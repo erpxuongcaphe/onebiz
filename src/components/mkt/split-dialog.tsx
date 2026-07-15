@@ -134,7 +134,9 @@ export function SplitDialog({
   }
 
   const filled = rows.filter((r) => r.title.trim() && r.assigneeId);
-  const needsContent = rows.some(
+  // Gợi ý (KHÔNG chặn — 00193): gắn nội dung vào công đoạn Duyệt/Đăng thì mới
+  // có rào "nội dung phải duyệt xong mới đăng". Không gắn vẫn chia việc được.
+  const suggestContent = rows.some(
     (r) => (r.taskType === "review" || r.taskType === "publish") && r.title.trim() && !r.contentItemId,
   );
 
@@ -142,10 +144,6 @@ export function SplitDialog({
     // Không để nút "mờ" khó hiểu — bấm được luôn, thiếu thì báo rõ tại đây.
     if (filled.length === 0) {
       setError("Hãy điền ít nhất 1 công đoạn có tên và người phụ trách.");
-      return;
-    }
-    if (needsContent) {
-      setError("Công đoạn Duyệt/Đăng cần gắn nội dung — tạo nhanh ở khối bên dưới.");
       return;
     }
     setLoading(true);
@@ -219,22 +217,17 @@ export function SplitDialog({
                       </option>
                     ))}
                   </select>
-                  {/* Duyệt/Đăng BẮT BUỘC gắn nội dung; công đoạn sản xuất gắn để
-                      người làm có nút "Nộp duyệt" ngay trên task của mình */}
+                  {/* Gắn nội dung LUÔN tuỳ chọn (00193). Gắn thì công đoạn sản xuất
+                      có nút "Nộp duyệt", và công đoạn Đăng bị soi "đã duyệt chưa". */}
                   <select
                     value={r.contentItemId}
                     onChange={(e) => patch(idx, { contentItemId: e.target.value })}
-                    className={
-                      "h-8 flex-1 rounded-lg border bg-background px-2 text-xs " +
-                      (!r.contentItemId && (r.taskType === "review" || r.taskType === "publish")
-                        ? "border-rose-300"
-                        : "border-outline-variant")
-                    }
+                    className="h-8 flex-1 rounded-lg border border-outline-variant bg-background px-2 text-xs"
                   >
                     <option value="">
-                      {r.taskType === "review" || r.taskType === "publish"
-                        ? "— Chọn nội dung —"
-                        : "— Gắn nội dung (tuỳ chọn) —"}
+                      {localContents.length
+                        ? "— Gắn nội dung (tuỳ chọn) —"
+                        : "— Chưa có nội dung nào —"}
                     </option>
                     {localContents.map((c) => (
                       <option key={c.id} value={c.id}>
@@ -273,10 +266,10 @@ export function SplitDialog({
           >
             <Icon name="add" size={14} /> Thêm công đoạn
           </button>
-          {needsContent ? (
-            <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3">
-              <Label className="text-xs font-semibold text-amber-800">
-                Công đoạn Duyệt/Đăng cần gắn nội dung — tạo nhanh tại đây:
+          {suggestContent ? (
+            <div className="space-y-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-3">
+              <Label className="text-xs font-semibold text-on-surface-variant">
+                Muốn gắn nội dung cho công đoạn Duyệt/Đăng? Tạo nhanh tại đây (không bắt buộc):
               </Label>
               <div className="flex flex-wrap items-center gap-2">
                 <Input
