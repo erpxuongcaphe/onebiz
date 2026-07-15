@@ -78,8 +78,7 @@ export function AssignPlanningButton({
           deadline: deadline || undefined,
         },
       });
-      setOpen(false);
-      refresh();
+      refresh(() => setOpen(false));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không giao được kế hoạch");
     } finally {
@@ -323,8 +322,7 @@ export function PlanEditorButton({
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
-      setSaved(true);
-      refresh();
+      refresh(() => setSaved(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được kế hoạch");
     } finally {
@@ -344,8 +342,7 @@ export function PlanEditorButton({
       // Bấm Nộp = tự lưu bản mới nhất RỒI nộp (không cần bấm Lưu nháp trước).
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
       await mktPost(`/api/mkt/v1/plans/${plan.id}/submit`, { expectedVersion: plan.versionNumber });
-      setOpen(false);
-      refresh();
+      refresh(() => setOpen(false));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không nộp được kế hoạch");
     } finally {
@@ -558,8 +555,7 @@ export function PlanReviewButton({
         action,
         comment: comment.trim() || undefined,
       });
-      setOpen(false);
-      refresh();
+      refresh(() => setOpen(false));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không duyệt được kế hoạch");
     } finally {
@@ -669,8 +665,7 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/change-request`, { reason: reason.trim() });
-      setOpen(false);
-      refresh();
+      refresh(() => setOpen(false));
     } catch (e) {
       const raw = e instanceof Error ? e.message : "";
       setError(
@@ -744,9 +739,10 @@ export function PlanReconcileButton({
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId, reason: reason.trim() });
-      setReassignFor(null);
-      setReassignTo("");
-      refresh();
+      refresh(() => {
+        setReassignFor(null);
+        setReassignTo("");
+      });
       setReason("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không điều chỉnh được việc");

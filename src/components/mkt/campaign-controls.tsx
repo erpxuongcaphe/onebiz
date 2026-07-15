@@ -198,8 +198,7 @@ export function EditCampaignButton({
         timeframeEnd: end || undefined,
         budget: budget ? Number(budget) : 0,
       });
-      setOpen(false);
-      refresh();
+      refresh(() => setOpen(false));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được chiến dịch");
     } finally {
@@ -301,12 +300,13 @@ export function WorkPackageForm({
         ownerId: ownerId || undefined,
         reviewerId: reviewerId || undefined,
       });
-      setTitle("");
-      setTargetOutput("");
-      setOwnerId("");
-      setReviewerId("");
-      setOpen(false);
-      refresh();
+      refresh(() => {
+        setTitle("");
+        setTargetOutput("");
+        setOwnerId("");
+        setReviewerId("");
+        setOpen(false);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được kênh");
     } finally {
@@ -423,11 +423,12 @@ export function ContentForm({ campaignId, pillars }: { campaignId: string; pilla
         riskLevel,
         pillarId,
       });
-      setTitle("");
-      setRiskLevel("low");
-      setPillarId("");
-      setOpen(false);
-      refresh();
+      refresh(() => {
+        setTitle("");
+        setRiskLevel("low");
+        setPillarId("");
+        setOpen(false);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không tạo được nội dung");
     } finally {
