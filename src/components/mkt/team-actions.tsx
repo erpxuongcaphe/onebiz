@@ -77,8 +77,7 @@ export function TeamMemberActions({
               newAssigneeId,
               reason,
             });
-            setReassignTask(null);
-            refresh();
+            refresh(() => setReassignTask(null));
           }}
         />
       ) : null}

@@ -43,6 +43,18 @@ describe("Giữ trạng thái đang chạy tới khi màn hình có dữ liệu 
     expect(offenders).toEqual([]);
   });
 
+  /**
+   * Bẫy đã vấp: đợt đầu mình chỉ thêm `refreshing` vào trạng thái nút, nhưng để
+   * nguyên `setOpen(false); refresh();` — nút giữ được, còn HỘP THOẠI vẫn đóng
+   * sớm 2,7 giây, tức khoảng lặng vẫn y nguyên. Kiểm chứng trên prod mới lòi ra.
+   * Việc đóng phải nằm TRONG nhịp làm mới: `refresh(() => setOpen(false))`.
+   */
+  it("không nơi nào đóng hộp thoại/dọn form NGAY rồi mới làm mới", () => {
+    const bad = /^[ ]+(?:set[A-Z]\w*|onOpenChange)\([^\n]*\);\n[ ]+refresh\(\);/m;
+    const offenders = components.filter((c) => bad.test(c.src)).map((c) => c.name);
+    expect(offenders).toEqual([]);
+  });
+
   it("hộp thoại con không tự đóng trước khi cha tải xong (nhận cờ busy từ cha)", () => {
     // Con nhận việc qua callback (onAdded/onSaved/onSubmit) thì KHÔNG giữ lệnh
     // làm mới → phải nhận cờ bận của cha, nếu không nút hết quay quá sớm.

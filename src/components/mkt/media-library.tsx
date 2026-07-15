@@ -107,8 +107,7 @@ export function MediaLibrary({
     setActionError(null);
     try {
       await mktDelete(`/api/mkt/v1/media/${item.id}`);
-      setPreview(null);
-      refresh();
+      refresh(() => setPreview(null));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không xoá được media");
     }
@@ -119,8 +118,7 @@ export function MediaLibrary({
     setActionError(null);
     try {
       await mktPost(`/api/mkt/v1/media/${item.id}/status`, { status: next });
-      setPreview(null);
-      refresh();
+      refresh(() => setPreview(null));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái media");
     }

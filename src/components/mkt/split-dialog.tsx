@@ -163,9 +163,10 @@ export function SplitDialog({
         contentItemId: r.contentItemId || undefined,
       }));
       await mktPost(`/api/mkt/v1/work-packages/${workPackageId}/split`, { tasks: payload });
-      onOpenChange(false);
-      setRows(defaultRows());
-      refresh();
+      refresh(() => {
+        onOpenChange(false);
+        setRows(defaultRows());
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không chia được việc");
     } finally {

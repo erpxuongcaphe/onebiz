@@ -42,9 +42,10 @@ export function AddReadinessButton({ campaignId }: { campaignId: string }) {
         title: title.trim(),
         requiredRole: role,
       });
-      setTitle("");
-      setOpen(false);
-      refresh();
+      refresh(() => {
+        setTitle("");
+        setOpen(false);
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không thêm được mục");
     } finally {
