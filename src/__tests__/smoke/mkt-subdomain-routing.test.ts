@@ -2,13 +2,15 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseState = vi.hoisted(() => ({
-  user: null as unknown,
+  subject: null as string | null,
 }));
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => ({
     auth: {
-      getUser: vi.fn(async () => ({ data: { user: supabaseState.user } })),
+      getClaims: vi.fn(async () => ({
+        data: supabaseState.subject ? { claims: { sub: supabaseState.subject } } : null,
+      })),
     },
   })),
 }));
@@ -21,7 +23,7 @@ function makeRequest(url: string): NextRequest {
 
 describe("MKT Hub subdomain routing", () => {
   beforeEach(() => {
-    supabaseState.user = null;
+    supabaseState.subject = null;
     process.env.BYPASS_AUTH = "false";
   });
 
@@ -36,7 +38,7 @@ describe("MKT Hub subdomain routing", () => {
   });
 
   it("returns signed-in users from login to the clean MKT Hub home", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(
@@ -47,7 +49,7 @@ describe("MKT Hub subdomain routing", () => {
   });
 
   it("serves /mkt behind the clean MKT Hub home URL", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(makeRequest("https://mkthub.onebiz.com.vn/"));
@@ -59,7 +61,7 @@ describe("MKT Hub subdomain routing", () => {
   });
 
   it("rewrites clean MKT deep links under the internal /mkt route", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(
@@ -74,7 +76,7 @@ describe("MKT Hub subdomain routing", () => {
 
   // CEO 11/07: URL trên subdomain phải sạch — /mkt/... redirect về path bỏ prefix
   it("redirects /mkt on the subdomain to the clean root URL", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(makeRequest("https://mkthub.onebiz.com.vn/mkt"));
@@ -84,7 +86,7 @@ describe("MKT Hub subdomain routing", () => {
   });
 
   it("redirects /mkt deep paths on the subdomain to clean URLs (keeping query)", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(
@@ -98,7 +100,7 @@ describe("MKT Hub subdomain routing", () => {
   });
 
   it("does not change the main OneBiz login destination", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(

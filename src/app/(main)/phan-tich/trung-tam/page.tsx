@@ -42,8 +42,12 @@ export default function ReportCenterPage() {
     .filter((report): report is ReportCatalogItem => Boolean(report));
 
   useEffect(() => {
-    setFavoritePaths(readFavoriteReportPaths());
-    setRecentPaths(readRecentReportPaths());
+    const frameId = window.requestAnimationFrame(() => {
+      setFavoritePaths(readFavoriteReportPaths());
+      setRecentPaths(readRecentReportPaths());
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, []);
 
   const handleFavorite = (path: string) => {
@@ -138,7 +142,11 @@ export default function ReportCenterPage() {
                         key={report.href}
                         className="group flex min-w-0 items-start border-b border-border p-3 last:border-b-0 md:border-r md:[&:nth-child(2n)]:border-r-0 2xl:[&:nth-child(2n)]:border-r 2xl:[&:nth-child(3n)]:border-r-0"
                       >
-                        <Link href={report.href} className="flex min-w-0 flex-1 items-start gap-3">
+                        <Link
+                          href={report.href}
+                          prefetch={false}
+                          className="flex min-w-0 flex-1 items-start gap-3"
+                        >
                           <Icon
                             name={report.icon}
                             size={21}
@@ -204,6 +212,7 @@ function ReportList({
             <div key={report.href} className="flex items-center gap-2 py-2">
               <Link
                 href={report.href}
+                prefetch={false}
                 className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
               >
                 <Icon name={report.icon} size={18} className="shrink-0 text-primary" />

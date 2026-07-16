@@ -2,13 +2,15 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const supabaseState = vi.hoisted(() => ({
-  user: null as unknown,
+  subject: null as string | null,
 }));
 
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn(() => ({
     auth: {
-      getUser: vi.fn(async () => ({ data: { user: supabaseState.user } })),
+      getClaims: vi.fn(async () => ({
+        data: supabaseState.subject ? { claims: { sub: supabaseState.subject } } : null,
+      })),
     },
   })),
 }));
@@ -21,7 +23,7 @@ function makeRequest(url: string): NextRequest {
 
 describe("FnB subdomain routing", () => {
   beforeEach(() => {
-    supabaseState.user = null;
+    supabaseState.subject = null;
     process.env.BYPASS_AUTH = "false";
   });
 
@@ -36,7 +38,7 @@ describe("FnB subdomain routing", () => {
   });
 
   it("keeps FnB login shared and returns signed-in users to the clean FnB home", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(
@@ -47,7 +49,7 @@ describe("FnB subdomain routing", () => {
   });
 
   it("serves POS FnB behind the clean FnB home URL", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(makeRequest("https://fnb.onebiz.com.vn/"));
@@ -59,7 +61,7 @@ describe("FnB subdomain routing", () => {
   });
 
   it("does not change the main OneBiz login destination", async () => {
-    supabaseState.user = { id: "user-1" };
+    supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");
 
     const response = await updateSession(
