@@ -73,4 +73,16 @@ describe("report branch scope integration", () => {
     }
   });
 
+  it("gates and remounts reports when branch scope changes", () => {
+    const hook = source("src/lib/hooks/use-report-scope.ts");
+    const shell = source("src/components/shared/report/report-shell.tsx");
+
+    expect(hook).toContain("const [isInitialized, setIsInitialized]");
+    expect(hook).toContain("initializedRef.current = true");
+    expect(hook).toContain("isReady: authReady && isInitialized");
+    expect(shell).toContain("useReportScope()");
+    expect(shell).toContain("isLoading || !isScopeReady");
+    expect(shell).toContain('key={activeBranchId ?? "__all__"}');
+  });
+
 });
