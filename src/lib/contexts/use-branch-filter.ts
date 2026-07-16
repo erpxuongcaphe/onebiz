@@ -26,11 +26,18 @@ import { useAuth } from "./auth-context";
  */
 export function useBranchFilter() {
   const { activeBranchId, currentBranch, branches, switchBranch, tenant } = useAuth();
+  const branchLabel = activeBranchId
+    ? currentBranch?.name ??
+      branches.find((branch) => branch.id === activeBranchId)?.name ??
+      "Chi nhánh không xác định"
+    : "Tất cả chi nhánh";
 
   return {
     activeBranchId,
     currentBranch,
     branches,
+    /** Tên phạm vi thật dùng thống nhất trên UI và trong file xuất. */
+    branchLabel,
     switchBranch,
     /** AuthContext đã load xong (tenant set). Guard cho data fetch effects. */
     isReady: !!tenant,

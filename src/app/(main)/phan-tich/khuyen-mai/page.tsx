@@ -98,8 +98,7 @@ function DailyTrendTooltip({
 }
 
 export default function KhuyenMaiAnalyticsPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -108,9 +107,6 @@ export default function KhuyenMaiAnalyticsPage() {
   const [detailRows, setDetailRows] = useState<PromotionDetailRow[]>([]);
   const [dailyTrend, setDailyTrend] = useState<PromotionDailyPoint[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const handleExportView = useCallback(() => {
     try {
@@ -344,7 +340,7 @@ export default function KhuyenMaiAnalyticsPage() {
             <span>Chưa có đơn nào áp KM trong 30 ngày qua</span>
           </div>
         ) : (
-          <ResponsiveContainer width="100%" height={280} minWidth={0}>
+          <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
             <BarChart data={dailyTrend} margin={{ top: 8, right: 8, bottom: 8, left: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis

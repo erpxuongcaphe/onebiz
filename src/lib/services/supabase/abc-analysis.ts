@@ -17,6 +17,52 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+interface AbcPagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllAbcRows<T>(
+  buildQuery: () => AbcPagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await buildQuery().range(
+      offset,
+      offset + pageSize - 1,
+    );
+    if (error) {
+      handleError(error, context);
+      return [];
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
+
+interface AbcProductQueryRow {
+  id: string;
+  code: string;
+  name: string;
+  unit: string | null;
+}
+
+interface AbcItemQueryRow {
+  product_id: string;
+  product_name: string;
+  quantity: number;
+  total: number;
+  invoices: { created_at: string };
+}
 
 export type AbcClass = "A" | "B" | "C" | "slow";
 
@@ -78,12 +124,15 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   if (!rangeWindow) throw new Error("Invalid report date range");
 
   // 1. Fetch all active products
-  const { data: products, error: pErr } = await supabase
-    .from("products")
-    .select("id, code, name, unit")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-  if (pErr) handleError(pErr, "getAbcReport.products");
+  const products = await fetchAllAbcRows<AbcProductQueryRow>(
+    () => supabase
+      .from("products")
+      .select("id, code, name, unit")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .order("id", { ascending: true }),
+    "getAbcReport.products",
+  );
 
   // 2. Fetch all invoice_items in range (joined with completed invoices)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -97,8 +146,7 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
     .gte("invoices.created_at", rangeWindow.start)
     .lt("invoices.created_at", rangeWindow.end);
   if (branchId) itemsQuery = itemsQuery.eq("invoices.branch_id", branchId);
-  const { data: items, error: iErr } = await itemsQuery;
-  if (iErr) handleError(iErr, "getAbcReport.items");
+  const items = await fetchAllAbcRows<AbcItemQueryRow>(() => itemsQuery.order("id", { ascending: true }), "getAbcReport.items");
 
   // 3. Aggregate
   const aggMap = new Map<

@@ -14,6 +14,38 @@
 
 import type { Promotion } from "@/lib/types";
 import { getClient, handleError, getCurrentTenantId } from "./base";
+const PROMOTION_REPORT_PAGE_SIZE = 1000;
+
+interface PromotionPagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllPromotionRows<T>(
+  buildQuery: () => PromotionPagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += PROMOTION_REPORT_PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(
+      offset,
+      offset + PROMOTION_REPORT_PAGE_SIZE - 1,
+    );
+    if (error) {
+      handleError(error, context);
+      return [];
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < PROMOTION_REPORT_PAGE_SIZE) break;
+  }
+  return rows;
+}
 
 // ============================================================
 // Types
@@ -117,11 +149,15 @@ export async function getPromotionKpis(params?: {
     .lte("start_date", now)
     .gte("end_date", now);
 
-  const [invRes, promoRes] = await Promise.all([invQuery, promoQuery]);
+  const [invoiceRows, promoRes] = await Promise.all([
+    fetchAllPromotionRows(
+      () => invQuery.order("created_at", { ascending: true }),
+      "getPromotionKpis:invoices",
+    ),
+    promoQuery,
+  ]);
 
-  if (invRes.error) handleError(invRes.error, "getPromotionKpis:invoices");
-
-  const rows = (invRes.data ?? []) as Array<{
+  const rows = invoiceRows as Array<{
     total: number;
     promotion_discount: number;
     promotion_free_value: number;
@@ -168,32 +204,33 @@ export async function getPromotionDetailRows(params?: {
     end: params?.endDate ?? defaultRange().end,
   };
 
-  const [promosRes, invRes] = await Promise.all([
-    supabase
-      .from("promotions")
-      .select(
-        "id, name, type, channel, usage_count, usage_limit",
-      )
-      .eq("tenant_id", tenantId)
-      .order("priority", { ascending: false }),
-    (() => {
-      let q = supabase
-        .from("invoices")
-        .select("promotion_id, total, promotion_discount, promotion_free_value")
+  const [promos, invoices] = await Promise.all([
+    fetchAllPromotionRows(
+      () => supabase
+        .from("promotions")
+        .select("id, name, type, channel, usage_count, usage_limit")
         .eq("tenant_id", tenantId)
-        .eq("status", "completed")
-        .not("promotion_id", "is", null)
-        .gte("created_at", range.start)
-        .lt("created_at", range.end);
-      if (params?.branchId) q = q.eq("branch_id", params.branchId);
-      return q;
-    })(),
+        .order("priority", { ascending: false }),
+      "getPromotionDetailRows:promos",
+    ),
+    fetchAllPromotionRows(
+      () => {
+        let query = supabase
+          .from("invoices")
+          .select("promotion_id, total, promotion_discount, promotion_free_value")
+          .eq("tenant_id", tenantId)
+          .eq("status", "completed")
+          .not("promotion_id", "is", null)
+          .gte("created_at", range.start)
+          .lt("created_at", range.end);
+        if (params?.branchId) query = query.eq("branch_id", params.branchId);
+        return query.order("created_at", { ascending: true });
+      },
+      "getPromotionDetailRows:invoices",
+    ),
   ]);
 
-  if (promosRes.error) handleError(promosRes.error, "getPromotionDetailRows:promos");
-  if (invRes.error) handleError(invRes.error, "getPromotionDetailRows:invoices");
-
-  const promos = (promosRes.data ?? []) as Array<{
+  const typedPromos = promos as Array<{
     id: string;
     name: string;
     type: Promotion["type"];
@@ -207,7 +244,7 @@ export async function getPromotionDetailRows(params?: {
     string,
     { count: number; discount: number; free: number; revenue: number }
   >();
-  for (const inv of (invRes.data ?? []) as Array<{
+  for (const inv of invoices as Array<{
     promotion_id: string;
     total: number;
     promotion_discount: number;
@@ -222,7 +259,7 @@ export async function getPromotionDetailRows(params?: {
     aggMap.set(key, cur);
   }
 
-  const rows: PromotionDetailRow[] = promos.map((p) => {
+  const rows: PromotionDetailRow[] = typedPromos.map((p) => {
     const agg = aggMap.get(p.id) ?? { count: 0, discount: 0, free: 0, revenue: 0 };
     return {
       promotionId: p.id,
@@ -276,8 +313,7 @@ export async function getPromotionDailyTrend(params?: {
     .lt("created_at", range.end);
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
 
-  const { data, error } = await query;
-  if (error) handleError(error, "getPromotionDailyTrend");
+  const data = await fetchAllPromotionRows(() => query.order("created_at", { ascending: true }), "getPromotionDailyTrend");
 
   // Bucketize by date (local)
   const buckets = new Map<string, { usageCount: number; totalDiscount: number }>();

@@ -29,7 +29,6 @@ import {
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -68,7 +67,7 @@ const PLATFORM_COLORS: Record<string, string> = {
 };
 
 export default function PlatformCommissionReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
     preset,
@@ -223,7 +222,6 @@ export default function PlatformCommissionReportPage() {
       return;
     }
     try {
-      const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
 
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO PHÍ DELIVERY PLATFORM",
@@ -319,10 +317,10 @@ export default function PlatformCommissionReportPage() {
       };
 
       exportReportToExcel({
-        kind: "kenh-ban",
+        kind: "platform-commission",
         mode: "full",
         range,
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, summarySheet, platformSheet, detailSheet],
       });
@@ -339,7 +337,7 @@ export default function PlatformCommissionReportPage() {
         variant: "error",
       });
     }
-  }, [rows, byPlatform, summary, effectiveCommissionPercent, range, activeBranchId, toast]);
+  }, [rows, byPlatform, summary, effectiveCommissionPercent, range, branchLabel, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">
@@ -426,7 +424,7 @@ export default function PlatformCommissionReportPage() {
             subtitle="So sánh chi phí thật"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byPlatform}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -457,7 +455,7 @@ export default function PlatformCommissionReportPage() {
             subtitle="Phân bổ số đơn delivery"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={byPlatform}

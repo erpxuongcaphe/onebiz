@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * ReportPageHeader — header chuẩn cho 14 báo cáo phân tích.
+ * ReportPageHeader — header chuẩn cho toàn bộ báo cáo phân tích.
  *
  * Pattern KiotViet (CEO 06/05/2026):
  * - Title + subtitle bên trái

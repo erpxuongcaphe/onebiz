@@ -302,7 +302,7 @@ export default function StaffRevenueReportPage() {
       };
 
       exportReportToExcel({
-        kind: "ban-hang",
+        kind: "nhan-vien",
         mode: "full",
         range,
         tenantName: "OneBiz",
@@ -404,7 +404,7 @@ export default function StaffRevenueReportPage() {
           subtitle="Tổng doanh thu trong kỳ"
         >
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart
                 data={byStaff.slice(0, 10)}
                 layout="vertical"

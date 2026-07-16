@@ -9,7 +9,7 @@
  *   - Phải nộp = output − input (nếu dương → nộp; âm → khấu trừ kỳ sau)
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
@@ -63,8 +63,8 @@ export default function VatReportPage() {
       .finally(() => setLoading(false));
   }, [isReady, range.from, range.to, activeBranchId, toast]);
 
-  const outputDetail = report?.outputDetail ?? [];
-  const inputDetail = report?.inputDetail ?? [];
+  const outputDetail = useMemo(() => report?.outputDetail ?? [], [report]);
+  const inputDetail = useMemo(() => report?.inputDetail ?? [], [report]);
   const taxPayable =
     (report?.output.totalTax ?? 0) - (report?.input.totalTax ?? 0);
 
@@ -229,7 +229,7 @@ export default function VatReportPage() {
       };
 
       exportReportToExcel({
-        kind: "tai-chinh",
+        kind: "vat",
         mode: "full",
         range,
         tenantName: "OneBiz",

@@ -32,6 +32,46 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+interface XntProductQueryRow {
+  id: string;
+  code: string;
+  name: string;
+  unit: string | null;
+  stock: number | null;
+  cost_price: number | null;
+  category_id: string | null;
+}
+interface XntPagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllXntRows<T>(
+  buildQuery: () => XntPagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await buildQuery().range(
+      offset,
+      offset + pageSize - 1,
+    );
+    if (error) {
+      handleError(error, context);
+      return [];
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
 
 // ============================================================
 // Types
@@ -215,8 +255,7 @@ export async function getXntReport(
     productsQuery = productsQuery.or(`code.ilike.${q},name.ilike.${q}`);
   }
 
-  const { data: products, error: pErr } = await productsQuery;
-  if (pErr) handleError(pErr, "getXntReport.products");
+  const products = await fetchAllXntRows<XntProductQueryRow>(() => productsQuery.order("id", { ascending: true }), "getXntReport.products");
 
   // 2. Fetch product_categories for category names
   const categoryIds = Array.from(
@@ -226,13 +265,20 @@ export async function getXntReport(
   ) as string[];
   let categoryMap = new Map<string, string>();
   if (categoryIds.length > 0) {
-    const { data: cats } = await supabase
-      .from("categories")
-      .select("id, name")
-      .in("id", categoryIds);
-    categoryMap = new Map(
-      (cats ?? []).map((c) => [c.id as string, c.name as string]),
-    );
+    const categories: Array<{ id: string; name: string }> = [];
+    for (let offset = 0; offset < categoryIds.length; offset += 200) {
+      const chunkIds = categoryIds.slice(offset, offset + 200);
+      const chunk = await fetchAllXntRows(
+        () => supabase
+          .from("categories")
+          .select("id, name")
+          .in("id", chunkIds)
+          .order("id", { ascending: true }),
+        "getXntReport.categories",
+      );
+      categories.push(...chunk);
+    }
+    categoryMap = new Map(categories.map((category) => [category.id, category.name]));
   }
 
   // 3. Fetch stock_movements trong kỳ
@@ -245,20 +291,22 @@ export async function getXntReport(
 
   if (branchId) movementsQuery = movementsQuery.eq("branch_id", branchId);
 
-  const { data: movements, error: mErr } = await movementsQuery;
-  if (mErr) handleError(mErr, "getXntReport.movements");
+  const movements = await fetchAllXntRows(() => movementsQuery.order("created_at", { ascending: true }), "getXntReport.movements");
 
   // Branch report must use branch snapshot as closing stock. Using
   // products.stock here would mix company-wide closing stock with
   // branch-filtered movements, making opening/closing balances drift.
   const branchClosingStock = new Map<string, number>();
   if (branchId) {
-    const { data: branchStock, error: bsErr } = await supabase
-      .from("branch_stock")
-      .select("product_id, quantity")
-      .eq("tenant_id", tenantId)
-      .eq("branch_id", branchId);
-    if (bsErr) handleError(bsErr, "getXntReport.branch_stock");
+    const branchStock = await fetchAllXntRows(
+      () => supabase
+        .from("branch_stock")
+        .select("product_id, quantity")
+        .eq("tenant_id", tenantId)
+        .eq("branch_id", branchId)
+        .order("product_id", { ascending: true }),
+      "getXntReport.branch_stock",
+    );
     for (const row of branchStock ?? []) {
       branchClosingStock.set(row.product_id, Number(row.quantity ?? 0));
     }

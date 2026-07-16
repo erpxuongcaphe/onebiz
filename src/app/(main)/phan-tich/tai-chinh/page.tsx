@@ -152,8 +152,8 @@ interface FinanceKpis {
 }
 
 export default function TaiChinhPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches, tenant } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
+  const { tenant } = useAuth();
   const tenantName = tenant?.name;
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
@@ -165,9 +165,6 @@ export default function TaiChinhPage() {
   const [monthlyProfitData, setMonthlyProfitData] = useState<ChartPoint[]>([]);
   const [cashFlowData, setCashFlowData] = useState<CashFlowRow[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const handleExportView = useCallback(() => {
     try {
@@ -548,7 +545,7 @@ export default function TaiChinhPage() {
             </p>
           ) : (
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={revenueVsExpenseData}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -607,7 +604,7 @@ export default function TaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={expenseBreakdownData}
@@ -649,7 +646,7 @@ export default function TaiChinhPage() {
               </p>
             ) : (
               <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={monthlyProfitData}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

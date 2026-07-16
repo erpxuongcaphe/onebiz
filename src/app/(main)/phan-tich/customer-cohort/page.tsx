@@ -27,7 +27,7 @@ export default function CustomerCohortPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
 
-  const { activeBranchId, branches, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const [data, setData] = useState<CohortReportResult | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -63,7 +63,7 @@ export default function CustomerCohortPage() {
     );
   })();
 
-  const handleExportView = useCallback(() => {
+  const handleExport = useCallback((mode: "view" | "full") => {
     if (!data) return;
     const titleRows = buildReportTitleRows({
       title: "Báo cáo cohort retention",
@@ -89,9 +89,10 @@ export default function CustomerCohortPage() {
     }
 
     exportReportToExcel({
-      kind: "khach-hang",
-      mode: "view",
+      kind: "customer-cohort",
+      mode,
       range,
+      branchName: branchLabel,
       sheets: [
         {
           name: "Cohort retention",
@@ -110,7 +111,7 @@ export default function CustomerCohortPage() {
         },
       ],
     });
-  }, [activeBranchId, branches, data, range]);
+  }, [activeBranchId, branchLabel, branches, data, range]);
 
   const colorForRetention = (pct: number): string => {
     if (pct === 0) return "bg-surface-container/30 text-muted-foreground";
@@ -130,7 +131,8 @@ export default function CustomerCohortPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExportView={handleExportView}
+        onExportView={() => handleExport("view")}
+        onExportFull={() => handleExport("full")}
         exportDisabled={loading || !data}
       />
 

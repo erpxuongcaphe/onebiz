@@ -115,8 +115,32 @@ export async function getBranchStockRows(params?: {
   limit?: number;
   offset?: number;
 }): Promise<BranchStockRow[]> {
-  const result = await getBranchStockPage(params ?? {});
-  return result.rows;
+  const filters = params ?? {};
+  if (typeof filters.limit === "number" || typeof filters.offset === "number") {
+    const result = await getBranchStockPage(filters);
+    return result.rows;
+  }
+
+  const pageSize = 1000;
+  const rows: BranchStockRow[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await getBranchStockPage({
+      ...filters,
+      lowStockOnly: false,
+      limit: pageSize,
+      offset,
+    });
+    rows.push(...page.rows);
+    if (page.rawCount < pageSize) break;
+  }
+
+  const merged = mergeBranchStockRows(rows);
+  if (!filters.lowStockOnly) return merged;
+  return merged.filter(
+    (row) =>
+      row.minStock !== undefined &&
+      row.quantity <= Number(row.minStock ?? 0),
+  );
 }
 
 /**
@@ -131,7 +155,7 @@ export async function getBranchStockPage(params: {
   lowStockOnly?: boolean;
   limit?: number;
   offset?: number;
-}): Promise<{ rows: BranchStockRow[]; total: number }> {
+}): Promise<{ rows: BranchStockRow[]; total: number; rawCount: number }> {
   const tenantId = await getCurrentTenantId();
   // A2 08/07/2026 (Cách B): LUÔN inner join products để loại được món menu F&B
   // trong MỌI trường hợp (kể cả khi không filter/search). An toàn vì
@@ -232,7 +256,7 @@ export async function getBranchStockPage(params: {
   }
 
   const total = rawRows.length !== rows.length || params.lowStockOnly ? filtered.length : count ?? filtered.length;
-  return { rows: filtered, total };
+  return { rows: filtered, total, rawCount: rawRows.length };
 }
 
 /**
@@ -246,80 +270,89 @@ export async function getBranchStockAggregates(params: {
   search?: string;
 }): Promise<{
   totalRows: number;
+  totalProducts: number;
   totalQty: number;
   totalValue: number;
   lowStockCount: number;
 }> {
-  // A2 08/07/2026 (Cách B): LUÔN inner join products để loại món menu F&B khỏi
-  // số liệu tổng (tổng dòng/tổng tồn/giá trị/low-stock) trong MỌI trường hợp —
-  // khớp getBranchStockPage. An toàn vì branch_stock.product_id NOT NULL + FK
-  // RESTRICT (không orphan). Trước đây chỉ inner khi có filter → summary card
-  // không filter vẫn cộng cả món menu vào giá trị tồn (giá vốn) → phồng số.
-  // CEO 28/05/2026: cú pháp đúng `alias:fk!inner` (xem getBranchStockPage).
+  const tenantId = await getCurrentTenantId();
+  const pageSize = 1000;
+  const rawRows: Array<Record<string, unknown>> = [];
   const productsRel =
     "products:product_id!inner ( product_type, code, name, cost_price, min_stock )";
 
-  const tenantId = await getCurrentTenantId();
-  let query = supabase
-    .from("branch_stock")
-    .select(
-      `
-      branch_id,
-      product_id,
-      variant_id,
-      quantity,
-      ${productsRel}
-      `,
-      { count: "exact" }
-    )
-    .eq("tenant_id", tenantId);
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase
+      .from("branch_stock")
+      .select("branch_id, product_id, variant_id, quantity, " + productsRel)
+      .eq("tenant_id", tenantId)
+      .neq("products.inventory_role", "fnb_menu_item")
+      .order("branch_id", { ascending: true })
+      .order("product_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-  if (params.branchId) query = query.eq("branch_id", params.branchId);
-  if (params.productType) query = query.eq("products.product_type", params.productType);
-  // A2 08/07 (Cách B): loại món menu F&B khỏi số liệu tổng — áp LUÔN nhờ inner join
-  // cố định ở trên (không còn phụ thuộc có filter hay không).
-  query = query.neq("products.inventory_role", "fnb_menu_item");
-  if (params.search) {
-    const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(
-      `code.ilike.%${esc}%,name.ilike.%${esc}%`,
-      { foreignTable: "products" }
-    );
+    if (params.branchId) query = query.eq("branch_id", params.branchId);
+    if (params.productType) {
+      query = query.eq("products.product_type", params.productType);
+    }
+    if (params.search) {
+      const escaped = params.search.replace(/%/g, "\\%").replace(/_/g, "\\_");
+      query = query.or(
+        "code.ilike.%" + escaped + "%,name.ilike.%" + escaped + "%",
+        { foreignTable: "products" },
+      );
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = (data ?? []) as unknown as Array<Record<string, unknown>>;
+    rawRows.push(...page);
+    if (page.length < pageSize) break;
   }
 
-  const { data, error, count } = await query;
-  if (error) throw error;
-
-  const grouped = new Map<string, { quantity: number; cost: number; minStock?: number | null }>();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const row of (data ?? []) as any[]) {
-    const key = `${row.branch_id}:${row.product_id}:${row.variant_id ?? "__base__"}`;
-    const current = grouped.get(key) ?? { quantity: 0, cost: 0, minStock: null };
-    const product = row.products ?? {};
+  const grouped = new Map<
+    string,
+    { quantity: number; cost: number; minStock?: number | null }
+  >();
+  const productIds = new Set<string>();
+  for (const row of rawRows) {
+    const productId = String(row.product_id ?? "");
+    productIds.add(productId);
+    const key = [
+      String(row.branch_id ?? ""),
+      productId,
+      String(row.variant_id ?? "__base__"),
+    ].join(":");
+    const current = grouped.get(key) ?? {
+      quantity: 0,
+      cost: 0,
+      minStock: null,
+    };
+    const product = (row.products ?? {}) as Record<string, unknown>;
     grouped.set(key, {
       quantity: current.quantity + Number(row.quantity ?? 0),
-      cost: Number(product.cost_price ?? current.cost ?? 0),
-      minStock: product.min_stock ?? current.minStock,
+      cost: Number(product.cost_price ?? current.cost),
+      minStock:
+        product.min_stock == null
+          ? current.minStock
+          : Number(product.min_stock),
     });
   }
 
-  let totalQty = 0;
-  let totalValue = 0;
-  let lowStockCount = 0;
-  for (const row of grouped.values()) {
-    totalQty += row.quantity;
-    totalValue += row.quantity * row.cost;
-    if (row.minStock !== undefined && row.minStock !== null && row.quantity <= Number(row.minStock)) {
-      lowStockCount += 1;
-    }
-  }
-
+  const rows = Array.from(grouped.values());
   return {
     totalRows: grouped.size,
-    totalQty,
-    totalValue,
-    lowStockCount,
+    totalProducts: productIds.size,
+    totalQty: rows.reduce((sum, row) => sum + row.quantity, 0),
+    totalValue: rows.reduce(
+      (sum, row) => sum + row.quantity * row.cost,
+      0,
+    ),
+    lowStockCount: rows.filter(
+      (row) =>
+        row.minStock != null &&
+        row.quantity <= Number(row.minStock),
+    ).length,
   };
 }
 

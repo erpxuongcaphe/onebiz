@@ -5,6 +5,7 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
 
 // === Shared Types ===
 
@@ -151,6 +152,7 @@ export interface CustomerSegment {
 }
 
 export interface TopCustomer {
+  customerId: string;
   rank: number;
   name: string;
   orders: number;
@@ -277,7 +279,7 @@ async function fetchAllPostgrestRows<T>(
       from + POSTGREST_PAGE_SIZE - 1,
     );
     if (error) {
-      console.warn(context, error.message);
+      handleError(error, context);
       return [];
     }
 
@@ -325,36 +327,31 @@ export async function getOverviewKpis(
   // thấy "Lợi nhuận tháng" là số 25% doanh thu — số fake hoàn toàn.
   const { getProfitAndLoss } = await import("./reports");
 
-  const [thisInvoices, prevInvoices, thisCustomers, prevCustomers, pnl] =
+  const [thisInvoices, prevInvoices, customerKpis, pnl] =
     await Promise.all([
-      bq(
-        supabase
-          .from("invoices")
-          .select("total, status")
-          .eq("tenant_id", tenantId)
-          .gte("created_at", thisMonth.start)
-          .lt("created_at", thisMonth.end),
+      fetchAllPostgrestRows(
+        () => bq(
+          supabase
+            .from("invoices")
+            .select("total, status")
+            .eq("tenant_id", tenantId)
+            .gte("created_at", thisMonth.start)
+            .lt("created_at", thisMonth.end),
+        ).order("created_at", { ascending: true }),
+        "[getOverviewKpis.currentInvoices]",
       ),
-      bq(
-        supabase
-          .from("invoices")
-          .select("total, status")
-          .eq("tenant_id", tenantId)
-          .gte("created_at", prevStart.toISOString())
-          .lt("created_at", prevEnd.toISOString()),
+      fetchAllPostgrestRows(
+        () => bq(
+          supabase
+            .from("invoices")
+            .select("total, status")
+            .eq("tenant_id", tenantId)
+            .gte("created_at", prevStart.toISOString())
+            .lt("created_at", prevEnd.toISOString()),
+        ).order("created_at", { ascending: true }),
+        "[getOverviewKpis.previousInvoices]",
       ),
-      supabase
-        .from("customers")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
-      supabase
-        .from("customers")
-        .select("id", { count: "exact", head: true })
-        .eq("tenant_id", tenantId)
-        .gte("created_at", prevStart.toISOString())
-        .lt("created_at", prevEnd.toISOString()),
+      getCustomerKpis(branchId, range),
       getProfitAndLoss(branchId, range).catch(() => ({
         current: { netProfit: 0 },
         previous: { netProfit: 0 },
@@ -366,13 +363,13 @@ export async function getOverviewKpis(
   const calcOrders = (data: { status: string }[] | null) =>
     (data ?? []).filter(i => i.status === "completed").length;
 
-  const rev = calcRev(thisInvoices.data);
-  const prevRev = calcRev(prevInvoices.data);
+  const rev = calcRev(thisInvoices);
+  const prevRev = calcRev(prevInvoices);
 
   return {
     revenue: rev, prevRevenue: prevRev,
-    orders: calcOrders(thisInvoices.data), prevOrders: calcOrders(prevInvoices.data),
-    newCustomers: thisCustomers.count ?? 0, prevNewCustomers: prevCustomers.count ?? 0,
+    orders: calcOrders(thisInvoices), prevOrders: calcOrders(prevInvoices),
+    newCustomers: customerKpis.newThisMonth, prevNewCustomers: customerKpis.prevNewMonth,
     profit: Math.round(pnl.current.netProfit ?? 0),
     prevProfit: Math.round(pnl.previous.netProfit ?? 0),
   };
@@ -395,9 +392,7 @@ export async function getDailyRevenue(
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getDailyRevenue");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getDailyRevenue]");
 
   // P1-3B-R3 12/06/2026: seed days theo RANGE đã chọn (không phải `now`).
   // Trước đây nếu customRange = "Tháng trước" (vd 01/05-31/05), grouped vẫn
@@ -436,13 +431,7 @@ export async function getRevenueByCategory(
     .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) {
-    // Log để dev debug — không silent swallow như trước
-    console.warn("[getRevenueByCategory]", error.message);
-    return [];
-  }
+  const data = await fetchAllPostgrestRows(() => query.order("id", { ascending: true }), "[getRevenueByCategory]");
 
   const map = new Map<string, number>();
   (data ?? []).forEach((item: Record<string, unknown>) => {
@@ -489,12 +478,30 @@ export async function getSalesKpis(
   function bqJoin<T>(query: T): T { return branchId ? (query as any).eq("invoices.branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
-    bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")),
-    bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")),
-    bq(supabase.from("sales_returns").select("total", { count: "exact" }).eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)),
-    bq(supabase.from("sales_returns").select("total", { count: "exact" }).eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", prev.start).lt("created_at", prev.end)),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      "[getSalesKpis.currentInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)).order("created_at", { ascending: true }),
+      "[getSalesKpis.previousInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      "[getSalesKpis.currentItems]",
+    ),
+    fetchAllPostgrestRows(
+      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      "[getSalesKpis.previousItems]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("sales_returns").select("total").eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      "[getSalesKpis.currentReturns]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("sales_returns").select("total").eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", prev.start).lt("created_at", prev.end)).order("created_at", { ascending: true }),
+      "[getSalesKpis.previousReturns]",
+    ),
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -503,17 +510,17 @@ export async function getSalesKpis(
   const calcCount = (d: { status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").length;
   const calcQty = (d: { quantity: number }[] | null) => (d ?? []).reduce((s, i) => s + ((i.quantity as number) ?? 0), 0);
 
-  const thisRev = calcRev(thisInv.data);
-  const prevRev = calcRev(prevInv.data);
-  const thisDelivery = calcDelivery(thisInv.data);
-  const prevDelivery = calcDelivery(prevInv.data);
-  const thisCount = calcCount(thisInv.data);
-  const prevCount = calcCount(prevInv.data);
-  const thisReturnAmount = (thisReturns.data ?? []).reduce(
+  const thisRev = calcRev(thisInv);
+  const prevRev = calcRev(prevInv);
+  const thisDelivery = calcDelivery(thisInv);
+  const prevDelivery = calcDelivery(prevInv);
+  const thisCount = calcCount(thisInv);
+  const prevCount = calcCount(prevInv);
+  const thisReturnAmount = thisReturns.reduce(
     (sum, row) => sum + (row.total ?? 0),
     0,
   );
-  const prevReturnAmount = (prevReturns.data ?? []).reduce(
+  const prevReturnAmount = prevReturns.reduce(
     (sum, row) => sum + (row.total ?? 0),
     0,
   );
@@ -525,11 +532,11 @@ export async function getSalesKpis(
     netRevenue: thisNetRevenue, prevNetRevenue,
     goodsRevenue: thisNetRevenue - thisDelivery, prevGoodsRevenue: prevNetRevenue - prevDelivery,
     deliveryFee: thisDelivery, prevDeliveryFee: prevDelivery,
-    soldQty: calcQty(thisItems.data), prevSoldQty: calcQty(prevItems.data),
+    soldQty: calcQty(thisItems), prevSoldQty: calcQty(prevItems),
     avgOrderValue: thisCount > 0 ? Math.round(thisNetRevenue / thisCount) : 0,
     prevAvgOrderValue: prevCount > 0 ? Math.round(prevNetRevenue / prevCount) : 0,
-    returnRate: thisCount > 0 ? Math.round(((thisReturns.count ?? 0) / thisCount) * 1000) / 10 : 0,
-    prevReturnRate: prevCount > 0 ? Math.round(((prevReturns.count ?? 0) / prevCount) * 1000) / 10 : 0,
+    returnRate: thisCount > 0 ? Math.round((thisReturns.length / thisCount) * 1000) / 10 : 0,
+    prevReturnRate: prevCount > 0 ? Math.round((prevReturns.length / prevCount) * 1000) / 10 : 0,
     returnAmount: thisReturnAmount,
     prevReturnAmount,
   };
@@ -549,9 +556,7 @@ export async function getRevenueByWeekday(
     .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
     .gte("created_at", r.start).lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getRevenueByWeekday");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getRevenueByWeekday]");
 
   const weekdays = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   const grouped = new Map<number, number>();
@@ -577,9 +582,7 @@ export async function getRevenueByHour(
     .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
     .gte("created_at", r.start).lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getRevenueByHour");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getRevenueByHour]");
 
   const hours: ChartPoint[] = [];
   for (let h = 0; h < 24; h++) {
@@ -844,13 +847,22 @@ export async function getEndOfDayStats(
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
-    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
-    bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", previous.start).lt("created_at", previous.end)),
-    bq(supabase.from("sales_returns").select("total").eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      "[getEndOfDayStats.currentInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", previous.start).lt("created_at", previous.end)).order("created_at", { ascending: true }),
+      "[getEndOfDayStats.previousInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("sales_returns").select("total").eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      "[getEndOfDayStats.returns]",
+    ),
   ]);
 
-  const completed = (todayInv.data ?? []).filter(i => i.status === "completed");
-  const prevCompleted = (yesterdayInv.data ?? []).filter(i => i.status === "completed");
+  const completed = todayInv.filter(i => i.status === "completed");
+  const prevCompleted = yesterdayInv.filter(i => i.status === "completed");
 
   const totalRevenue = completed.reduce((s, i) => s + (i.total ?? 0), 0);
   const cashAmount = completed.filter(i => i.payment_method === "cash").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -863,7 +875,7 @@ export async function getEndOfDayStats(
   const otherAmount = completed
     .filter(i => i.payment_method !== "cash" && i.payment_method !== "transfer" && i.payment_method !== "card")
     .reduce((s, i) => s + (i.total ?? 0), 0);
-  const returnAmount = (todayReturns.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
+  const returnAmount = todayReturns.reduce((s, i) => s + (i.total ?? 0), 0);
 
   return {
     totalRevenue,
@@ -895,9 +907,7 @@ export async function getTodayTopProducts(
     .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getTodayTopProducts");
+  const data = await fetchAllPostgrestRows(() => query.order("id", { ascending: true }), "[getTodayTopProducts]");
 
   const map = new Map<string, number>();
   (data ?? []).forEach((item: Record<string, unknown>) => {
@@ -948,9 +958,7 @@ export async function getOrdersKpis(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getOrdersKpis");
+  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("created_at", { ascending: true }), "[getOrdersKpis]");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prevQuery = (supabase as any)
@@ -998,9 +1006,7 @@ export async function getDailyOrderVolume(
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getDailyOrderVolume");
+  const data = await fetchAllPostgrestRows<{ created_at: string }>(() => query.order("created_at", { ascending: true }), "[getDailyOrderVolume]");
 
   const grouped = new Map<string, number>();
   const now = new Date();
@@ -1039,9 +1045,7 @@ export async function getOrderStatusDistribution(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getOrderStatusDistribution");
+  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("created_at", { ascending: true }), "[getOrderStatusDistribution]");
 
   const statusMap: Record<string, string> = {
     completed: "Hoàn thành",
@@ -1143,8 +1147,7 @@ export async function getOrderProductBreakdown(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) invQuery = invQuery.eq("branch_id", branchId);
-  const { data: invs, error } = await invQuery;
-  if (error) handleError(error, "getOrderProductBreakdown");
+  const invs = await fetchAllPostgrestRows(() => invQuery.order("created_at", { ascending: true }), "[getOrderProductBreakdown.invoices]");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids: string[] = (invs ?? []).map((x: any) => x.id);
   if (ids.length === 0) return [];
@@ -1153,12 +1156,15 @@ export async function getOrderProductBreakdown(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const items: any[] = [];
   for (let i = 0; i < ids.length; i += 200) {
-    const { data: chunk, error: itemErr } = await supabase
-      .from("invoice_items")
-      .select("invoice_id, product_id, product_name, unit, quantity, total")
-      .in("invoice_id", ids.slice(i, i + 200));
-    if (itemErr) handleError(itemErr, "getOrderProductBreakdown:items");
-    items.push(...(chunk ?? []));
+    const chunk = await fetchAllPostgrestRows(
+      () => supabase
+        .from("invoice_items")
+        .select("invoice_id, product_id, product_name, unit, quantity, total")
+        .in("invoice_id", ids.slice(i, i + 200))
+        .order("id", { ascending: true }),
+      "[getOrderProductBreakdown.items]",
+    );
+    items.push(...chunk);
   }
   if (items.length === 0) return [];
 
@@ -1205,49 +1211,28 @@ export async function getOrderProductBreakdown(
 // HÀNG HÓA (Inventory) - /phan-tich/hang-hoa
 // ========================================
 
-export async function getInventoryKpis(): Promise<{
+export async function getInventoryKpis(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{
   totalProducts: number;
   bestSeller: { name: string; qty: number };
   lowStockCount: number;
   stockValue: number;
 }> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Low-stock filter: trước đây dùng `.filter("stock", "lte", "min_stock"
-  // as unknown as string)` — Supabase compare `stock <= 'min_stock'` LITERAL
-  // string thay vì column reference → KPI luôn sai. Fix: fetch stock+min_stock
-  // rồi filter client-side. Với <500 SP active việc fetch full nhỏ.
-  const [products, productsForLowStock, topProduct] = await Promise.all([
-    supabase.from("products").select("id, sell_price, stock", { count: "exact" }).eq("tenant_id", tenantId).eq("is_active", true),
-    supabase.from("products").select("stock, min_stock").eq("tenant_id", tenantId).eq("is_active", true).gt("min_stock", 0),
-    supabase.from("invoice_items").select("product_name, quantity, invoices!inner(status, tenant_id)").eq("invoices.tenant_id", tenantId).eq("invoices.status", "completed").order("quantity", { ascending: false }).limit(100),
+  const [stock, topProducts] = await Promise.all([
+    getBranchStockAggregates({ branchId }),
+    getTopProductsByRevenue(1, branchId, range),
   ]);
-
-  const lowStockCount = (productsForLowStock.data ?? []).filter(
-    (p) =>
-      typeof p.stock === "number" &&
-      typeof p.min_stock === "number" &&
-      p.stock <= p.min_stock,
-  ).length;
-
-  // Aggregate top product
-  const qtyMap = new Map<string, number>();
-  (topProduct.data ?? []).forEach((item: Record<string, unknown>) => {
-    const name = item.product_name as string;
-    qtyMap.set(name, (qtyMap.get(name) ?? 0) + ((item.quantity as number) ?? 0));
-  });
-  let bestName = "";
-  let bestQty = 0;
-  qtyMap.forEach((qty, name) => { if (qty > bestQty) { bestQty = qty; bestName = name; } });
-
-  const stockValue = (products.data ?? []).reduce((s, p) => s + ((p.sell_price ?? 0) * (p.stock ?? 0)), 0);
+  const bestSeller = topProducts[0];
 
   return {
-    totalProducts: products.count ?? 0,
-    bestSeller: { name: bestName || "N/A", qty: bestQty },
-    lowStockCount,
-    stockValue,
+    totalProducts: stock.totalProducts,
+    bestSeller: bestSeller
+      ? { name: bestSeller.name, qty: bestSeller.qty }
+      : { name: "N/A", qty: 0 },
+    lowStockCount: stock.lowStockCount,
+    stockValue: stock.totalValue,
   };
 }
 
@@ -1258,31 +1243,41 @@ export async function getTopProductsByRevenue(
 ): Promise<TopProductRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const r = resolveRange(range, thisMonthRange());
+  const resolved = resolveRange(range, thisMonthRange());
+  const pageSize = 1000;
+  const rows: Array<Record<string, unknown>> = [];
+  let offset = 0;
 
-  let query = supabase
-    .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
-    .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
-    .eq("invoices.status", "completed");
-  if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
+  while (true) {
+    let query = supabase
+      .from("invoice_items")
+      .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
+      .eq("invoices.tenant_id", tenantId)
+      .gte("invoices.created_at", resolved.start)
+      .lt("invoices.created_at", resolved.end)
+      .eq("invoices.status", "completed")
+      .range(offset, offset + pageSize - 1);
+    if (branchId) query = query.eq("invoices.branch_id", branchId);
 
-  if (error) handleError(error, "getTopProductsByRevenue");
+    const { data, error } = await query;
+    if (error) handleError(error, "getTopProductsByRevenue");
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...page);
+    if (page.length < pageSize) break;
+    offset += page.length;
+  }
 
-  const map = new Map<string, { qty: number; revenue: number }>();
-  (data ?? []).forEach((item: Record<string, unknown>) => {
-    const name = item.product_name as string;
-    const existing = map.get(name) ?? { qty: 0, revenue: 0 };
-    existing.qty += (item.quantity as number) ?? 0;
-    existing.revenue += (item.total as number) ?? 0;
-    map.set(name, existing);
-  });
+  const totals = new Map<string, { qty: number; revenue: number }>();
+  for (const item of rows) {
+    const name = String(item.product_name ?? "");
+    const current = totals.get(name) ?? { qty: 0, revenue: 0 };
+    current.qty += Number(item.quantity ?? 0);
+    current.revenue += Number(item.total ?? 0);
+    totals.set(name, current);
+  }
 
-  return Array.from(map.entries())
-    .map(([name, { qty, revenue }]) => ({ name, qty, revenue }))
+  return Array.from(totals.entries())
+    .map(([name, values]) => ({ name, ...values }))
     .sort((a, b) => b.revenue - a.revenue)
     .slice(0, limit);
 }
@@ -1291,7 +1286,7 @@ export async function getTopProductsByRevenue(
  * Phân bổ SP theo category (cho chart Pie/Donut).
  *
  * @param branchId — nếu truyền: chỉ đếm SP có stock>0 ở branch đó
- *   (qua `branch_inventory`). Nếu không: đếm toàn tenant (overview).
+ *   (qua `branch_stock`). Nếu không: đếm toàn tenant (overview).
  *
  * Trước đây không nhận branchId → owner mở /phan-tich/kho ở quán FnB
  * vẫn thấy SP của xưởng rang + kho tổng → confused.
@@ -1301,50 +1296,47 @@ export async function getCategoryDistribution(
 ): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  const totals = new Map<string, number>();
 
-  // Nếu có branchId: chỉ lấy SP có stock>0 ở branch đó qua branch_inventory.
-  // Nếu không có: count toàn bộ active products của tenant.
   if (branchId) {
-    const { data, error } = await supabase
-      .from("branch_inventory")
-      .select("stock, products!inner(category_id, categories(name))")
-      .eq("branch_id", branchId)
-      .eq("tenant_id", tenantId)
-      .gt("stock", 0);
+    const data = await fetchAllPostgrestRows(
+      () => supabase
+        .from("branch_stock")
+        .select("quantity, products:product_id!inner(category_id, inventory_role, categories(name))")
+        .eq("tenant_id", tenantId)
+        .eq("branch_id", branchId)
+        .neq("products.inventory_role", "fnb_menu_item")
+        .gt("quantity", 0)
+        .order("product_id", { ascending: true }),
+      "[getCategoryDistribution.branch]",
+    );
 
-    if (error) {
-      console.warn("[getCategoryDistribution branch]", error.message);
-      return [];
+    for (const row of (data ?? []) as Array<Record<string, unknown>>) {
+      const product = row.products as Record<string, unknown> | null;
+      const category = product?.categories as { name?: string } | null;
+      const name = category?.name ?? "Ch\u01b0a ph\u00e2n lo\u1ea1i";
+      totals.set(name, (totals.get(name) ?? 0) + 1);
     }
-    const map = new Map<string, number>();
-    (data ?? []).forEach((row: Record<string, unknown>) => {
-      const products = row.products as Record<string, unknown> | null;
-      const cat = products?.categories as { name: string } | null;
-      const name = cat?.name ?? "Chưa phân loại";
-      map.set(name, (map.get(name) ?? 0) + 1);
-    });
-    return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+  } else {
+    const data = await fetchAllPostgrestRows(
+      () => supabase
+        .from("products")
+        .select("category_id, categories(name)")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .neq("inventory_role", "fnb_menu_item")
+        .order("id", { ascending: true }),
+      "[getCategoryDistribution.tenant]",
+    );
+
+    for (const product of (data ?? []) as Array<Record<string, unknown>>) {
+      const category = product.categories as { name?: string } | null;
+      const name = category?.name ?? "Ch\u01b0a ph\u00e2n lo\u1ea1i";
+      totals.set(name, (totals.get(name) ?? 0) + 1);
+    }
   }
 
-  const { data, error } = await supabase
-    .from("products")
-    .select("category_id, categories(name)")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true);
-
-  if (error) {
-    console.warn("[getCategoryDistribution]", error.message);
-    return [];
-  }
-
-  const map = new Map<string, number>();
-  (data ?? []).forEach((p: Record<string, unknown>) => {
-    const cat = p.categories as { name: string } | null;
-    const name = cat?.name ?? "Chưa phân loại";
-    map.set(name, (map.get(name) ?? 0) + 1);
-  });
-
-  return Array.from(map.entries()).map(([name, value]) => ({ name, value }));
+  return Array.from(totals.entries()).map(([name, value]) => ({ name, value }));
 }
 
 export async function getStockMovements(
@@ -1363,61 +1355,54 @@ export async function getStockMovements(
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getStockMovements]");
 
-  if (error) handleError(error, "getStockMovements");
-
-  const now = new Date();
-  const nhapMap = new Map<string, number>();
-  const xuatMap = new Map<string, number>();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now); d.setDate(d.getDate() - i);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-    nhapMap.set(key, 0);
-    xuatMap.set(key, 0);
+  const inbound = new Map<string, number>();
+  const outbound = new Map<string, number>();
+  const cursor = new Date(range.start);
+  const end = new Date(range.end);
+  while (cursor < end) {
+    const key = String(cursor.getDate()).padStart(2, "0") + "/" + String(cursor.getMonth() + 1).padStart(2, "0");
+    inbound.set(key, 0);
+    outbound.set(key, 0);
+    cursor.setDate(cursor.getDate() + 1);
   }
 
-  (data ?? []).forEach((m) => {
-    const d = new Date(m.created_at);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const qty = Math.abs(m.quantity ?? 0);
-    if (m.type === "in" || m.type === "adjust") {
-      nhapMap.set(key, (nhapMap.get(key) ?? 0) + qty);
-    } else {
-      xuatMap.set(key, (xuatMap.get(key) ?? 0) + qty);
-    }
-  });
+  for (const movement of data ?? []) {
+    const date = new Date(movement.created_at);
+    const key = String(date.getDate()).padStart(2, "0") + "/" + String(date.getMonth() + 1).padStart(2, "0");
+    const signedQty = Number(movement.quantity ?? 0);
+    const quantity = Math.abs(signedQty);
+    const isInbound = movement.type === "in" || (movement.type === "adjust" && signedQty >= 0);
+    const target = isInbound ? inbound : outbound;
+    target.set(key, (target.get(key) ?? 0) + quantity);
+  }
 
-  return Array.from(nhapMap.keys()).map(day => ({
+  return Array.from(inbound.keys()).map((day) => ({
     day,
-    nhap: nhapMap.get(day) ?? 0,
-    xuat: xuatMap.get(day) ?? 0,
+    nhap: inbound.get(day) ?? 0,
+    xuat: outbound.get(day) ?? 0,
   }));
 }
 
-export async function getLowStockProducts(limit: number = 10): Promise<LowStockItem[]> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+export async function getLowStockProducts(
+  limit: number = 10,
+  branchId?: string,
+): Promise<LowStockItem[]> {
+  const rows = await getBranchStockRows({ branchId, lowStockOnly: true });
 
-  const { data, error } = await supabase
-    .from("products")
-    .select("name, stock, min_stock, unit")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .gt("min_stock", 0)
-    .order("stock", { ascending: true })
-    .limit(limit * 2);
-
-  if (error) handleError(error, "getLowStockProducts");
-
-  return (data ?? [])
-    .filter(p => p.stock <= p.min_stock)
+  return rows
+    .sort((a, b) => {
+      const aRatio = a.minStock ? a.quantity / a.minStock : a.quantity;
+      const bRatio = b.minStock ? b.quantity / b.minStock : b.quantity;
+      return aRatio - bRatio;
+    })
     .slice(0, limit)
-    .map(p => ({
-      name: p.name,
-      stock: p.stock,
-      warning: p.min_stock,
-      unit: p.unit ?? "Cái",
+    .map((row) => ({
+      name: branchId ? row.productName : row.productName + " - " + row.branchName,
+      stock: row.quantity,
+      warning: Number(row.minStock ?? 0),
+      unit: row.unit ?? "C\u00e1i",
     }));
 }
 
@@ -1442,7 +1427,7 @@ export async function getChannelRevenue(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
-  const { data: posData } = await posQuery;
+  const posData = await fetchAllPostgrestRows(() => posQuery.order("created_at", { ascending: true }), "[channel.pos]");
 
   const posRevenue = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
 
@@ -1458,7 +1443,7 @@ export async function getChannelRevenue(
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
-  const { data: onlineData } = await onlineQuery;
+  const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
 
   const channelMap = new Map<string, number>();
   channelMap.set("Tại quầy", posRevenue);
@@ -1487,7 +1472,7 @@ export async function getChannelPerformance(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
-  const { data: posData } = await posQuery;
+  const posData = await fetchAllPostgrestRows(() => posQuery.order("created_at", { ascending: true }), "[channel.pos]");
 
   const posRev = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
   const posCount = posData?.length ?? 0;
@@ -1502,7 +1487,7 @@ export async function getChannelPerformance(
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
-  const { data: onlineData } = await onlineQuery;
+  const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
   map.set("Tại quầy", { revenue: posRev, orders: posCount });
@@ -1529,182 +1514,201 @@ export async function getCustomerKpis(
   range?: { from: string; to: string },
 ): Promise<{
   totalCustomers: number;
-  newThisMonth: number; prevNewMonth: number;
+  newThisMonth: number;
+  prevNewMonth: number;
   returningPct: number;
-  totalDebt: number; prevTotalDebt: number;
+  totalDebt: number;
+  prevTotalDebt: number;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = resolveRange(range, thisMonthRange());
-  const prev = range
-    ? previousRange(thisMonth)
-    : (() => {
-        const now = new Date();
-        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start: ps.toISOString(), end: pe.toISOString() };
-      })();
-  const prevStart = new Date(prev.start);
-  const prevEnd = new Date(prev.end);
-
-  const [total, thisNew, prevNew, debt] = await Promise.all([
-    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end),
-    supabase.from("customers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()),
-    supabase.from("customers").select("debt").eq("tenant_id", tenantId),
-  ]);
-
-  const totalDebt = (debt.data ?? []).reduce((s, c) => s + ((c.debt as number) ?? 0), 0);
-
-  // Returning customers: have >1 invoice
-  let repeatQuery = supabase.from("invoices").select("customer_id").eq("tenant_id", tenantId).eq("status", "completed").not("customer_id", "is", null);
-  if (branchId) repeatQuery = repeatQuery.eq("branch_id", branchId);
-  const { data: repeatData } = await repeatQuery;
-  const custInvCount = new Map<string, number>();
-  (repeatData ?? []).forEach(i => {
-    if (i.customer_id) custInvCount.set(i.customer_id, (custInvCount.get(i.customer_id) ?? 0) + 1);
-  });
-  const returning = Array.from(custInvCount.values()).filter(c => c > 1).length;
-  const totalWithInv = custInvCount.size;
-
-  // prev_debt approximation: totalDebt at end of last month
-  //   = current totalDebt
-  //     - (debt added bởi invoices created this month — those increased debt)
-  //     + (debt paid down by cash receipts this month linked to invoice).
-  // Cần `customer_debt_history` snapshot table để có chính xác — chưa có.
-  // Tạm thời: query 2 nguồn này. Nếu fail → fallback bằng totalDebt
-  // (như trước) nhưng KHÔNG dùng cho comparison %.
-  let prevDebtApprox = totalDebt;
-  try {
-    const [debtAdded, debtPaid] = await Promise.all([
-      supabase
+  const current = resolveRange(range, thisMonthRange());
+  const previous = previousRange(current);
+  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
         .from("invoices")
-        .select("debt")
+        .select("customer_id, created_at, debt")
         .eq("tenant_id", tenantId)
-        .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
-      supabase
-        .from("cash_transactions")
-        .select("amount")
-        .eq("tenant_id", tenantId)
-        .eq("type", "receipt")
-        .eq("reference_type", "invoice")
-        .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
-    ]);
-    const added = (debtAdded.data ?? []).reduce(
-      (s, r) => s + ((r.debt as number) ?? 0),
-      0,
-    );
-    const paid = (debtPaid.data ?? []).reduce(
-      (s, r) => s + ((r.amount as number) ?? 0),
-      0,
-    );
-    prevDebtApprox = Math.max(0, totalDebt - added + paid);
-  } catch {
-    // Fallback: keep prevDebtApprox = totalDebt (comparison sẽ ra 0%)
+        .eq("status", "completed")
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: true });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getCustomerKpis]",
+  );
+
+  const firstPurchase = new Map<string, string>();
+  const currentPurchases = new Map<string, number>();
+  let totalDebt = 0;
+  for (const invoice of invoices) {
+    const customerId = String(invoice.customer_id ?? "");
+    const createdAt = String(invoice.created_at ?? "");
+    if (!customerId || !createdAt) continue;
+    if (!firstPurchase.has(customerId)) firstPurchase.set(customerId, createdAt);
+    if (createdAt >= current.start && createdAt < current.end) {
+      currentPurchases.set(customerId, (currentPurchases.get(customerId) ?? 0) + 1);
+    }
+    totalDebt += Number(invoice.debt ?? 0);
   }
 
+  const firstDates = Array.from(firstPurchase.values());
+  const newThisMonth = firstDates.filter(
+    (date) => date >= current.start && date < current.end,
+  ).length;
+  const prevNewMonth = firstDates.filter(
+    (date) => date >= previous.start && date < previous.end,
+  ).length;
+  const returning = Array.from(currentPurchases.values()).filter(
+    (count) => count > 1,
+  ).length;
+
   return {
-    totalCustomers: total.count ?? 0,
-    newThisMonth: thisNew.count ?? 0,
-    prevNewMonth: prevNew.count ?? 0,
-    returningPct: totalWithInv > 0 ? Math.round((returning / totalWithInv) * 100) : 0,
+    totalCustomers: firstPurchase.size,
+    newThisMonth,
+    prevNewMonth,
+    returningPct:
+      currentPurchases.size > 0
+        ? Math.round((returning / currentPurchases.size) * 100)
+        : 0,
     totalDebt,
-    prevTotalDebt: prevDebtApprox,
+    prevTotalDebt: totalDebt,
   };
 }
 
-export async function getNewCustomersMonthly(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
+export async function getNewCustomersMonthly(
+  months: number = 6,
+  branchId?: string,
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNMonthsRange(months);
+  const window = lastNMonthsRange(months);
+  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("invoices")
+        .select("customer_id, created_at")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: true });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getNewCustomersMonthly]",
+  );
 
-  const { data, error } = await supabase
-    .from("customers")
-    .select("created_at")
-    .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
-
-  if (error) handleError(error, "getNewCustomersMonthly");
+  const firstPurchase = new Map<string, string>();
+  for (const invoice of invoices) {
+    const customerId = String(invoice.customer_id ?? "");
+    const createdAt = String(invoice.created_at ?? "");
+    if (customerId && createdAt && !firstPurchase.has(customerId)) {
+      firstPurchase.set(customerId, createdAt);
+    }
+  }
 
   const now = new Date();
   const grouped = new Map<string, number>();
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+  for (let index = months - 1; index >= 0; index--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
     grouped.set(key, 0);
   }
-
-  (data ?? []).forEach(c => {
-    const d = new Date(c.created_at);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+  for (const createdAt of firstPurchase.values()) {
+    if (createdAt < window.start || createdAt >= window.end) continue;
+    const date = new Date(createdAt);
+    const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
     if (grouped.has(key)) grouped.set(key, (grouped.get(key) ?? 0) + 1);
-  });
+  }
 
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getCustomerSegments(): Promise<CustomerSegment[]> {
+export async function getCustomerSegments(
+  branchId?: string,
+): Promise<CustomerSegment[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-
-  const { data } = await supabase.from("customers").select("group_id").eq("tenant_id", tenantId);
-
-  const groupMap: Record<string, string> = {
+  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("invoices")
+        .select("customer_id, customers!inner(group_id)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .not("customer_id", "is", null);
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query.order("customer_id", { ascending: true });
+    },
+    "[getCustomerSegments]",
+  );
+  const groupLabels: Record<string, string> = {
     vip: "VIP",
     wholesale: "Khách sỉ",
     retail: "Khách lẻ",
     agent: "Đại lý",
   };
-
+  const customerGroups = new Map<string, string>();
+  for (const invoice of invoices) {
+    const customerId = String(invoice.customer_id ?? "");
+    const customer = invoice.customers as { group_id?: string | null } | null;
+    if (customerId && !customerGroups.has(customerId)) {
+      customerGroups.set(customerId, customer?.group_id ?? "retail");
+    }
+  }
   const counts = new Map<string, number>();
-  (data ?? []).forEach(c => {
-    const name = groupMap[c.group_id ?? ""] ?? "Khách lẻ";
+  for (const groupId of customerGroups.values()) {
+    const name = groupLabels[groupId] ?? "Khách lẻ";
     counts.set(name, (counts.get(name) ?? 0) + 1);
-  });
-
+  }
   return Array.from(counts.entries()).map(([name, value]) => ({ name, value }));
 }
 
 export async function getTopCustomersByRevenue(
-  limit: number = 10,
+  limit: number | null = 10,
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<TopCustomer[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // P1-3B-R6 13/06/2026: thêm range — trước đây lấy lifetime mạo danh "kỳ này".
-  const r = resolveRange(range, thisMonthRange());
+  const resolved = resolveRange(range, thisMonthRange());
+  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("invoices")
+        .select("customer_id, total, customers(name)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .gte("created_at", resolved.start)
+        .lt("created_at", resolved.end)
+        .not("customer_id", "is", null)
+        .order("created_at", { ascending: false });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getTopCustomersByRevenue]",
+  );
 
-  let query = supabase
-    .from("invoices")
-    .select("customer_id, total, customers(name)")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("created_at", r.start)
-    .lt("created_at", r.end)
-    .not("customer_id", "is", null);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
+  const totals = new Map<string, { name: string; orders: number; revenue: number }>();
+  for (const invoice of invoices) {
+    const customerId = String(invoice.customer_id ?? "");
+    const customer = invoice.customers as { name?: string } | null;
+    const current = totals.get(customerId) ?? {
+      name: customer?.name ?? "N/A",
+      orders: 0,
+      revenue: 0,
+    };
+    current.orders += 1;
+    current.revenue += Number(invoice.total ?? 0);
+    totals.set(customerId, current);
+  }
 
-  if (error) handleError(error, "getTopCustomersByRevenue");
-
-  const map = new Map<string, { name: string; orders: number; revenue: number }>();
-  (data ?? []).forEach((inv: Record<string, unknown>) => {
-    const custId = inv.customer_id as string;
-    const customer = inv.customers as { name: string } | null;
-    const existing = map.get(custId) ?? { name: customer?.name ?? "N/A", orders: 0, revenue: 0 };
-    existing.orders += 1;
-    existing.revenue += (inv.total as number) ?? 0;
-    map.set(custId, existing);
-  });
-
-  return Array.from(map.values())
+  const ranked = Array.from(totals.entries())
+    .map(([customerId, values]) => ({ customerId, ...values }))
     .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit)
-    .map((c, i) => ({ rank: i + 1, ...c }));
+    .map((customer, index) => ({ rank: index + 1, ...customer }));
+  return limit == null ? ranked : ranked.slice(0, limit);
 }
 
 // ========================================
@@ -1828,7 +1832,14 @@ export async function getRevenueByCustomerAndCategory(
 
   return Array.from(map.values())
     .filter((c) => topCustIds.has(c.customerId))
-    .map(({ _custTotalRevenue: _ignore, ...rest }) => rest)
+    .map((cell) => ({
+      customerId: cell.customerId,
+      customerName: cell.customerName,
+      categoryId: cell.categoryId,
+      categoryName: cell.categoryName,
+      quantity: cell.quantity,
+      revenue: cell.revenue,
+    }))
     .sort((a, b) => b.revenue - a.revenue);
 }
 
@@ -1911,21 +1922,53 @@ export async function getRevenueByCustomerAndProduct(
   return topN == null ? rows : rows.slice(0, topN);
 }
 
-export async function getTopDebtors(limit: number = 5): Promise<TopDebtor[]> {
+export async function getTopDebtors(
+  limit: number | null = 5,
+  branchId?: string,
+): Promise<TopDebtor[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const { data, error } = await supabase
-    .from("customers")
-    .select("name, debt")
-    .eq("tenant_id", tenantId)
-    .gt("debt", 0)
-    .order("debt", { ascending: false })
-    .limit(limit);
+  if (!branchId) {
+    const customers = await fetchAllPostgrestRows(
+      () => supabase
+        .from("customers")
+        .select("name, debt")
+        .eq("tenant_id", tenantId)
+        .gt("debt", 0)
+        .order("debt", { ascending: false }),
+      "[getTopDebtors.tenant]",
+    );
+    const rows = customers.map((customer) => ({
+      name: customer.name,
+      debt: Number(customer.debt ?? 0),
+    }));
+    return limit == null ? rows : rows.slice(0, limit);
+  }
 
-  if (error) handleError(error, "getTopDebtors");
-
-  return (data ?? []).map(c => ({ name: c.name, debt: c.debt ?? 0 }));
+  const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => supabase
+      .from("invoices")
+      .select("customer_id, customer_name, debt, customers(name)")
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId)
+      .gt("debt", 0)
+      .order("debt", { ascending: false }),
+    "[getTopDebtors]",
+  );
+  const totals = new Map<string, TopDebtor>();
+  for (const invoice of invoices) {
+    const customerId = String(invoice.customer_id ?? invoice.customer_name ?? "");
+    const customer = invoice.customers as { name?: string } | null;
+    const current = totals.get(customerId) ?? {
+      name: customer?.name ?? String(invoice.customer_name ?? "Khách lẻ"),
+      debt: 0,
+    };
+    current.debt += Number(invoice.debt ?? 0);
+    totals.set(customerId, current);
+  }
+  const ranked = Array.from(totals.values()).sort((a, b) => b.debt - a.debt);
+  return limit == null ? ranked : ranked.slice(0, limit);
 }
 
 // ========================================
@@ -1937,190 +1980,226 @@ export async function getSupplierKpis(
   range?: { from: string; to: string },
 ): Promise<{
   totalSuppliers: number;
-  purchaseThisMonth: number; prevPurchase: number;
-  totalDebt: number; prevDebt: number;
+  purchaseThisMonth: number;
+  prevPurchase: number;
+  totalDebt: number;
+  prevDebt: number;
   returnCount: number;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = resolveRange(range, thisMonthRange());
-  const prev = range
-    ? previousRange(thisMonth)
-    : (() => {
-        const now = new Date();
-        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start: ps.toISOString(), end: pe.toISOString() };
-      })();
-  const prevStart = new Date(prev.start);
-  const prevEnd = new Date(prev.end);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
-
-  const [total, thisPO, prevPO, debt] = await Promise.all([
-    supabase.from("suppliers").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
-    bq(supabase.from("purchase_orders").select("total").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end).eq("status", "completed")),
-    bq(supabase.from("purchase_orders").select("total").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString()).eq("status", "completed")),
-    supabase.from("suppliers").select("debt").eq("tenant_id", tenantId),
-  ]);
-
-  const thisPurchase = (thisPO.data ?? []).reduce((s, p) => s + ((p.total as number) ?? 0), 0);
-  const prevPurchase = (prevPO.data ?? []).reduce((s, p) => s + ((p.total as number) ?? 0), 0);
-  const totalDebt = (debt.data ?? []).reduce((s, s2) => s + ((s2.debt as number) ?? 0), 0);
-
-  // Approximation prevDebt = totalDebt - (debt added by PO this month)
-  // + (paid down by cash payments this month linked to PO).
-  // Trước đây hardcode `prevDebt: totalDebt` → comparison luôn 0%.
-  let prevDebtApprox = totalDebt;
-  try {
-    const [debtAdded, debtPaid] = await Promise.all([
-      supabase
+  const current = resolveRange(range, thisMonthRange());
+  const previous = previousRange(current);
+  const purchaseOrders = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
         .from("purchase_orders")
-        .select("debt")
+        .select("supplier_id, total, debt, created_at")
         .eq("tenant_id", tenantId)
-        .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
-      supabase
-        .from("cash_transactions")
-        .select("amount")
+        .eq("status", "completed")
+        .order("created_at", { ascending: false });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getSupplierKpis.purchaseOrders]",
+  );
+  const supplierReturns = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("supplier_returns")
+        .select("id, created_at")
         .eq("tenant_id", tenantId)
-        .eq("type", "payment")
-        .eq("reference_type", "purchase_order")
-        .gte("created_at", thisMonth.start)
-        .lt("created_at", thisMonth.end),
-    ]);
-    const added = (debtAdded.data ?? []).reduce(
-      (s, r) => s + ((r.debt as number) ?? 0),
-      0,
-    );
-    const paid = (debtPaid.data ?? []).reduce(
-      (s, r) => s + ((r.amount as number) ?? 0),
-      0,
-    );
-    prevDebtApprox = Math.max(0, totalDebt - added + paid);
-  } catch {
-    /* fallback giữ prevDebtApprox = totalDebt */
+        .eq("status", "completed")
+        .gte("created_at", current.start)
+        .lt("created_at", current.end)
+        .order("created_at", { ascending: false });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getSupplierKpis.supplierReturns]",
+  );
+
+  const supplierIds = new Set<string>();
+  let purchaseThisMonth = 0;
+  let prevPurchase = 0;
+  let totalDebt = 0;
+  for (const order of purchaseOrders) {
+    const supplierId = String(order.supplier_id ?? "");
+    const createdAt = String(order.created_at ?? "");
+    if (supplierId) supplierIds.add(supplierId);
+    if (createdAt >= current.start && createdAt < current.end) {
+      purchaseThisMonth += Number(order.total ?? 0);
+    }
+    if (createdAt >= previous.start && createdAt < previous.end) {
+      prevPurchase += Number(order.total ?? 0);
+    }
+    totalDebt += Number(order.debt ?? 0);
   }
 
   return {
-    totalSuppliers: total.count ?? 0,
-    purchaseThisMonth: thisPurchase,
+    totalSuppliers: supplierIds.size,
+    purchaseThisMonth,
     prevPurchase,
     totalDebt,
-    prevDebt: prevDebtApprox,
-    returnCount: 0,
+    prevDebt: totalDebt,
+    returnCount: supplierReturns.length,
   };
 }
 
-export async function getPurchaseByMonth(months: number = 6, branchId?: string): Promise<ChartPoint[]> {
+export async function getPurchaseByMonth(
+  months: number = 6,
+  branchId?: string,
+): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const range = lastNMonthsRange(months);
+  const orders = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("purchase_orders")
+        .select("created_at, total")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .gte("created_at", range.start)
+        .lt("created_at", range.end)
+        .order("created_at", { ascending: true });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getPurchaseByMonth]",
+  );
 
-  let query = supabase
-    .from("purchase_orders")
-    .select("created_at, total")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
-  if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getPurchaseByMonth");
-
-  // P1-3B-R4 12/06/2026: key bao gồm year để khi months>=12 hoặc qua cuối năm
-  // không gộp T12/2025 vào T12/2026.
   const now = new Date();
   const grouped = new Map<string, number>();
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+  for (let index = months - 1; index >= 0; index--) {
+    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
+    const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
     grouped.set(key, 0);
   }
-
-  (data ?? []).forEach(po => {
-    const d = new Date(po.created_at);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
-    if (grouped.has(key)) grouped.set(key, (grouped.get(key) ?? 0) + ((po.total as number) ?? 0));
-  });
-
+  for (const order of orders) {
+    const date = new Date(String(order.created_at));
+    const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
+    if (grouped.has(key)) grouped.set(key, (grouped.get(key) ?? 0) + Number(order.total ?? 0));
+  }
   return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
 }
 
-export async function getTopSuppliersByPurchase(limit: number = 5, branchId?: string): Promise<{ name: string; amount: number }[]> {
+export async function getTopSuppliersByPurchase(
+  limit: number | null = 5,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<{ name: string; amount: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-
-  let query = supabase
-    .from("purchase_orders")
-    .select("total, suppliers(name)")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed");
-  if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getTopSuppliersByPurchase");
-
-  const map = new Map<string, number>();
-  (data ?? []).forEach((po: Record<string, unknown>) => {
-    const supplier = po.suppliers as { name: string } | null;
-    const name = supplier?.name ?? "N/A";
-    map.set(name, (map.get(name) ?? 0) + ((po.total as number) ?? 0));
-  });
-
-  return Array.from(map.entries())
-    .map(([name, amount]) => ({ name, amount }))
-    .sort((a, b) => b.amount - a.amount)
-    .slice(0, limit);
+  const resolved = resolveRange(range, thisMonthRange());
+  const orders = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("purchase_orders")
+        .select("supplier_id, total, suppliers(name)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .gte("created_at", resolved.start)
+        .lt("created_at", resolved.end)
+        .order("created_at", { ascending: false });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getTopSuppliersByPurchase]",
+  );
+  const totals = new Map<string, { name: string; amount: number }>();
+  for (const order of orders) {
+    const supplierId = String(order.supplier_id ?? "");
+    const supplier = order.suppliers as { name?: string } | null;
+    const current = totals.get(supplierId) ?? { name: supplier?.name ?? "N/A", amount: 0 };
+    current.amount += Number(order.total ?? 0);
+    totals.set(supplierId, current);
+  }
+  const ranked = Array.from(totals.values()).sort((a, b) => b.amount - a.amount);
+  return limit == null ? ranked : ranked.slice(0, limit);
 }
 
-export async function getSupplierPaymentStatus(): Promise<{ name: string; value: number }[]> {
+export async function getSupplierPaymentStatus(
+  branchId?: string,
+): Promise<{ name: string; value: number }[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-
-  const { data } = await supabase.from("suppliers").select("debt").eq("tenant_id", tenantId);
-
-  let paid = 0, owed = 0;
-  (data ?? []).forEach(s => {
-    const debt = (s.debt as number) ?? 0;
-    if (debt <= 0) paid++;
-    else owed++;
-  });
-
+  const orders = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("purchase_orders")
+        .select("supplier_id, debt")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .order("supplier_id", { ascending: true });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getSupplierPaymentStatus]",
+  );
+  const debts = new Map<string, number>();
+  for (const order of orders) {
+    const supplierId = String(order.supplier_id ?? "");
+    if (!supplierId) continue;
+    debts.set(supplierId, (debts.get(supplierId) ?? 0) + Number(order.debt ?? 0));
+  }
+  let paid = 0;
+  let owed = 0;
+  for (const debt of debts.values()) {
+    if (debt > 0) owed += 1;
+    else paid += 1;
+  }
   return [
     { name: "Đã thanh toán", value: paid },
     { name: "Còn nợ", value: owed },
   ];
 }
 
-export async function getSupplierSummary(limit: number = 8, branchId?: string): Promise<SupplierSummaryRow[]> {
+export async function getSupplierSummary(
+  limit: number | null = 8,
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<SupplierSummaryRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-
-  const { data: suppliers } = await supabase.from("suppliers").select("id, name, debt").eq("tenant_id", tenantId);
-  let poQuery = supabase.from("purchase_orders").select("supplier_id, total").eq("tenant_id", tenantId).eq("status", "completed");
-  if (branchId) poQuery = poQuery.eq("branch_id", branchId);
-  const { data: poData } = await poQuery;
-
-  const map = new Map<string, { name: string; total: number; debt: number; orders: number }>();
-  (suppliers ?? []).forEach(s => {
-    map.set(s.id, { name: s.name, total: 0, debt: (s.debt as number) ?? 0, orders: 0 });
-  });
-
-  (poData ?? []).forEach(po => {
-    const existing = map.get(po.supplier_id);
-    if (existing) {
-      existing.total += (po.total as number) ?? 0;
-      existing.orders += 1;
+  const resolved = resolveRange(range, thisMonthRange());
+  const orders = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => {
+      let query = supabase
+        .from("purchase_orders")
+        .select("supplier_id, total, debt, created_at, suppliers(name)")
+        .eq("tenant_id", tenantId)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false });
+      if (branchId) query = query.eq("branch_id", branchId);
+      return query;
+    },
+    "[getSupplierSummary]",
+  );
+  const totals = new Map<string, { name: string; total: number; debt: number; orders: number }>();
+  for (const order of orders) {
+    const supplierId = String(order.supplier_id ?? "");
+    if (!supplierId) continue;
+    const supplier = order.suppliers as { name?: string } | null;
+    const current = totals.get(supplierId) ?? {
+      name: supplier?.name ?? "N/A",
+      total: 0,
+      debt: 0,
+      orders: 0,
+    };
+    const createdAt = String(order.created_at ?? "");
+    if (createdAt >= resolved.start && createdAt < resolved.end) {
+      current.total += Number(order.total ?? 0);
+      current.orders += 1;
     }
-  });
-
-  return Array.from(map.values())
+    current.debt += Number(order.debt ?? 0);
+    totals.set(supplierId, current);
+  }
+  const ranked = Array.from(totals.values())
+    .filter((supplier) => supplier.orders > 0 || supplier.debt > 0)
     .sort((a, b) => b.total - a.total)
-    .slice(0, limit)
-    .map((s, i) => ({ rank: i + 1, ...s }));
+    .map((supplier, index) => ({ rank: index + 1, ...supplier }));
+  return limit == null ? ranked : ranked.slice(0, limit);
 }
 
 // ========================================
@@ -2154,16 +2233,28 @@ export async function getFinanceKpis(
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
-    bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
-    bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)),
-    bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)).order("created_at", { ascending: true }),
+      "[getFinanceKpis.currentInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())).order("created_at", { ascending: true }),
+      "[getFinanceKpis.previousInvoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)).order("created_at", { ascending: true }),
+      "[getFinanceKpis.currentCash]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())).order("created_at", { ascending: true }),
+      "[getFinanceKpis.previousCash]",
+    ),
   ]);
 
-  const revenue = (thisInv.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
-  const prevRevenue = (prevInv.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
-  const expense = (thisCash.data ?? []).filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
-  const prevExpense = (prevCash.data ?? []).filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
+  const revenue = thisInv.reduce((s, i) => s + (i.total ?? 0), 0);
+  const prevRevenue = prevInv.reduce((s, i) => s + (i.total ?? 0), 0);
+  const expense = thisCash.filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
+  const prevExpense = prevCash.filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
   const profit = revenue - expense;
   const prevProfit = prevRevenue - prevExpense;
 
@@ -2185,8 +2276,14 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [invData, cashData] = await Promise.all([
-    bq(supabase.from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)),
-    bq(supabase.from("cash_transactions").select("created_at, type, amount").eq("tenant_id", tenantId).gte("created_at", range.start).lt("created_at", range.end)),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)).order("created_at", { ascending: true }),
+      "[getRevenueVsExpense.invoices]",
+    ),
+    fetchAllPostgrestRows(
+      () => bq(supabase.from("cash_transactions").select("created_at, type, amount").eq("tenant_id", tenantId).gte("created_at", range.start).lt("created_at", range.end)).order("created_at", { ascending: true }),
+      "[getRevenueVsExpense.cashTransactions]",
+    ),
   ]);
 
   // P1-3B-R4: key kèm year để không merge T6/2025 và T6/2026.
@@ -2200,13 +2297,13 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
     expMap.set(key, 0);
   }
 
-  (invData.data ?? []).forEach(inv => {
+  invData.forEach(inv => {
     const d = new Date(inv.created_at);
     const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (revMap.has(key)) revMap.set(key, (revMap.get(key) ?? 0) + (inv.total ?? 0));
   });
 
-  (cashData.data ?? []).forEach(c => {
+  cashData.forEach(c => {
     if (c.type === "payment") {
       const d = new Date(c.created_at);
       const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
@@ -2237,9 +2334,7 @@ export async function getExpenseBreakdown(
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getExpenseBreakdown");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getExpenseBreakdown]");
 
   const map = new Map<string, number>();
   (data ?? []).forEach(c => {
@@ -2272,9 +2367,7 @@ export async function getCashFlow(months: number = 6, branchId?: string): Promis
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getCashFlow");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlow]");
 
   // P1-3B-R4: key kèm year (chống merge T6/2025 + T6/2026 → cumulativeBalance sai).
   const now = new Date();
@@ -2335,9 +2428,7 @@ export async function getCashFlowDetailed(months: number = 6, branchId?: string)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query;
-
-  if (error) handleError(error, "getCashFlowDetailed");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlowDetailed]");
 
   // P1-3B-R4: key kèm year.
   const now = new Date();
@@ -2457,11 +2548,10 @@ export async function getCrossChannelKpis(
       .lt("invoices.created_at", r.end)
       .eq("invoices.status", "completed");
     if (branchId) query = query.eq("invoices.branch_id", branchId);
-    const { data, error } = await query;
-    if (error) {
-      console.warn("[getCrossChannelKpis]", error.message);
-      return { retail: 0, fnb: 0, retailInvIds: new Set<string>(), fnbInvIds: new Set<string>() };
-    }
+    const data = await fetchAllPostgrestRows<Record<string, unknown>>(
+      () => query.order("id", { ascending: true }),
+      "[getCrossChannelKpis]",
+    );
     let retail = 0;
     let fnb = 0;
     const retailInvIds = new Set<string>();
@@ -2520,11 +2610,10 @@ export async function getCrossChannelTrend(
     .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
-  if (error) {
-    console.warn("[getCrossChannelTrend]", error.message);
-    return [];
-  }
+  const data = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => query.order("id", { ascending: true }),
+    "[getCrossChannelTrend]",
+  );
 
   // Group by date (YYYY-MM-DD)
   const byDay = new Map<string, { retail: number; fnb: number }>();
@@ -2568,11 +2657,10 @@ export async function getCrossChannelTopProducts(
     .lt("invoices.created_at", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
-  const { data, error } = await query;
-  if (error) {
-    console.warn("[getCrossChannelTopProducts]", error.message);
-    return { retail: [], fnb: [] };
-  }
+  const data = await fetchAllPostgrestRows<Record<string, unknown>>(
+    () => query.order("id", { ascending: true }),
+    "[getCrossChannelTopProducts]",
+  );
 
   const agg = new Map<string, ChannelTopProduct>();
   (data ?? []).forEach((row: Record<string, unknown>) => {

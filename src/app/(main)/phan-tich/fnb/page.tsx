@@ -70,8 +70,7 @@ const COLORS = [
 ];
 
 export default function FnbAnalyticsPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -82,9 +81,6 @@ export default function FnbAnalyticsPage() {
   const [hourly, setHourly] = useState<HourlyRevenue[]>([]);
   const [cashiers, setCashiers] = useState<CashierPerformance[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   useEffect(() => {
     if (!isReady) return;
@@ -337,7 +333,7 @@ export default function FnbAnalyticsPage() {
           {/* Revenue by Hour */}
           <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ doanh thu trong ngày">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={hourly.filter((h) => h.revenue > 0 || h.orders > 0)}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
@@ -352,7 +348,7 @@ export default function FnbAnalyticsPage() {
           {/* Top Menu Items */}
           <ChartCard title="Top món bán chạy" subtitle="Theo doanh thu">
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={menuItems.slice(0, 10)} layout="vertical">
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tickFormatter={formatChartCurrency} tick={{ fontSize: 11 }} />

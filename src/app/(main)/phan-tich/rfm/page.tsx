@@ -307,7 +307,7 @@ export default function RfmReportPage() {
       };
 
       exportReportToExcel({
-        kind: "khach-hang",
+        kind: "rfm",
         mode: "full",
         range,
         tenantName: "OneBiz",
@@ -398,7 +398,7 @@ export default function RfmReportPage() {
           subtitle="Tỷ trọng từng phân khúc"
         >
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
               <PieChart>
                 <Pie
                   data={segments.filter((s) => s.count > 0)}
