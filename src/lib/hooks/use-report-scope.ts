@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/contexts";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 
@@ -17,11 +17,12 @@ export function useReportScope() {
     user,
   } = useAuth();
   const initializedRef = useRef(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   const canViewAll =
     hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
     hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
-  const isReady = !!tenant;
+  const authReady = !!tenant;
 
   const fallbackBranchId = useMemo(
     () =>
@@ -32,7 +33,7 @@ export function useReportScope() {
   );
 
   useEffect(() => {
-    if (!isReady || initializedRef.current) return;
+    if (!authReady || initializedRef.current) return;
 
     const params = new URLSearchParams(window.location.search);
     const requestedBranch = params.get(BRANCH_PARAM);
@@ -53,17 +54,19 @@ export function useReportScope() {
       switchBranch(nextBranchId);
     }
     initializedRef.current = true;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- URL/auth scope initializes once.
+    setIsInitialized(true);
   }, [
     activeBranchId,
     branches,
     canViewAll,
     fallbackBranchId,
-    isReady,
+    authReady,
     switchBranch,
   ]);
 
   useEffect(() => {
-    if (!isReady || !initializedRef.current) return;
+    if (!authReady || !isInitialized || !initializedRef.current) return;
     if (!canViewAll && !activeBranchId) return;
 
     const url = new URL(window.location.href);
@@ -72,7 +75,7 @@ export function useReportScope() {
 
     url.searchParams.set(BRANCH_PARAM, nextValue);
     window.history.replaceState(window.history.state, "", url);
-  }, [activeBranchId, canViewAll, isReady]);
+  }, [activeBranchId, authReady, canViewAll, isInitialized]);
 
   const selectBranch = useCallback(
     (branchId: string | null) => {
@@ -92,7 +95,7 @@ export function useReportScope() {
     branches,
     branchName: currentBranch?.name ?? "Toàn công ty",
     canViewAll,
-    isReady,
+    isReady: authReady && isInitialized,
     selectBranch,
   };
 }

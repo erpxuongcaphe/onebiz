@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/contexts";
+import { useReportScope } from "@/lib/hooks/use-report-scope";
 import {
   REPORT_CATALOG,
   REPORT_CATEGORIES,
@@ -25,9 +26,14 @@ import { rememberRecentReportPath } from "@/lib/reports/preferences";
 
 export function ReportShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { isLoading, hasPermission } = useAuth();
+  const { activeBranchId, isLoading, hasPermission } = useAuth();
+  const { isReady: isScopeReady } = useReportScope();
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const setPickerVisibility = (open: boolean) => {
+    setPickerOpen(open);
+    if (!open) setQuery("");
+  };
 
   const currentReport = getReportByPath(pathname);
   const accessibleReports = useMemo(
@@ -51,11 +57,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
     }
   }, [canViewPage, currentReport]);
 
-  useEffect(() => {
-    if (!pickerOpen) setQuery("");
-  }, [pickerOpen]);
-
-  if (isLoading) {
+  if (isLoading || !isScopeReady) {
     return (
       <div className="flex min-h-[320px] items-center justify-center text-muted-foreground">
         <Icon name="progress_activity" size={28} className="animate-spin" />
@@ -106,7 +108,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
         </div>
         <button
           type="button"
-          onClick={() => setPickerOpen(true)}
+          onClick={() => setPickerVisibility(true)}
           className="inline-flex h-9 shrink-0 items-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-surface-container"
           aria-label="Đổi báo cáo"
         >
@@ -115,9 +117,16 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
         </button>
       </div>
 
-      <div className="min-h-0 flex-1">{children}</div>
+      {/* Remount report state so an older branch response cannot overwrite the new scope. */}
 
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+      <div
+        key={activeBranchId ?? "__all__"}
+        className="min-h-0 flex-1"
+      >
+        {children}
+      </div>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerVisibility}>
         <DialogContent className="grid max-h-[min(760px,calc(100vh-2rem))] w-[min(760px,calc(100vw-2rem))] max-w-none grid-rows-[auto,auto,minmax(0,1fr)] gap-3 p-4">
           <DialogHeader>
             <DialogTitle>Đổi báo cáo</DialogTitle>
@@ -161,7 +170,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
                           <Link
                             key={report.href}
                             href={report.href}
-                            onClick={() => setPickerOpen(false)}
+                            onClick={() => setPickerVisibility(false)}
                             className="flex items-start gap-3 px-3 py-2.5 hover:bg-surface-container-low"
                           >
                             <Icon
