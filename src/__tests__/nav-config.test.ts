@@ -47,6 +47,29 @@ describe("isHrefActive — longest match wins", () => {
     expect(isHrefActive("/hang-hoa-xyz", "/hang-hoa")).toBe(false); // not /hang-hoa/...
   });
 
+  it("supports exact-only leaves while keeping their parent group active", () => {
+    expect(isHrefActive("/phan-tich", "/phan-tich", true)).toBe(true);
+    expect(
+      isHrefActive("/phan-tich/khach-san-pham", "/phan-tich", true),
+    ).toBe(false);
+
+    const reportsGroup = sidebarNavGroups.find((group) => group.label === "Báo cáo");
+    expect(reportsGroup).toBeDefined();
+    if (!reportsGroup) return;
+    const overviewLeaf = reportsGroup.items?.find(
+      (leaf) => leaf.href === "/phan-tich",
+    );
+    expect(overviewLeaf?.exact).toBe(true);
+    expect(
+      isHrefActive(
+        "/phan-tich/khach-san-pham",
+        overviewLeaf?.href ?? "",
+        overviewLeaf?.exact,
+      ),
+    ).toBe(false);
+    expect(isGroupActive("/phan-tich/khach-san-pham", reportsGroup)).toBe(true);
+  });
+
   it("isGroupActive: nhóm Danh mục active khi user ở /hang-hoa/nhom (CEO 04/05 reorg)", () => {
     // Sau reorg sidebar (CEO 04/05/2026):
     // - /hang-hoa/nhom thuộc group "Danh mục" → sub "Sản phẩm"

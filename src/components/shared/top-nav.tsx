@@ -294,7 +294,7 @@ function MobileLeafLink({
   pathname: string;
   onClose: () => void;
 }) {
-  const active = isHrefActive(pathname, leaf.href);
+  const active = isHrefActive(pathname, leaf.href, leaf.exact);
 
   if (leaf.disabled) {
     return (
@@ -342,7 +342,9 @@ function MobileSubGroupAccordion({
   pathname: string;
   onClose: () => void;
 }) {
-  const hasActive = subGroup.items.some((l) => isHrefActive(pathname, l.href));
+  const hasActive = subGroup.items.some((l) =>
+    isHrefActive(pathname, l.href, l.exact),
+  );
   const [open, setOpen] = useState<boolean>(hasActive);
   useEffect(() => {
     if (hasActive) setOpen(true);

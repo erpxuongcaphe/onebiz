@@ -127,6 +127,8 @@ export type SidebarMode = "admin" | "pos";
 export interface SidebarLeaf {
   label: string;
   href: string;
+  /** Only highlight this leaf when pathname exactly equals href. */
+  exact?: boolean;
   /** Material Symbols Outlined name, e.g. "home", "shopping_cart" */
   icon?: string;
   /** Disable click + dim style. Combine with `comingSoon` to show "Soon" badge. */
@@ -373,6 +375,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         href: "/phan-tich",
         icon: "insights",
         permission: "reports.dashboard",
+        exact: true,
       },
       {
         label: "Báo cáo cuối ngày",
@@ -438,8 +441,14 @@ const ALL_NAV_HREFS: string[] = (() => {
  *
  * Special case: href "/" only matches exact "/" để không match mọi pathname.
  */
-export function isHrefActive(pathname: string, href: string): boolean {
+export function isHrefActive(
+  pathname: string,
+  href: string,
+  exact = false,
+): boolean {
   if (href === "/") return pathname === "/";
+
+  if (exact) return pathname === href;
 
   // Exact match always wins
   if (pathname === href) return true;
