@@ -14,6 +14,11 @@ import {
   ChangeRequestButton,
   PlanReconcileButton,
 } from "@/components/mkt/plan-controls";
+import {
+  PlanHealthBadge,
+  ProgressReportButton,
+  PlanProgressHistoryButton,
+} from "@/components/mkt/plan-progress";
 
 const VERSION_OUTCOME: Record<string, string> = {
   approve: "duyệt",
@@ -74,7 +79,10 @@ export default async function PlanningPage() {
                         {p.campaignName ?? "—"} · Phụ trách: {p.ownerName ?? "—"}
                       </div>
                     </div>
-                    <PlanStatusBadge value={p.status} />
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <PlanStatusBadge value={p.status} />
+                      <PlanHealthBadge plan={p} />
+                    </div>
                   </div>
                   {p.objective ? (
                     <div className="line-clamp-2 text-xs text-on-surface-variant">🎯 {p.objective}</div>
@@ -101,6 +109,10 @@ export default async function PlanningPage() {
                     />
                     {isLead && p.status === "submitted" ? (
                       <PlanReviewButton plan={p} members={members} />
+                    ) : null}
+                    {p.status === "in_execution" ? <ProgressReportButton plan={p} /> : null}
+                    {p.progressReports.length > 0 ? (
+                      <PlanProgressHistoryButton plan={p} />
                     ) : null}
                     {p.status === "in_execution" ? <ChangeRequestButton plan={p} /> : null}
                     {isLead && p.status === "in_execution" ? (
