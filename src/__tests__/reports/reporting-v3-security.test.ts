@@ -26,12 +26,19 @@ describe("Reporting V3 database hardening", () => {
 
   it("guards all ten legacy report RPC implementations", () => {
     const definitions = securityMigration.match(
-      /'get_[a-z_]+_report',\n\s*'[a-z, ]+'/g,
+      /'get_[a-z_]+_report',\r?\n\s*'[a-z, ]+'/g,
     );
     expect(definitions).toHaveLength(10);
     expect(securityMigration).toContain("_unsecured_legacy");
     expect(securityMigration).toContain(
       "perform public.assert_report_access('reports.view_detail'",
+    );
+  });
+
+  it("only revokes obsolete report overloads when they still exist", () => {
+    expect(securityMigration).toContain("to_regprocedure(v_signature)");
+    expect(securityMigration).not.toMatch(
+      /revoke all on function public\.get_staff_revenue_report\(\s*timestamptz,\s*timestamptz,\s*text,\s*uuid\s*\)/i,
     );
   });
 

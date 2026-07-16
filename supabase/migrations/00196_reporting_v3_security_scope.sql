@@ -312,12 +312,25 @@ end;
 $migration$;
 
 -- These obsolete overloads have no branch parameter and must not bypass scope.
-revoke all on function public.get_staff_revenue_report(
-  timestamptz, timestamptz, text, uuid
-) from public, anon, authenticated;
-revoke all on function public.get_receivable_aging_report(uuid)
-  from public, anon, authenticated;
-revoke all on function public.get_vat_report(timestamptz, timestamptz, uuid)
-  from public, anon, authenticated;
-revoke all on function public.get_rfm_report(timestamptz, timestamptz, uuid)
-  from public, anon, authenticated;
+-- Production databases created after 00082 may no longer contain them, so only
+-- revoke privileges when an overload is actually present.
+do $migration$
+declare
+  v_signature text;
+begin
+  foreach v_signature in array array[
+    'public.get_staff_revenue_report(timestamptz,timestamptz,text,uuid)',
+    'public.get_receivable_aging_report(uuid)',
+    'public.get_vat_report(timestamptz,timestamptz,uuid)',
+    'public.get_rfm_report(timestamptz,timestamptz,uuid)'
+  ]
+  loop
+    if to_regprocedure(v_signature) is not null then
+      execute format(
+        'revoke all on function %s from public, anon, authenticated',
+        v_signature
+      );
+    end if;
+  end loop;
+end;
+$migration$;
