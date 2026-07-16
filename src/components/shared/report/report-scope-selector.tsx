@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
   Select,
@@ -19,6 +20,14 @@ export function ReportScopeSelector() {
     isReady,
     selectBranch,
   } = useReportScope();
+  const branchItems = useMemo(
+    () =>
+      branches.map((branch) => ({
+        value: branch.id,
+        label: branch.name,
+      })),
+    [branches],
+  );
 
   if (!isReady || branches.length === 0) return null;
 
@@ -46,6 +55,7 @@ export function ReportScopeSelector() {
       <Select
         value={activeBranchId ?? ""}
         onValueChange={(value) => value && selectBranch(value)}
+        items={branchItems}
       >
         <SelectTrigger
           size="sm"
@@ -56,7 +66,12 @@ export function ReportScopeSelector() {
           aria-label="Chọn chi nhánh báo cáo"
         >
           <Icon name="storefront" size={14} />
-          <SelectValue placeholder="Chọn chi nhánh" />
+          <SelectValue placeholder="Chọn chi nhánh">
+            {(value) =>
+              branchItems.find((item) => item.value === value)?.label ??
+              "Chọn chi nhánh"
+            }
+          </SelectValue>
         </SelectTrigger>
         <SelectContent align="end">
           {branches.map((branch) => (

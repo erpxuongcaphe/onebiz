@@ -43,6 +43,9 @@ describe("report branch scope integration", () => {
     );
     expect(selector).toContain('value={activeBranchId ?? ""}');
     expect(selector).toContain("Toàn công ty");
+    expect(selector).toContain("const branchItems = useMemo");
+    expect(selector).toContain("items={branchItems}");
+    expect(selector).toContain("item.value === value)?.label");
     expect(selector).not.toContain("selectedBranchId");
     expect(selector).not.toContain("To?n c?ng ty");
   });
@@ -54,6 +57,20 @@ describe("report branch scope integration", () => {
     );
     expect(header).toContain("PERMISSIONS.REPORTS_EXPORT_DETAIL");
     expect(header).toContain("canExportFull && onExportFull");
+  });
+
+  it("gives report charts stable initial dimensions", () => {
+    const sales = source("src/app/(main)/phan-tich/ban-hang/page.tsx");
+    const financial = source(
+      "src/app/(main)/phan-tich/bao-cao-tai-chinh/page.tsx",
+    );
+
+    for (const page of [sales, financial]) {
+      const containers = page.match(/<ResponsiveContainer/g) ?? [];
+      const initialized =
+        page.match(/initialDimension=\{\{ width: 320, height: 224 \}\}/g) ?? [];
+      expect(initialized).toHaveLength(containers.length);
+    }
   });
 
 });
