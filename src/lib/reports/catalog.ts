@@ -347,9 +347,9 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/bao-cao-tai-chinh",
-    title: "Báo cáo lãi lỗ quản trị",
-    shortTitle: "Báo cáo P&L",
-    description: "Doanh thu, giá vốn, chi phí và lợi nhuận theo kỳ đã chọn.",
+    title: "Báo cáo kết quả vận hành",
+    shortTitle: "Kết quả vận hành",
+    description: "Doanh thu, giá vốn, chi phí và kết quả vận hành theo kỳ đã chọn.",
     category: "finance",
     icon: "description",
     keywords: ["p&l", "lãi lỗ", "profit loss", "kết quả kinh doanh"],

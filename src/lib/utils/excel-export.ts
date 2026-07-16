@@ -22,8 +22,7 @@
  * - All cells có thin border + center alignment cho number cells
  */
 
-import * as XLSX from "xlsx-js-style";
-import { saveAs } from "file-saver";
+import type * as XLSXTypes from "xlsx-js-style";
 import type { DateRange, ReportKind } from "@/lib/types/report";
 import { roundDecimals } from "@/lib/format";
 
@@ -163,9 +162,12 @@ export interface ExcelSheet {
 // Build worksheet from schema
 // ============================================================
 
-function buildWorksheet(sheet: ExcelSheet): XLSX.WorkSheet {
-  const ws: XLSX.WorkSheet = {};
-  const merges: XLSX.Range[] = [];
+function buildWorksheet(
+  sheet: ExcelSheet,
+  XLSX: typeof import("xlsx-js-style"),
+): XLSXTypes.WorkSheet {
+  const ws: XLSXTypes.WorkSheet = {};
+  const merges: XLSXTypes.Range[] = [];
   const rowHeights: { hpt: number }[] = [];
   let row = 0;
 
@@ -309,7 +311,7 @@ function buildWorksheet(sheet: ExcelSheet): XLSX.WorkSheet {
   return ws;
 }
 
-function formatCell(value: unknown, col: ExcelColumn): XLSX.CellObject {
+function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
   const format = col.format ?? "text";
   const isNumber = format === "number" || format === "currency" || format === "percent";
 
@@ -382,6 +384,13 @@ export interface ExportOptions {
   branchName?: string;
   /** Tenant name (vd "Cà Phê OneBiz") cho title row */
   tenantName?: string;
+  /** Friendly report title used in workbook metadata and the Info sheet. */
+  reportTitle?: string;
+  description?: string;
+  generatedBy?: string;
+  timezone?: string;
+  disclaimer?: string;
+  guide?: string[];
   /** Sheets to export — caller cung cấp */
   sheets: ExcelSheet[];
 }
@@ -389,20 +398,39 @@ export interface ExportOptions {
 /**
  * Generate Excel file và download.
  */
-export function exportReportToExcel(options: ExportOptions): void {
+export async function exportReportToExcel(
+  options: ExportOptions,
+): Promise<void> {
+  const [xlsxModule, fileSaverModule] = await Promise.all([
+    import("xlsx-js-style"),
+    import("file-saver"),
+  ]);
+  const XLSX =
+    "utils" in xlsxModule
+      ? xlsxModule
+      : (xlsxModule as unknown as {
+          default: typeof import("xlsx-js-style");
+        }).default;
+  const saveAs =
+    "saveAs" in fileSaverModule
+      ? fileSaverModule.saveAs
+      : (fileSaverModule as unknown as {
+          default: typeof import("file-saver")["saveAs"];
+        }).default;
   const wb = XLSX.utils.book_new();
 
   // Workbook properties — hiển thị trong File Info
+  const reportTitle = options.reportTitle ?? getReportKindLabel(options.kind);
   wb.Props = {
-    Title: `Báo cáo ${options.kind}`,
-    Subject: `Báo cáo phân tích ${options.kind} — ${options.range.from} đến ${options.range.to}`,
+    Title: reportTitle,
+    Subject: reportTitle + " — " + options.range.from + " đến " + options.range.to,
     Author: options.tenantName ?? "OneBiz ERP",
     Company: options.tenantName ?? "OneBiz",
     CreatedDate: new Date(),
   };
 
-  for (const sheet of options.sheets) {
-    const ws = buildWorksheet(sheet);
+  for (const sheet of ensureFullExportInfoSheet(options)) {
+    const ws = buildWorksheet(sheet, XLSX);
     const safeName = sheet.name
       .replace(/[\\/:*?[\]]/g, "")
       .substring(0, 31);
@@ -438,6 +466,76 @@ function buildFilename(options: ExportOptions): string {
   return `OneBiz_${kind}_${branchSafe}_${period}_${exportDate}.xlsx`;
 }
 
+const REPORT_KIND_LABELS: Record<ReportKind, string> = {
+  "cuoi-ngay": "Báo cáo cuối ngày",
+  "ban-hang": "Báo cáo bán hàng",
+  fnb: "Báo cáo FnB",
+  "dat-hang": "Báo cáo đặt hàng",
+  "kenh-ban": "Báo cáo kênh bán",
+  "khuyen-mai": "Báo cáo khuyến mãi",
+  "xuat-nhap-ton": "Báo cáo xuất nhập tồn",
+  "hang-hoa": "Báo cáo hàng hóa",
+  "khach-hang": "Báo cáo khách hàng",
+  "nha-cung-cap": "Báo cáo nhà cung cấp",
+  "tai-chinh": "Báo cáo tài chính quản trị",
+  "luong-tien": "Báo cáo lưu chuyển tiền",
+  "bao-cao-tai-chinh": "Báo cáo kết quả vận hành",
+  "canh-bao": "Báo cáo cảnh báo",
+  "so-quy": "Báo cáo sổ quỹ",
+  "tong-hop-kenh": "Báo cáo tổng hợp kênh",
+  "fnb-shipper": "Báo cáo giao hàng FnB",
+  "du-kien-mua-hang": "Báo cáo dự kiến mua hàng",
+};
+
+function getReportKindLabel(kind: ReportKind): string {
+  return REPORT_KIND_LABELS[kind];
+}
+
+function normalizeSheetName(name: string): string {
+  return name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Full exports always carry scope and interpretation metadata. Existing
+ * hand-built Info sheets are preserved and never duplicated.
+ */
+export function ensureFullExportInfoSheet(options: ExportOptions): ExcelSheet[] {
+  if (options.mode !== "full") return options.sheets;
+
+  const hasInfoSheet = options.sheets.some((sheet) => {
+    const normalized = normalizeSheetName(sheet.name);
+    return normalized === "thongtin" || normalized === "info";
+  });
+  if (hasInfoSheet) return options.sheets;
+
+  return [
+    buildInfoSheet({
+      title: options.reportTitle ?? getReportKindLabel(options.kind),
+      description:
+        options.description ??
+        "Báo cáo quản trị tổng hợp theo kỳ và phạm vi chi nhánh đã chọn.",
+      range: options.range,
+      branchName: options.branchName ?? "Theo phạm vi đang xem trên web",
+      tenantName: options.tenantName,
+      generatedBy: options.generatedBy,
+      timezone: options.timezone,
+      disclaimer:
+        options.disclaimer ??
+        "Báo cáo quản trị nội bộ; cần đối soát với chứng từ và sổ kế toán trước khi dùng cho báo cáo pháp định.",
+      guide:
+        options.guide ??
+        [
+          "Các sheet chi tiết dùng cùng kỳ và phạm vi chi nhánh ghi ở trên.",
+          "Số tiền dùng đơn vị VND, phần trăm được tính trên dữ liệu trong phạm vi đã chọn.",
+        ],
+    }),
+    ...options.sheets,
+  ];
+}
 // ============================================================
 // Helper: build "Sheet 0 — Thông tin báo cáo" (chuẩn MISA/KiotViet)
 // ============================================================
@@ -452,6 +550,8 @@ export interface InfoSheetOptions {
   tenantName?: string;
   generatedAt?: Date;
   generatedBy?: string;
+  /** IANA timezone used to interpret report dates. */
+  timezone?: string;
   /** Disclaimer (vd "Báo cáo quản trị — không thay thế BCTC theo TT200/133") */
   disclaimer?: string;
   /** Hướng dẫn đọc báo cáo (optional) — bullet list */
@@ -484,6 +584,7 @@ export function buildInfoSheet(opts: InfoSheetOptions): ExcelSheet {
       value: `${fmtDate(opts.range.from)} → ${fmtDate(opts.range.to)}`,
     },
     { label: "Chi nhánh", value: opts.branchName ?? "Tất cả chi nhánh" },
+    { label: "Múi giờ", value: opts.timezone ?? "Asia/Ho_Chi_Minh" },
     { label: "Ngày xuất", value: fmtDateTime },
   );
   if (opts.generatedBy) {

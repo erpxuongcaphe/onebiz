@@ -27,6 +27,7 @@ import { ReportDateRangePicker } from "./report-date-range-picker";
 import { ChartTableSwitch } from "./chart-table-switch";
 import { useAuth } from "@/lib/contexts";
 import { PERMISSIONS } from "@/lib/permissions/constants";
+import { ReportScopeSelector } from "./report-scope-selector";
 
 interface ReportPageHeaderProps {
   title: string;
@@ -49,6 +50,8 @@ interface ReportPageHeaderProps {
   /** Ẩn date range picker — dùng cho báo cáo snapshot (aging, công nợ aging).
    *  Tránh user hiểu lầm chọn ngày nhưng số không đổi. CEO 16/05/2026. */
   hideDateRange?: boolean;
+  /** Hide only for pages whose rows are not branch-owned. */
+  hideBranchScope?: boolean;
 }
 
 export function ReportPageHeader({
@@ -65,11 +68,13 @@ export function ReportPageHeader({
   exportDisabled,
   actions,
   hideDateRange,
+  hideBranchScope,
 }: ReportPageHeaderProps) {
   const { hasPermission } = useAuth();
+  const canExportView = hasPermission(PERMISSIONS.REPORTS_EXPORT);
+  const canExportFull = hasPermission(PERMISSIONS.REPORTS_EXPORT_DETAIL);
   const hasExport =
-    hasPermission(PERMISSIONS.REPORTS_EXPORT) &&
-    !!(onExportView || onExportFull);
+    (canExportView && !!onExportView) || (canExportFull && !!onExportFull);
   const showSwitch = viewMode != null && onViewModeChange;
 
   return (
@@ -86,6 +91,7 @@ export function ReportPageHeader({
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {!hideBranchScope && <ReportScopeSelector />}
           {showSwitch && (
             <ChartTableSwitch value={viewMode} onChange={onViewModeChange} />
           )}
@@ -113,7 +119,7 @@ export function ReportPageHeader({
                 <Icon name="expand_more" size={14} />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" sideOffset={6} className="p-1 min-w-[220px]">
-                {onExportView && (
+                {canExportView && onExportView && (
                   <button
                     onClick={onExportView}
                     className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left text-xs hover:bg-surface-container press-scale-sm"
@@ -133,7 +139,7 @@ export function ReportPageHeader({
                     </div>
                   </button>
                 )}
-                {onExportFull && (
+                {canExportFull && onExportFull && (
                   <button
                     onClick={onExportFull}
                     className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left text-xs hover:bg-surface-container press-scale-sm"

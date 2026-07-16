@@ -1,60 +1,46 @@
 "use client";
 
-/**
- * useReportState — hook chung cho 14 báo cáo phân tích.
- *
- * Trước đây mỗi page tự quản lý preset/dateRange/viewMode → 14 chỗ duplicate +
- * `DateRangeBar` props onPresetChange KHÔNG được wire lên (CEO 06/05 phát hiện
- * date filter không re-fetch). Hook này tập trung state + URL persist.
- *
- * Pattern KiotViet:
- * - Default preset: thisMonth
- * - URL persist via search params (?preset=thisMonth&from=...&to=...&view=table)
- * - Custom range chỉ active khi preset === "custom"
- * - viewMode default "chart" (Stitch UX), có thể override per-page
- */
-
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   DatePreset,
   DateRange,
   ReportViewMode,
 } from "@/lib/types/report";
-import { resolvePreset } from "@/lib/utils/date-presets";
+import { DATE_PRESETS, resolvePreset } from "@/lib/utils/date-presets";
 
 interface UseReportStateOptions {
-  /** Default preset, default "thisMonth" */
   defaultPreset?: DatePreset;
-  /** Default view mode, default "chart" */
   defaultViewMode?: ReportViewMode;
-  /** Disable view mode toggle (always table) — cho báo cáo bảng-only như XNT */
   forceTable?: boolean;
 }
 
 export interface UseReportStateReturn {
-  /** Current preset key */
   preset: DatePreset;
-  /** Resolved date range (always defined — fallback to thisMonth nếu custom mà chưa set) */
   range: DateRange;
-  /** Current view mode (chart / table) */
   viewMode: ReportViewMode;
-  /** Setter cho preset — auto resolve range hoặc giữ custom nếu chuyển về custom */
   setPreset: (next: DatePreset) => void;
-  /** Setter cho custom range — cũng auto switch preset → "custom" */
   setCustomRange: (range: DateRange) => void;
-  /** Setter cho view mode */
   setViewMode: (next: ReportViewMode) => void;
-  /** True nếu force table mode (không toggle được) */
   forceTable: boolean;
 }
 
-/**
- * Hook quản lý state báo cáo. Trả về state + setters.
- *
- * @example
- *   const { preset, range, viewMode, setPreset, setViewMode } = useReportState();
- *   useEffect(() => { fetch(...range) }, [range]);
- */
+const VALID_PRESETS = new Set<DatePreset>([
+  ...DATE_PRESETS.map((preset) => preset.key),
+  "custom",
+]);
+const VALID_VIEWS = new Set<ReportViewMode>(["chart", "table"]);
+const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidDateRange(from: string | null, to: string | null): boolean {
+  return (
+    !!from &&
+    !!to &&
+    ISO_DATE_PATTERN.test(from) &&
+    ISO_DATE_PATTERN.test(to) &&
+    from <= to
+  );
+}
+
 export function useReportState(
   options: UseReportStateOptions = {},
 ): UseReportStateReturn {
@@ -69,15 +55,52 @@ export function useReportState(
   const [viewMode, setViewMode] = useState<ReportViewMode>(
     forceTable ? "table" : defaultViewMode,
   );
+  const [urlReady, setUrlReady] = useState(false);
 
-  // Resolve range từ preset (hoặc custom nếu preset === "custom")
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedPreset = params.get("preset") as DatePreset | null;
+    const requestedView = params.get("view") as ReportViewMode | null;
+    const from = params.get("from");
+    const to = params.get("to");
+    const hasCustomRange = isValidDateRange(from, to);
+
+    if (
+      requestedPreset &&
+      VALID_PRESETS.has(requestedPreset) &&
+      (requestedPreset !== "custom" || hasCustomRange)
+    ) {
+      setPresetState(requestedPreset);
+    }
+    if (hasCustomRange) {
+      setCustomRangeState({ from: from!, to: to! });
+    }
+    if (!forceTable && requestedView && VALID_VIEWS.has(requestedView)) {
+      setViewMode(requestedView);
+    }
+    setUrlReady(true);
+  }, [forceTable]);
+
   const range = useMemo<DateRange>(() => {
     if (preset === "custom" && customRange) return customRange;
-    const resolved = resolvePreset(preset);
-    if (resolved) return resolved;
-    // Fallback thisMonth nếu preset === "custom" chưa set range
-    return resolvePreset("thisMonth")!;
-  }, [preset, customRange]);
+    return resolvePreset(preset) ?? resolvePreset("thisMonth")!;
+  }, [customRange, preset]);
+
+  useEffect(() => {
+    if (!urlReady) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("preset", preset);
+    url.searchParams.set("view", viewMode);
+    if (preset === "custom") {
+      url.searchParams.set("from", range.from);
+      url.searchParams.set("to", range.to);
+    } else {
+      url.searchParams.delete("from");
+      url.searchParams.delete("to");
+    }
+    window.history.replaceState(window.history.state, "", url);
+  }, [preset, range.from, range.to, urlReady, viewMode]);
 
   const setPreset = useCallback((next: DatePreset) => {
     setPresetState(next);
@@ -90,8 +113,7 @@ export function useReportState(
 
   const setViewModeSafe = useCallback(
     (next: ReportViewMode) => {
-      if (forceTable) return;
-      setViewMode(next);
+      if (!forceTable) setViewMode(next);
     },
     [forceTable],
   );

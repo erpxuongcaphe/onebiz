@@ -58,6 +58,7 @@ export default function FnbShipperReportPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [shippers, setShippers] = useState<DeliveryStaffPerformance[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [drillOrders, setDrillOrders] = useState<ShipperOrderRow[]>([]);
@@ -126,7 +127,7 @@ export default function FnbShipperReportPage() {
   const totalDeliveryFee = shippers.reduce((s, sh) => s + sh.totalDeliveryFee, 0);
   const activeShippers = shippers.length;
 
-  const handleExportView = useCallback(() => {
+  const handleExportView = useCallback(async () => {
     try {
       const title = buildReportTitleRows({
         title: "BÁO CÁO SHIPPER FNB",
@@ -165,7 +166,7 @@ export default function FnbShipperReportPage() {
           completedCount: shippers.reduce((s, sh) => s + sh.completedCount, 0),
         },
       };
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "fnb-shipper",
         mode: "view",
         range,
@@ -182,6 +183,109 @@ export default function FnbShipperReportPage() {
     }
   }, [shippers, range, branchLabel, totalOrders, totalRevenue, totalDeliveryFee, toast]);
 
+  const handleExportFull = useCallback(async () => {
+    setExporting(true);
+    try {
+      const orderGroups = await Promise.all(
+        shippers.map(async (shipper) => ({
+          shipper,
+          orders: await getOrdersByDeliveryStaff(
+            shipper.staffId,
+            activeBranchId,
+            range,
+          ),
+        })),
+      );
+      const titleRows = buildReportTitleRows({
+        title: "Báo cáo hiệu suất giao hàng FnB",
+        range,
+        branchName: branchLabel,
+        generatedAt: new Date(),
+      });
+      const summarySheet: ExcelSheet = {
+        name: "1. Tổng hợp shipper",
+        titleRows,
+        columns: [
+          { label: "Hạng", key: "rank", width: 7, format: "number" },
+          { label: "Nhân viên giao", key: "staffName", width: 28 },
+          { label: "Số đơn", key: "totalOrders", width: 12, format: "number" },
+          { label: "Doanh thu HĐ", key: "totalRevenue", width: 18, format: "currency" },
+          { label: "Phí giao thu", key: "totalDeliveryFee", width: 18, format: "currency" },
+          { label: "Thời gian TB (giây)", key: "avgDeliverySeconds", width: 18, format: "number" },
+          { label: "Đơn giao xong", key: "completedCount", width: 16, format: "number" },
+        ],
+        rows: shippers.map((shipper, index) => ({
+          rank: index + 1,
+          staffName: shipper.staffName,
+          totalOrders: shipper.totalOrders,
+          totalRevenue: shipper.totalRevenue,
+          totalDeliveryFee: shipper.totalDeliveryFee,
+          avgDeliverySeconds: shipper.avgDeliverySeconds,
+          completedCount: shipper.completedCount,
+        })),
+      };
+      const detailSheet: ExcelSheet = {
+        name: "2. Chi tiết đơn giao",
+        columns: [
+          { label: "Nhân viên giao", key: "staffName", width: 28 },
+          { label: "Mã đơn", key: "orderNumber", width: 16 },
+          { label: "Mã hóa đơn", key: "invoiceCode", width: 16 },
+          { label: "Khách hàng", key: "customerName", width: 28 },
+          { label: "Doanh thu", key: "total", width: 18, format: "currency" },
+          { label: "Phí giao", key: "deliveryFee", width: 16, format: "currency" },
+          { label: "Cự ly", key: "tier", width: 12 },
+          { label: "Giao lúc", key: "assignedAt", width: 20, format: "date" },
+          { label: "Hoàn tất lúc", key: "completedAt", width: 20, format: "date" },
+          { label: "Thời gian (giây)", key: "duration", width: 18, format: "number" },
+        ],
+        rows: orderGroups.flatMap(({ shipper, orders }) =>
+          orders.map((order) => ({
+            staffName: shipper.staffName,
+            orderNumber: order.orderNumber,
+            invoiceCode: order.invoiceCode ?? "",
+            customerName: order.customerName,
+            total: order.total,
+            deliveryFee: order.deliveryFee,
+            tier: order.deliveryTier ? TIER_LABEL[order.deliveryTier] ?? order.deliveryTier : "",
+            assignedAt: order.assignedAt
+              ? new Date(order.assignedAt).toLocaleString("vi-VN")
+              : "",
+            completedAt: order.completedAt
+              ? new Date(order.completedAt).toLocaleString("vi-VN")
+              : "",
+            duration: order.durationSeconds ?? "",
+          })),
+        ),
+      };
+
+      await exportReportToExcel({
+        kind: "fnb-shipper",
+        mode: "full",
+        range,
+        branchName: branchLabel,
+        reportTitle: "Báo cáo hiệu suất giao hàng FnB",
+        description:
+          "Tổng hợp hiệu suất từng nhân viên và chi tiết toàn bộ đơn giao trong phạm vi đã chọn.",
+        sheets: [summarySheet, detailSheet],
+      });
+      toast({ title: "Đã xuất báo cáo shipper đầy đủ", variant: "success" });
+    } catch (error) {
+      toast({
+        title: "Lỗi xuất báo cáo shipper",
+        description: error instanceof Error ? error.message : "",
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    activeBranchId,
+    branchLabel,
+    range,
+    shippers,
+    toast,
+  ]);
+
   const reportHeader = (
     <ReportPageHeader
       title="Hiệu suất shipper"
@@ -193,8 +297,8 @@ export default function FnbShipperReportPage() {
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       onExportView={handleExportView}
-      onExportFull={handleExportView}
-      exportDisabled={loading || shippers.length === 0}
+      onExportFull={handleExportFull}
+      exportDisabled={loading || exporting || shippers.length === 0}
     />
   );
 

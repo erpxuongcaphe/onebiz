@@ -51,6 +51,46 @@ export interface TopInvoice {
   date: string;
 }
 
+export interface SalesKpis {
+  netRevenue: number;
+  prevNetRevenue: number;
+  goodsRevenue: number;
+  prevGoodsRevenue: number;
+  deliveryFee: number;
+  prevDeliveryFee: number;
+  soldQty: number;
+  prevSoldQty: number;
+  avgOrderValue: number;
+  prevAvgOrderValue: number;
+  returnRate: number;
+  prevReturnRate: number;
+  returnAmount: number;
+  prevReturnAmount: number;
+}
+
+export interface SalesReportSummary {
+  kpis: SalesKpis;
+  dailyRevenue: MonthlyRevenuePoint[];
+  revenueByWeekday: ChartPoint[];
+  revenueByHour: ChartPoint[];
+  topInvoices: TopInvoice[];
+}
+
+export interface SalesInvoiceExportRow {
+  code: string;
+  branchId: string;
+  customerName: string;
+  subtotal: number;
+  discountAmount: number;
+  deliveryFee: number;
+  total: number;
+  paid: number;
+  debt: number;
+  paymentMethod: string;
+  createdAt: string;
+}
+
+
 // === Cuối ngày (End of Day) ===
 
 export interface PaymentMethodBreakdown {
@@ -433,6 +473,7 @@ export async function getSalesKpis(
   soldQty: number; prevSoldQty: number;
   avgOrderValue: number; prevAvgOrderValue: number;
   returnRate: number; prevReturnRate: number;
+  returnAmount: number; prevReturnAmount: number;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -452,8 +493,8 @@ export async function getSalesKpis(
     bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
     bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")),
     bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
-    bq(supabase.from("sales_returns").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)),
+    bq(supabase.from("sales_returns").select("total", { count: "exact" }).eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("sales_returns").select("total", { count: "exact" }).eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", prev.start).lt("created_at", prev.end)),
   ]);
 
   const calcRev = (d: { total: number; status: string }[] | null) => (d ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
@@ -468,16 +509,29 @@ export async function getSalesKpis(
   const prevDelivery = calcDelivery(prevInv.data);
   const thisCount = calcCount(thisInv.data);
   const prevCount = calcCount(prevInv.data);
+  const thisReturnAmount = (thisReturns.data ?? []).reduce(
+    (sum, row) => sum + (row.total ?? 0),
+    0,
+  );
+  const prevReturnAmount = (prevReturns.data ?? []).reduce(
+    (sum, row) => sum + (row.total ?? 0),
+    0,
+  );
+  const thisNetRevenue = thisRev - thisReturnAmount;
+  const prevNetRevenue = prevRev - prevReturnAmount;
+
 
   return {
-    netRevenue: thisRev, prevNetRevenue: prevRev,
-    goodsRevenue: thisRev - thisDelivery, prevGoodsRevenue: prevRev - prevDelivery,
+    netRevenue: thisNetRevenue, prevNetRevenue,
+    goodsRevenue: thisNetRevenue - thisDelivery, prevGoodsRevenue: prevNetRevenue - prevDelivery,
     deliveryFee: thisDelivery, prevDeliveryFee: prevDelivery,
     soldQty: calcQty(thisItems.data), prevSoldQty: calcQty(prevItems.data),
-    avgOrderValue: thisCount > 0 ? Math.round(thisRev / thisCount) : 0,
-    prevAvgOrderValue: prevCount > 0 ? Math.round(prevRev / prevCount) : 0,
+    avgOrderValue: thisCount > 0 ? Math.round(thisNetRevenue / thisCount) : 0,
+    prevAvgOrderValue: prevCount > 0 ? Math.round(prevNetRevenue / prevCount) : 0,
     returnRate: thisCount > 0 ? Math.round(((thisReturns.count ?? 0) / thisCount) * 1000) / 10 : 0,
     prevReturnRate: prevCount > 0 ? Math.round(((prevReturns.count ?? 0) / prevCount) * 1000) / 10 : 0,
+    returnAmount: thisReturnAmount,
+    prevReturnAmount,
   };
 }
 
@@ -571,6 +625,185 @@ export async function getTopInvoices(
   });
 }
 
+
+/**
+ * Server-aggregated sales dashboard. Falls back to the legacy read path until
+ * migration 00198 is available, so code deployment and DB rollout can be staged.
+ */
+export async function getSalesReportSummary(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<SalesReportSummary> {
+  const supabase = getClient();
+  const resolved = resolveRange(range, thisMonthRange());
+
+  try {
+    const { data, error } = await (supabase.rpc as any)("get_sales_report_summary", {
+      p_date_from: resolved.start,
+      p_date_to: resolved.end,
+      p_branch_id: branchId ?? null,
+    });
+    if (error) throw error;
+
+    const payload = data as {
+      current?: Record<string, unknown>;
+      previous?: Record<string, unknown>;
+      daily?: MonthlyRevenuePoint[];
+      weekday?: ChartPoint[];
+      hourly?: ChartPoint[];
+      top_invoices?: TopInvoice[];
+    } | null;
+    if (!payload?.current || !payload.previous) {
+      throw new Error("Invalid sales summary response");
+    }
+
+    const number = (value: unknown) => {
+      const parsed = Number(value ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+    const current = payload.current;
+    const previous = payload.previous;
+    const currentReturnAmount = number(current.return_amount);
+    const previousReturnAmount = number(previous.return_amount);
+    const currentRevenue = number(current.net_revenue);
+    const previousRevenue = number(previous.net_revenue);
+    // Returns contain product value only; delivery fee remains unchanged unless
+    // a dedicated delivery-fee refund is recorded in the data model.
+    const currentDelivery = number(current.delivery_fee);
+    const previousDelivery = number(previous.delivery_fee);
+    const currentCount = number(current.invoice_count);
+    const previousCount = number(previous.invoice_count);
+
+    return {
+      kpis: {
+        netRevenue: currentRevenue,
+        prevNetRevenue: previousRevenue,
+        goodsRevenue: currentRevenue - currentDelivery,
+        prevGoodsRevenue: previousRevenue - previousDelivery,
+        deliveryFee: currentDelivery,
+        prevDeliveryFee: previousDelivery,
+        soldQty: number(current.sold_qty),
+        prevSoldQty: number(previous.sold_qty),
+        avgOrderValue: currentCount > 0 ? Math.round(currentRevenue / currentCount) : 0,
+        prevAvgOrderValue: previousCount > 0 ? Math.round(previousRevenue / previousCount) : 0,
+        returnRate:
+          currentCount > 0
+            ? Math.round((number(current.return_count) / currentCount) * 1000) / 10
+            : 0,
+        prevReturnRate:
+          previousCount > 0
+            ? Math.round((number(previous.return_count) / previousCount) * 1000) / 10
+            : 0,
+        returnAmount: currentReturnAmount,
+        prevReturnAmount: previousReturnAmount,
+      },
+      dailyRevenue: payload.daily ?? [],
+      revenueByWeekday: payload.weekday ?? [],
+      revenueByHour: payload.hourly ?? [],
+      topInvoices: payload.top_invoices ?? [],
+    };
+  } catch (error) {
+    console.warn("[getSalesReportSummary] RPC unavailable, using legacy fallback", error);
+    const [kpis, dailyRevenue, revenueByWeekday, revenueByHour, topInvoices] =
+      await Promise.all([
+        getSalesKpis(branchId, range),
+        getDailyRevenue(30, branchId, range),
+        getRevenueByWeekday(branchId, range),
+        getRevenueByHour(branchId, range),
+        getTopInvoices(10, branchId, range),
+      ]);
+    return { kpis, dailyRevenue, revenueByWeekday, revenueByHour, topInvoices };
+  }
+}
+
+/**
+ * Loads every completed invoice in the selected scope in bounded pages.
+ * This runs only for the explicit Full export action.
+ */
+export async function getSalesInvoiceExportRows(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<SalesInvoiceExportRow[]> {
+  const supabase = getClient();
+  const resolved = resolveRange(range, thisMonthRange());
+  const pageSize = 1000;
+  const rows: SalesInvoiceExportRow[] = [];
+
+  try {
+    let offset = 0;
+    while (true) {
+      const { data, error } = await (supabase.rpc as any)(
+        "get_sales_report_invoice_page",
+        {
+          p_date_from: resolved.start,
+          p_date_to: resolved.end,
+          p_branch_id: branchId ?? null,
+          p_offset: offset,
+          p_limit: pageSize,
+        },
+      );
+      if (error) throw error;
+
+      const payload = data as {
+        rows?: Array<Record<string, unknown>>;
+        has_more?: boolean;
+      } | null;
+      const page = payload?.rows ?? [];
+      rows.push(...page.map(mapSalesInvoiceExportRow));
+      if (!payload?.has_more || page.length === 0) return rows;
+      offset += page.length;
+    }
+  } catch (error) {
+    rows.length = 0;
+    console.warn("[getSalesInvoiceExportRows] RPC unavailable, using RLS fallback", error);
+  }
+
+  const tenantId = await getCurrentTenantId();
+  let offset = 0;
+  while (true) {
+    let query = supabase
+      .from("invoices")
+      .select(
+        "code, branch_id, customer_name, subtotal, discount_amount, delivery_fee, total, paid, debt, payment_method, created_at",
+      )
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed")
+      .gte("created_at", resolved.start)
+      .lt("created_at", resolved.end)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+    if (branchId) query = query.eq("branch_id", branchId);
+
+    const { data, error } = await query;
+    if (error) handleError(error, "getSalesInvoiceExportRows");
+
+    const page = (data ?? []) as Array<Record<string, unknown>>;
+    rows.push(...page.map(mapSalesInvoiceExportRow));
+    if (page.length < pageSize) return rows;
+    offset += page.length;
+  }
+}
+
+function mapSalesInvoiceExportRow(row: Record<string, unknown>): SalesInvoiceExportRow {
+  const number = (value: unknown) => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  return {
+    code: String(row.code ?? ""),
+    branchId: String(row.branch_id ?? ""),
+    customerName: String(row.customer_name ?? "Khách lẻ"),
+    subtotal: number(row.subtotal),
+    discountAmount: number(row.discount_amount),
+    deliveryFee: number(row.delivery_fee),
+    total: number(row.total),
+    paid: number(row.paid),
+    debt: number(row.debt),
+    paymentMethod: String(row.payment_method ?? ""),
+    createdAt: String(row.created_at ?? ""),
+  };
+}
+
 // ========================================
 // CUỐI NGÀY (End of Day) - /phan-tich/cuoi-ngay
 // ========================================
@@ -613,7 +846,7 @@ export async function getEndOfDayStats(
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
     bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
     bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", previous.start).lt("created_at", previous.end)),
-    bq(supabase.from("sales_returns").select("refunded").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)),
+    bq(supabase.from("sales_returns").select("total").eq("tenant_id", tenantId).in("status", ["confirmed", "completed"]).gte("created_at", current.start).lt("created_at", current.end)),
   ]);
 
   const completed = (todayInv.data ?? []).filter(i => i.status === "completed");
@@ -630,7 +863,7 @@ export async function getEndOfDayStats(
   const otherAmount = completed
     .filter(i => i.payment_method !== "cash" && i.payment_method !== "transfer" && i.payment_method !== "card")
     .reduce((s, i) => s + (i.total ?? 0), 0);
-  const returnAmount = (todayReturns.data ?? []).reduce((s, i) => s + (i.refunded ?? 0), 0);
+  const returnAmount = (todayReturns.data ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
 
   return {
     totalRevenue,

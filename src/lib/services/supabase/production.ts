@@ -394,6 +394,7 @@ export async function getAllProductLots(options?: {
   search?: string;
   status?: string;
   sourceType?: string;
+  branchId?: string;
 }): Promise<(ProductLot & { productName: string; productCode: string })[]> {
   const tenantId = await getCurrentTenantId();
 
@@ -404,6 +405,9 @@ export async function getAllProductLots(options?: {
     .order("created_at", { ascending: false })
     .limit(200);
 
+  if (options?.branchId) {
+    query = query.eq("branch_id", options.branchId);
+  }
   if (options?.status && options.status !== "all") {
     query = query.eq("status", options.status);
   }

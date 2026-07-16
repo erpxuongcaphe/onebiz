@@ -26,7 +26,8 @@ import {
   exportReportToExcel,
   buildReportTitleRows,
 } from "@/lib/utils/excel-export";
-import { getAllProductLots, getExpiringLots } from "@/lib/services";
+import { getAllProductLots } from "@/lib/services";
+import { useBranchFilter } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
 
@@ -56,12 +57,15 @@ const STATUS_LABEL: Record<string, string> = {
   depleted: "Hết hàng",
   expired: "Hết hạn",
   recalled: "Thu hồi",
+  consumed: "Đã dùng hết",
+  disposed: "Đã hủy",
 };
 
 export default function LotTraceabilityPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
+  const { activeBranchId, branches, isReady } = useBranchFilter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [lots, setLots] = useState<LotRow[]>([]);
@@ -69,52 +73,56 @@ export default function LotTraceabilityPage() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
     setLoading(true);
     try {
-      const [lotData, expiringData] = await Promise.all([
-        getAllProductLots({
-          search: search || undefined,
-          status: statusFilter !== "all" ? statusFilter : undefined,
-        }),
-        getExpiringLots(30),
-      ]);
+      const lotData = await getAllProductLots({
+        search: search || undefined,
+        status: statusFilter !== "all" ? statusFilter : undefined,
+        branchId: activeBranchId,
+      });
 
       const now = Date.now();
-      const rows: LotRow[] = lotData.map((l) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const anyLot = l as any;
-        const expiryDate = anyLot.expiry_date as string | null;
+      const rows: LotRow[] = lotData.map((lot) => {
+        const expiryDate = lot.expiryDate ?? null;
         const daysToExpiry = expiryDate
           ? Math.floor(
               (new Date(expiryDate).getTime() - now) / (1000 * 60 * 60 * 24),
             )
           : null;
+
         return {
-          id: anyLot.id,
-          // CEO 26/05/2026: schema column là lot_number (migration 00104),
-          // không phải lot_code. Fallback giữ cho legacy data.
-          lotCode: anyLot.lot_number ?? anyLot.lot_code ?? "—",
-          productCode: anyLot.productCode,
-          productName: anyLot.productName,
-          quantity: Number(anyLot.quantity ?? 0),
-          remainingQty: Number(anyLot.remaining_qty ?? 0),
-          receivedDate: anyLot.received_date ?? anyLot.created_at,
+          id: lot.id,
+          lotCode: lot.lotNumber,
+          productCode: lot.productCode,
+          productName: lot.productName,
+          quantity: Number(lot.initialQty ?? 0),
+          remainingQty: Number(lot.currentQty ?? 0),
+          receivedDate: lot.receivedDate,
           expiryDate,
           daysToExpiry,
-          sourceType: anyLot.source_type ?? "other",
-          status: anyLot.status ?? "active",
+          sourceType: lot.sourceType,
+          status: lot.status,
         };
       });
 
       setLots(rows);
-      setExpiringCount(expiringData.total);
+      setExpiringCount(
+        rows.filter(
+          (lot) =>
+            lot.status === "active" &&
+            lot.daysToExpiry !== null &&
+            lot.daysToExpiry >= 0 &&
+            lot.daysToExpiry <= 30,
+        ).length,
+      );
     } catch (err) {
       console.error("Failed to fetch lot data:", err);
       setLots([]);
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter]);
+  }, [activeBranchId, isReady, search, statusFilter]);
 
   useEffect(() => {
     fetchData();
@@ -128,6 +136,9 @@ export default function LotTraceabilityPage() {
     const titleRows = buildReportTitleRows({
       title: "Báo cáo lot traceability",
       range,
+      branchName: activeBranchId
+        ? branches.find((branch) => branch.id === activeBranchId)?.name
+        : "Toàn công ty",
       generatedAt: new Date(),
     });
     exportReportToExcel({
@@ -166,7 +177,7 @@ export default function LotTraceabilityPage() {
         },
       ],
     });
-  }, [lots, range]);
+  }, [activeBranchId, branches, lots, range]);
 
   const columns: DataTableColumn<LotRow>[] = [
     { label: "Mã lô", key: "lotCode", align: "left", width: "120px" },

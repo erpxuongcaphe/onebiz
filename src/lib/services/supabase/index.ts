@@ -183,7 +183,7 @@ export {
   // Overview
   getOverviewKpis, getDailyRevenue, getRevenueByCategory,
   // Sales
-  getSalesKpis, getRevenueByWeekday as getSalesRevenueByWeekday, getRevenueByHour as getSalesRevenueByHour, getTopInvoices,
+  getSalesKpis, getSalesReportSummary, getSalesInvoiceExportRows, getRevenueByWeekday as getSalesRevenueByWeekday, getRevenueByHour as getSalesRevenueByHour, getTopInvoices,
   // End of day
   getEndOfDayStats, getTodayTopProducts,
   // Orders
