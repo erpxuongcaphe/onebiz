@@ -79,7 +79,7 @@ function getMktAuthRedirect(request: NextRequest): string {
 function handleFnbSubdomain(
   request: NextRequest,
   supabaseResponse: NextResponse,
-  user: unknown,
+  isAuthenticated: boolean,
 ): NextResponse {
   const { pathname } = request.nextUrl;
 
@@ -93,7 +93,7 @@ function handleFnbSubdomain(
   // Giữ fix client-side useEffect localStorage (chỉ chạy khi mount /dang-nhap).
 
   // Unauthenticated → login
-  if (!user && !isPublicPath) {
+  if (!isAuthenticated && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/dang-nhap";
     url.searchParams.set("redirect", getFnbPublicPath(pathname));
@@ -101,7 +101,7 @@ function handleFnbSubdomain(
   }
 
   // Authenticated on auth page → redirect to the requested FnB screen.
-  if (user && isPublicPath) {
+  if (isAuthenticated && isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = getFnbAuthRedirect(request);
     url.search = "";
@@ -165,21 +165,21 @@ function handleFnbSubdomain(
 function handleMktSubdomain(
   request: NextRequest,
   supabaseResponse: NextResponse,
-  user: unknown,
+  isAuthenticated: boolean,
 ): NextResponse {
   const { pathname } = request.nextUrl;
 
   const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((p) => pathname.startsWith(p));
 
-  if (!user && !isPublicPath) {
+  if (!isAuthenticated && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/dang-nhap";
     url.searchParams.set("redirect", getMktPublicPath(pathname));
     return NextResponse.redirect(url);
   }
 
-  if (user && isPublicPath) {
+  if (isAuthenticated && isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = getMktAuthRedirect(request);
     url.search = "";
@@ -325,19 +325,19 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session - QUAN TRỌNG: không bỏ dòng này
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Verify the signed access token and refresh cookies when needed. getClaims()
+  // avoids the Auth network roundtrip that getUser() performs on every page request.
+  const { data: claimsData } = await supabase.auth.getClaims();
+  const isAuthenticated = Boolean(claimsData?.claims.sub);
 
   // ── FnB subdomain routing ──
   if (isFnbSubdomain(request)) {
-    return handleFnbSubdomain(request, supabaseResponse, user);
+    return handleFnbSubdomain(request, supabaseResponse, isAuthenticated);
   }
 
   // ── MKT Hub subdomain routing ──
   if (isMktSubdomain(request)) {
-    return handleMktSubdomain(request, supabaseResponse, user);
+    return handleMktSubdomain(request, supabaseResponse, isAuthenticated);
   }
 
   // ── Standard ERP routing ──
@@ -347,7 +347,7 @@ export async function updateSession(request: NextRequest) {
   );
 
   // Redirect unauthenticated users to login
-  if (!user && !isPublicPath) {
+  if (!isAuthenticated && !isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/dang-nhap";
     url.searchParams.set("redirect", request.nextUrl.pathname);
@@ -360,7 +360,7 @@ export async function updateSession(request: NextRequest) {
   // Giữ fix client-side useEffect localStorage (chỉ chạy khi mount /dang-nhap).
 
   // Redirect authenticated users away from auth pages
-  if (user && isPublicPath) {
+  if (isAuthenticated && isPublicPath) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

@@ -170,6 +170,7 @@ export function ReportShell({ children }: { children: React.ReactNode }) {
                           <Link
                             key={report.href}
                             href={report.href}
+                            prefetch={false}
                             onClick={() => setPickerVisibility(false)}
                             className="flex items-start gap-3 px-3 py-2.5 hover:bg-surface-container-low"
                           >
