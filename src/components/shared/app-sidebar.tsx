@@ -70,7 +70,7 @@ function LeafLink({
   pathname: string;
   indent?: number;
 }) {
-  const active = isHrefActive(pathname, leaf.href);
+  const active = isHrefActive(pathname, leaf.href, leaf.exact);
   const disabled = !!leaf.disabled;
 
   const inner = (
@@ -178,7 +178,9 @@ function SubGroupSection({
   );
 
   // Auto-open khi subgroup chứa active leaf — UX expectation chuẩn.
-  const hasActive = visibleItems.some((l) => isHrefActive(pathname, l.href));
+  const hasActive = visibleItems.some((l) =>
+    isHrefActive(pathname, l.href, l.exact),
+  );
   const [open, setOpen] = useState<boolean>(alwaysOpen || hasActive);
 
   useEffect(() => {

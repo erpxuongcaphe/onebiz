@@ -81,6 +81,7 @@ interface FlatLeaf {
   disabled?: boolean;
   comingSoon?: boolean;
   badge?: string;
+  exact?: boolean;
 }
 
 function flattenGroup(
@@ -98,6 +99,7 @@ function flattenGroup(
       disabled: leaf.disabled,
       comingSoon: leaf.comingSoon,
       badge: leaf.badge,
+      exact: leaf.exact,
     });
   });
   group.subGroups?.forEach((sg) => {
@@ -112,6 +114,7 @@ function flattenGroup(
         disabled: leaf.disabled,
         comingSoon: leaf.comingSoon,
         badge: leaf.badge,
+        exact: leaf.exact,
       });
     });
   });
@@ -524,7 +527,7 @@ function MenuCardItem({
   pathname: string;
   onClick: () => void;
 }) {
-  const active = isHrefActive(pathname, leaf.href);
+  const active = isHrefActive(pathname, leaf.href, leaf.exact);
   const baseCls = cn(
     "relative flex flex-col items-center justify-start gap-1.5 p-3 rounded-xl border press-scale-sm min-h-[84px]",
     active
