@@ -44,6 +44,13 @@ export async function POST(
       },
     },
     "mark-done": { rpc: "mkt_mark_task_done", args: { p_task_id: taskId } },
+    // 00197: việc có người duyệt (không gắn nội dung) đi qua cột Chờ duyệt.
+    "submit-approval": { rpc: "mkt_submit_task_for_approval", args: { p_task_id: taskId } },
+    "approve-review": { rpc: "mkt_approve_task_review", args: { p_task_id: taskId } },
+    "return-review": {
+      rpc: "mkt_return_task_review",
+      args: { p_task_id: taskId, p_reason: body.reason ?? null },
+    },
     "force-done": {
       rpc: "mkt_force_task_done",
       args: { p_task_id: taskId, p_reason: body.reason ?? null },

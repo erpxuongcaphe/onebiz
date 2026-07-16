@@ -48,6 +48,11 @@ export function TaskActions({ task }: { task: MktMyTask }) {
   const primary = btn + " bg-primary text-primary-foreground hover:bg-primary-hover";
   const outline = btn + " border border-outline-variant bg-background hover:bg-surface-container";
 
+  // 00197: việc có người duyệt RIÊNG (khác người làm) và không gắn nội dung
+  // → phải đi qua cột Chờ duyệt. Trang này là "việc của tôi" nên tôi = người làm.
+  const needsApproval =
+    Boolean(task.reviewerId) && task.reviewerId !== task.assigneeId && !task.contentItemId;
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Chờ tôi xác nhận */}
@@ -84,13 +89,26 @@ export function TaskActions({ task }: { task: MktMyTask }) {
               <Icon name="rate_review" size={15} /> Mở màn duyệt
             </MktLink>
           ) : task.taskType === "publish" ? (
-            // Việc "Đăng bài": nội dung ĐÃ duyệt xong mới bắt đầu được (blocker
-            // backend) → hoàn tất = đã đăng, không nộp duyệt lại.
-            <button className={primary} disabled={busy} onClick={() => run("mark-done")}>
-              <Icon name="publish" size={15} /> Đã đăng bài
-            </button>
+            // Việc "Đăng bài": CÓ người duyệt riêng (00197) → sau khi đăng phải
+            // nộp nghiệm thu (qua cột Chờ duyệt); không có → hoàn tất thẳng.
+            // Gắn nội dung thì nội dung đã qua duyệt trước khi đăng (gate cũ).
+            needsApproval ? (
+              <button className={primary} disabled={busy} onClick={() => run("submit-approval")}>
+                <Icon name="publish" size={15} /> Đã đăng — nộp nghiệm thu
+              </button>
+            ) : (
+              <button className={primary} disabled={busy} onClick={() => run("mark-done")}>
+                <Icon name="publish" size={15} /> Đã đăng bài
+              </button>
+            )
           ) : task.contentItemId ? (
             <button className={primary} disabled={busy} onClick={() => setDialog("submit")}>
+              <Icon name="upload" size={15} /> Nộp duyệt
+            </button>
+          ) : needsApproval ? (
+            // 00197: kế hoạch đã chỉ định người duyệt → không tự Hoàn tất;
+            // nộp sang cột Chờ duyệt cho đúng "4 mắt".
+            <button className={primary} disabled={busy} onClick={() => run("submit-approval")}>
               <Icon name="upload" size={15} /> Nộp duyệt
             </button>
           ) : (
@@ -137,6 +155,65 @@ export function TaskActions({ task }: { task: MktMyTask }) {
         onSubmit={(contentUrl, note) =>
           run("submit-review", { contentItemId: task.contentItemId, contentUrl, note })
         }
+      />
+    </div>
+  );
+}
+
+/**
+ * Nút của NGƯỜI DUYỆT trên việc đang chờ duyệt (00197 — việc không gắn nội
+ * dung; việc gắn nội dung duyệt ở màn "Duyệt nội dung" như cũ).
+ * Duyệt xong → done; Trả lại → về "đang làm" kèm lý do, báo người làm.
+ */
+export function ReviewTaskActions({ task }: { task: MktMyTask }) {
+  const { refresh, refreshing } = useMktRefresh();
+  const [running, setRunning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [returnOpen, setReturnOpen] = useState(false);
+  const busy = running || refreshing;
+
+  async function run(action: string, body?: unknown) {
+    setRunning(true);
+    setErr(null);
+    try {
+      await mktPost(`/api/mkt/v1/tasks/${task.id}/${action}`, body);
+      refresh();
+      return true;
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Thao tác thất bại");
+      return false;
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const btn =
+    "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-50";
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        className={btn + " bg-primary text-primary-foreground hover:bg-primary-hover"}
+        disabled={busy}
+        onClick={() => run("approve-review")}
+      >
+        <Icon name="task_alt" size={15} /> Duyệt xong
+      </button>
+      <button
+        className={btn + " border border-outline-variant bg-background text-amber-700 hover:bg-surface-container"}
+        disabled={busy}
+        onClick={() => setReturnOpen(true)}
+      >
+        <Icon name="undo" size={15} /> Trả lại
+      </button>
+      {err ? <span className="text-xs font-medium text-rose-600">{err}</span> : null}
+      <ReasonDialog
+        open={returnOpen}
+        onOpenChange={setReturnOpen}
+        title="Trả lại việc"
+        description="Ghi rõ cần sửa gì để người làm biết đường làm tiếp."
+        confirmLabel="Trả lại"
+        onSubmit={(reason) => run("return-review", { reason })}
       />
     </div>
   );
