@@ -528,7 +528,13 @@ export default function BanHangPage() {
             subtitle="Dữ liệu thực tế"
           >
             <div className="h-56 md:h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={0}
+                minHeight={0}
+                initialDimension={{ width: 320, height: 224 }}
+              >
                 <LineChart
                   data={dailyRevenue}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -585,7 +591,13 @@ export default function BanHangPage() {
               subtitle="Tổng doanh thu trong kỳ đã chọn"
             >
               <div className="h-56 md:h-72">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={0}
+                  initialDimension={{ width: 320, height: 224 }}
+                >
                   <BarChart
                     data={revenueByWeekday}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -630,7 +642,13 @@ export default function BanHangPage() {
               subtitle="Tổng doanh thu trong kỳ đã chọn"
             >
               <div className="h-56 md:h-72">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={0}
+                  minHeight={0}
+                  initialDimension={{ width: 320, height: 224 }}
+                >
                   <AreaChart
                     data={revenueByHour}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
