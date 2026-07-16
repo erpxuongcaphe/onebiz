@@ -1,9 +1,14 @@
 import type { Metadata } from "next";
 import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
-import { getMyTasks, type MktMyTask } from "@/lib/mkt/read-models";
+import {
+  getMyTasks,
+  getTasksAwaitingMyReview,
+  type MktMyTask,
+  type MktReviewQueueTask,
+} from "@/lib/mkt/read-models";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
-import { TaskActions } from "@/components/mkt/task-actions";
+import { TaskActions, ReviewTaskActions } from "@/components/mkt/task-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +33,16 @@ function isDueSoonTask(task: MktMyTask): boolean {
   return (new Date(task.dueAt).getTime() - Date.now()) / 36e5 <= 48;
 }
 
-function TaskCard({ task, highlighted }: { task: MktMyTask; highlighted?: boolean }) {
+function TaskCard({
+  task,
+  highlighted,
+  reviewMode,
+}: {
+  task: MktMyTask & { assigneeName?: string | null };
+  highlighted?: boolean;
+  // 00197: thẻ trong cột "Chờ tôi duyệt" — hiện người làm + nút của NGƯỜI DUYỆT.
+  reviewMode?: boolean;
+}) {
   const due = dueLabel(task.dueAt);
   return (
     <article
@@ -42,6 +56,7 @@ function TaskCard({ task, highlighted }: { task: MktMyTask; highlighted?: boolea
       <div className="text-sm font-semibold leading-snug">{task.title}</div>
       <div className="mt-1 text-xs text-on-surface-variant">
         {task.campaignName ?? "Không thuộc chiến dịch"}
+        {reviewMode && task.assigneeName ? <> · Người làm: <b>{task.assigneeName}</b></> : null}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <AcceptanceBadge value={task.acceptanceStatus} />
@@ -56,7 +71,7 @@ function TaskCard({ task, highlighted }: { task: MktMyTask; highlighted?: boolea
         </span>
       </div>
       <div className="mt-3 border-t border-outline-variant pt-3">
-        <TaskActions task={task} />
+        {reviewMode ? <ReviewTaskActions task={task} /> : <TaskActions task={task} />}
       </div>
     </article>
   );
@@ -68,12 +83,14 @@ function Column({
   tasks,
   emptyLabel,
   highlightId,
+  reviewMode,
 }: {
   title: string;
   icon: string;
-  tasks: MktMyTask[];
+  tasks: Array<MktMyTask & { assigneeName?: string | null }>;
   emptyLabel: string;
   highlightId?: string;
+  reviewMode?: boolean;
 }) {
   // Task được deep-link từ Telegram: ghim lên đầu cột + viền nổi bật
   const ordered = highlightId
@@ -91,7 +108,7 @@ function Column({
       <div className="space-y-2">
         {ordered.length > 0 ? (
           ordered.map((t) => (
-            <TaskCard key={t.id} task={t} highlighted={t.id === highlightId} />
+            <TaskCard key={t.id} task={t} highlighted={t.id === highlightId} reviewMode={reviewMode} />
           ))
         ) : (
           <div className="rounded-lg border border-dashed border-outline-variant bg-background p-4 text-sm font-medium text-on-surface-variant">
@@ -110,7 +127,10 @@ export default async function MyTasksPage({
 }) {
   const { task: highlightId } = await searchParams;
   const { supabase, userId } = await getMktRequestContext();
-  const tasks = await getMyTasks(supabase, userId);
+  const [tasks, reviewQueue]: [MktMyTask[], MktReviewQueueTask[]] = await Promise.all([
+    getMyTasks(supabase, userId),
+    getTasksAwaitingMyReview(supabase, userId),
+  ]);
 
   const active = tasks.filter((t) => !["canceled", "done"].includes(t.taskStatus));
   const pending = active.filter((t) => t.acceptanceStatus === "pending");
@@ -148,6 +168,23 @@ export default async function MyTasksPage({
             Nhận việc trước khi làm — chỉ đúng người được giao mới nhận được.
           </p>
         </div>
+
+        {/* 00197: việc người khác nộp cho TÔI duyệt — hộp riêng, nổi lên đầu.
+            Không có thì ẩn hẳn, không chiếm chỗ. */}
+        {reviewQueue.length > 0 ? (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-3">
+            <div className="mb-3 flex items-center gap-2 font-semibold text-amber-800">
+              <Icon name="rate_review" size={18} />
+              Chờ tôi duyệt
+              <span className="text-xs font-medium">({reviewQueue.length})</span>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              {reviewQueue.map((t) => (
+                <TaskCard key={t.id} task={t} highlighted={t.id === highlightId} reviewMode />
+              ))}
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <Column

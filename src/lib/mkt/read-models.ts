@@ -78,7 +78,14 @@ export type MktMyTask = {
   contentItemId: string | null;
   workloadPoints: number;
   blockedReason: string | null;
+  assigneeId: string | null;
+  // 00197: UI cần biết việc có người duyệt riêng để hiện "Nộp duyệt" thay vì
+  // "Hoàn tất" (việc có reviewer phải qua cột Chờ duyệt).
+  reviewerId: string | null;
 };
+
+// Việc đang CHỜ CHÍNH TÔI duyệt (00197) — kèm tên người làm để biết của ai.
+export type MktReviewQueueTask = MktMyTask & { assigneeName: string | null };
 
 /** Task của chính user hiện tại (RLS lọc: assignee hoặc reviewer). */
 export async function getMyTasks(
@@ -109,12 +116,13 @@ export async function getMyTasks(
     workload_points: number | null;
     blocked_reason: string | null;
     assignee_id: string | null;
+    reviewer_id: string | null;
   };
 
   const { data, error } = await db
     .from<Row>("mkt_tasks")
     .select(
-      "id, title, description, task_type, acceptance_status, task_status, due_at, campaign_id, content_item_id, workload_points, blocked_reason, assignee_id",
+      "id, title, description, task_type, acceptance_status, task_status, due_at, campaign_id, content_item_id, workload_points, blocked_reason, assignee_id, reviewer_id",
     )
     .eq("assignee_id", userId)
     .is("deleted_at", null)
@@ -147,6 +155,100 @@ export async function getMyTasks(
     contentItemId: r.content_item_id,
     workloadPoints: r.workload_points ?? 1,
     blockedReason: r.blocked_reason,
+    assigneeId: r.assignee_id,
+    reviewerId: r.reviewer_id,
+  }));
+}
+
+/**
+ * Việc (KHÔNG gắn nội dung) đang chờ CHÍNH TÔI duyệt — 00197.
+ * getMyTasks chỉ lấy việc tôi LÀM; người duyệt cần hộp riêng, nếu không việc
+ * đã nộp duyệt sẽ không hiện với ai cả. Việc gắn nội dung đã có màn
+ * "Duyệt nội dung" riêng nên loại ở đây (tránh 2 cửa duyệt cùng một việc).
+ */
+export async function getTasksAwaitingMyReview(
+  supabase: MktSupabaseClient,
+  knownUserId?: string | null,
+): Promise<MktReviewQueueTask[]> {
+  const db = getMktDatabaseClient(supabase);
+  let userId = knownUserId ?? null;
+  if (!userId) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    userId = user?.id ?? null;
+  }
+  if (!userId) return [];
+
+  type Row = {
+    id: string;
+    title: string;
+    description: string | null;
+    task_type: string | null;
+    acceptance_status: string;
+    task_status: string;
+    due_at: string | null;
+    campaign_id: string | null;
+    content_item_id: string | null;
+    workload_points: number | null;
+    blocked_reason: string | null;
+    assignee_id: string | null;
+    reviewer_id: string | null;
+  };
+
+  const { data, error } = await db
+    .from<Row>("mkt_tasks")
+    .select(
+      "id, title, description, task_type, acceptance_status, task_status, due_at, campaign_id, content_item_id, workload_points, blocked_reason, assignee_id, reviewer_id",
+    )
+    .eq("reviewer_id", userId)
+    .eq("task_status", "reviewing")
+    .is("content_item_id", null)
+    .is("deleted_at", null)
+    .order("due_at", { ascending: true, nullsFirst: false })
+    .limit(100);
+
+  const rows = requireRows(data, error, "review_queue_tasks");
+  if (rows.length === 0) return [];
+
+  const campaignIds = Array.from(
+    new Set(rows.map((r) => r.campaign_id).filter(Boolean) as string[]),
+  );
+  const assigneeIds = Array.from(
+    new Set(rows.map((r) => r.assignee_id).filter(Boolean) as string[]),
+  );
+  const [campsRes, profsRes] = await Promise.all([
+    campaignIds.length
+      ? db.from<{ id: string; name: string }>("mkt_campaigns").select("id, name").in("id", campaignIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+    assigneeIds.length
+      ? db
+          .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+          .select("id, full_name, email")
+          .in("id", assigneeIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; email: string | null }> }),
+  ]);
+  const campaignNames = new Map((campsRes.data ?? []).map((c) => [c.id, c.name] as const));
+  const names = new Map(
+    (profsRes.data ?? []).map((p) => [p.id, p.full_name || p.email || "Chưa gán tên"] as const),
+  );
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    taskType: r.task_type,
+    acceptanceStatus: r.acceptance_status,
+    taskStatus: r.task_status,
+    dueAt: r.due_at,
+    campaignId: r.campaign_id,
+    campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
+    contentItemId: r.content_item_id,
+    workloadPoints: r.workload_points ?? 1,
+    blockedReason: r.blocked_reason,
+    assigneeId: r.assignee_id,
+    reviewerId: r.reviewer_id,
+    assigneeName: r.assignee_id ? names.get(r.assignee_id) ?? "Chưa gán tên" : null,
   }));
 }
 
