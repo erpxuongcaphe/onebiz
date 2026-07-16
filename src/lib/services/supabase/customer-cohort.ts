@@ -15,7 +15,7 @@
  * - M3+ retention > 30% → loyal cohort, khả năng LTV cao
  */
 
-import { getClient, getCurrentTenantId, handleError } from "./base";
+import { getClient, handleError } from "./base";
 
 export interface CohortRow {
   /** Tháng cohort (vd "2026-01") */
@@ -45,111 +45,40 @@ export interface CohortReportResult {
  *
  * @param months — Số tháng cohort (default 6)
  */
-export async function getCustomerCohortReport(
-  months: number = 6,
-): Promise<CohortReportResult> {
+export async function getCustomerCohortReport(options: {
+  months?: number;
+  branchId?: string;
+} = {}): Promise<CohortReportResult> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const months = Math.min(24, Math.max(1, options.months ?? 6));
+  const { data, error } = await (supabase.rpc as any)(
+    "get_customer_cohort_report",
+    {
+      p_months: months,
+      p_branch_id: options.branchId ?? null,
+    },
+  );
 
-  // Fetch all invoices có customer_id (skip walk-in)
-  const now = new Date();
-  const startMonth = new Date(now.getFullYear(), now.getMonth() - months + 1, 1);
-
-  const { data: invoices, error } = await supabase
-    .from("invoices")
-    .select("customer_id, created_at")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .not("customer_id", "is", null)
-    .gte("created_at", startMonth.toISOString())
-    .order("created_at", { ascending: true });
   if (error) handleError(error, "getCustomerCohortReport");
+  if (!data) throw new Error("Server did not return cohort report data.");
 
-  // Build customer → first_purchase_month + active_months
-   
-  type Inv = { customer_id: string; created_at: string };
-  const customerMap = new Map<
-    string,
-    { firstMonth: string; activeMonths: Set<string> }
-  >();
+  const raw = data as {
+    months_tracked?: number;
+    rows?: Array<{
+      cohort_month: string;
+      label: string;
+      size: number | string;
+      retention: Array<number | string>;
+    }>;
+  };
 
-  for (const inv of (invoices ?? []) as Inv[]) {
-    const cid = inv.customer_id;
-    if (!cid) continue;
-    const d = new Date(inv.created_at);
-    const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    let entry = customerMap.get(cid);
-    if (!entry) {
-      entry = { firstMonth: monthKey, activeMonths: new Set() };
-      customerMap.set(cid, entry);
-    }
-    if (monthKey < entry.firstMonth) entry.firstMonth = monthKey;
-    entry.activeMonths.add(monthKey);
-  }
-
-  // Build cohort matrix
-  const cohortKeys: string[] = [];
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    cohortKeys.push(
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-    );
-  }
-
-  // Group customers by first month
-  const cohorts = new Map<string, Map<string, Set<string>>>();
-  for (const cohortKey of cohortKeys) {
-    cohorts.set(cohortKey, new Map());
-  }
-
-  for (const [cid, info] of customerMap.entries()) {
-    if (!cohorts.has(info.firstMonth)) continue;
-    const monthMap = cohorts.get(info.firstMonth)!;
-    for (const am of info.activeMonths) {
-      if (!monthMap.has(am)) monthMap.set(am, new Set());
-      monthMap.get(am)!.add(cid);
-    }
-  }
-
-  // Build rows
-  const rows: CohortRow[] = [];
-  for (const cohortKey of cohortKeys) {
-    const cohortIdx = cohortKeys.indexOf(cohortKey);
-    const monthMap = cohorts.get(cohortKey)!;
-    const cohortSize = monthMap.get(cohortKey)?.size ?? 0;
-    const retention: number[] = [];
-
-    // For each subsequent month from cohort to current
-    const remaining = months - cohortIdx;
-    for (let n = 0; n < remaining; n++) {
-      // monthN = cohort + n months
-      const cohortDate = parseMonthKey(cohortKey);
-      const targetDate = new Date(
-        cohortDate.getFullYear(),
-        cohortDate.getMonth() + n,
-        1,
-      );
-      const targetKey = `${targetDate.getFullYear()}-${String(
-        targetDate.getMonth() + 1,
-      ).padStart(2, "0")}`;
-      const activeCount = monthMap.get(targetKey)?.size ?? 0;
-      const pct = cohortSize > 0 ? (activeCount / cohortSize) * 100 : 0;
-      retention.push(Math.round(pct * 10) / 10);
-    }
-
-    const [y, m] = cohortKey.split("-");
-    rows.push({
-      cohortMonth: cohortKey,
-      label: `T${parseInt(m, 10)}/${y}`,
-      size: cohortSize,
-      retention,
-    });
-  }
-
-  return { rows, monthsTracked: months };
-}
-
-function parseMonthKey(key: string): Date {
-  const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1);
+  return {
+    monthsTracked: Number(raw.months_tracked ?? months),
+    rows: (raw.rows ?? []).map((row) => ({
+      cohortMonth: row.cohort_month,
+      label: row.label,
+      size: Number(row.size ?? 0),
+      retention: (row.retention ?? []).map(Number),
+    })),
+  };
 }

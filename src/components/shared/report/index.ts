@@ -7,6 +7,7 @@
  */
 
 export { ReportPageHeader } from "./report-page-header";
+export { ReportScopeSelector } from "./report-scope-selector";
 export { ReportDateRangePicker } from "./report-date-range-picker";
 export { ChartTableSwitch } from "./chart-table-switch";
 export { ReportDataTable } from "./report-data-table";

@@ -124,7 +124,7 @@ function downloadCSV(filename: string, rows: ReconciledShiftRow[]): void {
 
 export default function ReconciledShiftReportPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { activeBranchId, switchBranch, user } = useAuth();
   const { hasPermission } = usePermissions();
 
   const canViewAny = hasPermission("shifts.reconcile_any");
@@ -141,6 +141,24 @@ export default function ReconciledShiftReportPage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [rows, setRows] = useState<ReconciledShiftRow[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!canView) return;
+    if (!canViewAny && user?.branchId) {
+      setBranchId(user.branchId);
+      return;
+    }
+    setBranchId(activeBranchId ?? "all");
+  }, [activeBranchId, canView, canViewAny, user?.branchId]);
+
+  const handleBranchChange = useCallback(
+    (value: string | null) => {
+      if (!value) return;
+      setBranchId(value);
+      switchBranch(value === "all" ? null : value);
+    },
+    [switchBranch],
+  );
 
   // Load branches (scope theo permission)
   useEffect(() => {
@@ -291,7 +309,7 @@ export default function ReconciledShiftReportPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-2 bg-surface-container-low rounded-xl p-3">
         <div className="col-span-2 md:col-span-1">
           <label className="text-xs text-muted-foreground">Chi nhánh</label>
-          <Select value={branchId} onValueChange={(v) => v && setBranchId(v)}>
+          <Select value={branchId} onValueChange={handleBranchChange}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>

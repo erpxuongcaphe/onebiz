@@ -316,6 +316,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         icon: "analytics",
         items: [
           { label: "Phân tích tài chính", href: "/phan-tich/tai-chinh", icon: "account_balance" },
+          { label: "Kết quả vận hành", href: "/phan-tich/bao-cao-tai-chinh", icon: "monitoring" },
           { label: "Lưu chuyển tiền tệ", href: "/phan-tich/luong-tien", icon: "payments" },
           { label: "Công nợ aging", href: "/phan-tich/cong-no-aging", icon: "credit_card_off", badge: "Mới" },
           { label: "VAT đầu vào / ra", href: "/phan-tich/vat", icon: "receipt", badge: "Mới" },

@@ -120,6 +120,9 @@ export const PERMISSIONS = {
   REPORTS_FNB: "reports.fnb",
   REPORTS_EXPORT: "reports.export",
   REPORTS_VIEW_PROFIT: "reports.view_profit",        // ẩn báo cáo lợi nhuận khỏi cashier
+  REPORTS_VIEW_ALL_BRANCHES: "reports.view_all_branches",
+  REPORTS_VIEW_DETAIL: "reports.view_detail",
+  REPORTS_EXPORT_DETAIL: "reports.export_detail",
 
   // Shifts — CEO 05/06/2026: cho phép đối chiếu ca pending
   // Owner/Admin = reconcile mọi chi nhánh
@@ -297,6 +300,9 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.REPORTS_FNB, label: "Báo cáo F&B" },
       { code: PERMISSIONS.REPORTS_VIEW_PROFIT, label: "Báo cáo lợi nhuận" },
       { code: PERMISSIONS.REPORTS_EXPORT, label: "Xuất báo cáo" },
+      { code: PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES, label: "Xem toàn công ty" },
+      { code: PERMISSIONS.REPORTS_VIEW_DETAIL, label: "Xem dữ liệu chi tiết" },
+      { code: PERMISSIONS.REPORTS_EXPORT_DETAIL, label: "Xuất dữ liệu chi tiết" },
     ],
   },
   {
@@ -387,6 +393,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.REPORTS_FNB,
       PERMISSIONS.REPORTS_VIEW_PROFIT,
       PERMISSIONS.REPORTS_EXPORT,
+      PERMISSIONS.REPORTS_VIEW_DETAIL,
+      PERMISSIONS.REPORTS_EXPORT_DETAIL,
       // System: cấp OTP + xem audit
       PERMISSIONS.SYSTEM_VIEW_AUDIT,
       PERMISSIONS.SYSTEM_ISSUE_OTP,

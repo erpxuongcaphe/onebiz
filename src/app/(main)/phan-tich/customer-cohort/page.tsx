@@ -13,6 +13,7 @@ import {
   ReportPageHeader,
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import { useBranchFilter } from "@/lib/contexts";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -26,20 +27,25 @@ export default function CustomerCohortPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
 
+  const { activeBranchId, branches, isReady } = useBranchFilter();
   const [data, setData] = useState<CohortReportResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
     setLoading(true);
     try {
-      const result = await getCustomerCohortReport(6);
+      const result = await getCustomerCohortReport({
+        months: 6,
+        branchId: activeBranchId,
+      });
       setData(result);
     } catch (err) {
       console.error("Failed to fetch cohort report:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeBranchId, isReady]);
 
   useEffect(() => {
     fetchData();
@@ -62,6 +68,9 @@ export default function CustomerCohortPage() {
     const titleRows = buildReportTitleRows({
       title: "Báo cáo cohort retention",
       range,
+      branchName: activeBranchId
+        ? branches.find((branch) => branch.id === activeBranchId)?.name
+        : "Toàn công ty",
       generatedAt: new Date(),
     });
 
@@ -101,7 +110,7 @@ export default function CustomerCohortPage() {
         },
       ],
     });
-  }, [data, range]);
+  }, [activeBranchId, branches, data, range]);
 
   const colorForRetention = (pct: number): string => {
     if (pct === 0) return "bg-surface-container/30 text-muted-foreground";

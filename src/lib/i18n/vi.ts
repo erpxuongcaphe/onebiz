@@ -151,7 +151,7 @@ export const TERMS = {
   analytics: "Phân tích",
   xnt: "Xuất - Nhập - Tồn",
   xntDetail: "Xuất - Nhập - Tồn chi tiết",
-  pnl: "Báo cáo lãi - lỗ",
+  pnl: "Báo cáo kết quả vận hành",
   abcAnalysis: "Phân tích ABC theo doanh thu",
   cohortRetention: "Khách hàng quay lại theo tháng đầu mua",
   lotTraceability: "Truy xuất nguồn gốc theo lô",

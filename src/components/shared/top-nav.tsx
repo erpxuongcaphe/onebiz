@@ -43,6 +43,7 @@ import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 
 // ---------------------------------------------------------------------------
 // Branch selector — visual polish (UX sprint 2)
@@ -70,14 +71,13 @@ function branchTypeIcon(type?: string): string {
 }
 
 function BranchSelector() {
-  const { tenant: _tenant, branches, currentBranch, switchBranch, user, hasPermission } = useAuth();
+  const { tenant: _tenant, branches, currentBranch, switchBranch, hasPermission } = useAuth();
   // CEO 13/07: nút "Tất cả chi nhánh" trước chỉ xem ô vai trò CŨ (profiles.role)
   // owner/admin → vai trò RBAC như "Chủ cửa hàng" bị bỏ sót dù được cấp quyền.
   // Giờ mở theo quyền RBAC `system.manage_branches` (chỉ Chủ cửa hàng + Admin có).
   const canViewAll =
-    user?.role === "owner" ||
-    user?.role === "admin" ||
-    hasPermission("system.manage_branches");
+    hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
+    hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
 
   const triggerIcon = currentBranch
     ? branchTypeIcon(currentBranch.branchType)
@@ -463,14 +463,13 @@ function MobileGroupAccordion({
 
 function MobileNav() {
   const pathname = usePathname();
-  const { branches, currentBranch, switchBranch, user, hasPermission } = useAuth();
+  const { branches, currentBranch, switchBranch, hasPermission } = useAuth();
   const [open, setOpen] = useState(false);
   // CEO 13/07: đồng bộ với BranchSelector — mở "Tất cả chi nhánh" theo quyền
   // RBAC `system.manage_branches` (Chủ cửa hàng + Admin), không chỉ vai trò cũ.
   const canViewAll =
-    user?.role === "owner" ||
-    user?.role === "admin" ||
-    hasPermission("system.manage_branches");
+    hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
+    hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

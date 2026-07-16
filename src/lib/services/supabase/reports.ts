@@ -25,6 +25,12 @@ export interface ProfitAndLoss {
   netMargin: number;
 }
 
+export interface CogsCostBasis {
+  snapshotLines: number;
+  estimatedLegacyLines: number;
+  mode: "snapshot" | "mixed" | "estimated";
+}
+
 export interface COGSItem {
   productName: string;
   qtySold: number;
@@ -128,6 +134,10 @@ export async function getProfitAndLoss(
 ): Promise<{
   current: ProfitAndLoss;
   previous: ProfitAndLoss;
+  cogsCostBasis: {
+    current: CogsCostBasis;
+    previous: CogsCostBasis;
+  };
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -135,13 +145,91 @@ export async function getProfitAndLoss(
     resolveComparisonPeriods(range);
   const now = new Date();
 
+  // Migration 00198 aggregates the complete data set in Postgres and reports
+  // which COGS lines use immutable snapshots versus legacy estimates.
+  if (typeof (supabase as any).rpc === "function") {
+    try {
+      const { data, error } = await (supabase.rpc as any)(
+        "get_profit_and_loss_report",
+        {
+          p_current_from: thisMonth.start,
+          p_current_to: thisMonth.end,
+          p_previous_from: prevMonth.start,
+          p_previous_to: prevMonth.end,
+          p_branch_id: branchId ?? null,
+        },
+      );
+      if (error) throw error;
+
+      const payload = data as {
+        current?: Record<string, unknown>;
+        previous?: Record<string, unknown>;
+      } | null;
+      if (!payload?.current || !payload.previous) {
+        throw new Error("Invalid P&L aggregate response");
+      }
+
+      const number = (value: unknown) => {
+        const parsed = Number(value ?? 0);
+        return Number.isFinite(parsed) ? parsed : 0;
+      };
+      const currentMonth = range
+        ? "Kỳ đã chọn"
+        : "T" + (now.getMonth() + 1) + "/" + now.getFullYear();
+      const previousMonth = range
+        ? "Kỳ trước"
+        : "T" +
+          (now.getMonth() === 0 ? 12 : now.getMonth()) +
+          "/" +
+          (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
+      const buildBasis = (row: Record<string, unknown>): CogsCostBasis => {
+        const snapshotLines = number(row.snapshot_lines);
+        const estimatedLegacyLines = number(row.estimated_legacy_lines);
+        return {
+          snapshotLines,
+          estimatedLegacyLines,
+          mode:
+            estimatedLegacyLines === 0
+              ? "snapshot"
+              : snapshotLines > 0
+                ? "mixed"
+                : "estimated",
+        };
+      };
+
+      return {
+        current: buildPnL(
+          currentMonth,
+          number(payload.current.revenue),
+          number(payload.current.cogs),
+          number(payload.current.operating_expense),
+          number(payload.current.delivery_fee),
+        ),
+        previous: buildPnL(
+          previousMonth,
+          number(payload.previous.revenue),
+          number(payload.previous.cogs),
+          number(payload.previous.operating_expense),
+          number(payload.previous.delivery_fee),
+        ),
+        cogsCostBasis: {
+          current: buildBasis(payload.current),
+          previous: buildBasis(payload.previous),
+        },
+      };
+    } catch (error) {
+      console.warn("[getProfitAndLoss] RPC unavailable, using legacy fallback", error);
+    }
+  }
+
+
   // Helper: apply optional branch filter
   function branchFilter(q: any) {
     return branchId ? q.eq("branch_id", branchId) : q;
   }
 
   // Phase 1: Fetch invoices + cash in parallel
-  const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
+  const [thisInv, prevInv, thisCash, prevCash, thisReturns, prevReturns] = await Promise.all([
     branchFilter(supabase
       .from("invoices")
       .select("id, total, delivery_fee")
@@ -170,14 +258,30 @@ export async function getProfitAndLoss(
       .eq("type", "payment")
       .gte("created_at", prevMonth.start)
       .lt("created_at", prevMonth.end)),
+    branchFilter(supabase
+      .from("sales_returns")
+      .select("id, total")
+      .eq("tenant_id", tenantId)
+      .in("status", ["confirmed", "completed"])
+      .gte("created_at", thisMonth.start)
+      .lt("created_at", thisMonth.end)),
+    branchFilter(supabase
+      .from("sales_returns")
+      .select("id, total")
+      .eq("tenant_id", tenantId)
+      .in("status", ["confirmed", "completed"])
+      .gte("created_at", prevMonth.start)
+      .lt("created_at", prevMonth.end))
   ]);
 
   // Build invoice ID arrays for Phase 2
-  const thisInvIdArr = (thisInv.data ?? []).map((i: any) => i.id as string);
-  const prevInvIdArr = (prevInv.data ?? []).map((i: any) => i.id as string);
+  const thisInvIdArr = (thisInv.data ?? []).map((invoice: Record<string, unknown>) => String(invoice.id));
+  const prevInvIdArr = (prevInv.data ?? []).map((invoice: Record<string, unknown>) => String(invoice.id));
+  const thisReturnIdArr = (thisReturns.data ?? []).map((item: Record<string, unknown>) => String(item.id));
+  const prevReturnIdArr = (prevReturns.data ?? []).map((item: Record<string, unknown>) => String(item.id));
 
   // Phase 2: Fetch invoice items by invoice IDs (invoice_items has NO created_at column)
-  const [thisItems, prevItems] = await Promise.all([
+  const [thisItems, prevItems, thisReturnItems, prevReturnItems] = await Promise.all([
     thisInvIdArr.length > 0
       ? supabase.from("invoice_items")
           .select("invoice_id, quantity, product_id, products(cost_price)")
@@ -188,28 +292,53 @@ export async function getProfitAndLoss(
           .select("invoice_id, quantity, product_id, products(cost_price)")
           .in("invoice_id", prevInvIdArr)
       : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    thisReturnIdArr.length > 0
+      ? supabase.from("return_items")
+          .select("return_id, quantity, product_id, products(cost_price)")
+          .in("return_id", thisReturnIdArr)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] }),
+    prevReturnIdArr.length > 0
+      ? supabase.from("return_items")
+          .select("return_id, quantity, product_id, products(cost_price)")
+          .in("return_id", prevReturnIdArr)
+      : Promise.resolve({ data: [] as Record<string, unknown>[] })
   ]);
 
   const thisInvIds = new Set<string>(thisInvIdArr);
   const prevInvIds = new Set<string>(prevInvIdArr);
 
-  // Calculate revenue
-  const thisRevenue = (thisInv.data ?? []).reduce(
-    (s: number, i: any) => s + ((i.total as number) ?? 0),
-    0
+  // Net revenue reverses the full economic value of completed returns.
+  const thisGrossRevenue = (thisInv.data ?? []).reduce(
+    (sum: number, invoice: Record<string, unknown>) =>
+      sum + Number(invoice.total ?? 0),
+    0,
   );
-  const prevRevenue = (prevInv.data ?? []).reduce(
-    (s: number, i: any) => s + ((i.total as number) ?? 0),
-    0
+  const prevGrossRevenue = (prevInv.data ?? []).reduce(
+    (sum: number, invoice: Record<string, unknown>) =>
+      sum + Number(invoice.total ?? 0),
+    0,
   );
-
+  const thisReturnRevenue = (thisReturns.data ?? []).reduce(
+    (sum: number, item: Record<string, unknown>) =>
+      sum + Number(item.total ?? 0),
+    0,
+  );
+  const prevReturnRevenue = (prevReturns.data ?? []).reduce(
+    (sum: number, item: Record<string, unknown>) =>
+      sum + Number(item.total ?? 0),
+    0,
+  );
+  const thisRevenue = thisGrossRevenue - thisReturnRevenue;
+  const prevRevenue = prevGrossRevenue - prevReturnRevenue;
   // Phí giao hàng thu hộ = SUM(delivery_fee) — tách khỏi doanh thu hàng hóa.
   const thisDeliveryFee = (thisInv.data ?? []).reduce(
-    (s: number, i: any) => s + ((i.delivery_fee as number) ?? 0),
+    (sum: number, invoice: Record<string, unknown>) =>
+      sum + Number(invoice.delivery_fee ?? 0),
     0
   );
   const prevDeliveryFee = (prevInv.data ?? []).reduce(
-    (s: number, i: any) => s + ((i.delivery_fee as number) ?? 0),
+    (sum: number, invoice: Record<string, unknown>) =>
+      sum + Number(invoice.delivery_fee ?? 0),
     0
   );
 
@@ -228,15 +357,29 @@ export async function getProfitAndLoss(
     }, 0);
   };
 
-  const thisCOGS = calcCOGS(
-    (thisItems.data ?? []) as Record<string, unknown>[],
-    thisInvIds
-  );
-  const prevCOGS = calcCOGS(
-    (prevItems.data ?? []) as Record<string, unknown>[],
-    prevInvIds
-  );
+  const calcReturnedCOGS = (items: Record<string, unknown>[]): number =>
+    items.reduce((sum, item) => {
+      const qty = Number(item.quantity ?? 0);
+      const product = item.products as { cost_price: number } | null;
+      return sum + qty * Number(product?.cost_price ?? 0);
+    }, 0);
 
+  const thisCOGS =
+    calcCOGS(
+      (thisItems.data ?? []) as Record<string, unknown>[],
+      thisInvIds,
+    ) -
+    calcReturnedCOGS(
+      (thisReturnItems.data ?? []) as Record<string, unknown>[],
+    );
+  const prevCOGS =
+    calcCOGS(
+      (prevItems.data ?? []) as Record<string, unknown>[],
+      prevInvIds,
+    ) -
+    calcReturnedCOGS(
+      (prevReturnItems.data ?? []) as Record<string, unknown>[],
+    );
   // Calculate OpEx (exclude purchase + refund categories)
   // A4 (07/07): loại thêm 'Hoàn tiền hủy đơn' (void HĐ completed 00117/00161) và
   // 'Hoàn trả' (void bill POS/F&B 00055/00086/00162). Đây là phiếu CHI hoàn tiền
@@ -247,6 +390,7 @@ export async function getProfitAndLoss(
     "Mua hàng nội bộ",
     "Hoàn tiền hủy đơn",
     "Hoàn trả",
+    "Trả hàng",
   ];
   const calcOpEx = (data: { category: string | null; amount: number }[]): number => {
     return data
@@ -268,6 +412,20 @@ export async function getProfitAndLoss(
   return {
     current: buildPnL(currentMonth, thisRevenue, thisCOGS, thisOpEx, thisDeliveryFee),
     previous: buildPnL(prevMonthLabel, prevRevenue, prevCOGS, prevOpEx, prevDeliveryFee),
+    cogsCostBasis: {
+      current: {
+        snapshotLines: 0,
+        estimatedLegacyLines:
+          (thisItems.data ?? []).length + (thisReturnItems.data ?? []).length,
+        mode: "estimated",
+      },
+      previous: {
+        snapshotLines: 0,
+        estimatedLegacyLines:
+          (prevItems.data ?? []).length + (prevReturnItems.data ?? []).length,
+        mode: "estimated",
+      },
+    },
   };
 }
 
@@ -884,8 +1042,8 @@ export async function getConsolidatedPnL(
         .gte("created_at", prevMonth.start).lt("created_at", prevMonth.end),
     ]);
 
-  const thisInvIdArr = (thisInv.data ?? []).map((i: any) => i.id as string);
-  const prevInvIdArr = (prevInv.data ?? []).map((i: any) => i.id as string);
+  const thisInvIdArr = (thisInv.data ?? []).map((invoice: Record<string, unknown>) => String(invoice.id));
+  const prevInvIdArr = (prevInv.data ?? []).map((invoice: Record<string, unknown>) => String(invoice.id));
 
   // Build set of internal invoice IDs for COGS exclusion
   const thisInternalIds = new Set((thisInternal.data ?? []).map((i: any) => i.id as string));
@@ -930,7 +1088,13 @@ export async function getConsolidatedPnL(
   const prevCOGS = calcConsolidatedCOGS((prevItems.data ?? []) as Record<string, unknown>[], prevInternalIds);
 
   // OpEx excluding purchase categories
-  const purchaseCats = ["Nhập hàng", "Mua hàng nội bộ"];
+  const purchaseCats = [
+    "Nhập hàng",
+    "Mua hàng nội bộ",
+    "Hoàn tiền hủy đơn",
+    "Hoàn trả",
+    "Trả hàng",
+  ];
   const thisOpEx = (thisCash.data ?? [])
     .filter((c: any) => !purchaseCats.includes(c.category ?? ""))
     .reduce((s: number, c: any) => s + Number(c.amount ?? 0), 0);
@@ -989,6 +1153,50 @@ export async function getBranchPnLComparison(
   const tenantId = await getCurrentTenantId();
   const range = toCreatedAtRangeWindow(dateRange) ?? thisMonthRange();
 
+  // Migration 00198 keeps branch comparison on the same formulas as the
+  // consolidated report and avoids client-side row caps.
+  try {
+    const { data, error } = await (supabase.rpc as any)(
+      "get_branch_profit_and_loss_report",
+      {
+        p_date_from: range.start,
+        p_date_to: range.end,
+      },
+    );
+    if (error) throw error;
+
+    const payload = data as {
+      rows?: Array<Record<string, unknown>>;
+    } | null;
+    if (!payload?.rows) throw new Error("Invalid branch P&L response");
+
+    const number = (value: unknown) => {
+      const parsed = Number(value ?? 0);
+      return Number.isFinite(parsed) ? parsed : 0;
+    };
+
+    return payload.rows.map((row) => ({
+      branchId: String(row.branch_id ?? ""),
+      branchName: String(row.branch_name ?? ""),
+      branchType: String(row.branch_type ?? "store"),
+      revenue: number(row.goods_revenue),
+      totalRevenue: number(row.total_revenue),
+      deliveryFee: number(row.delivery_fee),
+      goodsRevenue: number(row.goods_revenue),
+      cogs: number(row.cogs),
+      grossProfit: number(row.gross_profit),
+      grossMargin: number(row.gross_margin),
+      opEx: number(row.operating_expense),
+      netProfit: number(row.operating_result),
+      netMargin: number(row.operating_margin),
+    }));
+  } catch (error) {
+    console.warn(
+      "[getBranchPnLComparison] RPC unavailable, using legacy fallback",
+      error,
+    );
+  }
+
   // Get branches
   const { data: branches } = await supabase
     .from("branches")
@@ -1000,7 +1208,7 @@ export async function getBranchPnLComparison(
   if (!branches || branches.length === 0) return [];
 
   // Phase 1: Fetch invoices + cash this month
-  const [invData, cashData] = await Promise.all([
+  const [invData, cashData, returnData] = await Promise.all([
     supabase.from("invoices").select("id, branch_id, total, delivery_fee")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
@@ -1008,6 +1216,10 @@ export async function getBranchPnLComparison(
     supabase.from("cash_transactions").select("branch_id, category, amount")
       .eq("tenant_id", tenantId)
       .eq("type", "payment")
+      .gte("created_at", range.start).lt("created_at", range.end),
+    supabase.from("sales_returns").select("id, branch_id, total")
+      .eq("tenant_id", tenantId)
+      .in("status", ["confirmed", "completed"])
       .gte("created_at", range.start).lt("created_at", range.end),
   ]);
 
@@ -1023,6 +1235,20 @@ export async function getBranchPnLComparison(
     invIdArr.push(inv.id as string);
     branchTotalRevenue.set(bid, (branchTotalRevenue.get(bid) ?? 0) + Number(inv.total ?? 0));
     branchDeliveryFee.set(bid, (branchDeliveryFee.get(bid) ?? 0) + Number(inv.delivery_fee ?? 0));
+  }
+
+  const returnBranchMap = new Map<string, string>();
+  const branchReturnRevenue = new Map<string, number>();
+  const returnIdArr: string[] = [];
+  for (const item of (returnData.data ?? []) as Record<string, unknown>[]) {
+    const branchId = item.branch_id as string;
+    const returnId = item.id as string;
+    returnBranchMap.set(returnId, branchId);
+    returnIdArr.push(returnId);
+    branchReturnRevenue.set(
+      branchId,
+      (branchReturnRevenue.get(branchId) ?? 0) + Number(item.total ?? 0),
+    );
   }
 
   // Phase 2: Fetch invoice items by invoice IDs (no created_at on invoice_items)
@@ -1042,8 +1268,34 @@ export async function getBranchPnLComparison(
     }
   }
 
+  const branchReturnCogs = new Map<string, number>();
+  if (returnIdArr.length > 0) {
+    const returnItemData = await supabase
+      .from("return_items")
+      .select("return_id, quantity, products(cost_price)")
+      .in("return_id", returnIdArr);
+
+    for (const item of (returnItemData.data ?? []) as Record<string, unknown>[]) {
+      const branchId = returnBranchMap.get(item.return_id as string);
+      if (!branchId) continue;
+      const quantity = Number(item.quantity ?? 0);
+      const product = item.products as { cost_price: number } | null;
+      branchReturnCogs.set(
+        branchId,
+        (branchReturnCogs.get(branchId) ?? 0) +
+          quantity * Number(product?.cost_price ?? 0),
+      );
+    }
+  }
+
   // OpEx per branch (exclude purchase categories)
-  const purchaseCats = ["Nhập hàng", "Mua hàng nội bộ"];
+  const purchaseCats = [
+    "Nhập hàng",
+    "Mua hàng nội bộ",
+    "Hoàn tiền hủy đơn",
+    "Hoàn trả",
+    "Trả hàng",
+  ];
   const branchOpEx = new Map<string, number>();
   for (const cash of (cashData.data ?? []) as Record<string, unknown>[]) {
     if (purchaseCats.includes((cash.category as string) ?? "")) continue;
@@ -1052,10 +1304,12 @@ export async function getBranchPnLComparison(
   }
 
   return branches.map((b) => {
-    const totalRevenue = branchTotalRevenue.get(b.id) ?? 0;
+    const totalRevenue =
+      (branchTotalRevenue.get(b.id) ?? 0) - (branchReturnRevenue.get(b.id) ?? 0);
     const deliveryFee = branchDeliveryFee.get(b.id) ?? 0;
     const goodsRevenue = totalRevenue - deliveryFee;
-    const cogs = branchCogs.get(b.id) ?? 0;
+    const cogs =
+      (branchCogs.get(b.id) ?? 0) - (branchReturnCogs.get(b.id) ?? 0);
     const opEx = branchOpEx.get(b.id) ?? 0;
     const grossProfit = goodsRevenue - cogs;
     const netProfit = grossProfit - opEx;
