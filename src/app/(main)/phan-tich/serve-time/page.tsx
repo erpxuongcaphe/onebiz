@@ -52,7 +52,7 @@ function fmtMin(m: number): string {
 }
 
 export default function FnbServeTimeReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
     preset,
@@ -162,7 +162,6 @@ export default function FnbServeTimeReportPage() {
   const handleExport = useCallback(() => {
     if (!report) return;
     try {
-      const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO TIME-TO-SERVE FnB",
         description:
@@ -228,10 +227,10 @@ export default function FnbServeTimeReportPage() {
       };
 
       exportReportToExcel({
-        kind: "fnb",
+        kind: "serve-time",
         mode: "full",
         range,
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, summarySheet, branchSheet, hourSheet],
       });
@@ -248,7 +247,7 @@ export default function FnbServeTimeReportPage() {
         variant: "error",
       });
     }
-  }, [report, summary, byBranch, byHour, range, activeBranchId, toast]);
+  }, [report, summary, byBranch, byHour, range, branchLabel, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">
@@ -327,7 +326,7 @@ export default function FnbServeTimeReportPage() {
             subtitle="Đỏ = chậm (>10p), Vàng = bình thường (7-10p), Xanh = nhanh (<7p)"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byBranch}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -362,7 +361,7 @@ export default function FnbServeTimeReportPage() {
             subtitle="Giờ nào chậm = bố trí thêm pha chế"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={byHour}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -399,7 +398,7 @@ export default function FnbServeTimeReportPage() {
           subtitle="Món >5p cần xem lại công thức hoặc bố trí dụng cụ"
         >
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart
                 data={byProduct.slice(0, 10)}
                 layout="vertical"

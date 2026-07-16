@@ -49,7 +49,7 @@ import { ChartCard } from "../_components/chart-card";
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
 
 export default function SalesReturnReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
     preset,
@@ -232,7 +232,6 @@ export default function SalesReturnReportPage() {
       return;
     }
     try {
-      const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
 
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO TRẢ HÀNG CHI TIẾT",
@@ -350,10 +349,10 @@ export default function SalesReturnReportPage() {
       };
 
       exportReportToExcel({
-        kind: "ban-hang",
+        kind: "tra-hang",
         mode: "full",
         range,
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, reasonSheet, productSheet, staffSheet, detailSheet],
       });
@@ -370,7 +369,7 @@ export default function SalesReturnReportPage() {
         variant: "error",
       });
     }
-  }, [rows, byReason, byProduct, byStaff, kpis, range, activeBranchId, toast]);
+  }, [rows, byReason, byProduct, byStaff, kpis, range, branchLabel, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">
@@ -451,7 +450,7 @@ export default function SalesReturnReportPage() {
             subtitle="Top lý do giá trị cao"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byReason.slice(0, 8)}
                   layout="vertical"
@@ -489,7 +488,7 @@ export default function SalesReturnReportPage() {
             subtitle="Theo giá trị"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byProduct.slice(0, 8)}
                   layout="vertical"

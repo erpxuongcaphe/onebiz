@@ -108,8 +108,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function KenhBanPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -117,9 +116,6 @@ export default function KenhBanPage() {
   const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
   const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const handleExportView = useCallback(() => {
     try {
@@ -323,7 +319,7 @@ export default function KenhBanPage() {
           >
             {pieData.length > 0 ? (
               <div className="h-64 md:h-80">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={pieData}

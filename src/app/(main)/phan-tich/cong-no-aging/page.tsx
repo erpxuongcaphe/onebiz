@@ -10,7 +10,7 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
+import { formatNumber, formatCurrency, formatDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
   ReportPageHeader,
@@ -249,7 +249,7 @@ export default function ReceivableAgingReportPage() {
       };
 
       exportReportToExcel({
-        kind: "tai-chinh",
+        kind: "cong-no-aging",
         mode: "full",
         range: { from: today, to: today },
         tenantName: "OneBiz",

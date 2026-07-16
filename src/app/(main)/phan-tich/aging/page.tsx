@@ -67,7 +67,7 @@ const BUCKET_COLORS: Record<string, string> = {
 };
 
 export default function AgingReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
     preset,
@@ -225,7 +225,6 @@ export default function AgingReportPage() {
       return;
     }
     try {
-      const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
       const today = formatDateInputValue(new Date());
       const dateRange = { from: today, to: today };
 
@@ -345,10 +344,10 @@ export default function AgingReportPage() {
       };
 
       exportReportToExcel({
-        kind: "hang-hoa",
+        kind: "aging",
         mode: "full",
         range: dateRange,
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, overviewSheet, detailSheet, deadSheet],
       });
@@ -365,7 +364,7 @@ export default function AgingReportPage() {
         variant: "error",
       });
     }
-  }, [rows, bucketAgg, kpis, activeBranchId, toast]);
+  }, [rows, bucketAgg, kpis, branchLabel, toast]);
 
   // ── Render ──
   return (
@@ -429,7 +428,7 @@ export default function AgingReportPage() {
           subtitle="Dữ liệu thực tế tại thời điểm hiện tại"
         >
           <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+            <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
               <BarChart
                 data={bucketAgg}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

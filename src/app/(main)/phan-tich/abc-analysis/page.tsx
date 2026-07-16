@@ -10,7 +10,7 @@
  * - Slow: KHÔNG bán trong kỳ
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
@@ -71,10 +71,13 @@ export default function AbcAnalysisPage() {
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
 
-  const filteredRows =
-    data && filterMode !== "all"
-      ? data.rows.filter((r) => r.abcClass === filterMode)
-      : data?.rows ?? [];
+  const filteredRows = useMemo(
+    () =>
+      data && filterMode !== "all"
+        ? data.rows.filter((row) => row.abcClass === filterMode)
+        : data?.rows ?? [],
+    [data, filterMode],
+  );
 
   const handleExportView = useCallback(() => {
     if (!data) return;
@@ -85,7 +88,7 @@ export default function AbcAnalysisPage() {
       generatedAt: new Date(),
     });
     exportReportToExcel({
-      kind: "hang-hoa",
+      kind: "abc-analysis",
       mode: "view",
       range,
       branchName,
@@ -153,7 +156,7 @@ export default function AbcAnalysisPage() {
         })),
     });
     exportReportToExcel({
-      kind: "hang-hoa",
+      kind: "abc-analysis",
       mode: "full",
       range,
       branchName,

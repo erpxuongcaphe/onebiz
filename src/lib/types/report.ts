@@ -58,27 +58,47 @@ export type ReportViewMode = "chart" | "table";
 export type ReportExportMode = "view" | "full";
 
 // ============================================================
-// Report kinds — tất cả 14 báo cáo + XNT mới
+// Report kinds — toàn bộ catalog báo cáo và các loại legacy còn được export
 // ============================================================
 
 export type ReportKind =
+  | "tong-quan"
   | "cuoi-ngay"
+  | "tong-hop-kenh"
+  | "canh-bao"
+  | "doi-chieu-ca"
   | "ban-hang"
-  | "fnb"
   | "dat-hang"
   | "kenh-ban"
   | "khuyen-mai"
+  | "tra-hang"
+  | "platform-commission"
+  | "khach-hang"
+  | "khach-san-pham"
+  | "customer-cohort"
+  | "rfm"
   | "xuat-nhap-ton"
   | "hang-hoa"
-  | "khach-hang"
-  | "nha-cung-cap"
+  | "abc-analysis"
+  | "lot-traceability"
+  | "kiem-ke"
+  | "chenh-lech-kiem-ke"
+  | "aging"
+  | "ton-that"
+  | "tieu-hao-nvl"
+  | "cogs-theo-bom"
   | "tai-chinh"
-  | "luong-tien"
   | "bao-cao-tai-chinh"
-  | "canh-bao"
-  | "so-quy"
-  | "tong-hop-kenh"
+  | "luong-tien"
+  | "vat"
+  | "cong-no-aging"
+  | "fnb"
   | "fnb-shipper"
+  | "fnb-modifier"
+  | "serve-time"
+  | "nhan-vien"
+  | "nha-cung-cap"
+  | "so-quy"
   | "du-kien-mua-hang";
 
 /**

@@ -31,7 +31,6 @@ import { roundDecimals } from "@/lib/format";
 // ============================================================
 
 const COLOR_PRIMARY = "004AC6"; // OneBiz blue
-const COLOR_PRIMARY_LIGHT = "E8EEFD";
 const COLOR_HEADER_BG = "1E3A8A"; // Dark blue cho title block
 const COLOR_SECTION_BG = "DBEAFE"; // Light blue cho section divider
 const COLOR_COLUMN_HEADER = "F1F5F9"; // Gray light cho column header
@@ -467,23 +466,43 @@ function buildFilename(options: ExportOptions): string {
 }
 
 const REPORT_KIND_LABELS: Record<ReportKind, string> = {
+  "tong-quan": "Tổng quan kinh doanh",
   "cuoi-ngay": "Báo cáo cuối ngày",
+  "tong-hop-kenh": "Báo cáo tổng hợp kênh",
+  "canh-bao": "Báo cáo cảnh báo",
+  "doi-chieu-ca": "Báo cáo đối chiếu ca",
   "ban-hang": "Báo cáo bán hàng",
-  fnb: "Báo cáo FnB",
   "dat-hang": "Báo cáo đặt hàng",
   "kenh-ban": "Báo cáo kênh bán",
   "khuyen-mai": "Báo cáo khuyến mãi",
+  "tra-hang": "Báo cáo trả hàng",
+  "platform-commission": "Báo cáo phí nền tảng",
+  "khach-hang": "Báo cáo khách hàng",
+  "khach-san-pham": "Báo cáo khách hàng theo sản phẩm",
+  "customer-cohort": "Báo cáo khách hàng quay lại",
+  rfm: "Báo cáo phân khúc khách hàng RFM",
   "xuat-nhap-ton": "Báo cáo xuất nhập tồn",
   "hang-hoa": "Báo cáo hàng hóa",
-  "khach-hang": "Báo cáo khách hàng",
-  "nha-cung-cap": "Báo cáo nhà cung cấp",
+  "abc-analysis": "Báo cáo phân loại sản phẩm ABC",
+  "lot-traceability": "Báo cáo truy xuất theo lô",
+  "kiem-ke": "Báo cáo kiểm kê",
+  "chenh-lech-kiem-ke": "Báo cáo chênh lệch kiểm kê",
+  aging: "Báo cáo tuổi tồn kho",
+  "ton-that": "Báo cáo tổn thất",
+  "tieu-hao-nvl": "Báo cáo tiêu hao nguyên vật liệu",
+  "cogs-theo-bom": "Báo cáo giá vốn theo BOM",
   "tai-chinh": "Báo cáo tài chính quản trị",
-  "luong-tien": "Báo cáo lưu chuyển tiền",
   "bao-cao-tai-chinh": "Báo cáo kết quả vận hành",
-  "canh-bao": "Báo cáo cảnh báo",
-  "so-quy": "Báo cáo sổ quỹ",
-  "tong-hop-kenh": "Báo cáo tổng hợp kênh",
+  "luong-tien": "Báo cáo lưu chuyển tiền",
+  vat: "Báo cáo VAT",
+  "cong-no-aging": "Báo cáo tuổi công nợ",
+  fnb: "Báo cáo FnB",
   "fnb-shipper": "Báo cáo giao hàng FnB",
+  "fnb-modifier": "Báo cáo tùy chọn món FnB",
+  "serve-time": "Báo cáo thời gian phục vụ",
+  "nhan-vien": "Báo cáo nhân viên",
+  "nha-cung-cap": "Báo cáo nhà cung cấp",
+  "so-quy": "Báo cáo sổ quỹ",
   "du-kien-mua-hang": "Báo cáo dự kiến mua hàng",
 };
 

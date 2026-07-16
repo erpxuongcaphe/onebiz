@@ -26,8 +26,7 @@ import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
 export default function FnbModifierReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange } = useReportState({
     defaultPreset: "thisMonth",
@@ -36,9 +35,6 @@ export default function FnbModifierReportPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ModifierStatRow[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -55,7 +51,6 @@ export default function FnbModifierReportPage() {
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBranchId, range, toast]);
 
   useEffect(() => {
@@ -76,15 +71,15 @@ export default function FnbModifierReportPage() {
   const totalRevenue = stats.reduce((s, r) => s + r.totalPriceDelta, 0);
   const activeGroups = groupIds.length;
 
-  const handleExport = () => {
+  const handleExport = (mode: "view" | "full") => {
     const titleRows = buildReportTitleRows({
       title: "Báo cáo Tuỳ chọn món FnB",
       branchName: branchLabel,
       range,
     });
     exportReportToExcel({
-      kind: "fnb",
-      mode: "view",
+      kind: "fnb-modifier",
+      mode,
       range,
       branchName: branchLabel,
       sheets: [
@@ -121,7 +116,8 @@ export default function FnbModifierReportPage() {
         onPresetChange={setPreset}
         range={range}
         onCustomRangeChange={setCustomRange}
-        onExportView={stats.length > 0 ? handleExport : undefined}
+        onExportView={stats.length > 0 ? () => handleExport("view") : undefined}
+        onExportFull={stats.length > 0 ? () => handleExport("full") : undefined}
       />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">

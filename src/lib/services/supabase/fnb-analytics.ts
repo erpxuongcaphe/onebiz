@@ -3,9 +3,41 @@
  * Filters on invoices.source = 'fnb' and joins kitchen_orders + kitchen_order_items.
  */
 
-import { getClient, getCurrentTenantId } from "./base";
+import { getClient, getCurrentTenantId, handleError } from "./base";
 import { formatShortDate } from "@/lib/format";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+const FNB_REPORT_PAGE_SIZE = 1000;
+
+interface FnbPagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllFnbRows<T>(
+  buildQuery: () => FnbPagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += FNB_REPORT_PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(
+      offset,
+      offset + FNB_REPORT_PAGE_SIZE - 1,
+    );
+    if (error) {
+      handleError(error, context);
+      return [];
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < FNB_REPORT_PAGE_SIZE) break;
+  }
+  return rows;
+}
 
 // === Types ===
 
@@ -67,7 +99,7 @@ export async function getFnbKpis(
     query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: invoices } = await query;
+  const invoices = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[getFnbKpis.invoices]");
   const rows = invoices ?? [];
 
   const totalRevenue = rows.reduce((s, r) => s + Number(r.total ?? 0), 0);
@@ -86,7 +118,7 @@ export async function getFnbKpis(
     koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: koRows } = await koQuery;
+  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   let avgTurnoverMinutes = 0;
   if (koRows && koRows.length > 0) {
     const totalMinutes = koRows.reduce((sum, r) => {
@@ -123,15 +155,28 @@ export async function getRevenueByMenuItem(
     koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: koRows } = await koQuery;
+  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   const koIds = (koRows ?? []).map((r) => r.id);
   if (koIds.length === 0) return [];
 
   // Get items for those orders — scope qua kitchen_order_id (đã filter tenant ở koQuery)
-  const { data: items } = await supabase
-    .from("kitchen_order_items")
-    .select("product_name, quantity, unit_price")
-    .in("kitchen_order_id", koIds);
+  const items: Array<{
+    product_name: string;
+    quantity: number;
+    unit_price: number;
+  }> = [];
+  for (let offset = 0; offset < koIds.length; offset += 200) {
+    const chunkIds = koIds.slice(offset, offset + 200);
+    const chunk = await fetchAllFnbRows(
+      () => supabase
+        .from("kitchen_order_items")
+        .select("product_name, quantity, unit_price")
+        .in("kitchen_order_id", chunkIds)
+        .order("id", { ascending: true }),
+      "[getRevenueByMenuItem.items]",
+    );
+    items.push(...chunk);
+  }
 
   // Aggregate by product_name
   const map = new Map<string, { quantity: number; revenue: number }>();
@@ -172,7 +217,7 @@ export async function getRevenueByTable(
     query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { tableName: string; revenue: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -212,7 +257,7 @@ export async function getRevenueByHourFnb(
     query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const hourMap = new Map<number, { revenue: number; orders: number }>();
   for (let h = 0; h < 24; h++) {
@@ -258,7 +303,7 @@ export async function getCashierPerformance(
     query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
   }
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { cashierName: string; revenue: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -291,6 +336,16 @@ export interface PlatformRevenue {
   orders: number;
 }
 
+interface FnbCategoryItemRow {
+  product_id: string | null;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  products: {
+    category_id: string;
+    product_categories: { name: string } | null;
+  } | null;
+}
 export interface CategoryRevenue {
   categoryName: string;
   revenue: number;
@@ -328,7 +383,7 @@ export async function getRevenueByOrderType(
     .eq("status", "completed");
   if (branchId) query = query.eq("branch_id", branchId);
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -367,7 +422,7 @@ export async function getRevenueByPlatform(
     .not("delivery_platform", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -401,22 +456,28 @@ export async function getRevenueByCategory(
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
 
-  const { data: koRows } = await koQuery;
+  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   const koIds = (koRows ?? []).map((r) => r.id);
   if (koIds.length === 0) return [];
 
   // Get items with product category — scope qua kitchen_order_id
-  const { data: items } = await supabase
-    .from("kitchen_order_items")
-    .select("product_id, product_name, quantity, unit_price, products(category_id, product_categories(name))")
-    .in("kitchen_order_id", koIds);
+  const items: FnbCategoryItemRow[] = [];
+  for (let offset = 0; offset < koIds.length; offset += 200) {
+    const chunkIds = koIds.slice(offset, offset + 200);
+    const chunk = await fetchAllFnbRows<FnbCategoryItemRow>(
+      () => supabase
+        .from("kitchen_order_items")
+        .select("product_id, product_name, quantity, unit_price, products(category_id, product_categories(name))")
+        .in("kitchen_order_id", chunkIds)
+        .order("id", { ascending: true }) as unknown as FnbPagedQuery<FnbCategoryItemRow>,
+      "[getRevenueByCategory.items]",
+    );
+    items.push(...chunk);
+  }
 
   const map = new Map<string, { categoryName: string; revenue: number; orders: number; quantity: number }>();
   for (const item of items ?? []) {
-    const prod = (item as Record<string, unknown>).products as {
-      category_id: string;
-      product_categories: { name: string } | null;
-    } | null;
+    const prod = item.products;
     const catName = prod?.product_categories?.name ?? "Chưa phân loại";
     const key = prod?.category_id ?? "unknown";
     const prev = map.get(key) ?? { categoryName: catName, revenue: 0, orders: 0, quantity: 0 };
@@ -450,7 +511,7 @@ export async function getDailyRevenueFnb(
     .gte("created_at", since.toISOString());
   if (branchId) query = query.eq("branch_id", branchId);
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -487,7 +548,7 @@ export async function getTableTurnover(
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
 
-  const { data: rows } = await query;
+  const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { tableName: string; totalMinutes: number; orders: number }>();
   for (const row of rows ?? []) {
@@ -611,7 +672,7 @@ export async function getDeliveryStaffPerformance(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rows } = (await query) as { data: any[] | null };
+  const rows = await fetchAllFnbRows<any>(() => query, "[fnb.delivery]");
 
   const map = new Map<
     string,
@@ -718,17 +779,27 @@ export async function getModifierStats(
       .gte("created_at", rangeWindow.start)
       .lt("created_at", rangeWindow.end);
   }
-  const { data: koRows } = await koQuery;
+  const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   const koIds = (koRows ?? []).map((r) => r.id);
   if (koIds.length === 0) return [];
 
   // 2. Lấy kitchen_order_items với modifier_selections
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: items } = await (supabase
-    .from("kitchen_order_items")
-    .select("quantity, modifier_selections") as any)
-    .in("kitchen_order_id", koIds)
-    .not("modifier_selections", "is", null);
+  const items: Array<Record<string, unknown>> = [];
+  /* eslint-disable @typescript-eslint/no-explicit-any -- generated DB types do not expose modifier_selections yet */
+  for (let offset = 0; offset < koIds.length; offset += 200) {
+    const chunkIds = koIds.slice(offset, offset + 200);
+    const chunk = await fetchAllFnbRows<any>(
+      () => (supabase
+        .from("kitchen_order_items")
+        .select("quantity, modifier_selections") as any)
+        .in("kitchen_order_id", chunkIds)
+        .not("modifier_selections", "is", null)
+        .order("id", { ascending: true }),
+      "[getModifierStats.items]",
+    );
+    items.push(...chunk);
+  }
+  /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // 3. Aggregate client-side
   const map = new Map<
@@ -820,7 +891,7 @@ export async function getOrdersByDeliveryStaff(
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: rows } = (await query) as { data: any[] | null };
+  const rows = await fetchAllFnbRows<any>(() => query, "[fnb.delivery]");
 
   return (rows ?? []).map((row) => {
     const inv = row.invoices as

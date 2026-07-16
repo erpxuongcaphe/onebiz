@@ -22,7 +22,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -105,8 +104,7 @@ function heatmapClass(value: number, max: number): string {
 }
 
 export default function KhachSanPhamPage() {
-  const { activeBranchId } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange } = useReportState({
     defaultPreset: "thisMonth",
@@ -125,9 +123,6 @@ export default function KhachSanPhamPage() {
   const [productDetail, setProductDetail] = useState<CustomerProductCell[]>([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   // ── Load primary data ──
   useEffect(() => {
@@ -284,7 +279,7 @@ export default function KhachSanPhamPage() {
         };
       }
       exportReportToExcel({
-        kind: "khach-hang",
+        kind: "khach-san-pham",
         mode: "view",
         range,
         branchName: branchLabel,
@@ -387,7 +382,7 @@ export default function KhachSanPhamPage() {
         },
       ];
       exportReportToExcel({
-        kind: "khach-hang",
+        kind: "khach-san-pham",
         mode: "full",
         range,
         branchName: branchLabel,

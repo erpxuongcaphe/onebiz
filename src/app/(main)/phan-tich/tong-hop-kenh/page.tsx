@@ -130,8 +130,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function TongHopKenhPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -145,9 +144,6 @@ export default function TongHopKenhPage() {
     fnb: ChannelTopProduct[];
   }>({ retail: [], fnb: [] });
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const fetchData = useCallback(async () => {
     setLoading(true);

@@ -46,8 +46,7 @@ function CashFlowTooltip({ active, payload, label }: any) {
 }
 
 export default function LuongTienPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
@@ -55,9 +54,6 @@ export default function LuongTienPage() {
   const [loading, setLoading] = useState(true);
 
   const tenantName = useAuth().tenant?.name;
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const buildSheets = useCallback((): ExcelSheet[] => {
     // Sheet 0: Info + disclaimer
@@ -309,7 +305,7 @@ export default function LuongTienPage() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Thu - Chi theo tháng">
-          <ResponsiveContainer width="100%" height={280} minWidth={0}>
+          <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />
@@ -323,7 +319,7 @@ export default function LuongTienPage() {
         </ChartCard>
 
         <ChartCard title="Dòng tiền ròng & Số dư luỹ kế">
-          <ResponsiveContainer width="100%" height={280} minWidth={0}>
+          <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
             <LineChart data={balanceData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11 }} />

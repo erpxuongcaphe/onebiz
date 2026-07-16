@@ -65,7 +65,7 @@ export default function LotTraceabilityPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
-  const { activeBranchId, branches, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [lots, setLots] = useState<LotRow[]>([]);
@@ -132,7 +132,7 @@ export default function LotTraceabilityPage() {
   const activeLots = lots.filter((l) => l.status === "active").length;
   const totalQty = lots.reduce((s, l) => s + l.remainingQty, 0);
 
-  const handleExportView = useCallback(() => {
+  const handleExport = useCallback((mode: "view" | "full") => {
     const titleRows = buildReportTitleRows({
       title: "Báo cáo lot traceability",
       range,
@@ -142,9 +142,10 @@ export default function LotTraceabilityPage() {
       generatedAt: new Date(),
     });
     exportReportToExcel({
-      kind: "hang-hoa",
-      mode: "view",
+      kind: "lot-traceability",
+      mode,
       range,
+      branchName: branchLabel,
       sheets: [
         {
           name: "Lot trace",
@@ -177,7 +178,7 @@ export default function LotTraceabilityPage() {
         },
       ],
     });
-  }, [activeBranchId, branches, lots, range]);
+  }, [activeBranchId, branchLabel, branches, lots, range]);
 
   const columns: DataTableColumn<LotRow>[] = [
     { label: "Mã lô", key: "lotCode", align: "left", width: "120px" },
@@ -267,7 +268,8 @@ export default function LotTraceabilityPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExportView={handleExportView}
+        onExportView={() => handleExport("view")}
+        onExportFull={() => handleExport("full")}
         exportDisabled={loading}
       />
 

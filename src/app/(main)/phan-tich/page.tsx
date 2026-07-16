@@ -68,8 +68,7 @@ function RevenueTooltip({ active, payload, label }: any) {
 }
 
 export default function TongQuanPage() {
-  const { activeBranchId } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -93,10 +92,6 @@ export default function TongQuanPage() {
 
   // CEO 13/05: helper resolve tên branch để in title row Excel
   const tenantName = useAuth().tenant?.name;
-  const branchLabel =
-    activeBranchId
-      ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-      : "Tất cả chi nhánh";
 
   // Fetch finance KPI riêng (loading async, không block UI chính)
   useEffect(() => {
@@ -136,7 +131,7 @@ export default function TongQuanPage() {
         rows: kpiRows,
       };
       exportReportToExcel({
-        kind: "tai-chinh",
+        kind: "tong-quan",
         mode: "view",
         range,
         branchName: branchLabel,
@@ -273,7 +268,7 @@ export default function TongQuanPage() {
       const sheets: ExcelSheet[] = [infoSheet, execSummary];
 
       exportReportToExcel({
-        kind: "tai-chinh",
+        kind: "tong-quan",
         mode: "full",
         range,
         branchName: branchLabel,
@@ -413,7 +408,7 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo ngày
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={280} minWidth={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
                   <LineChart data={dailyRevenue}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis
@@ -449,7 +444,7 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo danh mục
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height={280} minWidth={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
                   <BarChart data={categoryRevenue} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis

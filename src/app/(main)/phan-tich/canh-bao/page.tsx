@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { ReportPageHeader } from "@/components/shared/report";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import Link from "next/link";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useReportState } from "@/lib/hooks/use-report-state";
 import { getFinancialAlerts } from "@/lib/services";
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
 import { Icon } from "@/components/ui/icon";
@@ -60,27 +62,22 @@ export default function CanhBaoPage() {
   // Branch awareness — chuỗi 5 đơn vị, owner cần xem cảnh báo riêng
   // từng quán/kho. Trước đây gọi `getFinancialAlerts()` không param →
   // luôn aggregate toàn tenant, không filter được.
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
+  const { preset, range, setPreset, setCustomRange } = useReportState({
+    defaultPreset: "today",
+    defaultViewMode: "table",
+    forceTable: true,
+  });
   const [loading, setLoading] = useState(true);
   const [alerts, setAlerts] = useState<FinancialAlert[]>([]);
   const [filterType, setFilterType] = useState<string>("all");
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
-
-  const handleExportExcel = useCallback(() => {
+  const handleExportExcel = useCallback(async (mode: "view" | "full") => {
     try {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
-      const todayIso = `${yyyy}-${mm}-${dd}`;
       const title = buildReportTitleRows({
         title: "CẢNH BÁO TÀI CHÍNH",
-        range: { from: todayIso, to: todayIso },
+        range,
         branchName: branchLabel,
         generatedAt: new Date(),
       });
@@ -94,33 +91,39 @@ export default function CanhBaoPage() {
           { label: "Mô tả", key: "description", width: 48 },
           { label: "Giá trị (VND)", key: "amount", width: 18, format: "currency" },
         ],
-        rows: alerts.map((a) => ({
-          severity: SEVERITY_CONFIG[a.severity].label,
-          type: TYPE_LABELS[a.type] ?? a.type,
-          title: a.title,
-          description: a.description ?? "",
-          amount: a.value ?? 0,
+        rows: alerts.map((alert) => ({
+          severity: SEVERITY_CONFIG[alert.severity].label,
+          type: TYPE_LABELS[alert.type] ?? alert.type,
+          title: alert.title,
+          description: alert.description ?? "",
+          amount: alert.value ?? 0,
         })),
         footer: {
           severity: "TỔNG",
           type: "",
           title: `${alerts.length} cảnh báo`,
           description: "",
-          amount: alerts.reduce((s, a) => s + (a.value ?? 0), 0),
+          amount: alerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
         },
       };
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "canh-bao",
-        mode: "view",
-        range: { from: todayIso, to: todayIso },
+        mode,
+        range,
         branchName: branchLabel,
+        reportTitle: "Cảnh báo điều hành",
+        description: "Danh sách cảnh báo đang hoạt động tại thời điểm xuất file.",
         sheets: [sheet],
       });
       toast({ title: "Đã xuất Excel cảnh báo", variant: "success" });
     } catch (err) {
-      toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+      toast({
+        title: "Lỗi xuất Excel",
+        description: err instanceof Error ? err.message : "Không thể tạo file",
+        variant: "error",
+      });
     }
-  }, [alerts, branchLabel, toast]);
+  }, [alerts, branchLabel, range, toast]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -163,18 +166,18 @@ export default function CanhBaoPage() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
-      {/* Header */}
-      <div className="border-b px-4 md:px-6 py-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold flex items-center gap-2">
-              <Icon name="warning" className="size-5 text-status-warning" />
-              Cảnh báo tài chính
-            </h1>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Theo dõi rủi ro: công nợ, tồn kho, hạn sử dụng, dòng tiền
-            </p>
-          </div>
+      <ReportPageHeader
+        title="Cảnh báo điều hành"
+        subtitle="Theo dõi rủi ro công nợ, tồn kho, hạn sử dụng và dòng tiền"
+        preset={preset}
+        range={range}
+        onPresetChange={setPreset}
+        onCustomRangeChange={setCustomRange}
+        onExportView={() => handleExportExcel("view")}
+        onExportFull={() => handleExportExcel("full")}
+        exportDisabled={alerts.length === 0}
+        hideDateRange
+        actions={
           <div className="flex items-center gap-2">
             {criticalCount > 0 && (
               <Badge variant="destructive" className="text-xs">
@@ -182,33 +185,13 @@ export default function CanhBaoPage() {
               </Badge>
             )}
             {warningCount > 0 && (
-              <Badge className="bg-status-warning/10 text-status-warning text-xs border-status-warning/25">
+              <Badge className="border-status-warning/25 bg-status-warning/10 text-xs text-status-warning">
                 {warningCount} cảnh báo
               </Badge>
             )}
-            {/* CEO 14/05 (research): Cảnh báo KHÔNG xuất Excel — chuẩn industry
-                (KiotViet/MISA cũng vậy). Alert chỉ live trên web/push, ai cần
-                trích xuất số liệu tồn kho/công nợ → vào module riêng. */}
-            {false && (
-            <button
-              type="button"
-              onClick={handleExportExcel}
-              disabled={alerts.length === 0}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-xs font-medium",
-                "bg-primary text-primary-foreground hover:bg-primary/90",
-                "transition-colors press-scale-sm outline-none ambient-shadow",
-                alerts.length === 0 && "opacity-50 cursor-not-allowed",
-              )}
-            >
-              <Icon name="download" size={14} />
-              Xuất Excel
-            </button>
-            )}
           </div>
-        </div>
-      </div>
-
+        }
+      />
       <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* Summary cards */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">

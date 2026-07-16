@@ -19,7 +19,7 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -135,8 +135,7 @@ function renderPieLabel(props: any) {
 }
 
 export default function NhaCungCapPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -154,9 +153,6 @@ export default function NhaCungCapPage() {
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
   const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const handleExportView = useCallback(() => {
     try {
@@ -195,8 +191,12 @@ export default function NhaCungCapPage() {
     }
   }, [supplierTable, range, branchLabel, toast]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
     try {
+      const [allTopSuppliers, allSupplierRows] = await Promise.all([
+        getTopSuppliersByPurchase(null, activeBranchId, range),
+        getSupplierSummary(null, activeBranchId, range),
+      ]);
       const title = buildReportTitleRows({
         title: "BÁO CÁO NHÀ CUNG CẤP — ĐẦY ĐỦ",
         range,
@@ -230,12 +230,12 @@ export default function NhaCungCapPage() {
         },
         {
           name: "Top NCC",
-          titleRows: ["TOP 5 NCC", ...title.slice(1)],
+          titleRows: ["TẤT CẢ NHÀ CUNG CẤP", ...title.slice(1)],
           columns: [
             { label: "Nhà cung cấp", key: "name", width: 32 },
             { label: "Tổng mua (VND)", key: "amount", width: 18, format: "currency" },
           ],
-          rows: topSuppliers,
+          rows: allTopSuppliers,
         },
         {
           name: "Chi tiết NCC",
@@ -246,7 +246,7 @@ export default function NhaCungCapPage() {
             { label: "Công nợ (VND)", key: "debt", width: 18, format: "currency" },
             { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
           ],
-          rows: supplierTable.map((s) => ({
+          rows: allSupplierRows.map((s) => ({
             name: s.name, purchased: s.total, debt: s.debt, orders: s.orders,
           })),
         },
@@ -260,12 +260,12 @@ export default function NhaCungCapPage() {
           rows: paymentStatus,
         },
       ];
-      exportReportToExcel({ kind: "nha-cung-cap", mode: "full", range, branchName: branchLabel, sheets });
+      await exportReportToExcel({ kind: "nha-cung-cap", mode: "full", range, branchName: branchLabel, sheets });
       toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [kpis, purchaseByMonth, topSuppliers, paymentStatus, supplierTable, range, branchLabel, toast]);
+  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, range, branchLabel, toast]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -289,9 +289,9 @@ export default function NhaCungCapPage() {
       const [kpiData, purchase, top, payment, summary] = await Promise.all([
         getSupplierKpis(activeBranchId, range),
         getPurchaseByMonth(6, activeBranchId),
-        getTopSuppliersByPurchase(5, activeBranchId),
-        getSupplierPaymentStatus(),
-        getSupplierSummary(8, activeBranchId),
+        getTopSuppliersByPurchase(5, activeBranchId, range),
+        getSupplierPaymentStatus(activeBranchId),
+        getSupplierSummary(8, activeBranchId, range),
       ]);
       setKpis(kpiData);
       setPurchaseByMonth(purchase);
@@ -379,7 +379,7 @@ export default function NhaCungCapPage() {
                   Chưa có dữ liệu mua hàng
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <LineChart
                     data={purchaseByMonth}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -422,7 +422,7 @@ export default function NhaCungCapPage() {
                   Chưa có dữ liệu nhà cung cấp
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={[...topSuppliers].reverse()}
                     layout="vertical"
@@ -466,7 +466,7 @@ export default function NhaCungCapPage() {
                 Chưa có dữ liệu thanh toán
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <PieChart>
                   <Pie
                     data={paymentStatus}

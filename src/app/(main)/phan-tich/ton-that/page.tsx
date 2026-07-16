@@ -55,7 +55,7 @@ import { ChartCard } from "../_components/chart-card";
 const COLORS = ["#EF4444", "#F97316", "#F59E0B", "#FBBF24", "#9CA3AF", "#6B7280"];
 
 export default function DisposalLossReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const {
     preset,
@@ -218,7 +218,6 @@ export default function DisposalLossReportPage() {
       return;
     }
     try {
-      const branchLabel = activeBranchId ? "Chi nhánh đang chọn" : "Tất cả chi nhánh";
 
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO TỔN THẤT TỒN KHO",
@@ -332,10 +331,10 @@ export default function DisposalLossReportPage() {
       };
 
       exportReportToExcel({
-        kind: "hang-hoa",
+        kind: "ton-that",
         mode: "full",
         range,
-        branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+        branchName: branchLabel,
         tenantName: "OneBiz",
         sheets: [infoSheet, reasonSheet, productSheet, branchSheet, detailSheet],
       });
@@ -352,7 +351,7 @@ export default function DisposalLossReportPage() {
         variant: "error",
       });
     }
-  }, [rows, byReason, byProduct, byBranch, kpis, range, activeBranchId, toast]);
+  }, [rows, byReason, byProduct, byBranch, kpis, range, branchLabel, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">
@@ -439,7 +438,7 @@ export default function DisposalLossReportPage() {
             subtitle="Top lý do tốn kém nhất"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byReason.slice(0, 8)}
                   layout="vertical"
@@ -477,7 +476,7 @@ export default function DisposalLossReportPage() {
             subtitle="So sánh thiệt hại giữa các đơn vị"
           >
             <div className="h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={byBranch}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

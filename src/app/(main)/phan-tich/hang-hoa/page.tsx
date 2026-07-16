@@ -158,8 +158,7 @@ interface InventoryKpis {
 }
 
 export default function HangHoaPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -170,9 +169,6 @@ export default function HangHoaPage() {
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const handleExportView = useCallback(() => {
     try {
@@ -303,11 +299,11 @@ export default function HangHoaPage() {
     setLoading(true);
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
-        getInventoryKpis(),
+        getInventoryKpis(activeBranchId, range),
         getTopProductsByRevenue(10, activeBranchId, range),
-        getCategoryDistribution(),
+        getCategoryDistribution(activeBranchId),
         getStockMovements(30, activeBranchId, range),
-        getAnalyticsLowStock(),
+        getAnalyticsLowStock(10, activeBranchId),
       ]);
       setKpis(kpiData);
       setTopProducts(topData);
@@ -406,7 +402,7 @@ export default function HangHoaPage() {
                   Chưa có dữ liệu doanh thu sản phẩm
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={[...topProducts].reverse()}
                     layout="vertical"
@@ -452,7 +448,7 @@ export default function HangHoaPage() {
                   Chưa có dữ liệu nhóm hàng
                 </div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={categories}
@@ -498,7 +494,7 @@ export default function HangHoaPage() {
                 Chưa có dữ liệu xuất nhập kho
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={movements}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}

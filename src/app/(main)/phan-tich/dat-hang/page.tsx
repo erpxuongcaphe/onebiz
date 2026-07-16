@@ -155,8 +155,7 @@ function renderPieLabel(props: any) {
 // === Page ===
 
 export default function DatHangPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
@@ -168,9 +167,6 @@ export default function DatHangPage() {
   // CEO 13/07 (chuẩn KiotViet): đặt hàng theo hàng hóa — mỗi SP 1 dòng.
   const [productRows, setProductRows] = useState<OrderProductBreakdownRow[]>([]);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   // ── Export Excel — view (1 sheet) + full (multi-sheet) ──
   const handleExportView = useCallback(() => {
@@ -457,7 +453,7 @@ export default function DatHangPage() {
         >
           {orderVolume.length > 0 ? (
             <div className="h-48 md:h-72">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
                   data={orderVolume}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -496,7 +492,7 @@ export default function DatHangPage() {
           )}
         </ChartCard>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div>
           {/* Order status pie chart */}
           <ChartCard
             title="Phân bổ trạng thái đơn hàng"
@@ -504,7 +500,7 @@ export default function DatHangPage() {
           >
             {orderStatus.length > 0 ? (
               <div className="h-64 md:h-80">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={orderStatus}
@@ -542,17 +538,6 @@ export default function DatHangPage() {
             )}
           </ChartCard>
 
-          {/* Placeholder for removed processing time chart */}
-          <ChartCard
-            title="Thời gian xử lý đơn trung bình"
-            subtitle="Tính năng đang phát triển"
-          >
-            <div className="h-64 md:h-80 flex flex-col items-center justify-center text-muted-foreground">
-              <Icon name="assignment" className="size-10 mb-3 opacity-30" />
-              <p className="text-sm">Dữ liệu thời gian xử lý chưa khả dụng</p>
-              <p className="text-xs mt-1">Tính năng sẽ được cập nhật sau</p>
-            </div>
-          </ChartCard>
         </div>
 
         {/* CEO 13/07 — Đặt hàng theo hàng hóa (chuẩn KiotViet) */}

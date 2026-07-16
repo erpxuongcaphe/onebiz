@@ -78,7 +78,7 @@ export default function KiemKeReportPage() {
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
 
-  const handleExportView = useCallback(() => {
+  const handleExport = useCallback((mode: "view" | "full") => {
     if (!data) return;
     const titleRows = buildReportTitleRows({
       title: "Báo cáo kiểm kê",
@@ -87,8 +87,8 @@ export default function KiemKeReportPage() {
       generatedAt: new Date(),
     });
     exportReportToExcel({
-      kind: "hang-hoa",
-      mode: "view",
+      kind: "kiem-ke",
+      mode,
       range,
       branchName,
       sheets: [
@@ -216,7 +216,8 @@ export default function KiemKeReportPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExportView={handleExportView}
+        onExportView={() => handleExport("view")}
+        onExportFull={() => handleExport("full")}
         exportDisabled={loading || !data}
       />
 

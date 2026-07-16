@@ -129,6 +129,21 @@ function renderPieLabel(props: any) {
   );
 }
 
+async function loadAllCustomersForExport(): Promise<Customer[]> {
+  const rows: Customer[] = [];
+  const pageSize = 500;
+  for (let page = 0; ; page++) {
+    const result = await getCustomers({
+      page,
+      pageSize,
+      sortBy: "name",
+      sortOrder: "asc",
+    });
+    rows.push(...result.data);
+    if (result.data.length < pageSize) return rows;
+  }
+}
+
 export default function KhachHangPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
   const {
@@ -152,8 +167,6 @@ export default function KhachHangPage() {
   const [customerSegments, setCustomerSegments] = useState<CustomerSegment[]>([]);
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [topDebtors, setTopDebtors] = useState<TopDebtor[]>([]);
-  // CEO 14/05: DS KH chi tiết cho Excel — fetch riêng, không block UI chính
-  const [customerList, setCustomerList] = useState<Customer[]>([]);
   const tenantName = useAuth().tenant?.name;
 
   const fetchData = useCallback(async () => {
@@ -162,10 +175,10 @@ export default function KhachHangPage() {
       const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
         getCustomerKpis(activeBranchId, range),
         getNewCustomersMonthly(6, activeBranchId),
-        getCustomerSegments(),
+        getCustomerSegments(activeBranchId),
         // P1-3B-R6 13/06/2026: truyền range để top 50 KH theo đúng kỳ (trước đây lifetime).
         getTopCustomersByRevenue(50, activeBranchId, range),
-        getTopDebtors(50), // Tăng top 50 công nợ (snapshot hiện tại — không cần range)
+        getTopDebtors(50, activeBranchId), // Tăng top 50 công nợ (snapshot hiện tại — không cần range)
       ]);
       setKpis(kpiData);
       setNewCustomersMonthly(monthly);
@@ -178,16 +191,6 @@ export default function KhachHangPage() {
       setLoading(false);
     }
   }, [activeBranchId, range]);
-
-  // Fetch DS KH chi tiết (page 0, size 500 — đủ cho export Excel)
-  useEffect(() => {
-    getCustomers({ page: 0, pageSize: 500, sortBy: "name", sortOrder: "asc" })
-      .then((res) => setCustomerList(res.data))
-      .catch((err: unknown) => {
-        console.error("[phan-tich/khach-hang] load customers failed:", err);
-        setCustomerList([]);
-      });
-  }, []);
 
   useEffect(() => {
     if (!isReady) return;
@@ -231,8 +234,20 @@ export default function KhachHangPage() {
     });
   }, [kpis, topCustomers, range, branchName]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
     if (!kpis) return;
+
+    const [allCustomers, allRevenueCustomers, allDebtors] = await Promise.all([
+      loadAllCustomersForExport(),
+      getTopCustomersByRevenue(null, activeBranchId, range),
+      getTopDebtors(null, activeBranchId),
+    ]);
+    const scopedCustomerIds = new Set(
+      allRevenueCustomers.map((customer) => customer.customerId),
+    );
+    const customerList = activeBranchId
+      ? allCustomers.filter((customer) => scopedCustomerIds.has(customer.id))
+      : allCustomers;
 
     // Sheet 0: Info
     const infoSheet = buildInfoSheet({
@@ -309,7 +324,7 @@ export default function KhachHangPage() {
       name: "Top doanh thu",
       titleRows: buildReportTitleRows({
         ...titleBase,
-        title: "TOP 50 KHÁCH HÀNG THEO DOANH THU",
+        title: "TẤT CẢ KHÁCH HÀNG THEO DOANH THU",
       }),
       columns: [
         { label: "Hạng", key: "rank", width: 8, align: "center" },
@@ -318,7 +333,7 @@ export default function KhachHangPage() {
         { label: "Doanh thu (VND)", key: "revenue", width: 20, format: "currency" },
         { label: "TB/đơn (VND)", key: "avgTicket", width: 16, format: "currency" },
       ],
-      rows: topCustomers.map((c) => ({
+      rows: allRevenueCustomers.map((c) => ({
         rank: c.rank,
         name: c.name,
         orders: c.orders,
@@ -327,9 +342,9 @@ export default function KhachHangPage() {
       })),
       footer: {
         rank: "",
-        name: "TỔNG TOP 50",
-        orders: topCustomers.reduce((s, c) => s + c.orders, 0),
-        revenue: topCustomers.reduce((s, c) => s + c.revenue, 0),
+        name: "TỔNG CỘNG",
+        orders: allRevenueCustomers.reduce((s, c) => s + c.orders, 0),
+        revenue: allRevenueCustomers.reduce((s, c) => s + c.revenue, 0),
         avgTicket: "",
       },
     };
@@ -376,7 +391,7 @@ export default function KhachHangPage() {
         { label: "Tên khách hàng", key: "name", width: 30 },
         { label: "Công nợ (VND)", key: "debt", width: 20, format: "currency" },
       ],
-      rows: topDebtors.map((d, i) => ({
+      rows: allDebtors.map((d, i) => ({
         stt: i + 1,
         name: d.name,
         debt: d.debt,
@@ -384,7 +399,7 @@ export default function KhachHangPage() {
       footer: {
         stt: "",
         name: "TỔNG CÔNG NỢ",
-        debt: topDebtors.reduce((s, d) => s + d.debt, 0),
+        debt: allDebtors.reduce((s, d) => s + d.debt, 0),
       },
     };
 
@@ -409,7 +424,7 @@ export default function KhachHangPage() {
       },
     };
 
-    exportReportToExcel({
+    await exportReportToExcel({
       kind: "khach-hang",
       mode: "full",
       range,
@@ -426,11 +441,9 @@ export default function KhachHangPage() {
     });
   }, [
     kpis,
-    topCustomers,
-    topDebtors,
     newCustomersMonthly,
     customerSegments,
-    customerList,
+    activeBranchId,
     range,
     branchName,
     tenantName,
@@ -527,7 +540,7 @@ export default function KhachHangPage() {
           <ChartCard title="Khách hàng mới theo tháng" subtitle="6 tháng gần nhất">
             {newCustomersMonthly.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
                     data={newCustomersMonthly}
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
@@ -566,7 +579,7 @@ export default function KhachHangPage() {
           <ChartCard title="Phân loại khách hàng" subtitle="Theo nhóm khách hàng">
             {customerSegments.length > 0 ? (
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <PieChart>
                     <Pie
                       data={customerSegments}
@@ -643,7 +656,7 @@ export default function KhachHangPage() {
         <ChartCard title="Xếp hạng công nợ khách hàng" subtitle="Top 5 khách hàng có công nợ cao nhất">
           {topDebtors.length > 0 ? (
             <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
+              <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={[...topDebtors].reverse()}
                   layout="vertical"

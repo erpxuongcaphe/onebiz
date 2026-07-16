@@ -52,8 +52,7 @@ const TIER_LABEL: Record<string, string> = {
 };
 
 export default function FnbShipperReportPage() {
-  const { activeBranchId, isReady } = useBranchFilter();
-  const { branches } = useAuth();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
@@ -64,9 +63,6 @@ export default function FnbShipperReportPage() {
   const [drillOrders, setDrillOrders] = useState<ShipperOrderRow[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
 
-  const branchLabel = activeBranchId
-    ? branches.find((b) => b.id === activeBranchId)?.name ?? "Chi nhánh đang chọn"
-    : "Tất cả chi nhánh";
 
   const fetchData = useCallback(async () => {
     setLoading(true);

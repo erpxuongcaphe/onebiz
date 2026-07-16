@@ -12,6 +12,37 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+interface InventoryCheckPagedQuery<T> {
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{
+    data: T[] | null;
+    error: { message: string } | null;
+  }>;
+}
+
+async function fetchAllInventoryCheckRows<T>(
+  buildQuery: () => InventoryCheckPagedQuery<T>,
+  context: string,
+): Promise<T[]> {
+  const pageSize = 1000;
+  const rows: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await buildQuery().range(
+      offset,
+      offset + pageSize - 1,
+    );
+    if (error) {
+      handleError(error, context);
+      return [];
+    }
+    const page = data ?? [];
+    rows.push(...page);
+    if (page.length < pageSize) break;
+  }
+  return rows;
+}
 
 export interface InventoryCheckReportRow {
   id: string;
@@ -90,8 +121,7 @@ export async function getInventoryCheckReport(
     .gte("created_at", rangeWindow.start)
     .lt("created_at", rangeWindow.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data: checks, error } = await query;
-  if (error) handleError(error, "getInventoryCheckReport.checks");
+  const checks = await fetchAllInventoryCheckRows<Record<string, unknown>>(() => query.order("created_at", { ascending: true }), "getInventoryCheckReport.checks");
 
   // 2. Build rows + aggregate
   let totalIncrease = 0;
@@ -135,10 +165,11 @@ export async function getInventoryCheckReport(
     .from("inventory_checks")
     .select("id, inventory_check_items(difference, products(cost_price))")
     .eq("tenant_id", tenantId)
+    .eq("status", "balanced")
     .gte("created_at", prevFrom.toISOString())
     .lt("created_at", prevTo.toISOString());
   if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
-  const { data: prevChecks } = await prevQuery;
+  const prevChecks = await fetchAllInventoryCheckRows<Record<string, unknown>>(() => prevQuery.order("created_at", { ascending: true }), "getInventoryCheckReport.previous");
 
   let prevInc = 0;
   let prevDec = 0;
