@@ -6,7 +6,13 @@ import { PERMISSIONS } from "@/lib/permissions/constants";
 
 const BRANCH_PARAM = "branch";
 
-export function useReportScope() {
+type ReportScopeOptions = {
+  synchronizeUrl?: boolean;
+};
+
+export function useReportScope(
+  { synchronizeUrl = true }: ReportScopeOptions = {},
+) {
   const {
     activeBranchId,
     branches,
@@ -16,8 +22,8 @@ export function useReportScope() {
     tenant,
     user,
   } = useAuth();
-  const initializedRef = useRef(false);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const initializedRef = useRef(!synchronizeUrl);
+  const [isInitialized, setIsInitialized] = useState(!synchronizeUrl);
 
   const canViewAll =
     hasPermission(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
@@ -33,7 +39,7 @@ export function useReportScope() {
   );
 
   useEffect(() => {
-    if (!authReady || initializedRef.current) return;
+    if (!synchronizeUrl || !authReady || initializedRef.current) return;
 
     const params = new URLSearchParams(window.location.search);
     const requestedBranch = params.get(BRANCH_PARAM);
@@ -63,10 +69,18 @@ export function useReportScope() {
     fallbackBranchId,
     authReady,
     switchBranch,
+    synchronizeUrl,
   ]);
 
   useEffect(() => {
-    if (!authReady || !isInitialized || !initializedRef.current) return;
+    if (
+      !synchronizeUrl ||
+      !authReady ||
+      !isInitialized ||
+      !initializedRef.current
+    ) {
+      return;
+    }
     if (!canViewAll && !activeBranchId) return;
 
     const url = new URL(window.location.href);
@@ -75,7 +89,13 @@ export function useReportScope() {
 
     url.searchParams.set(BRANCH_PARAM, nextValue);
     window.history.replaceState(window.history.state, "", url);
-  }, [activeBranchId, authReady, canViewAll, isInitialized]);
+  }, [
+    activeBranchId,
+    authReady,
+    canViewAll,
+    isInitialized,
+    synchronizeUrl,
+  ]);
 
   const selectBranch = useCallback(
     (branchId: string | null) => {

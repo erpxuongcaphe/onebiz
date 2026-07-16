@@ -19,7 +19,7 @@ export function ReportScopeSelector() {
     canViewAll,
     isReady,
     selectBranch,
-  } = useReportScope();
+  } = useReportScope({ synchronizeUrl: false });
   const branchItems = useMemo(
     () =>
       branches.map((branch) => ({
