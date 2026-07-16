@@ -4,6 +4,7 @@ import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { getCampaignList, type MktCampaign } from "@/lib/mkt/read-models";
 import { CampaignFormDialog } from "@/components/mkt/campaign-form-dialog";
+import { formatVnd } from "@/lib/mkt/format";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +17,6 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   completed: { label: "Hoàn thành", cls: "border-sky-200 bg-sky-50 text-sky-700" },
   canceled: { label: "Đã huỷ", cls: "border-slate-200 bg-slate-100 text-slate-500" },
 };
-
-function money(n: number) {
-  return new Intl.NumberFormat("vi-VN").format(n) + "đ";
-}
 
 function CampaignCard({ c }: { c: MktCampaign }) {
   const st = STATUS[c.status] ?? { label: c.status, cls: "border-slate-200 bg-slate-50 text-slate-700" };
@@ -54,7 +51,7 @@ function CampaignCard({ c }: { c: MktCampaign }) {
 
       <div className="mt-3 flex items-center gap-4 text-xs text-on-surface-variant">
         <span className="inline-flex items-center gap-1">
-          <Icon name="payments" size={14} /> {money(c.budget)}
+          <Icon name="payments" size={14} /> {formatVnd(c.budget)}
         </span>
         {c.timeframeStart ? (
           <span className="inline-flex items-center gap-1">

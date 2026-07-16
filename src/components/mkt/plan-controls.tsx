@@ -15,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import { mktPost } from "@/lib/mkt/client";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
+import { formatVnd } from "@/lib/mkt/format";
 import type {
   MktMember,
   MktPillar,
@@ -205,6 +206,19 @@ function newRow(): Row {
   };
 }
 
+// Một dòng KPI trong trình soạn. `kpiId` = id thật dưới DB (null = dòng mới);
+// `localId` chỉ để React theo dõi. Mục tiêu giữ dạng CHUỖI tới lúc gửi — RPC
+// validate bằng tiếng Việt, tránh bẫy `"0"` truthy và bẫy ép số sớm.
+type KpiRow = { localId: string; kpiId: string | null; name: string; target: string; unit: string };
+
+const newKpiRow = (): KpiRow => ({
+  localId: crypto.randomUUID(),
+  kpiId: null,
+  name: "",
+  target: "",
+  unit: "",
+});
+
 export function PlanEditorButton({
   plan,
   members,
@@ -227,6 +241,19 @@ export function PlanEditorButton({
   const [keyMessage, setKeyMessage] = useState(plan.keyMessage ?? "");
   const [mandatory, setMandatory] = useState(plan.mandatoryDeliverables ?? "");
   const [deadline, setDeadline] = useState(plan.deadline ? plan.deadline.slice(0, 10) : "");
+  const [strategySummary, setStrategySummary] = useState(plan.strategySummary ?? "");
+  const [budgetPlanned, setBudgetPlanned] = useState(
+    plan.budgetPlanned != null ? String(plan.budgetPlanned) : "",
+  );
+  const [kpiRows, setKpiRows] = useState<KpiRow[]>(() =>
+    plan.kpis.map((k) => ({
+      localId: k.id,
+      kpiId: k.id,
+      name: k.name,
+      target: String(k.targetValue),
+      unit: k.unit ?? "",
+    })),
+  );
   const [saving, setSaving] = useState(false);
   const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +316,41 @@ export function PlanEditorButton({
     }
   }
 
+  // Dòng KPI có gõ gì đó mới tính; dòng trống hoàn toàn thì bỏ qua êm.
+  const keptKpis = kpiRows.filter((r) => r.name.trim() || r.target.trim() || r.unit.trim());
+
+  // Validate tại chỗ bằng tiếng Việt TRƯỚC khi gửi — không để lỗi Anh ngữ của
+  // tầng dưới dội lên người dùng (khoá #6/#18/#19 sổ bẫy 00196).
+  function strategyProblem(): string | null {
+    const b = budgetPlanned.trim();
+    if (b !== "" && !/^\d+$/.test(b)) {
+      return "Ngân sách dự kiến phải là số tiền (chỉ gõ chữ số, đơn vị đồng).";
+    }
+    for (const r of keptKpis) {
+      if (!r.name.trim()) return "Có chỉ số KPI chưa đặt tên.";
+      const t = r.target.trim();
+      if (!/^\d+(\.\d+)?$/.test(t) || Number(t) <= 0) {
+        return `Mục tiêu của chỉ số "${r.name.trim()}" phải là số lớn hơn 0.`;
+      }
+    }
+    return null;
+  }
+
+  function strategyPayload() {
+    const b = budgetPlanned.trim();
+    return {
+      strategySummary: strategySummary.trim(),
+      budgetPlanned: b === "" ? null : Number(b),
+      kpis: keptKpis.map((r) => ({
+        id: r.kpiId ?? undefined,
+        name: r.name.trim(),
+        unit: r.unit.trim() || undefined,
+        targetValue: r.target.trim(),
+      })),
+      expectedVersion: plan.versionNumber,
+    };
+  }
+
   function payload() {
     return {
       items: filled.map((r, i) => ({
@@ -318,10 +380,16 @@ export function PlanEditorButton({
   }
 
   async function save() {
+    const problem = strategyProblem();
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/strategy`, strategyPayload());
       refresh(() => setSaved(true));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được kế hoạch");
@@ -336,11 +404,17 @@ export function PlanEditorButton({
       setError("Hãy thêm ít nhất 1 công đoạn (có tên) rồi mới nộp được.");
       return;
     }
+    const problem = strategyProblem();
+    if (problem) {
+      setError(problem);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
       // Bấm Nộp = tự lưu bản mới nhất RỒI nộp (không cần bấm Lưu nháp trước).
       await mktPost(`/api/mkt/v1/plans/${plan.id}/items`, payload());
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/strategy`, strategyPayload());
       await mktPost(`/api/mkt/v1/plans/${plan.id}/submit`, { expectedVersion: plan.versionNumber });
       refresh(() => setOpen(false));
     } catch (e) {
@@ -350,12 +424,25 @@ export function PlanEditorButton({
     }
   }
 
+  // Chống mất bản nháp (khoá #16): bấm ra ngoài / Esc khi đang soạn KHÔNG đóng
+  // hộp — kế hoạch là form gõ lâu nhất MKT Hub. Nút ✕/Đóng vẫn đóng bình thường.
+  function handleEditorOpenChange(nextOpen: boolean, details?: { reason?: string }) {
+    if (loading) return;
+    if (!nextOpen && editable) {
+      const reason = details?.reason;
+      if (reason === "outside-press" || reason === "escape-key" || reason === "close-watcher") {
+        return;
+      }
+    }
+    setOpen(nextOpen);
+  }
+
   return (
     <>
       <Button size="sm" variant={editable ? "default" : "outline"} onClick={() => setOpen(true)}>
         {editable ? "Lập kế hoạch" : "Xem kế hoạch"}
       </Button>
-      <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
+      <Dialog open={open} onOpenChange={handleEditorOpenChange}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
@@ -384,6 +471,93 @@ export function PlanEditorButton({
               <div className="space-y-1">
                 <Label className="text-xs">Hạn</Label>
                 <Input type="date" value={deadline} disabled={!editable} onChange={(e) => { setDeadline(e.target.value); setSaved(false); }} className="h-8" />
+              </div>
+            </div>
+
+            {/* Đề xuất chiến lược (00196) — Leader duyệt CẢ phần này. Không ép
+                cứng (bài học 00193): thiếu thì Leader "Yêu cầu sửa" là hàng rào. */}
+            <div className="space-y-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-2.5">
+              <div className="text-xs font-semibold">
+                <Icon name="flag" size={13} className="mr-1 inline" />
+                Đề xuất chiến lược & KPI{" "}
+                <span className="font-normal text-on-surface-variant">
+                  — Leader duyệt cả phần này (nên có, không bắt buộc)
+                </span>
+              </div>
+              <textarea
+                value={strategySummary}
+                disabled={!editable}
+                onChange={(e) => { setStrategySummary(e.target.value); setSaved(false); }}
+                rows={2}
+                placeholder="Cách đánh: insight gì, đánh kênh nào, vì sao tin là thắng…"
+                className="w-full rounded-lg border border-outline-variant bg-background px-2 py-1.5 text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <Label className="shrink-0 text-xs">Ngân sách dự kiến</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={budgetPlanned}
+                  disabled={!editable}
+                  onChange={(e) => { setBudgetPlanned(e.target.value); setSaved(false); }}
+                  placeholder="VD: 3000000"
+                  className="h-8 w-40"
+                />
+                <span className="text-xs text-on-surface-variant">
+                  {/^\d+$/.test(budgetPlanned.trim()) ? formatVnd(Number(budgetPlanned.trim())) : "đồng"}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {kpiRows.map((k, idx) => (
+                  <div key={k.localId} className="flex flex-wrap items-center gap-2">
+                    <Input
+                      value={k.name}
+                      disabled={!editable}
+                      onChange={(e) => { setKpiRows((v) => v.map((x, i) => (i === idx ? { ...x, name: e.target.value } : x))); setSaved(false); }}
+                      placeholder="Chỉ số — VD: Bài đăng / Lượt tiếp cận / Đơn hàng"
+                      className="h-8 min-w-40 flex-1"
+                    />
+                    <Input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={k.target}
+                      disabled={!editable}
+                      onChange={(e) => { setKpiRows((v) => v.map((x, i) => (i === idx ? { ...x, target: e.target.value } : x))); setSaved(false); }}
+                      placeholder="Mục tiêu"
+                      title="Mục tiêu (số)"
+                      className="h-8 w-28"
+                    />
+                    <Input
+                      value={k.unit}
+                      disabled={!editable}
+                      onChange={(e) => { setKpiRows((v) => v.map((x, i) => (i === idx ? { ...x, unit: e.target.value } : x))); setSaved(false); }}
+                      placeholder="đơn vị"
+                      className="h-8 w-24"
+                    />
+                    {editable ? (
+                      <button
+                        type="button"
+                        onClick={() => { setKpiRows((v) => v.filter((_, i) => i !== idx)); setSaved(false); }}
+                        className="text-on-surface-variant hover:text-rose-600"
+                        title="Bỏ chỉ số này"
+                        aria-label="Bỏ chỉ số này"
+                      >
+                        <Icon name="delete" size={15} />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {editable ? (
+                  <button
+                    type="button"
+                    onClick={() => setKpiRows((v) => [...v, newKpiRow()])}
+                    className="text-xs font-medium text-primary hover:underline"
+                  >
+                    + Thêm chỉ số KPI
+                  </button>
+                ) : null}
               </div>
             </div>
 
@@ -590,6 +764,43 @@ export function PlanReviewButton({
             {plan.objective ? (
               <p className="text-sm"><b>Mục tiêu:</b> {plan.objective}</p>
             ) : null}
+
+            {/* Đề xuất chiến lược (00196): Leader duyệt cả bức tranh, không chỉ
+                danh sách việc. Trống thì nhắc — "Yêu cầu sửa" chính là hàng rào. */}
+            {plan.strategySummary || plan.budgetPlanned != null || plan.kpis.length > 0 ? (
+              <div className="space-y-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-2.5">
+                <div className="text-xs font-semibold">
+                  <Icon name="flag" size={13} className="mr-1 inline" />
+                  Đề xuất chiến lược
+                </div>
+                {plan.strategySummary ? (
+                  <p className="whitespace-pre-line text-sm">{plan.strategySummary}</p>
+                ) : null}
+                {plan.budgetPlanned != null ? (
+                  <p className="text-sm">
+                    Ngân sách dự kiến: <b>{formatVnd(plan.budgetPlanned)}</b>
+                  </p>
+                ) : null}
+                {plan.kpis.length > 0 ? (
+                  <div className="space-y-1">
+                    {plan.kpis.map((k) => (
+                      <div key={k.id} className="flex items-center justify-between gap-2 rounded-md bg-background px-2 py-1 text-sm">
+                        <span className="min-w-0 truncate">{k.name}</span>
+                        <span className="shrink-0 font-semibold">
+                          {new Intl.NumberFormat("vi-VN").format(k.targetValue)}
+                          {k.unit ? ` ${k.unit}` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-lg border border-dashed border-outline-variant p-2.5 text-xs text-on-surface-variant">
+                Kế hoạch chưa có đề xuất chiến lược / KPI định lượng. Nếu cần bức tranh
+                rõ hơn trước khi duyệt, hãy bấm <b>Yêu cầu sửa</b> và ghi rõ mong muốn.
+              </div>
+            )}
 
             <div className="space-y-1.5">
               {plan.items.map((it, i) => (

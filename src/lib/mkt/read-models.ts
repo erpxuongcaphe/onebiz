@@ -1016,6 +1016,39 @@ export async function getContentOptions(
   }));
 }
 
+// KPI định lượng của kế hoạch (00196). latestActual = số thực tế ở báo cáo
+// GẦN NHẤT có ghi chỉ số này — để màn nào cũng so target/thực tế một kiểu.
+export type MktPlanKpi = {
+  id: string;
+  name: string;
+  unit: string | null;
+  targetValue: number;
+  sortOrder: number;
+  latestActual: number | null;
+};
+
+// Một lần báo cáo tiến độ tổng thể (00196) — bất biến, xếp mới nhất trên cùng.
+// stats do MÁY chụp từ task tại thời điểm báo cáo (chống báo cáo màu hồng).
+export type MktPlanProgressReport = {
+  id: string;
+  health: string;
+  summary: string;
+  issues: string | null;
+  nextSteps: string | null;
+  stats: {
+    tasksTotal?: number;
+    tasksDone?: number;
+    pointsTotal?: number;
+    pointsDone?: number;
+    overdue?: number;
+  };
+  planVersionNumber: number | null;
+  createdById: string | null;
+  createdByName: string | null;
+  createdAt: string;
+  entries: Array<{ kpiId: string; actualValue: number }>;
+};
+
 export type MktPlanInboxEntry = {
   id: string;
   workPackageId: string;
@@ -1030,6 +1063,10 @@ export type MktPlanInboxEntry = {
   mandatoryDeliverables: string | null;
   riskNotes: string | null;
   deadline: string | null;
+  strategySummary: string | null;
+  budgetPlanned: number | null;
+  kpis: MktPlanKpi[];
+  progressReports: MktPlanProgressReport[];
   ownerId: string | null;
   ownerName: string | null;
   reviewerId: string | null;
@@ -1074,11 +1111,13 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       mandatory_deliverables: string | null;
       risk_notes: string | null;
       deadline: string | null;
+      strategy_summary: string | null;
+      budget_planned: number | string | null;
       submitted_at: string | null;
       updated_at: string | null;
     }>("mkt_channel_plans")
     .select(
-      "id, work_package_id, campaign_id, owner_id, reviewer_id, status, version_number, current_version_id, objective, key_message, mandatory_deliverables, risk_notes, deadline, submitted_at, updated_at",
+      "id, work_package_id, campaign_id, owner_id, reviewer_id, status, version_number, current_version_id, objective, key_message, mandatory_deliverables, risk_notes, deadline, strategy_summary, budget_planned, submitted_at, updated_at",
     )
     .is("deleted_at", null)
     .in("status", ["planning", "submitted", "revision_required", "approved", "in_execution"])
@@ -1090,7 +1129,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   const wpIds = Array.from(new Set(plans.map((p) => p.work_package_id)));
   const campIds = Array.from(new Set(plans.map((p) => p.campaign_id)));
 
-  const [itemsRes, wpRes, campRes, verRes, tasksRes] = await Promise.all([
+  const [itemsRes, wpRes, campRes, verRes, tasksRes, kpisRes, reportsRes] = await Promise.all([
     db
       .from<{
         id: string;
@@ -1146,10 +1185,55 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       .in("channel_plan_id", planIds)
       .is("deleted_at", null)
       .order("created_at", { ascending: true }),
+    db
+      .from<{
+        id: string;
+        plan_id: string;
+        name: string;
+        unit: string | null;
+        target_value: number | string;
+        sort_order: number | null;
+      }>("mkt_plan_kpis")
+      .select("id, plan_id, name, unit, target_value, sort_order")
+      .in("plan_id", planIds)
+      .is("deleted_at", null)
+      .order("sort_order", { ascending: true }),
+    db
+      .from<{
+        id: string;
+        plan_id: string;
+        health: string;
+        summary: string;
+        issues: string | null;
+        next_steps: string | null;
+        stats: MktPlanProgressReport["stats"] | null;
+        plan_version_number: number | null;
+        created_by: string | null;
+        created_at: string;
+      }>("mkt_plan_progress_reports")
+      .select(
+        "id, plan_id, health, summary, issues, next_steps, stats, plan_version_number, created_by, created_at",
+      )
+      .in("plan_id", planIds)
+      .is("deleted_at", null)
+      // Quy ước toàn hệ thống: dòng thời gian MỚI NHẤT TRÊN CÙNG.
+      .order("created_at", { ascending: false }),
   ]);
 
   const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
   const campName = new Map((campRes.data ?? []).map((c) => [c.id, c.name] as const));
+
+  // Số thực tế từng KPI của các báo cáo (truy vấn nối tiếp vì cần id báo cáo).
+  const reportRows = reportsRes.data ?? [];
+  const reportIds = reportRows.map((r) => r.id);
+  const entriesRes = reportIds.length
+    ? await db
+        .from<{ report_id: string; kpi_id: string; actual_value: number | string }>(
+          "mkt_plan_kpi_entries",
+        )
+        .select("report_id, kpi_id, actual_value")
+        .in("report_id", reportIds)
+    : { data: [] as Array<{ report_id: string; kpi_id: string; actual_value: number | string }> };
 
   const pids = new Set<string>();
   plans.forEach((p) => {
@@ -1158,6 +1242,9 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   });
   (tasksRes.data ?? []).forEach((t) => {
     if (t.assignee_id) pids.add(t.assignee_id);
+  });
+  reportRows.forEach((r) => {
+    if (r.created_by) pids.add(r.created_by);
   });
   const names = new Map<string, string>();
   if (pids.size > 0) {
@@ -1221,6 +1308,60 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     tasksByPlan.set(t.channel_plan_id, arr);
   });
 
+  // PostgREST trả numeric dạng CHUỖI ("50000.00") — phải ép số một cửa ở đây,
+  // không để UI cộng chuỗi ra "50000.001" (bẫy kiểu dữ liệu).
+  const num = (x: number | string | null | undefined) =>
+    x == null ? null : Number(x);
+
+  const entriesByReport = new Map<string, MktPlanProgressReport["entries"]>();
+  (entriesRes.data ?? []).forEach((e) => {
+    const arr = entriesByReport.get(e.report_id) ?? [];
+    arr.push({ kpiId: e.kpi_id, actualValue: num(e.actual_value) ?? 0 });
+    entriesByReport.set(e.report_id, arr);
+  });
+
+  const reportsByPlan = new Map<string, MktPlanProgressReport[]>();
+  reportRows.forEach((r) => {
+    const arr = reportsByPlan.get(r.plan_id) ?? [];
+    arr.push({
+      id: r.id,
+      health: r.health,
+      summary: r.summary,
+      issues: r.issues,
+      nextSteps: r.next_steps,
+      stats: r.stats ?? {},
+      planVersionNumber: r.plan_version_number,
+      createdById: r.created_by,
+      createdByName: nm(r.created_by),
+      createdAt: r.created_at,
+      entries: entriesByReport.get(r.id) ?? [],
+    });
+    reportsByPlan.set(r.plan_id, arr);
+  });
+
+  const kpisByPlan = new Map<string, MktPlanKpi[]>();
+  (kpisRes.data ?? []).forEach((k) => {
+    // Số thực tế gần nhất: báo cáo đã xếp MỚI NHẤT TRƯỚC → bản ghi đầu tiên thắng.
+    let latest: number | null = null;
+    for (const rep of reportsByPlan.get(k.plan_id) ?? []) {
+      const hit = rep.entries.find((e) => e.kpiId === k.id);
+      if (hit) {
+        latest = hit.actualValue;
+        break;
+      }
+    }
+    const arr = kpisByPlan.get(k.plan_id) ?? [];
+    arr.push({
+      id: k.id,
+      name: k.name,
+      unit: k.unit,
+      targetValue: num(k.target_value) ?? 0,
+      sortOrder: k.sort_order ?? 0,
+      latestActual: latest,
+    });
+    kpisByPlan.set(k.plan_id, arr);
+  });
+
   return plans.map((p) => ({
     id: p.id,
     workPackageId: p.work_package_id,
@@ -1235,6 +1376,10 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     mandatoryDeliverables: p.mandatory_deliverables,
     riskNotes: p.risk_notes,
     deadline: p.deadline,
+    strategySummary: p.strategy_summary,
+    budgetPlanned: num(p.budget_planned),
+    kpis: kpisByPlan.get(p.id) ?? [],
+    progressReports: reportsByPlan.get(p.id) ?? [],
     ownerId: p.owner_id,
     ownerName: nm(p.owner_id),
     reviewerId: p.reviewer_id,

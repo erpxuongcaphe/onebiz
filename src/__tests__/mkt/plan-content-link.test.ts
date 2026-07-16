@@ -15,6 +15,12 @@ const dropCheck = readFileSync(
   "utf8",
 );
 const core = readFileSync(resolve("supabase/migrations/00168_mkt_hub_core.sql"), "utf8");
+// 00196 định nghĩa LẠI mkt_submit_plan (bản mới nhất thắng) — phải soi cả nó,
+// không thì ai chép nhầm bản 00182 là dựng lại nguyên con luật đã gỡ.
+const strategyMig = readFileSync(
+  resolve("supabase/migrations/00196_mkt_plan_strategy_progress.sql"),
+  "utf8",
+);
 
 /**
  * Luật "duyệt/đăng phải gắn nội dung" nằm ở BA tầng. Bỏ sót 1 tầng là kẹt lại
@@ -65,6 +71,16 @@ describe("Gắn nội dung là TUỲ CHỌN — chỉ siết khi có gắn (0019
     expect(fix).toContain("chưa có người làm");
     expect(fix).toContain("chưa có hạn");
     expect(fix).toContain("phụ thuộc vòng lặp");
+  });
+
+  it("00196 định nghĩa lại mkt_submit_plan cũng KHÔNG được dựng lại luật đã gỡ", () => {
+    expect(strategyMig).toContain("function public.mkt_submit_plan");
+    expect(strategyMig).not.toContain("(duyệt/đăng) cần gắn nội dung");
+    expect(strategyMig).not.toContain("alter table public.mkt_tasks add");
+    // Và vẫn giữ đủ các validate còn lại của 00193.
+    expect(strategyMig).toContain("chưa có người làm");
+    expect(strategyMig).toContain("chưa có hạn");
+    expect(strategyMig).toContain("phụ thuộc vòng lặp");
   });
 
   it("giao diện lập kế hoạch: ô nội dung tuỳ chọn, không viền đỏ, không chặn nộp", () => {
