@@ -169,16 +169,16 @@ export default function BaoCaoTaiChinhPage() {
         consolidatedRes,
         branchPnLRes,
       ] = await Promise.all([
-        getProfitAndLoss(bid),
-        getCOGSBreakdown(10, bid),
+        getProfitAndLoss(bid, range),
+        getCOGSBreakdown(10, bid, range),
         getGrossMarginTrend(6, bid),
         getInventoryTurnover(bid),
         getDSO(bid),
         fetchConsolidated
-          ? getConsolidatedPnL()
+          ? getConsolidatedPnL(range)
           : Promise.resolve(null),
         fetchConsolidated
-          ? getBranchPnLComparison()
+          ? getBranchPnLComparison(range)
           : Promise.resolve([] as BranchPnLRow[]),
       ]);
       setPnl(pnlRes);
@@ -198,7 +198,7 @@ export default function BaoCaoTaiChinhPage() {
     } finally {
       setLoading(false);
     }
-  }, [branchId, toast]);
+  }, [branchId, range, toast]);
 
   useEffect(() => {
     fetchData();
@@ -500,7 +500,7 @@ export default function BaoCaoTaiChinhPage() {
         {branchId === "all" && branchPnL.length > 0 && (
           <ChartCard
             title="So sánh lãi lỗ theo chi nhánh"
-            subtitle="Tháng hiện tại — xưởng rang, kho tổng, các quán FnB"
+            subtitle="Kỳ đã chọn — xưởng rang, kho tổng, các quán FnB"
           >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -645,7 +645,7 @@ export default function BaoCaoTaiChinhPage() {
             value={cur ? formatCurrency(cur.revenue) : "—"}
             change={
               cur && prev
-                ? `${pctChange(cur.revenue, prev.revenue)} so với tháng trước`
+                ? `${pctChange(cur.revenue, prev.revenue)} so với kỳ trước`
                 : ""
             }
             positive={cur && prev ? cur.revenue >= prev.revenue : true}
@@ -659,7 +659,7 @@ export default function BaoCaoTaiChinhPage() {
             value={cur ? formatCurrency(cur.cogs) : "—"}
             change={
               cur && prev
-                ? `${pctChange(cur.cogs, prev.cogs)} so với tháng trước`
+                ? `${pctChange(cur.cogs, prev.cogs)} so với kỳ trước`
                 : ""
             }
             positive={cur && prev ? cur.cogs <= prev.cogs : true}
@@ -673,7 +673,7 @@ export default function BaoCaoTaiChinhPage() {
             value={cur ? formatCurrency(cur.netProfit) : "—"}
             change={
               cur && prev
-                ? `${pctChange(cur.netProfit, prev.netProfit)} so với tháng trước`
+                ? `${pctChange(cur.netProfit, prev.netProfit)} so với kỳ trước`
                 : ""
             }
             positive={cur && prev ? cur.netProfit >= prev.netProfit : true}
@@ -687,7 +687,7 @@ export default function BaoCaoTaiChinhPage() {
             value={cur ? `${cur.grossMargin}%` : "—"}
             change={
               cur && prev
-                ? `${pctChange(cur.grossMargin, prev.grossMargin)} so với tháng trước`
+                ? `${pctChange(cur.grossMargin, prev.grossMargin)} so với kỳ trước`
                 : ""
             }
             positive={
@@ -703,7 +703,7 @@ export default function BaoCaoTaiChinhPage() {
         {/* P&L Table */}
         <ChartCard
           title="Bảng Lãi/Lỗ (P&L)"
-          subtitle="So sánh tháng hiện tại và tháng trước"
+          subtitle="So sánh kỳ đã chọn và kỳ liền trước"
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -905,7 +905,7 @@ export default function BaoCaoTaiChinhPage() {
           {/* COGS Breakdown Bar Chart */}
           <ChartCard
             title="Top sản phẩm theo giá vốn"
-            subtitle="Tháng hiện tại"
+            subtitle="Kỳ đã chọn"
           >
             {cogsItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
@@ -1069,7 +1069,7 @@ export default function BaoCaoTaiChinhPage() {
         {cogsItems.length > 0 && (
           <ChartCard
             title="Chi tiết giá vốn theo sản phẩm"
-            subtitle="Tháng hiện tại"
+            subtitle="Kỳ đã chọn"
           >
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

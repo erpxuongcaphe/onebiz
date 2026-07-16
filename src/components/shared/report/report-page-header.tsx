@@ -25,6 +25,8 @@ import type {
 } from "@/lib/types/report";
 import { ReportDateRangePicker } from "./report-date-range-picker";
 import { ChartTableSwitch } from "./chart-table-switch";
+import { useAuth } from "@/lib/contexts";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 
 interface ReportPageHeaderProps {
   title: string;
@@ -64,7 +66,10 @@ export function ReportPageHeader({
   actions,
   hideDateRange,
 }: ReportPageHeaderProps) {
-  const hasExport = !!(onExportView || onExportFull);
+  const { hasPermission } = useAuth();
+  const hasExport =
+    hasPermission(PERMISSIONS.REPORTS_EXPORT) &&
+    !!(onExportView || onExportFull);
   const showSwitch = viewMode != null && onViewModeChange;
 
   return (

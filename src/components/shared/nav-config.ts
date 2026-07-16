@@ -106,7 +106,7 @@ export const mainNavItems: NavGroup[] = [
     // Trước đây top-nav nói "Phân tích" còn các nơi khác nói "Báo cáo" →
     // user confuse.
     label: "Báo cáo",
-    href: "/phan-tich",
+    href: "/phan-tich/trung-tam",
   },
   // Day 4 16/05/2026: ẩn "Bán online" — chưa có data thật, đang là mock 15 đơn.
   // Bật lại khi đã wire vào shopee/lazada/tiki API hoặc có nguồn đơn online thật.
@@ -138,6 +138,8 @@ export interface SidebarLeaf {
   badge?: string;
   /** Permission code required to see this item. Owner always sees all. */
   permission?: string;
+  /** Any one of these permission codes grants access. */
+  permissions?: string[];
 }
 
 export interface SidebarSubGroup {
@@ -353,77 +355,38 @@ export const sidebarNavGroups: SidebarGroup[] = [
   },
 
   // ============================================================
-  // 9. BÁO CÁO — tách riêng cuối, group dưới cùng (CEO 04/05/2026)
-  // 14 báo cáo phân tích tổng hợp. Trước đây "Phân tích" + "Báo cáo TC"
-  // nằm trong "Tổng quan" → user khó tìm khi muốn deep-dive.
+  // 9. BÁO CÁO — lối vào gọn; toàn bộ danh mục nằm trong Trung tâm báo cáo.
   // ============================================================
   {
     label: "Báo cáo",
     icon: "analytics",
-    subGroups: [
+    items: [
       {
-        label: "Tổng quan",
+        label: "Trung tâm báo cáo",
+        href: "/phan-tich/trung-tam",
+        icon: "analytics",
+        permissions: ["reports.dashboard", "reports.analytics", "reports.fnb"],
+      },
+      {
+        label: "Tổng quan kinh doanh",
+        href: "/phan-tich",
         icon: "insights",
-        items: [
-          { label: "Phân tích tổng hợp", href: "/phan-tich", icon: "insights" },
-          { label: "Báo cáo tài chính", href: "/phan-tich/bao-cao-tai-chinh", icon: "summarize" },
-          { label: "Báo cáo cuối ngày", href: "/phan-tich/cuoi-ngay", icon: "today" },
-          // CEO 05/06/2026: theo dõi ca đối chiếu sau Pending Reconcile
-          { label: "Đối chiếu ca làm việc", href: "/phan-tich/doi-chieu-ca", icon: "fact_check", badge: "Mới" },
-        ],
+        permission: "reports.dashboard",
       },
       {
-        label: "Bán hàng",
-        icon: "shopping_cart",
-        items: [
-          { label: "Doanh thu bán hàng", href: "/phan-tich/ban-hang", icon: "trending_up" },
-          { label: "Đặt hàng & xử lý", href: "/phan-tich/dat-hang", icon: "description" },
-          { label: "Theo kênh bán", href: "/phan-tich/kenh-ban", icon: "storefront" },
-          { label: "Báo cáo quán cà phê", href: "/phan-tich/fnb", icon: "coffee" },
-          // CEO 03/06/2026: "Khuyến mãi" chuyển sang group Khuyến mãi top-level.
-          // Phase B 16/05/2026: báo cáo BÁN HÀNG chi tiết
-          { label: "Trả hàng chi tiết", href: "/phan-tich/tra-hang", icon: "undo", badge: "Mới" },
-          { label: "Doanh thu nhân viên", href: "/phan-tich/nhan-vien", icon: "badge", badge: "Mới" },
-          { label: "Phí delivery platform", href: "/phan-tich/platform-commission", icon: "delivery_dining", badge: "Mới" },
-          // Phase C.4 16/05/2026: COO time-to-serve
-          { label: "Time-to-serve FnB", href: "/phan-tich/serve-time", icon: "schedule", badge: "Mới" },
-        ],
+        label: "Báo cáo cuối ngày",
+        href: "/phan-tich/cuoi-ngay",
+        icon: "today",
+        permission: "reports.dashboard",
       },
       {
-        label: "Hàng hoá & Kho",
-        icon: "inventory_2",
-        items: [
-          { label: "Xuất - Nhập - Tồn", href: "/phan-tich/xuat-nhap-ton", icon: "inventory_2" },
-          { label: "Phân tích hàng hoá", href: "/phan-tich/hang-hoa", icon: "analytics" },
-          { label: "Phân loại sản phẩm theo doanh thu", href: "/phan-tich/abc-analysis", icon: "leaderboard" },
-          { label: "Truy xuất nguồn gốc theo lô", href: "/phan-tich/lot-traceability", icon: "qr_code" },
-          { label: "Báo cáo kiểm kê", href: "/phan-tich/kiem-ke", icon: "fact_check" },
-          // Phase A 16/05/2026: báo cáo KHO chi tiết
-          { label: "Aging tồn kho / Dead-stock", href: "/phan-tich/aging", icon: "hourglass_top", badge: "Mới" },
-          { label: "Tổn thất tồn kho", href: "/phan-tich/ton-that", icon: "delete_sweep", badge: "Mới" },
-          { label: "Chênh lệch kiểm kê", href: "/phan-tich/chenh-lech-kiem-ke", icon: "balance", badge: "Mới" },
-          // Day 18/05/2026 (CEO): Sprint BOM-CONSUME Phase 2
-          { label: "Tiêu hao NVL theo chi nhánh", href: "/phan-tich/tieu-hao-nvl", icon: "science", badge: "Mới" },
-          { label: "COGS thực theo BOM", href: "/phan-tich/cogs-theo-bom", icon: "account_balance", badge: "Mới" },
-        ],
+        label: "Cảnh báo điều hành",
+        href: "/phan-tich/canh-bao",
+        icon: "warning",
+        permission: "reports.dashboard",
       },
-      {
-        label: "Đối tác",
-        icon: "group",
-        items: [
-          { label: "Theo khách hàng", href: "/phan-tich/khach-hang", icon: "person" },
-          { label: "Khách hàng quay lại", href: "/phan-tich/customer-cohort", icon: "repeat" },
-          { label: "Theo nhà cung cấp", href: "/phan-tich/nha-cung-cap", icon: "apartment" },
-          // Phase C 16/05/2026: RFM
-          { label: "Phân khúc RFM", href: "/phan-tich/rfm", icon: "diversity_3", badge: "Mới" },
-        ],
-      },
-      // CEO 03/06/2026 — Sprint 3 (audit menu P1): subGroup "Tài chính" đã
-      // được di chuyển sang group top-level "Tài chính" để gộp cùng Sổ quỹ +
-      // Công nợ. Tránh kế toán phải hop 2 group cho cùng workflow.
     ],
   },
-
   // ============================================================
   // 10. HỆ THỐNG — pinned bottom
   // ============================================================
