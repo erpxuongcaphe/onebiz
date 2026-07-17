@@ -1224,7 +1224,15 @@ export default function CustomerProductReportPage() {
                   className="min-w-48 bg-background"
                   aria-label="Sắp xếp khách hàng"
                 >
-                  <SelectValue />
+                  <SelectValue>
+                    {sort === "revenue_desc"
+                      ? "Doanh thu cao nhất"
+                      : sort === "orders_desc"
+                        ? "Nhiều đơn nhất"
+                        : sort === "quantity_desc"
+                          ? "Số lượng cao nhất"
+                          : "Tên khách A-Z"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent align="end">
                   <SelectItem value="revenue_desc">Doanh thu cao nhất</SelectItem>
@@ -1553,7 +1561,13 @@ export default function CustomerProductReportPage() {
                           className="min-w-48 bg-background"
                           aria-label="Sắp xếp mặt hàng"
                         >
-                          <SelectValue />
+                          <SelectValue>
+                            {productSort === "revenue_desc"
+                              ? "Doanh thu cao nhất"
+                              : productSort === "quantity_desc"
+                                ? "Số lượng cao nhất"
+                                : "Tên hàng A-Z"}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent align="end">
                           <SelectItem value="revenue_desc">Doanh thu cao nhất</SelectItem>

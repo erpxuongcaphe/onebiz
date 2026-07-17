@@ -45,6 +45,8 @@ describe("báo cáo Khách hàng - Sản phẩm V5", () => {
     expect(page).toContain('aria-label="Góc nhìn báo cáo"');
     expect(page).toContain('aria-label="Nội dung hiển thị"');
     expect(page).toContain('aria-label="Mật độ bảng"');
+    expect(page).toContain('? "Doanh thu cao nhất"');
+    expect(page).toContain('? "Nhiều đơn nhất"');
     expect(page).toContain("DropdownMenuCheckboxItem");
     expect(page).toContain('url.searchParams.set("display", displayMode)');
     expect(page).toContain('url.searchParams.set("density", density)');
