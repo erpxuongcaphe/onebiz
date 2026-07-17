@@ -84,4 +84,3 @@ describe("report table preferences", () => {
     expect(readReportTablePreferences(tableKey)).toEqual({});
   });
 });
-
