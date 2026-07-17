@@ -41,12 +41,15 @@ describe("report branch scope integration", () => {
     const selector = source(
       "src/components/shared/report/report-scope-selector.tsx",
     );
-    expect(selector).toContain('value={activeBranchId ?? ""}');
+    expect(selector).toContain('const ALL_BRANCHES_VALUE = "__all_branches__"');
     expect(selector).toContain("Toàn công ty");
     expect(selector).toContain("const branchItems = useMemo");
-    expect(selector).toContain("items={branchItems}");
-    expect(selector).toContain("item.value === value)?.label");
+    expect(selector).toContain("const scopeItems = useMemo");
+    expect(selector).toContain("value={selectedValue}");
+    expect(selector).toContain("items={scopeItems}");
+    expect(selector).toContain("selectBranch(value === ALL_BRANCHES_VALUE ? null : value)");
     expect(selector).not.toContain("selectedBranchId");
+    expect(selector).not.toContain("aria-pressed");
     expect(selector).not.toContain("To?n c?ng ty");
   });
 

@@ -111,6 +111,8 @@ const LABEL = {
   visibleColumns: "C\u1ed9t hi\u1ec3n th\u1ecb",
   chooseColumns: "Ch\u1ecdn c\u1ed9t tr\u00ean b\u1ea3ng",
   required: "B\u1eaft bu\u1ed9c",
+  searchColumns: "T\u00ecm c\u1ed9t",
+  noColumns: "Kh\u00f4ng c\u00f3 c\u1ed9t ph\u00f9 h\u1ee3p",
   showAll: "Hi\u1ec7n t\u1ea5t c\u1ea3 c\u1ed9t",
   reset: "Kh\u00f4i ph\u1ee5c m\u1eb7c \u0111\u1ecbnh",
 };
@@ -122,6 +124,7 @@ export function ReportTableDisplayMenu({
   onReset,
   disableFreeze = false,
 }: ReportTableDisplayMenuProps) {
+  const [columnSearch, setColumnSearch] = useState("");
   const hiddenColumnKeys = useMemo(
     () => new Set(preferences.hiddenColumnKeys),
     [preferences.hiddenColumnKeys],
@@ -129,6 +132,13 @@ export function ReportTableDisplayMenu({
   const visibleCount = columns.filter(
     (column) => column.required || !hiddenColumnKeys.has(column.id),
   ).length;
+  const filteredColumns = useMemo(() => {
+    const query = columnSearch.trim().toLocaleLowerCase("vi-VN");
+    if (!query) return columns;
+    return columns.filter((column) =>
+      column.label.toLocaleLowerCase("vi-VN").includes(query),
+    );
+  }, [columnSearch, columns]);
 
   const setColumnVisible = (columnId: string, visible: boolean) => {
     setPreferences((current) => {
@@ -214,32 +224,56 @@ export function ReportTableDisplayMenu({
                     {visibleCount}/{columns.length}
                   </span>
                 </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="max-h-[70vh] min-w-64 overflow-y-auto">
+                <DropdownMenuSubContent className="min-w-72 p-1">
                   <DropdownMenuLabel>{LABEL.chooseColumns}</DropdownMenuLabel>
-                  {columns.map((column) => {
-                    const visible =
-                      column.required || !hiddenColumnKeys.has(column.id);
-                    return (
-                      <DropdownMenuCheckboxItem
-                        key={column.id}
-                        checked={visible}
-                        disabled={column.required}
-                        closeOnClick={false}
-                        onCheckedChange={(checked) =>
-                          setColumnVisible(column.id, checked === true)
-                        }
-                      >
-                        <span className="min-w-0 flex-1 truncate">
-                          {column.label}
-                        </span>
-                        {column.required && (
-                          <span className="text-[10px] text-muted-foreground">
-                            {LABEL.required}
+                  <div className="px-1 pb-1">
+                    <div className="relative">
+                      <Icon
+                        name="search"
+                        size={14}
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      />
+                      <input
+                        value={columnSearch}
+                        onChange={(event) => setColumnSearch(event.target.value)}
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                        placeholder={LABEL.searchColumns}
+                        className="h-8 w-full rounded-lg border border-border bg-background pl-8 pr-2 text-xs outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-[52vh] overflow-y-auto pr-1">
+                    {filteredColumns.map((column) => {
+                      const visible =
+                        column.required || !hiddenColumnKeys.has(column.id);
+                      return (
+                        <DropdownMenuCheckboxItem
+                          key={column.id}
+                          checked={visible}
+                          disabled={column.required}
+                          closeOnClick={false}
+                          onCheckedChange={(checked) =>
+                            setColumnVisible(column.id, checked === true)
+                          }
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {column.label}
                           </span>
-                        )}
-                      </DropdownMenuCheckboxItem>
-                    );
-                  })}
+                          {column.required && (
+                            <span className="text-[10px] text-muted-foreground">
+                              {LABEL.required}
+                            </span>
+                          )}
+                        </DropdownMenuCheckboxItem>
+                      );
+                    })}
+                    {filteredColumns.length === 0 && (
+                      <div className="px-2 py-3 text-xs text-muted-foreground">
+                        {LABEL.noColumns}
+                      </div>
+                    )}
+                  </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
                     disabled={preferences.hiddenColumnKeys.length === 0}

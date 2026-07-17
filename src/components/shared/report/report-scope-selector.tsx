@@ -9,8 +9,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { cn } from "@/lib/utils";
 import { useReportScope } from "@/lib/hooks/use-report-scope";
+
+const ALL_BRANCHES_VALUE = "__all_branches__";
 
 export function ReportScopeSelector() {
   const {
@@ -25,62 +26,66 @@ export function ReportScopeSelector() {
       branches.map((branch) => ({
         value: branch.id,
         label: branch.name,
+        icon: "storefront",
       })),
     [branches],
   );
+  const scopeItems = useMemo(
+    () =>
+      [
+        ...(canViewAll
+          ? [
+              {
+                value: ALL_BRANCHES_VALUE,
+                label: "Toàn công ty",
+                icon: "apartment",
+              },
+            ]
+          : []),
+        ...branchItems,
+      ],
+    [branchItems, canViewAll],
+  );
+  const selectedValue = activeBranchId ?? (canViewAll ? ALL_BRANCHES_VALUE : "");
+  const selectedItem = scopeItems.find((item) => item.value === selectedValue);
 
   if (!isReady || branches.length === 0) return null;
 
   return (
-    <div
-      className="flex h-8 items-center overflow-hidden rounded-lg border border-border bg-surface-container-lowest"
-      aria-label="Phạm vi báo cáo"
+    <Select
+      value={selectedValue}
+      onValueChange={(value) => {
+        if (!value) return;
+        selectBranch(value === ALL_BRANCHES_VALUE ? null : value);
+      }}
+      items={scopeItems}
     >
-      {canViewAll && (
-        <button
-          type="button"
-          aria-pressed={!activeBranchId}
-          onClick={() => selectBranch(null)}
-          className={cn(
-            "flex h-full items-center gap-1.5 px-2.5 text-xs font-medium transition-colors",
-            !activeBranchId
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-surface-container-low",
-          )}
-        >
-          <Icon name="apartment" size={14} />
-          <span className="hidden xl:inline">Toàn công ty</span>
-        </button>
-      )}
-      <Select
-        value={activeBranchId ?? ""}
-        onValueChange={(value) => value && selectBranch(value)}
-        items={branchItems}
+      <SelectTrigger
+        size="sm"
+        className="h-8 min-w-44 max-w-64 bg-background text-xs"
+        aria-label="Phạm vi báo cáo"
       >
-        <SelectTrigger
-          size="sm"
-          className={cn(
-            "h-full min-w-36 max-w-56 rounded-none border-0 px-2.5 shadow-none focus-visible:ring-0",
-            activeBranchId && canViewAll && "bg-primary-fixed/40 text-primary",
-          )}
-          aria-label="Chọn chi nhánh báo cáo"
-        >
-          <Icon name="storefront" size={14} />
-          <SelectValue placeholder="Chọn chi nhánh">
-            {(value) =>
-              branchItems.find((item) => item.value === value)?.label ??
-              "Chọn chi nhánh"
-            }
-          </SelectValue>
-        </SelectTrigger>
-        <SelectContent align="end">
-          {branches.map((branch) => (
-            <SelectItem key={branch.id} value={branch.id}>
-              {branch.name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+        <SelectValue placeholder="Chọn chi nhánh">
+          <Icon name={selectedItem?.icon ?? "storefront"} size={14} />
+          <span className="truncate">
+            {selectedItem?.label ?? "Chọn chi nhánh"}
+          </span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent align="end" className="min-w-64">
+        {canViewAll && (
+          <SelectItem value={ALL_BRANCHES_VALUE}>
+            <Icon name="apartment" size={15} />
+            Toàn công ty
+          </SelectItem>
+        )}
+        {branches.map((branch) => (
+          <SelectItem key={branch.id} value={branch.id}>
+            <Icon name="storefront" size={15} />
+            {branch.name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

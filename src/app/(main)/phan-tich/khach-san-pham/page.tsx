@@ -64,8 +64,10 @@ import { ClientChartContainer } from "../_components/client-chart-container";
 
 type ReportMode = "customers" | "products" | "categories";
 type ProductSort = "revenue_desc" | "quantity_desc" | "name_asc";
+type MatrixLimit = 10 | 20 | 50 | "all";
 
 const PAGE_SIZE_OPTIONS = [25, 50, 100];
+const MATRIX_LIMIT_OPTIONS: MatrixLimit[] = [10, 20, 50, "all"];
 
 const REPORT_MODES: Array<{
   id: ReportMode;
@@ -171,6 +173,8 @@ interface InitialViewPreferences {
   density: TableDensity;
   customerColumns: CustomerColumn[];
   productColumns: ProductColumn[];
+  matrixCustomerLimit: MatrixLimit;
+  matrixCategoryLimit: MatrixLimit;
   highlightValues: boolean;
   pageSize: number;
   productPageSize: number;
@@ -207,6 +211,18 @@ function normalizePageSize(value: unknown): number {
   return PAGE_SIZE_OPTIONS.includes(size) ? size : 50;
 }
 
+function normalizeMatrixLimit(value: unknown, fallback: MatrixLimit): MatrixLimit {
+  if (value === "all") return "all";
+  const size = Number(value);
+  return MATRIX_LIMIT_OPTIONS.includes(size as MatrixLimit)
+    ? (size as MatrixLimit)
+    : fallback;
+}
+
+function formatMatrixLimit(value: MatrixLimit, label: string): string {
+  return value === "all" ? `Tất cả ${label}` : `Top ${value} ${label}`;
+}
+
 function readInitialViewPreferences(): InitialViewPreferences {
   const stored = readReportViewPreferences<Record<string, unknown>>(REPORT_PATH);
   const params =
@@ -216,6 +232,8 @@ function readInitialViewPreferences(): InitialViewPreferences {
   const requestedMode = params?.get("reportMode");
   const requestedDisplay = params?.get("display");
   const requestedDensity = params?.get("density");
+  const requestedMatrixCustomers = params?.get("matrixCustomers");
+  const requestedMatrixCategories = params?.get("matrixCategories");
   const mode = isReportMode(requestedMode)
     ? requestedMode
     : isReportMode(stored.mode)
@@ -248,6 +266,14 @@ function readInitialViewPreferences(): InitialViewPreferences {
       DEFAULT_PRODUCT_COLUMNS,
       DEFAULT_PRODUCT_COLUMNS,
     ),
+    matrixCustomerLimit: normalizeMatrixLimit(
+      requestedMatrixCustomers ?? stored.matrixCustomerLimit,
+      20,
+    ),
+    matrixCategoryLimit: normalizeMatrixLimit(
+      requestedMatrixCategories ?? stored.matrixCategoryLimit,
+      10,
+    ),
     highlightValues: stored.highlightValues !== false,
     pageSize: normalizePageSize(stored.pageSize),
     productPageSize: normalizePageSize(stored.productPageSize),
@@ -269,52 +295,94 @@ function heatClass(value: number, maximum: number): string {
   return "bg-primary/3";
 }
 
-function buildMatrix(cells: CustomerProductMatrixCell[]) {
+function limitMatrixItems<T>(items: T[], limit: MatrixLimit): T[] {
+  return limit === "all" ? items : items.slice(0, limit);
+}
+
+function buildMatrix(
+  cells: CustomerProductMatrixCell[],
+  customerLimit: MatrixLimit,
+  categoryLimit: MatrixLimit,
+) {
   const customerNames = new Map<string, string>();
   const categoryNames = new Map<string, string>();
+  const sourceValues = new Map<string, Map<string, number>>();
+  const sourceCustomerTotals = new Map<string, number>();
+  const sourceCategoryTotals = new Map<string, number>();
+
+  for (const cell of cells) {
+    customerNames.set(cell.customerId, cell.customerName);
+    categoryNames.set(cell.categoryId, cell.categoryName);
+    const row = sourceValues.get(cell.customerId) ?? new Map<string, number>();
+    row.set(cell.categoryId, cell.revenue);
+    sourceValues.set(cell.customerId, row);
+    sourceCustomerTotals.set(
+      cell.customerId,
+      (sourceCustomerTotals.get(cell.customerId) ?? 0) + cell.revenue,
+    );
+    sourceCategoryTotals.set(
+      cell.categoryId,
+      (sourceCategoryTotals.get(cell.categoryId) ?? 0) + cell.revenue,
+    );
+  }
+
+  const sourceCustomers = Array.from(customerNames, ([id, name]) => ({
+    id,
+    name,
+    total: sourceCustomerTotals.get(id) ?? 0,
+  })).sort((a, b) => b.total - a.total);
+  const sourceCategories = Array.from(categoryNames, ([id, name]) => ({
+    id,
+    name,
+    total: sourceCategoryTotals.get(id) ?? 0,
+  })).sort((a, b) => b.total - a.total);
+
+  const customers = limitMatrixItems(sourceCustomers, customerLimit);
+  const categories = limitMatrixItems(sourceCategories, categoryLimit);
   const values = new Map<string, Map<string, number>>();
   const customerTotals = new Map<string, number>();
   const categoryTotals = new Map<string, number>();
   let grandTotal = 0;
   let maximum = 0;
 
-  for (const cell of cells) {
-    customerNames.set(cell.customerId, cell.customerName);
-    categoryNames.set(cell.categoryId, cell.categoryName);
-    const row = values.get(cell.customerId) ?? new Map<string, number>();
-    row.set(cell.categoryId, cell.revenue);
-    values.set(cell.customerId, row);
-    customerTotals.set(
-      cell.customerId,
-      (customerTotals.get(cell.customerId) ?? 0) + cell.revenue,
-    );
-    categoryTotals.set(
-      cell.categoryId,
-      (categoryTotals.get(cell.categoryId) ?? 0) + cell.revenue,
-    );
-    grandTotal += cell.revenue;
-    maximum = Math.max(maximum, cell.revenue);
+  for (const customer of customers) {
+    const sourceRow = sourceValues.get(customer.id);
+    const displayRow = new Map<string, number>();
+
+    for (const category of categories) {
+      const value = sourceRow?.get(category.id) ?? 0;
+      displayRow.set(category.id, value);
+      customerTotals.set(
+        customer.id,
+        (customerTotals.get(customer.id) ?? 0) + value,
+      );
+      categoryTotals.set(
+        category.id,
+        (categoryTotals.get(category.id) ?? 0) + value,
+      );
+      grandTotal += value;
+      maximum = Math.max(maximum, value);
+    }
+
+    values.set(customer.id, displayRow);
   }
 
-  const customers = Array.from(customerNames, ([id, name]) => ({
-    id,
-    name,
-    total: customerTotals.get(id) ?? 0,
-  })).sort((a, b) => b.total - a.total);
-  const categories = Array.from(categoryNames, ([id, name]) => ({
-    id,
-    name,
-    total: categoryTotals.get(id) ?? 0,
-  })).sort((a, b) => b.total - a.total);
-
   return {
-    customers,
-    categories,
+    customers: customers.map((customer) => ({
+      ...customer,
+      total: customerTotals.get(customer.id) ?? 0,
+    })),
+    categories: categories.map((category) => ({
+      ...category,
+      total: categoryTotals.get(category.id) ?? 0,
+    })),
     values,
     customerTotals,
     categoryTotals,
     grandTotal,
     maximum,
+    sourceCustomerCount: sourceCustomers.length,
+    sourceCategoryCount: sourceCategories.length,
   };
 }
 
@@ -411,6 +479,10 @@ export default function CustomerProductReportPage() {
   const [productColumns, setProductColumns] = useState<ProductColumn[]>([
     ...DEFAULT_PRODUCT_COLUMNS,
   ]);
+  const [matrixCustomerLimit, setMatrixCustomerLimit] =
+    useState<MatrixLimit>(20);
+  const [matrixCategoryLimit, setMatrixCategoryLimit] =
+    useState<MatrixLimit>(10);
   const [highlightValues, setHighlightValues] = useState(true);
   const [report, setReport] = useState<CustomerProductReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -440,6 +512,8 @@ export default function CustomerProductReportPage() {
     setDensity(initial.density);
     setCustomerColumns(initial.customerColumns);
     setProductColumns(initial.productColumns);
+    setMatrixCustomerLimit(initial.matrixCustomerLimit);
+    setMatrixCategoryLimit(initial.matrixCategoryLimit);
     setHighlightValues(initial.highlightValues);
     setPageSize(initial.pageSize);
     setProductPageSize(initial.productPageSize);
@@ -453,6 +527,8 @@ export default function CustomerProductReportPage() {
     url.searchParams.set("reportMode", mode);
     url.searchParams.set("display", displayMode);
     url.searchParams.set("density", density);
+    url.searchParams.set("matrixCustomers", String(matrixCustomerLimit));
+    url.searchParams.set("matrixCategories", String(matrixCategoryLimit));
     window.history.replaceState(window.history.state, "", url);
 
     writeReportViewPreferences(REPORT_PATH, {
@@ -461,6 +537,8 @@ export default function CustomerProductReportPage() {
       density,
       customerColumns,
       productColumns,
+      matrixCustomerLimit,
+      matrixCategoryLimit,
       highlightValues,
       pageSize,
       productPageSize,
@@ -470,6 +548,8 @@ export default function CustomerProductReportPage() {
     density,
     displayMode,
     highlightValues,
+    matrixCategoryLimit,
+    matrixCustomerLimit,
     mode,
     pageSize,
     preferencesReady,
@@ -509,6 +589,8 @@ export default function CustomerProductReportPage() {
     setDensity("standard");
     setCustomerColumns([...DEFAULT_CUSTOMER_COLUMNS]);
     setProductColumns([...DEFAULT_PRODUCT_COLUMNS]);
+    setMatrixCustomerLimit(20);
+    setMatrixCategoryLimit(10);
     setHighlightValues(true);
     setPageSize(50);
     setProductPageSize(50);
@@ -642,7 +724,15 @@ export default function CustomerProductReportPage() {
       null,
     [report?.customers, selectedCustomerId],
   );
-  const matrix = useMemo(() => buildMatrix(report?.matrix ?? []), [report?.matrix]);
+  const matrix = useMemo(
+    () =>
+      buildMatrix(
+        report?.matrix ?? [],
+        matrixCustomerLimit,
+        matrixCategoryLimit,
+      ),
+    [matrixCategoryLimit, matrixCustomerLimit, report?.matrix],
+  );
   const selectedModeOption =
     REPORT_MODES.find((option) => option.id === mode) ?? REPORT_MODES[0];
   const selectedDisplayOption =
@@ -764,7 +854,12 @@ export default function CustomerProductReportPage() {
             width: 18,
             format: "currency" as const,
           })),
-          { label: "Tổng cộng", key: "total", width: 20, format: "currency" as const },
+          {
+            label: "Tổng hiển thị",
+            key: "total",
+            width: 20,
+            format: "currency" as const,
+          },
         ];
         sheet = {
           name: "Theo nhóm hàng",
@@ -1137,6 +1232,61 @@ export default function CustomerProductReportPage() {
                 </SelectContent>
               </Select>
 
+              {mode === "categories" && (
+                <>
+                  <Select
+                    value={String(matrixCustomerLimit)}
+                    onValueChange={(value) =>
+                      setMatrixCustomerLimit(normalizeMatrixLimit(value, 20))
+                    }
+                  >
+                    <SelectTrigger
+                      className="min-w-40 bg-background"
+                      aria-label="Số khách trong bảng chéo"
+                    >
+                      <SelectValue>
+                        <Icon name="groups" size={15} />
+                        <span>
+                          {formatMatrixLimit(matrixCustomerLimit, "khách")}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {MATRIX_LIMIT_OPTIONS.map((option) => (
+                        <SelectItem key={String(option)} value={String(option)}>
+                          {formatMatrixLimit(option, "khách")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <Select
+                    value={String(matrixCategoryLimit)}
+                    onValueChange={(value) =>
+                      setMatrixCategoryLimit(normalizeMatrixLimit(value, 10))
+                    }
+                  >
+                    <SelectTrigger
+                      className="min-w-40 bg-background"
+                      aria-label="Số nhóm hàng trong bảng chéo"
+                    >
+                      <SelectValue>
+                        <Icon name="category" size={15} />
+                        <span>
+                          {formatMatrixLimit(matrixCategoryLimit, "nhóm")}
+                        </span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent align="start">
+                      {MATRIX_LIMIT_OPTIONS.map((option) => (
+                        <SelectItem key={String(option)} value={String(option)}>
+                          {formatMatrixLimit(option, "nhóm")}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </>
+              )}
               <DropdownMenu>
                 <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-background px-3 text-sm font-medium text-foreground outline-none hover:bg-surface-container-low">
                   <Icon name="view_column" size={16} />
@@ -1691,7 +1841,12 @@ export default function CustomerProductReportPage() {
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
                     <div>
                       <h2 id="category-table-title" className="text-sm font-semibold text-foreground">Khách hàng theo nhóm hàng</h2>
-                      <p className="mt-0.5 text-xs text-muted-foreground">20 khách và 10 nhóm có doanh thu cao nhất</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {formatNumber(matrix.customers.length)}/
+                        {formatNumber(matrix.sourceCustomerCount)} khách ·{" "}
+                        {formatNumber(matrix.categories.length)}/
+                        {formatNumber(matrix.sourceCategoryCount)} nhóm đang hiển thị
+                      </p>
                     </div>
                     {highlightValues && (
                       <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-label="Mức doanh thu">
@@ -1717,7 +1872,7 @@ export default function CustomerProductReportPage() {
                           {matrix.categories.map((category) => (
                             <th key={category.id} className="min-w-36 px-3 py-2.5 text-right font-semibold">{category.name}</th>
                           ))}
-                          <th className="sticky right-0 z-40 min-w-40 border-l border-border bg-surface-container px-3 py-2.5 text-right font-semibold text-primary">Tổng cộng</th>
+                          <th className="sticky right-0 z-40 min-w-40 border-l border-border bg-surface-container px-3 py-2.5 text-right font-semibold text-primary">Tổng hiển thị</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1748,7 +1903,7 @@ export default function CustomerProductReportPage() {
                       </tbody>
                       <tfoot className="sticky bottom-0 z-30 bg-surface-container font-semibold">
                         <tr className="border-t-2 border-border">
-                          <td className="sticky left-0 z-40 bg-surface-container px-3 py-2.5">Tổng cộng</td>
+                          <td className="sticky left-0 z-40 bg-surface-container px-3 py-2.5">Tổng hiển thị</td>
                           {matrix.categories.map((category) => (
                             <td key={category.id} className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(matrix.categoryTotals.get(category.id) ?? 0)}</td>
                           ))}

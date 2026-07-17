@@ -164,6 +164,7 @@ export function ReportTableFrame({
         preferences={preferences}
         setPreferences={setPreferences}
         onReset={resetDisplay}
+        disableFreeze={hasMergedCells}
       />
       <div
         ref={tableRootRef}
