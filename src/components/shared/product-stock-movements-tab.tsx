@@ -6,7 +6,7 @@
 // để CEO truy vết tồn kho.
 
 import { useEffect, useState } from "react";
-import { getProductStockMovements } from "@/lib/services";
+import { getStockCard } from "@/lib/services";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -31,17 +31,21 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Đợt 4 (17/07): thẻ kho ở chi tiết SP KHÔNG lọc chi nhánh → tồn cuối là tồn
+  // TOÀN CÔNG TY sau mỗi giao dịch; drift đối soát với products.stock.
+  const [drift, setDrift] = useState<{ computed: number; system: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    getProductStockMovements(productId, { page: 0, pageSize: 30 })
+    getStockCard(productId)
       .then((result) => {
         if (!cancelled) {
           setMovements(result.data);
           setTotal(result.total);
+          setDrift({ computed: result.computedFinal, system: result.systemStock });
         }
       })
       .catch((err) => {
@@ -90,18 +94,32 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>Hiển thị {movements.length} giao dịch gần nhất</span>
+        <span>Hiển thị {movements.length} giao dịch (toàn công ty)</span>
         <span>Tổng: {formatNumber(total)}</span>
       </div>
 
+      {/* Đợt 4: băng cảnh báo khi tồn cộng dồn từ sổ ≠ products.stock. */}
+      {drift && Math.abs(drift.computed - drift.system) > 0.001 && (
+        <div className="rounded-md border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-xs">
+          <div className="font-medium text-status-warning">
+            Sổ lệch tồn hệ thống {formatNumber(drift.computed - drift.system)}
+          </div>
+          <div className="text-muted-foreground">
+            Tồn cộng dồn từ sổ <b>{formatNumber(drift.computed)}</b> · tồn hệ
+            thống <b>{formatNumber(drift.system)}</b>. Nên đối soát.
+          </div>
+        </div>
+      )}
+
       {/* Day 17/05: overflow-x-auto cho laptop nhỏ.
-          CEO 10/06/2026: thay cột "Còn lại" (đang để "—") bằng "Đối tác"
-          (KH/NCC/Chi nhánh) — useful + thật. */}
+          CEO 10/06/2026: thay cột "Còn lại" (để "—") bằng "Đối tác" thật.
+          Đợt 4 (17/07): thêm lại cột "Tồn cuối" ĐÚNG (cộng dồn từ sổ). */}
       <div className="rounded-lg border overflow-x-auto">
-        <div className="grid grid-cols-[110px_200px_80px_220px_180px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[800px]">
+        <div className="grid grid-cols-[110px_180px_80px_100px_200px_160px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[860px]">
           <span>Ngày</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
+          <span className="text-right">Tồn cuối</span>
           <span>Đối tác</span>
           <span>Ghi chú</span>
         </div>
@@ -120,7 +138,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_200px_80px_220px_180px] gap-2 items-center px-3 py-2 text-sm"
+                className="grid grid-cols-[110px_180px_80px_100px_200px_160px] gap-2 items-center px-3 py-2 text-sm"
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
@@ -136,6 +154,10 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                 >
                   {signed > 0 ? "+" : ""}
                   {formatNumber(signed)}
+                </span>
+                {/* Đợt 4: Tồn cuối toàn công ty sau giao dịch. */}
+                <span className="text-right font-medium tabular-nums">
+                  {m.runningBalance != null ? formatNumber(m.runningBalance) : "—"}
                 </span>
                 <span className={`text-xs truncate ${pColor}`} title={m.partner ?? ""}>
                   {m.partner ?? "—"}

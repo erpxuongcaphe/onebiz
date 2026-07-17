@@ -2,7 +2,7 @@
  * Supabase service: Products & Categories
  */
 
-import type { Product, ProductDetail, StockMovement, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
+import type { Product, ProductDetail, StockMovement, StockCardResult, SalesHistory, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
@@ -753,6 +753,112 @@ export async function getStockMovements(
   });
 
   return { data: movements, total: count ?? 0 };
+}
+
+// --- Stock Card / Thẻ kho (Đợt 4 — CEO 17/07) ------------------------------
+// Sổ 1 mặt hàng kèm cột "Tồn cuối" (tồn sau mỗi giao dịch, kiểu KiotViet).
+//
+// Vì sao tính bằng TS chứ không RPC: đã verify data thật (probe-stock-card.mjs)
+// — sổ dài nhất của 1 cặp (SP × chi nhánh) chỉ 114 dòng → fetch full + cộng dồn
+// trong JS là tức thì, KHÔNG cần DDL/migration prod.
+//
+// Nguyên tắc (plan docs/PLAN-THE-KHO.md): tồn cuối CỘNG DỒN TIẾN từ đầu sổ
+// (KHÔNG tính ngược từ branch_stock — tính ngược giấu drift). Tie-break bắt
+// buộc (created_at, id) vì có 36 cụm trùng created_at (max 8 dòng).
+export async function getStockCard(
+  productId: string,
+  branchId?: string,
+): Promise<StockCardResult> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  // 1) Fetch TOÀN BỘ sổ của cặp này (loop phân trang phòng >1000, dù nay max 114)
+  //    theo thứ tự TĂNG (created_at, id) để cộng dồn tiến chuẩn xác.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ledger: any[] = [];
+  for (let page = 0; ; page++) {
+    let q = supabase
+      .from("stock_movements")
+      .select("*, profiles!stock_movements_created_by_fkey(full_name)")
+      .eq("tenant_id", tenantId)
+      .eq("product_id", productId);
+    if (branchId) q = q.eq("branch_id", branchId);
+    const { data, error } = await q
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(page * 1000, page * 1000 + 999);
+    if (error) handleError(error, "getStockCard");
+    const chunk = data ?? [];
+    ledger.push(...chunk);
+    if (chunk.length < 1000) break;
+  }
+
+  // 2) Cộng dồn TIẾN (oldest → newest): tồn cuối tại mỗi dòng.
+  //    quantity luôn dương, dấu nằm ở type ('out' = trừ).
+  let balance = 0;
+  const runningById = new Map<string, number>();
+  for (const row of ledger) {
+    const qty = Number(row.quantity ?? 0);
+    balance += row.type === "out" ? -qty : qty;
+    runningById.set(row.id, balance);
+  }
+  const computedFinal = balance;
+
+  // 3) Tồn hệ thống hiện tại để đối soát drift.
+  let systemStock = 0;
+  if (branchId) {
+    const { data: bs } = await supabase
+      .from("branch_stock")
+      .select("quantity")
+      .eq("tenant_id", tenantId)
+      .eq("product_id", productId)
+      .eq("branch_id", branchId)
+      .is("variant_id", null)
+      .maybeSingle();
+    systemStock = Number((bs as { quantity?: number } | null)?.quantity ?? 0);
+  } else {
+    const { data: pr } = await supabase
+      .from("products")
+      .select("stock")
+      .eq("id", productId)
+      .maybeSingle();
+    systemStock = Number((pr as { stock?: number } | null)?.stock ?? 0);
+  }
+
+  // 4) Enrich (đối tác + mã chứng từ thật) + đảo MỚI TRÊN CÙNG cho hiển thị.
+  const resolvePartner = await buildMovementPartnerResolver(supabase, ledger);
+  const typeNameMap = MOVEMENT_TYPE_LABELS;
+  const display = [...ledger].reverse().map((row) => {
+    const p = resolvePartner(row);
+    const m: StockMovement = {
+      id: row.id,
+      code: p.referenceCode ?? "—",
+      type: mapMovementType(row.type),
+      typeName: typeNameMap[row.type] ?? row.type,
+      quantity: row.quantity,
+      costPrice: 0,
+      totalAmount: 0,
+      date: row.created_at,
+      note: row.note ?? undefined,
+      createdBy: row.created_by,
+      createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
+      referenceType: row.reference_type ?? undefined,
+      referenceId: row.reference_id ?? undefined,
+      partner: p.partner,
+      partnerType: p.partnerType,
+      referenceCode: p.referenceCode,
+      runningBalance: runningById.get(row.id),
+    };
+    return m;
+  });
+
+  return {
+    data: display,
+    total: ledger.length,
+    systemStock,
+    computedFinal,
+    drift: computedFinal - systemStock,
+  };
 }
 
 // --- Sales History ---

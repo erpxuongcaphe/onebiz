@@ -8,6 +8,7 @@ export type {
   ProductType,
   ProductCategory,
   StockMovement,
+  StockCardResult,
   SalesHistory,
   PriceBook,
   InventoryCheck,

@@ -41,7 +41,7 @@ import {
   getBranchStockRows,
   getBranches,
   getProductStockBreakdown,
-  getProductStockMovements,
+  getStockCard,
   getUOMConversions,
   getUOMConversionsByProductIds,
   adjustStockToValue,
@@ -97,6 +97,9 @@ function StockRowDetail({
   // CEO 17/07 (Thẻ kho Đợt 1): tổng số giao dịch THẬT (count exact từ server)
   // — nhãn tab trước đây đếm movements.length nên kẹt trần 50 dù sổ dài hơn.
   const [movementsTotal, setMovementsTotal] = useState(0);
+  // Đợt 4 (17/07): đối soát tồn cộng dồn từ sổ vs tồn hệ thống (hiện băng
+  // cảnh báo nếu lệch — sổ thiếu/thừa bút toán).
+  const [stockDrift, setStockDrift] = useState<{ computed: number; system: number } | null>(null);
   const [conversions, setConversions] = useState<UOMConversion[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
@@ -181,22 +184,20 @@ function StockRowDetail({
     (async () => {
       setLoadingMovements(true);
       try {
-        // CEO 17/07 (Thẻ kho Đợt 1): dòng đang xem là (SP × CHI NHÁNH) nên sổ
-        // phải lọc đúng chi nhánh đó. Trước đây không lọc → trộn giao dịch của
-        // mọi chi nhánh, cộng tay không khớp tồn của dòng vừa bấm.
-        const res = await getProductStockMovements(
-          row.productId,
-          { page: 0, pageSize: 50 },
-          row.branchId,
-        );
+        // CEO 17/07 (Thẻ kho Đợt 4): thẻ kho đúng chi nhánh + tồn CUỐI cộng dồn
+        // tiến từ đầu sổ (getStockCard fetch full ledger — max 114 dòng/cặp nên
+        // rẻ). Trả kèm drift để cảnh báo sổ lệch tồn hệ thống.
+        const res = await getStockCard(row.productId, row.branchId);
         if (!cancelled) {
           setMovements(res.data);
           setMovementsTotal(res.total);
+          setStockDrift({ computed: res.computedFinal, system: res.systemStock });
         }
       } catch {
         if (!cancelled) {
           setMovements([]);
           setMovementsTotal(0);
+          setStockDrift(null);
         }
       } finally {
         if (!cancelled) setLoadingMovements(false);
@@ -429,6 +430,22 @@ function StockRowDetail({
                     <span> · hiển thị {movements.length}/{movementsTotal} dòng gần nhất</span>
                   )}
                 </div>
+                {/* Đợt 4: băng cảnh báo khi tồn cộng dồn từ sổ ≠ tồn hệ thống.
+                    Cộng dồn TIẾN từ đầu sổ nên phát hiện được cả lệch nhỏ mà
+                    tính-ngược-từ-tồn sẽ giấu mất. */}
+                {stockDrift &&
+                  Math.abs(stockDrift.computed - stockDrift.system) > 0.001 && (
+                    <div className="rounded-md border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-xs">
+                      <div className="font-medium text-status-warning">
+                        Sổ lệch tồn hệ thống {formatNumber(stockDrift.computed - stockDrift.system)} {row.unit ?? ""}
+                      </div>
+                      <div className="text-muted-foreground">
+                        Tồn cộng dồn từ sổ <b>{formatNumber(stockDrift.computed)}</b> ·
+                        tồn hệ thống <b>{formatNumber(stockDrift.system)}</b>.
+                        Sổ có thể thiếu/thừa bút toán hoặc tồn bị chỉnh tay — nên đối soát.
+                      </div>
+                    </div>
+                  )}
                 {loadingMovements ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
                     Đang tải...
@@ -445,6 +462,9 @@ function StockRowDetail({
                           <th className="text-left p-2 font-medium">Thời gian</th>
                           <th className="text-left p-2 font-medium">Loại</th>
                           <th className="text-right p-2 font-medium">Số lượng</th>
+                          {/* Đợt 4 (17/07): cột Tồn cuối kiểu KiotViet — tồn sau
+                              mỗi lần nhập/xuất, cộng dồn từ đầu sổ. */}
+                          <th className="text-right p-2 font-medium">Tồn cuối</th>
                           <th className="text-left p-2 font-medium">Đối tác</th>
                           <th className="text-left p-2 font-medium">Người tạo</th>
                           <th className="text-left p-2 font-medium">Ghi chú</th>
@@ -478,6 +498,12 @@ function StockRowDetail({
                                 variant="movement"
                                 isInflow={m.type !== "export"}
                               />
+                            </td>
+                            {/* Đợt 4: Tồn cuối sau giao dịch (KiotViet). */}
+                            <td className="p-2 text-right font-medium tabular-nums whitespace-nowrap">
+                              {m.runningBalance != null
+                                ? `${formatNumber(m.runningBalance)} ${row.unit ?? ""}`.trim()
+                                : "—"}
                             </td>
                             <td className={`p-2 text-xs max-w-[200px] truncate ${pColor}`} title={m.partner ?? ""}>
                               {m.partner ?? "—"}

@@ -122,6 +122,23 @@ export interface StockMovement {
   /** Đợt 3 (17/07): loại + id chứng từ gốc — để sau liên kết bấm mở chứng từ. */
   referenceType?: string;
   referenceId?: string;
+  /** Đợt 4 (17/07): tồn CUỐI sau giao dịch này (cộng dồn tiến từ đầu sổ,
+   * theo chi nhánh nếu xem per-branch). Chỉ có ở thẻ kho (getStockCard). */
+  runningBalance?: number;
+}
+
+/** Đợt 4 — Thẻ kho: sổ 1 mặt hàng (± theo chi nhánh) kèm tồn cuối cộng dồn
+ * + đối soát drift (tồn cộng dồn từ sổ vs tồn hệ thống). */
+export interface StockCardResult {
+  /** Dòng sổ, MỚI trên cùng, mỗi dòng có runningBalance = tồn cuối tại dòng đó. */
+  data: StockMovement[];
+  total: number;
+  /** Tồn hệ thống hiện tại: branch_stock (nếu xem per-branch) hoặc products.stock. */
+  systemStock: number;
+  /** Tồn cộng dồn tiến tới dòng mới nhất (đáng lẽ = systemStock). */
+  computedFinal: number;
+  /** computedFinal − systemStock. Khác 0 = sổ thiếu/thừa bút toán (cảnh báo). */
+  drift: number;
 }
 
 // Lịch sử bán hàng của sản phẩm
