@@ -48,11 +48,11 @@ const SEGMENT_COLORS: Record<RfmSegment, string> = {
 };
 
 const SEGMENT_LABELS: Record<RfmSegment, string> = {
-  Champion: "Champion (VIP)",
-  Loyal: "Loyal (Trung thành)",
-  Potential: "Potential (Tiềm năng)",
-  "At-risk": "At-risk (Sắp mất)",
-  Lost: "Lost (Đã mất)",
+  Champion: "Khách hàng giá trị cao",
+  Loyal: "Khách hàng trung thành",
+  Potential: "Khách hàng tiềm năng",
+  "At-risk": "Có nguy cơ rời bỏ",
+  Lost: "Đã ngừng mua",
 };
 
 type SegmentFilter = "all" | RfmSegment;
@@ -108,7 +108,7 @@ export default function RfmReportPage() {
       .then((res) => setRows(res.rows))
       .catch((err) => {
         toast({
-          title: "Không tải được báo cáo RFM",
+          title: "Không tải được báo cáo phân khúc khách hàng",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
@@ -165,19 +165,19 @@ export default function RfmReportPage() {
       cell: (r) => r.phone ?? "—",
     },
     {
-      label: "R",
+      label: "Mua gần đây",
       key: "rScore",
       align: "center",
       cell: (r) => <ScoreBadge score={r.rScore} />,
     },
     {
-      label: "F",
+      label: "Tần suất",
       key: "fScore",
       align: "center",
       cell: (r) => <ScoreBadge score={r.fScore} />,
     },
     {
-      label: "M",
+      label: "Giá trị",
       key: "mScore",
       align: "center",
       cell: (r) => <ScoreBadge score={r.mScore} />,
@@ -208,7 +208,7 @@ export default function RfmReportPage() {
       label: "Cách hôm nay",
       key: "recencyDays",
       align: "right",
-      cell: (r) => `${r.recencyDays}d`,
+      cell: (r) => `${r.recencyDays} ngày`,
     },
     {
       label: "Phân khúc",
@@ -218,7 +218,7 @@ export default function RfmReportPage() {
           className="text-xs px-2 py-0.5 rounded-full font-medium text-white"
           style={{ background: SEGMENT_COLORS[r.segment] }}
         >
-          {r.segment}
+          {SEGMENT_LABELS[r.segment]}
         </span>
       ),
     },
@@ -231,14 +231,14 @@ export default function RfmReportPage() {
     }
     try {
       const infoSheet = buildInfoSheet({
-        title: "BÁO CÁO RFM KHÁCH HÀNG",
+        title: "BÁO CÁO PHÂN KHÚC GIÁ TRỊ KHÁCH HÀNG",
         description:
-          "Phân khúc khách hàng theo Recency × Frequency × Monetary — CMO target campaign",
+          "Phân khúc theo lần mua gần nhất, tần suất mua và tổng chi tiêu",
         range,
         tenantName: "OneBiz",
         generatedAt: new Date(),
         disclaimer:
-          "Mỗi trục R/F/M tính ntile(5). Phân khúc: Champion (≥12), Loyal (9-11), Potential (6-8), At-risk, Lost.",
+          "Mỗi tiêu chí được chấm từ 1 đến 5; điểm càng cao thể hiện mức độ gắn bó và giá trị càng tốt.",
       });
 
       const segmentSheet: ExcelSheet = {
@@ -268,9 +268,9 @@ export default function RfmReportPage() {
           { label: "Mã KH", key: "code", width: 12 },
           { label: "Khách hàng", key: "name", width: 24 },
           { label: "SĐT", key: "phone", width: 14 },
-          { label: "R", key: "r", width: 6, format: "number" },
-          { label: "F", key: "f", width: 6, format: "number" },
-          { label: "M", key: "m", width: 6, format: "number" },
+          { label: "Mua gần đây", key: "r", width: 16, format: "number" },
+          { label: "Tần suất", key: "f", width: 12, format: "number" },
+          { label: "Giá trị", key: "m", width: 12, format: "number" },
           { label: "Số đơn", key: "freq", width: 10, format: "number" },
           { label: "Tổng tiền", key: "money", width: 16, format: "currency" },
           { label: "Đơn cuối", key: "last", width: 14, format: "text" },
@@ -288,11 +288,11 @@ export default function RfmReportPage() {
           money: r.monetary,
           last: r.lastOrderAt ? formatDate(r.lastOrderAt) : "",
           days: r.recencyDays,
-          segment: r.segment,
+          segment: SEGMENT_LABELS[r.segment],
         })),
         footer: {
           code: "",
-          name: `${rows.length} KH`,
+          name: `${rows.length} khách hàng`,
           phone: "",
           r: "",
           f: "",
@@ -315,8 +315,8 @@ export default function RfmReportPage() {
       });
 
       toast({
-        title: "Đã xuất báo cáo RFM",
-        description: `3 sheet: Info + Phân khúc + Chi tiết (${rows.length})`,
+        title: "Đã xuất báo cáo phân khúc khách hàng",
+        description: `3 trang tính: Thông tin + Phân khúc + Chi tiết (${rows.length})`,
         variant: "success",
       });
     } catch (err) {
@@ -331,8 +331,8 @@ export default function RfmReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="RFM khách hàng"
-        subtitle="Phân khúc khách hàng — Champion / Loyal / Potential / At-risk / Lost"
+        title="Phân khúc giá trị khách hàng"
+        subtitle="Xếp nhóm theo lần mua gần nhất, tần suất mua và tổng chi tiêu"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -345,7 +345,7 @@ export default function RfmReportPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
-          label="Tổng KH"
+          label="Tổng khách hàng"
           value={formatNumber(rows.length)}
           icon="group"
           bg="bg-primary-fixed"
@@ -353,7 +353,7 @@ export default function RfmReportPage() {
           valueColor="text-foreground"
         />
         <KpiCard
-          label="Champion (VIP)"
+          label="Giá trị cao"
           value={formatNumber(championCount)}
           change={`${rows.length > 0 ? ((championCount / rows.length) * 100).toFixed(1) : 0}%`}
           positive
@@ -363,7 +363,7 @@ export default function RfmReportPage() {
           valueColor="text-status-success"
         />
         <KpiCard
-          label="Loyal (trung thành)"
+          label="Trung thành"
           value={formatNumber(loyalCount)}
           change={`${rows.length > 0 ? ((loyalCount / rows.length) * 100).toFixed(1) : 0}%`}
           positive
@@ -373,7 +373,7 @@ export default function RfmReportPage() {
           valueColor="text-primary"
         />
         <KpiCard
-          label="At-risk (cần chăm)"
+          label="Có nguy cơ rời bỏ"
           value={formatNumber(atRiskCount)}
           change="Lâu không quay lại"
           positive={false}
@@ -383,7 +383,7 @@ export default function RfmReportPage() {
           valueColor="text-status-warning"
         />
         <KpiCard
-          label="Lost (đã mất)"
+          label="Đã ngừng mua"
           value={formatNumber(lostCount)}
           icon="person_off"
           bg="bg-status-error/10"
@@ -394,7 +394,7 @@ export default function RfmReportPage() {
 
       {viewMode === "chart" && rows.length > 0 && (
         <ChartCard
-          title="Phân bổ khách hàng theo phân khúc RFM"
+          title="Phân bổ khách hàng theo nhóm giá trị"
           subtitle="Tỷ trọng từng phân khúc"
         >
           <div className="h-80">
@@ -420,7 +420,7 @@ export default function RfmReportPage() {
                     ))}
                 </Pie>
                 <Tooltip
-                  formatter={(v: unknown) => `${formatNumber(Number(v) || 0)} KH`}
+                  formatter={(v: unknown) => `${formatNumber(Number(v) || 0)} khách`}
                 />
                 <Legend />
               </PieChart>
@@ -434,7 +434,7 @@ export default function RfmReportPage() {
           type="button"
           onClick={() => setSegmentFilter("all")}
           className={cn(
-            "h-8 px-3 rounded-full text-xs font-medium transition-colors",
+            "h-8 rounded-lg px-3 text-xs font-medium transition-colors",
             segmentFilter === "all"
               ? "bg-primary text-on-primary"
               : "bg-surface-container-low text-foreground hover:bg-surface-container",
@@ -448,7 +448,7 @@ export default function RfmReportPage() {
             type="button"
             onClick={() => setSegmentFilter(s.segment)}
             className={cn(
-              "h-8 px-3 rounded-full text-xs font-medium transition-colors",
+              "h-8 rounded-lg px-3 text-xs font-medium transition-colors",
               segmentFilter === s.segment
                 ? "text-white"
                 : "bg-surface-container-low text-foreground hover:bg-surface-container",
@@ -471,7 +471,7 @@ export default function RfmReportPage() {
             ? "Đang tải..."
             : filteredRows.length === 0
               ? "Không có khách hàng"
-              : `${filteredRows.length} KH — Tổng chi tiêu: ${formatCurrency(filteredRows.reduce((s, r) => s + r.monetary, 0))}đ`
+              : `${filteredRows.length} khách hàng — Tổng chi tiêu: ${formatCurrency(filteredRows.reduce((s, r) => s + r.monetary, 0))}đ`
         }
         emptyState={
           <div className="text-center py-12 text-muted-foreground">

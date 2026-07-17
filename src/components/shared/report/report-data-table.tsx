@@ -11,7 +11,7 @@
  * - Right-align số, left-align text
  */
 
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 
@@ -160,7 +160,7 @@ export function ReportDataTable<T>({
               const hasSubRows = subRows && subRows.length > 0;
               const isExpanded = expanded[key];
               return (
-                <>
+                <Fragment key={key}>
                   <tr
                     key={key}
                     className={cn(
@@ -172,7 +172,9 @@ export function ReportDataTable<T>({
                       <td className="w-8 px-2 sticky left-0 bg-inherit">
                         {hasSubRows && (
                           <button
+                            type="button"
                             onClick={() => toggleExpand(key)}
+                            aria-expanded={isExpanded}
                             className="p-0.5 rounded hover:bg-surface-container"
                             aria-label={isExpanded ? "Thu gọn" : "Mở rộng"}
                           >
@@ -232,7 +234,7 @@ export function ReportDataTable<T>({
                         ))}
                       </tr>
                     ))}
-                </>
+                </Fragment>
               );
             })
           )}

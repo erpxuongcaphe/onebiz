@@ -81,11 +81,11 @@ export function ReportPageHeader({
     <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold text-foreground truncate">
+          <h1 className="text-lg font-semibold leading-6 text-foreground break-words">
             {title}
           </h1>
           {subtitle && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+            <p className="mt-0.5 max-w-3xl text-xs leading-4 text-muted-foreground">
               {subtitle}
             </p>
           )}
@@ -108,7 +108,7 @@ export function ReportPageHeader({
               <DropdownMenuTrigger
                 disabled={exportDisabled}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-xs font-medium",
+                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium",
                   "bg-primary text-primary-foreground hover:bg-primary/90",
                   "transition-colors press-scale-sm outline-none ambient-shadow",
                   exportDisabled && "opacity-50 cursor-not-allowed",
@@ -131,10 +131,10 @@ export function ReportPageHeader({
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground">
-                        Xuất theo view hiện tại
+                        Xuất nội dung đang xem
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        1 sheet, đúng những gì đang xem
+                        Một trang tính, đúng nội dung trên màn hình
                       </p>
                     </div>
                   </button>
@@ -151,10 +151,10 @@ export function ReportPageHeader({
                     />
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-foreground">
-                        Xuất đầy đủ (mọi chiều)
+                        Xuất báo cáo đầy đủ
                       </p>
                       <p className="text-[11px] text-muted-foreground">
-                        Multi-sheet, kế toán pivot
+                        Nhiều trang tính để đối chiếu số liệu
                       </p>
                     </div>
                   </button>

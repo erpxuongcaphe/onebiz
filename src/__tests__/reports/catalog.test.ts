@@ -15,7 +15,7 @@ describe("report catalog", () => {
     expect(REPORT_CATALOG).toHaveLength(36);
     expect(new Set(paths).size).toBe(paths.length);
     expect(getReportByPath("/phan-tich/khach-san-pham")?.title).toBe(
-      "Sản phẩm theo khách hàng",
+      "Khách hàng mua sản phẩm nào",
     );
   });
 

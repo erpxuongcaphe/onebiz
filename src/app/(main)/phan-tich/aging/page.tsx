@@ -90,7 +90,7 @@ export default function AgingReportPage() {
       .then((res) => setRows(res.rows))
       .catch((err) => {
         toast({
-          title: "Không tải được báo cáo aging",
+          title: "Không tải được báo cáo tuổi tồn kho",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
@@ -140,7 +140,7 @@ export default function AgingReportPage() {
 
   // ── Columns table ──
   const columns: DataTableColumn<InventoryAgingRow>[] = [
-    { label: "Mã SP", key: "code", width: "100px" },
+    { label: "Mã hàng", key: "code", width: "100px" },
     { label: "Tên sản phẩm", key: "name", width: "240px" },
     {
       label: "Tồn",
@@ -183,7 +183,7 @@ export default function AgingReportPage() {
       cell: (r) => (r.lastSaleDate ? formatDate(r.lastSaleDate) : "—"),
     },
     {
-      label: "Nhóm aging",
+      label: "Nhóm thời gian",
       key: "agingBucket",
       align: "center",
       cell: (r) => (
@@ -203,7 +203,7 @@ export default function AgingReportPage() {
       ),
     },
     {
-      label: "Dead-stock",
+      label: "Hàng chậm bán",
       key: "isDeadStock",
       align: "center",
       cell: (r) =>
@@ -230,24 +230,24 @@ export default function AgingReportPage() {
 
       // Sheet 0: Info
       const infoSheet = buildInfoSheet({
-        title: "BÁO CÁO AGING TỒN KHO / DEAD-STOCK",
+        title: "BÁO CÁO TUỔI TỒN KHO VÀ HÀNG CHẬM BÁN",
         description:
-          "Phân loại tồn kho theo thời gian nằm kho + danh sách dead-stock",
+          "Phân loại tồn kho theo thời gian lưu kho và danh sách hàng chậm bán",
         range: dateRange,
         branchName: branchLabel,
         tenantName: "OneBiz",
         generatedAt: new Date(),
         disclaimer:
-          "Báo cáo snapshot tại thời điểm xuất file. Dead-stock = SP có tồn > 0 nhưng không bán trong 60 ngày gần nhất.",
+          "Số liệu ghi nhận tại thời điểm xuất file. Hàng chậm bán là mặt hàng còn tồn nhưng không bán trong 60 ngày gần nhất.",
       });
 
       // Sheet 1: Tổng quan theo bucket
       const overviewSheet: ExcelSheet = {
         name: "Tổng quan",
-        titleRows: ["TỔNG QUAN AGING TỒN KHO"],
+        titleRows: ["TỔNG QUAN TUỔI TỒN KHO"],
         columns: [
           { label: "Nhóm thời gian", key: "bucket", width: 24 },
-          { label: "Số SP", key: "count", width: 14, format: "number" },
+          { label: "Số mặt hàng", key: "count", width: 14, format: "number" },
           { label: "Tổng giá trị", key: "value", width: 18, format: "currency" },
         ],
         rows: bucketAgg.map((b) => ({
@@ -267,16 +267,16 @@ export default function AgingReportPage() {
         name: "Chi tiết",
         titleRows: ["CHI TIẾT TỪNG SẢN PHẨM"],
         columns: [
-          { label: "Mã SP", key: "code", width: 12 },
-          { label: "Tên SP", key: "name", width: 30 },
+          { label: "Mã hàng", key: "code", width: 12 },
+          { label: "Tên hàng", key: "name", width: 30 },
           { label: "Tồn", key: "qty", width: 12, format: "number" },
           { label: "Giá vốn", key: "cost", width: 14, format: "currency" },
           { label: "Giá trị tồn", key: "value", width: 16, format: "currency" },
           { label: "Ngày nhập cuối", key: "lastIn", width: 14, format: "text" },
           { label: "Tồn ngày", key: "days", width: 12, format: "number" },
           { label: "Bán cuối", key: "lastSale", width: 14, format: "text" },
-          { label: "Nhóm aging", key: "bucket", width: 16 },
-          { label: "Dead-stock", key: "dead", width: 12 },
+          { label: "Nhóm thời gian", key: "bucket", width: 16 },
+          { label: "Hàng chậm bán", key: "dead", width: 12 },
         ],
         rows: rows.map((r) => ({
           code: r.code,
@@ -308,11 +308,11 @@ export default function AgingReportPage() {
       // Sheet 3: Dead-stock danh sách riêng
       const deadRows = rows.filter((r) => r.isDeadStock);
       const deadSheet: ExcelSheet = {
-        name: "Dead-stock",
-        titleRows: [`DEAD-STOCK (${deadRows.length} SP — không bán >60 ngày)`],
+        name: "Hàng chậm bán",
+        titleRows: [`HÀNG CHẬM BÁN (${deadRows.length} mặt hàng — không bán trên 60 ngày)`],
         columns: [
-          { label: "Mã SP", key: "code", width: 12 },
-          { label: "Tên SP", key: "name", width: 30 },
+          { label: "Mã hàng", key: "code", width: 12 },
+          { label: "Tên hàng", key: "name", width: 30 },
           { label: "Tồn", key: "qty", width: 12, format: "number" },
           { label: "Giá trị vốn chết", key: "value", width: 18, format: "currency" },
           { label: "Tồn ngày", key: "days", width: 12, format: "number" },
@@ -353,8 +353,8 @@ export default function AgingReportPage() {
       });
 
       toast({
-        title: "Đã xuất báo cáo aging",
-        description: `4 sheet: Info + Tổng quan + Chi tiết (${rows.length}) + Dead-stock (${deadRows.length})`,
+        title: "Đã xuất báo cáo tuổi tồn kho",
+        description: `4 trang tính: Thông tin + Tổng quan + Chi tiết (${rows.length}) + Hàng chậm bán (${deadRows.length})`,
         variant: "success",
       });
     } catch (err) {
@@ -370,8 +370,8 @@ export default function AgingReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Aging tồn kho / Dead-stock"
-        subtitle="Snapshot tồn kho tại thời điểm hiện tại — không filter theo kỳ"
+        title="Tuổi tồn kho và hàng chậm bán"
+        subtitle="Số liệu tồn kho tại thời điểm hiện tại, không phụ thuộc khoảng ngày"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -394,7 +394,7 @@ export default function AgingReportPage() {
           valueColor="text-foreground"
         />
         <KpiCard
-          label="SL SP đang tồn"
+          label="Số mặt hàng đang tồn"
           value={formatNumber(kpis.totalSku)}
           icon="category"
           bg="bg-status-info/10"
@@ -402,9 +402,9 @@ export default function AgingReportPage() {
           valueColor="text-foreground"
         />
         <KpiCard
-          label="Dead-stock"
+          label="Mặt hàng chậm bán"
           value={`${formatNumber(kpis.deadCount)} SP`}
-          change={`${kpis.deadPercent.toFixed(1)}% tổng SKU`}
+          change={`${kpis.deadPercent.toFixed(1)}% tổng mặt hàng`}
           positive={kpis.deadPercent < 10}
           icon="warning"
           bg="bg-status-error/10"
@@ -480,7 +480,7 @@ export default function AgingReportPage() {
               key: "91+",
               label: `> 90 ngày (${rows.filter((r) => r.agingBucket === "91+").length})`,
             },
-            { key: "dead", label: `Dead-stock (${kpis.deadCount})` },
+            { key: "dead", label: `Hàng chậm bán (${kpis.deadCount})` },
           ] as { key: BucketFilter; label: string }[]
         ).map((chip) => (
           <button
@@ -509,7 +509,7 @@ export default function AgingReportPage() {
             ? "Đang tải..."
             : filteredRows.length === 0
               ? "Không có dữ liệu"
-              : `SL mặt hàng: ${filteredRows.length}`
+              : `Số mặt hàng: ${filteredRows.length}`
         }
         emptyState={
           <div className="text-center py-12 text-muted-foreground">

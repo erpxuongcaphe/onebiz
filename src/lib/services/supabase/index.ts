@@ -199,10 +199,23 @@ export {
   getCustomerKpis, getNewCustomersMonthly, getCustomerSegments, getTopCustomersByRevenue, getTopDebtors,
   // CEO 14/05: Khách hàng × Sản phẩm (cross-table analytics)
   getRevenueByCustomerAndCategory, getRevenueByCustomerAndProduct,
+  getCustomerProductReport, getCustomerProductDetailPage,
+  getCustomerProductExportRows,
   // Suppliers
   getSupplierKpis, getPurchaseByMonth, getTopSuppliersByPurchase, getSupplierPaymentStatus, getSupplierSummary,
   // Finance
   getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
+} from "./analytics";
+export type {
+  CustomerProductSort,
+  CustomerProductReportSummary,
+  CustomerProductCustomerRow,
+  CustomerProductCategoryRow,
+  CustomerProductMatrixCell,
+  CustomerProductReport,
+  CustomerProductDetailRow,
+  CustomerProductDetailPage,
+  CustomerProductExportRow,
 } from "./analytics";
 export { getPurchaseForecast } from "./purchase-forecast";
 export type {

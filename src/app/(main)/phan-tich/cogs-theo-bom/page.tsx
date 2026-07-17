@@ -62,9 +62,9 @@ export default function CogsTheoBomPage() {
   const negativeMargin = rows.filter((row) => row.margin < 0);
 
   const detailSheet = useCallback((): ExcelSheet => ({
-    name: "Chi tiết COGS",
+    name: "Chi tiết giá vốn",
     titleRows: buildReportTitleRows({
-      title: "BÁO CÁO GIÁ VỐN THỰC THEO BOM",
+      title: "BÁO CÁO GIÁ VỐN THEO CÔNG THỨC",
       range,
       branchName: branchLabel,
     }),
@@ -72,11 +72,11 @@ export default function CogsTheoBomPage() {
       { label: "Hóa đơn", key: "invoiceCode", width: 16 },
       { label: "Thời gian", key: "invoiceDate", width: 18 },
       { label: "Chi nhánh", key: "branchName", width: 24 },
-      { label: "Mã SKU", key: "productCode", width: 14 },
+      { label: "Mã hàng", key: "productCode", width: 14 },
       { label: "Tên sản phẩm", key: "productName", width: 32 },
       { label: "Số lượng", key: "qtySold", width: 12, format: "number" },
       { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
-      { label: "COGS thực", key: "cogsReal", width: 18, format: "currency" },
+      { label: "Giá vốn", key: "cogsReal", width: 18, format: "currency" },
       { label: "Lợi nhuận gộp", key: "margin", width: 18, format: "currency" },
     ],
     rows: rows.map((row) => ({
@@ -110,7 +110,7 @@ export default function CogsTheoBomPage() {
         sheets.push({
           name: "Tổng hợp",
           titleRows: buildReportTitleRows({
-            title: "TỔNG HỢP GIÁ VỐN THỰC THEO BOM",
+            title: "TỔNG HỢP GIÁ VỐN THEO CÔNG THỨC",
             range,
             branchName: branchLabel,
           }),
@@ -119,8 +119,8 @@ export default function CogsTheoBomPage() {
             { label: "Giá trị", key: "value", width: 22, format: "currency" },
           ],
           rows: [
-            { metric: "Doanh thu SKU có BOM", value: totalRevenue },
-            { metric: "Giá vốn thực theo BOM", value: totalCogs },
+            { metric: "Doanh thu sản phẩm có công thức", value: totalRevenue },
+            { metric: "Giá vốn theo công thức", value: totalCogs },
             { metric: "Lợi nhuận gộp", value: totalMargin },
             { metric: "Số dòng có lợi nhuận âm", value: negativeMargin.length },
           ],
@@ -132,11 +132,11 @@ export default function CogsTheoBomPage() {
         mode,
         range,
         branchName: branchLabel,
-        reportTitle: "Báo cáo giá vốn thực theo BOM",
-        description: "Giá vốn được tính từ nguyên vật liệu trong công thức BOM đã ghi nhận.",
+        reportTitle: "Báo cáo giá vốn theo công thức",
+        description: "Giá vốn được tính từ nguyên vật liệu trong công thức đã ghi nhận.",
         sheets,
       });
-      toast({ title: "Đã xuất báo cáo COGS theo BOM", variant: "success" });
+      toast({ title: "Đã xuất báo cáo giá vốn theo công thức", variant: "success" });
     } catch (err) {
       toast({
         title: "Lỗi xuất Excel",
@@ -149,8 +149,8 @@ export default function CogsTheoBomPage() {
   return (
     <div className="flex min-h-full flex-col">
       <ReportPageHeader
-        title="COGS thực theo BOM"
-        subtitle="Giá vốn từ nguyên vật liệu trong công thức, đối chiếu trực tiếp với doanh thu SKU"
+        title="Giá vốn theo công thức"
+        subtitle="Đối chiếu giá vốn nguyên vật liệu trong công thức với doanh thu sản phẩm"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -164,13 +164,13 @@ export default function CogsTheoBomPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <SummaryCard
             icon={<Icon name="trending_up" size={16} />}
-            label="Doanh thu (SKU có BOM)"
+            label="Doanh thu sản phẩm có công thức"
             value={loading ? "—" : formatCurrency(totalRevenue)}
             highlight
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
-            label="COGS thực theo BOM"
+            label="Giá vốn theo công thức"
             value={loading ? "—" : formatCurrency(totalCogs)}
           />
           <SummaryCard
@@ -194,10 +194,10 @@ export default function CogsTheoBomPage() {
                 <th className="px-4 py-3 text-left font-semibold">Hóa đơn</th>
                 <th className="px-4 py-3 text-left font-semibold">Thời gian</th>
                 <th className="px-4 py-3 text-left font-semibold">Chi nhánh</th>
-                <th className="px-4 py-3 text-left font-semibold">SKU</th>
+                <th className="px-4 py-3 text-left font-semibold">Mã hàng</th>
                 <th className="px-4 py-3 text-right font-semibold">SL</th>
                 <th className="px-4 py-3 text-right font-semibold">Doanh thu</th>
-                <th className="px-4 py-3 text-right font-semibold">COGS thực</th>
+                <th className="px-4 py-3 text-right font-semibold">Giá vốn</th>
                 <th className="px-4 py-3 text-right font-semibold">Lợi nhuận gộp</th>
               </tr>
             </thead>
@@ -208,8 +208,8 @@ export default function CogsTheoBomPage() {
                 <tr>
                   <td colSpan={8} className="py-12 text-center text-muted-foreground">
                     <Icon name="info" size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">Chưa có dữ liệu COGS theo BOM trong kỳ và phạm vi đã chọn.</p>
-                    <p className="mt-1 text-xs">Báo cáo chỉ tính SKU đã bật BOM và có công thức đang hoạt động.</p>
+                    <p className="text-sm">Chưa có dữ liệu giá vốn theo công thức trong kỳ và phạm vi đã chọn.</p>
+                    <p className="mt-1 text-xs">Báo cáo chỉ tính sản phẩm đã có công thức đang hoạt động.</p>
                   </td>
                 </tr>
               ) : rows.map((row) => (
