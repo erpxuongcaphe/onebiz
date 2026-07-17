@@ -12,7 +12,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency, formatNumber } from "@/lib/format";
@@ -409,7 +409,8 @@ export default function FnbAnalyticsPage() {
             {cashiers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
-              <div className="overflow-x-auto">
+              <ReportTableFrame tablePreferenceKey="report.fnb.daily">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-left">
@@ -432,7 +433,8 @@ export default function FnbAnalyticsPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
         </div>
@@ -444,7 +446,8 @@ export default function FnbAnalyticsPage() {
             {hourly.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
-              <div className="overflow-x-auto max-h-[420px]">
+              <ReportTableFrame tablePreferenceKey="report.fnb.products">
+                <div className="overflow-x-auto max-h-[420px]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-surface-container-low">
                     <tr className="border-b text-left text-xs text-muted-foreground">
@@ -478,7 +481,8 @@ export default function FnbAnalyticsPage() {
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
 
@@ -487,7 +491,8 @@ export default function FnbAnalyticsPage() {
             {menuItems.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
-              <div className="overflow-x-auto max-h-[420px]">
+              <ReportTableFrame tablePreferenceKey="report.fnb.payment-methods">
+                <div className="overflow-x-auto max-h-[420px]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-surface-container-low">
                     <tr className="border-b text-left text-xs text-muted-foreground">
@@ -521,7 +526,8 @@ export default function FnbAnalyticsPage() {
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
 
@@ -530,7 +536,8 @@ export default function FnbAnalyticsPage() {
             {tables.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
-              <div className="overflow-x-auto max-h-[420px]">
+              <ReportTableFrame tablePreferenceKey="report.fnb.hours">
+                <div className="overflow-x-auto max-h-[420px]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-surface-container-low">
                     <tr className="border-b text-left text-xs text-muted-foreground">
@@ -562,7 +569,8 @@ export default function FnbAnalyticsPage() {
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
 
@@ -571,7 +579,8 @@ export default function FnbAnalyticsPage() {
             {cashiers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
-              <div className="overflow-x-auto max-h-[420px]">
+              <ReportTableFrame tablePreferenceKey="report.fnb.order-types">
+                <div className="overflow-x-auto max-h-[420px]">
                 <table className="w-full text-sm">
                   <thead className="sticky top-0 bg-surface-container-low">
                     <tr className="border-b text-left text-xs text-muted-foreground">
@@ -608,7 +617,8 @@ export default function FnbAnalyticsPage() {
                     </tr>
                   </tfoot>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
         </div>

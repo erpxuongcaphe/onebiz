@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { Icon } from "@/components/ui/icon";
 import { useBranchFilter, useToast } from "@/lib/contexts";
@@ -160,7 +160,8 @@ export default function TieuHaoNvlPage() {
           <SummaryCard icon={<Icon name="payments" size={16} />} label="Tổng giá trị NVL tiêu hao" value={loading ? "—" : formatCurrency(totalCost)} highlight />
         </div>
 
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <ReportTableFrame tablePreferenceKey="report.material-consumption.rows">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <table className="w-full text-sm">
             <thead className="bg-surface-container-low text-xs uppercase text-muted-foreground">
               <tr>
@@ -205,7 +206,8 @@ export default function TieuHaoNvlPage() {
               </tfoot>
             )}
           </table>
-        </div>
+          </div>
+        </ReportTableFrame>
       </div>
     </div>
   );

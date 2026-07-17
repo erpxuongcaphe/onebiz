@@ -356,6 +356,7 @@ export default function ReceivableAgingReportPage() {
       </div>
 
       <ReportDataTable
+        tablePreferenceKey="report.receivable-aging.customers"
         columns={columns}
         rows={filteredRows}
         getRowKey={(r) => r.customerId}

@@ -17,6 +17,7 @@ import {
   ReportPageHeader,
   ReportDataTable,
   type DataTableColumn,
+  ReportTableFrame,
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
@@ -310,7 +311,8 @@ export default function VatReportPage() {
               <Icon name="trending_up" size={16} className="text-primary" />
               VAT đầu ra theo thuế suất
             </h3>
-            <table className="w-full text-sm">
+            <ReportTableFrame tablePreferenceKey="report.vat.output-rates">
+              <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground">
                 <tr className="border-b">
                   <th className="text-left py-2">Thuế suất</th>
@@ -342,7 +344,8 @@ export default function VatReportPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </ReportTableFrame>
           </div>
 
           <div className="rounded-xl border border-border bg-surface-container-lowest p-4">
@@ -350,7 +353,8 @@ export default function VatReportPage() {
               <Icon name="trending_down" size={16} className="text-status-success" />
               VAT đầu vào theo thuế suất
             </h3>
-            <table className="w-full text-sm">
+            <ReportTableFrame tablePreferenceKey="report.vat.input-rates">
+              <table className="w-full text-sm">
               <thead className="text-xs text-muted-foreground">
                 <tr className="border-b">
                   <th className="text-left py-2">Thuế suất</th>
@@ -382,7 +386,8 @@ export default function VatReportPage() {
                   </tr>
                 )}
               </tbody>
-            </table>
+              </table>
+            </ReportTableFrame>
           </div>
         </div>
       ) : null}
@@ -414,6 +419,7 @@ export default function VatReportPage() {
 
       {tab === "output" ? (
         <ReportDataTable
+          tablePreferenceKey="report.vat.output"
           columns={outputColumns}
           rows={outputDetail}
           getRowKey={(r) => r.id}
@@ -433,6 +439,7 @@ export default function VatReportPage() {
         />
       ) : (
         <ReportDataTable
+          tablePreferenceKey="report.vat.input"
           columns={inputColumns}
           rows={inputDetail}
           getRowKey={(r) => r.id}

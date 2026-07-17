@@ -19,7 +19,7 @@ import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from 
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
@@ -335,7 +335,8 @@ export default function LuongTienPage() {
 
       {/* Detail Table */}
       <ChartCard title="Chi tiết theo tháng">
-        <div className="overflow-x-auto">
+        <ReportTableFrame tablePreferenceKey="report.cash-flow.months">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b text-left text-xs text-muted-foreground">
@@ -388,7 +389,8 @@ export default function LuongTienPage() {
               ))}
             </tbody>
           </table>
-        </div>
+          </div>
+        </ReportTableFrame>
       </ChartCard>
       </div>
     </div>

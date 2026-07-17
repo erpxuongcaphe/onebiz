@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import {
@@ -298,7 +298,8 @@ export default function ReconciledShiftReportPage() {
           ) : filteredRows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-sm text-muted-foreground"><Icon name="inbox" size={32} className="mb-2 opacity-40" />Không có ca đã đối chiếu trong kỳ và phạm vi đã chọn</div>
           ) : (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.shift-reconciliation.rows">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-surface-container-low text-xs font-semibold uppercase text-muted-foreground">
@@ -333,7 +334,8 @@ export default function ReconciledShiftReportPage() {
                   })}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           )}
         </div>
       </div>

@@ -501,6 +501,7 @@ export default function AgingReportPage() {
 
       {/* Detail table */}
       <ReportDataTable
+        tablePreferenceKey="report.aging.products"
         columns={columns}
         rows={filteredRows}
         getRowKey={(r) => r.productId}

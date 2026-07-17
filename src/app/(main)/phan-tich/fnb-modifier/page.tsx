@@ -15,7 +15,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { KpiCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -181,7 +181,8 @@ export default function FnbModifierReportPage() {
                     </p>
                   </div>
                 </div>
-                <table className="w-full text-sm">
+                <ReportTableFrame tablePreferenceKey="report.fnb-modifier.rows">
+                  <table className="w-full text-sm">
                   <thead className="text-xs text-muted-foreground bg-surface-container-lowest">
                     <tr>
                       <th className="text-left px-4 py-2 font-semibold">Option</th>
@@ -224,7 +225,8 @@ export default function FnbModifierReportPage() {
                       );
                     })}
                   </tbody>
-                </table>
+                  </table>
+                </ReportTableFrame>
               </div>
             );
           })}

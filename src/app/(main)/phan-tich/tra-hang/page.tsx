@@ -552,6 +552,7 @@ export default function SalesReturnReportPage() {
       )}
 
       <ReportDataTable
+        tablePreferenceKey="report.sales-returns.rows"
         columns={columns}
         rows={filteredRows}
         getRowKey={(r, i) => `${r.returnId}-${r.productId}-${i}`}

@@ -535,6 +535,7 @@ export default function DisposalLossReportPage() {
 
       {/* Detail table */}
       <ReportDataTable
+        tablePreferenceKey="report.inventory-loss.rows"
         columns={columns}
         rows={filteredRows}
         getRowKey={(_r, i) => `${_r.disposalId}-${_r.productId}-${i}`}

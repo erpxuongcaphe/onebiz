@@ -435,6 +435,7 @@ export default function FnbServeTimeReportPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ReportDataTable
+          tablePreferenceKey="report.serve-time.branches"
           columns={branchColumns}
           rows={byBranch}
           getRowKey={(r) => r.branchId ?? "unknown"}
@@ -453,6 +454,7 @@ export default function FnbServeTimeReportPage() {
           }
         />
         <ReportDataTable
+          tablePreferenceKey="report.serve-time.hours"
           columns={hourColumns}
           rows={byHour}
           getRowKey={(r) => r.hourOfDay}

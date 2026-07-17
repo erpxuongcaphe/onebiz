@@ -463,6 +463,7 @@ export default function RfmReportPage() {
       </div>
 
       <ReportDataTable
+        tablePreferenceKey="report.rfm.customers"
         columns={columns}
         rows={filteredRows}
         getRowKey={(r) => r.customerId}

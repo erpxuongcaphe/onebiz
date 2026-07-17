@@ -570,6 +570,7 @@ export default function InventoryVarianceReportPage() {
 
       {/* Detail table */}
       <ReportDataTable
+        tablePreferenceKey="report.inventory-variance.rows"
         columns={columns}
         rows={filteredRows}
         getRowKey={(r, i) => `${r.checkId}-${r.productId}-${i}`}

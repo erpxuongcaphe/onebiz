@@ -488,6 +488,7 @@ export default function PlatformCommissionReportPage() {
       )}
 
       <ReportDataTable
+        tablePreferenceKey="report.platform-commission.rows"
         columns={columns}
         rows={rows}
         getRowKey={(r) => `${r.platform}-${r.branchId ?? ""}`}

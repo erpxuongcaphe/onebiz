@@ -28,7 +28,7 @@ import {
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
 import { ClientChartContainer } from "../_components/client-chart-container";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
@@ -575,7 +575,8 @@ export default function TongHopKenhPage() {
             subtitle="Retail vs F&B"
           >
             {trend.length > 0 ? (
-              <div className="overflow-x-auto">
+              <ReportTableFrame tablePreferenceKey="report.channel-summary.trend">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground">
@@ -618,7 +619,8 @@ export default function TongHopKenhPage() {
                     </tr>
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             ) : (
               <div className="py-8 text-center text-sm text-muted-foreground">
                 Chưa có dữ liệu trend.
@@ -648,7 +650,8 @@ function TopProductTable({
     );
   }
   return (
-    <div className="overflow-x-auto">
+    <ReportTableFrame tablePreferenceKey="report.channel-summary.table">
+      <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b text-muted-foreground">
@@ -685,6 +688,7 @@ function TopProductTable({
           ))}
         </tbody>
       </table>
-    </div>
+      </div>
+    </ReportTableFrame>
   );
 }

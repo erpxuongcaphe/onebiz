@@ -45,7 +45,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -397,7 +397,8 @@ export default function KhuyenMaiAnalyticsPage() {
             <span>Chưa có chương trình khuyến mãi nào</span>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <ReportTableFrame tablePreferenceKey="report.promotions.rows">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-xs text-muted-foreground">
@@ -465,7 +466,8 @@ export default function KhuyenMaiAnalyticsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </ReportTableFrame>
         )}
       </ChartCard>
       </div>

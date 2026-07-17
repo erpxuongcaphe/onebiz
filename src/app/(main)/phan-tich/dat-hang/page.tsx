@@ -15,7 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -546,7 +546,8 @@ export default function DatHangPage() {
           subtitle={`SL mặt hàng: ${productRows.length} · Tổng giá trị: ${formatCurrency(productRows.reduce((s, r) => s + r.amount, 0))}`}
         >
           {productRows.length > 0 ? (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.orders.products">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -591,7 +592,8 @@ export default function DatHangPage() {
                   </tr>
                 </tfoot>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           ) : (
             <div className="py-12 text-center text-muted-foreground text-sm">
               Chưa có mặt hàng nào được đặt trong khoảng thời gian này
@@ -602,7 +604,8 @@ export default function DatHangPage() {
         {/* Recent orders table */}
         <ChartCard title="Đơn hàng gần đây" subtitle="10 đơn mới nhất">
           {recentOrdersList.length > 0 ? (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.orders.recent">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -641,7 +644,8 @@ export default function DatHangPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           ) : (
             <div className="py-12 text-center text-muted-foreground text-sm">
               Chưa có đơn hàng nào
