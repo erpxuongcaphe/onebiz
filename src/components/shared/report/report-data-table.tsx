@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * ReportDataTable â€” báº£ng sá»‘ liá»‡u universal cho bÃ¡o cÃ¡o.
+ * ReportDataTable — bảng số liệu universal cho báo cáo.
  *
  * Pattern KiotViet (CEO 06/05/2026):
  * - Header row light blue background (`bg-primary-fixed/30`)
- * - Subtotal row (vd "SL máº·t hÃ ng: 201") highlight á»Ÿ top
- * - Column groups merged header (NHáº¬P / XUáº¤T)
- * - Expandable rows vá»›i "+" icon (cho XNT chi tiáº¿t theo chi nhÃ¡nh)
- * - Right-align sá»‘, left-align text
+ * - Subtotal row (vd "SL mặt hàng: 201") highlight ở top
+ * - Column groups merged header (NHẬP / XUẤT)
+ * - Expandable rows với "+" icon (cho XNT chi tiết theo chi nhánh)
+ * - Right-align số, left-align text
  */
 
 import {
@@ -44,7 +44,7 @@ export type ColumnAlign = "left" | "center" | "right";
 export interface DataTableColumn<T> {
   /** Header label */
   label: string;
-  /** Key trong T hoáº·c render function */
+  /** Key trong T hoặc render function */
   key: keyof T | string;
   /** Custom cell renderer (override default) */
   cell?: (row: T) => ReactNode;
@@ -58,9 +58,9 @@ export interface DataTableColumn<T> {
 }
 
 export interface ColumnGroup {
-  /** Group label hiá»ƒn thá»‹ trÃªn row 1 */
+  /** Group label hiển thị trên row 1 */
   label: string;
-  /** Sá»‘ column con thuá»™c group nÃ y */
+  /** Số column con thuộc group này */
   span: number;
   /** Header cell color */
   variant?: "default" | "input" | "output";
@@ -69,19 +69,19 @@ export interface ColumnGroup {
 export interface DataTableProps<T> {
   columns: DataTableColumn<T>[];
   rows: T[];
-  /** Column groups (optional) â€” render thÃªm 1 row merged header phÃ­a trÃªn */
+  /** Column groups (optional) — render thêm 1 row merged header phía trên */
   columnGroups?: ColumnGroup[];
   /** Row key extractor */
   getRowKey: (row: T, index: number) => string | number;
-  /** Subtotal label hiá»ƒn thá»‹ á»Ÿ row Ä‘áº§u (vd "SL máº·t hÃ ng: 201") */
+  /** Subtotal label hiển thị ở row đầu (vd "SL mặt hàng: 201") */
   subtotalLabel?: string;
   /** Empty state */
   emptyState?: ReactNode;
-  /** Click row â†’ expand sub-rows (cho XNT theo chi nhÃ¡nh) */
+  /** Click row → expand sub-rows (cho XNT theo chi nhánh) */
   getSubRows?: (row: T) => T[] | undefined;
   /** Class name override */
   className?: string;
-  /** Hiá»‡n menu tÃ¹y biáº¿n cÃ¡ch trÃ¬nh bÃ y báº£ng. */
+  /** Hiện menu tùy biến cách trình bày bảng. */
   showDisplayOptions?: boolean;
 }
 
@@ -159,11 +159,11 @@ export function ReportDataTable<T>({
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:bg-surface-container hover:text-foreground">
               <Icon name="tune" size={14} />
-              Hiá»ƒn thá»‹ báº£ng
+              Hiển thị bảng
               <Icon name="expand_more" size={14} />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-56">
-              <DropdownMenuLabel>Máº­t Ä‘á»™ báº£ng</DropdownMenuLabel>
+              <DropdownMenuLabel>Mật độ bảng</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={preferences.density}
                 onValueChange={(value) => {
@@ -176,14 +176,14 @@ export function ReportDataTable<T>({
                 }}
               >
                 <DropdownMenuRadioItem value="standard">
-                  TiÃªu chuáº©n
+                  Tiêu chuẩn
                 </DropdownMenuRadioItem>
                 <DropdownMenuRadioItem value="compact">
-                  Gá»n
+                  Gọn
                 </DropdownMenuRadioItem>
               </DropdownMenuRadioGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuLabel>CÃ¡ch trÃ¬nh bÃ y</DropdownMenuLabel>
+              <DropdownMenuLabel>Cách trình bày</DropdownMenuLabel>
               <DropdownMenuCheckboxItem
                 checked={preferences.wrapText}
                 onCheckedChange={(checked) =>
@@ -193,7 +193,7 @@ export function ReportDataTable<T>({
                   }))
                 }
               >
-                Xuá»‘ng dÃ²ng ná»™i dung dÃ i
+                Xuống dòng nội dung dài
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={preferences.freezeFirstColumn}
@@ -205,7 +205,7 @@ export function ReportDataTable<T>({
                   }))
                 }
               >
-                Cá»‘ Ä‘á»‹nh cá»™t Ä‘áº§u
+                Cố định cột đầu
               </DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem
                 checked={preferences.stripedRows}
@@ -216,12 +216,12 @@ export function ReportDataTable<T>({
                   }))
                 }
               >
-                Káº» dÃ²ng xen káº½
+                Kẻ dòng xen kẽ
               </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={resetDisplay}>
                 <Icon name="restart_alt" size={14} />
-                KhÃ´i phá»¥c máº·c Ä‘á»‹nh
+                Khôi phục mặc định
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -311,7 +311,7 @@ export function ReportDataTable<T>({
                 colSpan={columns.length + (hasExpand ? 1 : 0)}
                 className="text-center py-8 text-sm text-muted-foreground"
               >
-                {emptyState ?? "ChÆ°a cÃ³ dá»¯ liá»‡u"}
+                {emptyState ?? "Chưa có dữ liệu"}
               </td>
             </tr>
           ) : (
@@ -339,7 +339,7 @@ export function ReportDataTable<T>({
                             onClick={() => toggleExpand(key)}
                             aria-expanded={isExpanded}
                             className="p-0.5 rounded hover:bg-surface-container"
-                            aria-label={isExpanded ? "Thu gá»n" : "Má»Ÿ rá»™ng"}
+                            aria-label={isExpanded ? "Thu gọn" : "Mở rộng"}
                           >
                             <Icon
                               name={
@@ -410,4 +410,3 @@ export function ReportDataTable<T>({
     </div>
   );
 }
-
