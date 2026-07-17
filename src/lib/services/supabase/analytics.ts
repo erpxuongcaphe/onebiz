@@ -1744,6 +1744,277 @@ export interface CustomerProductCell {
   revenue: number;
 }
 
+export type CustomerProductSort =
+  | "revenue_desc"
+  | "orders_desc"
+  | "quantity_desc"
+  | "name_asc";
+
+export interface CustomerProductReportSummary {
+  customerCount: number;
+  orderCount: number;
+  productCount: number;
+  quantity: number;
+  revenue: number;
+  averageOrderValue: number;
+  topTenShare: number;
+}
+
+export interface CustomerProductCustomerRow {
+  customerId: string;
+  customerCode: string;
+  customerName: string;
+  orderCount: number;
+  productCount: number;
+  quantity: number;
+  revenue: number;
+  revenueShare: number;
+  topProduct: string | null;
+  lastPurchaseAt: string | null;
+}
+
+export interface CustomerProductCategoryRow {
+  categoryId: string;
+  categoryName: string;
+  revenue: number;
+}
+
+export interface CustomerProductMatrixCell {
+  customerId: string;
+  customerName: string;
+  categoryId: string;
+  categoryName: string;
+  revenue: number;
+}
+
+export interface CustomerProductReport {
+  summary: CustomerProductReportSummary;
+  customers: CustomerProductCustomerRow[];
+  customerTotal: number;
+  categories: CustomerProductCategoryRow[];
+  matrix: CustomerProductMatrixCell[];
+}
+
+export interface CustomerProductDetailRow {
+  productId: string;
+  productCode: string;
+  productName: string;
+  categoryName: string;
+  unit: string;
+  orderCount: number;
+  quantity: number;
+  revenue: number;
+  revenueShare: number;
+  lastPurchaseAt: string | null;
+}
+
+export interface CustomerProductDetailPage {
+  rows: CustomerProductDetailRow[];
+  total: number;
+  revenue: number;
+}
+
+export interface CustomerProductExportRow {
+  customerCode: string;
+  customerName: string;
+  productCode: string;
+  productName: string;
+  categoryName: string;
+  unit: string;
+  orderCount: number;
+  quantity: number;
+  revenue: number;
+  lastPurchaseAt: string | null;
+}
+
+interface CustomerProductReportRpc {
+  summary?: Record<string, unknown>;
+  customers?: Record<string, unknown>[];
+  customer_total?: number;
+  categories?: Record<string, unknown>[];
+  matrix?: Record<string, unknown>[];
+}
+
+function numberValue(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+type ReportingRpcResult = {
+  data: unknown;
+  error: { message: string; code?: string } | null;
+};
+
+function callReportingRpc(
+  name: string,
+  args: Record<string, unknown>,
+): Promise<ReportingRpcResult> {
+  const rpc = getClient().rpc as unknown as (
+    functionName: string,
+    parameters: Record<string, unknown>,
+  ) => Promise<ReportingRpcResult>;
+  return rpc(name, args);
+}
+
+export async function getCustomerProductReport(params: {
+  branchId?: string;
+  range: { from: string; to: string };
+  search?: string;
+  sort?: CustomerProductSort;
+  offset?: number;
+  limit?: number;
+}): Promise<CustomerProductReport> {
+  const r = resolveRange(params.range, thisMonthRange());
+  const { data, error } = await callReportingRpc(
+    "get_customer_product_report",
+    {
+      p_date_from: r.start,
+      p_date_to: r.end,
+      p_branch_id: params.branchId ?? null,
+      p_search: params.search?.trim() || null,
+      p_sort: params.sort ?? "revenue_desc",
+      p_offset: Math.max(params.offset ?? 0, 0),
+      p_limit: Math.min(Math.max(params.limit ?? 50, 10), 100),
+    },
+  );
+
+  if (error) handleError(error, "getCustomerProductReport");
+  const result = (data ?? {}) as CustomerProductReportRpc;
+  const summary = result.summary ?? {};
+
+  return {
+    summary: {
+      customerCount: numberValue(summary.customer_count),
+      orderCount: numberValue(summary.order_count),
+      productCount: numberValue(summary.product_count),
+      quantity: numberValue(summary.quantity),
+      revenue: numberValue(summary.revenue),
+      averageOrderValue: numberValue(summary.average_order_value),
+      topTenShare: numberValue(summary.top_ten_share),
+    },
+    customers: (result.customers ?? []).map((row) => ({
+      customerId: String(row.customer_id ?? ""),
+      customerCode: String(row.customer_code ?? "—"),
+      customerName: String(row.customer_name ?? "Khách lẻ"),
+      orderCount: numberValue(row.order_count),
+      productCount: numberValue(row.product_count),
+      quantity: numberValue(row.quantity),
+      revenue: numberValue(row.revenue),
+      revenueShare: numberValue(row.revenue_share),
+      topProduct: row.top_product ? String(row.top_product) : null,
+      lastPurchaseAt: row.last_purchase_at ? String(row.last_purchase_at) : null,
+    })),
+    customerTotal: numberValue(result.customer_total),
+    categories: (result.categories ?? []).map((row) => ({
+      categoryId: String(row.category_id ?? "uncategorized"),
+      categoryName: String(row.category_name ?? "Chưa phân loại"),
+      revenue: numberValue(row.revenue),
+    })),
+    matrix: (result.matrix ?? []).map((row) => ({
+      customerId: String(row.customer_id ?? ""),
+      customerName: String(row.customer_name ?? "Khách lẻ"),
+      categoryId: String(row.category_id ?? "uncategorized"),
+      categoryName: String(row.category_name ?? "Chưa phân loại"),
+      revenue: numberValue(row.revenue),
+    })),
+  };
+}
+
+export async function getCustomerProductDetailPage(params: {
+  branchId?: string;
+  range: { from: string; to: string };
+  customerId: string;
+  search?: string;
+  sort?: "revenue_desc" | "quantity_desc" | "name_asc";
+  offset?: number;
+  limit?: number;
+}): Promise<CustomerProductDetailPage> {
+  const r = resolveRange(params.range, thisMonthRange());
+  const { data, error } = await callReportingRpc(
+    "get_customer_product_detail_page",
+    {
+      p_date_from: r.start,
+      p_date_to: r.end,
+      p_customer_id: params.customerId,
+      p_branch_id: params.branchId ?? null,
+      p_search: params.search?.trim() || null,
+      p_sort: params.sort ?? "revenue_desc",
+      p_offset: Math.max(params.offset ?? 0, 0),
+      p_limit: Math.min(Math.max(params.limit ?? 50, 10), 100),
+    },
+  );
+
+  if (error) handleError(error, "getCustomerProductDetailPage");
+  const result = (data ?? {}) as {
+    rows?: Record<string, unknown>[];
+    total?: number;
+    revenue?: number;
+  };
+
+  return {
+    rows: (result.rows ?? []).map((row) => ({
+      productId: String(row.product_id ?? ""),
+      productCode: String(row.product_code ?? "—"),
+      productName: String(row.product_name ?? "Không rõ"),
+      categoryName: String(row.category_name ?? "Chưa phân loại"),
+      unit: String(row.unit ?? "—"),
+      orderCount: numberValue(row.order_count),
+      quantity: numberValue(row.quantity),
+      revenue: numberValue(row.revenue),
+      revenueShare: numberValue(row.revenue_share),
+      lastPurchaseAt: row.last_purchase_at ? String(row.last_purchase_at) : null,
+    })),
+    total: numberValue(result.total),
+    revenue: numberValue(result.revenue),
+  };
+}
+
+export async function getCustomerProductExportRows(params: {
+  branchId?: string;
+  range: { from: string; to: string };
+}): Promise<CustomerProductExportRow[]> {
+  const r = resolveRange(params.range, thisMonthRange());
+  const allRows: CustomerProductExportRow[] = [];
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await callReportingRpc(
+      "get_customer_product_export_page",
+      {
+        p_date_from: r.start,
+        p_date_to: r.end,
+        p_branch_id: params.branchId ?? null,
+        p_offset: offset,
+        p_limit: 1000,
+      },
+    );
+    if (error) handleError(error, "getCustomerProductExportRows");
+
+    const result = (data ?? {}) as {
+      rows?: Record<string, unknown>[];
+      has_more?: boolean;
+    };
+    const rows = (result.rows ?? []).map((row) => ({
+      customerCode: String(row.customer_code ?? "—"),
+      customerName: String(row.customer_name ?? "Khách lẻ"),
+      productCode: String(row.product_code ?? "—"),
+      productName: String(row.product_name ?? "Không rõ"),
+      categoryName: String(row.category_name ?? "Chưa phân loại"),
+      unit: String(row.unit ?? "—"),
+      orderCount: numberValue(row.order_count),
+      quantity: numberValue(row.quantity),
+      revenue: numberValue(row.revenue),
+      lastPurchaseAt: row.last_purchase_at ? String(row.last_purchase_at) : null,
+    }));
+    allRows.push(...rows);
+
+    if (!result.has_more || rows.length === 0) break;
+    offset += rows.length;
+  }
+
+  return allRows;
+}
+
 /**
  * Báo cáo C: doanh thu khách hàng × nhóm hàng (matrix dạng dài).
  *

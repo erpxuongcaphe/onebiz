@@ -87,7 +87,7 @@ export default function ReceivableAgingReportPage() {
   const columns: DataTableColumn<ReceivableAgingRow>[] = [
     { label: "Khách hàng", key: "customerName", width: "200px" },
     {
-      label: "Số HĐ",
+      label: "Số hóa đơn",
       key: "invoiceCount",
       align: "right",
       cell: (r) => formatNumber(r.invoiceCount),
@@ -158,18 +158,18 @@ export default function ReceivableAgingReportPage() {
     try {
       const today = formatDateInputValue(new Date());
       const infoSheet = buildInfoSheet({
-        title: "BÁO CÁO CÔNG NỢ AGING",
-        description: "Phân tích công nợ phải thu theo độ tuổi (snapshot hiện tại)",
+        title: "BÁO CÁO TUỔI NỢ PHẢI THU",
+        description: "Phân loại công nợ phải thu theo thời gian phát sinh",
         range: { from: today, to: today },
         tenantName: "OneBiz",
         generatedAt: new Date(),
         disclaimer:
-          "CFO dùng để gọi đòi. Nợ >90 ngày là red flag — xem xét impair hoặc khởi kiện.",
+          "CFO dùng để theo dõi thu hồi nợ. Nợ trên 90 ngày cần ưu tiên đánh giá khả năng thu hồi và phương án xử lý.",
       });
 
       const summarySheet: ExcelSheet = {
         name: "Tổng quan",
-        titleRows: ["TỔNG QUAN AGING CÔNG NỢ"],
+        titleRows: ["TỔNG QUAN TUỔI NỢ PHẢI THU"],
         columns: [
           { label: "Nhóm tuổi", key: "bucket", width: 22 },
           { label: "Tổng tiền", key: "value", width: 18, format: "currency" },
@@ -201,7 +201,7 @@ export default function ReceivableAgingReportPage() {
                 : "0%",
           },
           {
-            bucket: ">90 ngày (red flag)",
+            bucket: ">90 ngày (cần ưu tiên)",
             value: kpis.b91Plus,
             percent:
               kpis.totalOutstanding > 0
@@ -217,7 +217,7 @@ export default function ReceivableAgingReportPage() {
         titleRows: ["CHI TIẾT CÔNG NỢ TỪNG KHÁCH HÀNG"],
         columns: [
           { label: "Khách hàng", key: "name", width: 28 },
-          { label: "Số HĐ", key: "count", width: 10, format: "number" },
+          { label: "Số hóa đơn", key: "count", width: 10, format: "number" },
           { label: "Tổng nợ", key: "total", width: 16, format: "currency" },
           { label: "0–30", key: "b0_30", width: 14, format: "currency" },
           { label: "31–60", key: "b31_60", width: 14, format: "currency" },
@@ -257,8 +257,8 @@ export default function ReceivableAgingReportPage() {
       });
 
       toast({
-        title: "Đã xuất báo cáo công nợ aging",
-        description: `3 sheet: Info + Tổng quan + Chi tiết (${rows.length} KH)`,
+        title: "Đã xuất báo cáo tuổi nợ phải thu",
+        description: `3 trang tính: Thông tin + Tổng quan + Chi tiết (${rows.length} khách hàng)`,
         variant: "success",
       });
     } catch (err) {
@@ -273,8 +273,8 @@ export default function ReceivableAgingReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Công nợ aging buckets"
-        subtitle="Snapshot công nợ phải thu tại thời điểm hiện tại — không filter theo kỳ"
+        title="Tuổi nợ phải thu"
+        subtitle="Số công nợ phải thu tại thời điểm hiện tại, phân theo thời gian phát sinh"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -320,7 +320,7 @@ export default function ReceivableAgingReportPage() {
           valueColor="text-status-warning"
         />
         <KpiCard
-          label=">90 ngày (red flag)"
+          label=">90 ngày (cần ưu tiên)"
           value={formatCurrency(kpis.b91Plus) + " đ"}
           icon="error"
           bg="bg-status-error/10"

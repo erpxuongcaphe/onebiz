@@ -205,8 +205,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/khach-san-pham",
-    title: "Sản phẩm theo khách hàng",
-    shortTitle: "Khách × Sản phẩm",
+    title: "Khách hàng mua sản phẩm nào",
+    shortTitle: "Khách và sản phẩm",
     description: "Xem từng khách đã mua sản phẩm nào, số lượng và doanh thu.",
     category: "customers",
     icon: "diversity_3",
@@ -225,8 +225,8 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/rfm",
-    title: "Phân khúc khách hàng RFM",
-    shortTitle: "Phân khúc RFM",
+    title: "Phân khúc giá trị khách hàng (RFM)",
+    shortTitle: "Phân khúc khách",
     description: "Phân nhóm khách theo lần mua gần nhất, tần suất và giá trị.",
     category: "customers",
     icon: "stars",
@@ -296,7 +296,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   {
     href: "/phan-tich/aging",
     title: "Tuổi tồn kho & hàng chậm bán",
-    shortTitle: "Aging tồn kho",
+    shortTitle: "Tuổi tồn kho",
     description: "Nhận diện hàng tồn lâu, chậm luân chuyển và dead-stock.",
     category: "inventory",
     icon: "hourglass_top",
@@ -325,9 +325,9 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/cogs-theo-bom",
-    title: "Giá vốn thực tế theo BOM",
-    shortTitle: "COGS theo BOM",
-    description: "Phân tích giá vốn thực tế dựa trên công thức sản xuất.",
+    title: "Giá vốn theo công thức",
+    shortTitle: "Giá vốn công thức",
+    description: "Phân tích giá vốn nguyên vật liệu dựa trên công thức sản xuất.",
     category: "inventory",
     icon: "receipt_long",
     keywords: ["cogs", "bom", "giá vốn", "công thức"],
@@ -379,7 +379,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   {
     href: "/phan-tich/cong-no-aging",
     title: "Tuổi nợ phải thu",
-    shortTitle: "Công nợ aging",
+    shortTitle: "Tuổi công nợ",
     description: "Phân nhóm công nợ khách hàng theo thời gian quá hạn.",
     category: "finance",
     icon: "credit_card",

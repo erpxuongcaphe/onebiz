@@ -66,7 +66,7 @@ export default function CustomerCohortPage() {
   const handleExport = useCallback((mode: "view" | "full") => {
     if (!data) return;
     const titleRows = buildReportTitleRows({
-      title: "Báo cáo cohort retention",
+      title: "Báo cáo khách hàng quay lại",
       range,
       branchName: activeBranchId
         ? branches.find((branch) => branch.id === activeBranchId)?.name
@@ -76,12 +76,12 @@ export default function CustomerCohortPage() {
 
     // Build columns: Cohort | Size | M0 | M1 | M2 | M3 | M4 | M5
     const cols = [
-      { label: "Cohort", key: "label", width: 14 },
-      { label: "Size", key: "size", width: 10, format: "number" as const },
+      { label: "Tháng mua đầu", key: "label", width: 16 },
+      { label: "Số khách", key: "size", width: 12, format: "number" as const },
     ];
     for (let i = 0; i < data.monthsTracked; i++) {
       cols.push({
-        label: `M${i}`,
+        label: i === 0 ? "Tháng đầu" : `Tháng +${i}`,
         key: `m${i}`,
         width: 10,
         format: "number" as const,
@@ -95,7 +95,7 @@ export default function CustomerCohortPage() {
       branchName: branchLabel,
       sheets: [
         {
-          name: "Cohort retention",
+          name: "Khách hàng quay lại",
           titleRows,
           columns: cols,
           rows: data.rows.map((r) => {
@@ -125,6 +125,7 @@ export default function CustomerCohortPage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
         title="Khách hàng quay lại theo tháng đầu mua"
+        subtitle="Theo dõi tỷ lệ khách tiếp tục mua trong các tháng sau lần mua đầu tiên"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -185,15 +186,15 @@ export default function CustomerCohortPage() {
               className="animate-spin text-muted-foreground"
             />
             <p className="mt-2 text-sm text-muted-foreground">
-              Đang tính toán cohort...
+              Đang tính tỷ lệ khách quay lại...
             </p>
           </div>
         ) : !data || data.rows.length === 0 ? (
           <div className="text-center py-16 text-sm text-muted-foreground">
-            Chưa có dữ liệu cohort
+            Chưa có dữ liệu khách hàng quay lại
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow overflow-x-auto">
+          <div className="overflow-x-auto rounded-lg border border-border bg-surface-container-lowest">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-primary-fixed/40 border-b border-border">

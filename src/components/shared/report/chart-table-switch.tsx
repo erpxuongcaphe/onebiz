@@ -20,7 +20,7 @@ interface ChartTableSwitchProps {
 
 const OPTIONS: { key: ReportViewMode; label: string; icon: string }[] = [
   { key: "chart", label: "Biểu đồ", icon: "show_chart" },
-  { key: "table", label: "Báo cáo", icon: "table_rows" },
+  { key: "table", label: "Bảng số liệu", icon: "table_rows" },
 ];
 
 export function ChartTableSwitch({
@@ -31,7 +31,7 @@ export function ChartTableSwitch({
   return (
     <div
       className={cn(
-        "inline-flex items-center rounded-full p-0.5 bg-surface-container-low border border-border",
+        "inline-flex items-center rounded-lg border border-border bg-surface-container-low p-0.5",
         disabled && "opacity-50 pointer-events-none",
       )}
       role="tablist"
@@ -43,7 +43,7 @@ export function ChartTableSwitch({
           aria-selected={value === opt.key}
           onClick={() => onChange(opt.key)}
           className={cn(
-            "inline-flex items-center gap-1 px-3 h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
+            "inline-flex h-7 items-center gap-1 rounded-md px-3 text-xs font-medium transition-colors press-scale-sm",
             value === opt.key
               ? "bg-primary text-primary-foreground ambient-shadow"
               : "text-muted-foreground hover:text-foreground",

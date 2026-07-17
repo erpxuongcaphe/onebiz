@@ -42,15 +42,15 @@ export function KpiCard({
   subValue,
 }: KpiCardProps) {
   return (
-    <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-4 lg:p-5">
+    <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-muted-foreground truncate uppercase tracking-wide">
+          <p className="text-xs font-medium leading-4 text-muted-foreground">
             {label}
           </p>
           <p
             className={cn(
-              "text-xl lg:text-2xl font-bold mt-2 truncate tabular-nums",
+              "mt-2 break-words text-xl font-bold leading-7 tabular-nums lg:text-2xl",
               valueColor,
             )}
           >
@@ -78,7 +78,7 @@ export function KpiCard({
         </div>
         <div
           className={cn(
-            "size-10 rounded-xl flex items-center justify-center shrink-0",
+            "size-10 shrink-0 rounded-lg flex items-center justify-center",
             bg,
           )}
         >

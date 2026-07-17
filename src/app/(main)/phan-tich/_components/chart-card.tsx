@@ -11,12 +11,12 @@ interface ChartCardProps {
 // title text-base font-medium (Stitch dùng font weight nhẹ hơn bold).
 export function ChartCard({ title, subtitle, children, actions }: ChartCardProps) {
   return (
-    <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-5">
-      <div className="flex items-start justify-between mb-4">
+    <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-4 lg:p-5">
+      <div className="mb-4 flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-base font-medium text-on-surface">{title}</h3>
+          <h3 className="text-base font-semibold leading-5 text-on-surface">{title}</h3>
           {subtitle && (
-            <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>
+            <p className="mt-1 text-xs leading-4 text-muted-foreground">{subtitle}</p>
           )}
         </div>
         {actions}
