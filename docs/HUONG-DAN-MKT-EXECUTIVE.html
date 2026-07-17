@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hướng dẫn sử dụng MKT Hub — dành cho MKT Executive</title>
+</head>
+<body>
+<style>
+  :root {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+      --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+      --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+      --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+      --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+      --slate: #94a3b8; --slate-soft: #232c34;
+    }
+  }
+  :root[data-theme="light"] {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+  }
+  :root[data-theme="dark"] {
+    --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+    --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+    --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+    --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+    --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+    --slate: #94a3b8; --slate-soft: #232c34;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65; font-size: 16px; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  header.doc { border-bottom: 3px solid var(--primary); padding-bottom: 22px; margin-bottom: 30px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin: 0 0 8px; }
+  h1 { font-size: 33px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; }
+  .lede { color: var(--ink-soft); font-size: 17px; margin: 0; max-width: 64ch; }
+  .meta { margin-top: 14px; font-size: 13.5px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  nav.toc { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin: 26px 0 8px; }
+  nav.toc p { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+  nav.toc ol { margin: 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; }
+  nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--line); }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--primary); border-bottom-color: var(--primary); }
+
+  h2 { font-size: 23px; margin: 54px 0 6px; padding-top: 18px; letter-spacing: -.01em; border-top: 1px solid var(--line); text-wrap: balance; }
+  h2 .phan { display: block; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin-bottom: 4px; }
+  h3 { font-size: 17.5px; margin: 30px 0 8px; }
+  p { margin: 10px 0; max-width: 70ch; }
+  ul, ol { max-width: 68ch; padding-left: 24px; }
+  li { margin: 5px 0; }
+  a { color: var(--primary); }
+
+  .path { display: inline-block; background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 1px 9px; font-weight: 600; font-size: 14.5px; white-space: nowrap; }
+  .btn-name { font-weight: 700; color: var(--primary); }
+  .lg { display:inline-block; font-size:12px; font-weight:600; padding:2px 9px; border-radius:999px; white-space:nowrap; line-height:1.55; }
+
+  .note, .warn, .good { border-radius: 10px; padding: 13px 16px; margin: 16px 0; font-size: 15px; max-width: none; }
+  .note { background: var(--primary-soft); border-left: 4px solid var(--primary); }
+  .warn { background: var(--amber-soft); border-left: 4px solid var(--amber); }
+  .good { background: var(--green-soft); border-left: 4px solid var(--green); }
+  .note p, .warn p, .good p { margin: 4px 0; }
+
+  figure { margin: 20px 0 26px; }
+  .fig-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--paper); overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; font-family: inherit; }
+  figcaption { font-size: 13.5px; color: var(--ink-soft); margin-top: 8px; padding-left: 2px; }
+  figcaption b { color: var(--ink); }
+
+  table.roles { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14.5px; }
+  table.roles th, table.roles td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  table.roles th { background: var(--soft); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+  .table-scroll { overflow-x: auto; }
+
+  ol.steps { counter-reset: step; list-style: none; padding-left: 0; max-width: none; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 46px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 1px;
+    width: 30px; height: 30px; border-radius: 999px; background: var(--primary); color: #fff;
+    font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  ol.steps > li > b:first-child { display: block; margin-bottom: 2px; font-size: 16px; }
+
+  .faq dt { font-weight: 700; margin-top: 18px; }
+  .faq dd { margin: 4px 0 0 0; color: var(--ink-soft); max-width: 70ch; }
+
+  footer.doc { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-soft); }
+
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff; }
+    body { font-size: 10.8pt; color:#1c2430; }
+    .wrap { max-width: none; padding: 0; }
+    a { text-decoration: none; }
+    h1 { font-size: 22pt; }
+    h2 { font-size: 15pt; break-after: avoid; }
+    h3 { break-after: avoid; }
+    p, li { orphans: 2; widows: 2; }
+    figure, .note, .warn, .good, table.roles, ol.steps > li, .faq dt { break-inside: avoid; }
+    nav.toc { break-inside: avoid; }
+    .fig-card { background:#fff; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">Xưởng Cà Phê · OneBiz · MKT Hub</p>
+  <h1>Hướng dẫn sử dụng MKT Hub</h1>
+  <p class="lede">Tài liệu dành cho <b>MKT Executive</b> — người trực tiếp sản xuất nội dung. Đọc hết một lần là dùng được ngay: từ lúc đăng nhập, nhận việc, làm bài, nộp duyệt, cho tới tra cứu định hướng nội dung và thư viện.</p>
+  <div class="meta">
+    <span>Địa chỉ web: <b>mkthub.onebiz.com.vn</b></span>
+    <span>Dành cho: <b>MKT Executive</b></span>
+    <span>Cập nhật: <b>17/07/2026</b> — thêm Chiến lược &amp; KPI · Báo cáo tiến độ · Nộp duyệt việc</span>
+  </div>
+</header>
+
+<nav class="toc">
+  <p>Nội dung</p>
+  <ol>
+    <li><a href="#tong-quan">MKT Hub là gì — bạn làm gì ở đây</a></li>
+    <li><a href="#dang-nhap">Đăng nhập lần đầu</a></li>
+    <li><a href="#menu">Menu bên trái có những gì</a></li>
+    <li><a href="#telegram">Bật thông báo Telegram (làm một lần)</a></li>
+    <li><a href="#viec-cua-toi">"Việc của tôi" — nơi bạn ở nhiều nhất</a></li>
+    <li><a href="#nhan-viec">Bước 1 · Nhận việc (ba lựa chọn)</a></li>
+    <li><a href="#bat-dau">Bước 2 · Bắt đầu làm</a></li>
+    <li><a href="#nop-duyet">Bước 3 · Nộp bài để duyệt</a></li>
+    <li><a href="#loai-viec">Các loại việc khác nhau — nút sẽ khác nhau</a></li>
+    <li><a href="#khoa-tra-lai">Việc bị khoá &amp; việc bị trả lại</a></li>
+    <li><a href="#dinh-huong">Định hướng nội dung — đọc TRƯỚC khi làm</a></li>
+    <li><a href="#thu-vien">Thư viện media &amp; Thư viện tài liệu</a></li>
+    <li><a href="#lap-ke-hoach">Khi bạn được giao lập kế hoạch kênh</a></li>
+    <li><a href="#xem-tong-the">Xem tổng thể: Bảng tiến độ · Lịch · Chiến dịch · Báo cáo</a></li>
+    <li><a href="#quy-tac">Năm quy tắc vàng</a></li>
+    <li><a href="#faq">Câu hỏi thường gặp</a></li>
+  </ol>
+</nav>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="tong-quan"><span class="phan">Phần 1</span>MKT Hub là gì — bạn làm gì ở đây</h2>
+
+<p>MKT Hub là nơi <b>giao việc và theo dõi công việc marketing</b> của Xưởng Cà Phê. Thay vì nhắn tin qua lại rồi quên, mọi đầu việc đều nằm ở một chỗ: ai làm, hạn nào, làm tới đâu, ai duyệt.</p>
+
+<p>Bạn — <b>MKT Executive</b> — là người <b>trực tiếp làm ra nội dung</b>: quay, dựng, viết bài, đăng bài. Bạn không phải người chia việc (đó là việc của Leader), nhưng bạn là người <b>nhận việc và hoàn thành nó</b>.</p>
+
+<p>Trước khi đi vào từng nút, hãy nhìn <b>vòng đời của một đầu việc</b>. Hiểu cái này là hiểu 80% MKT Hub:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 150" role="img" aria-label="Vòng đời một đầu việc từ chờ nhận đến hoàn thành">
+    <g font-size="12" text-anchor="middle">
+      <rect x="4" y="40" width="118" height="48" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <text x="63" y="60" font-weight="700" fill="var(--amber)">Chờ tôi nhận</text>
+      <text x="63" y="76" font-size="10.5" fill="var(--ink-soft)">Leader vừa giao</text>
+
+      <rect x="164" y="40" width="118" height="48" rx="9" fill="var(--slate-soft)" stroke="var(--slate)"/>
+      <text x="223" y="60" font-weight="700" fill="var(--slate)">Đã nhận</text>
+      <text x="223" y="76" font-size="10.5" fill="var(--ink-soft)">chờ bạn bắt đầu</text>
+
+      <rect x="324" y="40" width="118" height="48" rx="9" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+      <text x="383" y="60" font-weight="700" fill="var(--indigo)">Đang làm</text>
+      <text x="383" y="76" font-size="10.5" fill="var(--ink-soft)">bạn đang sản xuất</text>
+
+      <rect x="484" y="40" width="118" height="48" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="543" y="60" font-weight="700" fill="var(--sky)">Chờ duyệt</text>
+      <text x="543" y="76" font-size="10.5" fill="var(--ink-soft)">Leader đang xem</text>
+
+      <rect x="644" y="40" width="112" height="48" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="700" y="60" font-weight="700" fill="var(--green)">Xong</text>
+      <text x="700" y="76" font-size="10.5" fill="var(--ink-soft)">đã hoàn tất</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+      <path d="M122 64 H158"/><path d="M282 64 H318"/><path d="M442 64 H478"/><path d="M602 64 H638"/>
+    </g>
+    <g fill="var(--ink-soft)">
+      <path d="M158 60 166 64 158 68 Z"/><path d="M318 60 326 64 318 68 Z"/>
+      <path d="M478 60 486 64 478 68 Z"/><path d="M638 60 646 64 638 68 Z"/>
+    </g>
+    <g font-size="10.5" text-anchor="middle" fill="var(--ink-soft)">
+      <text x="140" y="34">bấm Nhận việc</text>
+      <text x="300" y="34">bấm Bắt đầu</text>
+      <text x="460" y="34">bấm Nộp duyệt</text>
+      <text x="620" y="34">Leader duyệt</text>
+    </g>
+    <path d="M543 88 V116 H383 V92" stroke="var(--rose)" stroke-width="1.6" fill="none" stroke-dasharray="5 4"/>
+    <path d="M379 100 383 90 387 100 Z" fill="var(--rose)"/>
+    <text x="463" y="131" font-size="11" font-weight="600" text-anchor="middle" fill="var(--rose)">Nếu chưa đạt → trả lại, bạn sửa rồi nộp lại</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 1.</b> Vòng đời một đầu việc. Bạn chỉ cần nhớ 3 nút theo thứ tự: <b>Nhận việc</b> → <b>Bắt đầu</b> → <b>Nộp duyệt</b>. Đường đứt màu đỏ là trường hợp bài bị trả lại để sửa.</figcaption>
+</figure>
+
+<div class="note">
+  <p><b>Nguyên tắc quan trọng nhất:</b> việc giao cho bạn thì <b>chỉ mình bạn</b> nhận và làm được. Người khác không bấm thay bạn được, và bạn cũng không bấm thay người khác được. Đây là cách hệ thống biết chính xác ai đang làm gì.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="dang-nhap"><span class="phan">Phần 2</span>Đăng nhập lần đầu</h2>
+
+<ol class="steps">
+  <li><b>Mở trình duyệt</b> (Chrome trên máy tính hoặc điện thoại) và vào địa chỉ <span class="path">mkthub.onebiz.com.vn</span></li>
+  <li><b>Nhập tài khoản</b> mà công ty cấp cho bạn, rồi bấm <span class="btn-name">Đăng nhập</span>.</li>
+  <li><b>Xong.</b> Hệ thống đưa bạn thẳng vào màn hình <b>"Việc của tôi"</b> — vì đó là nơi bạn cần nhất.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 220" role="img" aria-label="Màn hình đăng nhập MKT Hub">
+    <rect x="230" y="10" width="300" height="200" rx="12" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+    <circle cx="380" cy="46" r="14" fill="var(--primary-soft)"/>
+    <text x="380" y="51" font-size="13" font-weight="700" text-anchor="middle" fill="var(--primary)">M</text>
+    <text x="380" y="78" font-size="15" font-weight="700" text-anchor="middle" fill="var(--ink)">MKT Hub</text>
+    <text x="380" y="96" font-size="11" text-anchor="middle" fill="var(--ink-soft)">Đăng nhập để tiếp tục</text>
+
+    <text x="256" y="120" font-size="10.5" font-weight="600" fill="var(--ink-soft)">Email hoặc số điện thoại</text>
+    <rect x="256" y="126" width="248" height="26" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="266" y="143" font-size="11" fill="var(--ink-soft)">ten.ban@xuongcaphe.com</text>
+
+    <text x="256" y="168" font-size="10.5" font-weight="600" fill="var(--ink-soft)">Mật khẩu</text>
+    <rect x="256" y="174" width="248" height="26" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="266" y="191" font-size="12" fill="var(--ink-soft)">••••••••</text>
+
+    <rect x="556" y="126" width="180" height="26" rx="6" fill="var(--amber-soft)" stroke="var(--amber)"/>
+    <text x="646" y="143" font-size="10.5" font-weight="600" text-anchor="middle" fill="var(--amber)">Công ty cấp cho bạn</text>
+    <path d="M510 139 H552" stroke="var(--amber)" stroke-width="1.4" stroke-dasharray="4 3"/>
+  </svg>
+  </div>
+  <figcaption><b>Hình 2.</b> Màn hình đăng nhập. Nếu quên mật khẩu, bấm <b>Quên mật khẩu</b> hoặc nhắn Leader cấp lại — <b>đừng dùng nhờ tài khoản người khác</b>, vì việc sẽ bị ghi nhận sai người.</figcaption>
+</figure>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="menu"><span class="phan">Phần 3</span>Menu bên trái có những gì</h2>
+
+<p>Bên trái màn hình là danh sách các mục. Dưới đây là <b>đúng những gì bạn thấy</b> với vai trò MKT Executive:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 330" role="img" aria-label="Menu bên trái của MKT Executive gồm 11 mục">
+    <rect x="10" y="10" width="250" height="310" rx="10" fill="var(--soft)" stroke="var(--line)"/>
+    <g font-size="12.5" fill="var(--ink)">
+      <rect x="20" y="22" width="230" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="34" y="39" font-weight="700" fill="var(--primary)">MKT Hub</text>
+
+      <rect x="20" y="58" width="230" height="24" rx="6" fill="none"/>
+      <text x="34" y="75">Tổng quan</text>
+      <rect x="20" y="84" width="230" height="24" rx="6" fill="var(--primary-soft)"/>
+      <text x="34" y="101" font-weight="700" fill="var(--primary)">Việc của tôi</text>
+      <text x="34" y="127">Chiến dịch</text>
+      <text x="34" y="153">Định hướng nội dung</text>
+      <text x="34" y="179">Lập kế hoạch</text>
+      <text x="34" y="205">Bảng tiến độ</text>
+      <text x="34" y="231">Lịch</text>
+      <text x="34" y="257">Thư viện media</text>
+      <text x="34" y="283">Thư viện tài liệu</text>
+      <text x="34" y="309">Báo cáo · Cài đặt</text>
+    </g>
+
+    <g font-size="11.5">
+      <text x="290" y="101" font-weight="700" fill="var(--primary)">← Bạn ở đây nhiều nhất</text>
+      <text x="290" y="127" fill="var(--ink-soft)">Xem chiến dịch đang chạy (chỉ xem)</text>
+      <text x="290" y="153" fill="var(--ink-soft)">Trụ &amp; góc nội dung — đọc trước khi làm bài</text>
+      <text x="290" y="179" fill="var(--ink-soft)">Khi bạn được giao phụ trách một kênh</text>
+      <text x="290" y="205" fill="var(--ink-soft)">Bảng theo dõi tiến độ cả team</text>
+      <text x="290" y="231" fill="var(--ink-soft)">Lịch đăng bài theo ngày</text>
+      <text x="290" y="257" fill="var(--ink-soft)">Ảnh, video dùng cho bài</text>
+      <text x="290" y="283" fill="var(--ink-soft)">Brief, bảng giá, tài liệu tham khảo</text>
+      <text x="290" y="309" fill="var(--ink-soft)">Số liệu · Nối Telegram</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 3.</b> Menu của MKT Executive gồm <b>11 mục</b>. Nếu bạn từng thấy ảnh chụp màn hình của Leader có thêm mục <i>Duyệt nội dung</i>, <i>Cần Leader xử lý</i>, <i>Nhân sự</i> — <b>đó là bình thường</b>, ba mục đó chỉ dành cho Leader nên bạn không thấy.</figcaption>
+</figure>
+
+<div class="note">
+  <p><b>Mẹo:</b> dùng điện thoại thì menu nằm ở <b>thanh dưới đáy màn hình</b>, có nút <b>"Thêm"</b> để mở đầy đủ các mục.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="telegram"><span class="phan">Phần 4</span>Bật thông báo Telegram (làm một lần, rất nên làm)</h2>
+
+<p>Nếu không bật, bạn phải <b>tự nhớ vào web xem có việc mới không</b>. Bật rồi thì mỗi khi Leader giao việc, sắp tới hạn, hay bài bị trả lại — Telegram sẽ báo cho bạn ngay, kèm đường dẫn bấm vào là mở đúng việc đó.</p>
+
+<ol class="steps">
+  <li><b>Vào mục Cài đặt</b> ở cuối menu bên trái.</li>
+  <li><b>Tìm khối "Kết nối Telegram"</b>, bấm nút kết nối.</li>
+  <li><b>Telegram mở ra</b> → bấm <span class="btn-name">Start</span> trong khung chat của bot.</li>
+  <li><b>Quay lại web</b>, thấy chữ <b>"Đã liên kết"</b> màu xanh là xong.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 140" role="img" aria-label="Khối kết nối Telegram trong mục Cài đặt">
+    <rect x="10" y="12" width="740" height="116" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+    <circle cx="52" cy="52" r="17" fill="var(--sky-soft)"/>
+    <path d="M44 52 L60 45 L56 60 L52 54 Z" fill="var(--sky)"/>
+    <text x="82" y="48" font-size="14.5" font-weight="700" fill="var(--ink)">Kết nối Telegram</text>
+    <text x="82" y="68" font-size="12" fill="var(--ink-soft)">Nhận thông báo giao việc, chờ duyệt và nhắc việc ngay trên Telegram,</text>
+    <text x="82" y="84" font-size="12" fill="var(--ink-soft)">kèm liên kết mở đúng màn hình trên web.</text>
+    <rect x="82" y="96" width="122" height="24" rx="7" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="143" y="112" font-size="11.5" font-weight="700" text-anchor="middle" fill="var(--green)">✓ Đã liên kết</text>
+    <rect x="214" y="96" width="112" height="24" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="270" y="112" font-size="11.5" font-weight="600" text-anchor="middle" fill="var(--ink-soft)">Ngắt liên kết</text>
+    <rect x="470" y="60" width="270" height="26" rx="7" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="605" y="77" font-size="11.5" font-weight="600" text-anchor="middle" fill="var(--green)">Thấy chữ này = đã xong, không cần làm gì thêm</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 4.</b> Khối <b>Kết nối Telegram</b> trong mục Cài đặt. Mỗi người tự nối tài khoản Telegram của mình — làm một lần, dùng mãi.</figcaption>
+</figure>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="viec-cua-toi"><span class="phan">Phần 5</span>"Việc của tôi" — nơi bạn ở nhiều nhất</h2>
+
+<p>Đây là màn hình chính của bạn, tên đầy đủ là <b>"Lịch Cá Nhân (My Tasks)"</b>. Nó chia việc của bạn thành <b>4 cột</b> để bạn biết nên làm gì trước:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 250" role="img" aria-label="Màn hình Việc của tôi với bốn cột">
+    <text x="10" y="20" font-size="16" font-weight="700" fill="var(--ink)">Lịch Cá Nhân (My Tasks)</text>
+    <text x="10" y="38" font-size="11.5" fill="var(--ink-soft)">Nhận việc trước khi làm — chỉ đúng người được giao mới nhận được.</text>
+
+    <g>
+      <rect x="8" y="52" width="180" height="188" rx="10" fill="var(--paper)" stroke="var(--amber)"/>
+      <rect x="8" y="52" width="180" height="30" rx="10" fill="var(--amber-soft)"/>
+      <text x="20" y="72" font-size="12" font-weight="700" fill="var(--amber)">Chờ tôi xác nhận</text>
+      <text x="176" y="72" font-size="12" font-weight="700" text-anchor="end" fill="var(--amber)">2</text>
+      <rect x="18" y="92" width="160" height="44" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="28" y="109" font-size="11" font-weight="600" fill="var(--ink)">Quay clip Oolong</text>
+      <text x="28" y="124" font-size="10" fill="var(--ink-soft)">Hạn: 20/07 · TikTok</text>
+      <rect x="18" y="144" width="160" height="44" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="28" y="161" font-size="11" font-weight="600" fill="var(--ink)">Viết caption</text>
+      <text x="28" y="176" font-size="10" fill="var(--ink-soft)">Hạn: 21/07 · Facebook</text>
+      <text x="98" y="215" font-size="10.5" text-anchor="middle" fill="var(--amber)">Làm ngay: bấm Nhận việc</text>
+    </g>
+
+    <g>
+      <rect x="196" y="52" width="180" height="188" rx="10" fill="var(--paper)" stroke="var(--rose)"/>
+      <rect x="196" y="52" width="180" height="30" rx="10" fill="var(--rose-soft)"/>
+      <text x="208" y="72" font-size="12" font-weight="700" fill="var(--rose)">Deadline gần (24-48h)</text>
+      <rect x="206" y="92" width="160" height="44" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="216" y="109" font-size="11" font-weight="600" fill="var(--ink)">Dựng clip Cold Brew</text>
+      <text x="216" y="124" font-size="10" fill="var(--rose)">Còn 6 giờ!</text>
+      <text x="286" y="215" font-size="10.5" text-anchor="middle" fill="var(--rose)">Ưu tiên số 1</text>
+    </g>
+
+    <g>
+      <rect x="384" y="52" width="180" height="188" rx="10" fill="var(--paper)" stroke="var(--indigo)"/>
+      <rect x="384" y="52" width="180" height="30" rx="10" fill="var(--indigo-soft)"/>
+      <text x="396" y="72" font-size="12" font-weight="700" fill="var(--indigo)">Hôm nay làm gì</text>
+      <rect x="394" y="92" width="160" height="44" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="404" y="109" font-size="11" font-weight="600" fill="var(--ink)">Quay quán Tư Búa</text>
+      <text x="404" y="124" font-size="10" fill="var(--ink-soft)">Đang làm</text>
+      <text x="474" y="215" font-size="10.5" text-anchor="middle" fill="var(--indigo)">Việc bạn đang cầm</text>
+    </g>
+
+    <g>
+      <rect x="572" y="52" width="180" height="188" rx="10" fill="var(--paper)" stroke="var(--slate)"/>
+      <rect x="572" y="52" width="180" height="30" rx="10" fill="var(--slate-soft)"/>
+      <text x="584" y="72" font-size="12" font-weight="700" fill="var(--slate)">Việc đang chờ</text>
+      <rect x="582" y="92" width="160" height="44" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="592" y="109" font-size="11" font-weight="600" fill="var(--ink)">Clip giới thiệu menu</text>
+      <text x="592" y="124" font-size="10" fill="var(--sky)">Đang chờ duyệt</text>
+      <text x="662" y="215" font-size="10.5" text-anchor="middle" fill="var(--slate)">Không cần làm gì</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 5.</b> Bốn cột của "Việc của tôi". Đọc từ trái sang phải: <b>Chờ tôi xác nhận</b> (việc mới, cần bấm nhận) · <b>Deadline gần</b> (sắp tới hạn, làm trước) · <b>Hôm nay làm gì</b> (đang cầm) · <b>Việc đang chờ</b> (đã nộp, đang chờ duyệt hoặc đang chờ việc khác xong).</figcaption>
+</figure>
+
+<div class="good">
+  <p><b>Thói quen tốt mỗi sáng:</b> mở "Việc của tôi" → nhìn cột <b>Deadline gần</b> trước → rồi mới tới cột <b>Chờ tôi xác nhận</b>. Nếu cả 4 cột đều trống nghĩa là bạn đang rảnh việc, nhắn Leader.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="nhan-viec"><span class="phan">Phần 6</span>Bước 1 · Nhận việc (ba lựa chọn)</h2>
+
+<p>Khi Leader giao việc, việc đó nằm ở cột <b>"Chờ tôi xác nhận"</b>. Bạn có <b>ba lựa chọn</b> — hãy chọn đúng, đừng để im:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 200" role="img" aria-label="Ba nút khi nhận việc">
+    <rect x="10" y="10" width="740" height="76" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="26" y="34" font-size="13.5" font-weight="700" fill="var(--ink)">Quay clip Oolong tháng 7</text>
+    <text x="26" y="52" font-size="11" fill="var(--ink-soft)">Kênh TikTok · Hạn 20/07 · 15 điểm khối lượng</text>
+    <rect x="26" y="60" width="128" height="18" rx="9" fill="var(--amber-soft)"/>
+    <text x="90" y="73" font-size="10" font-weight="700" text-anchor="middle" fill="var(--amber)">Chờ tôi xác nhận</text>
+
+    <rect x="440" y="34" width="92" height="28" rx="7" fill="var(--primary)"/>
+    <text x="486" y="52" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">Nhận việc</text>
+    <rect x="542" y="34" width="102" height="28" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="593" y="52" font-size="12" font-weight="600" text-anchor="middle" fill="var(--ink)">Cần trao đổi</text>
+    <rect x="654" y="34" width="82" height="28" rx="7" fill="var(--paper)" stroke="var(--rose)"/>
+    <text x="695" y="52" font-size="12" font-weight="600" text-anchor="middle" fill="var(--rose)">Từ chối</text>
+
+    <g font-size="11">
+      <rect x="440" y="100" width="92" height="86" rx="8" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="486" y="120" font-size="11" font-weight="700" text-anchor="middle" fill="var(--green)">Làm được</text>
+      <text x="486" y="138" font-size="10" text-anchor="middle" fill="var(--ink-soft)">Hiểu rõ,</text>
+      <text x="486" y="152" font-size="10" text-anchor="middle" fill="var(--ink-soft)">đủ thời gian</text>
+      <text x="486" y="172" font-size="10" font-weight="600" text-anchor="middle" fill="var(--green)">→ Nhận</text>
+
+      <rect x="542" y="100" width="102" height="86" rx="8" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <text x="593" y="120" font-size="11" font-weight="700" text-anchor="middle" fill="var(--amber)">Chưa rõ</text>
+      <text x="593" y="138" font-size="10" text-anchor="middle" fill="var(--ink-soft)">Thiếu thông tin,</text>
+      <text x="593" y="152" font-size="10" text-anchor="middle" fill="var(--ink-soft)">cần hỏi lại</text>
+      <text x="593" y="172" font-size="10" font-weight="600" text-anchor="middle" fill="var(--amber)">→ Ghi câu hỏi</text>
+
+      <rect x="654" y="100" width="82" height="86" rx="8" fill="var(--rose-soft)" stroke="var(--rose)"/>
+      <text x="695" y="120" font-size="11" font-weight="700" text-anchor="middle" fill="var(--rose)">Không thể</text>
+      <text x="695" y="138" font-size="10" text-anchor="middle" fill="var(--ink-soft)">Bận, ốm,</text>
+      <text x="695" y="152" font-size="10" text-anchor="middle" fill="var(--ink-soft)">sai người</text>
+      <text x="695" y="172" font-size="10" font-weight="600" text-anchor="middle" fill="var(--rose)">→ Ghi lý do</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.2" stroke-dasharray="3 3">
+      <path d="M486 62 V100"/><path d="M593 62 V100"/><path d="M695 62 V100"/>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 6.</b> Ba nút và khi nào dùng nút nào. <b>Cần trao đổi</b> và <b>Từ chối</b> đều <b>bắt buộc ghi lý do</b> — Leader sẽ thấy ngay và xử lý.</figcaption>
+</figure>
+
+<h3>Nếu bấm "Cần trao đổi" hoặc "Từ chối"</h3>
+<p>Một ô nhỏ hiện ra để bạn ghi lý do. Hãy ghi <b>cụ thể</b>, đừng ghi chung chung:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 170" role="img" aria-label="Ô nhập lý do khi cần trao đổi">
+    <rect x="200" y="10" width="360" height="150" rx="12" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+    <text x="220" y="36" font-size="14" font-weight="700" fill="var(--ink)">Cần trao đổi</text>
+    <text x="220" y="54" font-size="11" fill="var(--ink-soft)">Ghi vấn đề cần làm rõ với Leader trước khi nhận.</text>
+    <rect x="220" y="64" width="320" height="52" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="230" y="82" font-size="10.5" fill="var(--ink)">Chưa có kịch bản chi tiết. Quay ở quán nào,</text>
+    <text x="230" y="97" font-size="10.5" fill="var(--ink)">khung giờ nào ạ?</text>
+    <rect x="416" y="126" width="60" height="24" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="446" y="142" font-size="11" font-weight="600" text-anchor="middle" fill="var(--ink-soft)">Huỷ</text>
+    <rect x="484" y="126" width="56" height="24" rx="6" fill="var(--primary)"/>
+    <text x="512" y="142" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">Gửi</text>
+
+    <rect x="592" y="60" width="158" height="56" rx="8" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="671" y="80" font-size="10.5" font-weight="700" text-anchor="middle" fill="var(--green)">Viết như thế này</text>
+    <text x="671" y="96" font-size="10" text-anchor="middle" fill="var(--ink-soft)">nêu rõ thiếu gì,</text>
+    <text x="671" y="109" font-size="10" text-anchor="middle" fill="var(--ink-soft)">Leader trả lời được ngay</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 7.</b> Ô ghi lý do. Viết rõ như ví dụ trên thì Leader trả lời được ngay. Viết "không làm được" thì Leader phải hỏi lại — mất thời gian cả hai.</figcaption>
+</figure>
+
+<div class="warn">
+  <p><b>Đừng để việc nằm im ở cột "Chờ tôi xác nhận".</b> Hệ thống ghi nhận bạn chưa phản hồi, và Leader sẽ bị nhắc. Không làm được thì cứ <b>Từ chối kèm lý do</b> — đó là cách làm việc chuyên nghiệp, không ai trách.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="bat-dau"><span class="phan">Phần 7</span>Bước 2 · Bắt đầu làm</h2>
+
+<p>Sau khi bấm <b>Nhận việc</b>, thẻ việc chuyển sang trạng thái <b>Đã nhận</b> và xuất hiện nút <span class="btn-name">Bắt đầu</span>.</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 96" role="img" aria-label="Nút Bắt đầu sau khi nhận việc">
+    <rect x="10" y="10" width="740" height="76" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="26" y="36" font-size="13.5" font-weight="700" fill="var(--ink)">Quay clip Oolong tháng 7</text>
+    <text x="26" y="54" font-size="11" fill="var(--ink-soft)">Kênh TikTok · Hạn 20/07</text>
+    <rect x="26" y="62" width="70" height="18" rx="9" fill="var(--slate-soft)"/>
+    <text x="61" y="75" font-size="10" font-weight="700" text-anchor="middle" fill="var(--slate)">Đã nhận</text>
+    <rect x="640" y="36" width="96" height="28" rx="7" fill="var(--primary)"/>
+    <text x="688" y="54" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">▶ Bắt đầu</text>
+    <rect x="360" y="36" width="256" height="28" rx="7" fill="var(--primary-soft)" stroke="var(--primary)"/>
+    <text x="488" y="54" font-size="11" font-weight="600" text-anchor="middle" fill="var(--primary)">Bấm khi bạn THỰC SỰ bắt tay vào làm</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 8.</b> Nút <b>Bắt đầu</b> chuyển việc sang "Đang làm" và đưa nó lên cột <b>Hôm nay làm gì</b>.</figcaption>
+</figure>
+
+<div class="note">
+  <p><b>Vì sao phải bấm "Bắt đầu"?</b> Vì Leader nhìn bảng là biết việc nào đã có người bắt tay vào, việc nào còn nằm đó. Bấm đúng lúc bắt đầu làm — <b>đừng bấm rồi để đó cả tuần</b>, cũng đừng làm xong mới bấm.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="nop-duyet"><span class="phan">Phần 8</span>Bước 3 · Nộp bài để duyệt</h2>
+
+<p>Làm xong sản phẩm (clip, ảnh, bài viết), bạn bấm <span class="btn-name">Nộp duyệt</span>. Một ô hiện ra yêu cầu <b>2 thông tin</b>:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 210" role="img" aria-label="Ô nộp bản để duyệt gồm link nội dung và ghi chú">
+    <rect x="180" y="10" width="400" height="190" rx="12" fill="var(--paper)" stroke="var(--line)" stroke-width="1.5"/>
+    <text x="200" y="38" font-size="14.5" font-weight="700" fill="var(--ink)">Nộp bản để duyệt</text>
+
+    <text x="200" y="62" font-size="11" font-weight="600" fill="var(--ink)">Link nội dung (Drive, TikTok, Figma…)</text>
+    <rect x="200" y="70" width="360" height="28" rx="7" fill="var(--soft)" stroke="var(--primary)" stroke-width="1.5"/>
+    <text x="212" y="89" font-size="11" fill="var(--ink)">https://drive.google.com/file/d/...</text>
+    <text x="566" y="89" font-size="16" font-weight="700" fill="var(--rose)">*</text>
+
+    <text x="200" y="120" font-size="11" font-weight="600" fill="var(--ink)">Ghi chú cho người duyệt (tuỳ chọn)</text>
+    <rect x="200" y="128" width="360" height="36" rx="7" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="212" y="150" font-size="10.5" fill="var(--ink-soft)">Bản này em cắt lại hook 3 giây đầu ạ</text>
+
+    <rect x="436" y="172" width="58" height="24" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="465" y="188" font-size="11" font-weight="600" text-anchor="middle" fill="var(--ink-soft)">Huỷ</text>
+    <rect x="502" y="172" width="76" height="24" rx="6" fill="var(--primary)"/>
+    <text x="540" y="188" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">Nộp duyệt</text>
+
+    <rect x="600" y="62" width="150" height="46" rx="8" fill="var(--rose-soft)" stroke="var(--rose)"/>
+    <text x="675" y="80" font-size="10.5" font-weight="700" text-anchor="middle" fill="var(--rose)">Bắt buộc</text>
+    <text x="675" y="96" font-size="10" text-anchor="middle" fill="var(--ink-soft)">không có link không nộp được</text>
+    <path d="M572 84 H596" stroke="var(--rose)" stroke-width="1.4" stroke-dasharray="4 3"/>
+
+    <rect x="600" y="128" width="150" height="46" rx="8" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="675" y="146" font-size="10.5" font-weight="700" text-anchor="middle" fill="var(--green)">Nên ghi</text>
+    <text x="675" y="162" font-size="10" text-anchor="middle" fill="var(--ink-soft)">Leader duyệt nhanh hơn</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 9.</b> Ô <b>Nộp bản để duyệt</b>. Ô <b>Link nội dung</b> là bắt buộc — dán link Drive/TikTok/Figma nơi để sản phẩm của bạn. Ô ghi chú không bắt buộc nhưng nên ghi.</figcaption>
+</figure>
+
+<h3>Cách lấy link đúng</h3>
+<ol class="steps">
+  <li><b>Upload sản phẩm lên Google Drive</b> của team (clip, ảnh, file thiết kế).</li>
+  <li><b>Bấm chuột phải vào file → Chia sẻ</b> → đổi thành <b>"Bất kỳ ai có link — Người xem"</b>.</li>
+  <li><b>Copy link</b> rồi dán vào ô Link nội dung.</li>
+</ol>
+
+<div class="warn">
+  <p><b>Lỗi hay gặp nhất:</b> dán link Drive nhưng <b>quên bật chia sẻ</b> → Leader mở ra báo "Bạn cần quyền truy cập" → bài bị trả lại, mất thêm một vòng. Nhớ kiểm tra bước 2 ở trên.</p>
+</div>
+
+<p>Nộp xong, việc chuyển sang <b>"Đang chờ duyệt"</b> và nằm ở cột <b>Việc đang chờ</b>. Lúc này <b>bạn không cần làm gì</b> — chờ Leader xem.</p>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="loai-viec"><span class="phan">Phần 9</span>Các loại việc khác nhau — nút sẽ khác nhau</h2>
+
+<p>Không phải việc nào cũng có nút "Nộp duyệt". Tuỳ loại việc, hệ thống hiện nút phù hợp. Bảng dưới giúp bạn không bỡ ngỡ:</p>
+
+<div class="table-scroll">
+<table class="roles">
+  <thead>
+    <tr><th style="width:26%">Loại việc</th><th style="width:26%">Nút bạn sẽ thấy</th><th>Nghĩa là gì</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>Quay · Dựng · Ý tưởng</b><br><span style="color:var(--ink-soft);font-size:13px">(có gắn nội dung)</span></td>
+      <td><span class="btn-name">Nộp duyệt</span></td>
+      <td>Làm ra sản phẩm rồi nộp link để Leader duyệt. Đây là loại phổ biến nhất.</td>
+    </tr>
+    <tr>
+      <td><b>Đăng bài</b></td>
+      <td><span class="btn-name">Đã đăng bài</span><br><span style="color:var(--ink-soft);font-size:13px">hoặc</span> <span class="btn-name">Đã đăng — nộp nghiệm thu</span></td>
+      <td>Đăng thật xong mới bấm. Việc <b>có người duyệt</b> được chỉ định → nút là "nộp nghiệm thu": người duyệt xác nhận bài đăng đạt thì việc mới tính hoàn thành. Không có người duyệt → bấm là hết việc.</td>
+    </tr>
+    <tr>
+      <td><b>Việc không gắn nội dung</b><br><span style="color:var(--ink-soft);font-size:13px">(VD: đi khảo sát, gọi điện)</span></td>
+      <td><span class="btn-name">Nộp duyệt</span><br><span style="color:var(--ink-soft);font-size:13px">hoặc</span> <span class="btn-name">Hoàn tất</span></td>
+      <td>Việc <b>có người duyệt</b> → bấm <b>Nộp duyệt</b> (không cần dán link), việc sang cột <b>Chờ duyệt</b> đợi người duyệt chốt. Không có người duyệt → tự <b>Hoàn tất</b> như cũ.</td>
+    </tr>
+    <tr>
+      <td><b>Duyệt nội dung</b><br><span style="color:var(--ink-soft);font-size:13px">(chỉ khi bạn được giao duyệt)</span></td>
+      <td><span class="btn-name">Mở màn duyệt</span></td>
+      <td>Đưa bạn sang màn hình duyệt bài của người khác.</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 130" role="img" aria-label="Bốn kiểu nút theo loại việc">
+    <g font-size="11.5" text-anchor="middle">
+      <rect x="8" y="20" width="176" height="92" rx="10" fill="var(--primary-soft)" stroke="var(--primary)"/>
+      <text x="96" y="42" font-weight="700" fill="var(--primary)">Quay / Dựng / Ý tưởng</text>
+      <rect x="46" y="54" width="100" height="26" rx="7" fill="var(--primary)"/>
+      <text x="96" y="71" font-weight="700" fill="#fff">↑ Nộp duyệt</text>
+      <text x="96" y="98" font-size="10" fill="var(--ink-soft)">→ Leader xem bài</text>
+
+      <rect x="196" y="20" width="176" height="92" rx="10" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="284" y="42" font-weight="700" fill="var(--green)">Đăng bài</text>
+      <rect x="228" y="54" width="112" height="26" rx="7" fill="var(--green)"/>
+      <text x="284" y="71" font-weight="700" fill="#fff">Đã đăng bài</text>
+      <text x="284" y="98" font-size="10" fill="var(--ink-soft)">→ có người duyệt: nộp nghiệm thu</text>
+
+      <rect x="384" y="20" width="176" height="92" rx="10" fill="var(--slate-soft)" stroke="var(--slate)"/>
+      <text x="472" y="42" font-weight="700" fill="var(--slate)">Việc không có sản phẩm</text>
+      <rect x="422" y="54" width="100" height="26" rx="7" fill="var(--slate)"/>
+      <text x="472" y="71" font-weight="700" fill="#fff">Hoàn tất</text>
+      <text x="472" y="98" font-size="10" fill="var(--ink-soft)">→ có người duyệt: Nộp duyệt</text>
+
+      <rect x="572" y="20" width="180" height="92" rx="10" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="662" y="42" font-weight="700" fill="var(--sky)">Duyệt nội dung</text>
+      <rect x="602" y="54" width="120" height="26" rx="7" fill="var(--paper)" stroke="var(--sky)"/>
+      <text x="662" y="71" font-weight="600" fill="var(--sky)">Mở màn duyệt</text>
+      <text x="662" y="98" font-size="10" fill="var(--ink-soft)">→ sang màn duyệt bài</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 10.</b> Bạn <b>không cần nhớ bảng này</b> — hệ thống tự hiện đúng nút. Chỉ cần biết là nút có thể khác nhau, đừng hoang mang khi không thấy "Nộp duyệt".</figcaption>
+</figure>
+
+<h3>Luật mới (7/2026): việc có người duyệt phải qua cột "Chờ duyệt"</h3>
+<p>Khi kế hoạch chỉ định <b>người duyệt</b> cho việc của bạn, bạn <b>không tự kết thúc việc được nữa</b> — làm xong thì <b>Nộp duyệt</b>, việc sang cột Chờ duyệt, người duyệt chốt mới xong. Đây là nguyên tắc "bốn mắt": sản phẩm có người thứ hai nhìn qua trước khi tính hoàn thành.</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 128" role="img" aria-label="Luồng nộp duyệt việc có người duyệt">
+    <g font-size="11.5" font-weight="600" text-anchor="middle">
+      <rect x="10" y="34" width="150" height="42" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="85" y="52" fill="var(--sky)">Bạn đang làm</text>
+      <text x="85" y="67" font-size="10" font-weight="400" fill="var(--ink-soft)">xong → bấm Nộp duyệt</text>
+      <rect x="240" y="34" width="150" height="42" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <text x="315" y="52" fill="var(--amber)">Chờ duyệt</text>
+      <text x="315" y="67" font-size="10" font-weight="400" fill="var(--ink-soft)">người duyệt nhận Telegram</text>
+      <rect x="470" y="34" width="150" height="42" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="545" y="52" fill="var(--green)">Hoàn thành</text>
+      <text x="545" y="67" font-size="10" font-weight="400" fill="var(--ink-soft)">khi họ bấm "Duyệt xong"</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.4" fill="none">
+      <path d="M160 55 H234"/><path d="M390 55 H464"/>
+    </g>
+    <g fill="var(--ink-soft)">
+      <path d="M234 51 241 55 234 59 Z"/><path d="M464 51 471 55 464 59 Z"/>
+    </g>
+    <path d="M315 76 V104 H85 V78" stroke="var(--amber)" stroke-width="1.4" fill="none" stroke-dasharray="4 3"/>
+    <path d="M81 84 85 77 89 84 Z" fill="var(--amber)"/>
+    <text x="200" y="118" font-size="10.5" font-weight="600" fill="var(--amber)" text-anchor="middle">bị "Trả lại" (có ghi lý do) → bạn sửa rồi nộp lại</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 10b.</b> Việc có người duyệt: nộp → chờ duyệt → hoàn thành. Bị trả lại thì đọc lý do trong thông báo, sửa, nộp lại.</figcaption>
+</figure>
+
+<div class="note">
+  <p>Việc <b>không có</b> người duyệt (hoặc bạn tự duyệt chính mình) vẫn <b>Hoàn tất thẳng</b> như trước. Nếu bấm "Hoàn tất" mà máy báo <i>"việc này có người duyệt — hãy bấm Nộp duyệt"</i>, nhấn <b>Ctrl+Shift+R</b> tải lại trang một lần để nút mới hiện ra.</p>
+</div>
+
+<h3>Khi BẠN là người duyệt — hộp "Chờ tôi duyệt"</h3>
+<p>Nếu bạn được chỉ định làm <b>người duyệt</b> cho việc của đồng nghiệp, ngay đầu trang <span class="path">Việc của tôi</span> sẽ nổi <b>hộp vàng "Chờ tôi duyệt"</b> mỗi khi có việc nộp lên (không có thì hộp tự ẩn):</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 136" role="img" aria-label="Hộp Chờ tôi duyệt trên trang Việc của tôi">
+    <rect x="8" y="8" width="744" height="120" rx="12" fill="var(--amber-soft)" stroke="var(--amber)"/>
+    <text x="26" y="34" font-size="13" font-weight="700" fill="var(--amber)">✎ Chờ tôi duyệt (1)</text>
+    <rect x="26" y="46" width="708" height="68" rx="10" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="42" y="68" font-size="12" font-weight="600" fill="var(--ink)">Viết 5 bài local guide tuần này</text>
+    <text x="42" y="86" font-size="10.5" fill="var(--ink-soft)">MKT - Half of July · Người làm: <tspan font-weight="700" fill="var(--ink)">Phạm Thùy Dương</tspan></text>
+    <rect x="500" y="76" width="104" height="24" rx="7" fill="var(--primary)"/>
+    <text x="552" y="92" font-size="11" font-weight="700" text-anchor="middle" fill="#fff">✓ Duyệt xong</text>
+    <rect x="612" y="76" width="86" height="24" rx="7" fill="var(--paper)" stroke="var(--amber)"/>
+    <text x="655" y="92" font-size="11" font-weight="600" text-anchor="middle" fill="var(--amber)">↩ Trả lại</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 10c.</b> Thẻ ghi rõ việc của ai nộp. <b>Duyệt xong</b> → việc hoàn thành, người làm nhận báo. <b>Trả lại</b> → bắt buộc ghi rõ cần sửa gì.</figcaption>
+</figure>
+
+<ul>
+  <li>Bấm <span class="btn-name">Duyệt xong</span> khi sản phẩm đạt — việc chuyển hoàn thành, người làm nhận Telegram.</li>
+  <li>Bấm <b>Trả lại</b> khi cần sửa — <b>bắt buộc ghi lý do</b> để người làm biết đường làm tiếp; việc quay về "Đang làm" của họ.</li>
+  <li>Đừng ngâm: người làm đang chờ bạn mới xong việc được. Vào tay trong ngày là đẹp.</li>
+</ul>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="khoa-tra-lai"><span class="phan">Phần 10</span>Việc bị khoá &amp; việc bị trả lại</h2>
+
+<h3>Việc bị khoá — "Chờ việc trước hoàn tất"</h3>
+<p>Nhiều việc phải làm <b>theo thứ tự</b>: phải Quay xong mới Dựng được, phải Dựng xong mới Duyệt được. Nếu việc trước chưa xong, việc của bạn sẽ bị <b>khoá</b>:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 150" role="img" aria-label="Việc bị khoá vì chờ việc trước">
+    <g font-size="11.5" text-anchor="middle">
+      <rect x="60" y="14" width="150" height="46" rx="9" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+      <text x="135" y="34" font-weight="700" fill="var(--indigo)">1. Quay clip</text>
+      <text x="135" y="50" font-size="10" fill="var(--ink-soft)">Bạn A · đang làm</text>
+
+      <rect x="300" y="14" width="150" height="46" rx="9" fill="var(--rose-soft)" stroke="var(--rose)"/>
+      <text x="375" y="34" font-weight="700" fill="var(--rose)">2. Dựng clip</text>
+      <text x="375" y="50" font-size="10" fill="var(--rose)">🔒 việc CỦA BẠN</text>
+
+      <rect x="540" y="14" width="150" height="46" rx="9" fill="var(--slate-soft)" stroke="var(--slate)"/>
+      <text x="615" y="34" font-weight="700" fill="var(--slate)">3. Đăng bài</text>
+      <text x="615" y="50" font-size="10" fill="var(--ink-soft)">🔒 khoá</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+      <path d="M210 37 H294"/><path d="M450 37 H534"/>
+    </g>
+    <g fill="var(--ink-soft)">
+      <path d="M294 33 302 37 294 41 Z"/><path d="M534 33 542 37 534 41 Z"/>
+    </g>
+    <rect x="220" y="86" width="320" height="46" rx="9" fill="var(--rose-soft)" stroke="var(--rose)"/>
+    <text x="380" y="105" font-size="12" font-weight="700" text-anchor="middle" fill="var(--rose)">🔒 Chờ việc trước hoàn tất</text>
+    <text x="380" y="122" font-size="10.5" text-anchor="middle" fill="var(--ink-soft)">Bạn thấy dòng chữ này = chưa làm được, không phải lỗi</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 11.</b> Khi thấy <b>"Chờ việc trước hoàn tất"</b>, nghĩa là việc của bạn đang xếp hàng. Bạn <b>không cần làm gì</b> — khi người trước hoàn tất, việc của bạn <b>tự mở khoá</b> và Telegram sẽ báo bạn.</figcaption>
+</figure>
+
+<h3>Việc bị trả lại — cần sửa</h3>
+<p>Nếu Leader xem bài và thấy chưa đạt, bài sẽ <b>quay lại chỗ bạn</b> kèm <b>lý do cụ thể</b>. Đây là chuyện bình thường, không phải bị phạt.</p>
+
+<ol class="steps">
+  <li><b>Telegram báo</b> bài bị trả lại → bấm vào link để mở đúng việc đó.</li>
+  <li><b>Đọc kỹ nhận xét</b> của Leader — họ ghi rõ cần sửa gì.</li>
+  <li><b>Sửa sản phẩm</b>, upload bản mới lên Drive.</li>
+  <li><b>Bấm Nộp duyệt lại</b>, dán link bản mới, ghi chú "đã sửa theo góp ý…".</li>
+</ol>
+
+<div class="good">
+  <p><b>Mẹo giảm bị trả lại:</b> trước khi làm, mở mục <b>Định hướng nội dung</b> đọc phần <b>Guideline / Check-list</b> của góc nội dung mình đang làm (xem Phần 11). Làm đúng checklist ngay từ đầu thì hiếm khi phải sửa.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="dinh-huong"><span class="phan">Phần 11</span>Định hướng nội dung — đọc TRƯỚC khi làm</h2>
+
+<p>Đây là mục <b>quan trọng nhất mà nhiều người bỏ qua</b>. Nó là "cẩm nang nghề" của Xưởng: làm nội dung kiểu gì, quay ra sao, tránh gì.</p>
+
+<p>Cấu trúc gồm <b>2 tầng</b>:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 190" role="img" aria-label="Cấu trúc Trụ nội dung và các Góc bên trong">
+    <rect x="10" y="12" width="200" height="46" rx="9" fill="var(--primary-soft)" stroke="var(--primary)"/>
+    <rect x="22" y="26" width="16" height="18" rx="4" fill="var(--primary)"/>
+    <text x="48" y="34" font-size="12.5" font-weight="700" fill="var(--primary)">TRỤ (Pillar)</text>
+    <text x="48" y="50" font-size="10" fill="var(--ink-soft)">Nhóm nội dung lớn</text>
+
+    <text x="230" y="30" font-size="11.5" fill="var(--ink)">VD: <tspan font-weight="700">A. Local guide / Story</tspan> — kể chuyện đời thường quanh quán</text>
+    <text x="230" y="48" font-size="11.5" fill="var(--ink-soft)">Mỗi trụ có một màu riêng để dễ nhận ra</text>
+
+    <g stroke="var(--ink-soft)" stroke-width="1.5" fill="none">
+      <path d="M40 58 V78 H70"/><path d="M40 78 V108 H70"/><path d="M40 108 V138 H70"/>
+    </g>
+    <g>
+      <rect x="70" y="66" width="300" height="24" rx="6" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="82" y="82" font-size="11" font-weight="600" fill="var(--sky)">Góc 1 · Xưởng đi tìm bạn</text>
+      <rect x="70" y="96" width="300" height="24" rx="6" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="82" y="112" font-size="11" font-weight="600" fill="var(--sky)">Góc 2 · Ăn uống / đi chơi cùng Xưởng</text>
+      <rect x="70" y="126" width="300" height="24" rx="6" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="82" y="142" font-size="11" font-weight="600" fill="var(--sky)">Góc 3 · Ngồi Xưởng làm này làm kia</text>
+    </g>
+    <text x="390" y="112" font-size="11.5" fill="var(--ink-soft)">← Mỗi <tspan font-weight="700" fill="var(--sky)">Góc</tspan> là một cách kể chuyện cụ thể.</text>
+    <text x="390" y="130" font-size="11.5" fill="var(--ink-soft)">Bấm vào góc để mở chi tiết.</text>
+    <text x="390" y="164" font-size="11" fill="var(--ink-soft)">Một Trụ có nhiều Góc. Việc bạn làm luôn thuộc về một Góc cụ thể.</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 12.</b> <b>Trụ</b> là nhóm lớn, <b>Góc</b> là cách kể cụ thể bên trong trụ đó. Bấm vào tên góc để mở ra phần chi tiết.</figcaption>
+</figure>
+
+<p>Bấm vào một <b>Góc</b>, bạn sẽ thấy <b>5 phần</b> — đây chính là thứ bạn cần đọc trước khi quay/viết:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 250" role="img" aria-label="Chi tiết một góc nội dung gồm năm phần">
+    <rect x="10" y="10" width="740" height="230" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="28" y="34" font-size="13.5" font-weight="700" fill="var(--ink)">▾ Xưởng đi tìm bạn — hôm nay uống cà phê chưa?</text>
+    <rect x="452" y="20" width="150" height="19" rx="9" fill="var(--primary-soft)"/>
+    <text x="527" y="34" font-size="10" font-weight="700" text-anchor="middle" fill="var(--primary)">Awareness → Interest</text>
+
+    <rect x="28" y="48" width="704" height="38" rx="7" fill="var(--soft)"/>
+    <text x="40" y="64" font-size="10.5" font-weight="700" fill="var(--ink-soft)">💡 MÔ TẢ &amp; MỤC ĐÍCH</text>
+    <text x="40" y="79" font-size="10.5" fill="var(--ink)">Video mang cà phê đến người lao động, mời họ uống, nghe chuyện nghề. Mục đích: tạo niềm tin bằng câu chuyện thật.</text>
+
+    <rect x="28" y="94" width="704" height="60" rx="7" fill="var(--green-soft)"/>
+    <text x="40" y="110" font-size="10.5" font-weight="700" fill="var(--green)">☑ GUIDELINE / CHECK-LIST  — phần quan trọng nhất với bạn</text>
+    <text x="40" y="126" font-size="10.5" fill="var(--ink)">☐ Hook 3 giây đầu gây tò mò về nhân vật</text>
+    <text x="40" y="141" font-size="10.5" fill="var(--ink)">☐ Cảnh nhân vật uống cà phê Xưởng xuất hiện thường xuyên</text>
+    <text x="400" y="126" font-size="10.5" fill="var(--ink)">☐ Trò chuyện chân thành, không kịch bản giả</text>
+    <text x="400" y="141" font-size="10.5" fill="var(--ink)">☐ Có lời nhận xét về cà phê</text>
+
+    <rect x="28" y="162" width="346" height="34" rx="7" fill="var(--sky-soft)"/>
+    <text x="40" y="178" font-size="10.5" font-weight="700" fill="var(--sky)">🔗 KÊNH</text>
+    <text x="40" y="191" font-size="10.5" fill="var(--ink)">TikTok + Reels · Facebook phụ + Threads</text>
+
+    <rect x="386" y="162" width="346" height="34" rx="7" fill="var(--indigo-soft)"/>
+    <text x="398" y="178" font-size="10.5" font-weight="700" fill="var(--indigo)">🎬 FORMAT PHÙ HỢP</text>
+    <text x="398" y="191" font-size="10.5" fill="var(--ink)">Video POV thực tế · Ảnh + bài viết</text>
+
+    <rect x="28" y="204" width="704" height="26" rx="7" fill="var(--amber-soft)"/>
+    <text x="380" y="221" font-size="10.5" font-weight="600" text-anchor="middle" fill="var(--amber)">Làm đúng checklist này = bài rất hiếm khi bị trả lại</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 13.</b> Chi tiết một Góc. Phần <b>Guideline / Check-list</b> là "bài kiểm tra" — quay/viết xong, đọc lại checklist một lượt trước khi nộp.</figcaption>
+</figure>
+
+<div class="note">
+  <p><b>Nhớ:</b> mỗi nội dung trong hệ thống đều <b>gắn với một Trụ</b>. Khi nhận việc mà không rõ nó thuộc trụ/góc nào, hỏi Leader — đừng đoán.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="thu-vien"><span class="phan">Phần 12</span>Thư viện media &amp; Thư viện tài liệu</h2>
+
+<p>Hai kho dùng chung của team. Vào lấy tài nguyên, khỏi phải đi hỏi từng người.</p>
+
+<h3>Thư viện media — ảnh &amp; video</h3>
+<p>Chứa ảnh, video dùng cho bài. Bấm vào một thẻ là <b>xem trực tiếp</b> ngay trong web, không cần tải về.</p>
+
+<h3>Thư viện tài liệu — brief, bảng giá, hợp đồng, báo cáo</h3>
+<p>Chứa file Excel, Word, PDF. Cũng <b>xem trực tiếp</b> được. Có bộ lọc theo loại:</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 200" role="img" aria-label="Thư viện tài liệu với bộ lọc và thẻ tài liệu">
+    <text x="10" y="20" font-size="15" font-weight="700" fill="var(--ink)">Thư viện Tài liệu</text>
+    <g font-size="10.5">
+      <rect x="10" y="32" width="52" height="22" rx="11" fill="var(--primary-soft)" stroke="var(--primary)"/>
+      <text x="36" y="47" font-weight="700" text-anchor="middle" fill="var(--primary)">Tất cả</text>
+      <rect x="68" y="32" width="88" height="22" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="112" y="47" text-anchor="middle" fill="var(--ink-soft)">Brief / Yêu cầu</text>
+      <rect x="162" y="32" width="94" height="22" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="209" y="47" text-anchor="middle" fill="var(--ink-soft)">Brand / Nhận diện</text>
+      <rect x="262" y="32" width="64" height="22" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="294" y="47" text-anchor="middle" fill="var(--ink-soft)">Bảng giá</text>
+      <rect x="332" y="32" width="64" height="22" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="364" y="47" text-anchor="middle" fill="var(--ink-soft)">Hợp đồng</text>
+      <rect x="402" y="32" width="60" height="22" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="432" y="47" text-anchor="middle" fill="var(--ink-soft)">Báo cáo</text>
+      <rect x="600" y="32" width="150" height="22" rx="11" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="675" y="47" text-anchor="middle" fill="var(--ink-soft)">🔍 Tìm theo tên…</text>
+    </g>
+
+    <g>
+      <rect x="10" y="66" width="240" height="60" rx="9" fill="var(--paper)" stroke="var(--line)"/>
+      <rect x="22" y="78" width="36" height="36" rx="6" fill="var(--green-soft)"/>
+      <text x="40" y="101" font-size="14" text-anchor="middle" fill="var(--green)">▦</text>
+      <text x="68" y="90" font-size="11.5" font-weight="700" fill="var(--ink)">Bảng giá sỉ tháng 7</text>
+      <text x="68" y="105" font-size="10" fill="var(--ink-soft)">Google Sheets</text>
+      <rect x="68" y="110" width="52" height="15" rx="7" fill="var(--soft)"/>
+      <text x="94" y="121" font-size="9" text-anchor="middle" fill="var(--ink-soft)">Bảng giá</text>
+
+      <rect x="260" y="66" width="240" height="60" rx="9" fill="var(--paper)" stroke="var(--line)"/>
+      <rect x="272" y="78" width="36" height="36" rx="6" fill="var(--rose-soft)"/>
+      <text x="290" y="101" font-size="13" text-anchor="middle" fill="var(--rose)">▤</text>
+      <text x="318" y="90" font-size="11.5" font-weight="700" fill="var(--ink)">Brief chiến dịch T7</text>
+      <text x="318" y="105" font-size="10" fill="var(--ink-soft)">PDF</text>
+      <rect x="318" y="110" width="66" height="15" rx="7" fill="var(--soft)"/>
+      <text x="351" y="121" font-size="9" text-anchor="middle" fill="var(--ink-soft)">Brief / Yêu cầu</text>
+    </g>
+
+    <rect x="530" y="66" width="220" height="60" rx="9" fill="var(--primary-soft)" stroke="var(--primary)"/>
+    <text x="640" y="90" font-size="11" font-weight="700" text-anchor="middle" fill="var(--primary)">Bấm vào thẻ</text>
+    <text x="640" y="108" font-size="10.5" text-anchor="middle" fill="var(--ink-soft)">→ mở xem ngay trong web</text>
+
+    <rect x="10" y="140" width="740" height="46" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="24" y="160" font-size="11" font-weight="700" fill="var(--ink)">Bạn chỉ XEM, không thêm/xoá được tài liệu</text>
+    <text x="24" y="176" font-size="10.5" fill="var(--ink-soft)">Cần thêm tài liệu vào thư viện thì nhờ Leader — đây là kho chung nên chỉ Leader quản lý.</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 14.</b> Thư viện tài liệu. Bạn <b>xem được tất cả</b> nhưng <b>không thêm/xoá</b> — nút "Thêm tài liệu" chỉ Leader mới thấy. Đây là chủ ý, để kho chung không bị loạn.</figcaption>
+</figure>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="lap-ke-hoach"><span class="phan">Phần 13</span>Khi bạn được giao lập kế hoạch kênh</h2>
+
+<p>Bình thường Leader chia việc cho bạn. Nhưng có lúc Leader <b>giao hẳn một kênh</b> cho bạn tự lập kế hoạch — đây là <b>bước tiến trong nghề</b>, nghĩa là bạn được tin tưởng.</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 96" role="img" aria-label="Năm bước của luồng lập kế hoạch kênh">
+    <g font-size="11.5" font-weight="600" text-anchor="middle">
+      <rect x="6" y="30" width="132" height="42" rx="9" fill="var(--pink-soft)" stroke="var(--pink)"/>
+      <text x="72" y="48" fill="var(--pink)">1. Leader giao</text>
+      <text x="72" y="63" font-size="10" font-weight="400" fill="var(--ink-soft)">kênh cho bạn</text>
+
+      <rect x="158" y="30" width="132" height="42" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="224" y="48" fill="var(--sky)">2. Bạn soạn</text>
+      <text x="224" y="63" font-size="10" font-weight="400" fill="var(--ink-soft)">các công đoạn</text>
+
+      <rect x="310" y="30" width="122" height="42" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="371" y="55" fill="var(--sky)">3. Bạn nộp</text>
+
+      <rect x="452" y="30" width="132" height="42" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <text x="518" y="48" fill="var(--amber)">4. Leader duyệt</text>
+      <text x="518" y="63" font-size="10" font-weight="400" fill="var(--ink-soft)">hoặc bắt sửa</text>
+
+      <rect x="604" y="30" width="150" height="42" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="679" y="48" fill="var(--green)">5. Việc tự sinh</text>
+      <text x="679" y="63" font-size="10" font-weight="400" fill="var(--ink-soft)">báo cho từng người</text>
+    </g>
+    <g stroke="var(--ink-soft)" stroke-width="1.4" fill="none">
+      <path d="M138 51 H154"/><path d="M290 51 H306"/><path d="M432 51 H448"/><path d="M584 51 H600"/>
+    </g>
+    <g fill="var(--ink-soft)">
+      <path d="M154 47 161 51 154 55 Z"/><path d="M306 47 313 51 306 55 Z"/>
+      <path d="M448 47 455 51 448 55 Z"/><path d="M600 47 607 51 600 55 Z"/>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 15.</b> Năm bước. Bạn phụ trách bước 2 và 3.</figcaption>
+</figure>
+
+<ol class="steps">
+  <li><b>Telegram báo</b> bạn được giao lập kế hoạch → hoặc vào mục <span class="path">Lập kế hoạch</span> ở menu.</li>
+  <li><b>Đọc phần đầu</b>: Leader ghi sẵn mục tiêu, thông điệp chính, hạn chót.</li>
+  <li><b>Soạn các công đoạn</b>: mỗi dòng là một việc — đặt tên, chọn loại (Ý tưởng / Quay / Dựng / Duyệt / Đăng), chọn người làm, đặt hạn.</li>
+  <li><b>Điền khối "Đề xuất chiến lược &amp; KPI" <i>(mới 7/2026)</i></b>: viết vài dòng <b>cách đánh</b> (insight gì, vì sao tin là thắng), <b>ngân sách dự kiến</b>, và thêm các <b>chỉ số KPI</b> có con số mục tiêu (VD: Bài đăng — 20 bài, Lượt tiếp cận — 50.000 lượt). Không bắt buộc, nhưng Leader thấy trống có thể trả về — và có KPI thì lúc chạy máy tự tính % đạt cho bạn.</li>
+  <li><b>Bấm Nộp kế hoạch.</b> Không cần bấm "Lưu nháp" trước — nút Nộp <b>tự lưu rồi mới nộp</b>. Thiếu gì hệ thống báo rõ ngay.</li>
+  <li><b>Chờ Leader duyệt.</b> Duyệt xong, hệ thống <b>tự tạo việc</b> và báo cho từng người. Nếu bị bắt sửa, bạn sửa rồi nộp lại.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 178" role="img" aria-label="Bảng soạn công đoạn trong màn lập kế hoạch">
+    <rect x="10" y="10" width="740" height="158" rx="11" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="26" y="32" font-size="13" font-weight="700" fill="var(--ink)">Kế hoạch kênh: TikTok Xưởng Cà Phê</text>
+    <rect x="26" y="42" width="700" height="20" rx="5" fill="var(--soft)"/>
+    <g font-size="10" font-weight="700" fill="var(--ink-soft)">
+      <text x="36" y="56">TÊN CÔNG ĐOẠN</text><text x="270" y="56">LOẠI</text>
+      <text x="380" y="56">NGƯỜI LÀM</text><text x="560" y="56">HẠN</text>
+    </g>
+    <g font-size="10.5" fill="var(--ink)">
+      <rect x="26" y="66" width="700" height="24" rx="5" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="36" y="82">Ý tưởng &amp; kịch bản</text><text x="270" y="82" fill="var(--ink-soft)">Ý tưởng</text>
+      <text x="380" y="82" fill="var(--ink-soft)">Huyền Trang</text><text x="560" y="82" fill="var(--ink-soft)">18/07</text>
+
+      <rect x="26" y="94" width="700" height="24" rx="5" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="36" y="110">Quay clip tại quán</text><text x="270" y="110" fill="var(--ink-soft)">Quay</text>
+      <text x="380" y="110" fill="var(--ink-soft)">Quang Huy</text><text x="560" y="110" fill="var(--ink-soft)">20/07</text>
+
+      <rect x="26" y="122" width="700" height="24" rx="5" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="36" y="138">Dựng &amp; hậu kỳ</text><text x="270" y="138" fill="var(--ink-soft)">Dựng</text>
+      <text x="380" y="138" fill="var(--ink-soft)">Hoàng Thanh</text><text x="560" y="138" fill="var(--ink-soft)">22/07</text>
+    </g>
+    <rect x="626" y="150" width="100" height="12" rx="6" fill="var(--primary)"/>
+    <text x="676" y="159" font-size="8.5" font-weight="700" text-anchor="middle" fill="#fff">Nộp kế hoạch</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 16.</b> Bảng soạn công đoạn. Các công đoạn <b>nối tiếp nhau</b>: việc sau tự động chờ việc trước xong. Có tài liệu riêng chi tiết hơn — hỏi Leader nếu bạn được giao thường xuyên.</figcaption>
+</figure>
+
+<h3>Khi kế hoạch chạy: bấm "Báo cáo tiến độ" mỗi tuần <i>(mới 7/2026)</i></h3>
+<p>Kế hoạch được duyệt xong sẽ mang nhãn <b>"Đang thực thi"</b> — và trên thẻ của nó xuất hiện nút <span class="btn-name">Báo cáo tiến độ</span>. Đây là chỗ bạn báo <b>bức tranh của cả kênh</b> (việc lẻ chỉ kể được từng mảnh):</p>
+<ol class="steps">
+  <li><b>Chọn sức khỏe</b>: <span class="lg" style="background:var(--green-soft);color:var(--green)">Đúng nhịp</span> · <span class="lg" style="background:var(--amber-soft);color:var(--amber)">Có rủi ro</span> · <span class="lg" style="background:var(--rose-soft);color:var(--rose)">Lệch nhịp</span> — chọn thật, vì máy tự chụp số việc (x/y việc xong, mấy việc trễ) lưu kèm ngay cạnh lời bạn kể.</li>
+  <li><b>Kể ngắn</b>: đã làm gì &amp; kết quả · vướng gì / cần hỗ trợ gì · tuần tới làm gì.</li>
+  <li><b>Điền số thực tế từng KPI</b> (nếu kỳ này có số — bỏ trống nghĩa là chưa báo, khác số 0). Máy tự tính % đạt: <i>"Bài đăng: 5/20 bài (25%)"</i>.</li>
+  <li><b>Gửi</b> — Leader nhận Telegram; thẻ kế hoạch đeo badge sức khỏe; nút <b>Nhật ký</b> lưu mọi lần báo, mới nhất trên cùng.</li>
+</ol>
+<div class="good">
+  <p><b>Nhịp khuyến nghị: mỗi tuần một lần</b>, hoặc ngay khi có biến (thiếu ảnh, kênh tụt tương tác…). Báo "Có rủi ro" sớm là <b>điểm cộng</b> — Leader còn kịp gỡ; im lặng tới sát hạn mới là điểm trừ.</p>
+</div>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="xem-tong-the"><span class="phan">Phần 14</span>Xem tổng thể: Bảng tiến độ · Lịch · Chiến dịch · Báo cáo</h2>
+
+<p>Bốn mục này bạn <b>chỉ xem</b>, không thao tác. Dùng khi cần nắm bức tranh chung:</p>
+
+<div class="table-scroll">
+<table class="roles">
+  <thead>
+    <tr><th style="width:24%">Mục</th><th>Dùng để làm gì</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><b>Bảng tiến độ</b></td><td>Xem tất cả việc của cả team xếp theo cột trạng thái (Chưa làm → Đang làm → Chờ duyệt → Xong). Nhìn phát biết team đang tắc ở đâu.</td></tr>
+    <tr><td><b>Lịch</b></td><td>Xem theo ngày: hôm nay đăng bài gì, tuần này có gì. Hữu ích để canh lịch quay.</td></tr>
+    <tr><td><b>Chiến dịch</b></td><td>Xem chiến dịch đang chạy, mục tiêu là gì, gồm những kênh nào. Đọc để hiểu <b>việc mình làm phục vụ mục tiêu gì</b>.</td></tr>
+    <tr><td><b>Báo cáo</b></td><td>Số liệu tổng hợp về khối lượng công việc.</td></tr>
+  </tbody>
+</table>
+</div>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 160" role="img" aria-label="Bảng tiến độ dạng cột">
+    <text x="10" y="20" font-size="14" font-weight="700" fill="var(--ink)">Bảng tiến độ</text>
+    <g font-size="10.5">
+      <rect x="8" y="32" width="180" height="120" rx="9" fill="var(--soft)" stroke="var(--line)"/>
+      <text x="98" y="50" font-weight="700" text-anchor="middle" fill="var(--slate)">Chưa làm</text>
+      <rect x="18" y="58" width="160" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="28" y="75" fill="var(--ink)">Viết caption T7</text>
+      <rect x="18" y="90" width="160" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="28" y="107" fill="var(--ink)">Khảo sát quán mới</text>
+
+      <rect x="196" y="32" width="180" height="120" rx="9" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+      <text x="286" y="50" font-weight="700" text-anchor="middle" fill="var(--indigo)">Đang làm</text>
+      <rect x="206" y="58" width="160" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="216" y="75" fill="var(--ink)">Quay Oolong</text>
+
+      <rect x="384" y="32" width="180" height="120" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <text x="474" y="50" font-weight="700" text-anchor="middle" fill="var(--sky)">Chờ duyệt</text>
+      <rect x="394" y="58" width="160" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="404" y="75" fill="var(--ink)">Clip Cold Brew</text>
+
+      <rect x="572" y="32" width="180" height="120" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <text x="662" y="50" font-weight="700" text-anchor="middle" fill="var(--green)">Xong</text>
+      <rect x="582" y="58" width="160" height="26" rx="6" fill="var(--paper)" stroke="var(--line)"/>
+      <text x="592" y="75" fill="var(--ink)">Ảnh menu mới</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 17.</b> Bảng tiến độ của cả team. Việc của bạn nằm lẫn với việc người khác — đây là bảng chung để nhìn tổng thể, còn việc riêng của bạn thì xem ở "Việc của tôi".</figcaption>
+</figure>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="quy-tac"><span class="phan">Phần 15</span>Năm quy tắc vàng</h2>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 236" role="img" aria-label="Năm quy tắc vàng khi dùng MKT Hub">
+    <g font-size="11.5">
+      <rect x="10" y="10" width="740" height="40" rx="9" fill="var(--primary-soft)" stroke="var(--primary)"/>
+      <circle cx="34" cy="30" r="12" fill="var(--primary)"/><text x="34" y="35" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">1</text>
+      <text x="56" y="27" font-weight="700" fill="var(--ink)">Không để việc nằm im</text>
+      <text x="56" y="43" fill="var(--ink-soft)">Nhận, trao đổi, hoặc từ chối — chọn một, đừng lặng thinh.</text>
+
+      <rect x="10" y="56" width="740" height="40" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+      <circle cx="34" cy="76" r="12" fill="var(--green)"/><text x="34" y="81" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">2</text>
+      <text x="56" y="73" font-weight="700" fill="var(--ink)">Đọc Guideline trước khi làm</text>
+      <text x="56" y="89" fill="var(--ink-soft)">Vào Định hướng nội dung, đọc checklist của góc mình làm — đỡ bị trả lại.</text>
+
+      <rect x="10" y="102" width="740" height="40" rx="9" fill="var(--amber-soft)" stroke="var(--amber)"/>
+      <circle cx="34" cy="122" r="12" fill="var(--amber)"/><text x="34" y="127" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">3</text>
+      <text x="56" y="119" font-weight="700" fill="var(--ink)">Bật chia sẻ link Drive trước khi nộp</text>
+      <text x="56" y="135" fill="var(--ink-soft)">"Bất kỳ ai có link — Người xem". Quên là bài bị trả lại oan.</text>
+
+      <rect x="10" y="148" width="740" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
+      <circle cx="34" cy="168" r="12" fill="var(--sky)"/><text x="34" y="173" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">4</text>
+      <text x="56" y="165" font-weight="700" fill="var(--ink)">Bấm nút đúng lúc</text>
+      <text x="56" y="181" fill="var(--ink-soft)">"Bắt đầu" khi thật sự bắt đầu. Đừng bấm trước cả tuần, cũng đừng bấm sau khi xong.</text>
+
+      <rect x="10" y="194" width="740" height="40" rx="9" fill="var(--rose-soft)" stroke="var(--rose)"/>
+      <circle cx="34" cy="214" r="12" fill="var(--rose)"/><text x="34" y="219" font-size="12" font-weight="700" text-anchor="middle" fill="#fff">5</text>
+      <text x="56" y="211" font-weight="700" fill="var(--ink)">Dùng tài khoản của chính mình</text>
+      <text x="56" y="227" fill="var(--ink-soft)">Đừng mượn tài khoản người khác — hệ thống sẽ ghi nhận sai người làm.</text>
+    </g>
+  </svg>
+  </div>
+  <figcaption><b>Hình 18.</b> Năm quy tắc. Nhớ được 5 điều này là bạn dùng MKT Hub trơn tru.</figcaption>
+</figure>
+
+<!-- ══════════════════════════════════════ -->
+<h2 id="faq"><span class="phan">Phần 16</span>Câu hỏi thường gặp</h2>
+
+<dl class="faq">
+  <dt>Tôi không thấy mục "Duyệt nội dung", "Cần Leader xử lý", "Nhân sự" — có phải bị lỗi không?</dt>
+  <dd>Không. Ba mục đó chỉ dành cho Leader. Menu của bạn có 11 mục là đúng.</dd>
+
+  <dt>Tôi bấm "Nhận việc" của người khác được không?</dt>
+  <dd>Không. Chỉ đúng người được giao mới nhận được. Nếu bạn thấy việc mà không bấm được, nghĩa là việc đó không phải của bạn.</dd>
+
+  <dt>Lỡ bấm "Từ chối" nhầm thì sao?</dt>
+  <dd>Nhắn ngay cho Leader. Leader sẽ giao lại cho bạn. Không tự sửa được vì mọi thao tác đều được ghi lại.</dd>
+
+  <dt>Việc của tôi hiện "🔒 Chờ việc trước hoàn tất" — tôi phải làm gì?</dt>
+  <dd>Không làm gì cả. Chờ người làm việc trước hoàn tất, việc của bạn tự mở khoá và Telegram sẽ báo. Nếu chờ quá lâu, nhắn Leader.</dd>
+
+  <dt>Tôi nộp duyệt rồi nhưng muốn sửa lại bản khác?</dt>
+  <dd>Nhắn Leader trả bài về, rồi bạn nộp lại bản mới. Hoặc nếu Leader chưa xem, cứ nhắn họ chờ.</dd>
+
+  <dt>Tôi không có link Drive, nộp bằng gì?</dt>
+  <dd>Bắt buộc phải có link. Upload lên Drive team, bật chia sẻ, rồi dán link. Đây là cách để Leader xem được bài và để bài không bị thất lạc.</dd>
+
+  <dt>Tôi thêm được tài liệu vào Thư viện không?</dt>
+  <dd>Không. Bạn chỉ xem. Cần thêm thì gửi Leader.</dd>
+
+  <dt>Điện thoại dùng được không?</dt>
+  <dd>Được. Vào cùng địa chỉ <b>mkthub.onebiz.com.vn</b>. Menu nằm ở thanh dưới đáy, bấm <b>"Thêm"</b> để mở đủ mục.</dd>
+
+  <dt>Không nhận được thông báo Telegram?</dt>
+  <dd>Vào <b>Cài đặt</b> kiểm tra có chữ <b>"Đã liên kết"</b> màu xanh chưa. Chưa thì nối lại theo Phần 4.</dd>
+
+  <dt>Tôi quên mất việc mình đang làm thuộc chiến dịch nào?</dt>
+  <dd>Mở thẻ việc ra, trên đó có ghi tên kênh và chiến dịch. Hoặc vào mục <b>Chiến dịch</b> xem tổng thể.</dd>
+
+  <dt>Sao việc của tôi không có nút "Hoàn tất" mà chỉ có "Nộp duyệt"?</dt>
+  <dd>Vì việc đó <b>có người duyệt</b> được chỉ định trong kế hoạch (luật mới 7/2026 — xem Phần 9). Nộp duyệt xong, người duyệt bấm "Duyệt xong" là việc hoàn thành. Việc không có người duyệt vẫn Hoàn tất thẳng như cũ.</dd>
+
+  <dt>Việc của tôi bị "Trả lại" — có bị tính điểm xấu không?</dt>
+  <dd>Không. Trả lại là một phần bình thường của quy trình — đọc <b>lý do</b> trong thông báo, sửa cho đạt rồi Nộp duyệt lại. Mọi lần trả/nộp đều có ghi vết nên cứ minh bạch mà làm.</dd>
+
+  <dt>KPI trong kế hoạch có bắt buộc điền không?</dt>
+  <dd>Không bắt buộc, nhưng rất nên: có con số mục tiêu thì lúc chạy, <b>Báo cáo tiến độ</b> tự tính % đạt cho bạn — đỡ giải trình dài, và Leader duyệt kế hoạch cũng nhanh hơn vì thấy rõ cam kết.</dd>
+
+  <dt>Bao lâu nên gửi "Báo cáo tiến độ" một lần?</dt>
+  <dd>Mỗi tuần một lần, hoặc ngay khi có biến. Báo <b>"Có rủi ro" sớm là điểm cộng</b> — Leader còn kịp gỡ cho bạn; im lặng tới sát hạn mới đáng lo.</dd>
+</dl>
+
+<footer class="doc">
+  <p><b>Xưởng Cà Phê · OneBiz — MKT Hub</b> · Tài liệu nội bộ dành cho MKT Executive · Cập nhật tháng 7/2026.</p>
+  <p>Có gì chưa rõ, hỏi Leader trực tiếp — đừng ngại. Dùng sai một lần còn hơn đoán mò cả tháng.</p>
+</footer>
+
+</div>
+</body>
+</html>
