@@ -38,7 +38,7 @@ import type {
 } from "@/lib/services/supabase/analytics";
 import type { Customer } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
@@ -621,7 +621,8 @@ export default function KhachHangPage() {
         {/* Top 10 customers table */}
         <ChartCard title="Top 10 khách hàng theo doanh thu">
           {topCustomers.length > 0 ? (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.customers.top">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -644,7 +645,8 @@ export default function KhachHangPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           ) : (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Chưa có dữ liệu khách hàng

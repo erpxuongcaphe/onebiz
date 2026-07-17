@@ -450,6 +450,7 @@ export default function StaffRevenueReportPage() {
       )}
 
       <ReportDataTable
+        tablePreferenceKey="report.staff-performance.rows"
         columns={columns}
         rows={rows}
         getRowKey={(r) => `${r.staffId}-${r.branchId ?? ""}-${r.source}`}

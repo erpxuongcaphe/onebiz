@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
@@ -551,7 +551,8 @@ export default function HangHoaPage() {
           title="Sản phẩm tồn kho thấp"
           subtitle="Cần nhập thêm hàng"
         >
-          <div className="overflow-x-auto">
+          <ReportTableFrame tablePreferenceKey="report.products.low-stock">
+            <div className="overflow-x-auto">
             {lowStock.length === 0 ? (
               <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
                 Không có sản phẩm tồn kho thấp
@@ -611,7 +612,8 @@ export default function HangHoaPage() {
                 </tbody>
               </table>
             )}
-          </div>
+            </div>
+          </ReportTableFrame>
         </ChartCard>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const tableSource = readFileSync(
@@ -41,4 +41,52 @@ describe("report column views", () => {
       expect(source.split(key).length - 1).toBeGreaterThanOrEqual(2);
     },
   );
+
+  it("gives every standard report table a stable and unique preference key", () => {
+    const root = "src/app/(main)/phan-tich";
+    const pageFiles: string[] = [];
+    const walk = (directory: string) => {
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        const path = directory + "/" + entry.name;
+        if (entry.isDirectory()) walk(path);
+        else if (entry.name === "page.tsx") pageFiles.push(path);
+      }
+    };
+    walk(root);
+
+    const keys: string[] = [];
+    for (const path of pageFiles) {
+      const source = readFileSync(path, "utf8");
+      const dataTables =
+        source.match(/<ReportDataTable\b[\s\S]*?\/>/g) ?? [];
+      const tableFrames = source.match(/<ReportTableFrame\b[^>]*>/g) ?? [];
+      for (const table of [...dataTables, ...tableFrames]) {
+        const match = table.match(/tablePreferenceKey="([^"]+)"/);
+        expect(match, path).not.toBeNull();
+        keys.push(match![1]);
+      }
+
+      const nativeTableCount = source.match(/<table\b/g)?.length ?? 0;
+      const hasSpecializedColumnPicker = source.includes(
+        "CUSTOMER_COLUMN_OPTIONS",
+      );
+      if (nativeTableCount > 0 && !hasSpecializedColumnPicker) {
+        expect(tableFrames.length, path).toBe(nativeTableCount);
+      }
+    }
+
+    expect(keys.length).toBeGreaterThan(30);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("scopes legacy-table display rules to one table frame", () => {
+    const source = readFileSync(
+      "src/components/shared/report/report-table-frame.tsx",
+      "utf8",
+    );
+    expect(source).toContain("data-report-table-scope");
+    expect(source).toContain("MutationObserver");
+    expect(source).toContain("hiddenIndexes");
+    expect(source).toContain("first-of-type");
+  });
 });

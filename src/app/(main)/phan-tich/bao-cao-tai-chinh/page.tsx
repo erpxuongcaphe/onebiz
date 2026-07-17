@@ -15,7 +15,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
@@ -540,7 +540,8 @@ export default function BaoCaoTaiChinhPage() {
             title="So sánh kết quả vận hành theo chi nhánh"
             subtitle="Kỳ đã chọn — xưởng rang, kho tổng, các quán FnB"
           >
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.financial-results.branches">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -672,7 +673,8 @@ export default function BaoCaoTaiChinhPage() {
                 — nếu muốn xem số thật của toàn chuỗi, bật công tắc{" "}
                 <strong>&quot;Chỉ số CEO&quot;</strong> ở trên để so sánh.
               </p>
-            </div>
+              </div>
+            </ReportTableFrame>
           </ChartCard>
         )}
 
@@ -743,7 +745,8 @@ export default function BaoCaoTaiChinhPage() {
           title="Bảng kết quả vận hành"
           subtitle="So sánh kỳ đã chọn và kỳ liền trước"
         >
-          <div className="overflow-x-auto">
+          <ReportTableFrame tablePreferenceKey="report.financial-results.comparison">
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-muted-foreground">
@@ -853,7 +856,8 @@ export default function BaoCaoTaiChinhPage() {
                 })}
               </tbody>
             </table>
-          </div>
+            </div>
+          </ReportTableFrame>
         </ChartCard>
 
         {/* Gross Margin Trend + COGS Breakdown */}
@@ -1121,7 +1125,8 @@ export default function BaoCaoTaiChinhPage() {
             title="Chi tiết giá vốn theo sản phẩm"
             subtitle="Kỳ đã chọn"
           >
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.financial-results.materials">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -1173,7 +1178,8 @@ export default function BaoCaoTaiChinhPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           </ChartCard>
         )}
       </div>

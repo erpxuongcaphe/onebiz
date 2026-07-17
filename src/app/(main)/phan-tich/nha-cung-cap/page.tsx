@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
@@ -507,7 +507,8 @@ export default function NhaCungCapPage() {
               Chưa có dữ liệu nhà cung cấp
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.suppliers.summary">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -538,7 +539,8 @@ export default function NhaCungCapPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           )}
         </ChartCard>
       </div>

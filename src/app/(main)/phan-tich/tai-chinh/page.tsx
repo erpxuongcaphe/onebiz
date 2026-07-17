@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
@@ -692,7 +692,8 @@ export default function TaiChinhPage() {
               Chưa có dữ liệu dòng tiền.
             </p>
           ) : (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.finance.cash-flow">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -719,7 +720,8 @@ export default function TaiChinhPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           )}
         </ChartCard>
       </div>

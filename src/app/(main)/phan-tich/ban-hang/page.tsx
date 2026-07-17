@@ -37,6 +37,7 @@ import { Icon } from "@/components/ui/icon";
 import {
   ReportPageHeader,
   ReportDataTable,
+  ReportTableFrame,
   type DataTableColumn,
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -751,7 +752,8 @@ export default function BanHangPage() {
             title="Top 10 hóa đơn giá trị cao nhất"
             subtitle="Kỳ đã chọn"
           >
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.sales.top-invoices">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -784,7 +786,8 @@ export default function BanHangPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           </ChartCard>
         )}
       </div>

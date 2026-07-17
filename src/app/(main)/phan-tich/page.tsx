@@ -20,7 +20,7 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import { KpiCard, ChartCard } from "./_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts";
@@ -479,7 +479,8 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo ngày
                 </div>
               ) : (
-                <div className="overflow-x-auto max-h-[420px]">
+                <ReportTableFrame tablePreferenceKey="report.executive.top-products">
+                  <div className="overflow-x-auto max-h-[420px]">
                   <table className="w-full text-sm">
                     <thead className="sticky top-0 bg-surface-container-low">
                       <tr className="border-b text-left text-xs text-muted-foreground">
@@ -513,7 +514,8 @@ export default function TongQuanPage() {
                       </tr>
                     </tfoot>
                   </table>
-                </div>
+                  </div>
+                </ReportTableFrame>
               )}
             </ChartCard>
 
@@ -523,7 +525,8 @@ export default function TongQuanPage() {
                   Chưa có dữ liệu doanh thu theo danh mục
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <ReportTableFrame tablePreferenceKey="report.executive.branch-comparison">
+                  <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground">
@@ -570,7 +573,8 @@ export default function TongQuanPage() {
                       </tr>
                     </tfoot>
                   </table>
-                </div>
+                  </div>
+                </ReportTableFrame>
               )}
             </ChartCard>
           </div>
@@ -583,7 +587,8 @@ export default function TongQuanPage() {
               Chưa có dữ liệu sản phẩm bán chạy
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.executive.staff">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
@@ -606,7 +611,8 @@ export default function TongQuanPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           )}
         </ChartCard>
       </div>

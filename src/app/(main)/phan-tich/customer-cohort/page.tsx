@@ -9,9 +9,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@/components/ui/icon";
-import {
-  ReportPageHeader,
-} from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter } from "@/lib/contexts";
 import {
@@ -194,7 +192,8 @@ export default function CustomerCohortPage() {
             Chưa có dữ liệu khách hàng quay lại
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-lg border border-border bg-surface-container-lowest">
+          <ReportTableFrame tablePreferenceKey="report.customer-cohort.matrix">
+            <div className="overflow-x-auto rounded-lg border border-border bg-surface-container-lowest">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-primary-fixed/40 border-b border-border">
@@ -244,7 +243,8 @@ export default function CustomerCohortPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+            </div>
+          </ReportTableFrame>
         )}
 
         {/* Legend */}

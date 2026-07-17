@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader } from "@/components/shared/report";
+import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
@@ -378,7 +378,8 @@ export default function FnbShipperReportPage() {
               gán shipper khi tạo đơn delivery (POS FnB).
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <ReportTableFrame tablePreferenceKey="report.fnb-shipper.summary">
+              <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-muted-foreground">
@@ -479,7 +480,8 @@ export default function FnbShipperReportPage() {
                   </tr>
                 </tbody>
               </table>
-            </div>
+              </div>
+            </ReportTableFrame>
           )}
         </ChartCard>
 
@@ -501,7 +503,8 @@ export default function FnbShipperReportPage() {
                 Shipper này chưa có đơn nào trong kỳ.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <ReportTableFrame tablePreferenceKey="report.fnb-shipper.orders">
+                <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground">
@@ -563,7 +566,8 @@ export default function FnbShipperReportPage() {
                     })}
                   </tbody>
                 </table>
-              </div>
+                </div>
+              </ReportTableFrame>
             )}
           </ChartCard>
         )}
