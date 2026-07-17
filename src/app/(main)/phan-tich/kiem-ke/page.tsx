@@ -20,6 +20,7 @@ import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildMetricSummarySheet,
 } from "@/lib/utils/excel-export";
 import { getInventoryCheckReport } from "@/lib/services/supabase/inventory-check-report";
 import type {
@@ -92,6 +93,40 @@ export default function KiemKeReportPage() {
       range,
       branchName,
       sheets: [
+        ...(mode === "full"
+          ? [
+              buildMetricSummarySheet({
+                title: "TÓM TẮT KIỂM KÊ",
+                metrics: [
+                  {
+                    label: "Số phiếu kiểm trong kỳ",
+                    value: data.summary.totalChecks,
+                    format: "number",
+                    note: `Kỳ trước: ${data.summary.prevTotalChecks}`,
+                  },
+                  {
+                    label: "Lệch tăng (kho dư)",
+                    value: data.summary.totalIncrease,
+                    format: "currency",
+                    note: `Kỳ trước: ${data.summary.prevTotalIncrease}`,
+                  },
+                  {
+                    label: "Lệch giảm (thiệt hại)",
+                    value: data.summary.totalDecrease,
+                    format: "currency",
+                    note: `Kỳ trước: ${data.summary.prevTotalDecrease}`,
+                  },
+                  {
+                    label: "Chênh lệch ròng",
+                    value: data.summary.netImpact,
+                    format: "currency",
+                    note:
+                      "Số dương = thừa ròng; số âm = thiếu ròng",
+                  },
+                ],
+              }),
+            ]
+          : []),
         {
           name: "Báo cáo kiểm kê",
           titleRows,

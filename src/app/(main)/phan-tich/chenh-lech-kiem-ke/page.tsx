@@ -40,6 +40,7 @@ import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
   buildInfoSheet,
+  buildMetricSummarySheet,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import {
@@ -285,6 +286,40 @@ export default function InventoryVarianceReportPage() {
           "Báo cáo quản trị nội bộ. Giá trị lệch tính theo unit_cost snapshot tại thời điểm kiểm (00079); phiếu cũ fallback giá vốn hiện tại. CFO dùng để impair tồn kho.",
       });
 
+      const summarySheet = buildMetricSummarySheet({
+        title: "TÓM TẮT CHÊNH LỆCH KIỂM KÊ",
+        metrics: [
+          {
+            label: "Giá trị thiếu",
+            value: kpis.shortageValue,
+            format: "currency",
+            note: `${kpis.shortageCount} dòng thiếu`,
+          },
+          {
+            label: "Giá trị thừa",
+            value: kpis.surplusValue,
+            format: "currency",
+            note: `${kpis.surplusCount} dòng thừa`,
+          },
+          {
+            label: "Thiệt hại ròng",
+            value: kpis.netLoss,
+            format: "currency",
+            note: "Giá trị thiếu trừ giá trị thừa",
+          },
+          {
+            label: "Số phiếu kiểm kê",
+            value: kpis.checkCount,
+            format: "number",
+          },
+          {
+            label: "Số dòng chênh lệch",
+            value: rows.length,
+            format: "number",
+          },
+        ],
+      });
+
       const branchSheet: ExcelSheet = {
         name: "Theo chi nhánh",
         titleRows: ["CHÊNH LỆCH THEO CHI NHÁNH"],
@@ -382,12 +417,12 @@ export default function InventoryVarianceReportPage() {
         range,
         branchName: branchLabel,
         tenantName: "OneBiz",
-        sheets: [infoSheet, branchSheet, productSheet, detailSheet],
+        sheets: [infoSheet, summarySheet, branchSheet, productSheet, detailSheet],
       });
 
       toast({
         title: "Đã xuất báo cáo chênh lệch",
-        description: `4 sheet: Info + Chi nhánh (${byBranch.length}) + SP (${byProduct.length}) + Chi tiết (${rows.length})`,
+        description: `5 trang tính: Thông tin + Tóm tắt + Chi nhánh (${byBranch.length}) + Sản phẩm (${byProduct.length}) + Chi tiết (${rows.length})`,
         variant: "success",
       });
     } catch (err) {

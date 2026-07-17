@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
+  buildMetricSummarySheet,
   ensureFullExportInfoSheet,
   filterExcelSheetColumns,
   type ExcelSheet,
@@ -105,6 +106,42 @@ describe("current-view export columns", () => {
     expect(filtered.columnGroups).toEqual([
       { label: "Product", span: 1 },
       { label: "Inventory", span: 1 },
+    ]);
+  });
+});
+
+describe("metric summary sheets", () => {
+  it("keeps KPI values numeric and separates their units", () => {
+    const sheet = buildMetricSummarySheet({
+      metrics: [
+        { label: "Orders", value: 12, format: "number" },
+        { label: "Revenue", value: 1250000, format: "currency" },
+        { label: "Retention", value: 32.5, format: "percent" },
+      ],
+    });
+
+    expect(sheet.name).toBe("Tóm tắt");
+    expect(sheet.columns.map((column) => column.format)).toEqual([
+      undefined,
+      "number",
+      "currency",
+      "percent",
+      undefined,
+    ]);
+    expect(sheet.rows).toEqual([
+      expect.objectContaining({
+        label: "Orders",
+        numberValue: 12,
+        currencyValue: "",
+      }),
+      expect.objectContaining({
+        label: "Revenue",
+        currencyValue: 1250000,
+      }),
+      expect.objectContaining({
+        label: "Retention",
+        percentValue: 32.5,
+      }),
     ]);
   });
 });

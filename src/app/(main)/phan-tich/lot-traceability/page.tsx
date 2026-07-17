@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatNumber, formatShortDate } from "@/lib/format";
+import { formatDateInputValue, formatNumber, formatShortDate } from "@/lib/format";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -32,6 +32,7 @@ import { useReportState } from "@/lib/hooks/use-report-state";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildMetricSummarySheet,
 } from "@/lib/utils/excel-export";
 import { getAllProductLots } from "@/lib/services";
 import { useBranchFilter } from "@/lib/contexts";
@@ -76,6 +77,46 @@ const STATUS_FILTER_OPTIONS = [
   { value: "recalled", label: "Thu hồi" },
 ] as const;
 
+type ProductLotRow = Awaited<ReturnType<typeof getAllProductLots>>[number];
+
+function toLotRow(lot: ProductLotRow, now: number): LotRow {
+  const expiryDate = lot.expiryDate ?? null;
+  const daysToExpiry = expiryDate
+    ? Math.floor(
+        (new Date(expiryDate).getTime() - now) / (1000 * 60 * 60 * 24),
+      )
+    : null;
+
+  return {
+    id: lot.id,
+    lotCode: lot.lotNumber,
+    productCode: lot.productCode,
+    productName: lot.productName,
+    quantity: Number(lot.initialQty ?? 0),
+    remainingQty: Number(lot.currentQty ?? 0),
+    receivedDate: lot.receivedDate,
+    expiryDate,
+    daysToExpiry,
+    sourceType: lot.sourceType,
+    status: lot.status,
+  };
+}
+
+function summarizeLots(rows: LotRow[]) {
+  return {
+    totalLots: rows.length,
+    activeLots: rows.filter((lot) => lot.status === "active").length,
+    expiringLots: rows.filter(
+      (lot) =>
+        lot.status === "active" &&
+        lot.daysToExpiry !== null &&
+        lot.daysToExpiry >= 0 &&
+        lot.daysToExpiry <= 30,
+    ).length,
+    remainingQty: rows.reduce((sum, lot) => sum + lot.remainingQty, 0),
+  };
+}
+
 export default function LotTraceabilityPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
@@ -98,28 +139,7 @@ export default function LotTraceabilityPage() {
       });
 
       const now = Date.now();
-      const rows: LotRow[] = lotData.map((lot) => {
-        const expiryDate = lot.expiryDate ?? null;
-        const daysToExpiry = expiryDate
-          ? Math.floor(
-              (new Date(expiryDate).getTime() - now) / (1000 * 60 * 60 * 24),
-            )
-          : null;
-
-        return {
-          id: lot.id,
-          lotCode: lot.lotNumber,
-          productCode: lot.productCode,
-          productName: lot.productName,
-          quantity: Number(lot.initialQty ?? 0),
-          remainingQty: Number(lot.currentQty ?? 0),
-          receivedDate: lot.receivedDate,
-          expiryDate,
-          daysToExpiry,
-          sourceType: lot.sourceType,
-          status: lot.status,
-        };
-      });
+      const rows = lotData.map((lot) => toLotRow(lot, now));
 
       setLots(rows);
       setExpiringCount(
@@ -147,23 +167,65 @@ export default function LotTraceabilityPage() {
   const activeLots = lots.filter((l) => l.status === "active").length;
   const totalQty = lots.reduce((s, l) => s + l.remainingQty, 0);
 
-  const handleExport = useCallback((mode: "view" | "full") => {
+  const handleExport = useCallback(async (mode: "view" | "full") => {
+    const exportNow = Date.now();
+    const snapshotDate = formatDateInputValue(new Date(exportNow));
+    const exportRange = { from: snapshotDate, to: snapshotDate };
+    const exportLots =
+      mode === "full"
+        ? (
+            await getAllProductLots({
+              branchId: activeBranchId,
+              fetchAll: true,
+            })
+          ).map((lot) => toLotRow(lot, exportNow))
+        : lots;
+    const exportSummary = summarizeLots(exportLots);
     const titleRows = buildReportTitleRows({
-      title: "Báo cáo lot traceability",
-      range,
+      title: "BÁO CÁO TRUY XUẤT NGUỒN GỐC THEO LÔ",
+      range: exportRange,
       branchName: activeBranchId
         ? branches.find((branch) => branch.id === activeBranchId)?.name
         : "Toàn công ty",
       generatedAt: new Date(),
     });
-    exportReportToExcel({
+    await exportReportToExcel({
       kind: "lot-traceability",
       mode,
-      range,
+      range: exportRange,
       branchName: branchLabel,
       sheets: [
+        ...(mode === "full"
+          ? [
+              buildMetricSummarySheet({
+                title: "TÓM TẮT TRUY XUẤT LÔ",
+                metrics: [
+                  {
+                    label: "Tổng số lô",
+                    value: exportSummary.totalLots,
+                    format: "number",
+                  },
+                  {
+                    label: "Lô đang còn hàng",
+                    value: exportSummary.activeLots,
+                    format: "number",
+                  },
+                  {
+                    label: "Sắp hết hạn trong 30 ngày",
+                    value: exportSummary.expiringLots,
+                    format: "number",
+                  },
+                  {
+                    label: "Tổng số lượng còn lại",
+                    value: exportSummary.remainingQty,
+                    format: "number",
+                  },
+                ],
+              }),
+            ]
+          : []),
         {
-          name: "Lot trace",
+          name: "Chi tiết lô",
           titleRows,
           tablePreferenceKey: "report.lot-traceability.lots",
           columns: [
@@ -178,7 +240,7 @@ export default function LotTraceabilityPage() {
             { label: "Nguồn", key: "sourceType", width: 12 },
             { label: "Trạng thái", key: "status", width: 12 },
           ],
-          rows: lots.map((l) => ({
+          rows: exportLots.map((l) => ({
             lotCode: l.lotCode,
             productCode: l.productCode,
             productName: l.productName,
@@ -190,11 +252,11 @@ export default function LotTraceabilityPage() {
             sourceType: SOURCE_LABEL[l.sourceType] ?? l.sourceType,
             status: STATUS_LABEL[l.status] ?? l.status,
           })),
-          footerLabel: `SL lô: ${lots.length}`,
+          footerLabel: `Số lô: ${exportLots.length}`,
         },
       ],
     });
-  }, [activeBranchId, branchLabel, branches, lots, range]);
+  }, [activeBranchId, branchLabel, branches, lots]);
 
   const columns: DataTableColumn<LotRow>[] = [
     { label: "Mã lô", key: "lotCode", align: "left", width: "120px" },
@@ -282,6 +344,7 @@ export default function LotTraceabilityPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
+        hideDateRange
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onExportView={() => handleExport("view")}

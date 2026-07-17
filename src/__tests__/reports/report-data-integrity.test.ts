@@ -29,6 +29,14 @@ describe("report data integrity", () => {
     "src/lib/services/supabase/inventory-check-report.ts",
     "utf8",
   );
+  const production = readFileSync(
+    "src/lib/services/supabase/production.ts",
+    "utf8",
+  );
+  const lotTracePage = readFileSync(
+    "src/app/(main)/phan-tich/lot-traceability/page.tsx",
+    "utf8",
+  );
   const customerPage = readFileSync(
     "src/app/(main)/phan-tich/khach-hang/page.tsx",
     "utf8",
@@ -81,6 +89,9 @@ describe("report data integrity", () => {
     expect(abcAnalysis).toContain("fetchAllAbcRows");
     expect(xntReport).toContain("fetchAllXntRows");
     expect(inventoryCheckReport).toContain("fetchAllInventoryCheckRows");
+    expect(production).toContain(".range(offset, offset + pageSize - 1)");
+    expect(production).not.toContain(".limit(200)");
+    expect(lotTracePage).toContain("fetchAll: true");
     expect(analytics).not.toContain("console.warn(context, error.message)");
     expect(fnbAnalytics).not.toContain("console.warn(context, error.message)");
   });

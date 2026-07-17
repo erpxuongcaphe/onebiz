@@ -17,11 +17,15 @@ import { useEffect, useState, useCallback } from "react";
 import { KpiCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { getModifierStats } from "@/lib/services/supabase/fnb-analytics";
 import type { ModifierStatRow } from "@/lib/services/supabase/fnb-analytics";
-import { exportReportToExcel, buildReportTitleRows } from "@/lib/utils/excel-export";
+import {
+  exportReportToExcel,
+  buildReportTitleRows,
+  buildMetricSummarySheet,
+} from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +87,35 @@ export default function FnbModifierReportPage() {
       range,
       branchName: branchLabel,
       sheets: [
+        ...(mode === "full"
+          ? [
+              buildMetricSummarySheet({
+                title: "TÓM TẮT TÙY CHỌN MÓN FNB",
+                metrics: [
+                  {
+                    label: "Tổng lượt chọn",
+                    value: totalPicks,
+                    format: "number",
+                  },
+                  {
+                    label: "Doanh thu phí cộng",
+                    value: totalRevenue,
+                    format: "currency",
+                  },
+                  {
+                    label: "Nhóm tùy chọn hoạt động",
+                    value: activeGroups,
+                    format: "number",
+                  },
+                  {
+                    label: "Số tùy chọn phát sinh",
+                    value: stats.length,
+                    format: "number",
+                  },
+                ],
+              }),
+            ]
+          : []),
         {
           name: "Tuỳ chọn",
           titleRows,
