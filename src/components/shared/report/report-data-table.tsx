@@ -11,9 +11,33 @@
  * - Right-align số, left-align text
  */
 
-import { Fragment, useState, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  clearReportTablePreferences,
+  readReportTablePreferences,
+  writeReportTablePreferences,
+  type ReportTablePreferences,
+} from "@/lib/reports/preferences";
 
 export type ColumnAlign = "left" | "center" | "right";
 
@@ -57,7 +81,16 @@ export interface DataTableProps<T> {
   getSubRows?: (row: T) => T[] | undefined;
   /** Class name override */
   className?: string;
+  /** Hiện menu tùy biến cách trình bày bảng. */
+  showDisplayOptions?: boolean;
 }
+
+const DEFAULT_TABLE_PREFERENCES: ReportTablePreferences = {
+  density: "standard",
+  wrapText: true,
+  freezeFirstColumn: false,
+  stripedRows: true,
+};
 
 export function ReportDataTable<T>({
   columns,
@@ -68,18 +101,140 @@ export function ReportDataTable<T>({
   emptyState,
   getSubRows,
   className,
+  showDisplayOptions = true,
 }: DataTableProps<T>) {
+  const pathname = usePathname();
+  const preferenceKey = useMemo(
+    () =>
+      `${pathname}:${columns
+        .map((column, index) => `${String(column.key)}:${index}`)
+        .join("|")}`,
+    [columns, pathname],
+  );
+  const [preferences, setPreferences] = useState<ReportTablePreferences>(
+    DEFAULT_TABLE_PREFERENCES,
+  );
+  const [loadedPreferenceKey, setLoadedPreferenceKey] = useState<string | null>(
+    null,
+  );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (!showDisplayOptions) return;
+    const timer = window.setTimeout(() => {
+      const saved = readReportTablePreferences(preferenceKey);
+      setPreferences({ ...DEFAULT_TABLE_PREFERENCES, ...saved });
+      setLoadedPreferenceKey(preferenceKey);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [preferenceKey, showDisplayOptions]);
+
+  useEffect(() => {
+    if (!showDisplayOptions || loadedPreferenceKey !== preferenceKey) return;
+    writeReportTablePreferences(preferenceKey, preferences);
+  }, [loadedPreferenceKey, preferenceKey, preferences, showDisplayOptions]);
+
+  const resetDisplay = () => {
+    clearReportTablePreferences(preferenceKey);
+    setPreferences(DEFAULT_TABLE_PREFERENCES);
+  };
 
   const toggleExpand = (key: string) => {
     setExpanded((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   const hasExpand = !!getSubRows;
+  const cellPadding =
+    preferences.density === "compact" ? "px-2 py-1.5" : "px-3 py-2";
+  const subRowPadding =
+    preferences.density === "compact" ? "px-2 py-1" : "px-3 py-1.5";
+  const isStickyColumn = (column: DataTableColumn<T>, index: number) =>
+    column.sticky ||
+    (preferences.freezeFirstColumn && index === 0 && !hasExpand);
 
   return (
-    <div className={cn("overflow-x-auto", className)}>
-      <table className="w-full text-sm border-collapse">
+    <div className={cn("min-w-0 overflow-x-auto", className)}>
+      {showDisplayOptions && (
+        <div className="sticky left-0 z-20 flex min-h-9 min-w-full items-center justify-end border-b border-border/60 px-2 py-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger className="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-muted-foreground outline-none hover:bg-surface-container hover:text-foreground">
+              <Icon name="tune" size={14} />
+              Hiển thị bảng
+              <Icon name="expand_more" size={14} />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-56">
+              <DropdownMenuLabel>Mật độ bảng</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={preferences.density}
+                onValueChange={(value) => {
+                  if (value === "standard" || value === "compact") {
+                    setPreferences((current) => ({
+                      ...current,
+                      density: value,
+                    }));
+                  }
+                }}
+              >
+                <DropdownMenuRadioItem value="standard">
+                  Tiêu chuẩn
+                </DropdownMenuRadioItem>
+                <DropdownMenuRadioItem value="compact">
+                  Gọn
+                </DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel>Cách trình bày</DropdownMenuLabel>
+              <DropdownMenuCheckboxItem
+                checked={preferences.wrapText}
+                onCheckedChange={(checked) =>
+                  setPreferences((current) => ({
+                    ...current,
+                    wrapText: checked === true,
+                  }))
+                }
+              >
+                Xuống dòng nội dung dài
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={preferences.freezeFirstColumn}
+                disabled={hasExpand}
+                onCheckedChange={(checked) =>
+                  setPreferences((current) => ({
+                    ...current,
+                    freezeFirstColumn: checked === true,
+                  }))
+                }
+              >
+                Cố định cột đầu
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem
+                checked={preferences.stripedRows}
+                onCheckedChange={(checked) =>
+                  setPreferences((current) => ({
+                    ...current,
+                    stripedRows: checked === true,
+                  }))
+                }
+              >
+                Kẻ dòng xen kẽ
+              </DropdownMenuCheckboxItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={resetDisplay}>
+                <Icon name="restart_alt" size={14} />
+                Khôi phục mặc định
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      )}
+      <table
+        className={cn(
+          "w-full border-collapse text-sm",
+          preferences.wrapText
+            ? "[&_td]:whitespace-normal"
+            : "[&_td]:whitespace-nowrap",
+        )}
+      >
         <thead>
           {/* Column groups header (optional) */}
           {columnGroups && columnGroups.length > 0 && (
@@ -90,7 +245,8 @@ export function ReportDataTable<T>({
                   key={i}
                   colSpan={g.span}
                   className={cn(
-                    "px-3 py-2 text-xs font-semibold text-center border-b border-border",
+                    cellPadding,
+                    "border-b border-border text-center text-xs font-semibold",
                     g.variant === "input" &&
                       "bg-status-success/15 text-status-success",
                     g.variant === "output" &&
@@ -109,11 +265,14 @@ export function ReportDataTable<T>({
               <th
                 key={i}
                 className={cn(
-                  "px-3 py-2 text-xs font-semibold text-foreground whitespace-nowrap",
+                  cellPadding,
+                  "text-xs font-semibold text-foreground",
+                  !preferences.wrapText && "whitespace-nowrap",
                   col.align === "right" && "text-right",
                   col.align === "center" && "text-center",
                   (!col.align || col.align === "left") && "text-left",
-                  col.sticky && "sticky left-0 bg-primary-fixed/40 z-10",
+                  isStickyColumn(col, i) &&
+                    "sticky left-0 z-10 bg-primary-fixed/40",
                 )}
                 style={col.width ? { width: col.width } : undefined}
               >
@@ -131,11 +290,13 @@ export function ReportDataTable<T>({
                 <td
                   key={i}
                   className={cn(
-                    "px-3 py-2 text-xs text-foreground tabular-nums",
+                    cellPadding,
+                    "text-xs text-foreground tabular-nums",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     (!col.align || col.align === "left") && "text-left",
-                    col.sticky && "sticky left-0 bg-primary-fixed/20 z-10",
+                    isStickyColumn(col, i) &&
+                      "sticky left-0 z-10 bg-primary-fixed/20",
                   )}
                 >
                   {i === 0 ? subtotalLabel : col.subtotalCell ?? ""}
@@ -165,7 +326,9 @@ export function ReportDataTable<T>({
                     key={key}
                     className={cn(
                       "border-b border-border/50 hover:bg-surface-container/50 transition-colors",
-                      idx % 2 === 1 && "bg-surface-container-low/20",
+                      preferences.stripedRows &&
+                        idx % 2 === 1 &&
+                        "bg-surface-container-low/20",
                     )}
                   >
                     {hasExpand && (
@@ -193,11 +356,13 @@ export function ReportDataTable<T>({
                       <td
                         key={ci}
                         className={cn(
-                          "px-3 py-2 text-xs tabular-nums",
+                          cellPadding,
+                          "text-xs tabular-nums",
                           col.align === "right" && "text-right",
                           col.align === "center" && "text-center",
                           (!col.align || col.align === "left") && "text-left",
-                          col.sticky && "sticky left-0 bg-inherit z-10",
+                          isStickyColumn(col, ci) &&
+                            "sticky left-0 z-10 bg-inherit",
                         )}
                       >
                         {col.cell
@@ -219,12 +384,14 @@ export function ReportDataTable<T>({
                           <td
                             key={ci}
                             className={cn(
-                              "px-3 py-1.5 text-xs tabular-nums text-muted-foreground italic",
+                              subRowPadding,
+                              "text-xs tabular-nums text-muted-foreground italic",
                               col.align === "right" && "text-right",
                               col.align === "center" && "text-center",
                               (!col.align || col.align === "left") && "text-left",
                               ci === 0 && "pl-6",
-                              col.sticky && "sticky left-0 bg-surface-container-low/40 z-10",
+                              isStickyColumn(col, ci) &&
+                                "sticky left-0 z-10 bg-surface-container-low/40",
                             )}
                           >
                             {col.cell

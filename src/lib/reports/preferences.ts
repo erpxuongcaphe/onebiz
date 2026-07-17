@@ -3,6 +3,7 @@ import { REPORT_CATALOG } from "./catalog";
 const FAVORITES_KEY = "onebiz.reports.v1.favorites";
 const RECENT_KEY = "onebiz.reports.v1.recent";
 const VIEW_PREFERENCES_PREFIX = "onebiz.reports.v1.view.";
+const TABLE_PREFERENCES_PREFIX = "onebiz.reports.v1.table.";
 const MAX_RECENT_REPORTS = 8;
 const VALID_REPORT_PATHS = new Set(REPORT_CATALOG.map((report) => report.href));
 
@@ -93,6 +94,73 @@ export function clearReportViewPreferences(path: string): void {
   if (typeof window === "undefined" || !VALID_REPORT_PATHS.has(path)) return;
   try {
     window.localStorage.removeItem(VIEW_PREFERENCES_PREFIX + path);
+  } catch {
+    // Ignore unavailable storage.
+  }
+}
+
+export interface ReportTablePreferences {
+  density: "standard" | "compact";
+  wrapText: boolean;
+  freezeFirstColumn: boolean;
+  stripedRows: boolean;
+}
+
+function isValidTablePreferenceKey(key: string): boolean {
+  return key.length > 0 && key.length <= 500;
+}
+
+export function readReportTablePreferences(
+  key: string,
+): Partial<ReportTablePreferences> {
+  if (typeof window === "undefined" || !isValidTablePreferenceKey(key)) {
+    return {};
+  }
+
+  try {
+    const value = JSON.parse(
+      window.localStorage.getItem(TABLE_PREFERENCES_PREFIX + key) ?? "{}",
+    ) as Partial<ReportTablePreferences>;
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+    return {
+      density:
+        value.density === "compact" || value.density === "standard"
+          ? value.density
+          : undefined,
+      wrapText:
+        typeof value.wrapText === "boolean" ? value.wrapText : undefined,
+      freezeFirstColumn:
+        typeof value.freezeFirstColumn === "boolean"
+          ? value.freezeFirstColumn
+          : undefined,
+      stripedRows:
+        typeof value.stripedRows === "boolean" ? value.stripedRows : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+export function writeReportTablePreferences(
+  key: string,
+  preferences: ReportTablePreferences,
+): void {
+  if (typeof window === "undefined" || !isValidTablePreferenceKey(key)) return;
+  try {
+    window.localStorage.setItem(
+      TABLE_PREFERENCES_PREFIX + key,
+      JSON.stringify(preferences),
+    );
+  } catch {
+    // Table preferences are optional; reports must remain usable without storage.
+  }
+}
+
+export function clearReportTablePreferences(key: string): void {
+  if (typeof window === "undefined" || !isValidTablePreferenceKey(key)) return;
+  try {
+    window.localStorage.removeItem(TABLE_PREFERENCES_PREFIX + key);
   } catch {
     // Ignore unavailable storage.
   }

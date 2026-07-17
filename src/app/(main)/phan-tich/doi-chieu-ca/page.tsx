@@ -28,6 +28,16 @@ import {
 } from "@/lib/utils/excel-export";
 import { KpiCard } from "../_components";
 
+const RECONCILIATION_TYPE_LABELS: Record<
+  NonNullable<ReconciledShiftFilter["type"]>,
+  string
+> = {
+  all: "Tất cả",
+  self: "Tự đối chiếu",
+  cross: "Đối chiếu hộ",
+  big_variance: "Chênh lệch lớn (> 5%)",
+};
+
 function isSelfReconcile(row: ReconciledShiftRow): boolean {
   return !!row.reconciledById && row.reconciledById === row.cashierId;
 }
@@ -258,7 +268,9 @@ export default function ReconciledShiftReportPage() {
           <div>
             <label className="text-xs text-muted-foreground">Loại đối chiếu</label>
             <Select value={type} onValueChange={(value) => value && setType(value as NonNullable<ReconciledShiftFilter["type"]>)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger aria-label="Loại đối chiếu">
+                <SelectValue>{RECONCILIATION_TYPE_LABELS[type]}</SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả</SelectItem>
                 <SelectItem value="self">Tự đối chiếu</SelectItem>

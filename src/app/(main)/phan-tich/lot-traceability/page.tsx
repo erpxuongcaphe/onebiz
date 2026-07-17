@@ -15,6 +15,13 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Icon } from "@/components/ui/icon";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { formatNumber, formatShortDate } from "@/lib/format";
 import {
   ReportPageHeader,
@@ -60,6 +67,14 @@ const STATUS_LABEL: Record<string, string> = {
   consumed: "Đã dùng hết",
   disposed: "Đã hủy",
 };
+
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "Tất cả trạng thái" },
+  { value: "active", label: "Còn hàng" },
+  { value: "depleted", label: "Hết hàng" },
+  { value: "expired", label: "Hết hạn" },
+  { value: "recalled", label: "Thu hồi" },
+] as const;
 
 export default function LotTraceabilityPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
@@ -327,17 +342,29 @@ export default function LotTraceabilityPage() {
               className="pl-8 pr-3 h-8 text-xs rounded-full border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary w-64"
             />
           </div>
-          <select
+          <Select
             value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-8 px-3 text-xs rounded-full border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary"
+            onValueChange={(value) => value && setStatusFilter(value)}
           >
-            <option value="all">Tất cả trạng thái</option>
-            <option value="active">Còn hàng</option>
-            <option value="depleted">Hết hàng</option>
-            <option value="expired">Hết hạn</option>
-            <option value="recalled">Thu hồi</option>
-          </select>
+            <SelectTrigger
+              size="sm"
+              className="min-w-40 bg-surface-container-lowest text-xs"
+              aria-label="Trạng thái lô"
+            >
+              <SelectValue>
+                {STATUS_FILTER_OPTIONS.find(
+                  (option) => option.value === statusFilter,
+                )?.label ?? "Tất cả trạng thái"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent align="end">
+              {STATUS_FILTER_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {loading ? (

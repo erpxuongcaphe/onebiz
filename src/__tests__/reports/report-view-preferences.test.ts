@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  clearReportTablePreferences,
   clearReportViewPreferences,
+  readReportTablePreferences,
   readReportViewPreferences,
+  writeReportTablePreferences,
   writeReportViewPreferences,
 } from "@/lib/reports/preferences";
 
@@ -36,5 +39,48 @@ describe("report view preferences", () => {
     writeReportViewPreferences(REPORT_PATH, { density: "compact" });
     clearReportViewPreferences(REPORT_PATH);
     expect(readReportViewPreferences(REPORT_PATH)).toEqual({});
+  });
+});
+
+describe("report table preferences", () => {
+  const tableKey = "/phan-tich/ban-hang:date:0|revenue:1";
+
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("stores and restores display-only table settings", () => {
+    writeReportTablePreferences(tableKey, {
+      density: "compact",
+      wrapText: false,
+      freezeFirstColumn: true,
+      stripedRows: false,
+    });
+
+    expect(readReportTablePreferences(tableKey)).toEqual({
+      density: "compact",
+      wrapText: false,
+      freezeFirstColumn: true,
+      stripedRows: false,
+    });
+  });
+
+  it("ignores invalid keys and clears saved table settings", () => {
+    writeReportTablePreferences("", {
+      density: "compact",
+      wrapText: false,
+      freezeFirstColumn: true,
+      stripedRows: false,
+    });
+    expect(window.localStorage.length).toBe(0);
+
+    writeReportTablePreferences(tableKey, {
+      density: "standard",
+      wrapText: true,
+      freezeFirstColumn: false,
+      stripedRows: true,
+    });
+    clearReportTablePreferences(tableKey);
+    expect(readReportTablePreferences(tableKey)).toEqual({});
   });
 });
