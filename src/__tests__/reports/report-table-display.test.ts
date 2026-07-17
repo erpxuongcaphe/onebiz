@@ -6,6 +6,14 @@ const table = readFileSync(
   resolve("src/components/shared/report/report-data-table.tsx"),
   "utf8",
 );
+const tableDisplay = readFileSync(
+  resolve("src/components/shared/report/report-table-display.tsx"),
+  "utf8",
+);
+const tableFrame = readFileSync(
+  resolve("src/components/shared/report/report-table-frame.tsx"),
+  "utf8",
+);
 const lotReport = readFileSync(
   resolve("src/app/(main)/phan-tich/lot-traceability/page.tsx"),
   "utf8",
@@ -24,6 +32,9 @@ describe("report table display controls", () => {
     expect(table).toContain("Cố định cột đầu");
     expect(table).toContain("Kẻ dòng xen kẽ");
     expect(table).toContain("writeReportTablePreferences");
+    expect(tableDisplay).toContain("T\\u00ecm c\\u1ed9t");
+    expect(tableDisplay).toContain("filteredColumns");
+    expect(tableFrame).toContain("disableFreeze={hasMergedCells}");
   });
 
   it("uses Vietnamese dropdowns for the remaining report filters", () => {

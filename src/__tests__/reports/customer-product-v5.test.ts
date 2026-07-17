@@ -45,11 +45,17 @@ describe("báo cáo Khách hàng - Sản phẩm V5", () => {
     expect(page).toContain('aria-label="Góc nhìn báo cáo"');
     expect(page).toContain('aria-label="Nội dung hiển thị"');
     expect(page).toContain('aria-label="Mật độ bảng"');
+    expect(page).toContain('aria-label="Số khách trong bảng chéo"');
+    expect(page).toContain('aria-label="Số nhóm hàng trong bảng chéo"');
+    expect(page).toContain("MATRIX_LIMIT_OPTIONS");
+    expect(page).toContain("formatMatrixLimit");
     expect(page).toContain('? "Doanh thu cao nhất"');
     expect(page).toContain('? "Nhiều đơn nhất"');
     expect(page).toContain("DropdownMenuCheckboxItem");
     expect(page).toContain('url.searchParams.set("display", displayMode)');
     expect(page).toContain('url.searchParams.set("density", density)');
+    expect(page).toContain('url.searchParams.set("matrixCustomers", String(matrixCustomerLimit))');
+    expect(page).toContain('url.searchParams.set("matrixCategories", String(matrixCategoryLimit))');
     expect(page).not.toContain('role="tablist"');
   });
 
@@ -60,6 +66,9 @@ describe("báo cáo Khách hàng - Sản phẩm V5", () => {
     expect(page).toContain("clearReportViewPreferences");
     expect(page).toContain('mode: "view"');
     expect(page).toContain('mode: "full"');
+    expect(page).toContain("Tổng hiển thị");
+    expect(page).toContain("sourceCustomerCount");
+    expect(page).toContain("sourceCategoryCount");
   });
 
   it("uses a dropdown for chart and table selection across reports", () => {
