@@ -15,6 +15,10 @@ const migration = readFileSync(
   "utf8",
 );
 
+const chartSwitch = readFileSync(
+  resolve("src/components/shared/report/chart-table-switch.tsx"),
+  "utf8",
+);
 describe("báo cáo Khách hàng - Sản phẩm V5", () => {
   it("dùng tiếng Việt rõ nghĩa và ba góc nhìn phù hợp dữ liệu lớn", () => {
     expect(page).toContain('title="Khách hàng mua sản phẩm nào"');
@@ -37,6 +41,30 @@ describe("báo cáo Khách hàng - Sản phẩm V5", () => {
     expect(service).not.toContain("const rpc = getClient().rpc");
   });
 
+  it("uses compact dropdown controls and flexible report layouts", () => {
+    expect(page).toContain('aria-label="Góc nhìn báo cáo"');
+    expect(page).toContain('aria-label="Nội dung hiển thị"');
+    expect(page).toContain('aria-label="Mật độ bảng"');
+    expect(page).toContain("DropdownMenuCheckboxItem");
+    expect(page).toContain('url.searchParams.set("display", displayMode)');
+    expect(page).toContain('url.searchParams.set("density", density)');
+    expect(page).not.toContain('role="tablist"');
+  });
+
+  it("keeps visible columns aligned with the current-view export", () => {
+    expect(page).toContain('customerColumns.includes("revenue")');
+    expect(page).toContain('productColumns.includes("revenue")');
+    expect(page).toContain("writeReportViewPreferences");
+    expect(page).toContain("clearReportViewPreferences");
+    expect(page).toContain('mode: "view"');
+    expect(page).toContain('mode: "full"');
+  });
+
+  it("uses a dropdown for chart and table selection across reports", () => {
+    expect(chartSwitch).toContain('aria-label="Kiểu hiển thị báo cáo"');
+    expect(chartSwitch).toContain("<Select");
+    expect(chartSwitch).not.toContain('role="tablist"');
+  });
   it("migration chỉ đọc và luôn kiểm tra quyền báo cáo", () => {
     expect(migration).toContain("get_customer_product_report");
     expect(migration).toContain("get_customer_product_detail_page");
