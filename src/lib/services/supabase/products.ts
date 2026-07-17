@@ -506,9 +506,10 @@ export async function getAllStockMovements(
     const p = resolvePartner(row);
     return {
       id: row.id,
-      code: row.reference_type
-        ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}`
-        : row.id.slice(0, 10),
+      // Đợt 3 (CEO 17/07): "Mã phiếu" = MÃ CHỨNG TỪ THẬT (HD/PO/SX/IN/DI/TH...)
+      // do resolver tra ra. Trước đây chế từ UUID (2 ký tự loại + 6 ký tự id) —
+      // không truy được về chứng từ nào. Không có chứng từ (tồn đầu kỳ) → "—".
+      code: p.referenceCode ?? "—",
       type: mapMovementType(row.type),
       typeName: typeNameMap[row.type] ?? row.type,
       quantity: row.quantity,
@@ -553,17 +554,33 @@ async function buildMovementPartnerResolver(
   const purchaseOrderIds = new Set<string>();
   const inputInvoiceIds = new Set<string>();
   const internalSaleIds = new Set<string>();
+  // Đợt 3 (CEO 17/07) — nối MÃ THẬT cho 5 loại chứng từ còn thiếu (verify DB
+  // scripts/probe-doc-codes.mjs: reference_id trỏ đúng bảng này, cột `code`
+  // thật SX../IN../DI../TH../PO..). Trước đây các loại này bị "chế" mã từ UUID.
+  const productionOrderIds = new Set<string>();
+  const inventoryCheckIds = new Set<string>();
+  const disposalIds = new Set<string>();
+  const salesReturnIds = new Set<string>();
   for (const r of rows) {
     if (!r.reference_id) continue;
     const t = r.reference_type;
     if (t === "invoice" || t === "bom_consume" || t === "modifier_topping" || t === "invoice_void") {
       invoiceIds.add(r.reference_id);
-    } else if (t === "purchase_order" || t === "po_receive") {
+    } else if (t === "purchase_order" || t === "po_receive" || t === "purchase_order_revert") {
+      // purchase_order_revert (hủy phiếu nhập, đảo kho) trỏ CÙNG bảng purchase_orders.
       purchaseOrderIds.add(r.reference_id);
     } else if (t === "input_invoice") {
       inputInvoiceIds.add(r.reference_id);
     } else if (t === "internal_sale") {
       internalSaleIds.add(r.reference_id);
+    } else if (t === "production_order") {
+      productionOrderIds.add(r.reference_id);
+    } else if (t === "inventory_check") {
+      inventoryCheckIds.add(r.reference_id);
+    } else if (t === "disposal_export" || t === "disposal") {
+      disposalIds.add(r.reference_id);
+    } else if (t === "sales_return" || t === "return_bom_restore") {
+      salesReturnIds.add(r.reference_id);
     }
   }
 
@@ -571,6 +588,7 @@ async function buildMovementPartnerResolver(
   const poMap = new Map<string, { code: string; supplier_name: string | null }>();
   const inputInvMap = new Map<string, { code: string; supplier_name: string | null }>();
   const internalSaleMap = new Map<string, { code: string; to_branch_name: string | null }>();
+  const codeOnlyMap = new Map<string, string>(); // id → code (SX/IN/DI/TH)
 
   if (invoiceIds.size > 0) {
     const { data: invs } = await supabase
@@ -607,6 +625,22 @@ async function buildMovementPartnerResolver(
       to_branch_name: (i.branches as { name?: string } | null)?.name ?? null,
     }));
   }
+  // Đợt 3: 3 bảng chỉ cần mã (id → code) — gộp chung 1 map.
+  const codeOnlyLoaders: [Set<string>, string][] = [
+    [productionOrderIds, "production_orders"],
+    [inventoryCheckIds, "inventory_checks"],
+    [disposalIds, "disposal_exports"],
+    [salesReturnIds, "sales_returns"],
+  ];
+  for (const [ids, table] of codeOnlyLoaders) {
+    if (ids.size === 0) continue;
+    const { data: recs } = await supabase
+      .from(table)
+      .select("id, code")
+      .in("id", Array.from(ids));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (recs ?? []).forEach((r: any) => { if (r.code) codeOnlyMap.set(r.id, r.code); });
+  }
 
   return function resolvePartner(row: { reference_type: string | null; reference_id: string | null }): PartnerInfo {
     const t = row.reference_type;
@@ -618,6 +652,12 @@ async function buildMovementPartnerResolver(
       return { partner: inv.customer_name || "Khách lẻ", partnerType: "customer", referenceCode: inv.code };
     }
     if (t === "purchase_order" || t === "po_receive") {
+      const po = poMap.get(rid);
+      if (!po) return {};
+      return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };
+    }
+    // Đợt 3: hủy phiếu nhập (đảo kho) — cùng bảng PO, đối tác là NCC gốc.
+    if (t === "purchase_order_revert") {
       const po = poMap.get(rid);
       if (!po) return {};
       return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };
@@ -636,8 +676,15 @@ async function buildMovementPartnerResolver(
         referenceCode: is.code,
       };
     }
-    if (t === "inventory_check") return { partner: "Kiểm kho", partnerType: "system" };
-    if (t === "disposal_export") return { partner: "Xuất hủy", partnerType: "system" };
+    // Đợt 3: 4 loại chứng từ nội bộ — nay kèm MÃ THẬT (SX/IN/DI/TH) thay mã chế.
+    if (t === "production_order")
+      return { partner: "Lệnh sản xuất", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
+    if (t === "inventory_check")
+      return { partner: "Kiểm kho", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
+    if (t === "disposal_export" || t === "disposal")
+      return { partner: "Xuất hủy", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
+    if (t === "sales_return" || t === "return_bom_restore")
+      return { partner: "Trả hàng bán", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
     if (t === "internal_export") return { partner: "Xuất dùng nội bộ", partnerType: "system" };
     if (t === "stock_transfer") return { partner: "Chuyển kho", partnerType: "system" };
     if (t === "initial_stock_import") return { partner: "Tồn đầu kỳ (import)", partnerType: "system" };
@@ -686,7 +733,8 @@ export async function getStockMovements(
     const p = resolvePartner(row);
     return {
       id: row.id,
-      code: row.reference_type ? `${row.reference_type.toUpperCase().slice(0, 2)}${row.id.slice(0, 6)}` : row.id.slice(0, 10),
+      // Đợt 3: mã chứng từ THẬT (xem getAllStockMovements) — hết chế từ UUID.
+      code: p.referenceCode ?? "—",
       type: mapMovementType(row.type),
       typeName: typeNameMap[row.type] ?? row.type,
       quantity: row.quantity,
@@ -696,6 +744,8 @@ export async function getStockMovements(
       note: row.note ?? undefined,
       createdBy: row.created_by,
       createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
+      referenceType: row.reference_type ?? undefined,
+      referenceId: row.reference_id ?? undefined,
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,

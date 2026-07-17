@@ -119,6 +119,9 @@ export interface StockMovement {
   partnerType?: "customer" | "supplier" | "branch" | "system";
   /** Mã phiếu gốc (HD000123 / PO000045 / IS000007 …) — tham chiếu trực tiếp. */
   referenceCode?: string;
+  /** Đợt 3 (17/07): loại + id chứng từ gốc — để sau liên kết bấm mở chứng từ. */
+  referenceType?: string;
+  referenceId?: string;
 }
 
 // Lịch sử bán hàng của sản phẩm
