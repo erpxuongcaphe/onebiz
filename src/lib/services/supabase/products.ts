@@ -7,6 +7,8 @@ import type { Database } from "@/lib/supabase/types";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+// Đợt 2 (CEO 17/07): nhãn hướng giao dịch lấy từ nguồn sự thật chung.
+import { MOVEMENT_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
@@ -493,12 +495,7 @@ export async function getAllStockMovements(
   const { data, count, error } = await query;
   if (error) handleError(error, "getAllStockMovements");
 
-  const typeNameMap: Record<string, string> = {
-    in: "Nhập hàng",
-    out: "Xuất hàng",
-    adjust: "Kiểm kho",
-    transfer: "Chuyển kho",
-  };
+  const typeNameMap = MOVEMENT_TYPE_LABELS;
 
   // CEO 10/06/2026 — Batch load partner (KH/NCC/Chi nhánh) qua helper dùng chung.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -678,12 +675,7 @@ export async function getStockMovements(
 
   if (error) handleError(error, "getStockMovements");
 
-  const typeNameMap: Record<string, string> = {
-    in: "Nhập hàng",
-    out: "Xuất hàng",
-    adjust: "Kiểm kho",
-    transfer: "Chuyển kho",
-  };
+  const typeNameMap = MOVEMENT_TYPE_LABELS;
 
   // CEO 10/06/2026 — Batch load partner qua helper dùng chung.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -159,59 +159,11 @@ interface XntOptions {
 
 // ============================================================
 // Mapping: reference_type → bucket
+// Đợt 2 (CEO 17/07): chuyển về NGUỒN SỰ THẬT chung stock-movement-refs.ts
+// (dùng chung với Lịch sử kho + thẻ kho) — không khai lại ở đây.
 // ============================================================
 
-type InBucket =
-  | "supplier"
-  | "check"
-  | "return"
-  | "transfer"
-  | "production"
-  | "other";
-type OutBucket =
-  | "sale"
-  | "disposal"
-  | "supplier_return"
-  | "check"
-  | "transfer"
-  | "production"
-  | "internal"
-  | "other";
-
-function mapInBucket(referenceType: string | null): InBucket {
-  if (!referenceType) return "other";
-  const rt = referenceType.toLowerCase();
-  if (
-    rt === "purchase_entry" ||
-    rt === "purchase_order" ||
-    rt === "goods_receipt" ||
-    rt.startsWith("purchase_")
-  )
-    return "supplier";
-  if (rt === "inventory_check" || rt === "stock_adjustment") return "check";
-  // CEO 29/05/2026: hoàn kho do HỦY hóa đơn completed (movement bù type='in').
-  // Gom vào "hàng trả lại" để tổng Nhập cân với Xuất gốc (net = 0), tránh
-  // lệch tồn đầu kỳ. Xem RPC void_completed_invoice_atomic (migration 00117).
-  if (rt === "sales_return" || rt === "invoice_void") return "return";
-  if (rt === "transfer" || rt === "stock_transfer") return "transfer";
-  if (rt.startsWith("production")) return "production"; // production_order/complete/reconcile
-  return "other";
-}
-
-function mapOutBucket(referenceType: string | null): OutBucket {
-  if (!referenceType) return "other";
-  const rt = referenceType.toLowerCase();
-  if (rt === "invoice" || rt === "sale" || rt === "pos_sale") return "sale";
-  if (rt === "disposal" || rt === "disposal_export") return "disposal";
-  if (rt === "supplier_return" || rt === "purchase_return")
-    return "supplier_return";
-  if (rt === "inventory_check" || rt === "stock_adjustment") return "check";
-  if (rt === "transfer" || rt === "stock_transfer") return "transfer";
-  if (rt.startsWith("production")) return "production"; // production_consume/order/reconcile
-  if (rt === "internal_export" || rt === "internal_sale" || rt === "input_invoice")
-    return "internal";
-  return "other";
-}
+import { mapInBucket, mapOutBucket } from "@/lib/constants/stock-movement-refs";
 
 // ============================================================
 // Main service
