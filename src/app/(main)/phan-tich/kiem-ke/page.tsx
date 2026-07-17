@@ -95,6 +95,7 @@ export default function KiemKeReportPage() {
         {
           name: "Báo cáo kiểm kê",
           titleRows,
+          tablePreferenceKey: "report.kiem-ke.checks",
           columns: [
             { label: "Mã phiếu", key: "code", width: 14 },
             { label: "Ngày kiểm", key: "date", width: 12 },
@@ -310,6 +311,7 @@ export default function KiemKeReportPage() {
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
             <ReportDataTable<InventoryCheckReportRow>
               columns={columns}
+              tablePreferenceKey="report.kiem-ke.checks"
               rows={data.rows}
               getRowKey={(r) => r.id}
               subtotalLabel={`Tổng số phiếu: ${data.summary.totalChecks}`}

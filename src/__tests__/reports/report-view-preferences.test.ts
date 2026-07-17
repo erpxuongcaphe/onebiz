@@ -55,6 +55,7 @@ describe("report table preferences", () => {
       wrapText: false,
       freezeFirstColumn: true,
       stripedRows: false,
+      hiddenColumnKeys: ["previous"],
     });
 
     expect(readReportTablePreferences(tableKey)).toEqual({
@@ -62,6 +63,7 @@ describe("report table preferences", () => {
       wrapText: false,
       freezeFirstColumn: true,
       stripedRows: false,
+      hiddenColumnKeys: ["previous"],
     });
   });
 
@@ -71,6 +73,7 @@ describe("report table preferences", () => {
       wrapText: false,
       freezeFirstColumn: true,
       stripedRows: false,
+      hiddenColumnKeys: ["previous"],
     });
     expect(window.localStorage.length).toBe(0);
 
@@ -79,6 +82,7 @@ describe("report table preferences", () => {
       wrapText: true,
       freezeFirstColumn: false,
       stripedRows: true,
+      hiddenColumnKeys: [],
     });
     clearReportTablePreferences(tableKey);
     expect(readReportTablePreferences(tableKey)).toEqual({});

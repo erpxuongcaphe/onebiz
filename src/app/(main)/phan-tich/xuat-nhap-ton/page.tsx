@@ -4,8 +4,8 @@
  * Báo cáo Xuất-Nhập-Tồn (XNT).
  *
  * Format chuẩn KiotViet (CEO 06/05/2026):
- * - View "Tổng hợp" (9 cột): Mã / Tên / ĐVT / Tồn đầu / Nhập / Xuất / Tồn cuối
- * - View "Chi tiết" (13 cột): NHẬP × 5 (NCC/Kiểm/Trả/Chuyển/SX) + XUẤT × 6
+ * - View "Tổng hợp" (11 cột): Mã / Tên / ĐVT + số lượng và giá trị Tồn đầu / Nhập / Xuất / Tồn cuối
+ * - View "Chi tiết" (17 cột): Mã / Tên / Tồn đầu + NHẬP × 5 + XUẤT × 6 + Tồn cuối
  * - Filter: 16 preset thời gian + chi nhánh + search SP
  * - Export: View hiện tại (1 sheet) hoặc Đầy đủ (multi-sheet kế toán pivot)
  *
@@ -113,6 +113,7 @@ export default function XuatNhapTonPage() {
           {
             name: "Xuất nhập tồn",
             titleRows,
+            tablePreferenceKey: "report.xuat-nhap-ton.summary",
             columns: [
               { label: "Mã hàng", key: "code", width: 14 },
               { label: "Tên hàng", key: "name", width: 36 },
@@ -164,8 +165,9 @@ export default function XuatNhapTonPage() {
           {
             name: "XNT chi tiết",
             titleRows,
+            tablePreferenceKey: "report.xuat-nhap-ton.detail",
             columnGroups: [
-              { label: "", span: 4 }, // Mã / Tên / ĐVT / Tồn đầu+GT đầu (4)
+              { label: "", span: 4 }, // Mã / Tên / Tồn đầu / GT đầu
               { label: "NHẬP", span: 5 },
               { label: "XUẤT", span: 6 },
               { label: "", span: 2 }, // Tồn cuối + GT cuối
@@ -359,6 +361,7 @@ export default function XuatNhapTonPage() {
   const summaryColumns: DataTableColumn<XntRow>[] = [
     { label: "Mã hàng", key: "code", align: "left", width: "120px" },
     { label: "Tên hàng", key: "name", align: "left" },
+    { label: "ĐVT", key: "unit", align: "center", width: "80px" },
     {
       label: "Tồn đầu kỳ",
       key: "openingQty",
@@ -547,6 +550,7 @@ export default function XuatNhapTonPage() {
             {subMode === "summary" ? (
               <ReportDataTable
                 columns={summaryColumns}
+                tablePreferenceKey="report.xuat-nhap-ton.summary"
                 rows={data.rows}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
@@ -555,6 +559,7 @@ export default function XuatNhapTonPage() {
             ) : (
               <ReportDataTable
                 columns={detailColumns}
+                tablePreferenceKey="report.xuat-nhap-ton.detail"
                 columnGroups={detailColumnGroups}
                 rows={data.rows}
                 getRowKey={(r) => r.productId}

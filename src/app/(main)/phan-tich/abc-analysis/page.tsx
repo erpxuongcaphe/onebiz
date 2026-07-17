@@ -96,9 +96,10 @@ export default function AbcAnalysisPage() {
         {
           name: "ABC Analysis",
           titleRows,
+          tablePreferenceKey: "report.abc-analysis.products",
           columns: [
             { label: "Lớp", key: "abcClass", width: 8 },
-            { label: "Mã hàng", key: "code", width: 14 },
+            { label: "Mã hàng", key: "code", width: 14, hideable: false },
             { label: "Tên hàng", key: "name", width: 32 },
             { label: "ĐVT", key: "unit", width: 8 },
             { label: "SL bán", key: "qtySold", width: 10, format: "number" },
@@ -210,7 +211,7 @@ export default function AbcAnalysisPage() {
         </span>
       ),
     },
-    { label: "Mã hàng", key: "code", align: "left", width: "110px" },
+    { label: "Mã hàng", key: "code", align: "left", width: "110px", hideable: false },
     { label: "Tên hàng", key: "name", align: "left" },
     { label: "Đơn vị tính", key: "unit", align: "left", width: "90px" },
     {
@@ -350,6 +351,7 @@ export default function AbcAnalysisPage() {
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
             <ReportDataTable<AbcRow>
               columns={columns}
+              tablePreferenceKey="report.abc-analysis.products"
               rows={filteredRows}
               getRowKey={(r) => r.productId}
               subtotalLabel={`SL mặt hàng: ${filteredRows.length}`}

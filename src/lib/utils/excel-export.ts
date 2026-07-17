@@ -25,6 +25,7 @@
 import type * as XLSXTypes from "xlsx-js-style";
 import type { DateRange, ReportKind } from "@/lib/types/report";
 import { roundDecimals } from "@/lib/format";
+import { readReportTablePreferences } from "@/lib/reports/preferences";
 
 // ============================================================
 // Style constants — đồng bộ với theme OneBiz (#004AC6 primary)
@@ -115,6 +116,10 @@ export interface ExcelColumn {
   label: string;
   /** Key trong data row */
   key: string;
+  /** Stable key shared with the matching web column when it differs from data key. */
+  id?: string;
+  /** Set false when the matching web column must always remain visible. */
+  hideable?: boolean;
   /** Width in chars (default 15) */
   width?: number;
   /** Format số: "number" | "currency" | "percent" | "date" | "text" */
@@ -137,6 +142,8 @@ export interface ExcelSheet {
   titleRows?: string[];
   /** Column groups — merged header trên row 1 (vd "NHẬP" / "XUẤT") */
   columnGroups?: { label: string; span: number }[];
+  /** Shared with ReportDataTable so current-view exports mirror visible columns. */
+  tablePreferenceKey?: string;
   /** Column definitions */
   columns: ExcelColumn[];
   /** Data rows */
@@ -155,6 +162,44 @@ export interface ExcelSheet {
    * Khi true: tạo 3 cột "Người lập / Kế toán trưởng / Giám đốc" cuối sheet.
    */
   withSignature?: boolean;
+}
+
+export function filterExcelSheetColumns(
+  sheet: ExcelSheet,
+  hiddenColumnKeys: string[],
+): ExcelSheet {
+  if (hiddenColumnKeys.length === 0 || sheet.columns.length <= 1) return sheet;
+
+  const hidden = new Set(hiddenColumnKeys);
+  const visibleIndexes = sheet.columns
+    .map((column, index) => ({ column, index }))
+    .filter(
+      ({ column, index }) =>
+        index === 0 ||
+        column.hideable === false ||
+        !hidden.has(column.id ?? column.key),
+    );
+  if (visibleIndexes.length === sheet.columns.length) return sheet;
+
+  let groupOffset = 0;
+  const columnGroups = sheet.columnGroups?.reduce<
+    NonNullable<ExcelSheet["columnGroups"]>
+  >((groups, group) => {
+    const start = groupOffset;
+    const end = Math.min(groupOffset + group.span, sheet.columns.length);
+    groupOffset = end;
+    const span = visibleIndexes.filter(
+      ({ index }) => index >= start && index < end,
+    ).length;
+    if (span > 0) groups.push({ ...group, span });
+    return groups;
+  }, []);
+
+  return {
+    ...sheet,
+    columns: visibleIndexes.map(({ column }) => column),
+    columnGroups,
+  };
 }
 
 // ============================================================
@@ -428,7 +473,14 @@ export async function exportReportToExcel(
     CreatedDate: new Date(),
   };
 
-  for (const sheet of ensureFullExportInfoSheet(options)) {
+  const preparedSheets = ensureFullExportInfoSheet(options).map((sheet) => {
+    if (options.mode !== "view" || !sheet.tablePreferenceKey) return sheet;
+    const hiddenColumnKeys =
+      readReportTablePreferences(sheet.tablePreferenceKey).hiddenColumnKeys ?? [];
+    return filterExcelSheetColumns(sheet, hiddenColumnKeys);
+  });
+
+  for (const sheet of preparedSheets) {
     const ws = buildWorksheet(sheet, XLSX);
     const safeName = sheet.name
       .replace(/[\\/:*?[\]]/g, "")
