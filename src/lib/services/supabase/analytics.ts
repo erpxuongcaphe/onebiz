@@ -1849,11 +1849,12 @@ function callReportingRpc(
   name: string,
   args: Record<string, unknown>,
 ): Promise<ReportingRpcResult> {
-  const rpc = getClient().rpc as unknown as (
+  const client = getClient();
+  const rpc = client.rpc as unknown as (
     functionName: string,
     parameters: Record<string, unknown>,
   ) => Promise<ReportingRpcResult>;
-  return rpc(name, args);
+  return rpc.call(client, name, args);
 }
 
 export async function getCustomerProductReport(params: {

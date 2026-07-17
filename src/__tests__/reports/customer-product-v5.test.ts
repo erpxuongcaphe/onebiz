@@ -32,6 +32,11 @@ describe("báo cáo Khách hàng - Sản phẩm V5", () => {
     expect(service).toContain('if (!result.has_more || rows.length === 0) break;');
   });
 
+  it("keeps the Supabase client as the RPC receiver", () => {
+    expect(service).toContain("return rpc.call(client, name, args)");
+    expect(service).not.toContain("const rpc = getClient().rpc");
+  });
+
   it("migration chỉ đọc và luôn kiểm tra quyền báo cáo", () => {
     expect(migration).toContain("get_customer_product_report");
     expect(migration).toContain("get_customer_product_detail_page");
