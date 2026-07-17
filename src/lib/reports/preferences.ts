@@ -165,4 +165,3 @@ export function clearReportTablePreferences(key: string): void {
     // Ignore unavailable storage.
   }
 }
-
