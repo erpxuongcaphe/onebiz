@@ -1,16 +1,16 @@
 "use client";
 
 /**
- * BÃ¡o cÃ¡o Lot Traceability + HÃ ng cáº­n date â€” REP-3 (CEO 06/05/2026).
+ * Báo cáo Lot Traceability + Hàng cận date — REP-3 (CEO 06/05/2026).
  *
- * Hiá»ƒn thá»‹:
- * - KPI: Tá»•ng lÃ´ / LÃ´ sáº¯p háº¿t háº¡n / LÃ´ háº¿t hÃ ng / Tá»•ng giÃ¡ trá»‹ tá»“n lÃ´
- * - Filter theo SP / status / source / threshold ngÃ y
- * - Báº£ng chi tiáº¿t lot: lot_code / product / qty / received / expiry / source / status
+ * Hiển thị:
+ * - KPI: Tổng lô / Lô sắp hết hạn / Lô hết hàng / Tổng giá trị tồn lô
+ * - Filter theo SP / status / source / threshold ngày
+ * - Bảng chi tiết lot: lot_code / product / qty / received / expiry / source / status
  *
- * DÃ¹ng cho:
- * - Truy xuáº¥t ngÆ°á»£c khi recall (tÃ¬m lÃ´ bÃ¡n cho KH nÃ o)
- * - Cáº£nh bÃ¡o háº¿t háº¡n (Æ°u tiÃªn xáº£ slow movers cáº­n date)
+ * Dùng cho:
+ * - Truy xuất ngược khi recall (tìm lô bán cho KH nào)
+ * - Cảnh báo hết hạn (ưu tiên xả slow movers cận date)
  */
 
 import { useEffect, useState, useCallback } from "react";
@@ -53,27 +53,27 @@ interface LotRow {
 }
 
 const SOURCE_LABEL: Record<string, string> = {
-  purchase: "Nháº­p NCC",
-  production: "Sáº£n xuáº¥t",
-  transfer: "Chuyá»ƒn kho",
-  other: "KhÃ¡c",
+  purchase: "Nhập NCC",
+  production: "Sản xuất",
+  transfer: "Chuyển kho",
+  other: "Khác",
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  active: "CÃ²n hÃ ng",
-  depleted: "Háº¿t hÃ ng",
-  expired: "Háº¿t háº¡n",
-  recalled: "Thu há»“i",
-  consumed: "ÄÃ£ dÃ¹ng háº¿t",
-  disposed: "ÄÃ£ há»§y",
+  active: "Còn hàng",
+  depleted: "Hết hàng",
+  expired: "Hết hạn",
+  recalled: "Thu hồi",
+  consumed: "Đã dùng hết",
+  disposed: "Đã hủy",
 };
 
 const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "Táº¥t cáº£ tráº¡ng thÃ¡i" },
-  { value: "active", label: "CÃ²n hÃ ng" },
-  { value: "depleted", label: "Háº¿t hÃ ng" },
-  { value: "expired", label: "Háº¿t háº¡n" },
-  { value: "recalled", label: "Thu há»“i" },
+  { value: "all", label: "Tất cả trạng thái" },
+  { value: "active", label: "Còn hàng" },
+  { value: "depleted", label: "Hết hàng" },
+  { value: "expired", label: "Hết hạn" },
+  { value: "recalled", label: "Thu hồi" },
 ] as const;
 
 export default function LotTraceabilityPage() {
@@ -149,11 +149,11 @@ export default function LotTraceabilityPage() {
 
   const handleExport = useCallback((mode: "view" | "full") => {
     const titleRows = buildReportTitleRows({
-      title: "BÃ¡o cÃ¡o lot traceability",
+      title: "Báo cáo lot traceability",
       range,
       branchName: activeBranchId
         ? branches.find((branch) => branch.id === activeBranchId)?.name
-        : "ToÃ n cÃ´ng ty",
+        : "Toàn công ty",
       generatedAt: new Date(),
     });
     exportReportToExcel({
@@ -166,16 +166,16 @@ export default function LotTraceabilityPage() {
           name: "Lot trace",
           titleRows,
           columns: [
-            { label: "MÃ£ lÃ´", key: "lotCode", width: 14 },
-            { label: "MÃ£ hÃ ng", key: "productCode", width: 12 },
-            { label: "TÃªn hÃ ng", key: "productName", width: 30 },
-            { label: "SL nháº­p", key: "quantity", width: 10, format: "number" },
-            { label: "CÃ²n láº¡i", key: "remainingQty", width: 10, format: "number" },
-            { label: "NgÃ y nháº­p", key: "receivedDate", width: 14 },
+            { label: "Mã lô", key: "lotCode", width: 14 },
+            { label: "Mã hàng", key: "productCode", width: 12 },
+            { label: "Tên hàng", key: "productName", width: 30 },
+            { label: "SL nhập", key: "quantity", width: 10, format: "number" },
+            { label: "Còn lại", key: "remainingQty", width: 10, format: "number" },
+            { label: "Ngày nhập", key: "receivedDate", width: 14 },
             { label: "HSD", key: "expiryDate", width: 14 },
-            { label: "CÃ²n (ngÃ y)", key: "daysToExpiry", width: 10, format: "number" },
-            { label: "Nguá»“n", key: "sourceType", width: 12 },
-            { label: "Tráº¡ng thÃ¡i", key: "status", width: 12 },
+            { label: "Còn (ngày)", key: "daysToExpiry", width: 10, format: "number" },
+            { label: "Nguồn", key: "sourceType", width: 12 },
+            { label: "Trạng thái", key: "status", width: 12 },
           ],
           rows: lots.map((l) => ({
             lotCode: l.lotCode,
@@ -184,51 +184,51 @@ export default function LotTraceabilityPage() {
             quantity: l.quantity,
             remainingQty: l.remainingQty,
             receivedDate: formatShortDate(l.receivedDate),
-            expiryDate: l.expiryDate ? formatShortDate(l.expiryDate) : "â€”",
+            expiryDate: l.expiryDate ? formatShortDate(l.expiryDate) : "—",
             daysToExpiry: l.daysToExpiry ?? "",
             sourceType: SOURCE_LABEL[l.sourceType] ?? l.sourceType,
             status: STATUS_LABEL[l.status] ?? l.status,
           })),
-          footerLabel: `SL lÃ´: ${lots.length}`,
+          footerLabel: `SL lô: ${lots.length}`,
         },
       ],
     });
   }, [activeBranchId, branchLabel, branches, lots, range]);
 
   const columns: DataTableColumn<LotRow>[] = [
-    { label: "MÃ£ lÃ´", key: "lotCode", align: "left", width: "120px" },
-    { label: "MÃ£ hÃ ng", key: "productCode", align: "left", width: "100px" },
-    { label: "TÃªn hÃ ng", key: "productName", align: "left" },
+    { label: "Mã lô", key: "lotCode", align: "left", width: "120px" },
+    { label: "Mã hàng", key: "productCode", align: "left", width: "100px" },
+    { label: "Tên hàng", key: "productName", align: "left" },
     {
-      label: "Sá»‘ lÆ°á»£ng nháº­p",
+      label: "Số lượng nhập",
       key: "quantity",
       align: "right",
       cell: (r) => formatNumber(r.quantity),
     },
     {
-      label: "Sá»‘ lÆ°á»£ng cÃ²n láº¡i",
+      label: "Số lượng còn lại",
       key: "remainingQty",
       align: "right",
       cell: (r) => formatNumber(r.remainingQty),
     },
     {
-      label: "NgÃ y nháº­p",
+      label: "Ngày nhập",
       key: "receivedDate",
       align: "center",
       cell: (r) => formatShortDate(r.receivedDate),
     },
     {
-      label: "Háº¡n sá»­ dá»¥ng",
+      label: "Hạn sử dụng",
       key: "expiryDate",
       align: "center",
-      cell: (r) => (r.expiryDate ? formatShortDate(r.expiryDate) : "â€”"),
+      cell: (r) => (r.expiryDate ? formatShortDate(r.expiryDate) : "—"),
     },
     {
-      label: "CÃ²n láº¡i Ä‘áº¿n háº¡n",
+      label: "Còn lại đến hạn",
       key: "daysToExpiry",
       align: "right",
       cell: (r) => {
-        if (r.daysToExpiry == null) return "â€”";
+        if (r.daysToExpiry == null) return "—";
         const isExpired = r.daysToExpiry < 0;
         const isWarning = r.daysToExpiry >= 0 && r.daysToExpiry <= 30;
         return (
@@ -239,20 +239,20 @@ export default function LotTraceabilityPage() {
             )}
           >
             {isExpired
-              ? `QuÃ¡ háº¡n ${Math.abs(r.daysToExpiry)} ngÃ y`
-              : `CÃ²n ${r.daysToExpiry} ngÃ y`}
+              ? `Quá hạn ${Math.abs(r.daysToExpiry)} ngày`
+              : `Còn ${r.daysToExpiry} ngày`}
           </span>
         );
       },
     },
     {
-      label: "Nguá»“n nháº­p",
+      label: "Nguồn nhập",
       key: "sourceType",
       align: "center",
       cell: (r) => SOURCE_LABEL[r.sourceType] ?? r.sourceType,
     },
     {
-      label: "Tráº¡ng thÃ¡i",
+      label: "Trạng thái",
       key: "status",
       align: "center",
       cell: (r) => (
@@ -275,8 +275,8 @@ export default function LotTraceabilityPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
-        title="Truy xuáº¥t nguá»“n gá»‘c theo lÃ´"
-        subtitle="Cáº£nh bÃ¡o lÃ´ sáº¯p háº¿t háº¡n sá»­ dá»¥ng"
+        title="Truy xuất nguồn gốc theo lô"
+        subtitle="Cảnh báo lô sắp hết hạn sử dụng"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -291,7 +291,7 @@ export default function LotTraceabilityPage() {
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Tá»•ng sá»‘ lÃ´"
+            label="Tổng số lô"
             value={String(totalLots)}
             icon="inventory_2"
             bg="bg-primary-fixed"
@@ -299,7 +299,7 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="LÃ´ Ä‘ang cÃ²n hÃ ng"
+            label="Lô đang còn hàng"
             value={String(activeLots)}
             icon="check_circle"
             bg="bg-status-success/10"
@@ -307,9 +307,9 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Sáº¯p háº¿t háº¡n (trong 30 ngÃ y)"
+            label="Sắp hết hạn (trong 30 ngày)"
             value={String(expiringCount)}
-            change={expiringCount > 0 ? "Cáº§n xáº£ hÃ ng gáº¥p" : "An toÃ n"}
+            change={expiringCount > 0 ? "Cần xả hàng gấp" : "An toàn"}
             positive={expiringCount === 0}
             icon="schedule"
             bg="bg-status-warning/10"
@@ -317,7 +317,7 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tá»•ng sá»‘ lÆ°á»£ng cÃ²n láº¡i"
+            label="Tổng số lượng còn lại"
             value={formatNumber(totalQty)}
             icon="warehouse"
             bg="bg-status-info/10"
@@ -338,7 +338,7 @@ export default function LotTraceabilityPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="TÃ¬m theo mÃ£ lÃ´ / mÃ£ hÃ ng..."
+              placeholder="Tìm theo mã lô / mã hàng..."
               className="pl-8 pr-3 h-8 text-xs rounded-full border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary w-64"
             />
           </div>
@@ -349,12 +349,12 @@ export default function LotTraceabilityPage() {
             <SelectTrigger
               size="sm"
               className="min-w-40 bg-surface-container-lowest text-xs"
-              aria-label="Tráº¡ng thÃ¡i lÃ´"
+              aria-label="Trạng thái lô"
             >
               <SelectValue>
                 {STATUS_FILTER_OPTIONS.find(
                   (option) => option.value === statusFilter,
-                )?.label ?? "Táº¥t cáº£ tráº¡ng thÃ¡i"}
+                )?.label ?? "Tất cả trạng thái"}
               </SelectValue>
             </SelectTrigger>
             <SelectContent align="end">
@@ -375,7 +375,7 @@ export default function LotTraceabilityPage() {
               className="animate-spin text-muted-foreground"
             />
             <p className="mt-2 text-sm text-muted-foreground">
-              Äang táº£i dá»¯ liá»‡u lot...
+              Đang tải dữ liệu lot...
             </p>
           </div>
         ) : (
@@ -384,8 +384,8 @@ export default function LotTraceabilityPage() {
               columns={columns}
               rows={lots}
               getRowKey={(r) => r.id}
-              subtotalLabel={`SL lÃ´: ${lots.length}`}
-              emptyState="ChÆ°a cÃ³ lot nÃ o"
+              subtotalLabel={`SL lô: ${lots.length}`}
+              emptyState="Chưa có lot nào"
             />
           </div>
         )}
@@ -393,4 +393,3 @@ export default function LotTraceabilityPage() {
     </div>
   );
 }
-
