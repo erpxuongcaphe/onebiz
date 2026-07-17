@@ -653,18 +653,26 @@ async function buildMovementPartnerResolver(
 
 export async function getStockMovements(
   productId: string,
-  params: QueryParams
+  params: QueryParams,
+  // CEO 17/07 (Thẻ kho Đợt 1): lọc theo CHI NHÁNH. Tab "Lịch sử xuất nhập" ở
+  // Tồn kho mở từ dòng (SP × chi nhánh) nhưng trước đây query không lọc branch
+  // → hiện giao dịch của MỌI chi nhánh trộn lẫn (sai phạm vi, cộng tay không
+  // khớp tồn dòng vừa bấm). Optional để màn xem THEO SẢN PHẨM (tab Thẻ kho ở
+  // /hang-hoa) giữ cross-branch như chủ đích.
+  branchId?: string
 ): Promise<QueryResult<StockMovement>> {
   const supabase = getClient();
   // P1-3C-K1: filter tenant_id (defense-in-depth).
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
-  const { data, count, error } = await supabase
+  let query = supabase
     .from("stock_movements")
     .select("*, profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId)
-    .eq("product_id", productId)
+    .eq("product_id", productId);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, count, error } = await query
     .order("created_at", { ascending: false })
     .range(from, to);
 

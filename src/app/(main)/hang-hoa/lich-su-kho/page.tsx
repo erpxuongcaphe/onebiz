@@ -186,7 +186,11 @@ export default function LichSuKhoPage() {
   );
 
   // === Export ===
-  const handleExport = (type: "excel" | "csv") => {
+  // CEO 17/07 (Thẻ kho Đợt 1): xuất TOÀN BỘ dữ liệu theo bộ lọc hiện tại.
+  // Trước đây xuất state `data` — vốn chỉ là 1 TRANG (mặc định 20 dòng) do
+  // getAllStockMovements phân trang server-side → file mở được, có số, nhưng
+  // THIẾU dữ liệu âm thầm. Nay fetch lại đủ (chunk 1000/trang) rồi mới ghi file.
+  const handleExport = async (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
       { header: "Loại", key: "typeName", width: 12 },
@@ -207,8 +211,36 @@ export default function LichSuKhoPage() {
         format: (v: string) => formatDate(v),
       },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "lich-su-kho");
-    else exportToCsv(data, exportColumns, "lich-su-kho");
+    try {
+      const presetRange = computeListPresetRange(datePreset);
+      const filters = {
+        search: search || undefined,
+        movementType: typeFilter !== "all" ? typeFilter : undefined,
+        branchId: branchFilter !== "all" ? branchFilter : undefined,
+        dateFrom: (datePreset === "custom" ? dateFrom : presetRange.from) || undefined,
+        dateTo: (datePreset === "custom" ? dateTo : presetRange.to) || undefined,
+      };
+      const CHUNK = 1000; // PostgREST cắt trần ~1000 dòng/response
+      const all: AllStockMovementRow[] = [];
+      for (let p = 0; ; p++) {
+        const r = await getAllStockMovements({ page: p, pageSize: CHUNK, ...filters });
+        all.push(...r.data);
+        if (all.length >= r.total || r.data.length < CHUNK) break;
+      }
+      if (type === "excel") await exportToExcel(all, exportColumns, "lich-su-kho");
+      else await exportToCsv(all, exportColumns, "lich-su-kho");
+      toast({
+        title: "Đã xuất file",
+        description: `${all.length} dòng (đầy đủ theo bộ lọc hiện tại)`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Xuất file thất bại",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    }
   };
 
   // === Columns ===

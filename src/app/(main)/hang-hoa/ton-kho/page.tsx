@@ -94,6 +94,9 @@ function StockRowDetail({
     }>
   >([]);
   const [movements, setMovements] = useState<StockMovement[]>([]);
+  // CEO 17/07 (Thẻ kho Đợt 1): tổng số giao dịch THẬT (count exact từ server)
+  // — nhãn tab trước đây đếm movements.length nên kẹt trần 50 dù sổ dài hơn.
+  const [movementsTotal, setMovementsTotal] = useState(0);
   const [conversions, setConversions] = useState<UOMConversion[]>([]);
   const [loadingBranches, setLoadingBranches] = useState(true);
   const [loadingMovements, setLoadingMovements] = useState(true);
@@ -178,13 +181,23 @@ function StockRowDetail({
     (async () => {
       setLoadingMovements(true);
       try {
-        const res = await getProductStockMovements(row.productId, {
-          page: 0,
-          pageSize: 50,
-        });
-        if (!cancelled) setMovements(res.data);
+        // CEO 17/07 (Thẻ kho Đợt 1): dòng đang xem là (SP × CHI NHÁNH) nên sổ
+        // phải lọc đúng chi nhánh đó. Trước đây không lọc → trộn giao dịch của
+        // mọi chi nhánh, cộng tay không khớp tồn của dòng vừa bấm.
+        const res = await getProductStockMovements(
+          row.productId,
+          { page: 0, pageSize: 50 },
+          row.branchId,
+        );
+        if (!cancelled) {
+          setMovements(res.data);
+          setMovementsTotal(res.total);
+        }
       } catch {
-        if (!cancelled) setMovements([]);
+        if (!cancelled) {
+          setMovements([]);
+          setMovementsTotal(0);
+        }
       } finally {
         if (!cancelled) setLoadingMovements(false);
       }
@@ -202,7 +215,8 @@ function StockRowDetail({
     return () => {
       cancelled = true;
     };
-  }, [row.productId]);
+    // row.branchId trong deps: đổi dòng (chi nhánh khác) phải nạp lại sổ đúng CN.
+  }, [row.productId, row.branchId]);
 
   const totalQty = branches.reduce((s, b) => s + b.quantity, 0);
   const totalReserved = branches.reduce((s, b) => s + b.reserved, 0);
@@ -402,16 +416,26 @@ function StockRowDetail({
           },
           {
             id: "movements",
-            label: `Lịch sử xuất nhập (${movements.length})`,
+            // Đếm bằng total THẬT từ server (count exact) — movements.length
+            // kẹt trần 50 (pageSize) nên trước đây sổ dài hơn vẫn hiện "(50)".
+            label: `Lịch sử xuất nhập (${movementsTotal})`,
             content: (
               <div className="space-y-2">
+                {/* CEO 17/07: tự chứng minh phạm vi — sổ dưới đây CHỈ của chi
+                    nhánh dòng đang xem (đã lọc branch_id ở query). */}
+                <div className="text-xs text-muted-foreground">
+                  Sổ giao dịch tại chi nhánh: <b>{row.branchName}</b>
+                  {movementsTotal > movements.length && (
+                    <span> · hiển thị {movements.length}/{movementsTotal} dòng gần nhất</span>
+                  )}
+                </div>
                 {loadingMovements ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
                     Đang tải...
                   </div>
                 ) : movements.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
-                    Chưa có lịch sử xuất nhập cho sản phẩm này.
+                    Chưa có giao dịch nào của sản phẩm này tại chi nhánh {row.branchName}.
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-hidden">
