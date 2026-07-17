@@ -30,6 +30,9 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -46,6 +49,10 @@ export interface DataTableColumn<T> {
   label: string;
   /** Key trong T hoặc render function */
   key: keyof T | string;
+  /** Stable key used by display preferences and view exports. */
+  id?: string;
+  /** Set false for columns that must always remain visible. */
+  hideable?: boolean;
   /** Custom cell renderer (override default) */
   cell?: (row: T) => ReactNode;
   /** Subtotal cell renderer (footer/header subtotal) */
@@ -83,6 +90,8 @@ export interface DataTableProps<T> {
   className?: string;
   /** Hiện menu tùy biến cách trình bày bảng. */
   showDisplayOptions?: boolean;
+  /** Stable key shared with the matching current-view Excel sheet. */
+  tablePreferenceKey?: string;
 }
 
 const DEFAULT_TABLE_PREFERENCES: ReportTablePreferences = {
@@ -90,6 +99,7 @@ const DEFAULT_TABLE_PREFERENCES: ReportTablePreferences = {
   wrapText: true,
   freezeFirstColumn: false,
   stripedRows: true,
+  hiddenColumnKeys: [],
 };
 
 export function ReportDataTable<T>({
@@ -102,14 +112,16 @@ export function ReportDataTable<T>({
   getSubRows,
   className,
   showDisplayOptions = true,
+  tablePreferenceKey,
 }: DataTableProps<T>) {
   const pathname = usePathname();
   const preferenceKey = useMemo(
     () =>
+      tablePreferenceKey ??
       `${pathname}:${columns
         .map((column, index) => `${String(column.key)}:${index}`)
         .join("|")}`,
-    [columns, pathname],
+    [columns, pathname, tablePreferenceKey],
   );
   const [preferences, setPreferences] = useState<ReportTablePreferences>(
     DEFAULT_TABLE_PREFERENCES,
@@ -118,12 +130,52 @@ export function ReportDataTable<T>({
     null,
   );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const columnEntries = useMemo(
+    () =>
+      columns.map((column, index) => ({
+        column,
+        index,
+        id: column.id ?? String(column.key),
+      })),
+    [columns],
+  );
+  const hiddenColumnKeys = useMemo(
+    () => new Set(preferences.hiddenColumnKeys),
+    [preferences.hiddenColumnKeys],
+  );
+  const visibleColumnEntries = useMemo(
+    () =>
+      columnEntries.filter(
+        ({ column, id, index }) =>
+          index === 0 || column.hideable === false || !hiddenColumnKeys.has(id),
+      ),
+    [columnEntries, hiddenColumnKeys],
+  );
+  const visibleColumnGroups = useMemo(() => {
+    if (!columnGroups?.length) return undefined;
+
+    let offset = 0;
+    return columnGroups.reduce<ColumnGroup[]>((groups, group) => {
+      const start = offset;
+      const end = Math.min(offset + group.span, columns.length);
+      offset = end;
+      const span = visibleColumnEntries.filter(
+        ({ index }) => index >= start && index < end,
+      ).length;
+      if (span > 0) groups.push({ ...group, span });
+      return groups;
+    }, []);
+  }, [columnGroups, columns.length, visibleColumnEntries]);
 
   useEffect(() => {
     if (!showDisplayOptions) return;
     const timer = window.setTimeout(() => {
       const saved = readReportTablePreferences(preferenceKey);
-      setPreferences({ ...DEFAULT_TABLE_PREFERENCES, ...saved });
+      setPreferences({
+        ...DEFAULT_TABLE_PREFERENCES,
+        ...saved,
+        hiddenColumnKeys: saved.hiddenColumnKeys ?? [],
+      });
       setLoadedPreferenceKey(preferenceKey);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -133,6 +185,19 @@ export function ReportDataTable<T>({
     if (!showDisplayOptions || loadedPreferenceKey !== preferenceKey) return;
     writeReportTablePreferences(preferenceKey, preferences);
   }, [loadedPreferenceKey, preferenceKey, preferences, showDisplayOptions]);
+
+  const setColumnVisible = (columnId: string, visible: boolean) => {
+    setPreferences((current) => {
+      const hidden = new Set(current.hiddenColumnKeys);
+      if (visible) hidden.delete(columnId);
+      else hidden.add(columnId);
+      return { ...current, hiddenColumnKeys: Array.from(hidden) };
+    });
+  };
+
+  const showAllColumns = () => {
+    setPreferences((current) => ({ ...current, hiddenColumnKeys: [] }));
+  };
 
   const resetDisplay = () => {
     clearReportTablePreferences(preferenceKey);
@@ -219,6 +284,50 @@ export function ReportDataTable<T>({
                 Kẻ dòng xen kẽ
               </DropdownMenuCheckboxItem>
               <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <Icon name="view_column" size={14} />
+                  Cột hiển thị
+                  <span className="ml-auto mr-1 text-xs text-muted-foreground">
+                    {visibleColumnEntries.length}/{columns.length}
+                  </span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="min-w-64 max-h-[70vh] overflow-y-auto">
+                  <DropdownMenuLabel>Chọn cột trên bảng</DropdownMenuLabel>
+                  {columnEntries.map(({ column, id, index }) => {
+                    const required = index === 0 || column.hideable === false;
+                    const visible = required || !hiddenColumnKeys.has(id);
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={id}
+                        checked={visible}
+                        disabled={required}
+                        closeOnClick={false}
+                        onCheckedChange={(checked) =>
+                          setColumnVisible(id, checked === true)
+                        }
+                      >
+                        <span className="min-w-0 flex-1 truncate">{column.label}</span>
+                        {required && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Bắt buộc
+                          </span>
+                        )}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    disabled={preferences.hiddenColumnKeys.length === 0}
+                    closeOnClick={false}
+                    onSelect={showAllColumns}
+                  >
+                    <Icon name="select_all" size={14} />
+                    Hiện tất cả cột
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={resetDisplay}>
                 <Icon name="restart_alt" size={14} />
                 Khôi phục mặc định
@@ -237,10 +346,10 @@ export function ReportDataTable<T>({
       >
         <thead>
           {/* Column groups header (optional) */}
-          {columnGroups && columnGroups.length > 0 && (
+          {visibleColumnGroups && visibleColumnGroups.length > 0 && (
             <tr className="bg-surface-container">
               {hasExpand && <th className="w-8"></th>}
-              {columnGroups.map((g, i) => (
+              {visibleColumnGroups.map((g, i) => (
                 <th
                   key={i}
                   colSpan={g.span}
@@ -261,9 +370,9 @@ export function ReportDataTable<T>({
           {/* Column header row */}
           <tr className="bg-primary-fixed/40 border-b border-border">
             {hasExpand && <th className="w-8 sticky left-0 bg-primary-fixed/40"></th>}
-            {columns.map((col, i) => (
+            {visibleColumnEntries.map(({ column: col, id, index: originalIndex }) => (
               <th
-                key={i}
+                key={id}
                 className={cn(
                   cellPadding,
                   "text-xs font-semibold text-foreground",
@@ -271,7 +380,7 @@ export function ReportDataTable<T>({
                   col.align === "right" && "text-right",
                   col.align === "center" && "text-center",
                   (!col.align || col.align === "left") && "text-left",
-                  isStickyColumn(col, i) &&
+                  isStickyColumn(col, originalIndex) &&
                     "sticky left-0 z-10 bg-primary-fixed/40",
                 )}
                 style={col.width ? { width: col.width } : undefined}
@@ -286,16 +395,16 @@ export function ReportDataTable<T>({
           {subtotalLabel && (
             <tr className="bg-primary-fixed/20 font-bold border-b border-border">
               {hasExpand && <td className="w-8 sticky left-0 bg-primary-fixed/20"></td>}
-              {columns.map((col, i) => (
+              {visibleColumnEntries.map(({ column: col, id, index: originalIndex }, i) => (
                 <td
-                  key={i}
+                  key={id}
                   className={cn(
                     cellPadding,
                     "text-xs text-foreground tabular-nums",
                     col.align === "right" && "text-right",
                     col.align === "center" && "text-center",
                     (!col.align || col.align === "left") && "text-left",
-                    isStickyColumn(col, i) &&
+                    isStickyColumn(col, originalIndex) &&
                       "sticky left-0 z-10 bg-primary-fixed/20",
                   )}
                 >
@@ -308,7 +417,7 @@ export function ReportDataTable<T>({
           {rows.length === 0 ? (
             <tr>
               <td
-                colSpan={columns.length + (hasExpand ? 1 : 0)}
+                colSpan={visibleColumnEntries.length + (hasExpand ? 1 : 0)}
                 className="text-center py-8 text-sm text-muted-foreground"
               >
                 {emptyState ?? "Chưa có dữ liệu"}
@@ -352,16 +461,16 @@ export function ReportDataTable<T>({
                         )}
                       </td>
                     )}
-                    {columns.map((col, ci) => (
+                    {visibleColumnEntries.map(({ column: col, id, index: originalIndex }) => (
                       <td
-                        key={ci}
+                        key={id}
                         className={cn(
                           cellPadding,
                           "text-xs tabular-nums",
                           col.align === "right" && "text-right",
                           col.align === "center" && "text-center",
                           (!col.align || col.align === "left") && "text-left",
-                          isStickyColumn(col, ci) &&
+                          isStickyColumn(col, originalIndex) &&
                             "sticky left-0 z-10 bg-inherit",
                         )}
                       >
@@ -380,17 +489,17 @@ export function ReportDataTable<T>({
                         className="bg-surface-container-low/40 border-b border-border/30"
                       >
                         {hasExpand && <td className="w-8 sticky left-0 bg-surface-container-low/40"></td>}
-                        {columns.map((col, ci) => (
+                        {visibleColumnEntries.map(({ column: col, id, index: originalIndex }, visibleIndex) => (
                           <td
-                            key={ci}
+                            key={id}
                             className={cn(
                               subRowPadding,
                               "text-xs tabular-nums text-muted-foreground italic",
                               col.align === "right" && "text-right",
                               col.align === "center" && "text-center",
                               (!col.align || col.align === "left") && "text-left",
-                              ci === 0 && "pl-6",
-                              isStickyColumn(col, ci) &&
+                              visibleIndex === 0 && "pl-6",
+                              isStickyColumn(col, originalIndex) &&
                                 "sticky left-0 z-10 bg-surface-container-low/40",
                             )}
                           >

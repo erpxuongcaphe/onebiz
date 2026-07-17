@@ -182,6 +182,7 @@ export default function CuoiNgayPage() {
         {
           name: "Tổng hợp thanh toán",
           titleRows,
+          tablePreferenceKey: "report.cuoi-ngay.payments",
           columns: [
             { label: "Phương thức", key: "method", width: 18 },
             { label: "Số tiền", key: "amount", width: 18, format: "currency" },
@@ -575,6 +576,7 @@ export default function CuoiNgayPage() {
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
             <ReportDataTable<PaymentRow>
               columns={paymentColumns}
+              tablePreferenceKey="report.cuoi-ngay.payments"
               rows={paymentRows}
               getRowKey={(r) => r.method}
               subtotalLabel={`Tổng cộng: ${formatCurrency(totalRev)}đ`}

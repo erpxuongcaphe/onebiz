@@ -104,6 +104,7 @@ export interface ReportTablePreferences {
   wrapText: boolean;
   freezeFirstColumn: boolean;
   stripedRows: boolean;
+  hiddenColumnKeys: string[];
 }
 
 function isValidTablePreferenceKey(key: string): boolean {
@@ -136,6 +137,12 @@ export function readReportTablePreferences(
           : undefined,
       stripedRows:
         typeof value.stripedRows === "boolean" ? value.stripedRows : undefined,
+      hiddenColumnKeys: Array.isArray(value.hiddenColumnKeys)
+        ? value.hiddenColumnKeys.filter(
+            (item): item is string =>
+              typeof item === "string" && item.length > 0 && item.length <= 200,
+          ).slice(0, 200)
+        : undefined,
     };
   } catch {
     return {};

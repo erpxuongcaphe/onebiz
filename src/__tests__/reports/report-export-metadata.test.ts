@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   ensureFullExportInfoSheet,
+  filterExcelSheetColumns,
   type ExcelSheet,
   type ExportOptions,
 } from "@/lib/utils/excel-export";
@@ -67,5 +68,43 @@ describe("full report export metadata", () => {
     expect(source).toContain('import("file-saver")');
     expect(source).not.toContain('import * as XLSX from "xlsx-js-style"');
   });
+});
 
+describe("current-view export columns", () => {
+  const groupedSheet: ExcelSheet = {
+    name: "Stock",
+    columns: [
+      { label: "Code", key: "code" },
+      { label: "Name", key: "name" },
+      { label: "Quantity", key: "quantity" },
+      { label: "Value", key: "value" },
+    ],
+    columnGroups: [
+      { label: "Product", span: 2 },
+      { label: "Inventory", span: 2 },
+    ],
+    rows: [{ code: "SP01", name: "Coffee", quantity: 2, value: 100 }],
+  };
+
+  it("keeps the first identifying column and removes hidden columns", () => {
+    const filtered = filterExcelSheetColumns(groupedSheet, [
+      "code",
+      "name",
+      "quantity",
+    ]);
+
+    expect(filtered.columns.map((column) => column.key)).toEqual([
+      "code",
+      "value",
+    ]);
+  });
+
+  it("recalculates grouped headers after columns are hidden", () => {
+    const filtered = filterExcelSheetColumns(groupedSheet, ["name", "value"]);
+
+    expect(filtered.columnGroups).toEqual([
+      { label: "Product", span: 1 },
+      { label: "Inventory", span: 1 },
+    ]);
+  });
 });

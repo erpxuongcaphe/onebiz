@@ -185,6 +185,45 @@ export default function BanHangPage() {
   // ===== Excel exports =====
   const handleExportView = useCallback(async () => {
     if (!kpis) return;
+    if (viewMode === "table") {
+      const tableTitleRows = buildReportTitleRows({
+        title: "Doanh thu theo ngày",
+        range,
+        branchName,
+        generatedAt: new Date(),
+      });
+      await exportReportToExcel({
+        kind: "ban-hang",
+        mode: "view",
+        range,
+        branchName,
+        sheets: [
+          {
+            name: "Doanh thu theo ngày",
+            titleRows: tableTitleRows,
+            tablePreferenceKey: "report.ban-hang.daily-revenue",
+            columns: [
+              { label: "Ngày", key: "date", width: 14 },
+              {
+                label: "Doanh thu",
+                key: "revenue",
+                width: 18,
+                format: "currency",
+              },
+            ],
+            rows: dailyRevenue.map((row) => ({
+              date: row.date,
+              revenue: row.revenue,
+            })),
+            footerLabel: "Tổng cộng",
+            footer: {
+              revenue: dailyRevenue.reduce((sum, row) => sum + row.revenue, 0),
+            },
+          },
+        ],
+      });
+      return;
+    }
     const titleRows = buildReportTitleRows({
       title: "Báo cáo bán hàng",
       range,
@@ -217,7 +256,7 @@ export default function BanHangPage() {
         },
       ],
     });
-  }, [kpis, range, branchName]);
+  }, [branchName, dailyRevenue, kpis, range, viewMode]);
 
   const handleExportFull = useCallback(async () => {
     if (!kpis) return;
@@ -508,6 +547,7 @@ export default function BanHangPage() {
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
             <ReportDataTable<MonthlyRevenuePoint>
               columns={dailyColumns}
+              tablePreferenceKey="report.ban-hang.daily-revenue"
               rows={dailyRevenue}
               getRowKey={(r) => r.date}
               subtotalLabel={`Tổng cộng: ${formatCurrency(

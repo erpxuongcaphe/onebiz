@@ -165,6 +165,7 @@ export default function LotTraceabilityPage() {
         {
           name: "Lot trace",
           titleRows,
+          tablePreferenceKey: "report.lot-traceability.lots",
           columns: [
             { label: "Mã lô", key: "lotCode", width: 14 },
             { label: "Mã hàng", key: "productCode", width: 12 },
@@ -382,6 +383,7 @@ export default function LotTraceabilityPage() {
           <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
             <ReportDataTable<LotRow>
               columns={columns}
+              tablePreferenceKey="report.lot-traceability.lots"
               rows={lots}
               getRowKey={(r) => r.id}
               subtotalLabel={`SL lô: ${lots.length}`}
