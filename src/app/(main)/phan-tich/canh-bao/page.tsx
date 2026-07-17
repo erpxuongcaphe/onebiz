@@ -15,6 +15,7 @@ import { Icon } from "@/components/ui/icon";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildMetricSummarySheet,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 
@@ -75,6 +76,37 @@ export default function CanhBaoPage() {
 
   const handleExportExcel = useCallback(async (mode: "view" | "full") => {
     try {
+      const exportAlerts =
+        mode === "view" && filterType !== "all"
+          ? alerts.filter((alert) => alert.type === filterType)
+          : alerts;
+      const summarySheet = buildMetricSummarySheet({
+        title: "TÓM TẮT CẢNH BÁO ĐIỀU HÀNH",
+        metrics: [
+          { label: "Tổng cảnh báo", value: alerts.length, format: "number" },
+          {
+            label: "Nghiêm trọng",
+            value: alerts.filter((alert) => alert.severity === "critical")
+              .length,
+            format: "number",
+          },
+          {
+            label: "Cảnh báo",
+            value: alerts.filter((alert) => alert.severity === "warning").length,
+            format: "number",
+          },
+          {
+            label: "Thông tin",
+            value: alerts.filter((alert) => alert.severity === "info").length,
+            format: "number",
+          },
+          {
+            label: "Tổng giá trị liên quan",
+            value: alerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
+            format: "currency",
+          },
+        ],
+      });
       const title = buildReportTitleRows({
         title: "CẢNH BÁO TÀI CHÍNH",
         range,
@@ -91,7 +123,7 @@ export default function CanhBaoPage() {
           { label: "Mô tả", key: "description", width: 48 },
           { label: "Giá trị (VND)", key: "amount", width: 18, format: "currency" },
         ],
-        rows: alerts.map((alert) => ({
+        rows: exportAlerts.map((alert) => ({
           severity: SEVERITY_CONFIG[alert.severity].label,
           type: TYPE_LABELS[alert.type] ?? alert.type,
           title: alert.title,
@@ -101,9 +133,9 @@ export default function CanhBaoPage() {
         footer: {
           severity: "TỔNG",
           type: "",
-          title: `${alerts.length} cảnh báo`,
+          title: `${exportAlerts.length} cảnh báo`,
           description: "",
-          amount: alerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
+          amount: exportAlerts.reduce((sum, alert) => sum + (alert.value ?? 0), 0),
         },
       };
       await exportReportToExcel({
@@ -113,7 +145,7 @@ export default function CanhBaoPage() {
         branchName: branchLabel,
         reportTitle: "Cảnh báo điều hành",
         description: "Danh sách cảnh báo đang hoạt động tại thời điểm xuất file.",
-        sheets: [sheet],
+        sheets: mode === "full" ? [summarySheet, sheet] : [sheet],
       });
       toast({ title: "Đã xuất Excel cảnh báo", variant: "success" });
     } catch (err) {
@@ -123,7 +155,7 @@ export default function CanhBaoPage() {
         variant: "error",
       });
     }
-  }, [alerts, branchLabel, range, toast]);
+  }, [alerts, branchLabel, filterType, range, toast]);
 
   const fetchData = useCallback(async () => {
     try {

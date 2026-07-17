@@ -679,6 +679,59 @@ export function buildInfoSheet(opts: InfoSheetOptions): ExcelSheet {
   };
 }
 
+export interface ExcelSummaryMetric {
+  label: string;
+  value: number;
+  format: "number" | "currency" | "percent";
+  note?: string;
+}
+
+export interface MetricSummarySheetOptions {
+  name?: string;
+  title?: string;
+  titleRows?: string[];
+  metrics: ExcelSummaryMetric[];
+}
+
+/**
+ * Build a consistent KPI sheet while preserving raw numeric cells for pivoting.
+ * Each metric is written to the column matching its unit instead of converting
+ * values to display strings.
+ */
+export function buildMetricSummarySheet(
+  options: MetricSummarySheetOptions,
+): ExcelSheet {
+  return {
+    name: options.name ?? "Tóm tắt",
+    titleRows:
+      options.titleRows ?? [options.title ?? "TÓM TẮT CHỈ TIÊU"],
+    columns: [
+      { label: "Chỉ tiêu", key: "label", width: 32 },
+      { label: "Số lượng", key: "numberValue", width: 16, format: "number" },
+      {
+        label: "Giá trị (VND)",
+        key: "currencyValue",
+        width: 20,
+        format: "currency",
+      },
+      {
+        label: "Tỷ lệ (%)",
+        key: "percentValue",
+        width: 16,
+        format: "percent",
+      },
+      { label: "Diễn giải", key: "note", width: 42 },
+    ],
+    rows: options.metrics.map((metric) => ({
+      label: metric.label,
+      numberValue: metric.format === "number" ? metric.value : "",
+      currencyValue: metric.format === "currency" ? metric.value : "",
+      percentValue: metric.format === "percent" ? metric.value : "",
+      note: metric.note ?? "",
+    })),
+  };
+}
+
 // ============================================================
 // Helpers — title rows builder
 // ============================================================

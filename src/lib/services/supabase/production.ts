@@ -395,35 +395,44 @@ export async function getAllProductLots(options?: {
   status?: string;
   sourceType?: string;
   branchId?: string;
+  fetchAll?: boolean;
 }): Promise<(ProductLot & { productName: string; productCode: string })[]> {
   const tenantId = await getCurrentTenantId();
 
-  let query = supabase
-    .from("product_lots")
-    .select("*, products!inner(name, code)")
-    .eq("tenant_id", tenantId)
-    .order("created_at", { ascending: false })
-    .limit(200);
+  const pageSize = options?.fetchAll ? 1000 : 200;
+  const rows: Record<string, unknown>[] = [];
 
-  if (options?.branchId) {
-    query = query.eq("branch_id", options.branchId);
-  }
-  if (options?.status && options.status !== "all") {
-    query = query.eq("status", options.status);
-  }
-  if (options?.sourceType && options.sourceType !== "all") {
-    query = query.eq("source_type", options.sourceType);
-  }
-  if (options?.search) {
-    query = query.or(
-      `lot_number.ilike.%${options.search}%,products.name.ilike.%${options.search}%`
-    );
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase
+      .from("product_lots")
+      .select("*, products!inner(name, code)")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (options?.branchId) {
+      query = query.eq("branch_id", options.branchId);
+    }
+    if (options?.status && options.status !== "all") {
+      query = query.eq("status", options.status);
+    }
+    if (options?.sourceType && options.sourceType !== "all") {
+      query = query.eq("source_type", options.sourceType);
+    }
+    if (options?.search) {
+      query = query.or(
+        `lot_number.ilike.%${options.search}%,products.name.ilike.%${options.search}%`,
+      );
+    }
+
+    const { data, error } = await query.range(offset, offset + pageSize - 1);
+    if (error) throw error;
+    const page = (data ?? []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (!options?.fetchAll || page.length < pageSize) break;
   }
 
-  const { data, error } = await query;
-  if (error) throw error;
-
-  return (data ?? []).map((row: Record<string, unknown>) => {
+  return rows.map((row) => {
     const product = row.products as Record<string, unknown> | null;
     return {
       id: row.id as string,

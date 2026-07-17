@@ -15,6 +15,7 @@ import { useBranchFilter } from "@/lib/contexts";
 import {
   exportReportToExcel,
   buildReportTitleRows,
+  buildMetricSummarySheet,
 } from "@/lib/utils/excel-export";
 import { getCustomerCohortReport } from "@/lib/services/supabase/customer-cohort";
 import type { CohortReportResult } from "@/lib/services/supabase/customer-cohort";
@@ -92,6 +93,35 @@ export default function CustomerCohortPage() {
       range,
       branchName: branchLabel,
       sheets: [
+        ...(mode === "full"
+          ? [
+              buildMetricSummarySheet({
+                title: "TÓM TẮT KHÁCH HÀNG QUAY LẠI",
+                metrics: [
+                  {
+                    label: "Số nhóm khách",
+                    value: totalCohorts,
+                    format: "number",
+                  },
+                  {
+                    label: "Tổng khách hàng lần đầu",
+                    value: totalCustomers,
+                    format: "number",
+                  },
+                  {
+                    label: "Tháng kế tiếp quay lại trung bình",
+                    value: m1Retention,
+                    format: "percent",
+                  },
+                  {
+                    label: "Số tháng theo dõi",
+                    value: data.monthsTracked,
+                    format: "number",
+                  },
+                ],
+              }),
+            ]
+          : []),
         {
           name: "Khách hàng quay lại",
           titleRows,
@@ -109,7 +139,16 @@ export default function CustomerCohortPage() {
         },
       ],
     });
-  }, [activeBranchId, branchLabel, branches, data, range]);
+  }, [
+    activeBranchId,
+    branchLabel,
+    branches,
+    data,
+    m1Retention,
+    range,
+    totalCohorts,
+    totalCustomers,
+  ]);
 
   const colorForRetention = (pct: number): string => {
     if (pct === 0) return "bg-surface-container/30 text-muted-foreground";
