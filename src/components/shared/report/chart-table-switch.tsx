@@ -1,14 +1,18 @@
 "use client";
 
 /**
- * ChartTableSwitch — toggle "Biểu đồ" / "Báo cáo" (table).
- *
- * Pattern KiotViet (CEO 06/05/2026 ảnh 4): 2 button radio "Biểu đồ" + "Báo cáo".
- * Stitch: rounded-full pill group, active dùng primary.
+ * Compact report view selector used by every analytics page.
+ * Keeps the existing chart/table state contract while using less header space.
  */
 
-import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { ReportViewMode } from "@/lib/types/report";
 
 interface ChartTableSwitchProps {
@@ -28,31 +32,34 @@ export function ChartTableSwitch({
   onChange,
   disabled,
 }: ChartTableSwitchProps) {
+  const selected = OPTIONS.find((option) => option.key === value) ?? OPTIONS[0];
+
   return (
-    <div
-      className={cn(
-        "inline-flex items-center rounded-lg border border-border bg-surface-container-low p-0.5",
-        disabled && "opacity-50 pointer-events-none",
-      )}
-      role="tablist"
+    <Select
+      value={value}
+      disabled={disabled}
+      onValueChange={(next) => {
+        if (next) onChange(next as ReportViewMode);
+      }}
     >
-      {OPTIONS.map((opt) => (
-        <button
-          key={opt.key}
-          role="tab"
-          aria-selected={value === opt.key}
-          onClick={() => onChange(opt.key)}
-          className={cn(
-            "inline-flex h-7 items-center gap-1 rounded-md px-3 text-xs font-medium transition-colors press-scale-sm",
-            value === opt.key
-              ? "bg-primary text-primary-foreground ambient-shadow"
-              : "text-muted-foreground hover:text-foreground",
-          )}
-        >
-          <Icon name={opt.icon} size={14} />
-          {opt.label}
-        </button>
-      ))}
-    </div>
+      <SelectTrigger
+        size="sm"
+        className="min-w-36 bg-background text-xs"
+        aria-label="Kiểu hiển thị báo cáo"
+      >
+        <SelectValue>
+          <Icon name={selected.icon} size={14} />
+          <span>{selected.label}</span>
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent align="end" className="min-w-44">
+        {OPTIONS.map((option) => (
+          <SelectItem key={option.key} value={option.key}>
+            <Icon name={option.icon} size={15} />
+            {option.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

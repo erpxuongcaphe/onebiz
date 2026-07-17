@@ -12,10 +12,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ReportPageHeader } from "@/components/shared/report";
 import { cn } from "@/lib/utils";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import {
+  clearReportViewPreferences,
+  readReportViewPreferences,
+  writeReportViewPreferences,
+} from "@/lib/reports/preferences";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import {
   getCustomerProductDetailPage,
@@ -57,6 +77,182 @@ const REPORT_MODES: Array<{
   { id: "categories", label: "Theo nhóm hàng", icon: "table_view" },
 ];
 
+type ReportDisplayMode = "complete" | "table" | "visual";
+type TableDensity = "standard" | "compact";
+type CustomerColumn =
+  | "code"
+  | "revenue"
+  | "share"
+  | "orders"
+  | "products"
+  | "quantity"
+  | "topProduct"
+  | "lastPurchase";
+type ProductColumn =
+  | "code"
+  | "category"
+  | "unit"
+  | "orders"
+  | "quantity"
+  | "revenue"
+  | "share"
+  | "lastPurchase";
+
+const REPORT_PATH = "/phan-tich/khach-san-pham";
+const DISPLAY_MODES: Array<{
+  id: ReportDisplayMode;
+  label: string;
+  icon: string;
+  description: string;
+}> = [
+  {
+    id: "complete",
+    label: "Đầy đủ",
+    icon: "dashboard",
+    description: "Chỉ số, biểu đồ và bảng số liệu",
+  },
+  {
+    id: "table",
+    label: "Bảng số liệu",
+    icon: "table_rows",
+    description: "Tập trung đối chiếu số liệu",
+  },
+  {
+    id: "visual",
+    label: "Phân tích trực quan",
+    icon: "insert_chart",
+    description: "Chỉ số và biểu đồ",
+  },
+];
+const DENSITY_OPTIONS: Array<{
+  id: TableDensity;
+  label: string;
+  icon: string;
+}> = [
+  { id: "standard", label: "Tiêu chuẩn", icon: "density_medium" },
+  { id: "compact", label: "Gọn", icon: "density_small" },
+];
+const CUSTOMER_COLUMN_OPTIONS: Array<{
+  id: CustomerColumn;
+  label: string;
+}> = [
+  { id: "code", label: "Mã khách" },
+  { id: "revenue", label: "Doanh thu" },
+  { id: "share", label: "Tỷ trọng" },
+  { id: "orders", label: "Số đơn" },
+  { id: "products", label: "Số mã hàng" },
+  { id: "quantity", label: "Số lượng" },
+  { id: "topProduct", label: "Mặt hàng mua nhiều nhất" },
+  { id: "lastPurchase", label: "Lần mua gần nhất" },
+];
+const PRODUCT_COLUMN_OPTIONS: Array<{
+  id: ProductColumn;
+  label: string;
+}> = [
+  { id: "code", label: "Mã hàng" },
+  { id: "category", label: "Nhóm hàng" },
+  { id: "unit", label: "Đơn vị tính" },
+  { id: "orders", label: "Số đơn" },
+  { id: "quantity", label: "Số lượng" },
+  { id: "revenue", label: "Doanh thu" },
+  { id: "share", label: "Tỷ trọng" },
+  { id: "lastPurchase", label: "Lần mua gần nhất" },
+];
+const DEFAULT_CUSTOMER_COLUMNS = CUSTOMER_COLUMN_OPTIONS.map(
+  (column) => column.id,
+);
+const DEFAULT_PRODUCT_COLUMNS = PRODUCT_COLUMN_OPTIONS.map(
+  (column) => column.id,
+);
+
+interface InitialViewPreferences {
+  mode: ReportMode;
+  displayMode: ReportDisplayMode;
+  density: TableDensity;
+  customerColumns: CustomerColumn[];
+  productColumns: ProductColumn[];
+  highlightValues: boolean;
+  pageSize: number;
+  productPageSize: number;
+}
+
+function isReportMode(value: unknown): value is ReportMode {
+  return value === "customers" || value === "products" || value === "categories";
+}
+
+function isDisplayMode(value: unknown): value is ReportDisplayMode {
+  return value === "complete" || value === "table" || value === "visual";
+}
+
+function isTableDensity(value: unknown): value is TableDensity {
+  return value === "standard" || value === "compact";
+}
+
+function normalizeColumns<T extends string>(
+  value: unknown,
+  allowed: readonly T[],
+  fallback: readonly T[],
+): T[] {
+  if (!Array.isArray(value)) return [...fallback];
+  const selected = value.filter(
+    (column): column is T =>
+      typeof column === "string" && allowed.includes(column as T),
+  );
+  if (value.length === 0) return [];
+  return selected.length > 0 ? Array.from(new Set(selected)) : [...fallback];
+}
+
+function normalizePageSize(value: unknown): number {
+  const size = Number(value);
+  return PAGE_SIZE_OPTIONS.includes(size) ? size : 50;
+}
+
+function readInitialViewPreferences(): InitialViewPreferences {
+  const stored = readReportViewPreferences<Record<string, unknown>>(REPORT_PATH);
+  const params =
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search);
+  const requestedMode = params?.get("reportMode");
+  const requestedDisplay = params?.get("display");
+  const requestedDensity = params?.get("density");
+  const mode = isReportMode(requestedMode)
+    ? requestedMode
+    : isReportMode(stored.mode)
+      ? stored.mode
+      : "customers";
+  const displayMode = isDisplayMode(requestedDisplay)
+    ? requestedDisplay
+    : isDisplayMode(stored.displayMode)
+      ? stored.displayMode
+      : "complete";
+
+  return {
+    mode,
+    displayMode:
+      mode !== "customers" && displayMode === "visual"
+        ? "complete"
+        : displayMode,
+    density: isTableDensity(requestedDensity)
+      ? requestedDensity
+      : isTableDensity(stored.density)
+        ? stored.density
+        : "standard",
+    customerColumns: normalizeColumns(
+      stored.customerColumns,
+      DEFAULT_CUSTOMER_COLUMNS,
+      DEFAULT_CUSTOMER_COLUMNS,
+    ),
+    productColumns: normalizeColumns(
+      stored.productColumns,
+      DEFAULT_PRODUCT_COLUMNS,
+      DEFAULT_PRODUCT_COLUMNS,
+    ),
+    highlightValues: stored.highlightValues !== false,
+    pageSize: normalizePageSize(stored.pageSize),
+    productPageSize: normalizePageSize(stored.productPageSize),
+  };
+}
 function compactCurrency(value: number): string {
   return new Intl.NumberFormat("vi-VN", {
     notation: "compact",
@@ -145,21 +341,30 @@ function Pager({
         Hiển thị {formatNumber(start)}–{formatNumber(end)} trên {formatNumber(total)}
       </span>
       <div className="flex items-center gap-2">
-        <label className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5">
           <span className="hidden sm:inline">Số dòng</span>
-          <select
-            value={pageSize}
-            onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            className="h-8 rounded-lg border border-input bg-background px-2 text-xs text-foreground outline-none focus:border-ring"
-            aria-label="Số dòng mỗi trang"
+          <Select
+            value={String(pageSize)}
+            onValueChange={(value) =>
+              value && onPageSizeChange(Number(value))
+            }
           >
-            {PAGE_SIZE_OPTIONS.map((size) => (
-              <option key={size} value={size}>
-                {size}
-              </option>
-            ))}
-          </select>
-        </label>
+            <SelectTrigger
+              size="sm"
+              className="min-w-18 bg-background text-xs"
+              aria-label="Số dòng mỗi trang"
+            >
+              <SelectValue>{pageSize}</SelectValue>
+            </SelectTrigger>
+            <SelectContent align="end">
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <SelectItem key={size} value={String(size)}>
+                  {size} dòng
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -195,15 +400,18 @@ export default function CustomerProductReportPage() {
     defaultPreset: "thisMonth",
     forceTable: true,
   });
-  const [mode, setMode] = useState<ReportMode>(() => {
-    if (typeof window === "undefined") return "customers";
-    const requested = new URLSearchParams(window.location.search).get(
-      "reportMode",
-    );
-    return requested === "products" || requested === "categories"
-      ? requested
-      : "customers";
-  });
+  const [preferencesReady, setPreferencesReady] = useState(false);
+  const [mode, setMode] = useState<ReportMode>("customers");
+  const [displayMode, setDisplayMode] =
+    useState<ReportDisplayMode>("complete");
+  const [density, setDensity] = useState<TableDensity>("standard");
+  const [customerColumns, setCustomerColumns] = useState<CustomerColumn[]>([
+    ...DEFAULT_CUSTOMER_COLUMNS,
+  ]);
+  const [productColumns, setProductColumns] = useState<ProductColumn[]>([
+    ...DEFAULT_PRODUCT_COLUMNS,
+  ]);
+  const [highlightValues, setHighlightValues] = useState(true);
   const [report, setReport] = useState<CustomerProductReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -226,17 +434,98 @@ export default function CustomerProductReportPage() {
   const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
+    const initial = readInitialViewPreferences();
+    setMode(initial.mode);
+    setDisplayMode(initial.displayMode);
+    setDensity(initial.density);
+    setCustomerColumns(initial.customerColumns);
+    setProductColumns(initial.productColumns);
+    setHighlightValues(initial.highlightValues);
+    setPageSize(initial.pageSize);
+    setProductPageSize(initial.productPageSize);
+    setPreferencesReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!preferencesReady) return;
+
     const url = new URL(window.location.href);
     url.searchParams.set("reportMode", mode);
+    url.searchParams.set("display", displayMode);
+    url.searchParams.set("density", density);
     window.history.replaceState(window.history.state, "", url);
-  }, [mode]);
+
+    writeReportViewPreferences(REPORT_PATH, {
+      mode,
+      displayMode,
+      density,
+      customerColumns,
+      productColumns,
+      highlightValues,
+      pageSize,
+      productPageSize,
+    });
+  }, [
+    customerColumns,
+    density,
+    displayMode,
+    highlightValues,
+    mode,
+    pageSize,
+    preferencesReady,
+    productColumns,
+    productPageSize,
+  ]);
+
+  const changeMode = useCallback((next: ReportMode) => {
+    setMode(next);
+    if (next !== "customers") {
+      setDisplayMode((current) =>
+        current === "visual" ? "complete" : current,
+      );
+    }
+  }, []);
+
+  const toggleCustomerColumn = useCallback((column: CustomerColumn) => {
+    setCustomerColumns((current) =>
+      current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column],
+    );
+  }, []);
+
+  const toggleProductColumn = useCallback((column: ProductColumn) => {
+    setProductColumns((current) =>
+      current.includes(column)
+        ? current.filter((item) => item !== column)
+        : [...current, column],
+    );
+  }, []);
+
+  const resetViewPreferences = useCallback(() => {
+    clearReportViewPreferences(REPORT_PATH);
+    setMode("customers");
+    setDisplayMode("complete");
+    setDensity("standard");
+    setCustomerColumns([...DEFAULT_CUSTOMER_COLUMNS]);
+    setProductColumns([...DEFAULT_PRODUCT_COLUMNS]);
+    setHighlightValues(true);
+    setPageSize(50);
+    setProductPageSize(50);
+    setPage(0);
+    setProductPage(0);
+    toast({
+      title: "Đã khôi phục cách xem mặc định",
+      variant: "success",
+    });
+  }, [toast]);
 
   useEffect(() => {
     setPage(0);
   }, [activeBranchId, deferredSearch, range.from, range.to, sort]);
 
   useEffect(() => {
-    if (!isReady) return;
+    if (!isReady || !preferencesReady) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -271,6 +560,7 @@ export default function CustomerProductReportPage() {
     isReady,
     page,
     pageSize,
+    preferencesReady,
     range,
     reloadKey,
     sort,
@@ -292,7 +582,14 @@ export default function CustomerProductReportPage() {
   }, [activeBranchId, deferredProductSearch, productSort, range.from, range.to]);
 
   useEffect(() => {
-    if (!selectedCustomerId || mode !== "products" || !isReady) return;
+    if (
+      !selectedCustomerId ||
+      mode !== "products" ||
+      !isReady ||
+      !preferencesReady
+    ) {
+      return;
+    }
     let cancelled = false;
     setDetailLoading(true);
 
@@ -331,6 +628,7 @@ export default function CustomerProductReportPage() {
     isReady,
     mode,
     productPage,
+    preferencesReady,
     productPageSize,
     productSort,
     range,
@@ -345,6 +643,17 @@ export default function CustomerProductReportPage() {
     [report?.customers, selectedCustomerId],
   );
   const matrix = useMemo(() => buildMatrix(report?.matrix ?? []), [report?.matrix]);
+  const selectedModeOption =
+    REPORT_MODES.find((option) => option.id === mode) ?? REPORT_MODES[0];
+  const selectedDisplayOption =
+    DISPLAY_MODES.find((option) => option.id === displayMode) ??
+    DISPLAY_MODES[0];
+  const selectedDensityOption =
+    DENSITY_OPTIONS.find((option) => option.id === density) ??
+    DENSITY_OPTIONS[0];
+  const showKpis = displayMode !== "table";
+  const showCharts = mode === "customers" && displayMode !== "table";
+  const showCustomerTable = mode === "customers" && displayMode !== "visual";
   const topCustomers = useMemo(
     () =>
       (report?.customers ?? [])
@@ -380,15 +689,66 @@ export default function CustomerProductReportPage() {
           name: "Mặt hàng từng khách",
           titleRows,
           columns: [
-            { label: "Mã hàng", key: "productCode", width: 16 },
             { label: "Tên hàng", key: "productName", width: 34 },
-            { label: "Nhóm hàng", key: "categoryName", width: 22 },
-            { label: "Đơn vị tính", key: "unit", width: 12 },
-            { label: "Số đơn", key: "orderCount", width: 12, format: "number" },
-            { label: "Số lượng", key: "quantity", width: 14, format: "number" },
-            { label: "Doanh thu mặt hàng", key: "revenue", width: 20, format: "currency" },
-            { label: "Tỷ trọng", key: "revenueShare", width: 12, format: "percent" },
-            { label: "Lần mua gần nhất", key: "lastPurchaseAt", width: 18, format: "date" },
+            ...(productColumns.includes("code")
+              ? [{ label: "Mã hàng", key: "productCode", width: 16 }]
+              : []),
+            ...(productColumns.includes("category")
+              ? [{ label: "Nhóm hàng", key: "categoryName", width: 22 }]
+              : []),
+            ...(productColumns.includes("unit")
+              ? [{ label: "Đơn vị tính", key: "unit", width: 12 }]
+              : []),
+            ...(productColumns.includes("orders")
+              ? [
+                  {
+                    label: "Số đơn",
+                    key: "orderCount",
+                    width: 12,
+                    format: "number" as const,
+                  },
+                ]
+              : []),
+            ...(productColumns.includes("quantity")
+              ? [
+                  {
+                    label: "Số lượng",
+                    key: "quantity",
+                    width: 14,
+                    format: "number" as const,
+                  },
+                ]
+              : []),
+            ...(productColumns.includes("revenue")
+              ? [
+                  {
+                    label: "Doanh thu mặt hàng",
+                    key: "revenue",
+                    width: 20,
+                    format: "currency" as const,
+                  },
+                ]
+              : []),
+            ...(productColumns.includes("share")
+              ? [
+                  {
+                    label: "Tỷ trọng",
+                    key: "revenueShare",
+                    width: 12,
+                    format: "percent" as const,
+                  },
+                ]
+              : []),
+            ...(productColumns.includes("lastPurchase")
+              ? [
+                  {
+                    label: "Lần mua gần nhất",
+                    key: "lastPurchaseAt",
+                    width: 18,
+                    format: "date" as const,
+                  },
+                ]
+              : []),
           ],
           rows: (detail?.rows ?? []).map((row) => ({
             ...row,
@@ -427,15 +787,79 @@ export default function CustomerProductReportPage() {
           name: "Theo khách hàng",
           titleRows,
           columns: [
-            { label: "Mã khách", key: "customerCode", width: 16 },
             { label: "Khách hàng", key: "customerName", width: 32 },
-            { label: "Số đơn", key: "orderCount", width: 12, format: "number" },
-            { label: "Số mã hàng", key: "productCount", width: 14, format: "number" },
-            { label: "Số lượng", key: "quantity", width: 14, format: "number" },
-            { label: "Doanh thu mặt hàng", key: "revenue", width: 20, format: "currency" },
-            { label: "Tỷ trọng", key: "revenueShare", width: 12, format: "percent" },
-            { label: "Mặt hàng mua nhiều nhất", key: "topProduct", width: 32 },
-            { label: "Lần mua gần nhất", key: "lastPurchaseAt", width: 18, format: "date" },
+            ...(customerColumns.includes("code")
+              ? [{ label: "Mã khách", key: "customerCode", width: 16 }]
+              : []),
+            ...(customerColumns.includes("revenue")
+              ? [
+                  {
+                    label: "Doanh thu mặt hàng",
+                    key: "revenue",
+                    width: 20,
+                    format: "currency" as const,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("share")
+              ? [
+                  {
+                    label: "Tỷ trọng",
+                    key: "revenueShare",
+                    width: 12,
+                    format: "percent" as const,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("orders")
+              ? [
+                  {
+                    label: "Số đơn",
+                    key: "orderCount",
+                    width: 12,
+                    format: "number" as const,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("products")
+              ? [
+                  {
+                    label: "Số mã hàng",
+                    key: "productCount",
+                    width: 14,
+                    format: "number" as const,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("quantity")
+              ? [
+                  {
+                    label: "Số lượng",
+                    key: "quantity",
+                    width: 14,
+                    format: "number" as const,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("topProduct")
+              ? [
+                  {
+                    label: "Mặt hàng mua nhiều nhất",
+                    key: "topProduct",
+                    width: 32,
+                  },
+                ]
+              : []),
+            ...(customerColumns.includes("lastPurchase")
+              ? [
+                  {
+                    label: "Lần mua gần nhất",
+                    key: "lastPurchaseAt",
+                    width: 18,
+                    format: "date" as const,
+                  },
+                ]
+              : []),
           ],
           rows: report.customers.map((row) => ({
             ...row,
@@ -443,7 +867,6 @@ export default function CustomerProductReportPage() {
           })),
         };
       }
-
       await exportReportToExcel({
         kind: "khach-san-pham",
         mode: "view",
@@ -462,7 +885,17 @@ export default function CustomerProductReportPage() {
     } finally {
       setExporting(false);
     }
-  }, [branchLabel, detail?.rows, matrix, mode, range, report, toast]);
+  }, [
+    branchLabel,
+    customerColumns,
+    detail?.rows,
+    matrix,
+    mode,
+    productColumns,
+    range,
+    report,
+    toast,
+  ]);
 
   const handleExportFull = useCallback(async () => {
     if (!report) return;
@@ -619,29 +1052,151 @@ export default function CustomerProductReportPage() {
       <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low/35 p-4 lg:p-6">
         <div className="mx-auto max-w-[1800px] space-y-4">
           <div className="flex flex-col gap-3 border-b border-border pb-3 xl:flex-row xl:items-center xl:justify-between">
-            <div
-              className="inline-flex w-full overflow-x-auto rounded-lg border border-border bg-background p-1 xl:w-auto"
-              role="tablist"
-              aria-label="Góc nhìn báo cáo"
-            >
-              {REPORT_MODES.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === item.id}
-                  onClick={() => setMode(item.id)}
-                  className={cn(
-                    "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors",
-                    mode === item.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-surface-container hover:text-foreground",
-                  )}
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                value={mode}
+                onValueChange={(value) =>
+                  value && changeMode(value as ReportMode)
+                }
+              >
+                <SelectTrigger
+                  className="min-w-52 bg-background"
+                  aria-label="Góc nhìn báo cáo"
                 >
-                  <Icon name={item.icon} size={15} />
-                  {item.label}
-                </button>
-              ))}
+                  <SelectValue>
+                    <Icon name={selectedModeOption.icon} size={15} />
+                    <span>{selectedModeOption.label}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start" className="min-w-64">
+                  {REPORT_MODES.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      <Icon name={option.icon} size={15} />
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={displayMode}
+                onValueChange={(value) =>
+                  value && setDisplayMode(value as ReportDisplayMode)
+                }
+              >
+                <SelectTrigger
+                  className="min-w-48 bg-background"
+                  aria-label="Nội dung hiển thị"
+                >
+                  <SelectValue>
+                    <Icon name={selectedDisplayOption.icon} size={15} />
+                    <span>{selectedDisplayOption.label}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start" className="min-w-72">
+                  {DISPLAY_MODES.map((option) => (
+                    <SelectItem
+                      key={option.id}
+                      value={option.id}
+                      disabled={option.id === "visual" && mode !== "customers"}
+                    >
+                      <Icon name={option.icon} size={15} />
+                      <span className="flex flex-col">
+                        <span>{option.label}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {option.description}
+                        </span>
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={density}
+                onValueChange={(value) =>
+                  value && setDensity(value as TableDensity)
+                }
+              >
+                <SelectTrigger
+                  className="min-w-40 bg-background"
+                  aria-label="Mật độ bảng"
+                >
+                  <SelectValue>
+                    <Icon name={selectedDensityOption.icon} size={15} />
+                    <span>{selectedDensityOption.label}</span>
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent align="start">
+                  {DENSITY_OPTIONS.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      <Icon name={option.icon} size={15} />
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-input bg-background px-3 text-sm font-medium text-foreground outline-none hover:bg-surface-container-low">
+                  <Icon name="view_column" size={16} />
+                  Tùy chỉnh
+                  <Icon name="expand_more" size={15} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent
+                  align="start"
+                  sideOffset={6}
+                  className="min-w-64 p-1"
+                >
+                  {mode === "customers" && (
+                    <>
+                      <DropdownMenuLabel>Cột khách hàng</DropdownMenuLabel>
+                      {CUSTOMER_COLUMN_OPTIONS.map((column) => (
+                        <DropdownMenuCheckboxItem
+                          key={column.id}
+                          checked={customerColumns.includes(column.id)}
+                          onCheckedChange={() => toggleCustomerColumn(column.id)}
+                        >
+                          {column.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  {mode === "products" && (
+                    <>
+                      <DropdownMenuLabel>Cột mặt hàng</DropdownMenuLabel>
+                      {PRODUCT_COLUMN_OPTIONS.map((column) => (
+                        <DropdownMenuCheckboxItem
+                          key={column.id}
+                          checked={productColumns.includes(column.id)}
+                          onCheckedChange={() => toggleProductColumn(column.id)}
+                        >
+                          {column.label}
+                        </DropdownMenuCheckboxItem>
+                      ))}
+                      <DropdownMenuSeparator />
+                    </>
+                  )}
+                  <DropdownMenuCheckboxItem
+                    checked={highlightValues}
+                    onCheckedChange={(checked) =>
+                      setHighlightValues(checked === true)
+                    }
+                  >
+                    Tô màu số liệu nổi bật
+                  </DropdownMenuCheckboxItem>
+                  <DropdownMenuSeparator />
+                  <button
+                    type="button"
+                    onClick={resetViewPreferences}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-surface-container hover:text-foreground"
+                  >
+                    <Icon name="restart_alt" size={16} />
+                    Khôi phục mặc định
+                  </button>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -655,24 +1210,31 @@ export default function CustomerProductReportPage() {
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Tìm mã hoặc tên khách hàng"
-                  className="h-9 pl-9"
+                  className="h-8 pl-9"
                   aria-label="Tìm khách hàng"
                 />
               </div>
-              <select
+              <Select
                 value={sort}
-                onChange={(event) => setSort(event.target.value as CustomerProductSort)}
-                className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring"
-                aria-label="Sắp xếp khách hàng"
+                onValueChange={(value) =>
+                  value && setSort(value as CustomerProductSort)
+                }
               >
-                <option value="revenue_desc">Doanh thu cao nhất</option>
-                <option value="orders_desc">Nhiều đơn nhất</option>
-                <option value="quantity_desc">Số lượng cao nhất</option>
-                <option value="name_asc">Tên khách A–Z</option>
-              </select>
+                <SelectTrigger
+                  className="min-w-48 bg-background"
+                  aria-label="Sắp xếp khách hàng"
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent align="end">
+                  <SelectItem value="revenue_desc">Doanh thu cao nhất</SelectItem>
+                  <SelectItem value="orders_desc">Nhiều đơn nhất</SelectItem>
+                  <SelectItem value="quantity_desc">Số lượng cao nhất</SelectItem>
+                  <SelectItem value="name_asc">Tên khách A–Z</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
-
           {loading && !report ? (
             <div className="flex min-h-80 items-center justify-center rounded-lg border border-border bg-background text-sm text-muted-foreground">
               <Icon name="progress_activity" size={24} className="mr-2 animate-spin" />
@@ -698,7 +1260,8 @@ export default function CustomerProductReportPage() {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+              {showKpis && (
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <KpiCard
                   label="Khách có mua"
                   value={formatNumber(report.summary.customerCount)}
@@ -739,11 +1302,13 @@ export default function CustomerProductReportPage() {
                   iconColor="text-secondary-foreground"
                   valueColor="text-foreground"
                 />
-              </div>
+                </div>
+              )}
 
               {mode === "customers" && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                  {showCharts && (
+                    <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <ChartCard title="Khách hàng có doanh thu cao nhất" subtitle="10 khách trong kết quả đang xem">
                       <div className="h-72">
                         <ClientChartContainer initialDimension={{ width: 320, height: 224 }}>
@@ -801,9 +1366,11 @@ export default function CustomerProductReportPage() {
                         </ClientChartContainer>
                       </div>
                     </ChartCard>
-                  </div>
+                    </div>
+                  )}
 
-                  <section className="overflow-hidden rounded-lg border border-border bg-background" aria-labelledby="customer-table-title">
+                  {showCustomerTable && (
+                    <section className="overflow-hidden rounded-lg border border-border bg-background" aria-labelledby="customer-table-title">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-4 py-3">
                       <div>
                         <h2 id="customer-table-title" className="text-sm font-semibold text-foreground">
@@ -816,18 +1383,43 @@ export default function CustomerProductReportPage() {
                       {loading && <Icon name="progress_activity" size={18} className="animate-spin text-muted-foreground" />}
                     </div>
                     <div className="max-h-[620px] overflow-auto">
-                      <table className="min-w-[1240px] w-full border-collapse text-sm">
+                      <table
+                        className={cn(
+                          "w-full border-collapse text-sm",
+                          customerColumns.length > 5
+                            ? "min-w-[1240px]"
+                            : "min-w-[760px]",
+                          density === "compact" &&
+                            "[&_th]:!py-1.5 [&_td]:!py-1.5",
+                        )}
+                      >
                         <thead className="sticky top-0 z-20 bg-surface-container">
                           <tr className="border-b border-border text-xs text-muted-foreground">
                             <th className="sticky left-0 z-30 min-w-60 bg-surface-container px-3 py-2.5 text-left font-semibold">Khách hàng</th>
-                            <th className="px-3 py-2.5 text-left font-semibold">Mã khách</th>
+                            {customerColumns.includes("code") && (
+                              <th className="px-3 py-2.5 text-left font-semibold">Mã khách</th>
+                            )}
+                            {customerColumns.includes("revenue") && (
                             <th className="px-3 py-2.5 text-right font-semibold">Doanh thu</th>
+                            )}
+                            {customerColumns.includes("share") && (
                             <th className="px-3 py-2.5 text-right font-semibold">Tỷ trọng</th>
+                            )}
+                            {customerColumns.includes("orders") && (
                             <th className="px-3 py-2.5 text-right font-semibold">Số đơn</th>
-                            <th className="px-3 py-2.5 text-right font-semibold">Số mã hàng</th>
+                            )}
+                            {customerColumns.includes("products") && (
+                              <th className="px-3 py-2.5 text-right font-semibold">Số mã hàng</th>
+                            )}
+                            {customerColumns.includes("quantity") && (
                             <th className="px-3 py-2.5 text-right font-semibold">Số lượng</th>
-                            <th className="min-w-56 px-3 py-2.5 text-left font-semibold">Mặt hàng mua nhiều nhất</th>
+                            )}
+                            {customerColumns.includes("topProduct") && (
+                              <th className="min-w-56 px-3 py-2.5 text-left font-semibold">Mặt hàng mua nhiều nhất</th>
+                            )}
+                            {customerColumns.includes("lastPurchase") && (
                             <th className="px-3 py-2.5 text-right font-semibold">Lần mua gần nhất</th>
+                            )}
                             <th className="w-12 px-2 py-2.5"><span className="sr-only">Xem chi tiết</span></th>
                           </tr>
                         </thead>
@@ -841,14 +1433,37 @@ export default function CustomerProductReportPage() {
                               )}
                             >
                               <td className="sticky left-0 z-10 bg-inherit px-3 py-2.5 font-medium text-foreground">{row.customerName}</td>
-                              <td className="px-3 py-2.5 text-muted-foreground">{row.customerCode}</td>
-                              <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-primary">{formatCurrency(row.revenue)} ₫</td>
+                              {customerColumns.includes("code") && (
+                                <td className="px-3 py-2.5 text-muted-foreground">{row.customerCode}</td>
+                              )}
+                              {customerColumns.includes("revenue") && (
+                                <td
+                                  className={cn(
+                                    "px-3 py-2.5 text-right font-semibold tabular-nums",
+                                    highlightValues && "text-primary",
+                                  )}
+                                >
+                                  {formatCurrency(row.revenue)} ₫
+                                </td>
+                              )}
+                              {customerColumns.includes("share") && (
                               <td className="px-3 py-2.5 text-right tabular-nums">{row.revenueShare.toFixed(1)}%</td>
+                              )}
+                              {customerColumns.includes("orders") && (
                               <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.orderCount)}</td>
-                              <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.productCount)}</td>
+                              )}
+                              {customerColumns.includes("products") && (
+                                <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.productCount)}</td>
+                              )}
+                              {customerColumns.includes("quantity") && (
                               <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.quantity)}</td>
-                              <td className="max-w-72 truncate px-3 py-2.5 text-muted-foreground" title={row.topProduct ?? undefined}>{row.topProduct ?? "—"}</td>
+                              )}
+                              {customerColumns.includes("topProduct") && (
+                                <td className="max-w-72 truncate px-3 py-2.5 text-muted-foreground" title={row.topProduct ?? undefined}>{row.topProduct ?? "—"}</td>
+                              )}
+                              {customerColumns.includes("lastPurchase") && (
                               <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">{formatShortDate(row.lastPurchaseAt)}</td>
+                              )}
                               <td className="px-2 py-2 text-right">
                                 <Button
                                   type="button"
@@ -858,7 +1473,7 @@ export default function CustomerProductReportPage() {
                                   onClick={() => {
                                     setDetail(null);
                                     setSelectedCustomerId(row.customerId);
-                                    setMode("products");
+                                    changeMode("products");
                                   }}
                                 >
                                   <Icon name="arrow_forward" size={17} />
@@ -879,7 +1494,8 @@ export default function CustomerProductReportPage() {
                         setPage(0);
                       }}
                     />
-                  </section>
+                    </section>
+                  )}
                 </div>
               )}
 
@@ -888,21 +1504,33 @@ export default function CustomerProductReportPage() {
                   <div className="flex flex-col gap-3 border-b border-border p-4 xl:flex-row xl:items-end xl:justify-between">
                     <div className="min-w-0">
                       <label htmlFor="customer-select" className="mb-1 block text-xs font-medium text-muted-foreground">Khách hàng</label>
-                      <select
-                        id="customer-select"
+                      <Select
                         value={selectedCustomerId ?? ""}
-                        onChange={(event) => {
+                        onValueChange={(value) => {
+                          if (!value) return;
                           setDetail(null);
-                          setSelectedCustomerId(event.target.value);
+                          setSelectedCustomerId(value);
                         }}
-                        className="h-9 max-w-full rounded-lg border border-input bg-background px-3 text-sm font-medium text-foreground outline-none focus:border-ring sm:min-w-80"
                       >
-                        {report.customers.map((row) => (
-                          <option key={row.customerId} value={row.customerId}>
-                            {row.customerCode} · {row.customerName}
-                          </option>
-                        ))}
-                      </select>
+                        <SelectTrigger
+                          id="customer-select"
+                          className="max-w-full bg-background font-medium sm:min-w-80"
+                          aria-label="Khách hàng"
+                        >
+                          <SelectValue>
+                            {selectedCustomer
+                              ? `${selectedCustomer.customerCode} · ${selectedCustomer.customerName}`
+                              : "Chọn khách hàng"}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent align="start" className="min-w-96">
+                          {report.customers.map((row) => (
+                            <SelectItem key={row.customerId} value={row.customerId}>
+                              {row.customerCode} · {row.customerName}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                       <div className="relative sm:w-72">
@@ -915,16 +1543,24 @@ export default function CustomerProductReportPage() {
                           aria-label="Tìm mặt hàng"
                         />
                       </div>
-                      <select
+                      <Select
                         value={productSort}
-                        onChange={(event) => setProductSort(event.target.value as ProductSort)}
-                        className="h-9 rounded-lg border border-input bg-background px-3 text-sm text-foreground outline-none focus:border-ring"
-                        aria-label="Sắp xếp mặt hàng"
+                        onValueChange={(value) =>
+                          value && setProductSort(value as ProductSort)
+                        }
                       >
-                        <option value="revenue_desc">Doanh thu cao nhất</option>
-                        <option value="quantity_desc">Số lượng cao nhất</option>
-                        <option value="name_asc">Tên hàng A–Z</option>
-                      </select>
+                        <SelectTrigger
+                          className="min-w-48 bg-background"
+                          aria-label="Sắp xếp mặt hàng"
+                        >
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent align="end">
+                          <SelectItem value="revenue_desc">Doanh thu cao nhất</SelectItem>
+                          <SelectItem value="quantity_desc">Số lượng cao nhất</SelectItem>
+                          <SelectItem value="name_asc">Tên hàng A–Z</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-container-low/40 px-4 py-2.5">
@@ -939,37 +1575,85 @@ export default function CustomerProductReportPage() {
                     {detailLoading && <Icon name="progress_activity" size={18} className="animate-spin text-muted-foreground" />}
                   </div>
                   <div className="max-h-[650px] overflow-auto">
-                    <table className="min-w-[1180px] w-full border-collapse text-sm">
+                    <table
+                      className={cn(
+                        "w-full border-collapse text-sm",
+                        productColumns.length > 5
+                          ? "min-w-[1180px]"
+                          : "min-w-[720px]",
+                        density === "compact" &&
+                          "[&_th]:!py-1.5 [&_td]:!py-1.5",
+                      )}
+                    >
                       <thead className="sticky top-0 z-20 bg-surface-container">
                         <tr className="border-b border-border text-xs text-muted-foreground">
                           <th className="sticky left-0 z-30 min-w-72 bg-surface-container px-3 py-2.5 text-left font-semibold">Mặt hàng</th>
-                          <th className="px-3 py-2.5 text-left font-semibold">Mã hàng</th>
-                          <th className="min-w-48 px-3 py-2.5 text-left font-semibold">Nhóm hàng</th>
-                          <th className="px-3 py-2.5 text-left font-semibold">Đơn vị tính</th>
-                          <th className="px-3 py-2.5 text-right font-semibold">Số đơn</th>
-                          <th className="px-3 py-2.5 text-right font-semibold">Số lượng</th>
-                          <th className="px-3 py-2.5 text-right font-semibold">Doanh thu</th>
-                          <th className="px-3 py-2.5 text-right font-semibold">Tỷ trọng</th>
-                          <th className="px-3 py-2.5 text-right font-semibold">Lần mua gần nhất</th>
+                          {productColumns.includes("code") && (
+                            <th className="px-3 py-2.5 text-left font-semibold">Mã hàng</th>
+                          )}
+                          {productColumns.includes("category") && (
+                            <th className="min-w-48 px-3 py-2.5 text-left font-semibold">Nhóm hàng</th>
+                          )}
+                          {productColumns.includes("unit") && (
+                            <th className="px-3 py-2.5 text-left font-semibold">Đơn vị tính</th>
+                          )}
+                          {productColumns.includes("orders") && (
+                            <th className="px-3 py-2.5 text-right font-semibold">Số đơn</th>
+                          )}
+                          {productColumns.includes("quantity") && (
+                            <th className="px-3 py-2.5 text-right font-semibold">Số lượng</th>
+                          )}
+                          {productColumns.includes("revenue") && (
+                            <th className="px-3 py-2.5 text-right font-semibold">Doanh thu</th>
+                          )}
+                          {productColumns.includes("share") && (
+                            <th className="px-3 py-2.5 text-right font-semibold">Tỷ trọng</th>
+                          )}
+                          {productColumns.includes("lastPurchase") && (
+                            <th className="px-3 py-2.5 text-right font-semibold">Lần mua gần nhất</th>
+                          )}
                         </tr>
                       </thead>
                       <tbody>
                         {(detail?.rows ?? []).map((row, index) => (
                           <tr key={row.productId} className={cn("border-b border-border/60 hover:bg-surface-container-low", index % 2 === 1 && "bg-surface-container-low/30")}>
                             <td className="sticky left-0 z-10 bg-inherit px-3 py-2.5 font-medium text-foreground">{row.productName}</td>
-                            <td className="px-3 py-2.5 text-muted-foreground">{row.productCode}</td>
-                            <td className="px-3 py-2.5 text-muted-foreground">{row.categoryName}</td>
-                            <td className="px-3 py-2.5 text-muted-foreground">{row.unit}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.orderCount)}</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.quantity)}</td>
-                            <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-primary">{formatCurrency(row.revenue)} ₫</td>
-                            <td className="px-3 py-2.5 text-right tabular-nums">{row.revenueShare.toFixed(1)}%</td>
-                            <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">{formatShortDate(row.lastPurchaseAt)}</td>
+                            {productColumns.includes("code") && (
+                              <td className="px-3 py-2.5 text-muted-foreground">{row.productCode}</td>
+                            )}
+                            {productColumns.includes("category") && (
+                              <td className="px-3 py-2.5 text-muted-foreground">{row.categoryName}</td>
+                            )}
+                            {productColumns.includes("unit") && (
+                              <td className="px-3 py-2.5 text-muted-foreground">{row.unit}</td>
+                            )}
+                            {productColumns.includes("orders") && (
+                              <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.orderCount)}</td>
+                            )}
+                            {productColumns.includes("quantity") && (
+                              <td className="px-3 py-2.5 text-right tabular-nums">{formatNumber(row.quantity)}</td>
+                            )}
+                            {productColumns.includes("revenue") && (
+                              <td
+                                className={cn(
+                                  "px-3 py-2.5 text-right font-semibold tabular-nums",
+                                  highlightValues && "text-primary",
+                                )}
+                              >
+                                {formatCurrency(row.revenue)} ₫
+                              </td>
+                            )}
+                            {productColumns.includes("share") && (
+                              <td className="px-3 py-2.5 text-right tabular-nums">{row.revenueShare.toFixed(1)}%</td>
+                            )}
+                            {productColumns.includes("lastPurchase") && (
+                              <td className="whitespace-nowrap px-3 py-2.5 text-right text-muted-foreground">{formatShortDate(row.lastPurchaseAt)}</td>
+                            )}
                           </tr>
                         ))}
                         {!detailLoading && (detail?.rows.length ?? 0) === 0 && (
                           <tr>
-                            <td colSpan={9} className="px-4 py-12 text-center text-sm text-muted-foreground">Không tìm thấy mặt hàng phù hợp.</td>
+                            <td colSpan={1 + productColumns.length} className="px-4 py-12 text-center text-sm text-muted-foreground">Không tìm thấy mặt hàng phù hợp.</td>
                           </tr>
                         )}
                       </tbody>
@@ -995,16 +1679,24 @@ export default function CustomerProductReportPage() {
                       <h2 id="category-table-title" className="text-sm font-semibold text-foreground">Khách hàng theo nhóm hàng</h2>
                       <p className="mt-0.5 text-xs text-muted-foreground">20 khách và 10 nhóm có doanh thu cao nhất</p>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-label="Mức doanh thu">
-                      <span>Thấp</span>
-                      <span className="h-3 w-6 rounded-sm bg-primary/5" />
-                      <span className="h-3 w-6 rounded-sm bg-primary/12" />
-                      <span className="h-3 w-6 rounded-sm bg-primary/18" />
-                      <span>Cao</span>
-                    </div>
+                    {highlightValues && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground" aria-label="Mức doanh thu">
+                        <span>Thấp</span>
+                        <span className="h-3 w-6 rounded-sm bg-primary/5" />
+                        <span className="h-3 w-6 rounded-sm bg-primary/12" />
+                        <span className="h-3 w-6 rounded-sm bg-primary/18" />
+                        <span>Cao</span>
+                      </div>
+                    )}
                   </div>
                   <div className="max-h-[680px] overflow-auto">
-                    <table className="min-w-max w-full border-collapse text-sm">
+                    <table
+                      className={cn(
+                        "min-w-max w-full border-collapse text-sm",
+                        density === "compact" &&
+                          "[&_th]:!py-1.5 [&_td]:!py-1.5",
+                      )}
+                    >
                       <thead className="sticky top-0 z-30 bg-surface-container">
                         <tr className="border-b border-border text-xs text-muted-foreground">
                           <th className="sticky left-0 z-40 min-w-64 bg-surface-container px-3 py-2.5 text-left font-semibold">Khách hàng</th>
@@ -1021,12 +1713,22 @@ export default function CustomerProductReportPage() {
                             {matrix.categories.map((category) => {
                               const value = matrix.values.get(customer.id)?.get(category.id) ?? 0;
                               return (
-                                <td key={category.id} className={cn("px-3 py-2.5 text-right tabular-nums", heatClass(value, matrix.maximum))}>
+                                <td key={category.id} className={cn(
+                                    "px-3 py-2.5 text-right tabular-nums",
+                                    highlightValues && heatClass(value, matrix.maximum),
+                                  )}>
                                   {value === 0 ? "—" : formatCurrency(value)}
                                 </td>
                               );
                             })}
-                            <td className="sticky right-0 z-20 border-l border-border bg-background px-3 py-2.5 text-right font-semibold tabular-nums text-primary">{formatCurrency(customer.total)} ₫</td>
+                            <td
+                              className={cn(
+                                "sticky right-0 z-20 border-l border-border bg-background px-3 py-2.5 text-right font-semibold tabular-nums",
+                                highlightValues && "text-primary",
+                              )}
+                            >
+                              {formatCurrency(customer.total)} ₫
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1036,7 +1738,14 @@ export default function CustomerProductReportPage() {
                           {matrix.categories.map((category) => (
                             <td key={category.id} className="px-3 py-2.5 text-right tabular-nums">{formatCurrency(matrix.categoryTotals.get(category.id) ?? 0)}</td>
                           ))}
-                          <td className="sticky right-0 z-40 border-l border-border bg-surface-container px-3 py-2.5 text-right tabular-nums text-primary">{formatCurrency(matrix.grandTotal)} ₫</td>
+                          <td
+                            className={cn(
+                              "sticky right-0 z-40 border-l border-border bg-surface-container px-3 py-2.5 text-right tabular-nums",
+                              highlightValues && "text-primary",
+                            )}
+                          >
+                            {formatCurrency(matrix.grandTotal)} ₫
+                          </td>
                         </tr>
                       </tfoot>
                     </table>

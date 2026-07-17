@@ -1,0 +1,40 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  clearReportViewPreferences,
+  readReportViewPreferences,
+  writeReportViewPreferences,
+} from "@/lib/reports/preferences";
+
+const REPORT_PATH = "/phan-tich/khach-san-pham";
+
+describe("report view preferences", () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it("stores and restores a valid report configuration", () => {
+    writeReportViewPreferences(REPORT_PATH, {
+      displayMode: "table",
+      density: "compact",
+      customerColumns: ["revenue", "orders"],
+    });
+
+    expect(readReportViewPreferences(REPORT_PATH)).toEqual({
+      displayMode: "table",
+      density: "compact",
+      customerColumns: ["revenue", "orders"],
+    });
+  });
+
+  it("ignores unknown report paths", () => {
+    writeReportViewPreferences("/not-a-report", { density: "compact" });
+    expect(readReportViewPreferences("/not-a-report")).toEqual({});
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it("clears a saved configuration", () => {
+    writeReportViewPreferences(REPORT_PATH, { density: "compact" });
+    clearReportViewPreferences(REPORT_PATH);
+    expect(readReportViewPreferences(REPORT_PATH)).toEqual({});
+  });
+});
