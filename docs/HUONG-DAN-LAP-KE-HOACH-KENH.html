@@ -14,6 +14,7 @@
     --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
     --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
     --slate: #64748b; --slate-soft: #f1f5f9;
+    --orange: #c2410c; --orange-soft: #ffedd5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -23,6 +24,7 @@
       --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
       --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
       --slate: #94a3b8; --slate-soft: #232c34;
+      --orange: #fb923c; --orange-soft: #3c2413;
     }
   }
   :root[data-theme="light"] {
@@ -32,6 +34,7 @@
     --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
     --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
     --slate: #64748b; --slate-soft: #f1f5f9;
+    --orange: #c2410c; --orange-soft: #ffedd5;
   }
   :root[data-theme="dark"] {
     --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
@@ -40,6 +43,7 @@
     --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
     --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
     --slate: #94a3b8; --slate-soft: #232c34;
+    --orange: #fb923c; --orange-soft: #3c2413;
   }
 
   * { box-sizing: border-box; }
@@ -141,9 +145,10 @@
   <p>Nội dung</p>
   <ol>
     <li><a href="#y-tuong">Ý tưởng: hai cách chia việc</a></li>
+    <li><a href="#cay-ke-hoach">Cây kế hoạch — tối đa 4 cấp, tên do bạn đặt <b>(mới)</b></a></li>
     <li><a href="#vai-tro">Ai làm gì — ba vai trò</a></li>
     <li><a href="#giao">Bước 1 · Leader giao lập kế hoạch</a></li>
-    <li><a href="#soan">Bước 2 · Chủ kênh soạn kế hoạch</a></li>
+    <li><a href="#soan">Bước 2 · Người phụ trách soạn kế hoạch</a></li>
     <li><a href="#chien-luoc">Bước 2b · Đề xuất chiến lược &amp; KPI <b>(mới)</b></a></li>
     <li><a href="#nop">Bước 3 · Nộp kế hoạch</a></li>
     <li><a href="#duyet">Bước 4 · Leader duyệt kế hoạch</a></li>
@@ -157,7 +162,7 @@
 </nav>
 
 <h2 id="y-tuong"><span class="phan">Bắt đầu</span>Ý tưởng: hai cách chia việc</h2>
-<p>Trong MKT Hub, mỗi <b>gói việc</b> (một kênh cần triển khai — TikTok, Facebook…) có <b>hai cách</b> biến thành các đầu việc cụ thể. Leader chọn một trong hai cho từng gói:</p>
+<p>Trong MKT Hub, mỗi <b>gói việc</b> (một <b>Kế hoạch phụ</b> trong cây kế hoạch — VD "Tuần 1 · Chuẩn bị", có thể gắn nhãn kênh TikTok/Facebook…) có <b>hai cách</b> biến thành các đầu việc cụ thể. Leader chọn một trong hai cho từng gói:</p>
 
 <figure>
   <div class="fig-card">
@@ -193,9 +198,9 @@
     <g font-size="12.5" font-weight="600" text-anchor="middle">
       <rect x="6" y="30" width="128" height="40" rx="9" fill="var(--pink-soft)" stroke="var(--pink)"/>
       <text x="70" y="47" fill="var(--pink)">1. Leader giao</text>
-      <text x="70" y="61" font-size="10" fill="var(--ink-soft)">gói → chủ kênh</text>
+      <text x="70" y="61" font-size="10" fill="var(--ink-soft)">gói → người phụ trách</text>
       <rect x="158" y="30" width="128" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
-      <text x="222" y="47" fill="var(--sky)">2. Chủ kênh soạn</text>
+      <text x="222" y="47" fill="var(--sky)">2. Người phụ trách soạn</text>
       <text x="222" y="61" font-size="10" fill="var(--ink-soft)">các công đoạn</text>
       <rect x="310" y="30" width="120" height="40" rx="9" fill="var(--sky-soft)" stroke="var(--sky)"/>
       <text x="370" y="52" fill="var(--sky)">3. Nộp</text>
@@ -217,12 +222,84 @@
   <figcaption><b>Hình 2.</b> Năm bước. Điểm cốt lõi: <b>chỉ khi Leader duyệt xong, hệ thống mới sinh việc thật</b> — trước đó chỉ là kế hoạch dự kiến.</figcaption>
 </figure>
 
+<h2 id="cay-ke-hoach"><span class="phan">Mới · 7/2026</span>Cây kế hoạch — tối đa 4 cấp, tên do bạn đặt</h2>
+<p>Trước đây mỗi chiến dịch chỉ có một hàng "kênh" phẳng. Bây giờ, mỗi chiến dịch là một <b>cây kế hoạch</b>: bạn tự chia tầng để quản lý — chia theo tháng, theo kênh, theo khu vực, theo mục tiêu… tuỳ cách bạn nghĩ. Hệ thống chỉ giữ đúng <b>một khung</b>: sâu nhất là <b>4 cấp</b>, và tầng dưới cùng luôn là <b>Kế hoạch phụ — nơi chứa việc</b>.</p>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 330" role="img" aria-label="Cây kế hoạch 4 cấp: nhánh sâu bên trái, nhánh nông bên phải">
+    <rect x="8" y="10" width="744" height="52" rx="11" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+    <rect x="22" y="22" width="126" height="20" rx="10" fill="var(--indigo)"/>
+    <text x="85" y="36" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch cấp 1</text>
+    <text x="160" y="37" font-size="13.5" font-weight="700" fill="var(--ink)">Chiến dịch — "Quý 3 · Phủ thương hiệu"</text>
+    <text x="742" y="37" font-size="11" text-anchor="end" fill="var(--ink-soft)">giữ ngân sách · thời hạn · % sẵn sàng</text>
+
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+      <path d="M200 62 200 84"/><path d="M560 62 560 84"/>
+    </g>
+    <path d="M196 84 200 92 204 84 Z" fill="var(--ink-soft)"/>
+    <path d="M556 84 560 92 564 84 Z" fill="var(--ink-soft)"/>
+
+    <text x="200" y="80" font-size="10.5" text-anchor="middle" fill="var(--ink-soft)" dx="76">nhánh SÂU (đủ 4 cấp)</text>
+    <text x="560" y="80" font-size="10.5" text-anchor="middle" fill="var(--ink-soft)" dx="76">nhánh NÔNG (đi tắt)</text>
+
+    <rect x="16" y="92" width="368" height="226" rx="11" fill="var(--orange-soft)" stroke="var(--orange)"/>
+    <rect x="30" y="104" width="126" height="20" rx="10" fill="var(--orange)"/>
+    <text x="93" y="118" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch cấp 2</text>
+    <text x="166" y="119" font-size="12.5" font-weight="700" fill="var(--ink)">"Kênh Website"</text>
+
+    <rect x="34" y="134" width="332" height="174" rx="10" fill="var(--sky-soft)" stroke="var(--sky)"/>
+    <rect x="48" y="146" width="126" height="20" rx="10" fill="var(--sky)"/>
+    <text x="111" y="160" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch cấp 3</text>
+    <text x="184" y="161" font-size="12.5" font-weight="700" fill="var(--ink)">"Tháng 7"</text>
+
+    <rect x="52" y="176" width="296" height="122" rx="10" fill="var(--green-soft)" stroke="var(--green)"/>
+    <rect x="66" y="188" width="110" height="20" rx="10" fill="var(--green)"/>
+    <text x="121" y="202" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch phụ</text>
+    <text x="184" y="203" font-size="12.5" font-weight="700" fill="var(--ink)">"Tuần 1 · Chuẩn bị"</text>
+    <rect x="66" y="216" width="130" height="18" rx="9" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="131" y="229" font-size="10" font-weight="600" text-anchor="middle" fill="var(--ink)">Nhãn kênh: Website</text>
+    <rect x="66" y="242" width="268" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="76" y="257" font-size="11" fill="var(--ink)">Việc: viết 10 bài — giao người làm</text>
+    <rect x="66" y="270" width="268" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="76" y="285" font-size="11" fill="var(--ink)">Việc: quay 2 clip — giao người làm</text>
+
+    <rect x="408" y="92" width="344" height="122" rx="11" fill="var(--green-soft)" stroke="var(--green)"/>
+    <rect x="422" y="104" width="110" height="20" rx="10" fill="var(--green)"/>
+    <text x="477" y="118" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch phụ</text>
+    <text x="540" y="119" font-size="12.5" font-weight="700" fill="var(--ink)">"Việc gấp tuần này"</text>
+    <rect x="422" y="134" width="316" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="432" y="149" font-size="11" fill="var(--ink)">Việc: in băng rôn khai trương</text>
+    <rect x="422" y="162" width="316" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="432" y="177" font-size="11" fill="var(--ink)">Việc: đặt quà tặng khách</text>
+    <text x="422" y="203" font-size="10.5" fill="var(--ink-soft)">Gắn thẳng vào Chiến dịch — không cần qua cấp 2/3</text>
+
+    <text x="408" y="240" font-size="11.5" fill="var(--ink-soft)">Cùng một chiến dịch có thể vừa</text>
+    <text x="408" y="257" font-size="11.5" fill="var(--ink-soft)">có nhánh sâu, vừa có nhánh nông —</text>
+    <text x="408" y="274" font-size="11.5" fill="var(--ink-soft)">"tùy nhu cầu của từng kế hoạch,</text>
+    <text x="408" y="291" font-size="11.5" font-weight="700" fill="var(--ink)">nhưng tối đa 4 cấp".</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 2b.</b> Một chiến dịch, hai kiểu nhánh. Trái: đủ 4 cấp cho mảng lớn. Phải: kế hoạch gọn đi thẳng từ Chiến dịch xuống Kế hoạch phụ. Tên các cấp 2/3 do người lập tự đặt — hệ thống chỉ đánh số cấp theo độ sâu.</figcaption>
+</figure>
+
+<p>Bốn điều cần nhớ về cây:</p>
+<ul>
+  <li><b>Cấp 1 luôn là Chiến dịch</b> — nơi giữ ngân sách, khung thời gian và mức sẵn sàng. Không đổi gì so với trước.</li>
+  <li><b>Cấp 2 và cấp 3 là "thư mục" bạn tự đặt tên</b> ("Kênh Website", "Tháng 7", "Khu vực Quận 7"…). Chúng chỉ để gom nhóm — không có vòng duyệt riêng. Tạo bằng nút <span class="btn-name">Thêm Kế hoạch</span> trong tab <span class="path">Cây kế hoạch</span>; ô <b>"Nằm trong"</b> quyết định nó là cấp 2 (nằm ngay dưới Chiến dịch) hay cấp 3 (nằm trong một cấp 2).</li>
+  <li><b>Kế hoạch phụ là nơi duy nhất chứa việc</b> — toàn bộ luồng của tài liệu này (giao → soạn → nộp → duyệt → sinh việc → báo cáo) diễn ra trên Kế hoạch phụ. Kênh đăng bài (TikTok, Facebook…) giờ chỉ là <b>nhãn tuỳ chọn</b> gắn vào Kế hoạch phụ, không còn là một tầng bắt buộc.</li>
+  <li><b>Xoá một nhánh không mất gì bên trong</b> — xoá cấp 2/3 thì mọi thứ bên trong tự nối lên tầng trên. Chỉ xoá Kế hoạch phụ mới ẩn việc bên trong nó.</li>
+</ul>
+<div class="note">
+  <p><b>Màn "Lập kế hoạch" cũng hiện đúng cây này</b> (tím → cam → xanh dương → xanh lá), kèm <b>bộ lọc</b>: tìm theo tên (khớp cả tên cấp 2/3), khoảng hạn, người phụ trách, trạng thái. Trong trình soạn, dòng định vị trên cùng cho biết bạn đang đứng ở nhánh nào: <i>Cấp 1 → Cấp 2 → Cấp 3 → Kế hoạch phụ</i>.</p>
+</div>
+
 <h2 id="vai-tro"><span class="phan">Khái niệm</span>Ai làm gì — ba vai trò</h2>
 <div class="table-scroll">
 <table class="roles">
   <tr><th style="width:26%">Vai trò</th><th>Làm gì trong luồng này</th></tr>
-  <tr><td><b>Leader</b> <span class="chip lead">giao &amp; duyệt</span></td><td>Giao gói việc cho chủ kênh; đặt mục tiêu/thông điệp; duyệt hoặc yêu cầu sửa kế hoạch; điều chỉnh việc khi cần.</td></tr>
-  <tr><td><b>Chủ kênh</b> <span class="chip exec">lập kế hoạch</span></td><td>Người phụ trách một kênh (một nhân viên MKT được Leader giao). Tự soạn các công đoạn, đề xuất người làm, hạn, rồi nộp. <b>Không</b> tự sinh việc được.</td></tr>
+  <tr><td><b>Leader</b> <span class="chip lead">giao &amp; duyệt</span></td><td>Giao gói việc cho người phụ trách; đặt mục tiêu/thông điệp; duyệt hoặc yêu cầu sửa kế hoạch; điều chỉnh việc khi cần.</td></tr>
+  <tr><td><b>Người phụ trách</b> <span class="chip exec">lập kế hoạch</span></td><td>Người phụ trách một Kế hoạch phụ (một nhân viên MKT được Leader giao). Tự soạn các công đoạn, đề xuất người làm, hạn, rồi nộp. <b>Không</b> tự sinh việc được.</td></tr>
   <tr><td><b>Người làm</b> <span class="chip">thực thi</span></td><td>Người được đề xuất trong kế hoạch. Chỉ nhận việc <b>sau khi</b> Leader duyệt — việc hiện ở "Việc của tôi" như bình thường.</td></tr>
 </table>
 </div>
@@ -232,9 +309,9 @@
 
 <h2 id="giao"><span class="phan">Bước 1</span>Leader giao lập kế hoạch <span class="chip lead">Leader</span></h2>
 <ol class="steps">
-  <li><b>Mở gói việc</b>Vào <span class="path">Chiến dịch</span> → mở một chiến dịch → tab <span class="path">Kênh triển khai</span>. Mỗi kênh là một "gói việc". (Chưa có kênh thì bấm <span class="btn-name">Thêm kênh</span> để tạo.)</li>
+  <li><b>Mở gói việc</b>Vào <span class="path">Chiến dịch</span> → mở một chiến dịch → tab <span class="path">Cây kế hoạch</span>. Mỗi <b>Kế hoạch phụ</b> (thẻ xanh lá) là một "gói việc". (Chưa có thì bấm <span class="btn-name">Thêm Kế hoạch phụ</span> để tạo — chọn nó nằm trong nhánh nào của cây, gắn nhãn kênh nếu muốn.)</li>
   <li><b>Bấm "Giao lập kế hoạch"</b>Trên thẻ gói việc còn "Cần chia việc", có <b>hai nút</b>: "Chia Task Ngay" (cũ) và <span class="btn-name">Giao lập kế hoạch</span> (mới). Bấm nút mới.</li>
-  <li><b>Chọn người phụ trách + đặt mục tiêu</b>Trong hộp thoại: chọn <b>Người phụ trách kênh</b> (bắt buộc), người duyệt nội dung (tuỳ chọn), rồi điền <b>Mục tiêu</b>, <b>Thông điệp chính</b>, sản phẩm bắt buộc, hạn. Bấm <span class="btn-name">Giao lập kế hoạch</span>.</li>
+  <li><b>Chọn người phụ trách + đặt mục tiêu</b>Trong hộp thoại: chọn <b>Người phụ trách Kế hoạch phụ</b> (bắt buộc), người duyệt nội dung (tuỳ chọn), rồi điền <b>Mục tiêu</b>, <b>Thông điệp chính</b>, sản phẩm bắt buộc, hạn. Bấm <span class="btn-name">Giao lập kế hoạch</span>.</li>
 </ol>
 
 <figure>
@@ -254,10 +331,10 @@
     <g stroke="var(--ink-soft)" stroke-width="1.6" fill="var(--ink-soft)"><line x1="372" y1="92" x2="392" y2="92"/><path d="M392 88 400 92 392 96 Z"/></g>
     <rect x="404" y="8" width="348" height="234" rx="13" fill="var(--paper)" stroke="var(--line)"/>
     <text x="424" y="34" font-size="14" font-weight="700" fill="var(--ink)">Giao lập kế hoạch</text>
-    <text x="424" y="58" font-size="11" fill="var(--ink-soft)">Người phụ trách kênh *</text>
+    <text x="424" y="58" font-size="11" fill="var(--ink-soft)">Người phụ trách Kế hoạch phụ *</text>
     <rect x="424" y="64" width="308" height="28" rx="7" fill="var(--soft)" stroke="var(--primary)" stroke-width="1.5"/>
     <text x="436" y="82" font-size="12" font-weight="600" fill="var(--ink)">MKT Executive ▾</text>
-    <text x="424" y="112" font-size="11" fill="var(--ink-soft)">Mục tiêu kênh</text>
+    <text x="424" y="112" font-size="11" fill="var(--ink-soft)">Mục tiêu của Kế hoạch phụ</text>
     <rect x="424" y="118" width="308" height="26" rx="7" fill="var(--soft)" stroke="var(--line)"/>
     <text x="436" y="135" font-size="11" fill="var(--ink)">8 video Oolong, 200k lượt xem</text>
     <text x="424" y="164" font-size="11" fill="var(--ink-soft)">Thông điệp chính bắt buộc</text>
@@ -274,7 +351,7 @@
   <p>Giao xong: thẻ gói việc đổi nhãn thành <b>"Đang lập kế hoạch"</b>, nút "Chia Task Ngay" biến mất, và người phụ trách nhận thông báo (kèm Telegram nếu đã kết nối).</p>
 </div>
 
-<h2 id="soan"><span class="phan">Bước 2</span>Chủ kênh soạn kế hoạch <span class="chip exec">Chủ kênh</span></h2>
+<h2 id="soan"><span class="phan">Bước 2</span>Người phụ trách soạn kế hoạch <span class="chip exec">Người phụ trách</span></h2>
 <ol class="steps">
   <li><b>Mở mục "Lập kế hoạch"</b>Người phụ trách vào menu <span class="path">Lập kế hoạch</span> (bên trái). Kế hoạch được giao hiện ở đây, nhãn "Đang lập kế hoạch". Bấm <span class="btn-name">Lập kế hoạch</span>.</li>
   <li><b>Thêm từng công đoạn</b>Mỗi dòng là một công đoạn. Điền <b>tên</b>, chọn <b>loại</b> (Quay/Dựng/Duyệt/Đăng…), <b>người làm đề xuất</b>, <b>hạn</b>, <b>điểm khối lượng</b>. Bấm <span class="btn-name">Thêm công đoạn</span> để có dòng tiếp theo.</li>
@@ -306,11 +383,11 @@
   <p><b>Luật đã nới (7/2026):</b> gắn nội dung cho công đoạn Duyệt/Đăng là <b>tuỳ chọn</b> — lúc lập kế hoạch, nội dung thường <b>chưa tồn tại</b> (chính kế hoạch mới đẻ ra nó). Nếu bạn <b>có</b> gắn nội dung, hệ thống sẽ giữ rào an toàn: nội dung phải được duyệt xong thì việc Đăng mới chạy được.</p>
 </div>
 
-<h2 id="chien-luoc"><span class="phan">Bước 2b · Mới</span>Đề xuất chiến lược &amp; KPI <span class="chip exec">Chủ kênh</span></h2>
+<h2 id="chien-luoc"><span class="phan">Bước 2b · Mới</span>Đề xuất chiến lược &amp; KPI <span class="chip exec">Người phụ trách</span></h2>
 <p>Ngay dưới bốn ô đầu của trình soạn có khối <b>"Đề xuất chiến lược &amp; KPI"</b>. Đây là chỗ biến kế hoạch từ "danh sách việc rời rạc" thành <b>một đề xuất có bức tranh</b> để Leader duyệt trọn gói:</p>
 <ol class="steps">
   <li><b>Cách đánh</b>Viết vài dòng: insight gì, đánh kênh nào, vì sao tin là thắng. Đây là phần Leader đọc đầu tiên.</li>
-  <li><b>Ngân sách dự kiến</b>Gõ số tiền cần cho kênh này — gõ đến đâu hệ thống hiện dạng tiền Việt đến đó (VD gõ <b>3000000</b> → thấy ngay <b>3.000.000đ</b>).</li>
+  <li><b>Ngân sách dự kiến</b>Gõ số tiền cần cho Kế hoạch phụ này — gõ đến đâu hệ thống hiện dạng tiền Việt đến đó (VD gõ <b>3000000</b> → thấy ngay <b>3.000.000đ</b>).</li>
   <li><b>Bảng KPI định lượng</b>Bấm <span class="btn-name">+ Thêm chỉ số KPI</span>, mỗi dòng gồm: <b>tên chỉ số</b> · <b>con số mục tiêu</b> · <b>đơn vị</b>. VD: Bài đăng — 20 — bài; Lượt tiếp cận — 50000 — lượt. Con số này sẽ được so với <b>số thực tế</b> khi kế hoạch chạy (xem Bước 6).</li>
 </ol>
 
@@ -343,7 +420,7 @@
   <p><b>Không bắt buộc — nhưng đừng bỏ trống.</b> Hệ thống không chặn nộp khi thiếu chiến lược/KPI, song màn duyệt của Leader sẽ hiện nhắc <i>"kế hoạch chưa có đề xuất chiến lược"</i> — Leader có quyền bấm <b>Yêu cầu sửa</b> để trả về. Kế hoạch có con số cam kết luôn dễ được duyệt hơn.</p>
 </div>
 
-<h2 id="nop"><span class="phan">Bước 3</span>Nộp kế hoạch <span class="chip exec">Chủ kênh</span></h2>
+<h2 id="nop"><span class="phan">Bước 3</span>Nộp kế hoạch <span class="chip exec">Người phụ trách</span></h2>
 <p>Soạn xong, bấm <span class="btn-name">Nộp kế hoạch</span>. Hệ thống <b>tự kiểm</b> trước khi cho nộp — nếu thiếu sẽ báo đỏ ngay:</p>
 <ul>
   <li>Có <b>ít nhất một</b> công đoạn.</li>
@@ -352,14 +429,14 @@
   <li>Người làm còn <b>đang hoạt động</b> (chưa bị khoá tài khoản).</li>
   <li>Nếu có khai KPI: mỗi chỉ số phải có <b>tên</b> và <b>mục tiêu lớn hơn 0</b>.</li>
 </ul>
-<p>Nộp xong, kế hoạch chuyển nhãn <b>"Chờ duyệt kế hoạch"</b> và Leader nhận thông báo. Từ lúc này chủ kênh <b>không sửa trực tiếp</b> được nữa (muốn sửa phải chờ Leader trả lại).</p>
+<p>Nộp xong, kế hoạch chuyển nhãn <b>"Chờ duyệt kế hoạch"</b> và Leader nhận thông báo. Từ lúc này người phụ trách <b>không sửa trực tiếp</b> được nữa (muốn sửa phải chờ Leader trả lại).</p>
 
 <h2 id="duyet"><span class="phan">Bước 4</span>Leader duyệt kế hoạch <span class="chip lead">Leader</span></h2>
 <ol class="steps">
   <li><b>Mở kế hoạch chờ duyệt</b>Leader vào <span class="path">Lập kế hoạch</span>, thấy kế hoạch nhãn "Chờ duyệt kế hoạch" có nút <span class="btn-name">Duyệt kế hoạch</span>. Bấm vào.</li>
   <li><b>Xem bảng tóm tắt</b>Hệ thống hiện: tổng số công đoạn, tổng điểm khối lượng, số người tham gia, <b>tải theo từng người</b>, và danh sách công đoạn. Nhìn nhanh là biết kế hoạch có hợp lý không, ai bị dồn việc.</li>
-  <li><b>Đọc khối "Đề xuất chiến lược" <i>(mới)</i></b>Ngay trên danh sách công đoạn là <b>cách đánh + ngân sách dự kiến + bảng KPI</b> mà chủ kênh cam kết. Duyệt là duyệt <b>cả bức tranh này</b>, không chỉ danh sách việc. Kế hoạch để trống phần chiến lược sẽ có dòng nhắc — nếu bạn cần bức tranh rõ hơn, bấm <b>Yêu cầu sửa</b> và ghi rõ muốn bổ sung gì.</li>
-  <li><b>Ra quyết định</b>Ba nút: <span class="btn-name">Duyệt &amp; sinh việc</span> (đồng ý — sinh việc ngay), <b>Yêu cầu sửa</b> (trả lại cho chủ kênh, <b>bắt buộc ghi nhận xét</b>), <b>Từ chối</b> (huỷ, mở lại gói việc — cũng bắt buộc ghi lý do).</li>
+  <li><b>Đọc khối "Đề xuất chiến lược" <i>(mới)</i></b>Ngay trên danh sách công đoạn là <b>cách đánh + ngân sách dự kiến + bảng KPI</b> mà người phụ trách cam kết. Duyệt là duyệt <b>cả bức tranh này</b>, không chỉ danh sách việc. Kế hoạch để trống phần chiến lược sẽ có dòng nhắc — nếu bạn cần bức tranh rõ hơn, bấm <b>Yêu cầu sửa</b> và ghi rõ muốn bổ sung gì.</li>
+  <li><b>Ra quyết định</b>Ba nút: <span class="btn-name">Duyệt &amp; sinh việc</span> (đồng ý — sinh việc ngay), <b>Yêu cầu sửa</b> (trả lại cho người phụ trách, <b>bắt buộc ghi nhận xét</b>), <b>Từ chối</b> (huỷ, mở lại gói việc — cũng bắt buộc ghi lý do).</li>
 </ol>
 
 <figure>
@@ -474,8 +551,8 @@
   <p>Bấm "Hoàn tất" mà máy báo <i>"việc này có người duyệt — hãy bấm Nộp duyệt"</i> nghĩa là bạn đang cầm bản web cũ — nhấn <b>Ctrl+Shift+R</b> tải lại một lần là nút đúng hiện ra.</p>
 </div>
 
-<h2 id="bao-cao"><span class="phan">Bước 6 · Mới</span>Báo cáo tiến độ tổng thể <span class="chip exec">Chủ kênh</span></h2>
-<p>Việc lẻ chỉ kể được từng mảnh. Khi kế hoạch <b>đang thực thi</b>, chủ kênh dùng nút <span class="btn-name">Báo cáo tiến độ</span> trên thẻ kế hoạch để báo <b>bức tranh của cả kế hoạch</b> — mỗi khi có gì đáng nói (khuyến nghị mỗi tuần một lần):</p>
+<h2 id="bao-cao"><span class="phan">Bước 6 · Mới</span>Báo cáo tiến độ tổng thể <span class="chip exec">Người phụ trách</span></h2>
+<p>Việc lẻ chỉ kể được từng mảnh. Khi kế hoạch <b>đang thực thi</b>, người phụ trách dùng nút <span class="btn-name">Báo cáo tiến độ</span> trên thẻ kế hoạch để báo <b>bức tranh của cả kế hoạch</b> — mỗi khi có gì đáng nói (khuyến nghị mỗi tuần một lần):</p>
 <ol class="steps">
   <li><b>Chọn sức khỏe kế hoạch</b>Ba mức: <span class="lg" style="background:var(--green-soft);color:var(--green)">Đúng nhịp</span> · <span class="lg" style="background:var(--amber-soft);color:var(--amber)">Có rủi ro</span> · <span class="lg" style="background:var(--rose-soft);color:var(--rose)">Lệch nhịp</span>. Chọn thật — số máy nằm ngay cạnh, kể màu hồng là lộ liền.</li>
   <li><b>Kể ngắn gọn</b>Đã làm gì &amp; kết quả (bắt buộc) · Vướng mắc / cần hỗ trợ · Bước tiếp theo.</li>
@@ -539,7 +616,7 @@
 <p>Kế hoạch đã duyệt <b>không sửa trực tiếp</b> được (để giữ đúng cái đã chốt). Có hai cách điều chỉnh, tuỳ việc đã chạy tới đâu:</p>
 
 <h3>A. Đổi kế hoạch — khi chưa ai nhận việc</h3>
-<p>Nếu tất cả việc vừa sinh <b>chưa ai bấm nhận</b>, Leader (hoặc chủ kênh) bấm <span class="btn-name">Đổi kế hoạch</span>, ghi lý do → hệ thống thu hồi các việc đó, mở kế hoạch lại để sửa (tạo <b>phiên bản mới</b>), rồi nộp/duyệt lại như thường. Sạch sẽ, không ảnh hưởng ai.</p>
+<p>Nếu tất cả việc vừa sinh <b>chưa ai bấm nhận</b>, Leader (hoặc người phụ trách) bấm <span class="btn-name">Đổi kế hoạch</span>, ghi lý do → hệ thống thu hồi các việc đó, mở kế hoạch lại để sửa (tạo <b>phiên bản mới</b>), rồi nộp/duyệt lại như thường. Sạch sẽ, không ảnh hưởng ai.</p>
 
 <h3>B. Điều chỉnh việc — khi việc đã có người nhận/đang chạy</h3>
 <p>Nếu đã có người nhận việc, không thể thu hồi hàng loạt. Leader bấm <span class="btn-name">Điều chỉnh việc</span> để xử lý <b>từng việc</b>:</p>
@@ -585,9 +662,9 @@
 <div class="table-scroll">
 <table class="roles">
   <tr><th style="width:38%">Nhãn</th><th>Nghĩa</th></tr>
-  <tr><td><span class="lg" style="background:#e8eafb;color:#4f46e5">Đang lập kế hoạch</span></td><td>Chủ kênh đang soạn (hoặc vừa được giao).</td></tr>
+  <tr><td><span class="lg" style="background:#e8eafb;color:#4f46e5">Đang lập kế hoạch</span></td><td>Người phụ trách đang soạn (hoặc vừa được giao).</td></tr>
   <tr><td><span class="lg" style="background:#fdf0dd;color:#b45309">Chờ duyệt kế hoạch</span></td><td>Đã nộp, chờ Leader duyệt.</td></tr>
-  <tr><td><span class="lg" style="background:#fff4e5;color:#b45309">Cần sửa kế hoạch</span></td><td>Leader trả lại, chủ kênh sửa rồi nộp lại.</td></tr>
+  <tr><td><span class="lg" style="background:#fff4e5;color:#b45309">Cần sửa kế hoạch</span></td><td>Leader trả lại, người phụ trách sửa rồi nộp lại.</td></tr>
   <tr><td><span class="lg" style="background:#e2f5ee;color:#0e9a6c">Kế hoạch đã duyệt</span></td><td>Vừa duyệt (thoáng qua trước khi sinh việc).</td></tr>
   <tr><td><span class="lg" style="background:#e0f2fe;color:#0369a1">Đang thực thi</span></td><td>Đã sinh việc, đang chạy.</td></tr>
   <tr><td><span class="lg" style="background:#f1f5f9;color:#64748b">Đã thay thế / Đã huỷ</span></td><td>Bản cũ bị thay bằng phiên bản mới, hoặc bị từ chối.</td></tr>
