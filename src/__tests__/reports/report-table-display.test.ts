@@ -22,6 +22,10 @@ const shiftReport = readFileSync(
   resolve("src/app/(main)/phan-tich/doi-chieu-ca/page.tsx"),
   "utf8",
 );
+const xntReport = readFileSync(
+  resolve("src/app/(main)/phan-tich/xuat-nhap-ton/page.tsx"),
+  "utf8",
+);
 
 describe("report table display controls", () => {
   it("provides compact, persisted display choices for shared report tables", () => {
@@ -44,5 +48,17 @@ describe("report table display controls", () => {
     expect(shiftReport).toContain('aria-label="Loại đối chiếu"');
     expect(shiftReport).toContain("RECONCILIATION_TYPE_LABELS[type]");
     expect(shiftReport).not.toContain("<SelectValue />");
+  });
+
+  it("paginates large report tables without limiting Excel exports", () => {
+    expect(table).toContain("DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 200]");
+    expect(table).toContain("rows.slice(pageStart, pageEnd)");
+    expect(table).toContain("pagedRows.map");
+    expect(table).toContain("absoluteIndex");
+    expect(table).toContain('aria-label="Số dòng mỗi trang"');
+    expect(xntReport).toContain("debouncedSearch");
+    expect(xntReport).toContain("setDebouncedSearch(search.trim())");
+    expect(xntReport).toContain("pageSizeOptions={[25, 50, 100, 200]}");
+    expect(xntReport.match(/rows: data\.rows\.map/g)?.length ?? 0).toBeGreaterThan(1);
   });
 });

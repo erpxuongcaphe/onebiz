@@ -55,9 +55,17 @@ export default function XuatNhapTonPage() {
 
   const [subMode, setSubMode] = useState<SubMode>("summary");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedSearch(search.trim());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -66,7 +74,7 @@ export default function XuatNhapTonPage() {
       const result = await getXntReport({
         range,
         branchId: activeBranchId ?? undefined,
-        search: search.trim() || undefined,
+        search: debouncedSearch || undefined,
       });
       if (requestId !== requestIdRef.current) return;
       setData(result);
@@ -81,7 +89,7 @@ export default function XuatNhapTonPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [range, activeBranchId, search, toast]);
+  }, [range, activeBranchId, debouncedSearch, toast]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -540,8 +548,20 @@ export default function XuatNhapTonPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Tìm theo mã / tên hàng..."
-            className="w-full pl-8 pr-3 h-8 text-xs rounded-full border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary"
+            aria-label="Tìm mặt hàng"
+            className="h-8 w-full rounded-md border border-border bg-surface-container-lowest pl-8 pr-8 text-xs outline-none focus:ring-1 focus:ring-primary"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => setSearch("")}
+              className="absolute right-1.5 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-container hover:text-foreground"
+              aria-label="Xóa nội dung tìm kiếm"
+              title="Xóa nội dung tìm kiếm"
+            >
+              <Icon name="close" size={14} />
+            </button>
+          )}
         </div>
       </div>
 
@@ -571,6 +591,8 @@ export default function XuatNhapTonPage() {
                 rows={data.rows}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
+                defaultPageSize={50}
+                pageSizeOptions={[25, 50, 100, 200]}
                 emptyState="Chưa có dữ liệu trong kỳ này"
               />
             ) : (
@@ -581,6 +603,8 @@ export default function XuatNhapTonPage() {
                 rows={data.rows}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
+                defaultPageSize={50}
+                pageSizeOptions={[25, 50, 100, 200]}
                 emptyState="Chưa có dữ liệu trong kỳ này"
               />
             )}
