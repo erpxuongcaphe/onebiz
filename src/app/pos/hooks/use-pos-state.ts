@@ -15,6 +15,8 @@ import { useCallback, useMemo, useState } from "react";
 import type { Product } from "@/lib/types";
 import type { Customer } from "@/lib/types";
 import type { DraftOrderDetail } from "@/lib/services/supabase";
+import type { PosStockSnapshot } from "@/lib/services/supabase/pos-stock";
+import { mergePosStockSnapshot } from "../lib/stock-freshness";
 
 // ============================================================
 // Types
@@ -252,6 +254,10 @@ export function usePosState() {
     },
     []
   );
+
+  const applyStockSnapshot = useCallback((snapshot: PosStockSnapshot): void => {
+    setLines((prev) => mergePosStockSnapshot(prev, snapshot));
+  }, []);
 
   const clearCart = useCallback((): void => {
     setLines([]);
@@ -503,6 +509,7 @@ export function usePosState() {
     updateLineQty,
     updateLinePrice,
     updateLineDiscount,
+    applyStockSnapshot,
     clearCart,
     loadDraft,
     restoreFromLocalBackup,
