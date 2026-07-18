@@ -31,6 +31,8 @@ interface ProductGridProps {
   trackedStockRequests?: PosStockRequest[];
 }
 
+const STOCK_REFRESH_INTERVAL_MS = 10_000;
+
 /** CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production tính
  *  khả dụng = min(NVL stock / qty BOM). Lưu Map để map sang tile. */
 interface BomAvailMap {
@@ -53,6 +55,8 @@ export function ProductGrid({
   const [products, setProducts] = useState<Product[]>([]);
   const [bomAvail, setBomAvail] = useState<BomAvailMap>({});
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [stockRefreshFailed, setStockRefreshFailed] = useState(false);
   const [totalProducts, setTotalProducts] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const productsRef = useRef<Product[]>([]);
@@ -89,6 +93,7 @@ export function ProductGrid({
       }
 
       setLoading(true);
+      setLoadFailed(false);
       try {
         const filters: Record<string, string | string[]> = {
           status: "active",
@@ -129,10 +134,12 @@ export function ProductGrid({
         setProducts(effectiveProducts);
         setTotalProducts(result.total);
         setBomAvail(nextBomAvail);
+        setStockRefreshFailed(false);
         onStockSnapshot?.(snapshot);
       } catch (error) {
         if (fetchId !== fetchIdRef.current) return;
         console.error("[POS] product grid load failed:", error);
+        setLoadFailed(true);
         productsRef.current = [];
         setProducts([]);
       } finally {
@@ -188,9 +195,11 @@ export function ProductGrid({
         };
       }
       setBomAvail(nextBomAvail);
+      setStockRefreshFailed(false);
       onStockSnapshot?.(snapshot);
     } catch (error) {
       console.warn("[POS] refresh stock snapshot failed:", error);
+      setStockRefreshFailed(true);
     } finally {
       stockRefreshInFlightRef.current = false;
     }
@@ -200,7 +209,10 @@ export function ProductGrid({
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshStocks();
     };
-    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    const interval = window.setInterval(
+      refreshWhenVisible,
+      STOCK_REFRESH_INTERVAL_MS,
+    );
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("online", refreshWhenVisible);
     window.addEventListener("onebiz:pos-stock-changed", refreshWhenVisible);
@@ -276,9 +288,42 @@ export function ProductGrid({
 
       {/* ── Product tiles grid ── */}
       <div className="flex-1 overflow-y-auto p-2 min-w-0">
+        {stockRefreshFailed && !loadFailed && (
+          <div
+            role="alert"
+            className="mb-2 flex items-center gap-2 border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-xs text-foreground"
+          >
+            <Icon name="sync_problem" size={16} className="shrink-0 text-status-warning" />
+            <span className="min-w-0 flex-1">
+              Chưa cập nhật được tồn kho mới nhất. Kiểm tra mạng trước khi bán.
+            </span>
+            <button
+              type="button"
+              className="shrink-0 font-semibold text-primary hover:underline"
+              onClick={() => void refreshStocks()}
+            >
+              Thử lại
+            </button>
+          </div>
+        )}
         {loading ? (
           <div className="flex items-center justify-center h-32">
             <Icon name="progress_activity" className="animate-spin text-primary" />
+          </div>
+        ) : loadFailed ? (
+          <div className="flex min-h-[200px] flex-col items-center justify-center gap-3 px-6 text-center text-muted-foreground">
+            <Icon name="cloud_off" size={40} className="opacity-60" />
+            <p className="text-sm font-medium text-foreground">
+              Không tải được sản phẩm và tồn kho
+            </p>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1.5 bg-primary px-3 py-1.5 text-xs font-semibold text-on-primary hover:bg-primary/90"
+              onClick={() => void fetchProducts(selectedCategory, searchQuery)}
+            >
+              <Icon name="refresh" size={14} />
+              Thử lại
+            </button>
           </div>
         ) : displayProducts.length === 0 ? (
           // CEO 22/05/2026 (UX P2 #5): Empty state có CTA setup SP khi
