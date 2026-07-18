@@ -15,9 +15,14 @@ import {
   ProgressReportButton,
   PlanProgressHistoryButton,
 } from "@/components/mkt/plan-progress";
+import { CampaignPlanFormButton } from "@/components/mkt/campaign-plan-controls";
+import { WorkPackageForm } from "@/components/mkt/campaign-controls";
+import { mktPost } from "@/lib/mkt/client";
+import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 import { formatVnd } from "@/lib/mkt/format";
 import type {
   MktPlanInboxEntry,
+  MktCampaignPlanNode,
   MktMember,
   MktContentOption,
   MktPillar,
@@ -67,8 +72,8 @@ function HealthChip({ health }: { health: string | undefined }) {
   return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${label.cls}`}>{label.text}</span>;
 }
 
-// Nút tầng giữa (Kế hoạch cấp 2/3) dựng lại từ campaignPlanPath của từng
-// Kế hoạch phụ — màn này chỉ hiện các nhánh CÓ kế hoạch đang soạn/chạy.
+// Cây dựng từ NÚT THẬT (planNodes — 00201): nhánh mới tạo chưa có kế hoạch
+// vẫn hiện. campaignPlanPath của từng thẻ chỉ còn dùng cho tìm kiếm (pathNames).
 type TreeNode = {
   id: string;
   name: string;
@@ -76,20 +81,81 @@ type TreeNode = {
   plans: MktPlanInboxEntry[];
 };
 
+// Chuyển một Kế hoạch phụ sang nhánh khác ngay tại thẻ (Leader) — gọi RPC
+// di chuyển có sẵn từ 00200, null = trực thuộc Chiến dịch.
+function MoveSubPlan({
+  entry,
+  nodes,
+}: {
+  entry: MktPlanInboxEntry;
+  nodes: MktCampaignPlanNode[];
+}) {
+  const { refresh, refreshing } = useMktRefresh();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const roots = nodes.filter((n) => !n.parentPlanId);
+  const childrenOf = (id: string) => nodes.filter((n) => n.parentPlanId === id);
+
+  async function move(next: string) {
+    setSaving(true);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/work-packages/${entry.workPackageId}/campaign-plan`, {
+        campaignPlanId: next || null,
+      });
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không chuyển được nhánh");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <label className="flex items-center gap-1.5 text-xs text-on-surface-variant">
+        <Icon name="account_tree" size={13} />
+        <span className="shrink-0">Nằm trong</span>
+        <select
+          value={entry.campaignPlanId ?? ""}
+          disabled={saving || refreshing}
+          onChange={(e) => move(e.target.value)}
+          className="h-7 min-w-0 flex-1 rounded-lg border border-outline-variant bg-background px-1.5 text-xs"
+        >
+          <option value="">Chiến dịch (không qua cấp 2/3)</option>
+          {roots.map((r) => (
+            <optgroup key={r.id} label={`Cấp 2 · ${r.name}`}>
+              <option value={r.id}>{r.name}</option>
+              {childrenOf(r.id).map((k) => (
+                <option key={k.id} value={k.id}>↳ {k.name} (cấp 3)</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </label>
+      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
 export function PlanningTree({
   plans,
+  planNodes,
   campaignBudget,
   members,
   contents,
   pillars,
   isLead,
+  canManage,
 }: {
   plans: MktPlanInboxEntry[];
+  planNodes: MktCampaignPlanNode[];
   campaignBudget: Record<string, number>;
   members: MktMember[];
   contents: MktContentOption[];
   pillars: MktPillar[];
   isLead: boolean;
+  canManage: boolean;
 }) {
   const [q, setQ] = useState("");
   const [from, setFrom] = useState("");
@@ -130,6 +196,7 @@ export function PlanningTree({
   const hasFilter = Boolean(q || from || to || owner || status);
 
   // Cây: Chiến dịch (cấp 1) → nút cấp 2 → nút cấp 3 → Kế hoạch phụ.
+  // Dựng từ planNodes để nhánh RỖNG vẫn hiện; đang lọc thì ẩn nhánh không khớp.
   const tree = useMemo(() => {
     const byCampaign = new Map<string, MktPlanInboxEntry[]>();
     filtered.forEach((p) => {
@@ -138,39 +205,40 @@ export function PlanningTree({
       byCampaign.set(p.campaignId, arr);
     });
     return Array.from(byCampaign.entries()).map(([campaignId, campPlans]) => {
-      const roots: TreeNode[] = [];
-      const direct: MktPlanInboxEntry[] = [];
-      const ensure = (list: TreeNode[], node: { id: string; name: string }): TreeNode => {
-        let found = list.find((n) => n.id === node.id);
-        if (!found) {
-          found = { id: node.id, name: node.name, children: [], plans: [] };
-          list.push(found);
-        }
-        return found;
-      };
-      campPlans.forEach((p) => {
-        const path = p.campaignPlanPath;
-        if (path.length === 0) {
-          direct.push(p);
-          return;
-        }
-        const root = ensure(roots, path[0]);
-        if (path.length === 1) root.plans.push(p);
-        else ensure(root.children, path[1]).plans.push(p);
-      });
+      const nodes = planNodes.filter((n) => n.campaignId === campaignId);
+      const plansAt = (nodeId: string) => campPlans.filter((p) => p.campaignPlanId === nodeId);
+      const knownIds = new Set(nodes.map((n) => n.id));
+      const direct = campPlans.filter((p) => !p.campaignPlanId || !knownIds.has(p.campaignPlanId));
+      let roots: TreeNode[] = nodes
+        .filter((n) => !n.parentPlanId)
+        .map((r) => ({
+          id: r.id,
+          name: r.name,
+          plans: plansAt(r.id),
+          children: nodes
+            .filter((c) => c.parentPlanId === r.id)
+            .map((c) => ({ id: c.id, name: c.name, children: [], plans: plansAt(c.id) })),
+        }));
+      if (hasFilter) {
+        // Đang lọc: chỉ giữ nhánh có thẻ khớp — khỏi nhiễu bởi nhánh rỗng.
+        roots = roots
+          .map((r) => ({ ...r, children: r.children.filter((c) => c.plans.length > 0) }))
+          .filter((r) => r.plans.length > 0 || r.children.length > 0);
+      }
       return {
         campaignId,
         campaignName: campPlans[0]?.campaignName ?? "Chiến dịch",
         campPlans,
+        nodes,
         roots,
         direct,
       };
     });
-  }, [filtered]);
+  }, [filtered, planNodes, hasFilter]);
 
   const inputCls = "h-9 rounded-lg border border-outline-variant bg-background px-2 text-sm";
 
-  function renderCard(p: MktPlanInboxEntry) {
+  function renderCard(p: MktPlanInboxEntry, nodes: MktCampaignPlanNode[]) {
     const deadline = fmtDate(p.deadline);
     return (
       <article key={p.id} className="flex flex-col gap-3 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-4">
@@ -201,6 +269,7 @@ export function PlanningTree({
             Lịch sử: {p.versions.map((v) => `v${v.versionNumber} (${VERSION_OUTCOME[v.reviewAction ?? v.status] ?? v.status})`).join(" · ")}
           </div>
         ) : null}
+        {canManage && nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
         <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
           <PlanEditorButton plan={p} members={members} pillars={pillars} contents={contents.filter((c) => c.campaignId === p.campaignId)} />
           {isLead && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
@@ -213,12 +282,12 @@ export function PlanningTree({
     );
   }
 
-  function cardGrid(list: MktPlanInboxEntry[]) {
-    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map(renderCard)}</div>;
+  function cardGrid(list: MktPlanInboxEntry[], nodes: MktCampaignPlanNode[]) {
+    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map((p) => renderCard(p, nodes))}</div>;
   }
 
   // Khối một nút tầng giữa: cấp 2 = cam, cấp 3 = xanh dương (thụt vào trong).
-  function nodeBlock(node: TreeNode, level: 2 | 3) {
+  function nodeBlock(node: TreeNode, level: 2 | 3, nodes: MktCampaignPlanNode[]) {
     const all = [...node.plans, ...node.children.flatMap((c) => c.plans)];
     const tasks = all.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
     const done = tasks.filter((t) => t.taskStatus === "done");
@@ -237,8 +306,13 @@ export function PlanningTree({
             {tasks.length > 0 ? <span>{done.length}/{tasks.length} việc xong</span> : null}
           </span>
         </div>
-        {node.plans.length > 0 ? cardGrid(node.plans) : null}
-        {node.children.map((child) => nodeBlock(child, 3))}
+        {node.plans.length > 0 ? cardGrid(node.plans, nodes) : null}
+        {node.children.map((child) => nodeBlock(child, 3, nodes))}
+        {node.plans.length === 0 && node.children.length === 0 ? (
+          <p className="text-xs text-on-surface-variant">
+            Nhánh trống — thêm Kế hoạch phụ vào nhánh này, hoặc Leader giao lập kế hoạch từ tab Cây kế hoạch của chiến dịch.
+          </p>
+        ) : null}
       </div>
     );
   }
@@ -302,13 +376,26 @@ export function PlanningTree({
                 </span>
               </summary>
               <div className="space-y-3 border-t border-outline-variant p-3">
-                {g.roots.map((node) => nodeBlock(node, 2))}
+                {canManage ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="mr-auto text-xs text-on-surface-variant">
+                      Dựng cây ngay tại đây: thêm cấp 2/3 rồi xếp các Kế hoạch phụ vào bằng ô “Nằm trong” trên từng thẻ.
+                    </span>
+                    <CampaignPlanFormButton
+                      campaignId={g.campaignId}
+                      members={members}
+                      plans={g.nodes}
+                    />
+                    <WorkPackageForm campaignId={g.campaignId} members={members} campaignPlans={g.nodes} />
+                  </div>
+                ) : null}
+                {g.roots.map((node) => nodeBlock(node, 2, g.nodes))}
                 {g.direct.length > 0 ? (
                   <div className="space-y-2">
                     {g.roots.length > 0 ? (
                       <div className="text-xs font-semibold text-on-surface-variant">Trực thuộc Chiến dịch (không qua cấp 2/3)</div>
                     ) : null}
-                    {cardGrid(g.direct)}
+                    {cardGrid(g.direct, g.nodes)}
                   </div>
                 ) : null}
               </div>

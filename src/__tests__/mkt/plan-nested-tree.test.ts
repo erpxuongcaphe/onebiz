@@ -109,6 +109,24 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     expect(campaignControls).toContain("(cấp 3)");
   });
 
+  it("phản hồi CEO 18/07 tối: thao tác cây NGAY TẠI màn Lập kế hoạch (không phải đi vòng qua Chiến dịch)", () => {
+    const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
+    const planningPage = readFileSync(resolve("src/app/mkt/planning/page.tsx"), "utf8");
+    // Cây dựng từ NÚT THẬT → nhánh mới tạo chưa có kế hoạch vẫn hiện (kèm hint).
+    expect(planningPage).toContain("getCampaignPlanNodes");
+    expect(planningTree).toContain("planNodes.filter((n) => n.campaignId === campaignId)");
+    expect(planningTree).toContain("Nhánh trống");
+    // Tạo cấp 2/3 + Kế hoạch phụ ngay trong khối chiến dịch (chỉ người có quyền).
+    expect(planningTree).toContain("CampaignPlanFormButton");
+    expect(planningTree).toContain("WorkPackageForm");
+    expect(planningTree).toMatch(/canManage \? \([\s\S]{0,700}CampaignPlanFormButton/);
+    // Xếp thẻ vào nhánh tại chỗ — ô "Nằm trong" gọi RPC di chuyển có sẵn 00200.
+    expect(planningTree).toContain("function MoveSubPlan");
+    expect(planningTree).toContain("/campaign-plan`");
+    // Đang lọc thì ẩn nhánh rỗng cho đỡ nhiễu.
+    expect(planningTree).toMatch(/if \(hasFilter\) \{[\s\S]{0,400}r\.plans\.length > 0 \|\| r\.children\.length > 0/);
+  });
+
   it("lỗ hổng UAT 18/07 (00202): xoá chiến dịch phải xoá mềm CẢ nút cây kế hoạch + dọn nút mồ côi", () => {
     // mkt_delete_campaign (00192 viết trước 00200) bỏ sót mkt_campaign_plans.
     expect(mig202).toMatch(
