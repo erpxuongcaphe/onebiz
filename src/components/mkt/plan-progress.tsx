@@ -329,6 +329,15 @@ export function PlanProgressHistoryButton({ plan }: { plan: MktPlanInboxEntry })
                     Số máy lúc báo: {statsLine(r)}
                   </div>
                 ) : null}
+                {(r.stats?.byStage ?? []).length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(r.stats.byStage ?? []).map((s) => (
+                      <span key={s.stageId} className="rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-xs text-emerald-800">
+                        {s.title}: <b>{s.tasksDone ?? 0}/{s.tasksTotal ?? 0}</b> việc
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
                 <p className="whitespace-pre-line text-sm">{r.summary}</p>
                 {r.issues ? (
                   <p className="whitespace-pre-line text-sm text-amber-800">

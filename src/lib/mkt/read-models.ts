@@ -1089,6 +1089,17 @@ export type MktPlanItem = {
   sequence: number;
   isMandatory: boolean;
   dependsOnId: string | null;
+  // 00199: công đoạn thuộc KẾ HOẠCH PHỤ nào (null = chưa xếp / kế hoạch phẳng).
+  stageId: string | null;
+};
+
+// KẾ HOẠCH PHỤ (00199) — tầng 3 của cây: nhóm công đoạn có mục tiêu phụ + hạn riêng.
+export type MktPlanStage = {
+  id: string;
+  title: string;
+  goal: string | null;
+  dueDate: string | null;
+  sortOrder: number;
 };
 
 export type MktContentOption = { id: string; title: string; campaignId: string | null };
@@ -1143,6 +1154,8 @@ export type MktPlanProgressReport = {
     pointsTotal?: number;
     pointsDone?: number;
     overdue?: number;
+    // 00199: số máy chụp theo từng KẾ HOẠCH PHỤ tại thời điểm báo cáo.
+    byStage?: Array<{ stageId: string; title: string; tasksTotal?: number; tasksDone?: number }>;
   };
   planVersionNumber: number | null;
   createdById: string | null;
@@ -1169,6 +1182,7 @@ export type MktPlanInboxEntry = {
   budgetPlanned: number | null;
   kpis: MktPlanKpi[];
   progressReports: MktPlanProgressReport[];
+  stages: MktPlanStage[];
   ownerId: string | null;
   ownerName: string | null;
   reviewerId: string | null;
@@ -1231,7 +1245,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   const wpIds = Array.from(new Set(plans.map((p) => p.work_package_id)));
   const campIds = Array.from(new Set(plans.map((p) => p.campaign_id)));
 
-  const [itemsRes, wpRes, campRes, verRes, tasksRes, kpisRes, reportsRes] = await Promise.all([
+  const [itemsRes, wpRes, campRes, verRes, tasksRes, kpisRes, reportsRes, stagesRes] = await Promise.all([
     db
       .from<{
         id: string;
@@ -1249,9 +1263,10 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
         sequence: number | null;
         is_mandatory: boolean | null;
         depends_on_item_id: string | null;
+        stage_id: string | null;
       }>("mkt_channel_plan_items")
       .select(
-        "id, plan_id, title, task_type, description, content_angle, deliverable, suggested_assignee_id, reviewer_id, content_item_id, workload_points, due_at, sequence, is_mandatory, depends_on_item_id",
+        "id, plan_id, title, task_type, description, content_angle, deliverable, suggested_assignee_id, reviewer_id, content_item_id, workload_points, due_at, sequence, is_mandatory, depends_on_item_id, stage_id",
       )
       .in("plan_id", planIds)
       .order("sequence", { ascending: true }),
@@ -1320,6 +1335,18 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       .is("deleted_at", null)
       // Quy ước toàn hệ thống: dòng thời gian MỚI NHẤT TRÊN CÙNG.
       .order("created_at", { ascending: false }),
+    db
+      .from<{
+        id: string;
+        plan_id: string;
+        title: string;
+        goal: string | null;
+        due_date: string | null;
+        sort_order: number | null;
+      }>("mkt_channel_plan_stages")
+      .select("id, plan_id, title, goal, due_date, sort_order")
+      .in("plan_id", planIds)
+      .order("sort_order", { ascending: true }),
   ]);
 
   const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
@@ -1390,8 +1417,22 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       sequence: it.sequence ?? 0,
       isMandatory: it.is_mandatory ?? false,
       dependsOnId: it.depends_on_item_id,
+      stageId: it.stage_id,
     });
     itemsByPlan.set(it.plan_id, arr);
+  });
+
+  const stagesByPlan = new Map<string, MktPlanStage[]>();
+  (stagesRes.data ?? []).forEach((s) => {
+    const arr = stagesByPlan.get(s.plan_id) ?? [];
+    arr.push({
+      id: s.id,
+      title: s.title,
+      goal: s.goal,
+      dueDate: s.due_date,
+      sortOrder: s.sort_order ?? 0,
+    });
+    stagesByPlan.set(s.plan_id, arr);
   });
 
   const tasksByPlan = new Map<string, MktPlanInboxEntry["tasks"]>();
@@ -1482,6 +1523,7 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     budgetPlanned: num(p.budget_planned),
     kpis: kpisByPlan.get(p.id) ?? [],
     progressReports: reportsByPlan.get(p.id) ?? [],
+    stages: stagesByPlan.get(p.id) ?? [],
     ownerId: p.owner_id,
     ownerName: nm(p.owner_id),
     reviewerId: p.reviewer_id,

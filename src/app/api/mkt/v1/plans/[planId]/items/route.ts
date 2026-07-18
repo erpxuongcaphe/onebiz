@@ -8,6 +8,8 @@ type SaveItemsBody = {
   items?: unknown[];
   header?: Record<string, unknown>;
   expectedVersion?: number;
+  // 00199: danh sách KẾ HOẠCH PHỤ (nhóm công đoạn) — lưu cùng lượt với items.
+  stages?: unknown[];
 };
 
 // Owner (hoặc Leader) lưu nháp danh sách Plan Item — không sinh task, không notify.
@@ -26,5 +28,6 @@ export async function POST(
     p_items: Array.isArray(body.items) ? body.items : [],
     p_header: body.header ?? null,
     p_expected_version: typeof body.expectedVersion === "number" ? body.expectedVersion : null,
+    p_stages: Array.isArray(body.stages) ? body.stages : [],
   });
 }

@@ -172,6 +172,8 @@ type Row = {
   workloadPoints: string;
   dueAt: string;
   dependsOnId: string;
+  // 00199: công đoạn thuộc KẾ HOẠCH PHỤ nào ("" = chưa xếp).
+  stageId: string;
 };
 
 function toRow(it: MktPlanItem): Row {
@@ -187,10 +189,11 @@ function toRow(it: MktPlanItem): Row {
     workloadPoints: String(it.workloadPoints ?? 1),
     dueAt: it.dueAt ? it.dueAt.slice(0, 10) : "",
     dependsOnId: it.dependsOnId ?? "",
+    stageId: it.stageId ?? "",
   };
 }
 
-function newRow(): Row {
+function newRow(stageId = ""): Row {
   return {
     id: crypto.randomUUID(),
     title: "",
@@ -203,7 +206,35 @@ function newRow(): Row {
     workloadPoints: "5",
     dueAt: "",
     dependsOnId: "",
+    stageId,
   };
+}
+
+// KẾ HOẠCH PHỤ trong trình soạn (00199) — id do client sinh, giữ ổn định qua
+// các lần lưu để công đoạn tham chiếu được.
+type StageRow = { id: string; title: string; goal: string; dueDate: string };
+
+const newStageRow = (): StageRow => ({
+  id: crypto.randomUUID(),
+  title: "",
+  goal: "",
+  dueDate: "",
+});
+
+// Huy hiệu phân tầng — dùng chung cho trình soạn + màn duyệt, đúng hệ màu đã
+// chốt với CEO: Kế hoạch lớn = tím · Kế hoạch nhỏ = xanh dương · phụ = xanh lá.
+function TierBreadcrumb({ campaignName, channelTitle }: { campaignName: string | null; channelTitle: string | null }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs">
+      <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
+        Kế hoạch lớn: {campaignName ?? "—"}
+      </span>
+      <span className="text-on-surface-variant">→</span>
+      <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700">
+        Kế hoạch nhỏ: {channelTitle ?? "—"}
+      </span>
+    </div>
+  );
 }
 
 // Một dòng KPI trong trình soạn. `kpiId` = id thật dưới DB (null = dòng mới);
@@ -237,6 +268,14 @@ export function PlanEditorButton({
   const [rows, setRows] = useState<Row[]>(() =>
     plan.items.length ? plan.items.map(toRow) : [newRow()],
   );
+  const [stages, setStages] = useState<StageRow[]>(() =>
+    plan.stages.map((s) => ({
+      id: s.id,
+      title: s.title,
+      goal: s.goal ?? "",
+      dueDate: s.dueDate ? s.dueDate.slice(0, 10) : "",
+    })),
+  );
   const [objective, setObjective] = useState(plan.objective ?? "");
   const [keyMessage, setKeyMessage] = useState(plan.keyMessage ?? "");
   const [mandatory, setMandatory] = useState(plan.mandatoryDeliverables ?? "");
@@ -266,12 +305,31 @@ export function PlanEditorButton({
   const [quickPillarId, setQuickPillarId] = useState("");
   const [quickBusy, setQuickBusy] = useState(false);
 
-  function patch(idx: number, p: Partial<Row>) {
-    setRows((v) => v.map((r, i) => (i === idx ? { ...r, ...p } : r)));
+  // Vá theo ID (không theo vị trí) — công đoạn giờ hiển thị THEO NHÓM kế hoạch
+  // phụ nên chỉ số mảng không còn ổn định để tin.
+  function patchById(id: string, p: Partial<Row>) {
+    setRows((v) => v.map((r) => (r.id === id ? { ...r, ...p } : r)));
+    setSaved(false);
+  }
+
+  function patchStage(id: string, p: Partial<StageRow>) {
+    setStages((v) => v.map((s) => (s.id === id ? { ...s, ...p } : s)));
+    setSaved(false);
+  }
+
+  // Bỏ kế hoạch phụ: công đoạn bên trong KHÔNG mất — về nhóm "chưa xếp".
+  function removeStage(id: string) {
+    setStages((v) => v.filter((s) => s.id !== id));
+    setRows((v) => v.map((r) => (r.stageId === id ? { ...r, stageId: "" } : r)));
     setSaved(false);
   }
 
   const filled = rows.filter((r) => r.title.trim());
+  // Kế hoạch phụ trống hoàn toàn (chưa tên, chưa mục tiêu, không công đoạn) thì
+  // bỏ qua êm khi gửi — người dùng lỡ bấm thêm không bị bắt lỗi vô cớ.
+  const keptStages = stages.filter(
+    (s) => s.title.trim() || s.goal.trim() || s.dueDate || rows.some((r) => r.stageId === s.id && r.title.trim()),
+  );
 
   async function quickCreateContent() {
     if (!quickName.trim()) {
@@ -333,6 +391,9 @@ export function PlanEditorButton({
         return `Mục tiêu của chỉ số "${r.name.trim()}" phải là số lớn hơn 0.`;
       }
     }
+    for (const s of keptStages) {
+      if (!s.title.trim()) return "Có kế hoạch phụ chưa đặt tên.";
+    }
     return null;
   }
 
@@ -352,7 +413,14 @@ export function PlanEditorButton({
   }
 
   function payload() {
+    const stageIds = new Set(keptStages.map((s) => s.id));
     return {
+      stages: keptStages.map((s) => ({
+        id: s.id,
+        title: s.title.trim(),
+        goal: s.goal.trim() || undefined,
+        dueDate: s.dueDate || undefined,
+      })),
       items: filled.map((r, i) => ({
         id: r.id,
         title: r.title.trim(),
@@ -368,6 +436,7 @@ export function PlanEditorButton({
         dueAt: r.dueAt || undefined,
         sequence: i,
         dependsOnId: r.dependsOnId || undefined,
+        stageId: r.stageId && stageIds.has(r.stageId) ? r.stageId : undefined,
       })),
       header: {
         objective: objective.trim(),
@@ -445,8 +514,9 @@ export function PlanEditorButton({
       <Dialog open={open} onOpenChange={handleEditorOpenChange}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
+            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} />
             <DialogTitle>
-              Kế hoạch kênh — {plan.channelTitle ?? "Gói việc"}
+              Soạn kế hoạch nhỏ — {plan.channelTitle ?? "Gói việc"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
@@ -561,37 +631,52 @@ export function PlanEditorButton({
               </div>
             </div>
 
-            <div className="space-y-2">
-              {rows.map((r, idx) => (
+            {(() => {
+              // Một dòng công đoạn — dùng chung cho mọi nhóm (vá theo ID).
+              const rowEditor = (r: Row) => (
                 <div key={r.id} className="grid gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-2 sm:grid-cols-[1fr_auto]">
                   <div className="space-y-2">
                     <Input
                       value={r.title}
                       disabled={!editable}
-                      onChange={(e) => patch(idx, { title: e.target.value })}
-                      placeholder={`Công đoạn ${idx + 1} — VD: Quay video…`}
+                      onChange={(e) => patchById(r.id, { title: e.target.value })}
+                      placeholder={`Công đoạn ${rows.indexOf(r) + 1} — VD: Quay video…`}
                       className="h-8"
                     />
                     <div className="flex flex-wrap gap-2">
-                      <select value={r.taskType} disabled={!editable} onChange={(e) => patch(idx, { taskType: e.target.value })} className={selectCls}>
+                      <select value={r.taskType} disabled={!editable} onChange={(e) => patchById(r.id, { taskType: e.target.value })} className={selectCls}>
                         {TASK_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
-                      <select value={r.suggestedAssigneeId} disabled={!editable} onChange={(e) => patch(idx, { suggestedAssigneeId: e.target.value })} className={selectCls + " flex-1"}>
+                      <select value={r.suggestedAssigneeId} disabled={!editable} onChange={(e) => patchById(r.id, { suggestedAssigneeId: e.target.value })} className={selectCls + " flex-1"}>
                         <option value="">— Đề xuất người làm —</option>
                         {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <select value={r.reviewerId} disabled={!editable} onChange={(e) => patch(idx, { reviewerId: e.target.value })} className={selectCls + " flex-1"}>
+                      <select value={r.reviewerId} disabled={!editable} onChange={(e) => patchById(r.id, { reviewerId: e.target.value })} className={selectCls + " flex-1"}>
                         <option value="">— Người duyệt —</option>
                         {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                       </select>
-                      <Input type="date" value={r.dueAt} disabled={!editable} onChange={(e) => patch(idx, { dueAt: e.target.value })} className="h-8 w-36" />
-                      <Input type="number" min={1} step={1} value={r.workloadPoints} disabled={!editable} onChange={(e) => patch(idx, { workloadPoints: e.target.value })} className="h-8 w-16" title="Điểm khối lượng" />
-                      <select value={r.dependsOnId} disabled={!editable} onChange={(e) => patch(idx, { dependsOnId: e.target.value })} className={selectCls} title="Phụ thuộc công đoạn">
+                      <Input type="date" value={r.dueAt} disabled={!editable} onChange={(e) => patchById(r.id, { dueAt: e.target.value })} className="h-8 w-36" />
+                      <Input type="number" min={1} step={1} value={r.workloadPoints} disabled={!editable} onChange={(e) => patchById(r.id, { workloadPoints: e.target.value })} className="h-8 w-16" title="Điểm khối lượng" />
+                      <select value={r.dependsOnId} disabled={!editable} onChange={(e) => patchById(r.id, { dependsOnId: e.target.value })} className={selectCls} title="Phụ thuộc công đoạn">
                         <option value="">— Không phụ thuộc —</option>
                         {rows.filter((o) => o.id !== r.id && o.title.trim()).map((o, oi) => (
                           <option key={o.id} value={o.id}>Sau: {o.title.trim() || `Công đoạn ${oi + 1}`}</option>
                         ))}
                       </select>
+                      {stages.length > 0 ? (
+                        <select
+                          value={r.stageId}
+                          disabled={!editable}
+                          onChange={(e) => patchById(r.id, { stageId: e.target.value })}
+                          className={selectCls}
+                          title="Thuộc kế hoạch phụ nào"
+                        >
+                          <option value="">— Chưa xếp kế hoạch phụ —</option>
+                          {stages.map((s, si) => (
+                            <option key={s.id} value={s.id}>KH phụ {si + 1}: {s.title.trim() || "(chưa đặt tên)"}</option>
+                          ))}
+                        </select>
+                      ) : null}
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {/* Gắn nội dung LUÔN tuỳ chọn (00193): lúc lập kế hoạch nội dung
@@ -600,7 +685,7 @@ export function PlanEditorButton({
                       <select
                         value={r.contentItemId}
                         disabled={!editable}
-                        onChange={(e) => patch(idx, { contentItemId: e.target.value })}
+                        onChange={(e) => patchById(r.id, { contentItemId: e.target.value })}
                         className="h-8 flex-1 rounded-lg border border-outline-variant bg-background px-2 text-xs"
                       >
                         <option value="">
@@ -612,22 +697,92 @@ export function PlanEditorButton({
                           <option key={c.id} value={c.id}>{c.title}</option>
                         ))}
                       </select>
-                      <Input value={r.contentAngle} disabled={!editable} onChange={(e) => patch(idx, { contentAngle: e.target.value })} placeholder="Góc nội dung (tuỳ chọn)" className="h-8 flex-1 text-xs" />
-                      <Input value={r.deliverable} disabled={!editable} onChange={(e) => patch(idx, { deliverable: e.target.value })} placeholder="Sản phẩm bàn giao (tuỳ chọn)" className="h-8 flex-1 text-xs" />
+                      <Input value={r.contentAngle} disabled={!editable} onChange={(e) => patchById(r.id, { contentAngle: e.target.value })} placeholder="Góc nội dung (tuỳ chọn)" className="h-8 flex-1 text-xs" />
+                      <Input value={r.deliverable} disabled={!editable} onChange={(e) => patchById(r.id, { deliverable: e.target.value })} placeholder="Sản phẩm bàn giao (tuỳ chọn)" className="h-8 flex-1 text-xs" />
                     </div>
                   </div>
                   {editable ? (
-                    <button type="button" className="self-start text-on-surface-variant hover:text-rose-600" onClick={() => setRows((v) => v.filter((_, i) => i !== idx))}>
+                    <button type="button" className="self-start text-on-surface-variant hover:text-rose-600" onClick={() => setRows((v) => v.filter((x) => x.id !== r.id))} aria-label="Xoá công đoạn">
                       <Icon name="delete" size={18} />
                     </button>
                   ) : null}
                 </div>
-              ))}
-              {editable ? (
-                <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary" onClick={() => setRows((v) => [...v, newRow()])}>
-                  <Icon name="add" size={14} /> Thêm công đoạn
-                </button>
-              ) : null}
+              );
+
+              const unassigned = rows.filter((r) => !r.stageId || !stages.some((s) => s.id === r.stageId));
+
+              return (
+                <div className="space-y-2">
+                  {/* 00199: công đoạn xếp THEO KẾ HOẠCH PHỤ — mỗi nhóm một khối
+                      viền xanh lá, phân tầng rõ để không lẫn với công đoạn. */}
+                  {stages.map((s, si) => (
+                    <div key={s.id} className="space-y-2 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-2.5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                          Kế hoạch phụ {si + 1}
+                        </span>
+                        <Input
+                          value={s.title}
+                          disabled={!editable}
+                          onChange={(e) => patchStage(s.id, { title: e.target.value })}
+                          placeholder="Tên kế hoạch phụ — VD: Tuần 1 · Chuẩn bị nội dung"
+                          className="h-8 min-w-40 flex-1 font-medium"
+                        />
+                        <Input
+                          value={s.goal}
+                          disabled={!editable}
+                          onChange={(e) => patchStage(s.id, { goal: e.target.value })}
+                          placeholder="Mục tiêu phụ (tuỳ chọn)"
+                          className="h-8 min-w-36 flex-1 text-xs"
+                        />
+                        <Input
+                          type="date"
+                          value={s.dueDate}
+                          disabled={!editable}
+                          onChange={(e) => patchStage(s.id, { dueDate: e.target.value })}
+                          className="h-8 w-36"
+                          title="Hạn của kế hoạch phụ"
+                        />
+                        {editable ? (
+                          <button
+                            type="button"
+                            className="text-on-surface-variant hover:text-rose-600"
+                            onClick={() => removeStage(s.id)}
+                            title="Bỏ kế hoạch phụ (công đoạn bên trong về nhóm chưa xếp)"
+                            aria-label="Bỏ kế hoạch phụ"
+                          >
+                            <Icon name="delete" size={16} />
+                          </button>
+                        ) : null}
+                      </div>
+                      {rows.filter((r) => r.stageId === s.id).map(rowEditor)}
+                      {editable ? (
+                        <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" onClick={() => setRows((v) => [...v, newRow(s.id)])}>
+                          <Icon name="add" size={14} /> Thêm công đoạn vào kế hoạch phụ này
+                        </button>
+                      ) : null}
+                    </div>
+                  ))}
+
+                  {stages.length > 0 && unassigned.length > 0 ? (
+                    <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch phụ</div>
+                  ) : null}
+                  {unassigned.map(rowEditor)}
+
+                  {editable ? (
+                    <div className="flex flex-wrap items-center gap-4">
+                      <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" onClick={() => setStages((v) => [...v, newStageRow()])}>
+                        <Icon name="add" size={14} /> Thêm kế hoạch phụ
+                      </button>
+                      <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary" onClick={() => setRows((v) => [...v, newRow()])}>
+                        <Icon name="add" size={14} /> Thêm công đoạn{stages.length > 0 ? " (chưa xếp)" : ""}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
+            <div className="space-y-2">
 
               {/* Tạo nhanh nội dung — TUỲ CHỌN, chỉ dùng khi muốn quy trình chặt
                   (gắn nội dung → công đoạn Đăng sẽ soi "đã duyệt chưa"). Không
@@ -743,7 +898,8 @@ export function PlanReviewButton({
       <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Duyệt kế hoạch — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
+            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} />
+            <DialogTitle>Duyệt kế hoạch nhỏ — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -802,11 +958,13 @@ export function PlanReviewButton({
               </div>
             )}
 
-            <div className="space-y-1.5">
-              {plan.items.map((it, i) => (
+            {(() => {
+              // 00199: Leader duyệt nhìn theo KẾ HOẠCH PHỤ — thấy nhịp, không
+              // phải một đống việc rời. Không có kế hoạch phụ → danh sách phẳng.
+              const itemRow = (it: MktPlanItem) => (
                 <div key={it.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant bg-background p-2 text-sm">
                   <div className="min-w-0">
-                    <span className="font-medium">{i + 1}. {it.title}</span>
+                    <span className="font-medium">{plan.items.indexOf(it) + 1}. {it.title}</span>
                     <span className="ml-2 text-xs text-on-surface-variant">
                       {memberName(it.suggestedAssigneeId)}
                       {it.dependsOnId ? " · phụ thuộc công đoạn trước" : ""}
@@ -814,8 +972,51 @@ export function PlanReviewButton({
                   </div>
                   <span className="text-xs font-medium text-on-surface-variant">{it.workloadPoints} điểm</span>
                 </div>
-              ))}
-            </div>
+              );
+              const fmtDue = (d: string | null) => {
+                if (!d) return null;
+                const dt = new Date(d);
+                return Number.isNaN(dt.getTime())
+                  ? null
+                  : new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit" }).format(dt);
+              };
+              const unassigned = plan.items.filter(
+                (it) => !it.stageId || !plan.stages.some((s) => s.id === it.stageId),
+              );
+              if (plan.stages.length === 0) {
+                return <div className="space-y-1.5">{plan.items.map(itemRow)}</div>;
+              }
+              return (
+                <div className="space-y-2">
+                  {plan.stages.map((s, si) => {
+                    const its = plan.items.filter((it) => it.stageId === s.id);
+                    const pts = its.reduce((sum, it) => sum + (it.workloadPoints || 0), 0);
+                    return (
+                      <div key={s.id} className="space-y-1.5 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-surface-container-lowest p-2">
+                        <div className="flex flex-wrap items-center gap-2 text-xs">
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
+                            Kế hoạch phụ {si + 1}
+                          </span>
+                          <span className="font-semibold">{s.title}</span>
+                          {s.goal ? <span className="text-on-surface-variant">· {s.goal}</span> : null}
+                          {fmtDue(s.dueDate) ? <span className="text-on-surface-variant">· hạn {fmtDue(s.dueDate)}</span> : null}
+                          <span className="ml-auto font-medium text-on-surface-variant">{its.length} công đoạn · {pts} điểm</span>
+                        </div>
+                        {its.length ? its.map(itemRow) : (
+                          <p className="text-xs text-on-surface-variant">Chưa có công đoạn nào — cân nhắc Yêu cầu sửa.</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {unassigned.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch phụ</div>
+                      {unassigned.map(itemRow)}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })()}
 
             <div className="rounded-lg border border-outline-variant bg-surface-container-lowest p-2 text-xs">
               <div className="mb-1 font-semibold text-on-surface-variant">Tải theo người:</div>
