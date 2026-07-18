@@ -844,6 +844,47 @@ export type MktCampaignPlan = {
   parentPlanId: string | null;
 };
 
+// Toàn bộ nút cấp 2/3 của nhiều chiến dịch — cho màn Lập kế hoạch thao tác
+// cây TẠI CHỖ (tạo cấp, xếp Kế hoạch phụ) và hiện cả nhánh RỖNG chưa có kế
+// hoạch (dựng cây từ nút thật, không suy từ thẻ).
+export type MktCampaignPlanNode = MktCampaignPlan & { campaignId: string };
+
+export async function getCampaignPlanNodes(
+  supabase: MktSupabaseClient,
+  campaignIds: string[],
+): Promise<MktCampaignPlanNode[]> {
+  if (campaignIds.length === 0) return [];
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      campaign_id: string;
+      name: string;
+      objective: string | null;
+      owner_id: string | null;
+      timeframe_start: string | null;
+      timeframe_end: string | null;
+      sort_order: number | null;
+      parent_plan_id: string | null;
+    }>("mkt_campaign_plans")
+    .select("id, campaign_id, name, objective, owner_id, timeframe_start, timeframe_end, sort_order, parent_plan_id")
+    .in("campaign_id", campaignIds)
+    .is("deleted_at", null)
+    .order("sort_order", { ascending: true });
+  return requireRows(data, error, "campaign_plan_nodes").map((p) => ({
+    id: p.id,
+    campaignId: p.campaign_id,
+    name: p.name,
+    objective: p.objective,
+    ownerId: p.owner_id,
+    ownerName: null,
+    timeframeStart: p.timeframe_start,
+    timeframeEnd: p.timeframe_end,
+    sortOrder: p.sort_order ?? 0,
+    parentPlanId: p.parent_plan_id,
+  }));
+}
+
 export type MktCampaignDetail = {
   campaign: MktCampaign | null;
   campaignPlans: MktCampaignPlan[];

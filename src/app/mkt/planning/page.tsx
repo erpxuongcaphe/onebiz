@@ -6,6 +6,7 @@ import {
   getContentOptions,
   getPillars,
   getCampaignList,
+  getCampaignPlanNodes,
 } from "@/lib/mkt/read-models";
 import { PlanningTree } from "@/components/mkt/planning-tree";
 
@@ -20,9 +21,12 @@ export default async function PlanningPage() {
     getCampaignList(supabase),
   ]);
   const campaignIds = Array.from(new Set(plans.map((p) => p.campaignId).filter(Boolean)));
-  const [contents, pillars] = await Promise.all([
+  // Nội dung + trụ gắn vào công đoạn; planNodes = TOÀN BỘ nút cấp 2/3 để
+  // thao tác cây tại chỗ (tạo cấp, xếp thẻ) và hiện cả nhánh rỗng.
+  const [contents, pillars, planNodes] = await Promise.all([
     getContentOptions(supabase, campaignIds),
     getPillars(supabase),
+    getCampaignPlanNodes(supabase, campaignIds),
   ]);
   const campaignBudget: Record<string, number> = {};
   campaigns.forEach((c) => (campaignBudget[c.id] = c.budget));
@@ -38,11 +42,13 @@ export default async function PlanningPage() {
         </div>
         <PlanningTree
           plans={plans}
+          planNodes={planNodes}
           campaignBudget={campaignBudget}
           members={members}
           contents={contents}
           pillars={pillars}
           isLead={Boolean(ctx.isLead)}
+          canManage={Boolean(ctx.canManageCampaigns)}
         />
       </div>
     </div>
