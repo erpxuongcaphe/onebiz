@@ -34,6 +34,7 @@ import {
 import {
   CampaignPlanFormButton,
   CampaignPlanHeader,
+  PromoteSubPlanButton,
 } from "@/components/mkt/campaign-plan-controls";
 import { AssignPlanningButton } from "@/components/mkt/plan-controls";
 import { MktDeleteButton } from "@/components/mkt/delete-button";
@@ -388,12 +389,21 @@ export default async function CampaignDetailPage({
                             </span>
                           ) : null}
                           {canManage ? (
-                            <MktDeleteButton
-                              url={`/api/mkt/v1/work-packages/${w.id}`}
-                              label="Xoá Kế hoạch phụ"
-                              errorFallback="Không xoá được Kế hoạch phụ"
-                              confirmMessage={`Xoá Kế hoạch phụ "${w.title}"?\n\nCác công việc và kế hoạch bên trong cũng sẽ bị ẩn theo.`}
-                            />
+                            <>
+                              <MktDeleteButton
+                                url={`/api/mkt/v1/work-packages/${w.id}`}
+                                label="Xoá Kế hoạch phụ"
+                                errorFallback="Không xoá được Kế hoạch phụ"
+                                confirmMessage={`Xoá Kế hoạch phụ "${w.title}"?\n\nCác công việc và kế hoạch bên trong cũng sẽ bị ẩn theo.`}
+                              />
+                              <PromoteSubPlanButton
+                                campaignId={c.id}
+                                workPackageId={w.id}
+                                title={w.title}
+                                currentPlanId={w.campaignPlanId}
+                                nodes={detail.campaignPlans}
+                              />
+                            </>
                           ) : null}
                         </div>
                       </div>
@@ -452,16 +462,48 @@ export default async function CampaignDetailPage({
                                   kidSub.map(renderSubPlan)
                                 ) : (
                                   <p className="text-xs text-on-surface-variant">
-                                    Chưa có Kế hoạch phụ nào ở đây. Bấm “Thêm Kế hoạch phụ” và chọn nhánh này.
+                                    Chưa có Kế hoạch phụ nào ở đây — thêm bằng nút ngay dưới.
                                   </p>
                                 )}
+                                {canManage ? (
+                                  <div className="flex justify-end border-t border-outline-variant/60 pt-2">
+                                    <WorkPackageForm
+                                      campaignId={c.id}
+                                      members={members}
+                                      campaignPlans={detail.campaignPlans}
+                                      defaultCampaignPlanId={k.id}
+                                    />
+                                  </div>
+                                ) : null}
                               </div>
                             );
                           })}
                           {own.length === 0 && kids.length === 0 ? (
                             <p className="text-xs text-on-surface-variant">
-                              Nhánh trống. Thêm “Kế hoạch” (thành cấp 3) hoặc “Kế hoạch phụ” vào nhánh này.
+                              Nhánh trống — thêm cấp 3 hoặc Kế hoạch phụ bằng nút ngay dưới.
                             </p>
+                          ) : null}
+                          {canManage ? (
+                            // ➕ tại nhánh: thêm thẳng vào ĐÚNG nhánh này, khỏi chọn "Nằm trong".
+                            <div className="flex flex-wrap justify-end gap-2 border-t border-outline-variant/60 pt-2">
+                              <CampaignPlanFormButton
+                                campaignId={c.id}
+                                members={members}
+                                plans={detail.campaignPlans}
+                                defaultParentPlanId={p.id}
+                                trigger={
+                                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary">
+                                    <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
+                                  </button>
+                                }
+                              />
+                              <WorkPackageForm
+                                campaignId={c.id}
+                                members={members}
+                                campaignPlans={detail.campaignPlans}
+                                defaultCampaignPlanId={p.id}
+                              />
+                            </div>
                           ) : null}
                         </div>
                       );

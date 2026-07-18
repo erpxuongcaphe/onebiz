@@ -15,7 +15,7 @@ import {
   ProgressReportButton,
   PlanProgressHistoryButton,
 } from "@/components/mkt/plan-progress";
-import { CampaignPlanFormButton } from "@/components/mkt/campaign-plan-controls";
+import { CampaignPlanFormButton, PromoteSubPlanButton } from "@/components/mkt/campaign-plan-controls";
 import { WorkPackageForm } from "@/components/mkt/campaign-controls";
 import { mktPost } from "@/lib/mkt/client";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
@@ -269,7 +269,21 @@ export function PlanningTree({
             Lịch sử: {p.versions.map((v) => `v${v.versionNumber} (${VERSION_OUTCOME[v.reviewAction ?? v.status] ?? v.status})`).join(" · ")}
           </div>
         ) : null}
-        {canManage && nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
+        {canManage ? (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
+            </div>
+            {/* Nâng thẻ thành NÚT cấp 2/3 (CEO 18/07: "muốn thêm cấp 3 cho nó") */}
+            <PromoteSubPlanButton
+              campaignId={p.campaignId}
+              workPackageId={p.workPackageId}
+              title={p.channelTitle ?? "Kế hoạch phụ"}
+              currentPlanId={p.campaignPlanId}
+              nodes={nodes}
+            />
+          </div>
+        ) : null}
         <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
           <PlanEditorButton plan={p} members={members} pillars={pillars} contents={contents.filter((c) => c.campaignId === p.campaignId)} />
           {isLead && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
@@ -287,7 +301,7 @@ export function PlanningTree({
   }
 
   // Khối một nút tầng giữa: cấp 2 = cam, cấp 3 = xanh dương (thụt vào trong).
-  function nodeBlock(node: TreeNode, level: 2 | 3, nodes: MktCampaignPlanNode[]) {
+  function nodeBlock(node: TreeNode, level: 2 | 3, nodes: MktCampaignPlanNode[], campaignId: string) {
     const all = [...node.plans, ...node.children.flatMap((c) => c.plans)];
     const tasks = all.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
     const done = tasks.filter((t) => t.taskStatus === "done");
@@ -307,11 +321,35 @@ export function PlanningTree({
           </span>
         </div>
         {node.plans.length > 0 ? cardGrid(node.plans, nodes) : null}
-        {node.children.map((child) => nodeBlock(child, 3, nodes))}
+        {node.children.map((child) => nodeBlock(child, 3, nodes, campaignId))}
         {node.plans.length === 0 && node.children.length === 0 ? (
           <p className="text-xs text-on-surface-variant">
-            Nhánh trống — thêm Kế hoạch phụ vào nhánh này, hoặc Leader giao lập kế hoạch từ tab Cây kế hoạch của chiến dịch.
+            Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới.
           </p>
+        ) : null}
+        {canManage ? (
+          // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn "Nằm trong".
+          <div className="flex flex-wrap justify-end gap-2 border-t border-outline-variant/60 pt-2">
+            {level === 2 ? (
+              <CampaignPlanFormButton
+                campaignId={campaignId}
+                members={members}
+                plans={nodes}
+                defaultParentPlanId={node.id}
+                trigger={
+                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary">
+                    <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
+                  </button>
+                }
+              />
+            ) : null}
+            <WorkPackageForm
+              campaignId={campaignId}
+              members={members}
+              campaignPlans={nodes}
+              defaultCampaignPlanId={node.id}
+            />
+          </div>
         ) : null}
       </div>
     );
@@ -389,7 +427,7 @@ export function PlanningTree({
                     <WorkPackageForm campaignId={g.campaignId} members={members} campaignPlans={g.nodes} />
                   </div>
                 ) : null}
-                {g.roots.map((node) => nodeBlock(node, 2, g.nodes))}
+                {g.roots.map((node) => nodeBlock(node, 2, g.nodes, g.campaignId))}
                 {g.direct.length > 0 ? (
                   <div className="space-y-2">
                     {g.roots.length > 0 ? (
