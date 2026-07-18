@@ -108,6 +108,9 @@ describe("report data integrity", () => {
     expect(promotionAnalytics).toContain("fetchAllPromotionRows");
     expect(abcAnalysis).toContain("fetchAllAbcRows");
     expect(xntReport).toContain("fetchAllXntRows");
+    expect(xntReport).toContain("Promise.all([");
+    expect(xntReport).toContain('movementsQuery.in("product_id", productIds)');
+    expect(xntReport).toContain("productIds.length <= 200");
     expect(inventoryCheckReport).toContain("fetchAllInventoryCheckRows");
     expect(production).toContain(".range(offset, offset + pageSize - 1)");
     expect(production).not.toContain(".limit(200)");
