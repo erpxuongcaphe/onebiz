@@ -33,7 +33,7 @@ export default async function PlanningPage() {
         <div className="flex flex-col gap-1 pb-1">
           <h1 className="font-heading text-2xl font-bold tracking-normal sm:text-3xl">Lập kế hoạch</h1>
           <p className="text-sm text-on-surface-variant">
-            Cây 4 cấp: <b>Cấp 1 · Chiến dịch</b> → <b>Cấp 2 · Kế hoạch</b> → <b>Cấp 3 · Kênh</b> → <b>Cấp 4 · Kế hoạch phụ</b> → Công đoạn. Nộp Leader duyệt rồi hệ thống mới sinh việc thật.
+            Cây tối đa 4 cấp, sâu bao nhiêu tùy từng kế hoạch: <b>Cấp 1 · Chiến dịch</b> → <b>Cấp 2</b> → <b>Cấp 3</b> (tự đặt tên) → <b>Kế hoạch phụ</b> (nơi chứa việc). Nộp Leader duyệt rồi hệ thống mới sinh việc thật.
           </p>
         </div>
         <PlanningTree

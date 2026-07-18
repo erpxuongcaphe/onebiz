@@ -269,7 +269,9 @@ export function EditCampaignButton({
   );
 }
 
-// ── Dialog tạo Work Package (kênh triển khai) ──
+// ── Dialog tạo Work Package = "KẾ HOẠCH PHỤ" (00201) — nơi CHỨA VIỆC ──
+// Đây là tầng mang trọn vòng nộp → duyệt → sinh việc. Gắn vào nút cấp 2/3
+// bất kỳ của cây, hoặc trực thuộc Chiến dịch nếu kế hoạch gọn.
 export function WorkPackageForm({
   campaignId,
   members,
@@ -278,13 +280,14 @@ export function WorkPackageForm({
 }: {
   campaignId: string;
   members: MktMember[];
-  // 00200: các "Kế hoạch" cấp 2 để chọn kênh thuộc kế hoạch nào.
-  campaignPlans?: Array<{ id: string; name: string }>;
+  // Các nút Kế hoạch cấp 2/3 của cây để chọn chỗ gắn.
+  campaignPlans?: Array<{ id: string; name: string; parentPlanId?: string | null }>;
   defaultCampaignPlanId?: string;
 }) {
   const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
-  const [channelType, setChannelType] = useState("tiktok");
+  // Kênh là NHÃN tùy chọn — mặc định không gắn ("other" = Khác/không nhãn).
+  const [channelType, setChannelType] = useState("other");
   const [title, setTitle] = useState("");
   const [targetOutput, setTargetOutput] = useState("");
   const [ownerId, setOwnerId] = useState("");
@@ -316,50 +319,69 @@ export function WorkPackageForm({
         setOpen(false);
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Không tạo được kênh");
+      setError(e instanceof Error ? e.message : "Không tạo được Kế hoạch phụ");
     } finally {
       setSaving(false);
     }
   }
+
+  // Danh sách chỗ gắn: nút gốc (cấp 2) trước, nút con (cấp 3) thụt dòng ngay dưới cha.
+  const rootPlans = campaignPlans.filter((p) => !p.parentPlanId);
+  const childrenOf = (id: string) => campaignPlans.filter((p) => p.parentPlanId === id);
 
   return (
     <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
       <DialogTrigger
         render={
           <Button variant="outline" size="sm">
-            <Icon name="add" size={16} /> Thêm kênh
+            <Icon name="add" size={16} /> Thêm Kế hoạch phụ
           </Button>
         }
       />
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Thêm kênh triển khai</DialogTitle>
+          <span className="w-fit rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+            Kế hoạch phụ · nơi chứa việc
+          </span>
+          <DialogTitle>Thêm Kế hoạch phụ</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
-          {campaignPlans.length > 0 ? (
-            <div className="space-y-1.5">
-              <Label>Thuộc Kế hoạch (cấp 2)</Label>
-              <select value={campaignPlanId} onChange={(e) => setCampaignPlanId(e.target.value)} className={selectCls}>
-                <option value="">— Chưa xếp kế hoạch —</option>
-                {campaignPlans.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          ) : null}
           <div className="space-y-1.5">
-            <Label>Kênh</Label>
+            <Label>Nằm trong</Label>
+            <select value={campaignPlanId} onChange={(e) => setCampaignPlanId(e.target.value)} className={selectCls}>
+              <option value="">Chiến dịch (không qua cấp 2/3)</option>
+              {rootPlans.map((p) => (
+                <optgroup key={p.id} label={`Cấp 2 · ${p.name}`}>
+                  <option value={p.id}>{p.name}</option>
+                  {childrenOf(p.id).map((k) => (
+                    <option key={k.id} value={k.id}>
+                      ↳ {k.name} (cấp 3)
+                    </option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="wp-title">Tên Kế hoạch phụ</Label>
+            <Input
+              id="wp-title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="VD: Tuần 1 – Chuẩn bị nội dung"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Nhãn kênh (tuỳ chọn)</Label>
             <select value={channelType} onChange={(e) => setChannelType(e.target.value)} className={selectCls}>
-              {CHANNELS.map((c) => (
+              <option value="other">— Không gắn kênh —</option>
+              {CHANNELS.filter((c) => c.value !== "other").map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
               ))}
             </select>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="wp-title">Tên gói việc</Label>
-            <Input id="wp-title" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="wp-out">Sản phẩm đầu ra</Label>
@@ -401,7 +423,7 @@ export function WorkPackageForm({
             Huỷ
           </Button>
           <Button disabled={loading || !title.trim()} onClick={submit}>
-            {loading ? "Đang tạo…" : "Tạo kênh"}
+            {loading ? "Đang tạo…" : "Tạo Kế hoạch phụ"}
           </Button>
         </DialogFooter>
       </DialogContent>

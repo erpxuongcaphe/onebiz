@@ -11,9 +11,11 @@ type UpsertCampaignPlanBody = {
   ownerId?: string;
   timeframeStart?: string;
   timeframeEnd?: string;
+  // 00201: cha (null/bỏ trống = Kế hoạch cấp 2 gốc; có cha = Kế hoạch cấp 3).
+  parentPlanId?: string;
 };
 
-// Tạo/sửa "Kế hoạch" cấp 2 (gom nhiều kênh) trong một chiến dịch.
+// Tạo/sửa Kế hoạch cấp 2/3 (nút tự đặt tên trong cây) của một chiến dịch.
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ campaignId: string }> },
@@ -34,5 +36,6 @@ export async function POST(
     p_owner_id: body.ownerId || null,
     p_timeframe_start: body.timeframeStart || null,
     p_timeframe_end: body.timeframeEnd || null,
+    p_parent_plan_id: body.parentPlanId || null,
   });
 }

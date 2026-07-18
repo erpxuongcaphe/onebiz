@@ -15,9 +15,12 @@ const itemsRoute = readFileSync(
 );
 
 /**
- * Cây kế hoạch 3 tầng (CEO 18/07): Kế hoạch lớn (chiến dịch) → Kế hoạch nhỏ
- * (kênh/mảng) → KẾ HOẠCH PHỤ (nhóm công đoạn, 00199). Bộ test khoá các quyết
- * định thiết kế + các bẫy đã duyệt — sửa phải hiểu vì sao khoá tồn tại.
+ * 00199 dựng bảng stages; 00201 chốt lại TỪ VỰNG theo CEO: cây tối đa 4 cấp
+ * (Cấp 1 Chiến dịch → cấp 2 → cấp 3 tự đặt tên → KẾ HOẠCH PHỤ = work package,
+ * nơi chứa việc); stages 00199 đổi tên hiển thị thành "NHÓM CÔNG ĐOẠN".
+ * Phần SQL khoá theo văn bản migration 00199 (lịch sử đã chạy — chữ "kế hoạch
+ * phụ" trong đó là tên cũ của stages, KHÔNG sửa file cũ). Phần giao diện khoá
+ * theo từ vựng MỚI. Sửa test phải hiểu vì sao khoá tồn tại.
  */
 describe("00199 — tầng SQL", () => {
   it("bẫy 42P13: mkt_save_plan_items đổi chữ ký → DROP hàm cũ + grant chữ ký mới", () => {
@@ -75,36 +78,42 @@ describe("00199 — API + read-model", () => {
   });
 });
 
-describe("00199 — giao diện phân tầng (yêu cầu CEO: thuần Việt, không nhầm tầng)", () => {
-  it("dòng định vị chống lạc: Kế hoạch lớn → Kế hoạch nhỏ, ở cả soạn lẫn duyệt", () => {
+describe("giao diện phân tầng (00201 — thuần Việt, không nhầm tầng)", () => {
+  it("dòng định vị chống lạc: Cấp 1 → [cấp 2 → cấp 3] → Kế hoạch phụ, ở cả soạn lẫn duyệt", () => {
     expect(planControls).toContain("function TierBreadcrumb");
-    expect(planControls).toContain("Kế hoạch lớn:");
-    expect(planControls).toContain("Kế hoạch nhỏ:");
+    expect(planControls).toContain("Cấp 1: {campaignName");
+    expect(planControls).toContain("Kế hoạch phụ: {channelTitle");
+    // Nhánh giữa hiện đúng đường dẫn thật (campaignPlanPath), cấp nào bỏ qua thì không hiện.
+    expect(planControls).toContain("planPath={plan.campaignPlanPath}");
     const uses = planControls.match(/<TierBreadcrumb/g) ?? [];
     expect(uses.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("từ ngữ thuần Việt đúng chữ CEO: lớn / nhỏ / phụ — hết 'Kế hoạch kênh' trong tiêu đề hộp", () => {
-    expect(planControls).toContain("Soạn kế hoạch nhỏ —");
-    expect(planControls).toContain("Duyệt kế hoạch nhỏ —");
-    expect(planControls).toContain("Thêm kế hoạch phụ");
-    expect(planControls).toContain("Thêm công đoạn vào kế hoạch phụ này");
+  it("từ vựng 00201: hộp soạn/duyệt gọi đúng 'Kế hoạch phụ'; stages 00199 = 'nhóm công đoạn' (hết trùng tên)", () => {
+    expect(planControls).toContain("Soạn Kế hoạch phụ —");
+    expect(planControls).toContain("Duyệt Kế hoạch phụ —");
+    expect(planControls).toContain("Thêm nhóm công đoạn");
+    expect(planControls).toContain("Thêm công đoạn vào nhóm công đoạn này");
+    // Không còn chữ "kế hoạch nhỏ" và không còn stages mang tên "kế hoạch phụ".
+    expect(planControls).not.toContain("kế hoạch nhỏ");
+    expect(planControls).not.toContain("Kế hoạch phụ {si + 1}");
   });
 
-  it("hệ màu phân tầng: cấp 1 = tím (indigo) · cấp 3 = xanh dương (sky) · phụ = xanh lá (emerald)", () => {
+  it("hệ màu phân tầng: cấp 1 tím · cấp 2 cam · cấp 3 xanh dương · Kế hoạch phụ xanh lá", () => {
     expect(planControls).toContain("bg-indigo-50");
+    expect(planControls).toContain("bg-orange-50");
     expect(planControls).toContain("bg-sky-50");
-    expect(planControls).toContain("border-l-emerald-500");
-    // 00200: cây chuyển sang planning-tree; cấp 1 tím, cấp 2 cam, cấp 3 xanh dương.
+    expect(planControls).toContain("bg-emerald-50");
     expect(planningTree).toContain("border-l-indigo-500");
     expect(planningTree).toContain("border-l-orange-500");
     expect(planningTree).toContain("border-l-sky-500");
+    expect(planningTree).toContain("border-l-emerald-500");
   });
 
-  it("bỏ kế hoạch phụ KHÔNG mất công đoạn — về nhóm chưa xếp", () => {
+  it("bỏ nhóm công đoạn KHÔNG mất công đoạn — về nhóm chưa xếp", () => {
     expect(planControls).toContain("function removeStage");
     expect(planControls).toMatch(/r\.stageId === id \? \{ \.\.\.r, stageId: "" \}/);
-    expect(planControls).toContain("Chưa xếp kế hoạch phụ");
+    expect(planControls).toContain("Chưa xếp nhóm công đoạn");
   });
 
   it("vá công đoạn theo ID, không theo vị trí (danh sách giờ hiển thị theo nhóm)", () => {
@@ -112,22 +121,21 @@ describe("00199 — giao diện phân tầng (yêu cầu CEO: thuần Việt, kh
     expect(planControls).not.toMatch(/function patch\(idx: number/);
   });
 
-  it("màn duyệt nhóm theo kế hoạch phụ kèm tổng điểm; nhóm trống bị nhắc", () => {
+  it("màn duyệt nhóm theo nhóm công đoạn kèm tổng điểm; nhóm trống bị nhắc", () => {
     expect(planControls).toContain("công đoạn · ");
     expect(planControls).toContain("Chưa có công đoạn nào — cân nhắc Yêu cầu sửa.");
   });
 
-  it("màn Lập kế hoạch thành cây: nhóm theo chiến dịch + tổng hợp việc/ngân sách/sức khỏe xấu nhất", () => {
-    // 00200: nhãn đổi sang "Cấp 1/2/3" (cây 4 cấp); nội dung ở planning-tree.
-    expect(planningTree).toContain("Cấp 1 · Chiến dịch");
-    expect(planningTree).toContain("Cấp 3 · Kênh");
+  it("màn Lập kế hoạch thành cây lồng: nhãn theo độ sâu + tổng hợp việc/ngân sách/sức khỏe xấu nhất", () => {
+    expect(planningTree).toContain("Kế hoạch cấp 1 · Chiến dịch");
+    expect(planningTree).toContain("Kế hoạch cấp {level}");
     expect(planningTree).toContain("việc xong");
-    expect(planningTree).toContain("Ngân sách kênh");
+    expect(planningTree).toContain("Ngân sách");
     expect(planningTree).toContain("HEALTH_RANK");
-    expect(planningTree).toContain("kế hoạch phụ");
+    expect(planningTree).toContain("nhóm công đoạn");
   });
 
-  it("nhật ký báo cáo hiện số máy theo từng kế hoạch phụ", () => {
+  it("nhật ký báo cáo hiện số máy theo từng nhóm công đoạn", () => {
     expect(planProgress).toContain("byStage");
     expect(readModels).toContain("byStage?: Array<{ stageId: string; title: string;");
   });

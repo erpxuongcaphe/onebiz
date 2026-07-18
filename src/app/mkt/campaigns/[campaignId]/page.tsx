@@ -63,7 +63,7 @@ const READINESS_ROLE_LABEL: Record<string, string> = {
 };
 
 const TABS = [
-  { key: "channels", label: "Kênh triển khai" },
+  { key: "channels", label: "Cây kế hoạch" },
   { key: "tasks", label: "Bảng công việc" },
   { key: "content", label: "Nội dung" },
   { key: "readiness", label: "Mức độ Sẵn sàng" },
@@ -196,7 +196,7 @@ export default async function CampaignDetailPage({
                     label="Xoá chiến dịch"
                     redirectTo="/mkt/campaigns"
                     errorFallback="Không xoá được chiến dịch"
-                    confirmMessage={`Xoá chiến dịch "${c.name}"?\n\nToàn bộ kênh triển khai, nội dung, công việc và checklist sẵn sàng bên trong cũng sẽ bị ẩn theo.`}
+                    confirmMessage={`Xoá chiến dịch "${c.name}"?\n\nToàn bộ cây kế hoạch, nội dung, công việc và checklist sẵn sàng bên trong cũng sẽ bị ẩn theo.`}
                   >
                     Xoá
                   </MktDeleteButton>
@@ -238,7 +238,7 @@ export default async function CampaignDetailPage({
             <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-5">
               {[
                 {
-                  label: "1. Thêm kênh",
+                  label: "1. Dựng cây kế hoạch",
                   done: detail.workPackages.length > 0,
                   href: `/mkt/campaigns/${c.id}?tab=channels`,
                 },
@@ -302,33 +302,40 @@ export default async function CampaignDetailPage({
           })}
         </div>
 
-        {/* Kênh triển khai — nhóm theo Kế hoạch cấp 2 (00200) */}
+        {/* Cây kế hoạch (00201): Chiến dịch (cấp 1) → Kế hoạch cấp 2 → cấp 3 →
+            Kế hoạch phụ (nơi chứa việc). Các cấp giữa TỰ ĐẶT TÊN, sâu bao nhiêu
+            tùy từng kế hoạch, tối đa 4 cấp. Kênh chỉ còn là NHÃN tùy chọn. */}
         {activeTab === "channels" ? (
           <section className="space-y-3">
             {canManage ? (
               <div className="flex flex-wrap justify-end gap-2">
-                <CampaignPlanFormButton campaignId={c.id} members={members} />
+                <CampaignPlanFormButton campaignId={c.id} members={members} plans={detail.campaignPlans} />
                 <WorkPackageForm campaignId={c.id} members={members} campaignPlans={detail.campaignPlans} />
               </div>
             ) : null}
             {detail.workPackages.length > 0 || detail.campaignPlans.length > 0 ? (
               (() => {
-                const renderChannel = (w: (typeof detail.workPackages)[number]) => {
+                const renderSubPlan = (w: (typeof detail.workPackages)[number]) => {
                   const needsSplit = w.status === "needs_split";
                   return (
                     <article
                       key={w.id}
                       className={
-                        "rounded-lg border bg-background p-3 " +
-                        (needsSplit ? "border-rose-200" : "border-outline-variant")
+                        "rounded-lg border border-l-4 border-l-emerald-500 bg-background p-3 " +
+                        (needsSplit ? "border-rose-200 border-l-rose-500" : "border-outline-variant")
                       }
                     >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium">
-                              {CHANNEL_LABEL[w.channelType] ?? w.channelType}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                              Kế hoạch phụ
                             </span>
+                            {w.channelType !== "other" ? (
+                              <span className="rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium">
+                                Nhãn kênh: {CHANNEL_LABEL[w.channelType] ?? w.channelType}
+                              </span>
+                            ) : null}
                             {needsSplit ? (
                               <span className="rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">
                                 Cần chia việc (Needs Split)
@@ -383,9 +390,9 @@ export default async function CampaignDetailPage({
                           {canManage ? (
                             <MktDeleteButton
                               url={`/api/mkt/v1/work-packages/${w.id}`}
-                              label="Xoá kênh triển khai"
-                              errorFallback="Không xoá được kênh"
-                              confirmMessage={`Xoá kênh "${w.title}"?\n\nCác công việc và kế hoạch bên trong kênh này cũng sẽ bị ẩn theo.`}
+                              label="Xoá Kế hoạch phụ"
+                              errorFallback="Không xoá được Kế hoạch phụ"
+                              confirmMessage={`Xoá Kế hoạch phụ "${w.title}"?\n\nCác công việc và kế hoạch bên trong cũng sẽ bị ẩn theo.`}
                             />
                           ) : null}
                         </div>
@@ -394,46 +401,86 @@ export default async function CampaignDetailPage({
                   );
                 };
 
-                const unassigned = detail.workPackages.filter(
-                  (w) => !w.campaignPlanId || !detail.campaignPlans.some((p) => p.id === w.campaignPlanId),
+                const roots = detail.campaignPlans.filter((p) => !p.parentPlanId);
+                const childrenOf = (id: string) =>
+                  detail.campaignPlans.filter((p) => p.parentPlanId === id);
+                const subPlansOf = (id: string) =>
+                  detail.workPackages.filter((w) => w.campaignPlanId === id);
+                const knownIds = new Set(detail.campaignPlans.map((p) => p.id));
+                const direct = detail.workPackages.filter(
+                  (w) => !w.campaignPlanId || !knownIds.has(w.campaignPlanId),
                 );
+                const summarize = (subPlans: number, children?: number) =>
+                  [
+                    children ? `${children} kế hoạch cấp 3` : null,
+                    `${subPlans} kế hoạch phụ`,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
 
                 return (
                   <div className="space-y-3">
-                    {detail.campaignPlans.map((p) => {
-                      const chans = detail.workPackages.filter((w) => w.campaignPlanId === p.id);
+                    {roots.map((p) => {
+                      const kids = childrenOf(p.id);
+                      const own = subPlansOf(p.id);
                       return (
                         <div key={p.id} className="space-y-2 rounded-lg border border-orange-200 border-l-4 border-l-orange-500 bg-surface-container-lowest p-3">
                           <CampaignPlanHeader
                             plan={p}
+                            level={2}
                             campaignId={c.id}
                             members={members}
-                            channelCount={chans.length}
+                            plans={detail.campaignPlans}
+                            childSummary={summarize(own.length, kids.length)}
                             canManage={canManage}
                           />
-                          {chans.length > 0 ? (
-                            chans.map(renderChannel)
-                          ) : (
+                          {own.map(renderSubPlan)}
+                          {kids.map((k) => {
+                            const kidSub = subPlansOf(k.id);
+                            return (
+                              <div key={k.id} className="ml-3 space-y-2 rounded-lg border border-sky-200 border-l-4 border-l-sky-500 bg-background/60 p-3 sm:ml-5">
+                                <CampaignPlanHeader
+                                  plan={k}
+                                  level={3}
+                                  campaignId={c.id}
+                                  members={members}
+                                  plans={detail.campaignPlans}
+                                  childSummary={summarize(kidSub.length)}
+                                  canManage={canManage}
+                                />
+                                {kidSub.length > 0 ? (
+                                  kidSub.map(renderSubPlan)
+                                ) : (
+                                  <p className="text-xs text-on-surface-variant">
+                                    Chưa có Kế hoạch phụ nào ở đây. Bấm “Thêm Kế hoạch phụ” và chọn nhánh này.
+                                  </p>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {own.length === 0 && kids.length === 0 ? (
                             <p className="text-xs text-on-surface-variant">
-                              Chưa có kênh nào trong Kế hoạch này. Bấm “Thêm kênh” và chọn Kế hoạch này.
+                              Nhánh trống. Thêm “Kế hoạch” (thành cấp 3) hoặc “Kế hoạch phụ” vào nhánh này.
                             </p>
-                          )}
+                          ) : null}
                         </div>
                       );
                     })}
-                    {unassigned.length > 0 ? (
+                    {direct.length > 0 ? (
                       <div className="space-y-2">
-                        {detail.campaignPlans.length > 0 ? (
-                          <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch (cấp 2)</div>
+                        {roots.length > 0 ? (
+                          <div className="text-xs font-semibold text-on-surface-variant">
+                            Trực thuộc Chiến dịch (không qua cấp 2/3)
+                          </div>
                         ) : null}
-                        {unassigned.map(renderChannel)}
+                        {direct.map(renderSubPlan)}
                       </div>
                     ) : null}
                   </div>
                 );
               })()
             ) : (
-              <EmptyTab label="Chưa có kênh triển khai. Thêm kênh rồi chia việc theo công đoạn." />
+              <EmptyTab label="Chưa có gì trong cây kế hoạch. Thêm “Kế hoạch” để chia tầng, hoặc thêm ngay “Kế hoạch phụ” (nơi chứa việc) nếu chiến dịch gọn." />
             )}
           </section>
         ) : null}
@@ -500,7 +547,7 @@ export default async function CampaignDetailPage({
                 </article>
               ))
             ) : (
-              <EmptyTab label="Chưa có công việc. Chia việc từ tab “Kênh triển khai”." />
+              <EmptyTab label="Chưa có công việc. Chia việc từ tab “Cây kế hoạch”." />
             )}
           </section>
         ) : null}

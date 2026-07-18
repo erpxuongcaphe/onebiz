@@ -63,7 +63,7 @@ export function AssignPlanningButton({
 
   async function submit() {
     if (!ownerId) {
-      setError("Chọn người phụ trách kênh (Channel Owner) trước.");
+      setError("Chọn người phụ trách Kế hoạch phụ trước.");
       return;
     }
     setSaving(true);
@@ -107,7 +107,7 @@ export function AssignPlanningButton({
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Người phụ trách kênh *</Label>
+                <Label>Người phụ trách Kế hoạch phụ *</Label>
                 <select value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={selectCls + " h-9 w-full"}>
                   <option value="">— Chọn người —</option>
                   {members.map((m) => (
@@ -126,7 +126,7 @@ export function AssignPlanningButton({
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Mục tiêu kênh</Label>
+              <Label>Mục tiêu của Kế hoạch phụ</Label>
               <Input value={objective} onChange={(e) => setObjective(e.target.value)} placeholder="VD: 8 video Oolong, 200k lượt xem…" />
             </div>
             <div className="space-y-1">
@@ -221,17 +221,36 @@ const newStageRow = (): StageRow => ({
   dueDate: "",
 });
 
-// Huy hiệu phân tầng — dùng chung cho trình soạn + màn duyệt, đúng hệ màu đã
-// chốt với CEO: Kế hoạch lớn = tím · Kế hoạch nhỏ = xanh dương · phụ = xanh lá.
-function TierBreadcrumb({ campaignName, channelTitle }: { campaignName: string | null; channelTitle: string | null }) {
+// Đường dẫn phân tầng — dùng chung cho trình soạn + màn duyệt, đúng hệ màu đã
+// chốt với CEO (00201): cấp 1 tím · cấp 2 cam · cấp 3 xanh dương · phụ xanh lá.
+// Hiện đúng nhánh thật của Kế hoạch phụ: cấp giữa nào không dùng thì không hiện.
+function TierBreadcrumb({
+  campaignName,
+  channelTitle,
+  planPath = [],
+}: {
+  campaignName: string | null;
+  channelTitle: string | null;
+  planPath?: Array<{ id: string; name: string }>;
+}) {
+  const arrow = <span className="text-on-surface-variant">→</span>;
+  const middleCls = ["bg-orange-50 text-orange-700", "bg-sky-50 text-sky-700"];
   return (
     <div className="flex flex-wrap items-center gap-1.5 text-xs">
       <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-medium text-indigo-700">
-        Kế hoạch lớn: {campaignName ?? "—"}
+        Cấp 1: {campaignName ?? "—"}
       </span>
-      <span className="text-on-surface-variant">→</span>
-      <span className="rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700">
-        Kế hoạch nhỏ: {channelTitle ?? "—"}
+      {planPath.map((node, i) => (
+        <span key={node.id} className="contents">
+          {arrow}
+          <span className={`rounded-full px-2 py-0.5 font-medium ${middleCls[i] ?? middleCls[1]}`}>
+            Cấp {i + 2}: {node.name}
+          </span>
+        </span>
+      ))}
+      {arrow}
+      <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+        Kế hoạch phụ: {channelTitle ?? "—"}
       </span>
     </div>
   );
@@ -317,7 +336,7 @@ export function PlanEditorButton({
     setSaved(false);
   }
 
-  // Bỏ kế hoạch phụ: công đoạn bên trong KHÔNG mất — về nhóm "chưa xếp".
+  // Bỏ nhóm công đoạn: công đoạn bên trong KHÔNG mất — về nhóm "chưa xếp".
   function removeStage(id: string) {
     setStages((v) => v.filter((s) => s.id !== id));
     setRows((v) => v.map((r) => (r.stageId === id ? { ...r, stageId: "" } : r)));
@@ -325,8 +344,8 @@ export function PlanEditorButton({
   }
 
   const filled = rows.filter((r) => r.title.trim());
-  // Kế hoạch phụ trống hoàn toàn (chưa tên, chưa mục tiêu, không công đoạn) thì
-  // bỏ qua êm khi gửi — người dùng lỡ bấm thêm không bị bắt lỗi vô cớ.
+  // Nhóm công đoạn trống hoàn toàn (chưa tên, chưa mục tiêu, không công đoạn)
+  // thì bỏ qua êm khi gửi — người dùng lỡ bấm thêm không bị bắt lỗi vô cớ.
   const keptStages = stages.filter(
     (s) => s.title.trim() || s.goal.trim() || s.dueDate || rows.some((r) => r.stageId === s.id && r.title.trim()),
   );
@@ -392,7 +411,7 @@ export function PlanEditorButton({
       }
     }
     for (const s of keptStages) {
-      if (!s.title.trim()) return "Có kế hoạch phụ chưa đặt tên.";
+      if (!s.title.trim()) return "Có nhóm công đoạn chưa đặt tên.";
     }
     return null;
   }
@@ -514,9 +533,9 @@ export function PlanEditorButton({
       <Dialog open={open} onOpenChange={handleEditorOpenChange}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-3xl">
           <DialogHeader>
-            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} />
+            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} planPath={plan.campaignPlanPath} />
             <DialogTitle>
-              Soạn kế hoạch nhỏ — {plan.channelTitle ?? "Gói việc"}
+              Soạn Kế hoạch phụ — {plan.channelTitle ?? "Gói việc"}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
@@ -669,9 +688,9 @@ export function PlanEditorButton({
                           disabled={!editable}
                           onChange={(e) => patchById(r.id, { stageId: e.target.value })}
                           className={selectCls}
-                          title="Thuộc kế hoạch phụ nào"
+                          title="Thuộc nhóm công đoạn nào"
                         >
-                          <option value="">— Chưa xếp kế hoạch phụ —</option>
+                          <option value="">— Chưa xếp nhóm công đoạn —</option>
                           {stages.map((s, si) => (
                             <option key={s.id} value={s.id}>KH phụ {si + 1}: {s.title.trim() || "(chưa đặt tên)"}</option>
                           ))}
@@ -719,13 +738,13 @@ export function PlanEditorButton({
                     <div key={s.id} className="space-y-2 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-2.5">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                          Kế hoạch phụ {si + 1}
+                          Nhóm công đoạn {si + 1}
                         </span>
                         <Input
                           value={s.title}
                           disabled={!editable}
                           onChange={(e) => patchStage(s.id, { title: e.target.value })}
-                          placeholder="Tên kế hoạch phụ — VD: Tuần 1 · Chuẩn bị nội dung"
+                          placeholder="Tên nhóm công đoạn — VD: Tuần 1 · Chuẩn bị nội dung"
                           className="h-8 min-w-40 flex-1 font-medium"
                         />
                         <Input
@@ -741,15 +760,15 @@ export function PlanEditorButton({
                           disabled={!editable}
                           onChange={(e) => patchStage(s.id, { dueDate: e.target.value })}
                           className="h-8 w-36"
-                          title="Hạn của kế hoạch phụ"
+                          title="Hạn của nhóm công đoạn"
                         />
                         {editable ? (
                           <button
                             type="button"
                             className="text-on-surface-variant hover:text-rose-600"
                             onClick={() => removeStage(s.id)}
-                            title="Bỏ kế hoạch phụ (công đoạn bên trong về nhóm chưa xếp)"
-                            aria-label="Bỏ kế hoạch phụ"
+                            title="Bỏ nhóm công đoạn (công đoạn bên trong về nhóm chưa xếp)"
+                            aria-label="Bỏ nhóm công đoạn"
                           >
                             <Icon name="delete" size={16} />
                           </button>
@@ -758,21 +777,21 @@ export function PlanEditorButton({
                       {rows.filter((r) => r.stageId === s.id).map(rowEditor)}
                       {editable ? (
                         <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" onClick={() => setRows((v) => [...v, newRow(s.id)])}>
-                          <Icon name="add" size={14} /> Thêm công đoạn vào kế hoạch phụ này
+                          <Icon name="add" size={14} /> Thêm công đoạn vào nhóm công đoạn này
                         </button>
                       ) : null}
                     </div>
                   ))}
 
                   {stages.length > 0 && unassigned.length > 0 ? (
-                    <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch phụ</div>
+                    <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp nhóm công đoạn</div>
                   ) : null}
                   {unassigned.map(rowEditor)}
 
                   {editable ? (
                     <div className="flex flex-wrap items-center gap-4">
                       <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700" onClick={() => setStages((v) => [...v, newStageRow()])}>
-                        <Icon name="add" size={14} /> Thêm kế hoạch phụ
+                        <Icon name="add" size={14} /> Thêm nhóm công đoạn
                       </button>
                       <button type="button" className="inline-flex items-center gap-1 text-xs font-medium text-primary" onClick={() => setRows((v) => [...v, newRow()])}>
                         <Icon name="add" size={14} /> Thêm công đoạn{stages.length > 0 ? " (chưa xếp)" : ""}
@@ -898,8 +917,8 @@ export function PlanReviewButton({
       <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
         <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-2xl">
           <DialogHeader>
-            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} />
-            <DialogTitle>Duyệt kế hoạch nhỏ — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
+            <TierBreadcrumb campaignName={plan.campaignName} channelTitle={plan.channelTitle} planPath={plan.campaignPlanPath} />
+            <DialogTitle>Duyệt Kế hoạch phụ — {plan.channelTitle ?? "Gói việc"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2 text-center">
@@ -960,7 +979,7 @@ export function PlanReviewButton({
 
             {(() => {
               // 00199: Leader duyệt nhìn theo KẾ HOẠCH PHỤ — thấy nhịp, không
-              // phải một đống việc rời. Không có kế hoạch phụ → danh sách phẳng.
+              // phải một đống việc rời. Không có nhóm công đoạn → danh sách phẳng.
               const itemRow = (it: MktPlanItem) => (
                 <div key={it.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-outline-variant bg-background p-2 text-sm">
                   <div className="min-w-0">
@@ -995,7 +1014,7 @@ export function PlanReviewButton({
                       <div key={s.id} className="space-y-1.5 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-surface-container-lowest p-2">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
-                            Kế hoạch phụ {si + 1}
+                            Nhóm công đoạn {si + 1}
                           </span>
                           <span className="font-semibold">{s.title}</span>
                           {s.goal ? <span className="text-on-surface-variant">· {s.goal}</span> : null}
@@ -1010,7 +1029,7 @@ export function PlanReviewButton({
                   })}
                   {unassigned.length > 0 ? (
                     <div className="space-y-1.5">
-                      <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch phụ</div>
+                      <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp nhóm công đoạn</div>
                       {unassigned.map(itemRow)}
                     </div>
                   ) : null}
