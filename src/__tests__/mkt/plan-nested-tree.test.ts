@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const mig = readFileSync(resolve("supabase/migrations/00201_mkt_plan_tree_nested.sql"), "utf8");
+const mig202 = readFileSync(
+  resolve("supabase/migrations/00202_mkt_delete_campaign_plans.sql"),
+  "utf8",
+);
 const readModels = readFileSync(resolve("src/lib/mkt/read-models.ts"), "utf8");
 const plansRoute = readFileSync(
   resolve("src/app/api/mkt/v1/campaigns/[campaignId]/plans/route.ts"),
@@ -103,6 +107,17 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     expect(campaignControls).toContain("Chiến dịch (không qua cấp 2/3)");
     expect(campaignControls).toMatch(/optgroup[\s\S]{0,200}Cấp 2 · \$\{p\.name\}/);
     expect(campaignControls).toContain("(cấp 3)");
+  });
+
+  it("lỗ hổng UAT 18/07 (00202): xoá chiến dịch phải xoá mềm CẢ nút cây kế hoạch + dọn nút mồ côi", () => {
+    // mkt_delete_campaign (00192 viết trước 00200) bỏ sót mkt_campaign_plans.
+    expect(mig202).toMatch(
+      /update public\.mkt_campaign_plans set deleted_at = now\(\)[\s\S]{0,120}where campaign_id = p_campaign_id/,
+    );
+    // Backfill: nút của chiến dịch đã xoá mềm trước bản vá cũng được dọn.
+    expect(mig202).toMatch(/c\.deleted_at is not null[\s\S]{0,60}cp\.deleted_at is null/);
+    // Cùng chữ ký → create or replace, KHÔNG được DROP (tránh 42P13 ngược).
+    expect(mig202).not.toContain("drop function");
   });
 
   it("bug UAT 18/07: form tạo phải reset sạch sau khi lưu — nhãn kênh không dính sang lần sau", () => {
