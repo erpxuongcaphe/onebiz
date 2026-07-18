@@ -85,7 +85,18 @@ export function CampaignPlanFormButton({
         timeframeEnd: end || undefined,
         parentPlanId: parentPlanId || undefined,
       });
-      refresh(() => setOpen(false));
+      refresh(() => {
+        setOpen(false);
+        // Form TẠO mở lại phải trắng — không giữ tên/cha lần trước (form SỬA thì giữ).
+        if (!edit) {
+          setName("");
+          setObjective("");
+          setOwnerId("");
+          setParentPlanId(defaultParentPlanId);
+          setStart("");
+          setEnd("");
+        }
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Không lưu được Kế hoạch");
     } finally {
