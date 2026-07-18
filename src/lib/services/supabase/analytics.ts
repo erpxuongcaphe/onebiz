@@ -5,6 +5,7 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
 
 // === Shared Types ===
@@ -1044,22 +1045,26 @@ export async function getDailyOrderVolume(
   if (branchId) query = query.eq("branch_id", branchId);
   const data = await fetchAllPostgrestRows<{ created_at: string }>(() => query.order("created_at", { ascending: true }), "[getDailyOrderVolume]");
 
-  const grouped = new Map<string, number>();
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
-    grouped.set(key, 0);
-  }
+  const dayKeys = dayKeysForRange(customRange, days);
+  const grouped = new Map(dayKeys.map((key) => [key, 0]));
+  const includeYear =
+    customRange !== undefined &&
+    customRange.from.slice(0, 4) !== customRange.to.slice(0, 4);
 
   (data ?? []).forEach((inv: { created_at: string }) => {
     const d = new Date(inv.created_at);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!grouped.has(key)) return;
     grouped.set(key, (grouped.get(key) ?? 0) + 1);
   });
 
-  return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
+  return dayKeys.map((key) => {
+    const [year, month, day] = key.split("-");
+    return {
+      label: includeYear ? `${day}/${month}/${year}` : `${day}/${month}`,
+      value: grouped.get(key) ?? 0,
+    };
+  });
 }
 
 export async function getOrderStatusDistribution(

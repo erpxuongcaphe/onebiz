@@ -7,7 +7,7 @@
  * KH cohort quay lại trong tháng N sau đó.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -29,22 +29,27 @@ export default function CustomerCohortPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const [data, setData] = useState<CohortReportResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [months, setMonths] = useState(6);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const result = await getCustomerCohortReport({
-        months: 6,
+        months,
         branchId: activeBranchId,
       });
+      if (requestId !== requestIdRef.current) return;
       setData(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch cohort report:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, isReady]);
+  }, [activeBranchId, isReady, months]);
 
   useEffect(() => {
     fetchData();
@@ -62,11 +67,23 @@ export default function CustomerCohortPage() {
     );
   })();
 
+  const cohortRange = useMemo(() => {
+    const firstMonth = data?.rows[0]?.cohortMonth;
+    const lastMonth = data?.rows[data.rows.length - 1]?.cohortMonth;
+    if (!firstMonth || !lastMonth) return range;
+
+    const [year, month] = lastMonth.split("-").map(Number);
+    const lastDay = new Date(year, month, 0).getDate();
+    return {
+      from: `${firstMonth}-01`,
+      to: `${lastMonth}-${String(lastDay).padStart(2, "0")}`,
+    };
+  }, [data?.rows, range]);
   const handleExport = useCallback((mode: "view" | "full") => {
     if (!data) return;
     const titleRows = buildReportTitleRows({
       title: "Báo cáo khách hàng quay lại",
-      range,
+      range: cohortRange,
       branchName: activeBranchId
         ? branches.find((branch) => branch.id === activeBranchId)?.name
         : "Toàn công ty",
@@ -90,7 +107,7 @@ export default function CustomerCohortPage() {
     exportReportToExcel({
       kind: "customer-cohort",
       mode,
-      range,
+      range: cohortRange,
       branchName: branchLabel,
       sheets: [
         ...(mode === "full"
@@ -145,7 +162,7 @@ export default function CustomerCohortPage() {
     branches,
     data,
     m1Retention,
-    range,
+    cohortRange,
     totalCohorts,
     totalCustomers,
   ]);
@@ -162,7 +179,7 @@ export default function CustomerCohortPage() {
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       <ReportPageHeader
         title="Khách hàng quay lại theo tháng đầu mua"
-        subtitle="Theo dõi tỷ lệ khách tiếp tục mua trong các tháng sau lần mua đầu tiên"
+        subtitle={`Theo dõi ${months} nhóm tháng gần nhất và tỷ lệ khách tiếp tục mua`}
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -172,6 +189,19 @@ export default function CustomerCohortPage() {
         onExportView={() => handleExport("view")}
         onExportFull={() => handleExport("full")}
         exportDisabled={loading || !data}
+        hideDateRange
+        actions={
+          <select
+            aria-label="Số tháng theo dõi"
+            value={months}
+            onChange={(event) => setMonths(Number(event.target.value))}
+            className="h-8 rounded-lg border border-border bg-background px-2.5 text-xs font-medium text-foreground outline-none focus:ring-2 focus:ring-primary/20"
+          >
+            <option value={6}>6 tháng</option>
+            <option value={12}>12 tháng</option>
+            <option value={24}>24 tháng</option>
+          </select>
+        }
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
@@ -189,7 +219,7 @@ export default function CustomerCohortPage() {
           <KpiCard
             label="Tổng khách hàng lần đầu"
             value={String(totalCustomers)}
-            change="6 tháng gần nhất"
+            change={`${months} tháng gần nhất`}
             positive
             icon="person_add"
             bg="bg-status-success/10"

@@ -16,7 +16,7 @@
  *   - Bảng top KM theo discount + lượt dùng (per-promotion detail)
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -27,7 +27,7 @@ import {
   CartesianGrid,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   exportReportToExcel,
@@ -47,6 +47,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 const TYPE_LABEL: Record<string, string> = {
   discount_percent: "Giảm %",
@@ -102,10 +103,12 @@ export default function KhuyenMaiAnalyticsPage() {
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<PromotionKpis | null>(null);
   const [detailRows, setDetailRows] = useState<PromotionDetailRow[]>([]);
   const [dailyTrend, setDailyTrend] = useState<PromotionDailyPoint[]>([]);
+  const requestIdRef = useRef(0);
 
 
   const handleExportView = useCallback(() => {
@@ -237,22 +240,25 @@ export default function KhuyenMaiAnalyticsPage() {
   }, [kpis, detailRows, dailyTrend, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const [kpiData, rows, trend] = await Promise.all([
-        getPromotionKpis({ branchId: activeBranchId }),
-        getPromotionDetailRows({ branchId: activeBranchId }),
-        getPromotionDailyTrend({ days: 30, branchId: activeBranchId }),
+        getPromotionKpis({ branchId: activeBranchId, dateRange: range }),
+        getPromotionDetailRows({ branchId: activeBranchId, dateRange: range }),
+        getPromotionDailyTrend({ branchId: activeBranchId, dateRange: range }),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpiData);
       setDetailRows(rows);
       setDailyTrend(trend);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch promotion analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId]);
+  }, [activeBranchId, range]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -325,7 +331,7 @@ export default function KhuyenMaiAnalyticsPage() {
       </div>
 
       {/* Daily trend chart */}
-      <ChartCard title="Xu hướng KM 30 ngày">
+      <ChartCard title="Xu hướng khuyến mãi" subtitle={selectedPeriodLabel}>
         {loading ? (
           <div className="h-[280px] flex items-center justify-center">
             <Icon
@@ -337,7 +343,7 @@ export default function KhuyenMaiAnalyticsPage() {
         ) : dailyTrend.length === 0 || dailyTrend.every((d) => d.usageCount === 0) ? (
           <div className="h-[280px] flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
             <Icon name="bar_chart" size={32} className="opacity-40" />
-            <span>Chưa có đơn nào áp KM trong 30 ngày qua</span>
+            <span>Chưa có đơn nào áp khuyến mãi trong kỳ đã chọn</span>
           </div>
         ) : (
           <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>

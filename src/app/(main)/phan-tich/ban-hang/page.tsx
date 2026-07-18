@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -153,17 +153,21 @@ export default function BanHangPage() {
   const [revenueByWeekday, setRevenueByWeekday] = useState<ChartPoint[]>([]);
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topInvoicesList, setTopInvoicesList] = useState<TopInvoice[]>([]);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const summary = await getSalesReportSummary(activeBranchId, range);
+      if (requestId !== requestIdRef.current) return;
       setKpis(summary.kpis);
       setDailyRevenue(summary.dailyRevenue);
       setRevenueByWeekday(summary.revenueByWeekday);
       setRevenueByHour(summary.revenueByHour);
       setTopInvoicesList(summary.topInvoices);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch sales analytics:", err);
       toast({
         title: "Lỗi tải báo cáo bán hàng",
@@ -171,7 +175,7 @@ export default function BanHangPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
@@ -492,7 +496,7 @@ export default function BanHangPage() {
           <KpiCard
             label="Doanh thu hàng hóa"
             value={formatCurrency(kpis?.goodsRevenue ?? 0) + "đ"}
-            change={`${revenueChange.text} so với tháng trước`}
+            change={`${revenueChange.text} so với kỳ trước`}
             positive={revenueChange.positive}
             icon="trending_up"
             bg="bg-primary-fixed"
@@ -514,7 +518,7 @@ export default function BanHangPage() {
           <KpiCard
             label="Số lượng bán"
             value={formatNumber(kpis?.soldQty ?? 0)}
-            change={`${qtyChange.text} so với tháng trước`}
+            change={`${qtyChange.text} so với kỳ trước`}
             positive={qtyChange.positive}
             icon="inventory_2"
             bg="bg-status-success/10"
@@ -524,7 +528,7 @@ export default function BanHangPage() {
           <KpiCard
             label="Giá trị trung bình mỗi đơn"
             value={formatCurrency(kpis?.avgOrderValue ?? 0) + "đ"}
-            change={`${avgChange.text} so với tháng trước`}
+            change={`${avgChange.text} so với kỳ trước`}
             positive={avgChange.positive}
             icon="receipt"
             bg="bg-status-info/10"
@@ -534,7 +538,7 @@ export default function BanHangPage() {
           <KpiCard
             label="Tỷ lệ trả hàng"
             value={`${(kpis?.returnRate ?? 0).toFixed(1)}%`}
-            change={`${returnChange.text} so với tháng trước`}
+            change={`${returnChange.text} so với kỳ trước`}
             positive={!returnChange.positive}
             icon="undo"
             bg="bg-status-warning/10"

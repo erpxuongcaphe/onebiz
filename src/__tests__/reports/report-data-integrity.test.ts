@@ -41,6 +41,18 @@ describe("report data integrity", () => {
     "src/app/(main)/phan-tich/khach-hang/page.tsx",
     "utf8",
   );
+  const promotionPage = readFileSync(
+    "src/app/(main)/phan-tich/khuyen-mai/page.tsx",
+    "utf8",
+  );
+  const orderPage = readFileSync(
+    "src/app/(main)/phan-tich/dat-hang/page.tsx",
+    "utf8",
+  );
+  const cohortPage = readFileSync(
+    "src/app/(main)/phan-tich/customer-cohort/page.tsx",
+    "utf8",
+  );
   const supplierPage = readFileSync(
     "src/app/(main)/phan-tich/nha-cung-cap/page.tsx",
     "utf8",
@@ -100,5 +112,19 @@ describe("report data integrity", () => {
     const balancedFilters =
       inventoryCheckReport.match(/\.eq\("status", "balanced"\)/g) ?? [];
     expect(balancedFilters).toHaveLength(2);
+  });
+  it("keeps sales periods aligned across labels, queries, and daily buckets", () => {
+    expect(promotionPage).toContain("dateRange: range");
+    expect(promotionAnalytics).toContain("toCreatedAtRangeWindow(params?.dateRange)");
+    expect(analytics).toContain("dayKeysForRange(customRange, days)");
+    expect(orderPage).toContain("requestId !== requestIdRef.current");
+    expect(orderPage).toContain("subtitle={selectedPeriodLabel}");
+  });
+
+  it("uses an explicit month selector for the cohort snapshot report", () => {
+    expect(cohortPage).toContain("hideDateRange");
+    expect(cohortPage).toContain('aria-label="Số tháng theo dõi"');
+    expect(cohortPage).toContain("months,");
+    expect(cohortPage).toContain("range: cohortRange");
   });
 });
