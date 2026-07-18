@@ -1776,6 +1776,9 @@ function PosPageInner() {
           state.applyStockSnapshot(freshStockSnapshot);
         } catch (error) {
           console.warn("[POS] checkout stock refresh failed:", error);
+          throw new Error(
+            "Không xác minh được tồn kho mới nhất. Vui lòng kiểm tra mạng và thử thanh toán lại.",
+          );
         }
       }
 
