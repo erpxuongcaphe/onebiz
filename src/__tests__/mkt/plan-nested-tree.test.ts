@@ -104,4 +104,11 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     expect(campaignControls).toMatch(/optgroup[\s\S]{0,200}Cấp 2 · \$\{p\.name\}/);
     expect(campaignControls).toContain("(cấp 3)");
   });
+
+  it("bug UAT 18/07: form tạo phải reset sạch sau khi lưu — nhãn kênh không dính sang lần sau", () => {
+    // WorkPackageForm: reset nhãn kênh về "không gắn" trong khối refresh sau submit.
+    expect(campaignControls).toMatch(/refresh\(\(\) => \{[\s\S]{0,400}setChannelType\("other"\)/);
+    // CampaignPlanFormButton: form TẠO mở lại phải trắng (form SỬA giữ nguyên).
+    expect(cpControls).toMatch(/if \(!edit\) \{[\s\S]{0,220}setName\(""\)[\s\S]{0,220}setParentPlanId\(defaultParentPlanId\)/);
+  });
 });

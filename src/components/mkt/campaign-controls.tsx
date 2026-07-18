@@ -315,6 +315,8 @@ export function WorkPackageForm({
         setTargetOutput("");
         setOwnerId("");
         setReviewerId("");
+        // Bug UAT 18/07: thiếu reset nhãn kênh → lần tạo sau dính nhãn lần trước.
+        setChannelType("other");
         setCampaignPlanId(defaultCampaignPlanId);
         setOpen(false);
       });
