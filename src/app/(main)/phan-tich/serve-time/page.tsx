@@ -11,7 +11,7 @@
  *   - Median + p90 để bỏ outliers (đơn cá biệt)
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -65,25 +65,33 @@ export default function FnbServeTimeReportPage() {
 
   const [report, setReport] = useState<FnbServeTimeReport | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     getFnbServeTimeReport({
       branchId: activeBranchId ?? null,
       dateFrom: range.from,
       dateTo: range.to,
     })
-      .then(setReport)
+      .then((result) => {
+        if (requestId !== requestIdRef.current) return;
+        setReport(result);
+      })
       .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
         toast({
-          title: "Không tải được báo cáo serve time",
+          title: "Không tải được báo cáo thời gian phục vụ",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
         setReport(null);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [isReady, activeBranchId, range.from, range.to, toast]);
 
   const summary = report?.summary ?? {
@@ -236,7 +244,7 @@ export default function FnbServeTimeReportPage() {
       });
 
       toast({
-        title: "Đã xuất báo cáo serve time",
+        title: "Đã xuất báo cáo thời gian phục vụ",
         description: `4 sheet: Info + Tổng quan + Chi nhánh (${byBranch.length}) + Theo giờ (${byHour.length})`,
         variant: "success",
       });
@@ -252,8 +260,8 @@ export default function FnbServeTimeReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Time-to-serve FnB"
-        subtitle="Thời gian phục vụ TB — tối ưu nhân sự giờ peak"
+        title="Thời gian phục vụ F&B"
+        subtitle="Thời gian phục vụ trung bình, hỗ trợ bố trí nhân sự giờ cao điểm"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -266,7 +274,7 @@ export default function FnbServeTimeReportPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="TB phục vụ"
+          label="Phục vụ trung bình"
           value={fmtMin(summary.avgMinutes)}
           change={`${formatNumber(summary.orderCount)} đơn`}
           positive={summary.avgMinutes <= 7}
@@ -322,7 +330,7 @@ export default function FnbServeTimeReportPage() {
       {viewMode === "chart" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard
-            title="TB phục vụ theo chi nhánh"
+            title="Thời gian phục vụ theo chi nhánh"
             subtitle="Đỏ = chậm (>10p), Vàng = bình thường (7-10p), Xanh = nhanh (<7p)"
           >
             <div className="h-72">
@@ -357,7 +365,7 @@ export default function FnbServeTimeReportPage() {
           </ChartCard>
 
           <ChartCard
-            title="TB phục vụ theo giờ trong ngày"
+            title="Thời gian phục vụ theo giờ trong ngày"
             subtitle="Giờ nào chậm = bố trí thêm pha chế"
           >
             <div className="h-72">

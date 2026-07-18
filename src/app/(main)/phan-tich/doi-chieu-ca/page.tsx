@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
@@ -75,9 +75,11 @@ export default function ReconciledShiftReportPage() {
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReconciledShiftRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!canView || !isReady || (!canViewAny && !effectiveBranchId)) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await getReconciledShifts({
@@ -86,8 +88,10 @@ export default function ReconciledShiftReportPage() {
         dateTo: range.to,
         type,
       });
+      if (requestId !== requestIdRef.current) return;
       setRows(data);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setRows([]);
       toast({
         title: "Không tải được báo cáo đối chiếu ca",
@@ -95,7 +99,7 @@ export default function ReconciledShiftReportPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [canView, canViewAny, effectiveBranchId, isReady, range.from, range.to, toast, type]);
 

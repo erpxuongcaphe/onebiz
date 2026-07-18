@@ -9,7 +9,7 @@
  *   - Drill-down: click 1 shipper → list đơn của họ + giao xong chưa
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -62,12 +62,16 @@ export default function FnbShipperReportPage() {
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [drillOrders, setDrillOrders] = useState<ShipperOrderRow[]>([]);
   const [drillLoading, setDrillLoading] = useState(false);
+  const requestIdRef = useRef(0);
+  const drillRequestIdRef = useRef(0);
 
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const list = await getDeliveryStaffPerformance(activeBranchId, range);
+      if (requestId !== requestIdRef.current) return;
       setShippers(list);
       // Reset drill khi đổi filter
       if (
@@ -78,6 +82,7 @@ export default function FnbShipperReportPage() {
         setDrillOrders([]);
       }
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch shipper data:", err);
       toast({
         title: "Lỗi tải báo cáo",
@@ -85,7 +90,7 @@ export default function FnbShipperReportPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBranchId, range, toast]);
@@ -97,23 +102,27 @@ export default function FnbShipperReportPage() {
 
   const handleDrillStaff = async (staffId: string) => {
     if (selectedStaffId === staffId) {
+      drillRequestIdRef.current += 1;
       setSelectedStaffId(null);
       setDrillOrders([]);
       return;
     }
+    const requestId = ++drillRequestIdRef.current;
     setSelectedStaffId(staffId);
     setDrillLoading(true);
     try {
       const orders = await getOrdersByDeliveryStaff(staffId, activeBranchId, range);
+      if (requestId !== drillRequestIdRef.current) return;
       setDrillOrders(orders);
     } catch (err) {
+      if (requestId !== drillRequestIdRef.current) return;
       toast({
         title: "Lỗi tải danh sách đơn",
         description: err instanceof Error ? err.message : "",
         variant: "error",
       });
     } finally {
-      setDrillLoading(false);
+      if (requestId === drillRequestIdRef.current) setDrillLoading(false);
     }
   };
 
@@ -132,7 +141,7 @@ export default function FnbShipperReportPage() {
         generatedAt: new Date(),
       });
       const sheet: ExcelSheet = {
-        name: "Shipper",
+        name: "Nhân viên giao hàng",
         titleRows: title,
         columns: [
           { label: "Hạng", key: "rank", width: 6 },
@@ -199,7 +208,7 @@ export default function FnbShipperReportPage() {
         generatedAt: new Date(),
       });
       const summarySheet: ExcelSheet = {
-        name: "1. Tổng hợp shipper",
+        name: "1. Tổng hợp giao hàng",
         titleRows,
         columns: [
           { label: "Hạng", key: "rank", width: 7, format: "number" },
@@ -264,10 +273,10 @@ export default function FnbShipperReportPage() {
           "Tổng hợp hiệu suất từng nhân viên và chi tiết toàn bộ đơn giao trong phạm vi đã chọn.",
         sheets: [summarySheet, detailSheet],
       });
-      toast({ title: "Đã xuất báo cáo shipper đầy đủ", variant: "success" });
+      toast({ title: "Đã xuất báo cáo giao hàng đầy đủ", variant: "success" });
     } catch (error) {
       toast({
-        title: "Lỗi xuất báo cáo shipper",
+        title: "Lỗi xuất báo cáo giao hàng",
         description: error instanceof Error ? error.message : "",
         variant: "error",
       });
@@ -284,7 +293,7 @@ export default function FnbShipperReportPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Hiệu suất shipper"
+      title="Hiệu suất giao hàng nội bộ"
       subtitle="Nhân viên quán đi giao — đo số đơn, doanh thu, thời gian giao"
       preset={preset}
       range={range}
@@ -326,7 +335,7 @@ export default function FnbShipperReportPage() {
             bg="bg-primary-fixed"
             iconColor="text-primary"
             valueColor="text-primary"
-            change={`${activeShippers} shipper hoạt động`}
+            change={`${activeShippers} nhân viên giao hàng`}
             positive
           />
           <KpiCard
@@ -352,7 +361,7 @@ export default function FnbShipperReportPage() {
             positive
           />
           <KpiCard
-            label="Số shipper"
+            label="Nhân viên giao hàng"
             value={String(activeShippers)}
             icon="badge"
             bg="bg-status-info/10"
@@ -360,7 +369,7 @@ export default function FnbShipperReportPage() {
             valueColor="text-status-info"
             change={
               activeShippers > 0
-                ? `TB ${formatNumber(Math.round(totalOrders / activeShippers))} đơn/shipper`
+                ? `TB ${formatNumber(Math.round(totalOrders / activeShippers))} đơn/người`
                 : undefined
             }
             positive
@@ -369,13 +378,13 @@ export default function FnbShipperReportPage() {
 
         {/* Bảng shipper */}
         <ChartCard
-          title="Bảng xếp hạng shipper"
-          subtitle="Click vào shipper để xem danh sách đơn của họ"
+          title="Bảng xếp hạng nhân viên giao hàng"
+          subtitle="Chọn một nhân viên để xem danh sách đơn"
         >
           {shippers.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              Chưa có shipper nào giao đơn trong kỳ này. Đảm bảo nhân viên đã được
-              gán shipper khi tạo đơn delivery (POS FnB).
+              Chưa có nhân viên giao hàng nào trong kỳ này. Kiểm tra việc phân công
+              nhân viên khi tạo đơn giao hàng tại POS F&B.
             </div>
           ) : (
             <ReportTableFrame tablePreferenceKey="report.fnb-shipper.summary">
@@ -489,7 +498,7 @@ export default function FnbShipperReportPage() {
         {selectedStaffId && (
           <ChartCard
             title={`Đơn của ${shippers.find((s) => s.staffId === selectedStaffId)?.staffName ?? ""}`}
-            subtitle="Click 1 dòng khác phía trên để đổi shipper, hoặc click lại dòng này để đóng"
+            subtitle="Chọn dòng khác để đổi nhân viên, hoặc chọn lại để đóng"
           >
             {drillLoading ? (
               <div className="py-8 flex items-center justify-center">
@@ -500,7 +509,7 @@ export default function FnbShipperReportPage() {
               </div>
             ) : drillOrders.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                Shipper này chưa có đơn nào trong kỳ.
+                Nhân viên này chưa có đơn nào trong kỳ.
               </div>
             ) : (
               <ReportTableFrame tablePreferenceKey="report.fnb-shipper.orders">

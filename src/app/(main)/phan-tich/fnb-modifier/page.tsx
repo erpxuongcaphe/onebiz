@@ -13,7 +13,7 @@
  *   - Setup giá topping (vd Trân châu chiếm 60% → có thể tăng phí).
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { KpiCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
@@ -38,14 +38,18 @@ export default function FnbModifierReportPage() {
   });
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<ModifierStatRow[]>([]);
+  const requestIdRef = useRef(0);
 
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const list = await getModifierStats(activeBranchId, range);
+      if (requestId !== requestIdRef.current) return;
       setStats(list);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch modifier stats:", err);
       toast({
         title: "Lỗi tải báo cáo",
@@ -53,7 +57,7 @@ export default function FnbModifierReportPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
@@ -143,7 +147,7 @@ export default function FnbModifierReportPage() {
   return (
     <div className="space-y-4 p-4 md:p-6">
       <ReportPageHeader
-        title="Tuỳ chọn món FnB"
+        title="Tùy chọn món F&B"
         subtitle="Phân tích lựa chọn Mức đường, Mức đá, Topping... của khách trong kỳ."
         preset={preset}
         onPresetChange={setPreset}

@@ -12,7 +12,7 @@
  *   - Net revenue thật khi sale qua delivery vs bán trực tiếp tại quán
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -93,9 +93,11 @@ export default function PlatformCommissionReportPage() {
     totalNet: number;
   } | null>(null);
   const [loading, setLoading] = useState(false);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     getPlatformCommissionReport({
       branchId: activeBranchId ?? null,
@@ -103,19 +105,23 @@ export default function PlatformCommissionReportPage() {
       dateTo: range.to,
     })
       .then((res) => {
+        if (requestId !== requestIdRef.current) return;
         setRows(res.rows);
         setSummary(res.summary);
         setPreviousPeriod(res.previousPeriod ?? null);
       })
       .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
         toast({
-          title: "Không tải được báo cáo platform",
+          title: "Không tải được báo cáo phí nền tảng",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
         setRows([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [isReady, activeBranchId, range.from, range.to, toast]);
 
   // ── Aggregations ──
@@ -155,7 +161,7 @@ export default function PlatformCommissionReportPage() {
   // ── Columns ──
   const columns: DataTableColumn<PlatformCommissionRow>[] = [
     {
-      label: "Platform",
+      label: "Nền tảng",
       key: "platform",
       width: "160px",
       cell: (r) => (
@@ -176,13 +182,13 @@ export default function PlatformCommissionReportPage() {
       cell: (r) => formatNumber(r.orderCount),
     },
     {
-      label: "Doanh thu Gross",
+      label: "Doanh thu gộp",
       key: "grossRevenue",
       align: "right",
       cell: (r) => formatCurrency(r.grossRevenue),
     },
     {
-      label: "Commission",
+      label: "Phí nền tảng",
       key: "commissionTotal",
       align: "right",
       cell: (r) => (
@@ -198,7 +204,7 @@ export default function PlatformCommissionReportPage() {
       cell: (r) => `${r.effectiveCommissionPercent.toFixed(1)}%`,
     },
     {
-      label: "Net (thực thu)",
+      label: "Thực nhận",
       key: "netRevenue",
       align: "right",
       cell: (r) => (
@@ -244,7 +250,7 @@ export default function PlatformCommissionReportPage() {
         ],
         rows: [
           { label: "Tổng số đơn delivery", value: formatNumber(summary.totalOrders) },
-          { label: "Doanh thu Gross", value: formatCurrency(summary.totalGross) + " đ" },
+          { label: "Doanh thu gộp", value: formatCurrency(summary.totalGross) + " đ" },
           { label: "Tổng commission trả platform", value: formatCurrency(summary.totalCommission) + " đ" },
           { label: "Doanh thu Net thực thu", value: formatCurrency(summary.totalNet) + " đ" },
           { label: "% Phí trung bình", value: `${effectiveCommissionPercent.toFixed(2)}%` },
@@ -255,10 +261,10 @@ export default function PlatformCommissionReportPage() {
         name: "Theo platform",
         titleRows: ["PHÍ THEO TỪNG PLATFORM"],
         columns: [
-          { label: "Platform", key: "label", width: 22 },
+          { label: "Nền tảng", key: "label", width: 22 },
           { label: "Số đơn", key: "orders", width: 12, format: "number" },
           { label: "Gross", key: "gross", width: 18, format: "currency" },
-          { label: "Commission", key: "commission", width: 18, format: "currency" },
+          { label: "Phí nền tảng", key: "commission", width: 18, format: "currency" },
           { label: "Net", key: "net", width: 18, format: "currency" },
           { label: "% Phí", key: "pct", width: 12 },
         ],
@@ -284,11 +290,11 @@ export default function PlatformCommissionReportPage() {
         name: "Chi tiết platform × CN",
         titleRows: ["CHI TIẾT PLATFORM × CHI NHÁNH"],
         columns: [
-          { label: "Platform", key: "platform", width: 20 },
+          { label: "Nền tảng", key: "platform", width: 20 },
           { label: "Chi nhánh", key: "branch", width: 24 },
           { label: "Số đơn", key: "orders", width: 12, format: "number" },
           { label: "Gross", key: "gross", width: 16, format: "currency" },
-          { label: "Commission", key: "commission", width: 16, format: "currency" },
+          { label: "Phí nền tảng", key: "commission", width: 16, format: "currency" },
           { label: "Net", key: "net", width: 16, format: "currency" },
           { label: "% Phí", key: "pct", width: 10 },
           { label: "AOV", key: "aov", width: 14, format: "currency" },
@@ -342,8 +348,8 @@ export default function PlatformCommissionReportPage() {
   return (
     <div className="p-3 md:p-5 space-y-4">
       <ReportPageHeader
-        title="Phí platform delivery"
-        subtitle="Gross vs Commission vs Net theo Grab / Shopee / Gojek / Be"
+        title="Phí nền tảng giao hàng"
+        subtitle="Doanh thu gộp, phí nền tảng và thực nhận theo từng đối tác"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -356,7 +362,7 @@ export default function PlatformCommissionReportPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Doanh thu Gross"
+          label="Doanh thu gộp"
           value={formatCurrency(summary.totalGross) + " đ"}
           change={
             previousPeriod && previousPeriod.totalGross > 0
@@ -373,7 +379,7 @@ export default function PlatformCommissionReportPage() {
           valueColor="text-foreground"
         />
         <KpiCard
-          label="Commission trả platform"
+          label="Phí trả nền tảng"
           value={formatCurrency(summary.totalCommission) + " đ"}
           change={
             previousPeriod && previousPeriod.totalCommission > 0
@@ -390,7 +396,7 @@ export default function PlatformCommissionReportPage() {
           valueColor="text-status-error"
         />
         <KpiCard
-          label="Net thực thu"
+          label="Thực nhận"
           value={formatCurrency(summary.totalNet) + " đ"}
           change={
             previousPeriod && previousPeriod.totalNet > 0
@@ -406,9 +412,9 @@ export default function PlatformCommissionReportPage() {
           valueColor="text-status-success"
         />
         <KpiCard
-          label="Mất do platform"
+          label="Chi phí nền tảng"
           value={formatCurrency(summary.totalLostToPlatform) + " đ"}
-          change="Gross − Net (sau phí)"
+          change="Doanh thu gộp trừ thực nhận"
           positive={false}
           icon="warning"
           bg="bg-status-warning/10"
@@ -420,8 +426,8 @@ export default function PlatformCommissionReportPage() {
       {viewMode === "chart" && byPlatform.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard
-            title="Doanh thu Gross / Commission / Net theo platform"
-            subtitle="So sánh chi phí thật"
+            title="Doanh thu gộp, phí và thực nhận theo nền tảng"
+            subtitle="So sánh chi phí thực tế"
           >
             <div className="h-72">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -442,17 +448,17 @@ export default function PlatformCommissionReportPage() {
                     ]}
                   />
                   <Legend />
-                  <Bar dataKey="gross" name="Gross" fill="#3B82F6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="commission" name="Commission" fill="#EF4444" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="net" name="Net" fill="#10B981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="gross" name="Doanh thu gộp" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="commission" name="Phí nền tảng" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="net" name="Thực nhận" fill="#10B981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
           </ChartCard>
 
           <ChartCard
-            title="Tỷ trọng đơn theo platform"
-            subtitle="Phân bổ số đơn delivery"
+            title="Tỷ trọng đơn theo nền tảng"
+            subtitle="Phân bổ số đơn giao hàng"
           >
             <div className="h-72">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -496,13 +502,13 @@ export default function PlatformCommissionReportPage() {
           loading
             ? "Đang tải..."
             : rows.length === 0
-              ? "Không có dữ liệu delivery trong kỳ"
-              : `${rows.length} dòng — Tổng commission: ${formatCurrency(summary.totalCommission)}đ (${effectiveCommissionPercent.toFixed(1)}%)`
+              ? "Không có dữ liệu giao hàng trong kỳ"
+              : `${rows.length} dòng — Tổng phí nền tảng: ${formatCurrency(summary.totalCommission)}đ (${effectiveCommissionPercent.toFixed(1)}%)`
         }
         emptyState={
           <div className="text-center py-12 text-muted-foreground">
             <Icon name="delivery_dining" size={40} className="opacity-50 mb-2" />
-            <p>Chưa có đơn delivery nào trong kỳ</p>
+            <p>Chưa có đơn giao hàng nào trong kỳ</p>
           </div>
         }
       />
