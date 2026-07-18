@@ -466,12 +466,13 @@ export default async function CampaignDetailPage({
                                   </p>
                                 )}
                                 {canManage ? (
-                                  <div className="flex justify-end border-t border-outline-variant/60 pt-2">
+                                  <div className="flex border-t border-outline-variant/50 pt-1.5">
                                     <WorkPackageForm
                                       campaignId={c.id}
                                       members={members}
                                       campaignPlans={detail.campaignPlans}
                                       defaultCampaignPlanId={k.id}
+                                      compact
                                     />
                                   </div>
                                 ) : null}
@@ -485,23 +486,24 @@ export default async function CampaignDetailPage({
                           ) : null}
                           {canManage ? (
                             // ➕ tại nhánh: thêm thẳng vào ĐÚNG nhánh này, khỏi chọn "Nằm trong".
-                            <div className="flex flex-wrap justify-end gap-2 border-t border-outline-variant/60 pt-2">
+                            <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1.5">
+                              <WorkPackageForm
+                                campaignId={c.id}
+                                members={members}
+                                campaignPlans={detail.campaignPlans}
+                                defaultCampaignPlanId={p.id}
+                                compact
+                              />
                               <CampaignPlanFormButton
                                 campaignId={c.id}
                                 members={members}
                                 plans={detail.campaignPlans}
                                 defaultParentPlanId={p.id}
                                 trigger={
-                                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary">
+                                  <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary">
                                     <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
                                   </button>
                                 }
-                              />
-                              <WorkPackageForm
-                                campaignId={c.id}
-                                members={members}
-                                campaignPlans={detail.campaignPlans}
-                                defaultCampaignPlanId={p.id}
                               />
                             </div>
                           ) : null}

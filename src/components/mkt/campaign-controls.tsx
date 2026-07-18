@@ -277,12 +277,15 @@ export function WorkPackageForm({
   members,
   campaignPlans = [],
   defaultCampaignPlanId = "",
+  compact = false,
 }: {
   campaignId: string;
   members: MktMember[];
   // Các nút Kế hoạch cấp 2/3 của cây để chọn chỗ gắn.
   campaignPlans?: Array<{ id: string; name: string; parentPlanId?: string | null }>;
   defaultCampaignPlanId?: string;
+  // true = nút mở dạng "ghost" nhẹ (dùng ở hàng ➕ cuối mỗi nhánh, đỡ nặng mắt).
+  compact?: boolean;
 }) {
   const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
@@ -335,9 +338,18 @@ export function WorkPackageForm({
     <Dialog open={open} onOpenChange={(o) => (loading ? null : setOpen(o))}>
       <DialogTrigger
         render={
-          <Button variant="outline" size="sm">
-            <Icon name="add" size={16} /> Thêm Kế hoạch phụ
-          </Button>
+          compact ? (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary"
+            >
+              <Icon name="add" size={13} /> Thêm Kế hoạch phụ
+            </button>
+          ) : (
+            <Button variant="outline" size="sm">
+              <Icon name="add" size={16} /> Thêm Kế hoạch phụ
+            </Button>
+          )
         }
       />
       <DialogContent className="sm:max-w-md">
