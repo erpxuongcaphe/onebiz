@@ -49,8 +49,8 @@ import {
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
-// CEO 06/07: cảnh báo mềm bán vượt tồn thành phẩm cho SKU có công thức (G3 batch).
-import { getBomAvailabilityBatch } from "@/lib/services/supabase/bom";
+import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
+import { findPosStockShortages } from "./lib/stock-freshness";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -175,6 +175,14 @@ function PosPageInner() {
   const router = useRouter();
   const { toast } = useToast();
   const state = usePosState();
+  const {
+    user,
+    tenant,
+    currentBranch,
+    branches,
+    switchBranch,
+    logout,
+  } = useAuth();
 
   // Multi-tab invoice management (KiotViet parity)
   const [tabs, setTabs] = useState<InvoiceTab[]>(() => [
@@ -294,6 +302,14 @@ function PosPageInner() {
     async (query: string) => {
       const q = query.trim();
       if (!q) return;
+      if (!currentBranch?.id) {
+        toast({
+          title: "Chưa chọn chi nhánh",
+          description: "Chọn một chi nhánh cụ thể trước khi thêm sản phẩm.",
+          variant: "warning",
+        });
+        return;
+      }
       try {
         const result = await getProducts({
           page: 0,
@@ -301,29 +317,37 @@ function PosPageInner() {
           search: q,
           sortBy: "code",
           sortOrder: "asc",
-          // Barcode quick-add ở POS Retail chỉ quét SKU channel='retail'
-          // (CEO 14/07: khoá product_type='sku' — không quét trúng NVL).
           filters: { status: "active", channel: "retail", productType: "sku" },
         });
         if (result.data.length > 0) {
           const product = result.data[0];
-          addLineWithTier(product);
+          const snapshot = await getPosStockSnapshot(
+            [{ productId: product.id, hasBom: Boolean(product.hasBom) }],
+            currentBranch.id,
+          );
+          const stockEntry = snapshot.get(product.id);
+          const availableStock = stockEntry?.availableStock ?? Number(product.branchStock ?? 0);
+          const effectiveProduct = { ...product, stock: availableStock };
+          addLineWithTier(effectiveProduct, {
+            availableStock,
+            stockKnown: true,
+          });
           setSearchQuery("");
           searchInputRef.current?.focus();
-          // Auto-scroll cart LÊN ĐẦU — dòng mới nằm trên cùng (CEO 04/07)
           setTimeout(() => {
             cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
           }, 50);
-          // CEO 03/06/2026 — Sprint 3 (P2 fix): SKU has_bom luôn product.stock=0
-          // (vì SKU không giữ tồn, chỉ NVL giữ). Toast "Hết hàng" sẽ false-positive.
-          // → Bỏ qua check cho has_bom (POS RPC v5 sẽ check khả dụng qua BOM thực).
-          if (!product.hasBom && (product.stock ?? 0) <= 0) {
-            toast({ title: "Hết hàng", description: `"${product.name}" đã hết`, variant: "warning" });
+          if (availableStock <= 0) {
+            toast({
+              title: "Hết hàng",
+              description: `"${product.name}" đã hết tại ${currentBranch.name}`,
+              variant: "warning",
+            });
           }
         } else {
           toast({
             title: "Không tìm thấy sản phẩm",
-            description: `Mã/tên "${q}" không khớp SKU nào.`,
+            description: `Mã/tên "${q}" không khớp SKU nào tại chi nhánh này.`,
             variant: "warning",
           });
         }
@@ -336,9 +360,8 @@ function PosPageInner() {
         });
       }
     },
-    [state, toast],
+    [currentBranch?.id, currentBranch?.name, state, toast],
   );
-
   const handleSearchEnter = useCallback(
     () => lookupAndAdd(searchQuery),
     [searchQuery, lookupAndAdd],
@@ -415,7 +438,6 @@ function PosPageInner() {
   // - Mount → check có ca đang mở của cashier này tại chi nhánh này không
   // - Không có → bắt mở ca trước khi cho thanh toán
   // - Có → cho phép bán, mọi invoice + cash_transaction gắn shift_id
-  const { user, tenant, currentBranch, branches, switchBranch, logout } = useAuth();
 
   // CEO 13/05: POS Retail = bán sỉ qua Kho tổng. Nếu user đang ở Cửa hàng
   // FnB / Xưởng / Văn phòng → auto-switch sang kho tổng đầu tiên. Tránh
@@ -992,12 +1014,11 @@ function PosPageInner() {
             // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
             cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
           }, 50);
-          // CEO 03/06/2026 — Sprint 3 (P2): bỏ qua check cho has_bom (xem
-          // comment ở barcode quick-add). Tránh false-positive cho SKU đóng gói.
-          if (!product.hasBom && (product.stock ?? 0) <= 0) {
+          // availableStock đã là tồn chi nhánh hoặc khả dụng theo BOM.
+          if ((availableStock ?? product.stock ?? 0) <= 0) {
             toast({
               title: "Hết hàng",
-              description: `"${product.name}" đã hết trong kho`,
+              description: `"${product.name}" đã hết tại chi nhánh đang bán`,
               variant: "warning",
             });
           }
@@ -1713,26 +1734,6 @@ function PosPageInner() {
       if (!ok) return;
     }
 
-    // Oversell preflight — báo trước khi xuất hoá đơn nếu line nào vượt tồn.
-    // Trước đây chỉ có badge UI vàng — cashier vẫn bấm F10 → âm kho.
-    // Skip line từ draft loaded (availableStock=0 unknown) — sẽ check sau ở RPC.
-    const oversoldLines = state.lines.filter(
-      (l) => l.availableStock > 0 && l.quantity > l.availableStock,
-    );
-    if (oversoldLines.length > 0) {
-      const first = oversoldLines[0];
-      toast({
-        title: `${first.productName}: cần ${formatNumber(first.quantity)}, còn ${formatNumber(first.availableStock)}`,
-        description:
-          oversoldLines.length > 1
-            ? `Và ${oversoldLines.length - 1} sản phẩm khác vượt tồn. Vui lòng giảm SL hoặc kiểm kho.`
-            : "Vui lòng giảm SL hoặc kiểm kho.",
-        variant: "error",
-        duration: 6000,
-      });
-      return;
-    }
-
     // ─── Compute paid logic (CEO 04/05) ───
     // paidEntered = số khách đưa thực (từ ô input). 0 nếu rỗng → ghi nợ 100%.
     // paidForInvoice = paid trong DB (capped tại total — invoice luôn balanced).
@@ -1758,59 +1759,69 @@ function PosPageInner() {
       const ctx = await getCurrentContext();
       if (!ctx) throw new Error("Không xác định được chi nhánh");
 
-      // CEO 06/07 — CẢNH BÁO MỀM bán vượt tồn thành phẩm cho SKU có công thức.
-      // Vụ Yaourt: bán 7 khi thành phẩm còn 2 → âm -5 mà cashier không hay.
-      // Guard tồn phía trên đo availableStock = tồn SKU (has_bom luôn 0) nên
-      // bỏ sót. Ở đây đọc khả dụng theo BOM (tái dùng batch RPC của G3): vượt
-      // → confirm để cashier QUYẾT (bán trước–SX sau là hợp lệ), KHÔNG chặn
-      // cứng. Service lỗi / offline → cho qua (fail-open). Đặt SAU submitLock
-      // nên không mở cửa double-click; bấm Hủy → return → finally nhả khoá.
-      // Review 06/07 vá 2 lỗ: (1) KHÔNG loại theo intent — "refund" ở đây là
-      // "trả tiền thừa" (vẫn là đơn bán trừ kho, ca tiền mặt phổ biến nhất),
-      // trả hàng thật không đi qua handleComplete; ChangeDialog return TRƯỚC
-      // submitLock nên check chỉ chạy 1 lần ở lượt re-entry, không hỏi 2 lần.
-      // (2) Gửi TOÀN BỘ productId trong giỏ (không filter l.hasBom — line load
-      // từ nháp F3 không có hasBom): RPC chỉ trả entry cho SKU có BOM, Map tự
-      // lọc → đơn nháp cũng được cảnh báo.
-      if (state.lines.length > 0 && networkStatus.isOnline) {
+      // Read stock again immediately before checkout. The browser snapshot can be
+      // stale when another terminal has just sold or adjusted the same product.
+      let freshStockSnapshot = null as Awaited<
+        ReturnType<typeof getPosStockSnapshot>
+      > | null;
+      if (networkStatus.isOnline && state.lines.length > 0) {
         try {
-          const needByProduct = new Map<string, number>();
-          for (const l of state.lines) {
-            needByProduct.set(l.productId, (needByProduct.get(l.productId) ?? 0) + l.quantity);
-          }
-          const availMap = await getBomAvailabilityBatch(
-            [...needByProduct.keys()],
+          freshStockSnapshot = await getPosStockSnapshot(
+            state.lines.map((line) => ({
+              productId: line.productId,
+              hasBom: line.hasBom,
+            })),
             ctx.branchId,
           );
-          const shortages: string[] = [];
-          for (const [productId, needQty] of needByProduct) {
-            const entry = availMap.get(productId);
-            if (!entry) continue; // SP không có BOM tại chi nhánh → bỏ qua
-            // epsilon chống false-positive do numeric làm tròn (6.9999... vs 7)
-            if (needQty > entry.available + 0.001) {
-              const name =
-                state.lines.find((l) => l.productId === productId)?.productName ?? "";
-              shortages.push(
-                `• ${name}: cần ${formatNumber(needQty)}, khả dụng ~${formatNumber(Math.max(0, entry.available))}` +
-                  (entry.bottleneckMaterialName ? ` (thiếu ${entry.bottleneckMaterialName})` : ""),
-              );
-            }
-          }
-          if (shortages.length > 0) {
-            const ok =
-              typeof window !== "undefined" &&
-              window.confirm(
-                `⚠️ BÁN VƯỢT TỒN — kho sẽ bị ghi ÂM:\n\n${shortages.join("\n")}\n\n` +
-                  `Bấm OK nếu hàng thực tế CÓ (mẻ mới làm xong, chưa kịp hoàn thành lệnh SX/nhập kho).\n` +
-                  `Bấm Hủy để kiểm lại trước khi xuất bill.`,
-              );
-            if (!ok) return;
-          }
-        } catch {
-          // fail-open: không vì check cảnh báo mà chặn thanh toán
+          state.applyStockSnapshot(freshStockSnapshot);
+        } catch (error) {
+          console.warn("[POS] checkout stock refresh failed:", error);
         }
       }
 
+      const stockShortages = findPosStockShortages(
+        state.lines,
+        freshStockSnapshot ?? undefined,
+      );
+      const hardShortages = stockShortages.filter((item) =>
+        freshStockSnapshot
+          ? item.source !== "bom"
+          : !item.hasBom,
+      );
+      if (hardShortages.length > 0) {
+        const first = hardShortages[0];
+        toast({
+          title: `${first.productName}: cần ${formatNumber(first.required)}, còn ${formatNumber(Math.max(0, first.available))}`,
+          description:
+            hardShortages.length > 1
+              ? `Và ${hardShortages.length - 1} sản phẩm khác vượt tồn tại chi nhánh này. Vui lòng giảm số lượng hoặc kiểm kho.`
+              : "Tồn kho vừa được cập nhật. Vui lòng giảm số lượng hoặc kiểm kho.",
+          variant: "error",
+          duration: 7000,
+        });
+        return;
+      }
+
+      const bomShortages = stockShortages.filter(
+        (item) => item.source === "bom",
+      );
+      if (bomShortages.length > 0) {
+        const shortageLines = bomShortages.map(
+          (item) =>
+            `• ${item.productName}: cần ${formatNumber(item.required)}, khả dụng ~${formatNumber(Math.max(0, item.available))}` +
+            (item.bottleneckMaterialName
+              ? ` (thiếu ${item.bottleneckMaterialName})`
+              : ""),
+        );
+        const ok =
+          typeof window !== "undefined" &&
+          window.confirm(
+            `⚠️ BÁN VƯỢT TỒN — kho sẽ bị ghi ÂM:\n\n${shortageLines.join("\n")}\n\n` +
+              "Bấm OK nếu hàng thực tế đã có nhưng chưa kịp hoàn thành lệnh sản xuất/nhập kho.\n" +
+              "Bấm Hủy để kiểm lại trước khi xuất hóa đơn.",
+          );
+        if (!ok) return;
+      }
       // Auto-link walk-in customer khi cần track debt/credit mà cashier
       // chưa chọn customer thật. Lazy create — chỉ tạo lần đầu mỗi tenant.
       let resolvedCustomerId: string | null = state.customer?.id ?? null;
@@ -2296,6 +2307,9 @@ function PosPageInner() {
         description: toastDescription,
         variant: isOfflineCheckout ? "info" : "success",
       });
+      if (!isOfflineCheckout && typeof window !== "undefined") {
+        window.dispatchEvent(new Event("onebiz:pos-stock-changed"));
+      }
       state.clearCart();
       setAppliedPromotion(null);
       setPromotionCleared(false);
@@ -2765,6 +2779,8 @@ function PosPageInner() {
           <ProductGrid
             searchQuery={searchQuery}
             onAddProduct={handleAddProduct}
+            onStockSnapshot={state.applyStockSnapshot}
+            trackedStockRequests={state.lines}
           />
         </div>
 
@@ -3674,6 +3690,8 @@ function PosPageInner() {
             variantLabel: payload.variantLabel,
             unitPrice: payload.unitPrice,
             quantity: payload.quantity,
+            availableStock: Number(variantPickerProduct.stock ?? 0),
+            stockKnown: true,
           });
           setTimeout(() => {
             // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)

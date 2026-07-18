@@ -14,7 +14,11 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import type { Product, ProductCategory } from "@/lib/types";
 import { getProducts } from "@/lib/services/supabase/products";
 import { getCategoriesByScope } from "@/lib/services/supabase/categories";
-import { getBomAvailabilityBatch } from "@/lib/services/supabase/bom";
+import {
+  getPosStockSnapshot,
+  type PosStockSnapshot,
+  type PosStockRequest,
+} from "@/lib/services/supabase/pos-stock";
 import { useAuth } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
@@ -23,6 +27,8 @@ interface ProductGridProps {
   /** CEO 08/07: truyền kèm khả dụng THẬT (BOM-aware) mà lưới đã tính → giỏ tô
    *  đỏ ô số lượng đúng cho hàng hết (kể cả SKU công thức mà NVL cũng hết). */
   onAddProduct: (product: Product, availableStock?: number) => void;
+  onStockSnapshot?: (snapshot: PosStockSnapshot) => void;
+  trackedStockRequests?: PosStockRequest[];
 }
 
 /** CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production tính
@@ -34,7 +40,12 @@ interface BomAvailMap {
   };
 }
 
-export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
+export function ProductGrid({
+  searchQuery,
+  onAddProduct,
+  onStockSnapshot,
+  trackedStockRequests = [],
+}: ProductGridProps) {
   const { currentBranch } = useAuth();
   const branchId = currentBranch?.id ?? "";
   const [categories, setCategories] = useState<ProductCategory[]>([]);
@@ -44,6 +55,14 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   const [loading, setLoading] = useState(true);
   const [totalProducts, setTotalProducts] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const productsRef = useRef<Product[]>([]);
+  const fetchIdRef = useRef(0);
+  const stockRefreshInFlightRef = useRef(false);
+  const trackedStockRequestsRef = useRef<PosStockRequest[]>([]);
+
+  useEffect(() => {
+    trackedStockRequestsRef.current = trackedStockRequests;
+  }, [trackedStockRequests]);
 
   // ---- Fetch categories on mount ----
   // POS Retail chỉ hiện categories có ≥1 SP retail (CEO 04/05). Auto-compute
@@ -59,12 +78,18 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
   // ---- Fetch products (debounced when search changes) ----
   const fetchProducts = useCallback(
     async (catId: string, search: string) => {
+      const fetchId = ++fetchIdRef.current;
+      if (!branchId) {
+        productsRef.current = [];
+        setProducts([]);
+        setBomAvail({});
+        setTotalProducts(0);
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       try {
-        // Retail POS chỉ hiển thị SKU channel='retail' (hàng đóng gói bán lẻ/sỉ).
-        // Món FnB pha chế tại quán (channel='fnb') được POS FnB xử lý riêng.
-        // CEO 14/07/2026: khoá thêm product_type='sku' — chỉ SKU là mã BÁN,
-        // NVL (đầu vào mua hàng) tuyệt đối không lên đơn đặt hàng bán.
         const filters: Record<string, string | string[]> = {
           status: "active",
           channel: "retail",
@@ -73,50 +98,49 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
         if (catId !== "all") filters.category = catId;
         const result = await getProducts({
           page: 0,
-          // CEO 29/05/2026: KHÔNG giới hạn số SKU trên POS — nạp toàn bộ SP của
-          // nhóm (lưới có tab nhóm + ô tìm để cashier điều hướng nhanh).
           pageSize: 100000,
           search: search || undefined,
           sortBy: "name",
           sortOrder: "asc",
           filters,
         });
-        setProducts(result.data);
-        setTotalProducts(result.total);
-
-        // CEO 03/06/2026 — Sprint 3 (G3): cho SKU has_bom=true, tính khả dụng
-        // theo BOM. Branch production sẽ trả số > 0, outlet trả empty (FE
-        // fallback dùng product.stock). Batch 1 RPC, không spam.
-        const skusWithBom = result.data
-          .filter((p) => p.hasBom && p.productType === "sku")
-          .map((p) => p.id);
-        if (skusWithBom.length > 0 && branchId) {
-          try {
-            const map = await getBomAvailabilityBatch(skusWithBom, branchId);
-            const next: BomAvailMap = {};
-            for (const [skuId, entry] of map.entries()) {
-              next[skuId] = {
-                available: entry.available,
-                bottleneckName: entry.bottleneckMaterialName,
-              };
-            }
-            setBomAvail(next);
-          } catch {
-            // fail silent — fallback dùng product.stock
-            setBomAvail({});
-          }
-        } else {
-          setBomAvail({});
+        // Keep the full retail catalog visible; overlay branch/BOM availability.
+        const snapshot = await getPosStockSnapshot(
+          result.data.map((product) => ({
+            productId: product.id,
+            hasBom: Boolean(product.hasBom),
+          })),
+          branchId,
+        );
+        const nextBomAvail: BomAvailMap = {};
+        for (const entry of snapshot.values()) {
+          if (entry.source !== "bom") continue;
+          nextBomAvail[entry.productId] = {
+            available: entry.availableStock,
+            bottleneckName: entry.bottleneckMaterialName,
+          };
         }
-      } catch {
+        const effectiveProducts = result.data.map((product) => ({
+          ...product,
+          stock: snapshot.get(product.id)?.availableStock ?? 0,
+        }));
+        if (fetchId !== fetchIdRef.current) return;
+        productsRef.current = effectiveProducts;
+        setProducts(effectiveProducts);
+        setTotalProducts(result.total);
+        setBomAvail(nextBomAvail);
+        onStockSnapshot?.(snapshot);
+      } catch (error) {
+        if (fetchId !== fetchIdRef.current) return;
+        console.error("[POS] product grid load failed:", error);
+        productsRef.current = [];
         setProducts([]);
       } finally {
-        setLoading(false);
+        if (fetchId === fetchIdRef.current) setLoading(false);
       }
     },
-    [branchId]
+    [branchId, onStockSnapshot],
   );
-
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -127,6 +151,70 @@ export function ProductGrid({ searchQuery, onAddProduct }: ProductGridProps) {
     };
   }, [selectedCategory, searchQuery, fetchProducts]);
 
+  const refreshStocks = useCallback(async () => {
+    if (!branchId || stockRefreshInFlightRef.current) return;
+    const currentProducts = productsRef.current;
+    if (currentProducts.length === 0) return;
+
+    stockRefreshInFlightRef.current = true;
+    try {
+      const snapshot = await getPosStockSnapshot(
+        [
+          ...currentProducts.map((product) => ({
+            productId: product.id,
+            hasBom: Boolean(product.hasBom),
+          })),
+          ...trackedStockRequestsRef.current,
+        ],
+        branchId,
+      );
+      setProducts((current) => {
+        const next = current.map((product) => {
+          const entry = snapshot.get(product.id);
+          return entry
+            ? { ...product, stock: entry.availableStock }
+            : product;
+        });
+        productsRef.current = next;
+        return next;
+      });
+
+      const nextBomAvail: BomAvailMap = {};
+      for (const entry of snapshot.values()) {
+        if (entry.source !== "bom") continue;
+        nextBomAvail[entry.productId] = {
+          available: entry.availableStock,
+          bottleneckName: entry.bottleneckMaterialName,
+        };
+      }
+      setBomAvail(nextBomAvail);
+      onStockSnapshot?.(snapshot);
+    } catch (error) {
+      console.warn("[POS] refresh stock snapshot failed:", error);
+    } finally {
+      stockRefreshInFlightRef.current = false;
+    }
+  }, [branchId, onStockSnapshot]);
+
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") void refreshStocks();
+    };
+    const interval = window.setInterval(refreshWhenVisible, 30_000);
+    window.addEventListener("focus", refreshWhenVisible);
+    window.addEventListener("online", refreshWhenVisible);
+    window.addEventListener("onebiz:pos-stock-changed", refreshWhenVisible);
+    window.addEventListener("fnb-sync-complete", refreshWhenVisible);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshWhenVisible);
+      window.removeEventListener("online", refreshWhenVisible);
+      window.removeEventListener("onebiz:pos-stock-changed", refreshWhenVisible);
+      window.removeEventListener("fnb-sync-complete", refreshWhenVisible);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [refreshStocks]);
   // CEO 29/05/2026: KHÔNG ẩn SP giá bán = 0 nữa. Nhiều SKU (vd nhóm Bao bì)
   // chưa đặt giá bán vẫn cần hiện trên POS để bán / đặt giá tại quầy (bán 0đ
   // đã có popup xác nhận riêng). Trước đây lọc sellPrice>0 làm ẩn mất chúng.
