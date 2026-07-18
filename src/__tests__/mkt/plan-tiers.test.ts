@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 const mig = readFileSync(resolve("supabase/migrations/00199_mkt_plan_stages.sql"), "utf8");
 const planControls = readFileSync(resolve("src/components/mkt/plan-controls.tsx"), "utf8");
 const planningPage = readFileSync(resolve("src/app/mkt/planning/page.tsx"), "utf8");
+// 00200: cây 4 cấp + màu chuyển sang planning-tree.tsx (client component).
+const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
 const planProgress = readFileSync(resolve("src/components/mkt/plan-progress.tsx"), "utf8");
 const readModels = readFileSync(resolve("src/lib/mkt/read-models.ts"), "utf8");
 const itemsRoute = readFileSync(
@@ -89,11 +91,14 @@ describe("00199 — giao diện phân tầng (yêu cầu CEO: thuần Việt, kh
     expect(planControls).toContain("Thêm công đoạn vào kế hoạch phụ này");
   });
 
-  it("hệ màu phân tầng: lớn = tím (indigo) · nhỏ = xanh dương (sky) · phụ = xanh lá (emerald)", () => {
+  it("hệ màu phân tầng: cấp 1 = tím (indigo) · cấp 3 = xanh dương (sky) · phụ = xanh lá (emerald)", () => {
     expect(planControls).toContain("bg-indigo-50");
     expect(planControls).toContain("bg-sky-50");
     expect(planControls).toContain("border-l-emerald-500");
-    expect(planningPage).toContain("border-l-indigo-500");
+    // 00200: cây chuyển sang planning-tree; cấp 1 tím, cấp 2 cam, cấp 3 xanh dương.
+    expect(planningTree).toContain("border-l-indigo-500");
+    expect(planningTree).toContain("border-l-orange-500");
+    expect(planningTree).toContain("border-l-sky-500");
   });
 
   it("bỏ kế hoạch phụ KHÔNG mất công đoạn — về nhóm chưa xếp", () => {
@@ -112,13 +117,14 @@ describe("00199 — giao diện phân tầng (yêu cầu CEO: thuần Việt, kh
     expect(planControls).toContain("Chưa có công đoạn nào — cân nhắc Yêu cầu sửa.");
   });
 
-  it("màn Lập kế hoạch thành cây: nhóm theo Kế hoạch lớn + tổng hợp việc/ngân sách/sức khỏe xấu nhất", () => {
-    expect(planningPage).toContain("Kế hoạch lớn");
-    expect(planningPage).toContain("kế hoạch nhỏ</span>");
-    expect(planningPage).toContain("việc xong");
-    expect(planningPage).toContain("Ngân sách kênh");
-    expect(planningPage).toContain("HEALTH_RANK");
-    expect(planningPage).toContain("kế hoạch phụ");
+  it("màn Lập kế hoạch thành cây: nhóm theo chiến dịch + tổng hợp việc/ngân sách/sức khỏe xấu nhất", () => {
+    // 00200: nhãn đổi sang "Cấp 1/2/3" (cây 4 cấp); nội dung ở planning-tree.
+    expect(planningTree).toContain("Cấp 1 · Chiến dịch");
+    expect(planningTree).toContain("Cấp 3 · Kênh");
+    expect(planningTree).toContain("việc xong");
+    expect(planningTree).toContain("Ngân sách kênh");
+    expect(planningTree).toContain("HEALTH_RANK");
+    expect(planningTree).toContain("kế hoạch phụ");
   });
 
   it("nhật ký báo cáo hiện số máy theo từng kế hoạch phụ", () => {

@@ -12,6 +12,8 @@ const readModels = readFileSync(resolve("src/lib/mkt/read-models.ts"), "utf8");
 const api = readFileSync(resolve("src/lib/mkt/api.ts"), "utf8");
 const campaignsPage = readFileSync(resolve("src/app/mkt/campaigns/page.tsx"), "utf8");
 const planningPage = readFileSync(resolve("src/app/mkt/planning/page.tsx"), "utf8");
+// 00200: cây + nút chuyển sang planning-tree.tsx (client); page.tsx chỉ còn fetch + render.
+const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
 
 /**
  * Khoá "sổ bẫy" của tính năng Chiến lược + Báo cáo tiến độ (00196).
@@ -174,7 +176,7 @@ describe("00196 — tầng giao diện", () => {
   });
 
   it("nút báo cáo chỉ gắn cho kế hoạch đang thực thi; có nhật ký khi đã có báo cáo", () => {
-    expect(planningPage).toContain('p.status === "in_execution" ? <ProgressReportButton');
-    expect(planningPage).toContain("p.progressReports.length > 0");
+    expect(planningTree).toContain('p.status === "in_execution" ? <ProgressReportButton');
+    expect(planningTree).toContain("p.progressReports.length > 0");
   });
 });

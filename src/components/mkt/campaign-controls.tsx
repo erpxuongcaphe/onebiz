@@ -273,9 +273,14 @@ export function EditCampaignButton({
 export function WorkPackageForm({
   campaignId,
   members,
+  campaignPlans = [],
+  defaultCampaignPlanId = "",
 }: {
   campaignId: string;
   members: MktMember[];
+  // 00200: các "Kế hoạch" cấp 2 để chọn kênh thuộc kế hoạch nào.
+  campaignPlans?: Array<{ id: string; name: string }>;
+  defaultCampaignPlanId?: string;
 }) {
   const { refresh, refreshing } = useMktRefresh();
   const [open, setOpen] = useState(false);
@@ -284,6 +289,7 @@ export function WorkPackageForm({
   const [targetOutput, setTargetOutput] = useState("");
   const [ownerId, setOwnerId] = useState("");
   const [reviewerId, setReviewerId] = useState("");
+  const [campaignPlanId, setCampaignPlanId] = useState(defaultCampaignPlanId);
   const [saving, setSaving] = useState(false);
   const loading = saving || refreshing;
   const [error, setError] = useState<string | null>(null);
@@ -299,12 +305,14 @@ export function WorkPackageForm({
         targetOutput: targetOutput.trim() || undefined,
         ownerId: ownerId || undefined,
         reviewerId: reviewerId || undefined,
+        campaignPlanId: campaignPlanId || undefined,
       });
       refresh(() => {
         setTitle("");
         setTargetOutput("");
         setOwnerId("");
         setReviewerId("");
+        setCampaignPlanId(defaultCampaignPlanId);
         setOpen(false);
       });
     } catch (e) {
@@ -328,6 +336,17 @@ export function WorkPackageForm({
           <DialogTitle>Thêm kênh triển khai</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {campaignPlans.length > 0 ? (
+            <div className="space-y-1.5">
+              <Label>Thuộc Kế hoạch (cấp 2)</Label>
+              <select value={campaignPlanId} onChange={(e) => setCampaignPlanId(e.target.value)} className={selectCls}>
+                <option value="">— Chưa xếp kế hoạch —</option>
+                {campaignPlans.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           <div className="space-y-1.5">
             <Label>Kênh</Label>
             <select value={channelType} onChange={(e) => setChannelType(e.target.value)} className={selectCls}>
