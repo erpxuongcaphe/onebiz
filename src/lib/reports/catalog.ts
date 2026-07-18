@@ -27,6 +27,13 @@ export interface ReportCatalogItem {
   permissionMode?: "any" | "all";
 }
 
+export interface ReportWorkflow {
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  reportPaths: string[];
+}
 export const REPORT_CENTER_PATH = "/phan-tich/trung-tam";
 
 export const REPORT_CATEGORIES: ReportCategory[] = [
@@ -68,6 +75,88 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
   },
 ];
 
+/**
+ * Lối vào theo câu hỏi công việc. Quyền xem vẫn được kiểm tra từ REPORT_CATALOG,
+ * nên danh sách này không mở thêm quyền cho bất kỳ tài khoản nào.
+ */
+export const REPORT_WORKFLOWS: ReportWorkflow[] = [
+  {
+    id: "business-health",
+    title: "Công ty đang hoạt động thế nào?",
+    description: "Doanh thu, lợi nhuận, dòng tiền và cảnh báo cần chú ý.",
+    icon: "monitoring",
+    reportPaths: [
+      "/phan-tich",
+      "/phan-tich/bao-cao-tai-chinh",
+      "/phan-tich/luong-tien",
+      "/phan-tich/canh-bao",
+    ],
+  },
+  {
+    id: "sales-drivers",
+    title: "Doanh thu đến từ đâu?",
+    description: "Theo dõi mặt hàng, khách hàng, kênh bán và nhân viên đóng góp.",
+    icon: "trending_up",
+    reportPaths: [
+      "/phan-tich/ban-hang",
+      "/phan-tich/hang-hoa",
+      "/phan-tich/khach-hang",
+      "/phan-tich/kenh-ban",
+      "/phan-tich/nhan-vien",
+    ],
+  },
+  {
+    id: "customer-behavior",
+    title: "Khách hàng đang mua gì?",
+    description: "Xem sản phẩm đã mua, mức độ quay lại và nhóm khách giá trị.",
+    icon: "groups",
+    reportPaths: [
+      "/phan-tich/khach-san-pham",
+      "/phan-tich/customer-cohort",
+      "/phan-tich/rfm",
+      "/phan-tich/cong-no-aging",
+    ],
+  },
+  {
+    id: "inventory-risks",
+    title: "Tồn kho có vấn đề gì?",
+    description: "Kiểm tra tồn cuối, hàng chậm bán, chênh lệch và hao hụt.",
+    icon: "inventory_2",
+    reportPaths: [
+      "/phan-tich/xuat-nhap-ton",
+      "/phan-tich/aging",
+      "/phan-tich/abc-analysis",
+      "/phan-tich/chenh-lech-kiem-ke",
+      "/phan-tich/ton-that",
+    ],
+  },
+  {
+    id: "cost-control",
+    title: "Chi phí và giá vốn có hợp lý?",
+    description: "Đối chiếu giá vốn, tiêu hao, phí nền tảng và hiệu quả nhà cung cấp.",
+    icon: "account_balance_wallet",
+    reportPaths: [
+      "/phan-tich/cogs-theo-bom",
+      "/phan-tich/tieu-hao-nvl",
+      "/phan-tich/platform-commission",
+      "/phan-tich/nha-cung-cap",
+      "/phan-tich/tai-chinh",
+    ],
+  },
+  {
+    id: "daily-operations",
+    title: "Vận hành hôm nay có ổn?",
+    description: "Chốt ngày, đối chiếu ca, thời gian phục vụ và hoạt động F&B.",
+    icon: "fact_check",
+    reportPaths: [
+      "/phan-tich/cuoi-ngay",
+      "/phan-tich/doi-chieu-ca",
+      "/phan-tich/fnb",
+      "/phan-tich/serve-time",
+      "/phan-tich/fnb-shipper",
+    ],
+  },
+];
 const DASHBOARD_PERMISSIONS = [
   PERMISSIONS.REPORTS_DASHBOARD,
   PERMISSIONS.REPORTS_ANALYTICS,

@@ -3,6 +3,7 @@ import { PERMISSIONS } from "@/lib/permissions/constants";
 import {
   REPORT_CATALOG,
   REPORT_CATEGORIES,
+  REPORT_WORKFLOWS,
   canAccessReport,
   getReportByPath,
   searchReports,
@@ -27,6 +28,16 @@ describe("report catalog", () => {
     ).toBe(true);
   });
 
+  it("keeps workflow shortcuts linked to registered reports", () => {
+    const paths = new Set(REPORT_CATALOG.map((report) => report.href));
+
+    expect(REPORT_WORKFLOWS).toHaveLength(6);
+    for (const workflow of REPORT_WORKFLOWS) {
+      expect(workflow.reportPaths.length).toBeGreaterThanOrEqual(4);
+      expect(new Set(workflow.reportPaths).size).toBe(workflow.reportPaths.length);
+      expect(workflow.reportPaths.every((path) => paths.has(path))).toBe(true);
+    }
+  });
   it("finds reports from business-language and accentless queries", () => {
     expect(searchReports(REPORT_CATALOG, "khach mua gi")[0]?.href).toBe(
       "/phan-tich/khach-san-pham",

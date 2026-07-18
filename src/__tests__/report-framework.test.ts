@@ -14,6 +14,8 @@ import {
   PRESET_GROUPS,
   getPresetLabel,
   formatRangeLabel,
+  formatCompactRangeLabel,
+  formatSelectedPeriodLabel,
 } from "@/lib/utils/date-presets";
 import type { DatePreset } from "@/lib/types/report";
 
@@ -139,5 +141,15 @@ describe("formatRangeLabel", () => {
   it("format đúng theo DD/MM/YYYY", () => {
     const label = formatRangeLabel({ from: "2026-05-01", to: "2026-05-06" });
     expect(label).toBe("Từ ngày 01/05/2026 đến ngày 06/05/2026");
+  });
+});
+describe("compact period labels", () => {
+  it("giữ cùng một nhãn kỳ giữa bộ lọc và biểu đồ", () => {
+    const range = { from: "2026-07-01", to: "2026-07-18" };
+
+    expect(formatCompactRangeLabel(range)).toBe("01/07 - 18/07");
+    expect(formatSelectedPeriodLabel("thisMonth", range)).toBe(
+      "Tháng này · 01/07 - 18/07",
+    );
   });
 });
