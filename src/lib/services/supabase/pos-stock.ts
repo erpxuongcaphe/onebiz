@@ -92,6 +92,7 @@ export async function getPosStockSnapshot(
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
         .is("variant_id", null)
+        .order("product_id", { ascending: true })
         .range(offset, offset + pageSize - 1);
       if (error) handleError(error, "getPosStockSnapshot:branch_stock");
       const page = data ?? [];
