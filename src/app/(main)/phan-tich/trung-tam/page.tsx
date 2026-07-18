@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/contexts";
 import {
   REPORT_CATALOG,
   REPORT_CATEGORIES,
+  REPORT_WORKFLOWS,
   canAccessReport,
   searchReports,
   type ReportCatalogItem,
@@ -22,6 +23,7 @@ import { cn } from "@/lib/utils";
 export default function ReportCenterPage() {
   const { hasPermission } = useAuth();
   const [query, setQuery] = useState("");
+  const [workflowId, setWorkflowId] = useState(REPORT_WORKFLOWS[0]?.id ?? "");
   const [favoritePaths, setFavoritePaths] = useState<string[]>([]);
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const deferredQuery = useDeferredValue(query);
@@ -40,7 +42,12 @@ export default function ReportCenterPage() {
   const recent = recentPaths
     .map((path) => accessibleReports.find((report) => report.href === path))
     .filter((report): report is ReportCatalogItem => Boolean(report));
-
+  const selectedWorkflow =
+    REPORT_WORKFLOWS.find((workflow) => workflow.id === workflowId) ??
+    REPORT_WORKFLOWS[0];
+  const workflowReports = (selectedWorkflow?.reportPaths ?? [])
+    .map((path) => accessibleReports.find((report) => report.href === path))
+    .filter((report): report is ReportCatalogItem => Boolean(report));
   useEffect(() => {
     const frameId = window.requestAnimationFrame(() => {
       setFavoritePaths(readFavoriteReportPaths());
@@ -81,8 +88,69 @@ export default function ReportCenterPage() {
       </header>
 
       <div className="space-y-7 px-4 py-5 lg:px-6">
+        {!query && workflowReports.length > 0 ? (
+          <section aria-labelledby="report-workflow-title">
+            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2
+                  id="report-workflow-title"
+                  className="text-base font-semibold text-foreground"
+                >
+                  Tìm nhanh theo nhu cầu
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  {selectedWorkflow?.description ??
+                    "Chọn câu hỏi cần trả lời để đi thẳng tới nhóm báo cáo phù hợp."}
+                </p>
+              </div>
+              <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-[360px]">
+                Nhu cầu công việc
+                <select
+                  value={workflowId}
+                  onChange={(event) => setWorkflowId(event.target.value)}
+                  className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
+                >
+                  {REPORT_WORKFLOWS.map((workflow) => (
+                    <option key={workflow.id} value={workflow.id}>
+                      {workflow.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="grid border-y border-border md:grid-cols-2 xl:grid-cols-3">
+              {workflowReports.map((report) => (
+                <Link
+                  key={report.href}
+                  href={report.href}
+                  prefetch={false}
+                  className="group flex min-w-0 items-start gap-3 border-b border-border p-3 hover:bg-surface-container-low md:border-r md:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0"
+                >
+                  <Icon
+                    name={report.icon}
+                    size={21}
+                    className="mt-0.5 shrink-0 text-primary"
+                  />
+                  <span className="min-w-0">
+                    <span className="block break-words text-sm font-medium leading-5 text-foreground group-hover:text-primary">
+                      {report.title}
+                    </span>
+                    <span className="mt-1 block text-xs leading-4 text-muted-foreground">
+                      {report.description}
+                    </span>
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </section>
+        ) : null}
         {!query && (favorites.length > 0 || recent.length > 0) ? (
-          <div className="grid gap-6 xl:grid-cols-2">
+          <div
+            className={cn(
+              "grid gap-6",
+              favorites.length > 0 && recent.length > 0 && "xl:grid-cols-2",
+            )}
+          >
             {favorites.length > 0 ? (
               <ReportList
                 title="Báo cáo đã ghim"

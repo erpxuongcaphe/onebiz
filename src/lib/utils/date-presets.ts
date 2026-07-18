@@ -233,6 +233,21 @@ export function resolvePreset(preset: DatePreset): DateRange | null {
  *   formatRangeLabel({from: "2026-05-01", to: "2026-05-06"})
  *   // "Từ ngày 01/05/2026 đến ngày 06/05/2026"
  */
+export function formatCompactRangeLabel(range: DateRange): string {
+  const formatDate = (iso: string) => {
+    const [, month, day] = iso.split("-");
+    return [day, month].filter(Boolean).join("/");
+  };
+
+  return formatDate(range.from) + " - " + formatDate(range.to);
+}
+
+export function formatSelectedPeriodLabel(
+  preset: DatePreset,
+  range: DateRange,
+): string {
+  return getPresetLabel(preset) + " · " + formatCompactRangeLabel(range);
+}
 export function formatRangeLabel(range: DateRange): string {
   const fmt = (iso: string) => {
     const [y, m, d] = iso.split("-");

@@ -79,7 +79,7 @@ export function ReportPageHeader({
 
   return (
     <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-3">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
+      <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_auto] xl:items-center">
         <div className="min-w-0 flex-1">
           <h1 className="text-lg font-semibold leading-6 text-foreground break-words">
             {title}
@@ -90,7 +90,7 @@ export function ReportPageHeader({
             </p>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:justify-end xl:px-0 xl:pb-0 [&>*]:shrink-0">
           {!hideBranchScope && <ReportScopeSelector />}
           {showSwitch && (
             <ChartTableSwitch value={viewMode} onChange={onViewModeChange} />
@@ -108,7 +108,7 @@ export function ReportPageHeader({
               <DropdownMenuTrigger
                 disabled={exportDisabled}
                 className={cn(
-                  "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium",
+                  "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium",
                   "bg-primary text-primary-foreground hover:bg-primary/90",
                   "transition-colors press-scale-sm outline-none ambient-shadow",
                   exportDisabled && "opacity-50 cursor-not-allowed",
