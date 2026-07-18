@@ -1231,6 +1231,9 @@ export type MktPlanInboxEntry = {
   kpis: MktPlanKpi[];
   progressReports: MktPlanProgressReport[];
   stages: MktPlanStage[];
+  // 00200: Kênh (kế hoạch nhỏ) thuộc Kế hoạch cấp 2 nào — để dựng cây 4 cấp.
+  campaignPlanId: string | null;
+  campaignPlanName: string | null;
   ownerId: string | null;
   ownerName: string | null;
   reviewerId: string | null;
@@ -1319,8 +1322,8 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
       .in("plan_id", planIds)
       .order("sequence", { ascending: true }),
     db
-      .from<{ id: string; title: string }>("mkt_channel_work_packages")
-      .select("id, title")
+      .from<{ id: string; title: string; campaign_plan_id: string | null }>("mkt_channel_work_packages")
+      .select("id, title, campaign_plan_id")
       .in("id", wpIds),
     db.from<{ id: string; name: string }>("mkt_campaigns").select("id, name").in("id", campIds),
     db
@@ -1398,7 +1401,21 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   ]);
 
   const wpTitle = new Map((wpRes.data ?? []).map((w) => [w.id, w.title] as const));
+  const wpCampaignPlan = new Map((wpRes.data ?? []).map((w) => [w.id, w.campaign_plan_id] as const));
   const campName = new Map((campRes.data ?? []).map((c) => [c.id, c.name] as const));
+
+  // 00200: tên Kế hoạch cấp 2 cho từng kênh (nếu có xếp).
+  const cpIds = Array.from(
+    new Set((wpRes.data ?? []).map((w) => w.campaign_plan_id).filter(Boolean) as string[]),
+  );
+  const campaignPlanName = new Map<string, string>();
+  if (cpIds.length > 0) {
+    const { data: cps } = await db
+      .from<{ id: string; name: string }>("mkt_campaign_plans")
+      .select("id, name")
+      .in("id", cpIds);
+    (cps ?? []).forEach((cp) => campaignPlanName.set(cp.id, cp.name));
+  }
 
   // Số thực tế từng KPI của các báo cáo (truy vấn nối tiếp vì cần id báo cáo).
   const reportRows = reportsRes.data ?? [];
@@ -1559,6 +1576,11 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     campaignId: p.campaign_id,
     campaignName: campName.get(p.campaign_id) ?? null,
     channelTitle: wpTitle.get(p.work_package_id) ?? null,
+    campaignPlanId: wpCampaignPlan.get(p.work_package_id) ?? null,
+    campaignPlanName: (() => {
+      const cid = wpCampaignPlan.get(p.work_package_id);
+      return cid ? campaignPlanName.get(cid) ?? null : null;
+    })(),
     status: p.status,
     versionNumber: p.version_number,
     currentVersionId: p.current_version_id,
