@@ -39,7 +39,7 @@ const HEALTH_LABEL: Record<string, { text: string; cls: string }> = {
   on_track: { text: "Đúng nhịp", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 };
 
-// Trạng thái kế hoạch (kênh) cho bộ lọc — thuần Việt.
+// Trạng thái Kế hoạch phụ cho bộ lọc — thuần Việt.
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
   { value: "planning", label: "Đang lập kế hoạch" },
   { value: "submitted", label: "Chờ duyệt" },
@@ -60,6 +60,21 @@ function worstHealth(plans: MktPlanInboxEntry[]): string | undefined {
     .filter(Boolean)
     .sort((a, b) => (HEALTH_RANK[b as string] ?? 0) - (HEALTH_RANK[a as string] ?? 0))[0] as string | undefined;
 }
+
+function HealthChip({ health }: { health: string | undefined }) {
+  const label = health ? HEALTH_LABEL[health] : null;
+  if (!label) return null;
+  return <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${label.cls}`}>{label.text}</span>;
+}
+
+// Nút tầng giữa (Kế hoạch cấp 2/3) dựng lại từ campaignPlanPath của từng
+// Kế hoạch phụ — màn này chỉ hiện các nhánh CÓ kế hoạch đang soạn/chạy.
+type TreeNode = {
+  id: string;
+  name: string;
+  children: TreeNode[];
+  plans: MktPlanInboxEntry[];
+};
 
 export function PlanningTree({
   plans,
@@ -95,7 +110,9 @@ export function PlanningTree({
     const toT = to ? new Date(to).getTime() + 86_400_000 : null; // trọn ngày "đến"
     return plans.filter((p) => {
       if (needle) {
-        const hay = `${p.channelTitle ?? ""} ${p.campaignName ?? ""} ${p.campaignPlanName ?? ""} ${p.objective ?? ""}`.toLowerCase();
+        // Tìm khớp cả tên nút cấp 2/3 trên nhánh — gõ "Tháng 7" ra đúng nhánh.
+        const pathNames = p.campaignPlanPath.map((n) => n.name).join(" ");
+        const hay = `${p.channelTitle ?? ""} ${p.campaignName ?? ""} ${pathNames} ${p.objective ?? ""}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       if (owner && p.ownerId !== owner) return false;
@@ -112,7 +129,7 @@ export function PlanningTree({
 
   const hasFilter = Boolean(q || from || to || owner || status);
 
-  // Cây: Cấp 1 Chiến dịch → Cấp 2 Kế hoạch → Cấp 3 Kênh.
+  // Cây: Chiến dịch (cấp 1) → nút cấp 2 → nút cấp 3 → Kế hoạch phụ.
   const tree = useMemo(() => {
     const byCampaign = new Map<string, MktPlanInboxEntry[]>();
     filtered.forEach((p) => {
@@ -121,23 +138,32 @@ export function PlanningTree({
       byCampaign.set(p.campaignId, arr);
     });
     return Array.from(byCampaign.entries()).map(([campaignId, campPlans]) => {
-      const byLevel2 = new Map<string, { name: string; plans: MktPlanInboxEntry[] }>();
-      const unassigned: MktPlanInboxEntry[] = [];
-      campPlans.forEach((p) => {
-        if (p.campaignPlanId) {
-          const g = byLevel2.get(p.campaignPlanId) ?? { name: p.campaignPlanName ?? "Kế hoạch", plans: [] };
-          g.plans.push(p);
-          byLevel2.set(p.campaignPlanId, g);
-        } else {
-          unassigned.push(p);
+      const roots: TreeNode[] = [];
+      const direct: MktPlanInboxEntry[] = [];
+      const ensure = (list: TreeNode[], node: { id: string; name: string }): TreeNode => {
+        let found = list.find((n) => n.id === node.id);
+        if (!found) {
+          found = { id: node.id, name: node.name, children: [], plans: [] };
+          list.push(found);
         }
+        return found;
+      };
+      campPlans.forEach((p) => {
+        const path = p.campaignPlanPath;
+        if (path.length === 0) {
+          direct.push(p);
+          return;
+        }
+        const root = ensure(roots, path[0]);
+        if (path.length === 1) root.plans.push(p);
+        else ensure(root.children, path[1]).plans.push(p);
       });
       return {
         campaignId,
         campaignName: campPlans[0]?.campaignName ?? "Chiến dịch",
         campPlans,
-        level2: Array.from(byLevel2.entries()),
-        unassigned,
+        roots,
+        direct,
       };
     });
   }, [filtered]);
@@ -147,10 +173,10 @@ export function PlanningTree({
   function renderCard(p: MktPlanInboxEntry) {
     const deadline = fmtDate(p.deadline);
     return (
-      <article key={p.id} className="flex flex-col gap-3 rounded-lg border border-sky-200 border-l-4 border-l-sky-500 bg-background p-4">
+      <article key={p.id} className="flex flex-col gap-3 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-4">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{p.channelTitle ?? "Gói việc"}</div>
+            <div className="truncate text-sm font-semibold">{p.channelTitle ?? "Kế hoạch phụ"}</div>
             <div className="mt-0.5 truncate text-xs text-on-surface-variant">Phụ trách: {p.ownerName ?? "—"}</div>
           </div>
           <div className="flex shrink-0 flex-col items-end gap-1">
@@ -160,10 +186,10 @@ export function PlanningTree({
         </div>
         {p.objective ? <div className="line-clamp-2 text-xs text-on-surface-variant">🎯 {p.objective}</div> : null}
         <div className="flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
-          <span className="rounded-full bg-sky-50 px-1.5 py-0.5 font-medium text-sky-700">Cấp 3 · Kênh</span>
+          <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">Kế hoạch phụ</span>
           {p.stages.length > 0 ? (
             <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
-              <Icon name="account_tree" size={13} /> {p.stages.length} kế hoạch phụ
+              <Icon name="account_tree" size={13} /> {p.stages.length} nhóm công đoạn
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1"><Icon name="checklist" size={13} /> {p.items.length} công đoạn</span>
@@ -187,38 +213,43 @@ export function PlanningTree({
     );
   }
 
-  function level2Block(name: string, list: MktPlanInboxEntry[], labelLevel = true) {
-    const worst = worstHealth(list);
-    const worstLabel = worst ? HEALTH_LABEL[worst] : null;
-    const tasks = list.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
+  function cardGrid(list: MktPlanInboxEntry[]) {
+    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map(renderCard)}</div>;
+  }
+
+  // Khối một nút tầng giữa: cấp 2 = cam, cấp 3 = xanh dương (thụt vào trong).
+  function nodeBlock(node: TreeNode, level: 2 | 3) {
+    const all = [...node.plans, ...node.children.flatMap((c) => c.plans)];
+    const tasks = all.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
     const done = tasks.filter((t) => t.taskStatus === "done");
+    const tone =
+      level === 2
+        ? { box: "border-orange-200 border-l-orange-500", chip: "bg-orange-50 text-orange-700" }
+        : { box: "border-sky-200 border-l-sky-500", chip: "bg-sky-50 text-sky-700" };
     return (
-      <div className="space-y-3 rounded-lg border border-orange-200 border-l-4 border-l-orange-500 bg-surface-container-lowest p-3">
+      <div key={node.id} className={`space-y-3 rounded-lg border border-l-4 bg-surface-container-lowest p-3 ${tone.box} ${level === 3 ? "ml-3 sm:ml-5" : ""}`}>
         <div className="flex flex-wrap items-center gap-2">
-          {labelLevel ? (
-            <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">Cấp 2 · Kế hoạch</span>
-          ) : (
-            <span className="rounded-full border border-outline-variant bg-background px-2 py-0.5 text-xs font-medium text-on-surface-variant">Chưa xếp Kế hoạch (cấp 2)</span>
-          )}
-          {labelLevel ? <span className="text-sm font-semibold">{name}</span> : null}
-          {worstLabel ? <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${worstLabel.cls}`}>{worstLabel.text}</span> : null}
+          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone.chip}`}>Kế hoạch cấp {level}</span>
+          <span className="text-sm font-semibold">{node.name}</span>
+          <HealthChip health={worstHealth(all)} />
           <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
-            <span>{list.length} kênh</span>
+            <span>{all.length} kế hoạch phụ</span>
             {tasks.length > 0 ? <span>{done.length}/{tasks.length} việc xong</span> : null}
           </span>
         </div>
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map(renderCard)}</div>
+        {node.plans.length > 0 ? cardGrid(node.plans) : null}
+        {node.children.map((child) => nodeBlock(child, 3))}
       </div>
     );
   }
 
   return (
     <>
-      {/* Bộ lọc & tìm kiếm (00200) */}
+      {/* Bộ lọc & tìm kiếm (00200/00201) */}
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest p-2.5">
         <div className="relative min-w-[180px] flex-1">
           <Icon name="search" size={15} className="absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant" />
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên kế hoạch / kênh…" className="h-9 pl-7" />
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên kế hoạch…" className="h-9 pl-7" />
         </div>
         <div className="flex items-center gap-1 text-xs text-on-surface-variant">
           <span>Hạn từ</span>
@@ -247,34 +278,39 @@ export function PlanningTree({
 
       {filtered.length === 0 ? (
         <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
-          {hasFilter ? "Không có kế hoạch nào khớp bộ lọc. Thử nới điều kiện hoặc Xoá lọc." : "Chưa có kế hoạch nào. Kế hoạch xuất hiện khi Leader giao lập kế hoạch cho một kênh."}
+          {hasFilter ? "Không có kế hoạch nào khớp bộ lọc. Thử nới điều kiện hoặc Xoá lọc." : "Chưa có kế hoạch nào. Kế hoạch xuất hiện khi Leader giao lập kế hoạch cho một Kế hoạch phụ."}
         </div>
       ) : (
         tree.map((g) => {
           const allTasks = g.campPlans.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
           const doneTasks = allTasks.filter((t) => t.taskStatus === "done");
           const sumChannelBudget = g.campPlans.reduce((s, p) => s + (p.budgetPlanned ?? 0), 0);
-          const worst = worstHealth(g.campPlans);
-          const worstLabel = worst ? HEALTH_LABEL[worst] : null;
           const budget = campaignBudget[g.campaignId];
           return (
             <details key={g.campaignId} open className="rounded-lg border border-indigo-200 border-l-4 border-l-indigo-500 bg-background">
               <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-3 [&::-webkit-details-marker]:hidden">
                 <Icon name="flag" size={16} className="text-indigo-600" />
-                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">Cấp 1 · Chiến dịch</span>
+                <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">Kế hoạch cấp 1 · Chiến dịch</span>
                 <span className="min-w-0 truncate text-sm font-semibold">{g.campaignName}</span>
-                {worstLabel ? <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${worstLabel.cls}`}>{worstLabel.text}</span> : null}
+                <HealthChip health={worstHealth(g.campPlans)} />
                 <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
-                  <span>{g.level2.length} kế hoạch · {g.campPlans.length} kênh</span>
+                  <span>{g.campPlans.length} kế hoạch phụ</span>
                   {allTasks.length > 0 ? <span>{doneTasks.length}/{allTasks.length} việc xong</span> : null}
                   {sumChannelBudget > 0 || budget != null ? (
-                    <span>Ngân sách kênh {formatVnd(sumChannelBudget)}{budget != null ? <> / {formatVnd(budget)}</> : null}</span>
+                    <span>Ngân sách {formatVnd(sumChannelBudget)}{budget != null ? <> / {formatVnd(budget)}</> : null}</span>
                   ) : null}
                 </span>
               </summary>
               <div className="space-y-3 border-t border-outline-variant p-3">
-                {g.level2.map(([id, grp]) => <div key={id}>{level2Block(grp.name, grp.plans, true)}</div>)}
-                {g.unassigned.length > 0 ? level2Block("", g.unassigned, false) : null}
+                {g.roots.map((node) => nodeBlock(node, 2))}
+                {g.direct.length > 0 ? (
+                  <div className="space-y-2">
+                    {g.roots.length > 0 ? (
+                      <div className="text-xs font-semibold text-on-surface-variant">Trực thuộc Chiến dịch (không qua cấp 2/3)</div>
+                    ) : null}
+                    {cardGrid(g.direct)}
+                  </div>
+                ) : null}
               </div>
             </details>
           );

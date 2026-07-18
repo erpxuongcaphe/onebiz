@@ -830,7 +830,8 @@ export async function getExceptionLog(
   }));
 }
 
-// CẤP 2 · KẾ HOẠCH (00200) — gom nhiều kênh trong một chiến dịch.
+// Nút KẾ HOẠCH trong cây (00200/00201) — người làm kế hoạch tự đặt tên.
+// parentPlanId null = Kế hoạch cấp 2 (ngay dưới Chiến dịch); có cha = cấp 3.
 export type MktCampaignPlan = {
   id: string;
   name: string;
@@ -840,6 +841,7 @@ export type MktCampaignPlan = {
   timeframeStart: string | null;
   timeframeEnd: string | null;
   sortOrder: number;
+  parentPlanId: string | null;
 };
 
 export type MktCampaignDetail = {
@@ -1010,8 +1012,9 @@ export async function getCampaignDetail(
             timeframe_start: string | null;
             timeframe_end: string | null;
             sort_order: number | null;
+            parent_plan_id: string | null;
           }>("mkt_campaign_plans")
-          .select("id, name, objective, owner_id, timeframe_start, timeframe_end, sort_order")
+          .select("id, name, objective, owner_id, timeframe_start, timeframe_end, sort_order, parent_plan_id")
           .eq("campaign_id", campaignId)
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
@@ -1076,6 +1079,7 @@ export async function getCampaignDetail(
       timeframeStart: p.timeframe_start,
       timeframeEnd: p.timeframe_end,
       sortOrder: p.sort_order ?? 0,
+      parentPlanId: p.parent_plan_id,
     })),
     workPackages: wp.map((w) => ({
       id: w.id,
@@ -1231,9 +1235,12 @@ export type MktPlanInboxEntry = {
   kpis: MktPlanKpi[];
   progressReports: MktPlanProgressReport[];
   stages: MktPlanStage[];
-  // 00200: Kênh (kế hoạch nhỏ) thuộc Kế hoạch cấp 2 nào — để dựng cây 4 cấp.
+  // 00200/00201: Kế hoạch phụ này gắn vào nút nào của cây. campaignPlanPath là
+  // chuỗi tổ tiên từ cấp 2 xuống (VD [cấp 2 "Kênh Website", cấp 3 "Tháng 7"]);
+  // rỗng = trực thuộc Chiến dịch. campaignPlanId/Name = nút gắn TRỰC TIẾP.
   campaignPlanId: string | null;
   campaignPlanName: string | null;
+  campaignPlanPath: Array<{ id: string; name: string }>;
   ownerId: string | null;
   ownerName: string | null;
   reviewerId: string | null;
@@ -1404,18 +1411,49 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
   const wpCampaignPlan = new Map((wpRes.data ?? []).map((w) => [w.id, w.campaign_plan_id] as const));
   const campName = new Map((campRes.data ?? []).map((c) => [c.id, c.name] as const));
 
-  // 00200: tên Kế hoạch cấp 2 cho từng kênh (nếu có xếp).
+  // 00200/00201: tên + cha của nút cây mà từng Kế hoạch phụ gắn vào. Nút gắn
+  // có thể là cấp 3 → phải kéo thêm nút CHA (cấp 2) để dựng đường dẫn đầy đủ.
   const cpIds = Array.from(
     new Set((wpRes.data ?? []).map((w) => w.campaign_plan_id).filter(Boolean) as string[]),
   );
-  const campaignPlanName = new Map<string, string>();
+  const campaignPlanNode = new Map<string, { name: string; parentPlanId: string | null }>();
   if (cpIds.length > 0) {
     const { data: cps } = await db
-      .from<{ id: string; name: string }>("mkt_campaign_plans")
-      .select("id, name")
+      .from<{ id: string; name: string; parent_plan_id: string | null }>("mkt_campaign_plans")
+      .select("id, name, parent_plan_id")
       .in("id", cpIds);
-    (cps ?? []).forEach((cp) => campaignPlanName.set(cp.id, cp.name));
+    (cps ?? []).forEach((cp) =>
+      campaignPlanNode.set(cp.id, { name: cp.name, parentPlanId: cp.parent_plan_id }),
+    );
+    const parentIds = Array.from(
+      new Set(
+        (cps ?? [])
+          .map((cp) => cp.parent_plan_id)
+          .filter((pid): pid is string => Boolean(pid) && !campaignPlanNode.has(pid as string)),
+      ),
+    );
+    if (parentIds.length > 0) {
+      const { data: parents } = await db
+        .from<{ id: string; name: string; parent_plan_id: string | null }>("mkt_campaign_plans")
+        .select("id, name, parent_plan_id")
+        .in("id", parentIds);
+      (parents ?? []).forEach((cp) =>
+        campaignPlanNode.set(cp.id, { name: cp.name, parentPlanId: cp.parent_plan_id }),
+      );
+    }
   }
+  // Đường dẫn tổ tiên (cấp 2 → cấp 3) của một nút; trần 4 cấp nên tối đa 2 mắt xích.
+  const planPathOf = (nodeId: string | null | undefined): Array<{ id: string; name: string }> => {
+    if (!nodeId) return [];
+    const node = campaignPlanNode.get(nodeId);
+    if (!node) return [];
+    const self = { id: nodeId, name: node.name };
+    if (node.parentPlanId) {
+      const parent = campaignPlanNode.get(node.parentPlanId);
+      return parent ? [{ id: node.parentPlanId, name: parent.name }, self] : [self];
+    }
+    return [self];
+  };
 
   // Số thực tế từng KPI của các báo cáo (truy vấn nối tiếp vì cần id báo cáo).
   const reportRows = reportsRes.data ?? [];
@@ -1579,8 +1617,9 @@ export async function getPlanInbox(supabase: MktSupabaseClient): Promise<MktPlan
     campaignPlanId: wpCampaignPlan.get(p.work_package_id) ?? null,
     campaignPlanName: (() => {
       const cid = wpCampaignPlan.get(p.work_package_id);
-      return cid ? campaignPlanName.get(cid) ?? null : null;
+      return cid ? campaignPlanNode.get(cid)?.name ?? null : null;
     })(),
+    campaignPlanPath: planPathOf(wpCampaignPlan.get(p.work_package_id)),
     status: p.status,
     versionNumber: p.version_number,
     currentVersionId: p.current_version_id,

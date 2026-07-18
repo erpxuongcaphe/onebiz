@@ -60,21 +60,26 @@ describe("00200 — read-model", () => {
   });
 });
 
-describe("00200 — giao diện (thuần Việt, đánh số Cấp 1/2/3/4, phân tầng màu)", () => {
-  it("cây 4 cấp: nhãn Cấp 1/2/3 đủ + màu tím/cam/xanh dương", () => {
-    expect(planningTree).toContain("Cấp 1 · Chiến dịch");
-    expect(planningTree).toContain("Cấp 2 · Kế hoạch");
-    expect(planningTree).toContain("Cấp 3 · Kênh");
+describe("giao diện cây lồng (00201 — thuần Việt, nhãn theo độ sâu, phân tầng màu)", () => {
+  it("cây tối đa 4 cấp: Kế hoạch cấp 1/2/3 theo độ sâu + Kế hoạch phụ xanh lá", () => {
+    expect(planningTree).toContain("Kế hoạch cấp 1 · Chiến dịch");
+    expect(planningTree).toContain("Kế hoạch cấp {level}");
     expect(planningTree).toContain("border-l-indigo-500");
     expect(planningTree).toContain("border-l-orange-500");
     expect(planningTree).toContain("border-l-sky-500");
-    expect(planningPage).toContain("Cấp 4 · Kế hoạch phụ");
+    expect(planningTree).toContain("border-l-emerald-500");
+    expect(planningPage).toContain("Kế hoạch phụ");
+    expect(planningPage).toContain("tối đa 4 cấp");
   });
 
-  it("nhóm 3 tầng: chiến dịch → kế hoạch cấp 2 → kênh; có nhóm 'Chưa xếp'", () => {
+  it("cây lồng dựng từ campaignPlanPath: chiến dịch → cấp 2 → cấp 3; nhánh nông hiện 'Trực thuộc Chiến dịch'", () => {
     expect(planningTree).toContain("byCampaign");
-    expect(planningTree).toContain("byLevel2");
-    expect(planningTree).toContain("Chưa xếp Kế hoạch (cấp 2)");
+    expect(planningTree).toContain("campaignPlanPath");
+    expect(planningTree).toContain("type TreeNode");
+    expect(planningTree).toContain("Trực thuộc Chiến dịch (không qua cấp 2/3)");
+    // Tìm kiếm khớp cả tên nút cấp 2/3 trên nhánh.
+    expect(planningTree).toContain("const pathNames = p.campaignPlanPath.map((n) => n.name)");
+    expect(planningTree).toContain("${pathNames}");
   });
 
   it("đủ 4 bộ lọc: tên + khoảng ngày + người phụ trách + trạng thái, kèm Xoá lọc", () => {
@@ -88,11 +93,13 @@ describe("00200 — giao diện (thuần Việt, đánh số Cấp 1/2/3/4, phâ
     expect(planningTree).toContain("p.status !== status");
   });
 
-  it("quản lý cấp 2 trong chi tiết chiến dịch: thêm/sửa/xoá + kênh nhóm theo cấp 2", () => {
+  it("quản lý nút cây trong chi tiết chiến dịch: thêm/sửa/xoá + chọn cha + xoá nối lên tầng trên", () => {
     expect(cpControls).toContain("CampaignPlanFormButton");
-    expect(cpControls).toContain("Thêm Kế hoạch (cấp 2)");
-    expect(cpControls).toContain("về nhóm \"Chưa xếp kế hoạch\"");
+    expect(cpControls).toContain("Thêm Kế hoạch");
+    expect(cpControls).toContain("thành Kế hoạch cấp 2");
+    expect(cpControls).toContain("thành Kế hoạch cấp 3");
+    expect(cpControls).toContain("nối lên tầng trên");
     expect(campaignDetail).toContain("CampaignPlanHeader");
-    expect(campaignDetail).toContain("Chưa xếp kế hoạch (cấp 2)");
+    expect(campaignDetail).toContain("Trực thuộc Chiến dịch (không qua cấp 2/3)");
   });
 });
