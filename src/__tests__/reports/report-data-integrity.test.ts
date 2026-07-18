@@ -72,8 +72,8 @@ describe("report data integrity", () => {
 
   it("paginates product sales and builds movement dates from the selected range", () => {
     expect(analytics).toContain(".range(offset, offset + pageSize - 1)");
-    expect(analytics).toContain("const cursor = new Date(range.start)");
-    expect(analytics).toContain("const end = new Date(range.end)");
+    expect(analytics).toContain("dayKeysForRange(customRange, days)");
+    expect(analytics).toContain("if (!inbound.has(key)) continue");
   });
   it("paginates finance, executive, channel, and stock aggregates", () => {
     expect(analytics).toContain("fetchAllPostgrestRows");
@@ -93,6 +93,14 @@ describe("report data integrity", () => {
     expect(analytics).not.toContain("returnCount: 0");
   });
 
+  it("keeps inventory and purchasing views aligned with the selected period", () => {
+    expect(analytics).toContain("dayKeysForRange(customRange, days)");
+    expect(analytics).toContain("monthKeysForRange(customRange, months)");
+    expect(inventoryPage).toContain("subtitle={`${selectedPeriodLabel}");
+    expect(inventoryPage).toContain("Tồn kho tại thời điểm hiện tại");
+    expect(supplierPage).toContain("getPurchaseByMonth(6, activeBranchId, range)");
+    expect(supplierPage).toContain("Dư nợ tại thời điểm hiện tại");
+  });
   it("paginates high-volume specialist report sources", () => {
     expect(reports).toContain("fetchAllReportRows");
     expect(reports).toContain("fetchReportRowsByIds");

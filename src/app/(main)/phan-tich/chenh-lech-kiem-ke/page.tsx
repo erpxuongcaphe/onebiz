@@ -16,7 +16,7 @@
  * không ghi nhận, lỗi nhập liệu). Tổn thất = có ghi nhận xuất hủy chính thức.
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -67,18 +67,24 @@ export default function InventoryVarianceReportPage() {
   const [rows, setRows] = useState<InventoryVarianceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<VarianceFilter>("all");
+  const requestIdRef = useRef(0);
 
   // ── Fetch ──
   useEffect(() => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     getInventoryVarianceReport({
       branchId: activeBranchId ?? null,
       dateFrom: range.from,
       dateTo: range.to,
     })
-      .then((res) => setRows(res.rows))
+      .then((res) => {
+        if (requestId !== requestIdRef.current) return;
+        setRows(res.rows);
+      })
       .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
         toast({
           title: "Không tải được báo cáo chênh lệch",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
@@ -86,7 +92,9 @@ export default function InventoryVarianceReportPage() {
         });
         setRows([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [isReady, activeBranchId, range.from, range.to, toast]);
 
   // ── KPI ──

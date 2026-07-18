@@ -1398,20 +1398,17 @@ export async function getStockMovements(
   if (branchId) query = query.eq("branch_id", branchId);
   const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getStockMovements]");
 
-  const inbound = new Map<string, number>();
-  const outbound = new Map<string, number>();
-  const cursor = new Date(range.start);
-  const end = new Date(range.end);
-  while (cursor < end) {
-    const key = String(cursor.getDate()).padStart(2, "0") + "/" + String(cursor.getMonth() + 1).padStart(2, "0");
-    inbound.set(key, 0);
-    outbound.set(key, 0);
-    cursor.setDate(cursor.getDate() + 1);
-  }
+  const dayKeys = dayKeysForRange(customRange, days);
+  const inbound = new Map(dayKeys.map((key) => [key, 0]));
+  const outbound = new Map(dayKeys.map((key) => [key, 0]));
+  const includeYear =
+    customRange !== undefined &&
+    customRange.from.slice(0, 4) !== customRange.to.slice(0, 4);
 
   for (const movement of data ?? []) {
     const date = new Date(movement.created_at);
-    const key = String(date.getDate()).padStart(2, "0") + "/" + String(date.getMonth() + 1).padStart(2, "0");
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    if (!inbound.has(key)) continue;
     const signedQty = Number(movement.quantity ?? 0);
     const quantity = Math.abs(signedQty);
     const isInbound = movement.type === "in" || (movement.type === "adjust" && signedQty >= 0);
@@ -1419,11 +1416,14 @@ export async function getStockMovements(
     target.set(key, (target.get(key) ?? 0) + quantity);
   }
 
-  return Array.from(inbound.keys()).map((day) => ({
-    day,
-    nhap: inbound.get(day) ?? 0,
-    xuat: outbound.get(day) ?? 0,
-  }));
+  return dayKeys.map((key) => {
+    const [year, month, day] = key.split("-");
+    return {
+      day: includeYear ? `${day}/${month}/${year}` : `${day}/${month}`,
+      nhap: inbound.get(key) ?? 0,
+      xuat: outbound.get(key) ?? 0,
+    };
+  });
 }
 
 export async function getLowStockProducts(
@@ -2362,10 +2362,11 @@ export async function getSupplierKpis(
 export async function getPurchaseByMonth(
   months: number = 6,
   branchId?: string,
+  customRange?: { from: string; to: string },
 ): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNMonthsRange(months);
+  const range = resolveRange(customRange, lastNMonthsRange(months));
   const orders = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
       let query = supabase
@@ -2382,19 +2383,14 @@ export async function getPurchaseByMonth(
     "[getPurchaseByMonth]",
   );
 
-  const now = new Date();
-  const grouped = new Map<string, number>();
-  for (let index = months - 1; index >= 0; index--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - index, 1);
-    const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
-    grouped.set(key, 0);
-  }
+  const monthKeys = monthKeysForRange(customRange, months);
+  const grouped = new Map(monthKeys.map((key) => [key, 0]));
   for (const order of orders) {
     const date = new Date(String(order.created_at));
     const key = "T" + (date.getMonth() + 1) + "/" + date.getFullYear();
     if (grouped.has(key)) grouped.set(key, (grouped.get(key) ?? 0) + Number(order.total ?? 0));
   }
-  return Array.from(grouped.entries()).map(([label, value]) => ({ label, value }));
+  return monthKeys.map((label) => ({ label, value: grouped.get(label) ?? 0 }));
 }
 
 export async function getTopSuppliersByPurchase(
