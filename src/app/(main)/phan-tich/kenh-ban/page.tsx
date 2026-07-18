@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   PieChart,
   Pie,
@@ -12,7 +12,8 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   formatCurrency,
   formatChartTooltipCurrency,
@@ -112,9 +113,11 @@ export default function KenhBanPage() {
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
   const [channelRevenue, setChannelRevenue] = useState<ChartPoint[]>([]);
   const [channelPerformance, setChannelPerformance] = useState<ChannelPerformanceRow[]>([]);
+  const requestIdRef = useRef(0);
 
 
   const handleExportView = useCallback(() => {
@@ -239,18 +242,21 @@ export default function KenhBanPage() {
   );
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const [revenueRes, perfRes] = await Promise.all([
         getChannelRevenue(activeBranchId, range),
         getChannelPerformance(activeBranchId, range),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setChannelRevenue(revenueRes);
       setChannelPerformance(perfRes);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch channel analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range]);
 
@@ -307,7 +313,7 @@ export default function KenhBanPage() {
           </div>
         ) : (
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-            Chưa có dữ liệu kênh bán trong tháng này.
+            Chưa có dữ liệu kênh bán trong kỳ đã chọn.
           </div>
         )}
 
@@ -315,7 +321,7 @@ export default function KenhBanPage() {
           {/* Revenue by channel pie chart */}
           <ChartCard
             title="Doanh thu theo kênh bán"
-            subtitle="Tháng hiện tại"
+            subtitle={selectedPeriodLabel}
           >
             {pieData.length > 0 ? (
               <div className="h-64 md:h-80">
@@ -374,7 +380,7 @@ export default function KenhBanPage() {
         {/* Channel performance table */}
         <ChartCard
           title="Hiệu suất theo kênh bán"
-          subtitle="Tháng hiện tại"
+          subtitle={selectedPeriodLabel}
         >
           {channelPerformance.length > 0 ? (
             <ReportTableFrame tablePreferenceKey="report.sales-channels.performance">

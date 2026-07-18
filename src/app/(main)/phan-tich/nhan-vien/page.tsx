@@ -71,6 +71,7 @@ export default function StaffRevenueReportPage() {
 
   useEffect(() => {
     if (!isReady) return;
+    let cancelled = false;
     setLoading(true);
     getStaffRevenueReport({
       dateFrom: range.from,
@@ -78,8 +79,11 @@ export default function StaffRevenueReportPage() {
       source: sourceFilter === "all" ? null : sourceFilter,
       branchId: activeBranchId ?? null,
     })
-      .then((res) => setRows(res.rows))
+      .then((res) => {
+        if (!cancelled) setRows(res.rows);
+      })
       .catch((err) => {
+        if (cancelled) return;
         toast({
           title: "Không tải được báo cáo NV",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
@@ -87,7 +91,13 @@ export default function StaffRevenueReportPage() {
         });
         setRows([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isReady, range.from, range.to, sourceFilter, activeBranchId, toast]);
 
   // ── KPI ──

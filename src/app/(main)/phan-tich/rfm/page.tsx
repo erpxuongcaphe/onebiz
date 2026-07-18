@@ -99,14 +99,18 @@ export default function RfmReportPage() {
 
   useEffect(() => {
     if (!isReady) return;
+    let cancelled = false;
     setLoading(true);
     getRfmReport({
       dateFrom: range.from,
       dateTo: range.to,
       branchId: activeBranchId ?? null,
     })
-      .then((res) => setRows(res.rows))
+      .then((res) => {
+        if (!cancelled) setRows(res.rows);
+      })
       .catch((err) => {
+        if (cancelled) return;
         toast({
           title: "Không tải được báo cáo phân khúc khách hàng",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
@@ -114,7 +118,13 @@ export default function RfmReportPage() {
         });
         setRows([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isReady, range.from, range.to, activeBranchId, toast]);
 
   const segments = useMemo(() => {

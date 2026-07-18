@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -167,9 +167,11 @@ export default function KhachHangPage() {
   const [customerSegments, setCustomerSegments] = useState<CustomerSegment[]>([]);
   const [topCustomers, setTopCustomers] = useState<TopCustomer[]>([]);
   const [topDebtors, setTopDebtors] = useState<TopDebtor[]>([]);
+  const requestIdRef = useRef(0);
   const tenantName = useAuth().tenant?.name;
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const [kpiData, monthly, segments, customers, debtors] = await Promise.all([
@@ -180,15 +182,17 @@ export default function KhachHangPage() {
         getTopCustomersByRevenue(50, activeBranchId, range),
         getTopDebtors(50, activeBranchId), // Tăng top 50 công nợ (snapshot hiện tại — không cần range)
       ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpiData);
       setNewCustomersMonthly(monthly);
       setCustomerSegments(segments);
       setTopCustomers(customers);
       setTopDebtors(debtors);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch customer analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range]);
 
@@ -481,10 +485,6 @@ export default function KhachHangPage() {
     kpis && kpis.prevNewMonth > 0
       ? Math.round(((kpis.newThisMonth - kpis.prevNewMonth) / kpis.prevNewMonth) * 100)
       : 0;
-  const debtChange =
-    kpis && kpis.prevTotalDebt > 0
-      ? Math.round(((kpis.totalDebt - kpis.prevTotalDebt) / kpis.prevTotalDebt) * 100)
-      : 0;
 
   return (
     <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
@@ -496,7 +496,7 @@ export default function KhachHangPage() {
           <KpiCard
             label="Tổng khách hàng"
             value={kpis ? String(kpis.totalCustomers) : "0"}
-            change={kpis ? `+${kpis.newThisMonth} khách mới tháng này` : ""}
+            change={kpis ? `+${kpis.newThisMonth} khách mới trong kỳ` : ""}
             positive
             icon="group"
             bg="bg-primary-fixed"
@@ -504,9 +504,9 @@ export default function KhachHangPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Khách mới tháng"
+            label="Khách mới trong kỳ"
             value={kpis ? String(kpis.newThisMonth) : "0"}
-            change={newMonthChange !== 0 ? `${newMonthChange > 0 ? "+" : ""}${newMonthChange}% so với tháng trước` : "Không có dữ liệu tháng trước"}
+            change={newMonthChange !== 0 ? `${newMonthChange > 0 ? "+" : ""}${newMonthChange}% so với kỳ trước` : "Không có dữ liệu kỳ trước"}
             positive={newMonthChange >= 0}
             icon="person_add"
             bg="bg-status-success/10"
@@ -526,8 +526,8 @@ export default function KhachHangPage() {
           <KpiCard
             label="Nợ phải thu"
             value={kpis ? formatCurrency(kpis.totalDebt) : formatCurrency(0)}
-            change={debtChange !== 0 ? `${debtChange > 0 ? "+" : ""}${debtChange}% so với tháng trước` : ""}
-            positive={debtChange <= 0}
+            change="Số dư công nợ hiện tại"
+            positive
             icon="credit_card"
             bg="bg-status-error/10"
             iconColor="text-status-error"
@@ -537,7 +537,7 @@ export default function KhachHangPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* New customers per month */}
-          <ChartCard title="Khách hàng mới theo tháng" subtitle="6 tháng gần nhất">
+          <ChartCard title="Khách hàng mới theo tháng" subtitle="6 tháng gần nhất · Số liệu tham chiếu">
             {newCustomersMonthly.length > 0 ? (
               <div className="h-64">
                 <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>

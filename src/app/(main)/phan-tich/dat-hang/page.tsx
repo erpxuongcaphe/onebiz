@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -17,7 +17,8 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getOrdersKpis,
@@ -66,7 +67,7 @@ function calcChangePct(
   const pct = ((current - previous) / previous) * 100;
   const sign = pct >= 0 ? "+" : "";
   return {
-    text: `${sign}${pct.toFixed(1)}% so với tháng trước`,
+    text: `${sign}${pct.toFixed(1)}% so với kỳ trước`,
     positive: pct >= 0,
   };
 }
@@ -159,6 +160,7 @@ export default function DatHangPage() {
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<OrdersKpis | null>(null);
   const [orderVolume, setOrderVolume] = useState<ChartPoint[]>([]);
@@ -166,6 +168,7 @@ export default function DatHangPage() {
   const [recentOrdersList, setRecentOrdersList] = useState<RecentOrder[]>([]);
   // CEO 13/07 (chuẩn KiotViet): đặt hàng theo hàng hóa — mỗi SP 1 dòng.
   const [productRows, setProductRows] = useState<OrderProductBreakdownRow[]>([]);
+  const requestIdRef = useRef(0);
 
 
   // ── Export Excel — view (1 sheet) + full (multi-sheet) ──
@@ -349,6 +352,7 @@ export default function DatHangPage() {
   );
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const [kpisData, volumeData, statusData, ordersData, productData] =
@@ -359,15 +363,17 @@ export default function DatHangPage() {
           getRecentOrders(10, activeBranchId, range),
           getOrderProductBreakdown(activeBranchId, range),
         ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpisData);
       setOrderVolume(volumeData);
       setOrderStatus(statusData);
       setRecentOrdersList(ordersData);
       setProductRows(productData);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch order analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range]);
 
@@ -449,7 +455,7 @@ export default function DatHangPage() {
         {/* Order volume line chart */}
         <ChartCard
           title="Số lượng đơn hàng theo ngày"
-          subtitle="30 ngày gần nhất"
+          subtitle={selectedPeriodLabel}
         >
           {orderVolume.length > 0 ? (
             <div className="h-48 md:h-72">
@@ -496,7 +502,7 @@ export default function DatHangPage() {
           {/* Order status pie chart */}
           <ChartCard
             title="Phân bổ trạng thái đơn hàng"
-            subtitle="Tháng hiện tại"
+            subtitle={selectedPeriodLabel}
           >
             {orderStatus.length > 0 ? (
               <div className="h-64 md:h-80">
@@ -602,7 +608,7 @@ export default function DatHangPage() {
         </ChartCard>
 
         {/* Recent orders table */}
-        <ChartCard title="Đơn hàng gần đây" subtitle="10 đơn mới nhất">
+        <ChartCard title="Đơn hàng gần đây" subtitle="Tối đa 10 đơn trong kỳ">
           {recentOrdersList.length > 0 ? (
             <ReportTableFrame tablePreferenceKey="report.orders.recent">
               <div className="overflow-x-auto">
