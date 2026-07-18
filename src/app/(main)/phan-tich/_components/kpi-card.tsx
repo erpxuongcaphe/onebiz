@@ -41,6 +41,16 @@ export function KpiCard({
   valueColor,
   subValue,
 }: KpiCardProps) {
+  const numericValue = /\d/.test(value);
+  const valueSizeClass =
+    value.length >= 22
+      ? "text-sm leading-5"
+      : value.length >= 17
+        ? "text-base leading-6"
+        : value.length >= 13
+          ? "text-lg leading-6"
+          : "text-xl leading-7 lg:text-2xl";
+
   return (
     <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-4">
       <div className="flex items-start justify-between gap-3">
@@ -50,7 +60,9 @@ export function KpiCard({
           </p>
           <p
             className={cn(
-              "mt-2 break-words text-xl font-bold leading-7 tabular-nums lg:text-2xl",
+              "mt-2 max-w-full font-bold tabular-nums",
+              numericValue ? "whitespace-nowrap" : "break-words",
+              valueSizeClass,
               valueColor,
             )}
           >

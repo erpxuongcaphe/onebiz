@@ -68,6 +68,7 @@ export default function SalesReturnReportPage() {
 
   useEffect(() => {
     if (!isReady) return;
+    let cancelled = false;
     setLoading(true);
     // Fetch song song: báo cáo trả hàng + tổng doanh thu cùng kỳ
     Promise.all([
@@ -82,12 +83,14 @@ export default function SalesReturnReportPage() {
       }).catch(() => []),
     ])
       .then(([returnRes, revenueDays]) => {
+        if (cancelled) return;
         setRows(returnRes.rows);
         setPeriodRevenue(
           revenueDays.reduce((s, d) => s + (Number(d.revenue) || 0), 0),
         );
       })
       .catch((err) => {
+        if (cancelled) return;
         toast({
           title: "Không tải được báo cáo trả hàng",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
@@ -96,7 +99,13 @@ export default function SalesReturnReportPage() {
         setRows([]);
         setPeriodRevenue(0);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [isReady, activeBranchId, range.from, range.to, toast]);
 
   // ── KPI ──

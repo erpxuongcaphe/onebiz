@@ -14,6 +14,8 @@
 
 import type { Promotion } from "@/lib/types";
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 const PROMOTION_REPORT_PAGE_SIZE = 1000;
 
 interface PromotionPagedQuery<T> {
@@ -121,10 +123,11 @@ export async function getPromotionKpis(params?: {
   startDate?: string;
   endDate?: string;
   branchId?: string;
+  dateRange?: { from: string; to: string };
 }): Promise<PromotionKpis> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = {
+  const range = toCreatedAtRangeWindow(params?.dateRange) ?? {
     start: params?.startDate ?? defaultRange().start,
     end: params?.endDate ?? defaultRange().end,
   };
@@ -196,10 +199,11 @@ export async function getPromotionDetailRows(params?: {
   startDate?: string;
   endDate?: string;
   branchId?: string;
+  dateRange?: { from: string; to: string };
 }): Promise<PromotionDetailRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = {
+  const range = toCreatedAtRangeWindow(params?.dateRange) ?? {
     start: params?.startDate ?? defaultRange().start,
     end: params?.endDate ?? defaultRange().end,
   };
@@ -297,11 +301,12 @@ export async function getPromotionDetailRows(params?: {
 export async function getPromotionDailyTrend(params?: {
   days?: number;
   branchId?: string;
+  dateRange?: { from: string; to: string };
 }): Promise<PromotionDailyPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const days = params?.days ?? 30;
-  const range = defaultRange(days);
+  const range = toCreatedAtRangeWindow(params?.dateRange) ?? defaultRange(days);
 
   let query = supabase
     .from("invoices")
@@ -318,11 +323,7 @@ export async function getPromotionDailyTrend(params?: {
   // Bucketize by date (local)
   const buckets = new Map<string, { usageCount: number; totalDiscount: number }>();
   // Init all days với 0 — UI chart không bị skip ngày trống
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  for (const key of dayKeysForRange(params?.dateRange, days)) {
     buckets.set(key, { usageCount: 0, totalDiscount: 0 });
   }
 

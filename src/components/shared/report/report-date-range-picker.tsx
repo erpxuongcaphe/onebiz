@@ -12,7 +12,7 @@
  * Trigger compact: hiển thị label preset hiện tại + chevron, max-w 200px.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -24,6 +24,7 @@ import type { DatePreset, DateRange } from "@/lib/types/report";
 import {
   DATE_PRESETS,
   PRESET_GROUPS,
+  formatCompactRangeLabel,
   getPresetLabel,
 } from "@/lib/utils/date-presets";
 
@@ -42,17 +43,20 @@ export function ReportDateRangePicker({
 }: ReportDateRangePickerProps) {
   const [customFrom, setCustomFrom] = useState(range.from);
   const [customTo, setCustomTo] = useState(range.to);
+  const [open, setOpen] = useState(false);
+  const fromInputId = useId();
+  const toInputId = useId();
+  const handleOpenChange = (nextOpen: boolean) => {
+    setOpen(nextOpen);
+    if (nextOpen) {
+      setCustomFrom(range.from);
+      setCustomTo(range.to);
+    }
+  };
 
   const presetLabel = getPresetLabel(preset);
 
-  // Format range hiển thị compact: "06/05/2026 - 06/05/2026"
-  const rangeDisplay = (() => {
-    const fmt = (iso: string) => {
-      const [y, m, d] = iso.split("-");
-      return `${d}/${m}`;
-    };
-    return `${fmt(range.from)} - ${fmt(range.to)}`;
-  })();
+  const rangeDisplay = formatCompactRangeLabel(range);
 
   const handlePresetClick = (next: DatePreset) => {
     onPresetChange(next);
@@ -65,10 +69,10 @@ export function ReportDateRangePicker({
   };
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={handleOpenChange}>
       <DropdownMenuTrigger
         className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3 h-8 text-xs font-medium",
+          "inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs font-medium",
           "bg-surface-container-low text-foreground hover:bg-surface-container",
           "border border-border transition-colors press-scale-sm outline-none",
         )}
@@ -82,10 +86,10 @@ export function ReportDateRangePicker({
       <DropdownMenuContent
         align="end"
         sideOffset={6}
-        className="p-3 w-auto min-w-[640px]"
+        className="w-[min(760px,calc(100vw-2rem))] min-w-0 p-3"
       >
         {/* 5-column preset grid */}
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {PRESET_GROUPS.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
               <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-1">
@@ -93,6 +97,7 @@ export function ReportDateRangePicker({
               </p>
               {DATE_PRESETS.filter((p) => p.group === group.key).map((p) => (
                 <button
+                  type="button"
                   key={p.key}
                   onClick={() => handlePresetClick(p.key)}
                   className={cn(
@@ -114,10 +119,11 @@ export function ReportDateRangePicker({
           <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Tùy chỉnh
           </p>
-          <div className="flex items-end gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label className="text-[10px] text-muted-foreground">Từ ngày</label>
+              <label htmlFor={fromInputId} className="text-[10px] text-muted-foreground">Từ ngày</label>
               <input
+                id={fromInputId}
                 type="date"
                 value={customFrom}
                 onChange={(e) => setCustomFrom(e.target.value)}
@@ -125,8 +131,9 @@ export function ReportDateRangePicker({
               />
             </div>
             <div className="flex-1">
-              <label className="text-[10px] text-muted-foreground">Đến ngày</label>
+              <label htmlFor={toInputId} className="text-[10px] text-muted-foreground">Đến ngày</label>
               <input
+                id={toInputId}
                 type="date"
                 value={customTo}
                 onChange={(e) => setCustomTo(e.target.value)}
@@ -134,6 +141,7 @@ export function ReportDateRangePicker({
               />
             </div>
             <button
+              type="button"
               onClick={applyCustomRange}
               className="h-8 px-3 rounded-lg bg-primary text-primary-foreground text-xs font-medium press-scale-sm hover:bg-primary/90"
             >

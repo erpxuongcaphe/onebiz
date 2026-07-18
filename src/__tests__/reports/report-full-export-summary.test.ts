@@ -35,4 +35,21 @@ describe("full export KPI summaries", () => {
       expect(reportSource(report)).toContain('mode === "full"');
     }
   });
+
+  it("includes cash-flow details in full finance workbooks", () => {
+    const finance = readFileSync(
+      resolve("src/app/(main)/phan-tich/tai-chinh/page.tsx"),
+      "utf8",
+    );
+    const cashFlow = readFileSync(
+      resolve("src/app/(main)/phan-tich/luong-tien/page.tsx"),
+      "utf8",
+    );
+
+    expect(finance).toContain("cashFlowSheet");
+    expect(finance).toContain("Dòng tiền ròng");
+    expect(finance).not.toContain("getMonthlyProfit(");
+    expect(cashFlow).toContain("categoryDetail");
+    expect(cashFlow).toContain("Chi tiết thu chi theo danh mục".toUpperCase());
+  });
 });
