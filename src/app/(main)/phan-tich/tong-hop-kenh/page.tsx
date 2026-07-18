@@ -13,7 +13,7 @@
  *   - Bảng so sánh head-to-head top SP từng kênh
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -53,6 +53,7 @@ import {
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 import { cn } from "@/lib/utils";
 
 // Stitch palette
@@ -143,9 +144,12 @@ export default function TongHopKenhPage() {
     retail: ChannelTopProduct[];
     fnb: ChannelTopProduct[];
   }>({ retail: [], fnb: [] });
+  const requestIdRef = useRef(0);
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
 
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const [k, t, top] = await Promise.all([
@@ -153,10 +157,12 @@ export default function TongHopKenhPage() {
         getCrossChannelTrend(activeBranchId, range),
         getCrossChannelTopProducts(activeBranchId, range, 10),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(k);
       setTrend(t);
       setTopProducts(top);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch cross-channel data:", err);
       toast({
         title: "Lỗi tải báo cáo",
@@ -164,7 +170,7 @@ export default function TongHopKenhPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
@@ -177,7 +183,7 @@ export default function TongHopKenhPage() {
     if (!kpis) return;
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO TỔNG HỢP KÊNH (RETAIL vs FNB)",
+        title: "BÁO CÁO TỔNG HỢP KÊNH (BÁN LẺ VÀ F&B)",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -187,7 +193,7 @@ export default function TongHopKenhPage() {
         titleRows: title,
         columns: [
           { label: "Chỉ số", key: "label", width: 28 },
-          { label: "Retail", key: "retail", width: 18, format: "currency" },
+          { label: "Bán lẻ", key: "retail", width: 18, format: "currency" },
           { label: "FnB", key: "fnb", width: 18, format: "currency" },
           { label: "Tổng", key: "total", width: 18, format: "currency" },
         ],
@@ -244,7 +250,7 @@ export default function TongHopKenhPage() {
           titleRows: title,
           columns: [
             { label: "Chỉ số", key: "label", width: 28 },
-            { label: "Retail", key: "retail", width: 18, format: "currency" },
+            { label: "Bán lẻ", key: "retail", width: 18, format: "currency" },
             { label: "FnB", key: "fnb", width: 18, format: "currency" },
             { label: "Tổng", key: "total", width: 18, format: "currency" },
           ],
@@ -274,7 +280,7 @@ export default function TongHopKenhPage() {
           titleRows: ["XU HƯỚNG DOANH THU THEO NGÀY", ...title.slice(1)],
           columns: [
             { label: "Ngày", key: "date", width: 14 },
-            { label: "Retail (VND)", key: "retail", width: 18, format: "currency" },
+            { label: "Bán lẻ (VND)", key: "retail", width: 18, format: "currency" },
             { label: "FnB (VND)", key: "fnb", width: 18, format: "currency" },
             { label: "Tổng (VND)", key: "total", width: 18, format: "currency" },
           ],
@@ -286,7 +292,7 @@ export default function TongHopKenhPage() {
           })),
         },
         {
-          name: "Top Retail",
+          name: "Top bán lẻ",
           titleRows: ["TOP SẢN PHẨM RETAIL", ...title.slice(1)],
           columns: [
             { label: "Hạng", key: "rank", width: 6 },
@@ -338,7 +344,7 @@ export default function TongHopKenhPage() {
   const reportHeader = (
     <ReportPageHeader
       title="Tổng hợp kênh"
-      subtitle="So sánh Retail vs F&B — bức tranh tổng thể"
+      subtitle="So sánh bán lẻ và F&B trên toàn hệ thống"
       preset={preset}
       range={range}
       onPresetChange={setPreset}
@@ -381,14 +387,14 @@ export default function TongHopKenhPage() {
   }
 
   const pieData = [
-    { name: "Retail", value: kpis.retailRevenue, color: RETAIL_COLOR },
+    { name: "Bán lẻ", value: kpis.retailRevenue, color: RETAIL_COLOR },
     { name: "F&B", value: kpis.fnbRevenue, color: FNB_COLOR },
   ].filter((p) => p.value > 0);
 
   // Compute leader badge
   const leader =
     kpis.retailRevenue > kpis.fnbRevenue
-      ? { label: "Retail dẫn đầu", color: RETAIL_COLOR }
+      ? { label: "Bán lẻ dẫn đầu", color: RETAIL_COLOR }
       : kpis.fnbRevenue > kpis.retailRevenue
         ? { label: "F&B dẫn đầu", color: FNB_COLOR }
         : null;
@@ -411,7 +417,7 @@ export default function TongHopKenhPage() {
             valueColor="text-primary"
           />
           <KpiCard
-            label="Retail (bán lẻ)"
+            label="Bán lẻ"
             value={formatCurrency(kpis.retailRevenue)}
             change={
               kpis.prevRetailRevenue > 0
@@ -439,7 +445,7 @@ export default function TongHopKenhPage() {
             valueColor="text-status-warning"
           />
           <KpiCard
-            label="Tỷ trọng Retail / F&B"
+            label="Tỷ trọng bán lẻ / F&B"
             value={`${kpis.retailPct.toFixed(0)}% / ${kpis.fnbPct.toFixed(0)}%`}
             change={leader?.label ?? "Cân bằng"}
             positive
@@ -456,7 +462,7 @@ export default function TongHopKenhPage() {
               {/* Pie chart */}
               <ChartCard
                 title="Tỷ trọng doanh thu theo kênh"
-                subtitle="Retail vs F&B"
+                subtitle={`${selectedPeriodLabel} · Bán lẻ và F&B`}
               >
                 <div className="h-72">
                   <ClientChartContainer>
@@ -495,7 +501,7 @@ export default function TongHopKenhPage() {
               {/* Trend line */}
               <ChartCard
                 title="Xu hướng doanh thu theo ngày"
-                subtitle="So sánh Retail và F&B"
+                subtitle={`${selectedPeriodLabel} · So sánh bán lẻ và F&B`}
               >
                 <div className="h-72">
                   {trend.length > 0 ? (
@@ -521,7 +527,7 @@ export default function TongHopKenhPage() {
                         <Line
                           type="monotone"
                           dataKey="retail"
-                          name="Retail"
+                          name="Bán lẻ"
                           stroke={RETAIL_COLOR}
                           strokeWidth={2}
                           dot={{ r: 3 }}
@@ -548,12 +554,12 @@ export default function TongHopKenhPage() {
             {/* Head-to-head top products */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ChartCard
-                title="Top 10 sản phẩm Retail"
+                title="Top 10 sản phẩm bán lẻ"
                 subtitle="Theo doanh thu trong kỳ"
               >
                 <TopProductTable
                   rows={topProducts.retail}
-                  emptyText="Chưa có sản phẩm Retail nào bán được."
+                  emptyText="Chưa có sản phẩm bán lẻ nào trong kỳ."
                   accentColor={RETAIL_COLOR}
                 />
               </ChartCard>
@@ -572,7 +578,7 @@ export default function TongHopKenhPage() {
         ) : (
           <ChartCard
             title="Bảng tổng hợp doanh thu theo ngày"
-            subtitle="Retail vs F&B"
+            subtitle={`${selectedPeriodLabel} · Bán lẻ và F&B`}
           >
             {trend.length > 0 ? (
               <ReportTableFrame tablePreferenceKey="report.channel-summary.trend">
@@ -582,7 +588,7 @@ export default function TongHopKenhPage() {
                     <tr className="border-b text-muted-foreground">
                       <th className="text-left py-2 pr-4 font-medium">Ngày</th>
                       <th className="text-right py-2 pr-4 font-medium" style={{ color: RETAIL_COLOR }}>
-                        Retail
+                        Bán lẻ
                       </th>
                       <th className="text-right py-2 pr-4 font-medium" style={{ color: FNB_COLOR }}>
                         F&B

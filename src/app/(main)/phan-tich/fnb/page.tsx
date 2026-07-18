@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -36,6 +36,7 @@ import {
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 // === Tooltips ===
 
@@ -80,10 +81,13 @@ export default function FnbAnalyticsPage() {
   const [tables, setTables] = useState<TableRevenue[]>([]);
   const [hourly, setHourly] = useState<HourlyRevenue[]>([]);
   const [cashiers, setCashiers] = useState<CashierPerformance[]>([]);
+  const requestIdRef = useRef(0);
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
 
 
   useEffect(() => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     (async () => {
       setLoading(true);
       try {
@@ -96,15 +100,17 @@ export default function FnbAnalyticsPage() {
           getRevenueByHourFnb(activeBranchId, range),
           getCashierPerformance(activeBranchId, range),
         ]);
+        if (requestId !== requestIdRef.current) return;
         setKpis(k);
         setMenuItems(m);
         setTables(t);
         setHourly(h);
         setCashiers(c);
       } catch {
+        if (requestId !== requestIdRef.current) return;
         // silent
       } finally {
-        setLoading(false);
+        if (requestId === requestIdRef.current) setLoading(false);
       }
     })();
   }, [activeBranchId, range, isReady]);
@@ -331,7 +337,7 @@ export default function FnbAnalyticsPage() {
       {viewMode === "chart" ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4">
           {/* Revenue by Hour */}
-          <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ doanh thu trong ngày">
+          <ChartCard title="Doanh thu theo giờ" subtitle={`${selectedPeriodLabel} · Phân bổ trong ngày`}>
             <div className="h-64">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={hourly.filter((h) => h.revenue > 0 || h.orders > 0)}>
@@ -346,7 +352,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Top Menu Items */}
-          <ChartCard title="Top món bán chạy" subtitle="Theo doanh thu">
+          <ChartCard title="Top món bán chạy" subtitle={`${selectedPeriodLabel} · Theo doanh thu`}>
             <div className="h-64">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={menuItems.slice(0, 10)} layout="vertical">
@@ -372,7 +378,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Revenue by Table */}
-          <ChartCard title="Doanh thu theo bàn" subtitle="Bàn nào bán nhiều nhất">
+          <ChartCard title="Doanh thu theo bàn" subtitle={`${selectedPeriodLabel} · Xếp theo doanh thu`}>
             {tables.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
@@ -405,7 +411,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Cashier Performance */}
-          <ChartCard title="Hiệu suất nhân viên" subtitle="Doanh thu và số đơn theo nhân viên">
+          <ChartCard title="Hiệu suất nhân viên" subtitle={`${selectedPeriodLabel} · Doanh thu và số đơn`}>
             {cashiers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
@@ -442,7 +448,7 @@ export default function FnbAnalyticsPage() {
         /* TABLE VIEW — 4 bảng số liệu kế toán đầy đủ */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 px-4 pb-4">
           {/* Doanh thu theo giờ */}
-          <ChartCard title="Doanh thu theo giờ" subtitle="Phân bổ trong ngày">
+          <ChartCard title="Doanh thu theo giờ" subtitle={`${selectedPeriodLabel} · Phân bổ trong ngày`}>
             {hourly.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
@@ -487,7 +493,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Top món */}
-          <ChartCard title="Top món bán chạy" subtitle="Theo doanh thu">
+          <ChartCard title="Top món bán chạy" subtitle={`${selectedPeriodLabel} · Theo doanh thu`}>
             {menuItems.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
@@ -532,7 +538,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Doanh thu theo bàn */}
-          <ChartCard title="Doanh thu theo bàn" subtitle="Bàn nào bán nhiều nhất">
+          <ChartCard title="Doanh thu theo bàn" subtitle={`${selectedPeriodLabel} · Xếp theo doanh thu`}>
             {tables.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
@@ -575,7 +581,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Cashier */}
-          <ChartCard title="Hiệu suất nhân viên" subtitle="Doanh thu + số đơn theo NV">
+          <ChartCard title="Hiệu suất nhân viên" subtitle={`${selectedPeriodLabel} · Doanh thu và số đơn`}>
             {cashiers.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (

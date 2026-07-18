@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { Icon } from "@/components/ui/icon";
@@ -27,9 +27,11 @@ export default function TieuHaoNvlPage() {
   });
   const [rows, setRows] = useState<NvlConsumptionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const data = await getNvlConsumptionByBranch({
@@ -37,8 +39,10 @@ export default function TieuHaoNvlPage() {
         toDate: range.to,
         branchId: activeBranchId,
       });
+      if (requestId !== requestIdRef.current) return;
       setRows(data);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       setRows([]);
       toast({
         variant: "error",
@@ -46,7 +50,7 @@ export default function TieuHaoNvlPage() {
         description: err instanceof Error ? err.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, isReady, range.from, range.to, toast]);
 

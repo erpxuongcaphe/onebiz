@@ -659,7 +659,7 @@ export async function getDeliveryStaffPerformance(
   let query: any = supabase
     .from("kitchen_orders")
     .select(
-      "delivery_staff_id, delivery_fee, delivery_assigned_at, delivery_completed_at, invoice_id, invoices(total), profiles!kitchen_orders_delivery_staff_id_fkey(full_name)",
+      "delivery_staff_id, delivery_fee, delivery_assigned_at, delivery_completed_at, invoice_id, invoices(total)",
     )
     .eq("tenant_id", tenantId)
     .not("delivery_staff_id", "is", null);
@@ -673,6 +673,28 @@ export async function getDeliveryStaffPerformance(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows = await fetchAllFnbRows<any>(() => query, "[fnb.delivery]");
+  const staffIds = Array.from(
+    new Set(
+      (rows ?? [])
+        .map((row) => String(row.delivery_staff_id ?? ""))
+        .filter(Boolean),
+    ),
+  );
+  const profiles = staffIds.length
+    ? await fetchAllFnbRows<{ id: string; full_name: string | null }>(
+        () =>
+          supabase
+            .from("profiles")
+            .select("id, full_name")
+            .eq("tenant_id", tenantId)
+            .in("id", staffIds)
+            .order("id", { ascending: true }),
+        "[fnb.deliveryProfiles]",
+      )
+    : [];
+  const staffNames = new Map(
+    profiles.map((profile) => [profile.id, profile.full_name ?? "Không rõ"]),
+  );
 
   const map = new Map<
     string,
@@ -688,8 +710,7 @@ export async function getDeliveryStaffPerformance(
   for (const row of rows ?? []) {
     const staffId = row.delivery_staff_id as string;
     if (!staffId) continue;
-    const profile = row.profiles as { full_name?: string } | null;
-    const name = profile?.full_name ?? "Không rõ";
+    const name = staffNames.get(staffId) ?? "Không rõ";
     const inv = row.invoices as { total?: number } | null;
     const revenue = Number(inv?.total ?? 0);
     const fee = Number(row.delivery_fee ?? 0);

@@ -36,6 +36,7 @@ export function ClientChartContainer({ children, ...rest }: Props) {
       height="100%"
       minWidth={0}
       minHeight={0}
+      initialDimension={{ width: 320, height: 224 }}
       {...rest}
     >
       {children as React.ReactElement}
