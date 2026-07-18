@@ -31,6 +31,10 @@ import {
   WorkPackageForm,
   WorkPackageSplitButton,
 } from "@/components/mkt/campaign-controls";
+import {
+  CampaignPlanFormButton,
+  CampaignPlanHeader,
+} from "@/components/mkt/campaign-plan-controls";
 import { AssignPlanningButton } from "@/components/mkt/plan-controls";
 import { MktDeleteButton } from "@/components/mkt/delete-button";
 import { canConfirmReadiness } from "@/lib/mkt/readiness";
@@ -298,17 +302,18 @@ export default async function CampaignDetailPage({
           })}
         </div>
 
-        {/* Kênh triển khai */}
+        {/* Kênh triển khai — nhóm theo Kế hoạch cấp 2 (00200) */}
         {activeTab === "channels" ? (
           <section className="space-y-3">
             {canManage ? (
-              <div className="flex justify-end">
-                <WorkPackageForm campaignId={c.id} members={members} />
+              <div className="flex flex-wrap justify-end gap-2">
+                <CampaignPlanFormButton campaignId={c.id} members={members} />
+                <WorkPackageForm campaignId={c.id} members={members} campaignPlans={detail.campaignPlans} />
               </div>
             ) : null}
-            {detail.workPackages.length > 0 ? (
-              <div className="space-y-2">
-                {detail.workPackages.map((w) => {
+            {detail.workPackages.length > 0 || detail.campaignPlans.length > 0 ? (
+              (() => {
+                const renderChannel = (w: (typeof detail.workPackages)[number]) => {
                   const needsSplit = w.status === "needs_split";
                   return (
                     <article
@@ -387,8 +392,46 @@ export default async function CampaignDetailPage({
                       </div>
                     </article>
                   );
-                })}
-              </div>
+                };
+
+                const unassigned = detail.workPackages.filter(
+                  (w) => !w.campaignPlanId || !detail.campaignPlans.some((p) => p.id === w.campaignPlanId),
+                );
+
+                return (
+                  <div className="space-y-3">
+                    {detail.campaignPlans.map((p) => {
+                      const chans = detail.workPackages.filter((w) => w.campaignPlanId === p.id);
+                      return (
+                        <div key={p.id} className="space-y-2 rounded-lg border border-orange-200 border-l-4 border-l-orange-500 bg-surface-container-lowest p-3">
+                          <CampaignPlanHeader
+                            plan={p}
+                            campaignId={c.id}
+                            members={members}
+                            channelCount={chans.length}
+                            canManage={canManage}
+                          />
+                          {chans.length > 0 ? (
+                            chans.map(renderChannel)
+                          ) : (
+                            <p className="text-xs text-on-surface-variant">
+                              Chưa có kênh nào trong Kế hoạch này. Bấm “Thêm kênh” và chọn Kế hoạch này.
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {unassigned.length > 0 ? (
+                      <div className="space-y-2">
+                        {detail.campaignPlans.length > 0 ? (
+                          <div className="text-xs font-semibold text-on-surface-variant">Chưa xếp kế hoạch (cấp 2)</div>
+                        ) : null}
+                        {unassigned.map(renderChannel)}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })()
             ) : (
               <EmptyTab label="Chưa có kênh triển khai. Thêm kênh rồi chia việc theo công đoạn." />
             )}

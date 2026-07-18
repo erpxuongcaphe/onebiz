@@ -830,8 +830,21 @@ export async function getExceptionLog(
   }));
 }
 
+// CẤP 2 · KẾ HOẠCH (00200) — gom nhiều kênh trong một chiến dịch.
+export type MktCampaignPlan = {
+  id: string;
+  name: string;
+  objective: string | null;
+  ownerId: string | null;
+  ownerName: string | null;
+  timeframeStart: string | null;
+  timeframeEnd: string | null;
+  sortOrder: number;
+};
+
 export type MktCampaignDetail = {
   campaign: MktCampaign | null;
+  campaignPlans: MktCampaignPlan[];
   workPackages: Array<{
     id: string;
     channelType: string;
@@ -843,6 +856,8 @@ export type MktCampaignDetail = {
     reviewerName: string | null;
     status: string;
     workloadPoints: number;
+    // 00200: kênh thuộc Kế hoạch cấp 2 nào (null = chưa xếp).
+    campaignPlanId: string | null;
   }>;
   readiness: Array<{
     id: string;
@@ -909,8 +924,9 @@ export async function getCampaignDetail(
         owner_id: string | null;
         reviewer_id: string | null;
         status: string;
+        campaign_plan_id: string | null;
       }>("mkt_channel_work_packages")
-      .select("id, channel_type, title, target_output, owner_id, reviewer_id, status")
+      .select("id, channel_type, title, target_output, owner_id, reviewer_id, status, campaign_plan_id")
       .eq("campaign_id", campaignId)
       .is("deleted_at", null)
       .order("created_at", { ascending: true })
@@ -973,7 +989,7 @@ export async function getCampaignDetail(
     throw new Error(`MKT_READ_FAILED:campaign_detail:${campaignRow.error.message}`);
   }
   if (!campaignRow.data) {
-    return { campaign: null, workPackages: [], readiness: [], contents: [], tasks: [] };
+    return { campaign: null, campaignPlans: [], workPackages: [], readiness: [], contents: [], tasks: [] };
   }
   const c = campaignRow.data;
 
@@ -982,12 +998,33 @@ export async function getCampaignDetail(
   const ct = requireRows(ctRes.data, ctRes.error, "campaign_contents");
   const tk = requireRows(tkRes.data, tkRes.error, "campaign_tasks");
 
+  // 00200: Kế hoạch cấp 2 của chiến dịch (đọc riêng — nhẹ, luôn cần cho tab channels).
+  const cpRes =
+    activeTab === "channels"
+      ? await db
+          .from<{
+            id: string;
+            name: string;
+            objective: string | null;
+            owner_id: string | null;
+            timeframe_start: string | null;
+            timeframe_end: string | null;
+            sort_order: number | null;
+          }>("mkt_campaign_plans")
+          .select("id, name, objective, owner_id, timeframe_start, timeframe_end, sort_order")
+          .eq("campaign_id", campaignId)
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+      : { data: [] as never[], error: null };
+  const cp = requireRows(cpRes.data, cpRes.error, "campaign_plans_level2");
+
   const profileIds = new Set<string>();
   if (activeTab === "channels") {
     wp.forEach((item) => {
       if (item.owner_id) profileIds.add(item.owner_id);
       if (item.reviewer_id) profileIds.add(item.reviewer_id);
     });
+    cp.forEach((item) => item.owner_id && profileIds.add(item.owner_id));
   }
   if (activeTab === "readiness") {
     rd.forEach((item) => item.confirmed_by && profileIds.add(item.confirmed_by));
@@ -1030,6 +1067,16 @@ export async function getCampaignDetail(
       timeframeStart: c.timeframe_start,
       timeframeEnd: c.timeframe_end,
     },
+    campaignPlans: cp.map((p) => ({
+      id: p.id,
+      name: p.name,
+      objective: p.objective,
+      ownerId: p.owner_id,
+      ownerName: nm(p.owner_id),
+      timeframeStart: p.timeframe_start,
+      timeframeEnd: p.timeframe_end,
+      sortOrder: p.sort_order ?? 0,
+    })),
     workPackages: wp.map((w) => ({
       id: w.id,
       channelType: w.channel_type,
@@ -1042,6 +1089,7 @@ export async function getCampaignDetail(
       status: w.status,
       // Tổng điểm khối lượng của các task trong gói (đúng "Workload pts" prototype)
       workloadPoints: workloadByPackage.get(w.id) ?? 0,
+      campaignPlanId: w.campaign_plan_id,
     })),
     readiness: rd.map((r) => ({
       id: r.id,

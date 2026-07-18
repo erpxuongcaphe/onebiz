@@ -10,6 +10,8 @@ type CreateWorkPackageBody = {
   targetOutput?: string;
   ownerId?: string;
   reviewerId?: string;
+  // 00200: kênh thuộc Kế hoạch cấp 2 nào (tuỳ chọn).
+  campaignPlanId?: string;
 };
 
 export async function POST(
@@ -31,5 +33,6 @@ export async function POST(
     p_target_output: body.targetOutput ?? null,
     p_owner_id: body.ownerId || null,
     p_reviewer_id: body.reviewerId || null,
+    p_campaign_plan_id: body.campaignPlanId || null,
   });
 }
