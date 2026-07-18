@@ -127,6 +127,30 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     expect(planningTree).toMatch(/if \(hasFilter\) \{[\s\S]{0,400}r\.plans\.length > 0 \|\| r\.children\.length > 0/);
   });
 
+  it("CEO chốt 18/07 khuya: NÂNG thẻ thành nút cấp — Test Plan thành nhánh, không mất công đoạn", () => {
+    const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
+    // Thẻ trực thuộc → cấp 2; trong cấp 2 → cấp 3; trong cấp 3 → ẨN (trần 4 cấp).
+    expect(cpControls).toContain("export function PromoteSubPlanButton");
+    expect(cpControls).toContain("if (currentPlanId && parentNode?.parentPlanId) return null");
+    expect(cpControls).toContain("const newLevel: 2 | 3 = currentPlanId ? 3 : 2");
+    // Flow 2 bước dùng RPC có sẵn: tạo nút cùng tên tại đúng chỗ → đưa thẻ vào trong.
+    expect(cpControls).toMatch(/campaigns\/\$\{campaignId\}\/plans[\s\S]{0,120}parentPlanId: currentPlanId/);
+    expect(cpControls).toMatch(/work-packages\/\$\{workPackageId\}\/campaign-plan[\s\S]{0,80}campaignPlanId: nodeId/);
+    // Gắn ở cả màn Lập kế hoạch lẫn chi tiết chiến dịch.
+    expect(planningTree).toContain("PromoteSubPlanButton");
+    expect(campaignDetail).toContain("PromoteSubPlanButton");
+  });
+
+  it("➕ tại nhánh: thêm cấp 3 / Kế hoạch phụ thẳng vào đúng nhánh (khỏi chọn 'Nằm trong')", () => {
+    const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
+    expect(planningTree).toContain("Thêm cấp 3 vào nhánh này");
+    expect(planningTree).toContain("defaultParentPlanId={node.id}");
+    expect(planningTree).toContain("defaultCampaignPlanId={node.id}");
+    expect(campaignDetail).toContain("Thêm cấp 3 vào nhánh này");
+    expect(campaignDetail).toContain("defaultParentPlanId={p.id}");
+    expect(campaignDetail).toContain("defaultCampaignPlanId={k.id}");
+  });
+
   it("lỗ hổng UAT 18/07 (00202): xoá chiến dịch phải xoá mềm CẢ nút cây kế hoạch + dọn nút mồ côi", () => {
     // mkt_delete_campaign (00192 viết trước 00200) bỏ sót mkt_campaign_plans.
     expect(mig202).toMatch(

@@ -191,6 +191,81 @@ export function CampaignPlanFormButton({
   );
 }
 
+// ══════════════════════════════════════════════════════════════
+// NÂNG một Kế hoạch phụ (thẻ chứa việc) thành NÚT CẤP (CEO chốt 18/07):
+// "Test Plan đang là thẻ, muốn thêm cấp 3 cho nó" → bấm nút này: tạo nút
+// cùng tên tại đúng chỗ thẻ đang đứng, rồi đưa thẻ (giữ nguyên toàn bộ
+// công đoạn/việc) vào TRONG nút — không mất gì, không cần SQL mới.
+//   • Thẻ trực thuộc Chiến dịch → thành nút CẤP 2.
+//   • Thẻ trong một nút cấp 2  → thành nút CẤP 3.
+//   • Thẻ trong nút cấp 3      → không nâng được (trần 4 cấp) — ẩn nút.
+// ══════════════════════════════════════════════════════════════
+export function PromoteSubPlanButton({
+  campaignId,
+  workPackageId,
+  title,
+  currentPlanId,
+  nodes,
+}: {
+  campaignId: string;
+  workPackageId: string;
+  title: string;
+  currentPlanId: string | null;
+  nodes: Array<{ id: string; parentPlanId: string | null }>;
+}) {
+  const { refresh, refreshing } = useMktRefresh();
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const parentNode = currentPlanId ? nodes.find((n) => n.id === currentPlanId) : null;
+  // Thẻ đang nằm trong nút cấp 3 → nhánh đã sâu nhất, không nâng nữa.
+  if (currentPlanId && parentNode?.parentPlanId) return null;
+  const newLevel: 2 | 3 = currentPlanId ? 3 : 2;
+
+  async function promote() {
+    if (
+      !window.confirm(
+        `Chuyển "${title}" thành Kế hoạch cấp ${newLevel} (một nhánh của cây)?\n\nCác công đoạn/việc đang có sẽ nằm gọn trong một thẻ con bên trong nhánh — không mất gì. Sau đó bạn thêm ${newLevel === 2 ? "cấp 3 và " : ""}Kế hoạch phụ vào nhánh thoải mái.`,
+      )
+    )
+      return;
+    setSaving(true);
+    setError(null);
+    try {
+      const created = await mktPost<{ campaignPlanId?: string }>(
+        `/api/mkt/v1/campaigns/${campaignId}/plans`,
+        { name: title, parentPlanId: currentPlanId || undefined },
+      );
+      const nodeId = created?.campaignPlanId;
+      if (!nodeId) throw new Error("Không tạo được nút Kế hoạch");
+      await mktPost(`/api/mkt/v1/work-packages/${workPackageId}/campaign-plan`, {
+        campaignPlanId: nodeId,
+      });
+      refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không chuyển được thành nhánh");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={saving || refreshing}
+        onClick={promote}
+        className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary disabled:opacity-60"
+        title={`Biến thẻ này thành một nhánh cấp ${newLevel} — công đoạn/việc giữ nguyên bên trong`}
+      >
+        <Icon name="move_up" size={13} />
+        {saving ? "Đang chuyển…" : `Chuyển thành Kế hoạch cấp ${newLevel}`}
+      </button>
+      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
 // Thanh tiêu đề một nút Kế hoạch trong cây (cấp 2 cam / cấp 3 xanh dương),
 // kèm sửa/xoá cho Leader. Xoá KHÔNG mất gì — mọi thứ bên trong nối lên tầng trên.
 export function CampaignPlanHeader({
