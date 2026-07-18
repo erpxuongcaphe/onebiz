@@ -7,7 +7,7 @@
  * Bảng: List phiếu kiểm kê trong kỳ với từng metric.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatShortDate } from "@/lib/format";
@@ -50,16 +50,20 @@ export default function KiemKeReportPage() {
 
   const [data, setData] = useState<InventoryCheckReportResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const result = await getInventoryCheckReport({
         range,
         branchId: activeBranchId ?? undefined,
       });
+      if (requestId !== requestIdRef.current) return;
       setData(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch inventory check report:", err);
       toast({
         title: "Lỗi tải báo cáo kiểm kê",
@@ -67,7 +71,7 @@ export default function KiemKeReportPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [range, activeBranchId, toast]);
 

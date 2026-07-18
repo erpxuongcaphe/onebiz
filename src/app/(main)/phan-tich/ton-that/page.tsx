@@ -19,7 +19,7 @@
  * Excel: Info + Tổng theo lý do + Tổng theo SP + Tổng theo chi nhánh + Chi tiết
  */
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import {
   BarChart,
   Bar,
@@ -73,10 +73,12 @@ export default function DisposalLossReportPage() {
   } | null>(null);
   const [loading, setLoading] = useState(false);
   const [reasonFilter, setReasonFilter] = useState<string | "all">("all");
+  const requestIdRef = useRef(0);
 
   // ── Fetch ──
   useEffect(() => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     getDisposalLossReport({
       branchId: activeBranchId ?? null,
@@ -84,10 +86,12 @@ export default function DisposalLossReportPage() {
       dateTo: range.to,
     })
       .then((res) => {
+        if (requestId !== requestIdRef.current) return;
         setRows(res.rows);
         setPreviousPeriod(res.previousPeriod ?? null);
       })
       .catch((err) => {
+        if (requestId !== requestIdRef.current) return;
         toast({
           title: "Không tải được báo cáo tổn thất",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
@@ -95,7 +99,9 @@ export default function DisposalLossReportPage() {
         });
         setRows([]);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
   }, [isReady, activeBranchId, range.from, range.to, toast]);
 
   // ── KPI ──

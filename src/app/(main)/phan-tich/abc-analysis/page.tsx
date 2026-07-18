@@ -10,7 +10,7 @@
  * - Slow: KHÔNG bán trong kỳ
  */
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
@@ -47,19 +47,23 @@ export default function AbcAnalysisPage() {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [data, setData] = useState<AbcReportResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const result = await getAbcReport({
         range,
         branchId: activeBranchId ?? undefined,
       });
+      if (requestId !== requestIdRef.current) return;
       setData(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch ABC report:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [range, activeBranchId]);
 

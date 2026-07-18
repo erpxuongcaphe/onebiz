@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -44,6 +44,7 @@ import type {
   LowStockItem,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 const PIE_COLORS = [
   "#004AC6",
@@ -168,6 +169,8 @@ export default function HangHoaPage() {
   const [categories, setCategories] = useState<{ name: string; value: number }[]>([]);
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+  const requestIdRef = useRef(0);
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
 
 
   const handleExportView = useCallback(() => {
@@ -258,7 +261,7 @@ export default function HangHoaPage() {
           rows: categories.map((c) => ({ name: c.name, value: c.value })),
         },
         {
-          name: "Xuất - Nhập 30 ngày",
+          name: "Xuất - Nhập trong kỳ",
           titleRows: ["XUẤT - NHẬP THEO NGÀY", ...title.slice(1)],
           columns: [
             { label: "Ngày", key: "date", width: 14 },
@@ -296,6 +299,7 @@ export default function HangHoaPage() {
   }, [kpis, topProducts, categories, movements, lowStock, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
@@ -305,15 +309,17 @@ export default function HangHoaPage() {
         getStockMovements(30, activeBranchId, range),
         getAnalyticsLowStock(10, activeBranchId),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpiData);
       setTopProducts(topData);
       setCategories(catData);
       setMovements(moveData);
       setLowStock(lowData);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch inventory analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range]);
 
@@ -363,7 +369,7 @@ export default function HangHoaPage() {
           <KpiCard
             label="Hàng bán chạy"
             value={kpis?.bestSeller.name ?? "—"}
-            change={kpis?.bestSeller.qty ? `${formatNumber(kpis.bestSeller.qty)} sản phẩm trong tháng` : undefined}
+            change={kpis?.bestSeller.qty ? `${formatNumber(kpis.bestSeller.qty)} sản phẩm trong kỳ` : undefined}
             positive
             icon="star"
             bg="bg-status-success/10"
@@ -394,7 +400,7 @@ export default function HangHoaPage() {
           {/* Top 10 Products by Revenue - Horizontal Bar */}
           <ChartCard
             title="Top 10 sản phẩm theo doanh thu"
-            subtitle={`Tổng ${topProducts.length} sản phẩm`}
+            subtitle={`${selectedPeriodLabel} · ${topProducts.length} sản phẩm`}
           >
             <div className="h-72 md:h-96">
               {topProducts.length === 0 ? (
@@ -440,7 +446,7 @@ export default function HangHoaPage() {
           {/* Product Category Distribution - Pie */}
           <ChartCard
             title="Phân bổ sản phẩm theo nhóm hàng"
-            subtitle={`${totalProducts} sản phẩm`}
+            subtitle={`Tại thời điểm hiện tại · ${totalProducts} sản phẩm`}
           >
             <div className="h-72 md:h-96">
               {categories.length === 0 ? (
@@ -486,7 +492,7 @@ export default function HangHoaPage() {
         {/* Stock Movement Line Chart */}
         <ChartCard
           title="Biến động xuất nhập kho"
-          subtitle="Nhập vs Xuất"
+          subtitle={`${selectedPeriodLabel} · Nhập so với xuất`}
         >
           <div className="h-56 md:h-72">
             {movements.length === 0 ? (
@@ -549,7 +555,7 @@ export default function HangHoaPage() {
         {/* Low Stock Products Table */}
         <ChartCard
           title="Sản phẩm tồn kho thấp"
-          subtitle="Cần nhập thêm hàng"
+          subtitle="Tồn kho tại thời điểm hiện tại · Cần nhập thêm hàng"
         >
           <ReportTableFrame tablePreferenceKey="report.products.low-stock">
             <div className="overflow-x-auto">

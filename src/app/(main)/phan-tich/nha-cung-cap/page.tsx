@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -42,15 +42,20 @@ import type {
   SupplierSummaryRow,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 // === Helpers ===
 
 const PAYMENT_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
 
+function truncateAxisLabel(value: string, maxLength: number = 24): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
 function calcChange(current: number, previous: number): string {
   if (previous === 0) return current > 0 ? "+100%" : "0%";
   const pct = ((current - previous) / previous) * 100;
-  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với tháng trước`;
+  return `${pct >= 0 ? "+" : ""}${pct.toFixed(1)}% so với kỳ trước`;
 }
 
 // === Custom Tooltips ===
@@ -152,6 +157,8 @@ export default function NhaCungCapPage() {
   const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
   const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
+  const requestIdRef = useRef(0);
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
 
 
   const handleExportView = useCallback(() => {
@@ -213,15 +220,15 @@ export default function NhaCungCapPage() {
           ],
           rows: [
             { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
-            { metric: "Mua tháng này", value: kpis?.purchaseThisMonth ?? 0 },
-            { metric: "Mua tháng trước", value: kpis?.prevPurchase ?? 0 },
+            { metric: "Mua trong kỳ", value: kpis?.purchaseThisMonth ?? 0 },
+            { metric: "Mua kỳ trước", value: kpis?.prevPurchase ?? 0 },
             { metric: "Tổng công nợ", value: kpis?.totalDebt ?? 0 },
             { metric: "Số đơn trả", value: kpis?.returnCount ?? 0 },
           ],
         },
         {
           name: "Mua theo tháng",
-          titleRows: ["MUA HÀNG 6 THÁNG GẦN NHẤT", ...title.slice(1)],
+          titleRows: ["GIÁ TRỊ MUA HÀNG TRONG KỲ", ...title.slice(1)],
           columns: [
             { label: "Tháng", key: "label", width: 16 },
             { label: "Giá trị (VND)", key: "value", width: 18, format: "currency" },
@@ -284,24 +291,27 @@ export default function NhaCungCapPage() {
   );
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
       const [kpiData, purchase, top, payment, summary] = await Promise.all([
         getSupplierKpis(activeBranchId, range),
-        getPurchaseByMonth(6, activeBranchId),
+        getPurchaseByMonth(6, activeBranchId, range),
         getTopSuppliersByPurchase(5, activeBranchId, range),
         getSupplierPaymentStatus(activeBranchId),
         getSupplierSummary(8, activeBranchId, range),
       ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpiData);
       setPurchaseByMonth(purchase);
       setTopSuppliers(top);
       setPaymentStatus(payment);
       setSupplierTable(summary);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch supplier analytics:", err);
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, range]);
 
@@ -329,7 +339,7 @@ export default function NhaCungCapPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Tổng NCC"
+            label="NCC đã giao dịch"
             value={String(kpis?.totalSuppliers ?? 0)}
             change={`${kpis?.totalSuppliers ?? 0} nhà cung cấp`}
             positive
@@ -339,7 +349,7 @@ export default function NhaCungCapPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng mua tháng"
+            label="Tổng mua trong kỳ"
             value={formatCurrency(kpis?.purchaseThisMonth ?? 0)}
             change={calcChange(kpis?.purchaseThisMonth ?? 0, kpis?.prevPurchase ?? 0)}
             positive={(kpis?.purchaseThisMonth ?? 0) >= (kpis?.prevPurchase ?? 0)}
@@ -351,8 +361,8 @@ export default function NhaCungCapPage() {
           <KpiCard
             label="Công nợ NCC"
             value={formatCurrency(kpis?.totalDebt ?? 0)}
-            change={calcChange(kpis?.totalDebt ?? 0, kpis?.prevDebt ?? 0)}
-            positive={(kpis?.totalDebt ?? 0) <= (kpis?.prevDebt ?? 0)}
+            change="Dư nợ tại thời điểm hiện tại"
+            positive={(kpis?.totalDebt ?? 0) === 0}
             icon="account_balance_wallet"
             bg="bg-status-warning/10"
             iconColor="text-status-warning"
@@ -372,7 +382,7 @@ export default function NhaCungCapPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Purchase volume by month */}
-          <ChartCard title="Giá trị mua hàng theo tháng" subtitle="6 tháng gần nhất">
+          <ChartCard title="Giá trị mua hàng theo tháng" subtitle={selectedPeriodLabel}>
             <div className="h-64">
               {purchaseByMonth.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -415,7 +425,7 @@ export default function NhaCungCapPage() {
           </ChartCard>
 
           {/* Top 5 suppliers horizontal bar */}
-          <ChartCard title="Top 5 nhà cung cấp" subtitle="Theo giá trị mua hàng">
+          <ChartCard title="Top 5 nhà cung cấp" subtitle={`${selectedPeriodLabel} · Theo giá trị mua hàng`}>
             <div className="h-64">
               {topSuppliers.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -443,6 +453,7 @@ export default function NhaCungCapPage() {
                       tickLine={false}
                       axisLine={false}
                       width={150}
+                      tickFormatter={(value: string) => truncateAxisLabel(value)}
                     />
                     <Tooltip content={<SupplierAmountTooltip />} />
                     <Bar
@@ -459,7 +470,7 @@ export default function NhaCungCapPage() {
         </div>
 
         {/* Payment status pie chart */}
-        <ChartCard title="Tình trạng thanh toán NCC" subtitle="Tổng hợp công nợ">
+        <ChartCard title="Tình trạng thanh toán NCC" subtitle="Dư nợ tại thời điểm hiện tại">
           <div className="h-72">
             {paymentStatus.length === 0 ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -501,7 +512,7 @@ export default function NhaCungCapPage() {
         </ChartCard>
 
         {/* Supplier table */}
-        <ChartCard title="Bảng tổng hợp nhà cung cấp">
+        <ChartCard title="Bảng tổng hợp nhà cung cấp" subtitle={selectedPeriodLabel}>
           {supplierTable.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Chưa có dữ liệu nhà cung cấp

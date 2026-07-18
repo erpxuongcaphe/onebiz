@@ -12,7 +12,7 @@
  * Built trên framework `@/components/shared/report` Sprint REP-1.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
@@ -57,8 +57,10 @@ export default function XuatNhapTonPage() {
   const [search, setSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
       const result = await getXntReport({
@@ -66,8 +68,10 @@ export default function XuatNhapTonPage() {
         branchId: activeBranchId ?? undefined,
         search: search.trim() || undefined,
       });
+      if (requestId !== requestIdRef.current) return;
       setData(result);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch XNT report:", err);
       toast({
         title: "Lỗi tải báo cáo Xuất - Nhập - Tồn",
@@ -75,7 +79,7 @@ export default function XuatNhapTonPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [range, activeBranchId, search, toast]);
 
