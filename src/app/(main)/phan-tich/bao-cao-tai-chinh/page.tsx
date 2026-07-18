@@ -49,6 +49,7 @@ import type {
 } from "@/lib/services/supabase/reports";
 import { Icon } from "@/components/ui/icon";
 import { useBranchFilter, useToast } from "@/lib/contexts";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 // === Helpers ===
 
@@ -131,6 +132,7 @@ export default function BaoCaoTaiChinhPage() {
     setPreset,
     setCustomRange,
   } = useReportState({ defaultPreset: "thisMonth", forceTable: true });
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const { activeBranchId, branches, isReady } = useBranchFilter();
@@ -511,7 +513,7 @@ export default function BaoCaoTaiChinhPage() {
                 <strong>
                   {formatCurrency(consolidated.current.internalRevenue)}
                 </strong>{" "}
-                doanh thu nội bộ (xưởng bán cho kho, kho bán cho quán) trong tháng này.
+                doanh thu nội bộ (xưởng bán cho kho, kho bán cho quán) trong kỳ đã chọn.
                 Kỳ trước:{" "}
                 {formatCurrency(consolidated.previous.internalRevenue)}.
               </p>
@@ -752,10 +754,10 @@ export default function BaoCaoTaiChinhPage() {
                 <tr className="border-b text-muted-foreground">
                   <th className="text-left py-2 pr-4 font-medium">Khoản mục</th>
                   <th className="text-right py-2 pr-4 font-medium">
-                    {cur?.period ?? "Tháng này"}
+                    {cur?.period ?? "Kỳ hiện tại"}
                   </th>
                   <th className="text-right py-2 pr-4 font-medium">
-                    {prev?.period ?? "Tháng trước"}
+                    {prev?.period ?? "Kỳ trước"}
                   </th>
                   <th className="text-right py-2 font-medium">Thay đổi</th>
                 </tr>
@@ -865,7 +867,7 @@ export default function BaoCaoTaiChinhPage() {
           {/* Gross Margin Trend */}
           <ChartCard
             title="Xu hướng biên lợi nhuận gộp"
-            subtitle="6 tháng gần nhất"
+            subtitle="6 tháng gần nhất · tham chiếu"
           >
             {marginTrend.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
@@ -918,7 +920,7 @@ export default function BaoCaoTaiChinhPage() {
                     {/* Stitch palette: Doanh thu dùng primary #004AC6, COGS orange, Biên gộp green. */}
                     <Line
                       yAxisId="left"
-                      type="monotone"
+                      type="linear"
                       dataKey="revenue"
                       stroke="#004AC6"
                       strokeWidth={2}
@@ -927,7 +929,7 @@ export default function BaoCaoTaiChinhPage() {
                     />
                     <Line
                       yAxisId="left"
-                      type="monotone"
+                      type="linear"
                       dataKey="cogs"
                       stroke="#ea580c"
                       strokeWidth={2}
@@ -936,7 +938,7 @@ export default function BaoCaoTaiChinhPage() {
                     />
                     <Line
                       yAxisId="right"
-                      type="monotone"
+                      type="linear"
                       dataKey="grossMargin"
                       stroke="#16a34a"
                       strokeWidth={2}
@@ -953,7 +955,7 @@ export default function BaoCaoTaiChinhPage() {
           {/* COGS Breakdown Bar Chart */}
           <ChartCard
             title="Top sản phẩm theo giá vốn"
-            subtitle="Kỳ đã chọn"
+            subtitle={selectedPeriodLabel}
           >
             {cogsItems.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
@@ -1123,7 +1125,7 @@ export default function BaoCaoTaiChinhPage() {
         {cogsItems.length > 0 && (
           <ChartCard
             title="Chi tiết giá vốn theo sản phẩm"
-            subtitle="Kỳ đã chọn"
+            subtitle={selectedPeriodLabel}
           >
             <ReportTableFrame tablePreferenceKey="report.financial-results.materials">
               <div className="overflow-x-auto">

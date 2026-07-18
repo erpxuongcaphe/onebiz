@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -35,7 +35,6 @@ import {
   getFinanceKpis,
   getRevenueVsExpense,
   getExpenseBreakdown,
-  getMonthlyProfit,
   getCashFlow,
 } from "@/lib/services";
 import type {
@@ -44,6 +43,7 @@ import type {
   CashFlowRow,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
+import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 const EXPENSE_COLORS = ["#004AC6", "#ea580c", "#16a34a", "#9333ea", "#6b7280"];
 
@@ -158,7 +158,9 @@ export default function TaiChinhPage() {
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
+  const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
+  const requestIdRef = useRef(0);
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
   const [revenueVsExpenseData, setRevenueVsExpenseData] = useState<MultiSeriesPoint[]>([]);
   const [expenseBreakdownData, setExpenseBreakdownData] = useState<{ name: string; value: number }[]>([]);
@@ -322,10 +324,10 @@ export default function TaiChinhPage() {
 
       // Sheet 3: Doanh thu vs Chi phí 12 tháng
       const trendSheet: ExcelSheet = {
-        name: "Trend 12 tháng",
+        name: "Xu hướng theo kỳ",
         titleRows: buildReportTitleRows({
           ...titleBase,
-          title: "XU HƯỚNG DOANH THU VS CHI PHÍ 12 THÁNG",
+          title: "XU HƯỚNG DOANH THU VÀ CHI PHÍ THEO KỲ",
         }),
         columns: [
           { label: "Tháng", key: "label", width: 14 },
@@ -349,7 +351,7 @@ export default function TaiChinhPage() {
           };
         }),
         footer: {
-          label: "TỔNG 12 THÁNG",
+          label: "TỔNG KỲ",
           revenue: revenueVsExpenseData.reduce(
             (s, p) => s + Number(p.revenue ?? 0),
             0,
@@ -386,6 +388,32 @@ export default function TaiChinhPage() {
         },
       };
 
+      const cashFlowSheet: ExcelSheet = {
+        name: "Dòng tiền",
+        titleRows: buildReportTitleRows({
+          ...titleBase,
+          title: "TỔNG HỢP DÒNG TIỀN THEO KỲ",
+        }),
+        columns: [
+          { label: "Tháng", key: "month", width: 16 },
+          { label: "Thu vào (VND)", key: "receipt", width: 20, format: "currency" },
+          { label: "Chi ra (VND)", key: "payment", width: 20, format: "currency" },
+          { label: "Dòng tiền ròng", key: "net", width: 20, format: "currency" },
+        ],
+        rows: cashFlowData.map((row) => ({
+          month: row.month,
+          receipt: row.thu,
+          payment: row.chi,
+          net: row.ton,
+        })),
+        footer: {
+          month: "TỔNG KỲ",
+          receipt: cashFlowData.reduce((sum, row) => sum + row.thu, 0),
+          payment: cashFlowData.reduce((sum, row) => sum + row.chi, 0),
+          net: cashFlowData.reduce((sum, row) => sum + row.ton, 0),
+        },
+      };
+
       exportReportToExcel({
         kind: "tai-chinh",
         mode: "full",
@@ -398,11 +426,12 @@ export default function TaiChinhPage() {
           expenseSheet,
           trendSheet,
           profitTrendSheet,
+          cashFlowSheet,
         ],
       });
       toast({
         title: "Đã xuất báo cáo tài chính",
-        description: "5 sheet: Info + P&L + Chi phí + Trend + LN tháng",
+        description: "6 sheet: Thông tin + Kết quả + Chi phí + Xu hướng + Lợi nhuận + Dòng tiền",
         variant: "success",
       });
     } catch (err) {
@@ -417,6 +446,7 @@ export default function TaiChinhPage() {
     revenueVsExpenseData,
     expenseBreakdownData,
     monthlyProfitData,
+    cashFlowData,
     range,
     branchLabel,
     tenantName,
@@ -424,27 +454,36 @@ export default function TaiChinhPage() {
   ]);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
     try {
-      setLoading(true);
-      const [kpiResult, revExpResult, expBkResult, profitResult, cashResult] =
+      const [kpiResult, revExpResult, expBkResult, cashResult] =
         await Promise.all([
           getFinanceKpis(activeBranchId, range),
-          getRevenueVsExpense(12, activeBranchId),
+          getRevenueVsExpense(12, activeBranchId, range),
           getExpenseBreakdown(activeBranchId, range),
-          getMonthlyProfit(12, activeBranchId),
-          getCashFlow(6, activeBranchId),
+          getCashFlow(6, activeBranchId, range),
         ]);
+      if (requestId !== requestIdRef.current) return;
       setKpis(kpiResult);
       setRevenueVsExpenseData(revExpResult);
       setExpenseBreakdownData(expBkResult);
-      setMonthlyProfitData(profitResult);
+      setMonthlyProfitData(
+        revExpResult.map((point) => ({
+          label: String(point.label),
+          value: Number(point.revenue ?? 0) - Number(point.expense ?? 0),
+        })),
+      );
       setCashFlowData(cashResult);
     } catch (err) {
-      console.error("Failed to fetch finance data:", err);
+      if (requestId === requestIdRef.current) {
+        console.error("Failed to fetch finance data:", err);
+      }
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, range]);
+  }, [activeBranchId, isReady, range]);
 
   useEffect(() => {
     if (!isReady) return; // PERF F12: chờ AuthContext xong, tránh double-fire
@@ -484,7 +523,7 @@ export default function TaiChinhPage() {
             value={kpis ? formatCurrency(kpis.revenue) : "—"}
             change={
               kpis
-                ? `${pctChange(kpis.revenue, kpis.prevRevenue)} so với tháng trước`
+                ? `${pctChange(kpis.revenue, kpis.prevRevenue)} so với kỳ trước`
                 : ""
             }
             positive={kpis ? kpis.revenue >= kpis.prevRevenue : true}
@@ -498,7 +537,7 @@ export default function TaiChinhPage() {
             value={kpis ? formatCurrency(kpis.expense) : "—"}
             change={
               kpis
-                ? `${pctChange(kpis.expense, kpis.prevExpense)} so với tháng trước`
+                ? `${pctChange(kpis.expense, kpis.prevExpense)} so với kỳ trước`
                 : ""
             }
             positive={kpis ? kpis.expense <= kpis.prevExpense : false}
@@ -512,7 +551,7 @@ export default function TaiChinhPage() {
             value={kpis ? formatCurrency(kpis.profit) : "—"}
             change={
               kpis
-                ? `${pctChange(kpis.profit, kpis.prevProfit)} so với tháng trước`
+                ? `${pctChange(kpis.profit, kpis.prevProfit)} so với kỳ trước`
                 : ""
             }
             positive={kpis ? kpis.profit >= kpis.prevProfit : true}
@@ -526,7 +565,7 @@ export default function TaiChinhPage() {
             value={kpis ? `${kpis.profitMargin}%` : "—"}
             change={
               kpis
-                ? `${pctChange(kpis.profitMargin, kpis.prevProfitMargin)} so với tháng trước`
+                ? `${pctChange(kpis.profitMargin, kpis.prevProfitMargin)} so với kỳ trước`
                 : ""
             }
             positive={kpis ? kpis.profitMargin >= kpis.prevProfitMargin : true}
@@ -538,7 +577,7 @@ export default function TaiChinhPage() {
         </div>
 
         {/* Revenue vs Expense line chart */}
-        <ChartCard title="Doanh thu và Chi phí" subtitle="12 tháng gần nhất">
+        <ChartCard title="Doanh thu và Chi phí" subtitle={selectedPeriodLabel}>
           {revenueVsExpenseData.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-12">
               Chưa có dữ liệu doanh thu và chi phí.
@@ -572,7 +611,7 @@ export default function TaiChinhPage() {
                     )}
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="revenue"
                     stroke="#004AC6"
                     strokeWidth={2}
@@ -581,7 +620,7 @@ export default function TaiChinhPage() {
                     name="Doanh thu"
                   />
                   <Line
-                    type="monotone"
+                    type="linear"
                     dataKey="expense"
                     stroke="#ef4444"
                     strokeWidth={2}
@@ -597,7 +636,7 @@ export default function TaiChinhPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Expense breakdown pie chart */}
-          <ChartCard title="Cơ cấu chi phí" subtitle="Tháng hiện tại">
+          <ChartCard title="Cơ cấu chi phí" subtitle={selectedPeriodLabel}>
             {expenseBreakdownData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
                 Chưa có dữ liệu chi phí.
@@ -639,7 +678,7 @@ export default function TaiChinhPage() {
           </ChartCard>
 
           {/* Monthly profit bar chart */}
-          <ChartCard title="Lợi nhuận theo tháng" subtitle="12 tháng gần nhất">
+          <ChartCard title="Lợi nhuận theo tháng" subtitle={selectedPeriodLabel}>
             {monthlyProfitData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
                 Chưa có dữ liệu lợi nhuận.
@@ -686,7 +725,7 @@ export default function TaiChinhPage() {
         </div>
 
         {/* Cash flow summary table */}
-        <ChartCard title="Tổng hợp dòng tiền" subtitle="6 tháng gần nhất">
+        <ChartCard title="Tổng hợp dòng tiền" subtitle={selectedPeriodLabel}>
           {cashFlowData.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-12">
               Chưa có dữ liệu dòng tiền.
@@ -700,7 +739,7 @@ export default function TaiChinhPage() {
                     <th className="text-left py-2 pr-4 font-medium">Tháng</th>
                     <th className="text-right py-2 pr-4 font-medium">Thu</th>
                     <th className="text-right py-2 pr-4 font-medium">Chi</th>
-                    <th className="text-right py-2 font-medium">Tồn quỹ</th>
+                    <th className="text-right py-2 font-medium">Dòng tiền ròng</th>
                   </tr>
                 </thead>
                 <tbody>
