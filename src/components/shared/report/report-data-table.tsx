@@ -20,7 +20,15 @@ import {
 } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -92,7 +100,15 @@ export interface DataTableProps<T> {
   showDisplayOptions?: boolean;
   /** Stable key shared with the matching current-view Excel sheet. */
   tablePreferenceKey?: string;
+  /** Number of rows shown on first load. */
+  defaultPageSize?: number;
+  /** Compact choices shown in the rows-per-page dropdown. */
+  pageSizeOptions?: number[];
+  /** Only paginate when the result is larger than this value. */
+  paginationThreshold?: number;
 }
+
+const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
 const DEFAULT_TABLE_PREFERENCES: ReportTablePreferences = {
   density: "standard",
@@ -113,6 +129,9 @@ export function ReportDataTable<T>({
   className,
   showDisplayOptions = true,
   tablePreferenceKey,
+  defaultPageSize = 50,
+  pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
+  paginationThreshold = 50,
 }: DataTableProps<T>) {
   const pathname = usePathname();
   const preferenceKey = useMemo(
@@ -130,6 +149,8 @@ export function ReportDataTable<T>({
     null,
   );
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [pageState, setPageState] = useState({ key: "", index: 0 });
+  const [pageSize, setPageSize] = useState(defaultPageSize);
   const columnEntries = useMemo(
     () =>
       columns.map((column, index) => ({
@@ -166,6 +187,33 @@ export function ReportDataTable<T>({
       return groups;
     }, []);
   }, [columnGroups, columns.length, visibleColumnEntries]);
+  const normalizedPageSizeOptions = useMemo(
+    () =>
+      Array.from(new Set([...pageSizeOptions, defaultPageSize]))
+        .filter((size) => Number.isInteger(size) && size > 0)
+        .sort((a, b) => a - b),
+    [defaultPageSize, pageSizeOptions],
+  );
+  const showPagination = rows.length > paginationThreshold;
+  const resultBoundaryKey =
+    rows.length === 0
+      ? "empty"
+      : [
+          getRowKey(rows[0], 0),
+          getRowKey(rows[rows.length - 1], rows.length - 1),
+          rows.length,
+        ].join(":");
+  const pageResetKey = [preferenceKey, resultBoundaryKey].join(":");
+  const requestedPageIndex =
+    pageState.key === pageResetKey ? pageState.index : 0;
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePageIndex = Math.min(requestedPageIndex, pageCount - 1);
+  const pageStart = showPagination ? safePageIndex * pageSize : 0;
+  const pageEnd = showPagination
+    ? Math.min(rows.length, pageStart + pageSize)
+    : rows.length;
+  const pagedRows = showPagination ? rows.slice(pageStart, pageEnd) : rows;
+
 
   useEffect(() => {
     if (!showDisplayOptions) return;
@@ -218,7 +266,7 @@ export function ReportDataTable<T>({
     (preferences.freezeFirstColumn && index === 0 && !hasExpand);
 
   return (
-    <div className={cn("min-w-0 overflow-x-auto", className)}>
+    <div className={cn("min-w-0", className)}>
       {showDisplayOptions && (
         <div className="sticky left-0 z-20 flex min-h-9 min-w-full items-center justify-end border-b border-border/60 px-2 py-1">
           <DropdownMenu>
@@ -336,8 +384,9 @@ export function ReportDataTable<T>({
           </DropdownMenu>
         </div>
       )}
-      <table
-        className={cn(
+      <div className="min-w-0 overflow-x-auto">
+        <table
+          className={cn(
           "w-full border-collapse text-sm",
           preferences.wrapText
             ? "[&_td]:whitespace-normal"
@@ -424,8 +473,9 @@ export function ReportDataTable<T>({
               </td>
             </tr>
           ) : (
-            rows.map((row, idx) => {
-              const key = String(getRowKey(row, idx));
+            pagedRows.map((row, idx) => {
+              const absoluteIndex = pageStart + idx;
+              const key = String(getRowKey(row, absoluteIndex));
               const subRows = getSubRows?.(row);
               const hasSubRows = subRows && subRows.length > 0;
               const isExpanded = expanded[key];
@@ -436,7 +486,7 @@ export function ReportDataTable<T>({
                     className={cn(
                       "border-b border-border/50 hover:bg-surface-container/50 transition-colors",
                       preferences.stripedRows &&
-                        idx % 2 === 1 &&
+                        absoluteIndex % 2 === 1 &&
                         "bg-surface-container-low/20",
                     )}
                   >
@@ -515,7 +565,77 @@ export function ReportDataTable<T>({
             })
           )}
         </tbody>
-      </table>
+        </table>
+      </div>
+      {showPagination && (
+        <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+          <span className="tabular-nums">
+            Hiển thị {pageStart + 1}–{pageEnd} trên {rows.length} dòng
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline">Số dòng</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(value) => {
+                setPageSize(Number(value));
+                setPageState({ key: pageResetKey, index: 0 });
+              }}
+            >
+              <SelectTrigger
+                size="sm"
+                className="min-w-20 bg-background text-xs"
+                aria-label="Số dòng mỗi trang"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {normalizedPageSizeOptions.map((size) => (
+                  <SelectItem key={size} value={String(size)}>
+                    {size} dòng
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePageIndex === 0}
+              onClick={() =>
+                setPageState({
+                  key: pageResetKey,
+                  index: safePageIndex - 1,
+                })
+              }
+              aria-label="Trang trước"
+              title="Trang trước"
+            >
+              <Icon name="chevron_left" size={18} />
+            </Button>
+            <span className="min-w-14 text-center tabular-nums text-foreground">
+              {safePageIndex + 1}/{pageCount}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              className="h-8 w-8"
+              disabled={safePageIndex >= pageCount - 1}
+              onClick={() =>
+                setPageState({
+                  key: pageResetKey,
+                  index: safePageIndex + 1,
+                })
+              }
+              aria-label="Trang sau"
+              title="Trang sau"
+            >
+              <Icon name="chevron_right" size={18} />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
