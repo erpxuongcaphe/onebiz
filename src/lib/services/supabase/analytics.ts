@@ -238,6 +238,42 @@ function resolveRange(
   return toCreatedAtRangeWindow(range) ?? fallback;
 }
 
+export function monthKeysForRange(
+  range: { from: string; to: string } | undefined,
+  fallbackMonths: number,
+): string[] {
+  const now = new Date();
+  let startYear = now.getFullYear();
+  let startMonth = now.getMonth() - Math.max(1, fallbackMonths) + 1;
+  let endYear = now.getFullYear();
+  let endMonth = now.getMonth();
+
+  if (range) {
+    const [fromYear, fromMonth] = range.from.split("-").map(Number);
+    const [toYear, toMonth] = range.to.split("-").map(Number);
+    if (
+      Number.isInteger(fromYear) &&
+      Number.isInteger(fromMonth) &&
+      Number.isInteger(toYear) &&
+      Number.isInteger(toMonth)
+    ) {
+      startYear = fromYear;
+      startMonth = fromMonth - 1;
+      endYear = toYear;
+      endMonth = toMonth - 1;
+    }
+  }
+
+  const cursor = new Date(startYear, startMonth, 1);
+  const end = new Date(endYear, endMonth, 1);
+  const keys: string[] = [];
+  while (cursor <= end) {
+    keys.push(`T${cursor.getMonth() + 1}/${cursor.getFullYear()}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return keys;
+}
+
 /**
  * Compute previous-period range (same length backward) cho KPIs comparison.
  * Dùng khi caller pass custom range — previous month không còn ý nghĩa.
@@ -2539,10 +2575,15 @@ export async function getFinanceKpis(
   };
 }
 
-export async function getRevenueVsExpense(months: number = 12, branchId?: string): Promise<MultiSeriesPoint[]> {
+export async function getRevenueVsExpense(
+  months: number = 12,
+  branchId?: string,
+  dateRange?: { from: string; to: string },
+): Promise<MultiSeriesPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNMonthsRange(months);
+  const range = resolveRange(dateRange, lastNMonthsRange(months));
+  const monthKeys = monthKeysForRange(dateRange, months);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
@@ -2559,12 +2600,9 @@ export async function getRevenueVsExpense(months: number = 12, branchId?: string
   ]);
 
   // P1-3B-R4: key kèm year để không merge T6/2025 và T6/2026.
-  const now = new Date();
   const revMap = new Map<string, number>();
   const expMap = new Map<string, number>();
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+  for (const key of monthKeys) {
     revMap.set(key, 0);
     expMap.set(key, 0);
   }
@@ -2619,18 +2657,27 @@ export async function getExpenseBreakdown(
     .sort((a, b) => b.value - a.value);
 }
 
-export async function getMonthlyProfit(months: number = 12, branchId?: string): Promise<ChartPoint[]> {
-  const data = await getRevenueVsExpense(months, branchId);
+export async function getMonthlyProfit(
+  months: number = 12,
+  branchId?: string,
+  dateRange?: { from: string; to: string },
+): Promise<ChartPoint[]> {
+  const data = await getRevenueVsExpense(months, branchId, dateRange);
   return data.map(d => ({
     label: d.label as string,
     value: (d.revenue as number) - (d.expense as number),
   }));
 }
 
-export async function getCashFlow(months: number = 6, branchId?: string): Promise<CashFlowRow[]> {
+export async function getCashFlow(
+  months: number = 6,
+  branchId?: string,
+  dateRange?: { from: string; to: string },
+): Promise<CashFlowRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNMonthsRange(months);
+  const range = resolveRange(dateRange, lastNMonthsRange(months));
+  const monthKeys = monthKeysForRange(dateRange, months);
 
   let query = supabase
     .from("cash_transactions")
@@ -2642,12 +2689,9 @@ export async function getCashFlow(months: number = 6, branchId?: string): Promis
   const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlow]");
 
   // P1-3B-R4: key kèm year (chống merge T6/2025 + T6/2026 → cumulativeBalance sai).
-  const now = new Date();
   const thuMap = new Map<string, number>();
   const chiMap = new Map<string, number>();
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+  for (const key of monthKeys) {
     thuMap.set(key, 0);
     chiMap.set(key, 0);
   }
@@ -2688,10 +2732,15 @@ export interface CashFlowDetailedRow {
   cumulativeBalance: number;
 }
 
-export async function getCashFlowDetailed(months: number = 6, branchId?: string): Promise<CashFlowDetailedRow[]> {
+export async function getCashFlowDetailed(
+  months: number = 6,
+  branchId?: string,
+  dateRange?: { from: string; to: string },
+): Promise<CashFlowDetailedRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = lastNMonthsRange(months);
+  const range = resolveRange(dateRange, lastNMonthsRange(months));
+  const monthKeys = monthKeysForRange(dateRange, months);
 
   let query = supabase
     .from("cash_transactions")
@@ -2703,12 +2752,6 @@ export async function getCashFlowDetailed(months: number = 6, branchId?: string)
   const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlowDetailed]");
 
   // P1-3B-R4: key kèm year.
-  const now = new Date();
-  const monthKeys: string[] = [];
-  for (let i = months - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthKeys.push(`T${d.getMonth() + 1}/${d.getFullYear()}`);
-  }
 
   // Group by month → type → category
   const grouped = new Map<string, Map<string, number>>();
