@@ -281,7 +281,7 @@ create or replace function public.mkt_audit_execute_scenario(
   p_run_id uuid,
   p_scenario_key text
 ) returns jsonb
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 declare
   v_run record;
   v_sandbox record;
