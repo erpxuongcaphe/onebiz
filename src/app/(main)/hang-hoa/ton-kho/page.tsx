@@ -459,7 +459,8 @@ function StockRowDetail({
                   </div>
                 ) : (
                   <div className="border rounded-lg overflow-x-auto">
-                    <table className="w-full min-w-[1080px] text-sm">
+                    {/* Đợt 6: 10 cột → nới min-w cho khỏi dính cột. */}
+                    <table className="w-full min-w-[1280px] text-sm">
                       <thead className="bg-muted/30">
                         <tr>
                           <th className="text-left p-2 font-medium">Thời gian</th>
