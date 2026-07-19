@@ -2,7 +2,7 @@
 
 ## Điều kiện một lần trước khi dùng
 
-1. Migration `00209_mkt_audit_runner.sql` đã được chạy trên Supabase.
+1. Các migration Audit Runner (`00209` và bản vá `00210` nếu hệ thống đã cài `00209`) đã được chạy trên Supabase.
 2. Bản web chứa Audit Runner đã được đưa lên production.
 3. CEO đăng nhập MKT Hub bằng Google Chrome và có quyền `mkt.audit_runner`.
 4. Mở: `https://mkthub.onebiz.com.vn/audit-runner`.
