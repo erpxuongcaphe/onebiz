@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { PlanStatusBadge } from "@/components/mkt/badges";
@@ -44,6 +44,20 @@ const HEALTH_LABEL: Record<string, { text: string; cls: string }> = {
   at_risk: { text: "Có rủi ro", cls: "border-amber-200 bg-amber-50 text-amber-700" },
   on_track: { text: "Đúng nhịp", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
 };
+
+// Ghi nhớ nhánh đang GẬP theo máy người dùng (localStorage) — F5 hay thao tác
+// lưu xong vẫn giữ nguyên cách nhìn. Chỉ lưu id đang gập; nút mới mặc định mở.
+const COLLAPSED_KEY = "mkt-planning-collapsed";
+
+function readCollapsed(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_KEY);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch {
+    // localStorage bị chặn (chế độ riêng tư…) — coi như không nhớ gì.
+  }
+  return new Set();
+}
 
 // Trạng thái Kế hoạch phụ cho bộ lọc — thuần Việt.
 const STATUS_OPTIONS: Array<{ value: string; label: string }> = [
@@ -164,6 +178,32 @@ export function PlanningTree({
   const [owner, setOwner] = useState("");
   const [status, setStatus] = useState("");
 
+  // Trạng thái gập — đọc từ localStorage SAU khi gắn lên trang (server không
+  // biết máy người dùng), ghi lại mỗi lần đóng/mở. Set chứa id đang GẬP.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    // localStorage chỉ có sau khi gắn lên trang; khởi tạo thẳng trong useState
+    // sẽ lệch server/client (hydration mismatch) — nên chấp nhận 1 lần setState.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCollapsed(readCollapsed());
+  }, []);
+  function persistCollapsed(next: Set<string>) {
+    setCollapsed(next);
+    try {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(Array.from(next)));
+    } catch {
+      // Không ghi được thì thôi — chỉ mất tính năng nhớ, không chặn thao tác.
+    }
+  }
+  function handleToggle(id: string, isOpen: boolean) {
+    const shouldCollapse = !isOpen;
+    if (collapsed.has(id) === shouldCollapse) return; // trình duyệt bắn lại — bỏ qua
+    const next = new Set(collapsed);
+    if (shouldCollapse) next.add(id);
+    else next.delete(id);
+    persistCollapsed(next);
+  }
+
   // Người phụ trách xuất hiện thực tế (để ô lọc chỉ liệt kê người có kế hoạch).
   const owners = useMemo(() => {
     const m = new Map<string, string>();
@@ -195,6 +235,14 @@ export function PlanningTree({
   }, [plans, q, from, to, owner, status]);
 
   const hasFilter = Boolean(q || from || to || owner || status);
+  // Đang lọc thì MỞ HẾT — kết quả khớp không bao giờ bị giấu trong nhánh gập.
+  // (Toggle tay lúc này không ghi nhớ — bỏ lọc là trở về đúng cách nhìn đã lưu.)
+  const isOpen = (id: string) => hasFilter || !collapsed.has(id);
+  const onToggleGuarded = (id: string) => (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    if (e.target !== e.currentTarget) return; // toggle của details con — bỏ qua
+    if (hasFilter) return;
+    handleToggle(id, e.currentTarget.open);
+  };
 
   // Cây: Chiến dịch (cấp 1) → nút cấp 2 → nút cấp 3 → Kế hoạch phụ.
   // Dựng từ planNodes để nhánh RỖNG vẫn hiện; đang lọc thì ẩn nhánh không khớp.
@@ -312,7 +360,12 @@ export function PlanningTree({
         : { box: "border-sky-200 border-l-sky-500", chip: "bg-sky-50 text-sky-700" };
     const nodeData = nodes.find((n) => n.id === node.id);
     return (
-      <details key={node.id} open className={`group/node rounded-lg border border-l-4 bg-surface-container-lowest ${tone.box} ${level === 3 ? "ml-2 sm:ml-3.5" : ""}`}>
+      <details
+        key={node.id}
+        open={isOpen(node.id)}
+        onToggle={onToggleGuarded(node.id)}
+        className={`group/node rounded-lg border border-l-4 bg-surface-container-lowest ${tone.box} ${level === 3 ? "ml-2 sm:ml-3.5" : ""}`}
+      >
         <summary className="flex cursor-pointer flex-wrap items-center gap-1.5 px-2.5 py-1.5 [&::-webkit-details-marker]:hidden">
           <Icon name="expand_more" size={15} className="shrink-0 -rotate-90 text-on-surface-variant transition-transform group-open/node:rotate-0" />
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone.chip}`}>Kế hoạch cấp {level}</span>
@@ -414,7 +467,27 @@ export function PlanningTree({
           >
             <Icon name="close" size={14} /> Xoá lọc
           </button>
-        ) : null}
+        ) : (
+          // Toàn cảnh một cú bấm. Ẩn khi đang lọc (lúc lọc luôn mở hết).
+          (() => {
+            const allIds = [
+              ...tree.map((g) => g.campaignId),
+              ...planNodes.map((n) => n.id),
+            ];
+            const anyOpen = allIds.some((id) => !collapsed.has(id));
+            return (
+              <button
+                type="button"
+                onClick={() => persistCollapsed(anyOpen ? new Set(allIds) : new Set())}
+                className="inline-flex h-9 items-center gap-1 rounded-lg border border-outline-variant px-2.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container"
+                title={anyOpen ? "Gập mọi chiến dịch và nhánh — nhìn toàn cảnh một dòng mỗi nhánh" : "Mở lại toàn bộ cây"}
+              >
+                <Icon name={anyOpen ? "unfold_less" : "unfold_more"} size={14} />
+                {anyOpen ? "Gập tất cả" : "Mở tất cả"}
+              </button>
+            );
+          })()
+        )}
       </div>
 
       {filtered.length === 0 ? (
@@ -428,7 +501,12 @@ export function PlanningTree({
           const sumChannelBudget = g.campPlans.reduce((s, p) => s + (p.budgetPlanned ?? 0), 0);
           const budget = campaignBudget[g.campaignId];
           return (
-            <details key={g.campaignId} open className="rounded-lg border border-indigo-200 border-l-4 border-l-indigo-500 bg-background">
+            <details
+              key={g.campaignId}
+              open={isOpen(g.campaignId)}
+              onToggle={onToggleGuarded(g.campaignId)}
+              className="rounded-lg border border-indigo-200 border-l-4 border-l-indigo-500 bg-background"
+            >
               <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-2.5 [&::-webkit-details-marker]:hidden">
                 <Icon name="flag" size={16} className="text-indigo-600" />
                 <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">Kế hoạch cấp 1 · Chiến dịch</span>
