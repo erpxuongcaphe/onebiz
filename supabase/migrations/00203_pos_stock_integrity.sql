@@ -340,12 +340,6 @@ grant execute on function public.pos_complete_checkout_atomic_v2(
   text, text, uuid, uuid, numeric, numeric, text, boolean
 ) to authenticated;
 
--- Prevent authenticated clients from bypassing v2 by supplying tenant/actor IDs.
-revoke all on function public.pos_complete_checkout_atomic(
-  uuid, uuid, uuid, uuid, text, jsonb, text, jsonb, numeric, numeric,
-  numeric, numeric, text, text, uuid, uuid, numeric, numeric, text
-) from public, anon, authenticated;
-
 create or replace function public.complete_draft_atomic_v3(
   p_invoice_id uuid,
   p_method text,
@@ -645,11 +639,6 @@ revoke all on function public.complete_draft_atomic_v3(
 grant execute on function public.complete_draft_atomic_v3(
   uuid, text, numeric, jsonb, uuid, boolean
 ) to authenticated;
-
--- Prevent authenticated clients from bypassing v3 by supplying scope IDs.
-revoke all on function public.complete_draft_atomic(
-  uuid, uuid, uuid, uuid, text, numeric, jsonb, uuid
-) from public, anon, authenticated;
 
 do $
 begin
