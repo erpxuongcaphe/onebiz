@@ -2,7 +2,7 @@
 
 // Lịch sử xuất/nhập kho — xem tất cả stock movements, lọc theo loại, chi nhánh, thời gian
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -22,6 +22,8 @@ import { getAllStockMovements, getBranches } from "@/lib/services";
 import type { AllStockMovementRow } from "@/lib/services/supabase";
 import type { BranchDetail } from "@/lib/services/supabase";
 import { Icon } from "@/components/ui/icon";
+import { StockDocumentLink } from "@/components/shared/stock-document-link";
+import { getStockMovementCounts } from "@/lib/services/supabase/products";
 
 // === Movement type badge config ===
 const movementTypeBadge: Record<
@@ -58,8 +60,8 @@ const feTypeToDbType: Record<string, string> = {
 const movementTypeOptions = [
   { label: "Nhập kho", value: "in" },
   { label: "Xuất kho", value: "out" },
-  { label: "Kiểm kho", value: "adjust" },
-  { label: "Chuyển kho", value: "transfer" },
+  { label: "Kiểm kho", value: "inventory_check" },
+  { label: "Chuyển kho", value: "stock_transfer" },
 ];
 
 // === Date presets ===
@@ -78,6 +80,11 @@ export default function LichSuKhoPage() {
   const { toast } = useToast();
   const [data, setData] = useState<AllStockMovementRow[]>([]);
   const [total, setTotal] = useState(0);
+  const [movementCounts, setMovementCounts] = useState({
+    total: 0,
+    inbound: 0,
+    outbound: 0,
+  });
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -112,17 +119,20 @@ export default function LichSuKhoPage() {
       const effectiveDateTo =
         datePreset === "custom" ? dateTo : presetRange.to;
 
-      const result = await getAllStockMovements({
-        page,
-        pageSize,
+      const filters = {
         search: search || undefined,
         movementType: typeFilter !== "all" ? typeFilter : undefined,
         branchId: branchFilter !== "all" ? branchFilter : undefined,
         dateFrom: effectiveDateFrom || undefined,
         dateTo: effectiveDateTo || undefined,
-      });
+      };
+      const [result, counts] = await Promise.all([
+        getAllStockMovements({ page, pageSize, ...filters }),
+        getStockMovementCounts(filters),
+      ]);
       setData(result.data);
       setTotal(result.total);
+      setMovementCounts(counts);
     } catch (err) {
       toast({
         title: "Lỗi tải lịch sử kho",
@@ -143,21 +153,6 @@ export default function LichSuKhoPage() {
     setPage(0);
   }, [search, typeFilter, branchFilter, datePreset, dateFrom, dateTo]);
 
-  // === Summary stats ===
-  const totalIn = useMemo(
-    () =>
-      data
-        .filter((r) => r.type === "import")
-        .reduce((sum, r) => sum + Math.abs(r.quantity), 0),
-    [data]
-  );
-  const totalOut = useMemo(
-    () =>
-      data
-        .filter((r) => r.type === "export")
-        .reduce((sum, r) => sum + Math.abs(r.quantity), 0),
-    [data]
-  );
 
   // === Export ===
   // CEO 17/07 (Thẻ kho Đợt 1): xuất TOÀN BỘ dữ liệu theo bộ lọc hiện tại.
@@ -167,16 +162,15 @@ export default function LichSuKhoPage() {
   const handleExport = async (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
-      { header: "Loại", key: "typeName", width: 12 },
+      { header: "Loại chứng từ", key: "referenceTypeName", width: 24 },
+      { header: "Hướng", key: "typeName", width: 12 },
+      { header: "Chi nhánh", key: "branchName", width: 24 },
       { header: "Mã hàng", key: "productCode", width: 15 },
       { header: "Tên hàng", key: "productName", width: 25 },
-      { header: "Số lượng", key: "quantity", width: 12 },
-      {
-        header: "Tham chiếu",
-        key: "referenceType",
-        width: 20,
-        format: (v: string) => referenceTypeLabels[v] ?? v ?? "",
-      },
+      { header: "ĐVT", key: "productUnit", width: 10 },
+      { header: "Số lượng biến động", key: "signedQuantity", width: 18 },
+      { header: "Đối tác/Bộ phận", key: "partner", width: 25 },
+      { header: "Người tạo", key: "createdByName", width: 20 },
       { header: "Ghi chú", key: "note", width: 25 },
       {
         header: "Ngày tạo",
@@ -201,8 +195,15 @@ export default function LichSuKhoPage() {
         all.push(...r.data);
         if (all.length >= r.total || r.data.length < CHUNK) break;
       }
-      if (type === "excel") await exportToExcel(all, exportColumns, "lich-su-kho");
-      else await exportToCsv(all, exportColumns, "lich-su-kho");
+      const exportRows = all.map((row) => ({
+        ...row,
+        referenceTypeName:
+          referenceTypeLabels[row.referenceType ?? ""] ?? row.referenceType ?? "",
+        signedQuantity:
+          row.type === "export" ? -Math.abs(row.quantity) : Math.abs(row.quantity),
+      }));
+      if (type === "excel") await exportToExcel(exportRows, exportColumns, "lich-su-kho");
+      else await exportToCsv(exportRows, exportColumns, "lich-su-kho");
       toast({
         title: "Đã xuất file",
         description: `${all.length} dòng (đầy đủ theo bộ lọc hiện tại)`,
@@ -224,7 +225,12 @@ export default function LichSuKhoPage() {
       header: "Mã phiếu",
       size: 130,
       cell: ({ row }) => (
-        <span className="font-medium text-primary">{row.original.code}</span>
+        <StockDocumentLink
+          referenceType={row.original.referenceType}
+          referenceId={row.original.referenceId}
+          code={row.original.code}
+          className="font-medium"
+        />
       ),
     },
     {
@@ -243,6 +249,19 @@ export default function LichSuKhoPage() {
           </Badge>
         );
       },
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 180,
+      cell: ({ row }) => (
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium">{row.original.branchName ?? "—"}</div>
+          {row.original.branchCode && (
+            <div className="text-xs text-muted-foreground">{row.original.branchCode}</div>
+          )}
+        </div>
+      ),
     },
     {
       accessorKey: "productName",
@@ -289,7 +308,6 @@ export default function LichSuKhoPage() {
       cell: ({ row }) => {
         const p = row.original.partner;
         const t = row.original.partnerType;
-        const code = row.original.referenceCode;
         if (!p) return <span className="text-muted-foreground">--</span>;
         const colorMap = {
           customer: "text-blue-600",
@@ -299,15 +317,10 @@ export default function LichSuKhoPage() {
         } as const;
         const color = t ? colorMap[t] : "text-foreground";
         return (
-          <div className="flex flex-col gap-0.5">
+          <div className="min-w-0">
             <span className={`text-sm font-medium truncate ${color}`} title={p}>
               {p}
             </span>
-            {code && (
-              <span className="text-[10px] font-mono text-muted-foreground">
-                {code}
-              </span>
-            )}
           </div>
         );
       },
@@ -388,20 +401,20 @@ export default function LichSuKhoPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
         <SummaryCard
           icon={<Icon name="history" size={16} />}
-          label="Tổng phiếu"
-          value={total.toString()}
+          label="Dòng biến động"
+          value={movementCounts.total.toString()}
         />
         <SummaryCard
           icon={<Icon name="arrow_circle_down" size={16} className="text-status-success" />}
-          label="Tổng nhập"
-          value={`+${formatNumber(totalIn)}`}
+          label="Dòng nhập"
+          value={formatNumber(movementCounts.inbound)}
           highlight
         />
         <SummaryCard
           icon={<Icon name="arrow_circle_up" size={16} className="text-status-error" />}
-          label="Tổng xuất"
-          value={`-${formatNumber(totalOut)}`}
-          danger={totalOut > 0}
+          label="Dòng xuất"
+          value={formatNumber(movementCounts.outbound)}
+          danger={movementCounts.outbound > 0}
         />
       </div>
 

@@ -10,6 +10,8 @@ import { getStockCard } from "@/lib/services";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
+import { StockDocumentLink } from "@/components/shared/stock-document-link";
 
 interface ProductStockMovementsTabProps {
   productId: string;
@@ -29,6 +31,7 @@ const TYPE_STYLE: Record<
 export function ProductStockMovementsTab({ productId }: ProductStockMovementsTabProps) {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [total, setTotal] = useState(0);
+  const [visibleLimit, setVisibleLimit] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   // Đợt 4 (17/07): thẻ kho ở chi tiết SP KHÔNG lọc chi nhánh → tồn cuối là tồn
@@ -39,6 +42,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setVisibleLimit(50);
 
     getStockCard(productId)
       .then((result) => {
@@ -94,7 +98,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>Hiển thị {movements.length} giao dịch (toàn công ty)</span>
+        <span>Hiển thị {Math.min(visibleLimit, movements.length)}/{movements.length} giao dịch (toàn công ty)</span>
         <span>Tổng: {formatNumber(total)}</span>
       </div>
 
@@ -115,8 +119,9 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           CEO 10/06/2026: thay cột "Còn lại" (để "—") bằng "Đối tác" thật.
           Đợt 4 (17/07): thêm lại cột "Tồn cuối" ĐÚNG (cộng dồn từ sổ). */}
       <div className="rounded-lg border overflow-x-auto">
-        <div className="grid grid-cols-[110px_180px_80px_100px_200px_160px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[860px]">
+        <div className="grid grid-cols-[110px_130px_180px_80px_100px_200px_160px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[1000px]">
           <span>Ngày</span>
+          <span>Mã phiếu</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
           <span className="text-right">Tồn cuối</span>
@@ -124,8 +129,8 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           <span>Ghi chú</span>
         </div>
 
-        <ul className="divide-y min-w-[800px]">
-          {movements.map((m) => {
+        <ul className="divide-y min-w-[1000px]">
+          {movements.slice(0, visibleLimit).map((m) => {
             const style = TYPE_STYLE[m.type] ?? TYPE_STYLE.import;
             const signed = m.type === "export" ? -Math.abs(m.quantity) : m.quantity;
             const partnerColor: Record<NonNullable<typeof m.partnerType>, string> = {
@@ -138,11 +143,16 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_180px_80px_100px_200px_160px] gap-2 items-center px-3 py-2 text-sm"
+                className="grid grid-cols-[110px_130px_180px_80px_100px_200px_160px] gap-2 items-center px-3 py-2 text-sm"
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
                 </span>
+                <StockDocumentLink
+                  referenceType={m.referenceType}
+                  referenceId={m.referenceId}
+                  code={m.referenceCode ?? m.code}
+                />
                 <span className={`flex items-center gap-2 ${style.color}`}>
                   <Icon name={style.icon} size={14} />
                   <span className="truncate">{m.typeName || style.label}</span>
@@ -161,11 +171,6 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                 </span>
                 <span className={`text-xs truncate ${pColor}`} title={m.partner ?? ""}>
                   {m.partner ?? "—"}
-                  {m.referenceCode && (
-                    <span className="ml-1 text-[10px] text-muted-foreground font-mono">
-                      ({m.referenceCode})
-                    </span>
-                  )}
                 </span>
                 <span className="text-xs text-muted-foreground truncate" title={m.note ?? ""}>
                   {m.note ?? ""}
@@ -175,6 +180,19 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           })}
         </ul>
       </div>
+      {visibleLimit < movements.length && (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleLimit((current) => current + 50)}
+          >
+            <Icon name="expand_more" size={15} />
+            Xem thêm 50 giao dịch
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -439,9 +439,18 @@ export async function getProductById(id: string): Promise<ProductDetail | null> 
 export interface AllStockMovementRow extends StockMovement {
   productName: string;
   productCode: string;
+  productUnit: string;
   referenceType?: string;
   referenceId?: string;
   branchId?: string;
+  branchName?: string;
+  branchCode?: string;
+}
+
+export interface StockMovementCounts {
+  total: number;
+  inbound: number;
+  outbound: number;
 }
 
 // --- All Stock Movements (cross-product) ---
@@ -463,7 +472,7 @@ export async function getAllStockMovements(
 
   let query = supabase
     .from("stock_movements")
-    .select("*, products!inner(name, code), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
+    .select("*, products!inner(name, code, unit), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   // Search by product name/code or note
@@ -473,8 +482,12 @@ export async function getAllStockMovements(
     );
   }
 
-  // Filter by movement type
-  if (params.movementType && params.movementType !== "all") {
+  // Filter by direction or by the source document family shown in the UI.
+  if (params.movementType === "inventory_check") {
+    query = query.eq("reference_type", "inventory_check");
+  } else if (params.movementType === "stock_transfer") {
+    query = query.in("reference_type", ["transfer", "stock_transfer"]);
+  } else if (params.movementType && params.movementType !== "all") {
     query = query.eq("type", params.movementType as "in" | "out" | "adjust" | "transfer");
   }
 
@@ -501,6 +514,21 @@ export async function getAllStockMovements(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: any[] = data ?? [];
   const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+  const branchIds = Array.from(
+    new Set(rows.map((row) => row.branch_id).filter((id): id is string => Boolean(id))),
+  );
+  const branchMap = new Map<string, { name: string; code: string | null }>();
+  if (branchIds.length > 0) {
+    const { data: branchRows, error: branchError } = await supabase
+      .from("branches")
+      .select("id, name, code")
+      .eq("tenant_id", tenantId)
+      .in("id", branchIds);
+    if (branchError) handleError(branchError, "getAllStockMovements.branches");
+    (branchRows ?? []).forEach((branch) => {
+      branchMap.set(branch.id, { name: branch.name, code: branch.code });
+    });
+  }
 
   const movements: AllStockMovementRow[] = rows.map((row) => {
     const p = resolvePartner(row);
@@ -521,9 +549,12 @@ export async function getAllStockMovements(
       createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
       productName: row.products?.name ?? "—",
       productCode: row.products?.code ?? "—",
+      productUnit: row.products?.unit ?? "—",
       referenceType: row.reference_type ?? undefined,
       referenceId: row.reference_id ?? undefined,
       branchId: row.branch_id ?? undefined,
+      branchName: branchMap.get(row.branch_id)?.name,
+      branchCode: branchMap.get(row.branch_id)?.code ?? undefined,
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
@@ -531,6 +562,64 @@ export async function getAllStockMovements(
   });
 
   return { data: movements, total: count ?? 0 };
+}
+
+export async function getStockMovementCounts(
+  params: {
+    search?: string;
+    movementType?: string;
+    branchId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+  },
+): Promise<StockMovementCounts> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const countRows = async (movementType?: "in" | "out") => {
+    if (
+      movementType &&
+      (params.movementType === "in" || params.movementType === "out") &&
+      params.movementType !== movementType
+    ) {
+      return 0;
+    }
+    let query = supabase
+      .from("stock_movements")
+      .select("id, products!inner(name, code)", { count: "exact", head: true })
+      .eq("tenant_id", tenantId);
+
+    if (params.search) {
+      query = query.or(
+        `note.ilike.%${params.search}%,products.name.ilike.%${params.search}%,products.code.ilike.%${params.search}%`,
+      );
+    }
+    if (params.movementType === "inventory_check") {
+      query = query.eq("reference_type", "inventory_check");
+    } else if (params.movementType === "stock_transfer") {
+      query = query.in("reference_type", ["transfer", "stock_transfer"]);
+    } else if (params.movementType && params.movementType !== "all") {
+      query = query.eq(
+        "type",
+        params.movementType as "in" | "out" | "adjust" | "transfer",
+      );
+    }
+    if (movementType) query = query.eq("type", movementType);
+    if (params.branchId && params.branchId !== "all") {
+      query = query.eq("branch_id", params.branchId);
+    }
+    query = applyCreatedAtRangeFilter(query, params);
+    const { count, error } = await query;
+    if (error) handleError(error, "getStockMovementCounts");
+    return count ?? 0;
+  };
+
+  const [total, inbound, outbound] = await Promise.all([
+    countRows(),
+    countRows("in"),
+    countRows("out"),
+  ]);
+  return { total, inbound, outbound };
 }
 
 // --- Stock Movements Partner Resolver (CEO 10/06/2026) ───────────────
@@ -561,26 +650,46 @@ async function buildMovementPartnerResolver(
   const inventoryCheckIds = new Set<string>();
   const disposalIds = new Set<string>();
   const salesReturnIds = new Set<string>();
+  const supplierReturnIds = new Set<string>();
+  const internalExportIds = new Set<string>();
+  const stockTransferIds = new Set<string>();
   for (const r of rows) {
     if (!r.reference_id) continue;
     const t = r.reference_type;
     if (t === "invoice" || t === "bom_consume" || t === "modifier_topping" || t === "invoice_void") {
       invoiceIds.add(r.reference_id);
-    } else if (t === "purchase_order" || t === "po_receive" || t === "purchase_order_revert") {
+    } else if (
+      t === "purchase_order" ||
+      t === "po_receive" ||
+      t === "purchase_order_revert" ||
+      t === "goods_receipt" ||
+      t === "purchase_entry"
+    ) {
       // purchase_order_revert (hủy phiếu nhập, đảo kho) trỏ CÙNG bảng purchase_orders.
       purchaseOrderIds.add(r.reference_id);
     } else if (t === "input_invoice") {
       inputInvoiceIds.add(r.reference_id);
     } else if (t === "internal_sale") {
       internalSaleIds.add(r.reference_id);
-    } else if (t === "production_order") {
+    } else if (
+      t === "production_order" ||
+      t === "production_reconcile" ||
+      t === "production_complete" ||
+      t === "production_consume"
+    ) {
       productionOrderIds.add(r.reference_id);
     } else if (t === "inventory_check") {
       inventoryCheckIds.add(r.reference_id);
     } else if (t === "disposal_export" || t === "disposal") {
       disposalIds.add(r.reference_id);
-    } else if (t === "sales_return" || t === "return_bom_restore") {
+    } else if (t === "sales_return" || t === "return" || t === "return_bom_restore") {
       salesReturnIds.add(r.reference_id);
+    } else if (t === "supplier_return" || t === "purchase_return") {
+      supplierReturnIds.add(r.reference_id);
+    } else if (t === "internal_export") {
+      internalExportIds.add(r.reference_id);
+    } else if (t === "stock_transfer" || t === "transfer") {
+      stockTransferIds.add(r.reference_id);
     }
   }
 
@@ -631,6 +740,9 @@ async function buildMovementPartnerResolver(
     [inventoryCheckIds, "inventory_checks"],
     [disposalIds, "disposal_exports"],
     [salesReturnIds, "sales_returns"],
+    [supplierReturnIds, "supplier_returns"],
+    [internalExportIds, "internal_exports"],
+    [stockTransferIds, "stock_transfers"],
   ];
   for (const [ids, table] of codeOnlyLoaders) {
     if (ids.size === 0) continue;
@@ -651,7 +763,12 @@ async function buildMovementPartnerResolver(
       if (!inv) return {};
       return { partner: inv.customer_name || "Khách lẻ", partnerType: "customer", referenceCode: inv.code };
     }
-    if (t === "purchase_order" || t === "po_receive") {
+    if (
+      t === "purchase_order" ||
+      t === "po_receive" ||
+      t === "goods_receipt" ||
+      t === "purchase_entry"
+    ) {
       const po = poMap.get(rid);
       if (!po) return {};
       return { partner: po.supplier_name || "NCC", partnerType: "supplier", referenceCode: po.code };
@@ -677,16 +794,25 @@ async function buildMovementPartnerResolver(
       };
     }
     // Đợt 3: 4 loại chứng từ nội bộ — nay kèm MÃ THẬT (SX/IN/DI/TH) thay mã chế.
-    if (t === "production_order")
+    if (
+      t === "production_order" ||
+      t === "production_reconcile" ||
+      t === "production_complete" ||
+      t === "production_consume"
+    )
       return { partner: "Lệnh sản xuất", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
     if (t === "inventory_check")
       return { partner: "Kiểm kho", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
     if (t === "disposal_export" || t === "disposal")
       return { partner: "Xuất hủy", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
-    if (t === "sales_return" || t === "return_bom_restore")
+    if (t === "sales_return" || t === "return" || t === "return_bom_restore")
       return { partner: "Trả hàng bán", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
-    if (t === "internal_export") return { partner: "Xuất dùng nội bộ", partnerType: "system" };
-    if (t === "stock_transfer") return { partner: "Chuyển kho", partnerType: "system" };
+    if (t === "supplier_return" || t === "purchase_return")
+      return { partner: "Trả hàng nhà cung cấp", partnerType: "supplier", referenceCode: codeOnlyMap.get(rid) };
+    if (t === "internal_export")
+      return { partner: "Xuất dùng nội bộ", partnerType: "system", referenceCode: codeOnlyMap.get(rid) };
+    if (t === "stock_transfer" || t === "transfer")
+      return { partner: "Chuyển kho", partnerType: "branch", referenceCode: codeOnlyMap.get(rid) };
     if (t === "initial_stock_import") return { partner: "Tồn đầu kỳ (import)", partnerType: "system" };
     if (t === "initial_stock_reset") return { partner: "Tồn đầu kỳ (ghi đè)", partnerType: "system" };
     return {};
