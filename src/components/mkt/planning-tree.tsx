@@ -17,6 +17,7 @@ import {
 } from "@/components/mkt/plan-progress";
 import { CampaignPlanFormButton, PromoteSubPlanButton } from "@/components/mkt/campaign-plan-controls";
 import { WorkPackageForm } from "@/components/mkt/campaign-controls";
+import { MktDeleteButton } from "@/components/mkt/delete-button";
 import { mktPost } from "@/lib/mkt/client";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 import { formatVnd } from "@/lib/mkt/format";
@@ -112,9 +113,9 @@ function MoveSubPlan({
   }
 
   return (
-    <div className="flex flex-col gap-1">
-      <label className="flex items-center gap-1.5 text-xs text-on-surface-variant">
-        <Icon name="account_tree" size={13} />
+    <>
+      <label className="flex min-w-[190px] flex-1 items-center gap-1.5 text-xs text-on-surface-variant">
+        <Icon name="account_tree" size={13} className="shrink-0" />
         <span className="shrink-0">Nằm trong</span>
         <select
           value={entry.campaignPlanId ?? ""}
@@ -133,8 +134,8 @@ function MoveSubPlan({
           ))}
         </select>
       </label>
-      {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
-    </div>
+      {error ? <p className="w-full text-xs font-medium text-rose-600">{error}</p> : null}
+    </>
   );
 }
 
@@ -237,31 +238,31 @@ export function PlanningTree({
   }, [filtered, planNodes, hasFilter]);
 
   const inputCls = "h-9 rounded-lg border border-outline-variant bg-background px-2 text-sm";
+  const ghostBtnCls =
+    "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary";
 
   function renderCard(p: MktPlanInboxEntry, nodes: MktCampaignPlanNode[]) {
     const deadline = fmtDate(p.deadline);
     return (
-      <article key={p.id} className="flex flex-col gap-3 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-4">
+      <article key={p.id} className="flex flex-col gap-2 rounded-lg border border-emerald-200 border-l-4 border-l-emerald-500 bg-background p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">{p.channelTitle ?? "Kế hoạch phụ"}</div>
-            <div className="mt-0.5 truncate text-xs text-on-surface-variant">Phụ trách: {p.ownerName ?? "—"}</div>
-          </div>
-          <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="min-w-0 truncate text-sm font-semibold">{p.channelTitle ?? "Kế hoạch phụ"}</div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
             <PlanStatusBadge value={p.status} />
             <PlanHealthBadge plan={p} />
           </div>
         </div>
         {p.objective ? <div className="line-clamp-2 text-xs text-on-surface-variant">🎯 {p.objective}</div> : null}
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
-          <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700">Kế hoạch phụ</span>
+        {/* Một hàng meta gọn: phụ trách · nhóm công đoạn · công đoạn · bản · hạn */}
+        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-on-surface-variant">
+          <span className="inline-flex items-center gap-1"><Icon name="person" size={13} /> {p.ownerName ?? "—"}</span>
           {p.stages.length > 0 ? (
             <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
               <Icon name="account_tree" size={13} /> {p.stages.length} nhóm công đoạn
             </span>
           ) : null}
           <span className="inline-flex items-center gap-1"><Icon name="checklist" size={13} /> {p.items.length} công đoạn</span>
-          <span>bản v{p.versionNumber}</span>
+          <span>v{p.versionNumber}</span>
           {deadline ? <span className="inline-flex items-center gap-1"><Icon name="schedule" size={13} /> {deadline}</span> : null}
         </div>
         {p.versions.length > 1 || p.versions.some((v) => v.reviewAction) ? (
@@ -270,22 +271,20 @@ export function PlanningTree({
           </div>
         ) : null}
         {canManage ? (
-          // "Nằm trong" một hàng riêng đủ rộng (không bị nút khác chèn cụt chữ);
-          // nút nâng thành nhánh là hành động hiếm → ghost nhẹ, hàng riêng căn phải.
-          <div className="space-y-1 border-t border-outline-variant/50 pt-2">
+          // Một hàng gọn: "Nằm trong" (tự giãn, không bị nghiền nhờ min-w) +
+          // nút nâng ghost. Thiếu chỗ thì tự xuống dòng — không bao giờ cụt chữ.
+          <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-1 border-t border-outline-variant/50 pt-1.5">
             {nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
-            <div className="flex justify-end">
-              <PromoteSubPlanButton
-                campaignId={p.campaignId}
-                workPackageId={p.workPackageId}
-                title={p.channelTitle ?? "Kế hoạch phụ"}
-                currentPlanId={p.campaignPlanId}
-                nodes={nodes}
-              />
-            </div>
+            <PromoteSubPlanButton
+              campaignId={p.campaignId}
+              workPackageId={p.workPackageId}
+              title={p.channelTitle ?? "Kế hoạch phụ"}
+              currentPlanId={p.campaignPlanId}
+              nodes={nodes}
+            />
           </div>
         ) : null}
-        <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
+        <div className="mt-auto flex flex-wrap justify-end gap-1.5">
           <PlanEditorButton plan={p} members={members} pillars={pillars} contents={contents.filter((c) => c.campaignId === p.campaignId)} />
           {isLead && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
           {p.status === "in_execution" ? <ProgressReportButton plan={p} /> : null}
@@ -298,10 +297,11 @@ export function PlanningTree({
   }
 
   function cardGrid(list: MktPlanInboxEntry[], nodes: MktCampaignPlanNode[]) {
-    return <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{list.map((p) => renderCard(p, nodes))}</div>;
+    return <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">{list.map((p) => renderCard(p, nodes))}</div>;
   }
 
   // Khối một nút tầng giữa: cấp 2 = cam, cấp 3 = xanh dương (thụt vào trong).
+  // Là <details> — bấm tiêu đề để THU GỌN cả nhánh, nhìn toàn cảnh không phải cuộn.
   function nodeBlock(node: TreeNode, level: 2 | 3, nodes: MktCampaignPlanNode[], campaignId: string) {
     const all = [...node.plans, ...node.children.flatMap((c) => c.plans)];
     const tasks = all.flatMap((p) => p.tasks).filter((t) => t.taskStatus !== "canceled");
@@ -310,51 +310,77 @@ export function PlanningTree({
       level === 2
         ? { box: "border-orange-200 border-l-orange-500", chip: "bg-orange-50 text-orange-700" }
         : { box: "border-sky-200 border-l-sky-500", chip: "bg-sky-50 text-sky-700" };
+    const nodeData = nodes.find((n) => n.id === node.id);
     return (
-      <div key={node.id} className={`space-y-3 rounded-lg border border-l-4 bg-surface-container-lowest p-3 ${tone.box} ${level === 3 ? "ml-3 sm:ml-5" : ""}`}>
-        <div className="flex flex-wrap items-center gap-2">
+      <details key={node.id} open className={`group/node rounded-lg border border-l-4 bg-surface-container-lowest ${tone.box} ${level === 3 ? "ml-2 sm:ml-3.5" : ""}`}>
+        <summary className="flex cursor-pointer flex-wrap items-center gap-1.5 px-2.5 py-1.5 [&::-webkit-details-marker]:hidden">
+          <Icon name="expand_more" size={15} className="shrink-0 -rotate-90 text-on-surface-variant transition-transform group-open/node:rotate-0" />
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone.chip}`}>Kế hoạch cấp {level}</span>
-          <span className="text-sm font-semibold">{node.name}</span>
+          <span className="min-w-0 truncate text-sm font-semibold">{node.name}</span>
           <HealthChip health={worstHealth(all)} />
-          <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+          <span className="ml-auto flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
             <span>{all.length} kế hoạch phụ</span>
             {tasks.length > 0 ? <span>{done.length}/{tasks.length} việc xong</span> : null}
           </span>
-        </div>
-        {node.plans.length > 0 ? cardGrid(node.plans, nodes) : null}
-        {node.children.map((child) => nodeBlock(child, 3, nodes, campaignId))}
-        {node.plans.length === 0 && node.children.length === 0 ? (
-          <p className="text-xs text-on-surface-variant">
-            Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới.
-          </p>
-        ) : null}
-        {canManage ? (
-          // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn
-          // "Nằm trong". Ghost nhẹ + căn trái theo dòng nội dung — không nặng mắt.
-          <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1.5">
-            <WorkPackageForm
-              campaignId={campaignId}
-              members={members}
-              campaignPlans={nodes}
-              defaultCampaignPlanId={node.id}
-              compact
-            />
-            {level === 2 ? (
+          {canManage && nodeData ? (
+            // Sửa/xoá nhánh TẠI CHỖ — chặn nổi bọt để bấm nút không đóng/mở nhánh.
+            <span className="flex items-center gap-1" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
               <CampaignPlanFormButton
                 campaignId={campaignId}
                 members={members}
                 plans={nodes}
-                defaultParentPlanId={node.id}
+                edit={nodeData}
                 trigger={
-                  <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary">
-                    <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
+                  <button type="button" className="rounded-md p-0.5 text-on-surface-variant/70 transition hover:bg-surface-container hover:text-primary" title="Sửa Kế hoạch" aria-label="Sửa Kế hoạch">
+                    <Icon name="edit" size={14} />
                   </button>
                 }
               />
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+              <MktDeleteButton
+                url={`/api/mkt/v1/campaign-plans/${node.id}`}
+                label="Xoá Kế hoạch"
+                errorFallback="Không xoá được Kế hoạch"
+                confirmMessage={`Xoá Kế hoạch "${node.name}"?\n\nKHÔNG mất gì bên trong: Kế hoạch con và Kế hoạch phụ sẽ nối lên tầng trên.`}
+              />
+            </span>
+          ) : null}
+        </summary>
+        <div className="space-y-2 px-2.5 pb-2">
+          {node.plans.length > 0 ? cardGrid(node.plans, nodes) : null}
+          {node.children.map((child) => nodeBlock(child, 3, nodes, campaignId))}
+          {node.plans.length === 0 && node.children.length === 0 ? (
+            <p className="text-xs text-on-surface-variant">
+              Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới.
+            </p>
+          ) : null}
+          {canManage ? (
+            // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn
+            // "Nằm trong". Ghost nhẹ + căn trái theo dòng nội dung — không nặng mắt.
+            <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1">
+              <WorkPackageForm
+                campaignId={campaignId}
+                members={members}
+                campaignPlans={nodes}
+                defaultCampaignPlanId={node.id}
+                compact
+              />
+              {level === 2 ? (
+                <CampaignPlanFormButton
+                  campaignId={campaignId}
+                  members={members}
+                  plans={nodes}
+                  defaultParentPlanId={node.id}
+                  trigger={
+                    <button type="button" className={ghostBtnCls}>
+                      <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
+                    </button>
+                  }
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      </details>
     );
   }
 
@@ -403,12 +429,12 @@ export function PlanningTree({
           const budget = campaignBudget[g.campaignId];
           return (
             <details key={g.campaignId} open className="rounded-lg border border-indigo-200 border-l-4 border-l-indigo-500 bg-background">
-              <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-3 [&::-webkit-details-marker]:hidden">
+              <summary className="flex cursor-pointer flex-wrap items-center gap-2 p-2.5 [&::-webkit-details-marker]:hidden">
                 <Icon name="flag" size={16} className="text-indigo-600" />
                 <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">Kế hoạch cấp 1 · Chiến dịch</span>
                 <span className="min-w-0 truncate text-sm font-semibold">{g.campaignName}</span>
                 <HealthChip health={worstHealth(g.campPlans)} />
-                <span className="ml-auto flex flex-wrap items-center gap-3 text-xs text-on-surface-variant">
+                <span className="ml-auto flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
                   <span>{g.campPlans.length} kế hoạch phụ</span>
                   {allTasks.length > 0 ? <span>{doneTasks.length}/{allTasks.length} việc xong</span> : null}
                   {sumChannelBudget > 0 || budget != null ? (
@@ -416,7 +442,7 @@ export function PlanningTree({
                   ) : null}
                 </span>
               </summary>
-              <div className="space-y-3 border-t border-outline-variant p-3">
+              <div className="space-y-2 border-t border-outline-variant p-2.5">
                 {canManage ? (
                   <div className="flex flex-wrap items-center justify-end gap-2">
                     {g.roots.length === 0 ? (
