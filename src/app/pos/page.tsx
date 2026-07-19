@@ -51,6 +51,7 @@ import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { findPosStockShortages } from "./lib/stock-freshness";
+import { notifyPosStockChanged } from "./lib/stock-events";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -1877,6 +1878,7 @@ function PosPageInner() {
           branchId: ctx.branchId,
           createdBy: ctx.userId,
           paymentBreakdown: breakdown,
+          allowBomShortage: bomShortages.length > 0,
           // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
           // match được giao dịch của ca này.
           shiftId: currentShift?.id ?? null,
@@ -1905,6 +1907,7 @@ function PosPageInner() {
           })),
           paymentMethod: state.paymentMethod,
           paymentBreakdown: breakdown,
+          allowBomShortage: bomShortages.length > 0,
           subtotal: state.subtotal,
           discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
           total: state.total,
@@ -1942,6 +1945,7 @@ function PosPageInner() {
             branchId: ctx.branchId,
             createdBy: ctx.userId,
             paymentBreakdown: breakdown,
+            allowBomShortage: bomShortages.length > 0,
             // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
             // (giống nhánh chính dòng ~1678) để close_shift_atomic không sót đơn → quỹ ca đúng.
             shiftId: currentShift?.id ?? null,
@@ -2311,7 +2315,7 @@ function PosPageInner() {
         variant: isOfflineCheckout ? "info" : "success",
       });
       if (!isOfflineCheckout && typeof window !== "undefined") {
-        window.dispatchEvent(new Event("onebiz:pos-stock-changed"));
+        notifyPosStockChanged(ctx.branchId);
       }
       state.clearCart();
       setAppliedPromotion(null);

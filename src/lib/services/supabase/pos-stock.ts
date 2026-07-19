@@ -1,4 +1,5 @@
 import { getBomAvailabilityBatch } from "./bom";
+import { mapWithConcurrency } from "@/lib/utils/async-concurrency";
 import { getClient, getCurrentTenantId, handleError } from "./base";
 
 export interface PosStockRequest {
@@ -72,34 +73,22 @@ export async function getPosStockSnapshot(
     }
   }
 
-  const stockRows: Array<{ product_id: string; quantity: number | null }> = [];
-  if (productIds.length <= 100) {
-    const { data, error } = await supabase
-      .from("branch_stock")
-      .select("product_id, quantity")
-      .eq("tenant_id", tenantId)
-      .eq("branch_id", branchId)
-      .is("variant_id", null)
-      .in("product_id", productIds);
-    if (error) handleError(error, "getPosStockSnapshot:branch_stock");
-    stockRows.push(...(data ?? []));
-  } else {
-    const pageSize = 1000;
-    for (let offset = 0; ; offset += pageSize) {
+  const stockResults = await mapWithConcurrency(
+    chunks(productIds, QUERY_CHUNK_SIZE),
+    4,
+    async (ids) => {
       const { data, error } = await supabase
         .from("branch_stock")
         .select("product_id, quantity")
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
         .is("variant_id", null)
-        .order("product_id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+        .in("product_id", ids);
       if (error) handleError(error, "getPosStockSnapshot:branch_stock");
-      const page = data ?? [];
-      stockRows.push(...page);
-      if (page.length < pageSize) break;
-    }
-  }
+      return data ?? [];
+    },
+  );
+  const stockRows = stockResults.flat();
 
   const branchStockByProduct = new Map<string, number>();
   const requestedIds = new Set(productIds);

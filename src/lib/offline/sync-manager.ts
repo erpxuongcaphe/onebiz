@@ -17,6 +17,7 @@ import type { PosCheckoutInput } from "@/lib/services/supabase/pos-checkout";
 
 const MAX_ATTEMPTS = 10;
 const MAX_BACKOFF_MS = 30_000;
+const STUCK_SYNC_TIMEOUT_MS = 2 * 60_000;
 // Cap kích thước queue để tránh growth vô hạn nếu thiết bị offline lâu + sync fail.
 // Khi vượt ngưỡng, force-clear completed + oldest failed (giữ pending/syncing).
 const MAX_QUEUE_SIZE = 500;
@@ -102,7 +103,45 @@ async function pruneIfOversized(): Promise<void> {
 
 // ── Replay Queue ──
 
+export function isPosStockConflict(message: string): boolean {
+  return /POS_STOCK_SHORTAGE|NVL_INSUFFICIENT|INSUFFICIENT_STOCK/i.test(message);
+}
+
+export function shouldRecoverSyncEntry(
+  entry: Pick<SyncQueueEntry, "status" | "lastAttempt">,
+  nowMs: number = Date.now(),
+): boolean {
+  if (entry.status !== "syncing") return false;
+  if (!entry.lastAttempt) return true;
+  const attemptedAt = Date.parse(entry.lastAttempt);
+  return !Number.isFinite(attemptedAt) ||
+    nowMs - attemptedAt >= STUCK_SYNC_TIMEOUT_MS;
+}
+
+async function recoverStuckSyncEntries(): Promise<number> {
+  const db = await getDb();
+  const syncing = await db
+    .transaction("sync_queue")
+    .objectStore("sync_queue")
+    .index("by_status")
+    .getAll("syncing");
+  const recoverable = syncing.filter((entry) => shouldRecoverSyncEntry(entry));
+  if (recoverable.length === 0) return 0;
+
+  const tx = db.transaction("sync_queue", "readwrite");
+  for (const entry of recoverable) {
+    await tx.store.put({
+      ...entry,
+      status: "pending",
+      error: "Lần đồng bộ trước bị gián đoạn. Hệ thống đang thử lại.",
+    });
+  }
+  await tx.done;
+  return recoverable.length;
+}
+
 export async function replayQueue(): Promise<SyncResult[]> {
+  await recoverStuckSyncEntries();
   const db = await getDb();
   const allEntries = await db
     .transaction("sync_queue")
@@ -119,7 +158,11 @@ export async function replayQueue(): Promise<SyncResult[]> {
     if (!entry.id) continue;
 
     // Mark as syncing
-    await db.put("sync_queue", { ...entry, status: "syncing" });
+    await db.put("sync_queue", {
+      ...entry,
+      status: "syncing",
+      lastAttempt: new Date().toISOString(),
+    });
 
     try {
       const serverData = await executeAction(entry.action, entry.payload);
@@ -148,24 +191,18 @@ export async function replayQueue(): Promise<SyncResult[]> {
       const attempts = entry.attempts + 1;
       const errorMsg = err instanceof Error ? err.message : String(err);
 
-      if (attempts >= MAX_ATTEMPTS) {
-        // Max attempts reached — mark failed
-        await db.put("sync_queue", {
-          ...entry,
-          status: "failed",
-          attempts,
-          lastAttempt: new Date().toISOString(),
-          error: errorMsg,
-        });
-      } else {
-        // Back to pending with incremented attempts
-        await db.put("sync_queue", {
-          ...entry,
-          status: "pending",
-          attempts,
-          lastAttempt: new Date().toISOString(),
-          error: errorMsg,
-        });
+      const stockConflict =
+        entry.action === "posCheckout" && isPosStockConflict(errorMsg);
+      const permanentlyFailed = stockConflict || attempts >= MAX_ATTEMPTS;
+      await db.put("sync_queue", {
+        ...entry,
+        status: permanentlyFailed ? "failed" : "pending",
+        attempts,
+        lastAttempt: new Date().toISOString(),
+        error: errorMsg,
+      });
+      if (stockConflict) {
+        await markPendingOrderFailed(entry.localId, errorMsg);
       }
 
       results.push({
@@ -177,8 +214,10 @@ export async function replayQueue(): Promise<SyncResult[]> {
       });
 
       // Exponential backoff before next entry
-      const delay = Math.min(1000 * Math.pow(2, attempts), MAX_BACKOFF_MS);
-      await sleep(delay);
+      if (!stockConflict) {
+        const delay = Math.min(1000 * Math.pow(2, attempts), MAX_BACKOFF_MS);
+        await sleep(delay);
+      }
     }
   }
 
@@ -208,6 +247,21 @@ async function executeAction(
     default:
       throw new Error(`Unknown sync action: ${action}`);
   }
+}
+
+async function markPendingOrderFailed(
+  localId: string,
+  error: string,
+): Promise<void> {
+  const db = await getDb();
+  const order = await db.get("pending_orders", localId);
+  if (!order) return;
+  await db.put("pending_orders", {
+    ...order,
+    status: "failed",
+    updatedAt: new Date().toISOString(),
+    syncError: error,
+  });
 }
 
 async function updatePendingOrder(

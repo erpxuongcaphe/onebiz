@@ -191,8 +191,16 @@ export function usePosState() {
         });
         if (existingIdx >= 0) {
           const next = [...prev];
+          const freshStock = options?.stockKnown === true
+            ? {
+                availableStock: options.availableStock ?? 0,
+                stockKnown: true as const,
+                hasBom: product.hasBom ?? next[existingIdx].hasBom ?? false,
+              }
+            : {};
           next[existingIdx] = {
             ...next[existingIdx],
+            ...freshStock,
             quantity: next[existingIdx].quantity + qtyDelta,
           };
           return next;
@@ -295,6 +303,7 @@ export function usePosState() {
         unit: it.unit,
         availableStock: 0, // unknown from draft row — oversell check will re-fetch if needed
         quantity: it.quantity,
+        stockKnown: false,
         unitPrice: it.unitPrice,
         vatRate: (it as any).vatRate ?? 0,
         discount: { mode: "amount", value: it.discount },

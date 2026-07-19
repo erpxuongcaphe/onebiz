@@ -8,7 +8,7 @@
  * Clicking a tile fires onAddProduct
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import type { Product, ProductCategory } from "@/lib/types";
@@ -19,8 +19,15 @@ import {
   type PosStockSnapshot,
   type PosStockRequest,
 } from "@/lib/services/supabase/pos-stock";
+import { getClient } from "@/lib/services/supabase/base";
 import { useAuth } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { mapWithConcurrency } from "@/lib/utils/async-concurrency";
+import {
+  POS_STOCK_CHANNEL,
+  POS_STOCK_EVENT,
+  type PosStockChangedMessage,
+} from "../lib/stock-events";
 
 interface ProductGridProps {
   searchQuery: string;
@@ -63,6 +70,14 @@ export function ProductGrid({
   const fetchIdRef = useRef(0);
   const stockRefreshInFlightRef = useRef(false);
   const trackedStockRequestsRef = useRef<PosStockRequest[]>([]);
+  const trackedStockKey = useMemo(
+    () =>
+      trackedStockRequests
+        .map((request) => request.productId)
+        .sort()
+        .join("|"),
+    [trackedStockRequests],
+  );
 
   useEffect(() => {
     trackedStockRequestsRef.current = trackedStockRequests;
@@ -101,20 +116,37 @@ export function ProductGrid({
           productType: "sku",
         };
         if (catId !== "all") filters.category = catId;
-        const result = await getProducts({
-          page: 0,
-          pageSize: 100000,
+        const query = {
+          pageSize: 500,
           search: search || undefined,
-          sortBy: "name",
-          sortOrder: "asc",
+          sortBy: "name" as const,
+          sortOrder: "asc" as const,
           filters,
-        });
+        };
+        const firstPage = await getProducts({ ...query, page: 0 });
+        const pageCount = Math.ceil(firstPage.total / query.pageSize);
+        const remainingPageNumbers = Array.from(
+          { length: Math.max(0, pageCount - 1) },
+          (_, index) => index + 1,
+        );
+        const remainingPages = await mapWithConcurrency(
+          remainingPageNumbers,
+          4,
+          (page) => getProducts({ ...query, page }),
+        );
+        const catalogProducts = [
+          ...firstPage.data,
+          ...remainingPages.flatMap((page) => page.data),
+        ];
         // Keep the full retail catalog visible; overlay branch/BOM availability.
         const snapshot = await getPosStockSnapshot(
-          result.data.map((product) => ({
-            productId: product.id,
-            hasBom: Boolean(product.hasBom),
-          })),
+          [
+            ...catalogProducts.map((product) => ({
+              productId: product.id,
+              hasBom: Boolean(product.hasBom),
+            })),
+            ...trackedStockRequestsRef.current,
+          ],
           branchId,
         );
         const nextBomAvail: BomAvailMap = {};
@@ -125,14 +157,14 @@ export function ProductGrid({
             bottleneckName: entry.bottleneckMaterialName,
           };
         }
-        const effectiveProducts = result.data.map((product) => ({
+        const effectiveProducts = catalogProducts.map((product) => ({
           ...product,
           stock: snapshot.get(product.id)?.availableStock ?? 0,
         }));
         if (fetchId !== fetchIdRef.current) return;
         productsRef.current = effectiveProducts;
         setProducts(effectiveProducts);
-        setTotalProducts(result.total);
+        setTotalProducts(firstPage.total);
         setBomAvail(nextBomAvail);
         setStockRefreshFailed(false);
         onStockSnapshot?.(snapshot);
@@ -161,7 +193,12 @@ export function ProductGrid({
   const refreshStocks = useCallback(async () => {
     if (!branchId || stockRefreshInFlightRef.current) return;
     const currentProducts = productsRef.current;
-    if (currentProducts.length === 0) return;
+    if (
+      currentProducts.length === 0 &&
+      trackedStockRequestsRef.current.length === 0
+    ) {
+      return;
+    }
 
     stockRefreshInFlightRef.current = true;
     try {
@@ -206,6 +243,10 @@ export function ProductGrid({
   }, [branchId, onStockSnapshot]);
 
   useEffect(() => {
+    if (trackedStockKey) void refreshStocks();
+  }, [trackedStockKey, refreshStocks]);
+
+  useEffect(() => {
     const refreshWhenVisible = () => {
       if (document.visibilityState === "visible") void refreshStocks();
     };
@@ -215,18 +256,63 @@ export function ProductGrid({
     );
     window.addEventListener("focus", refreshWhenVisible);
     window.addEventListener("online", refreshWhenVisible);
-    window.addEventListener("onebiz:pos-stock-changed", refreshWhenVisible);
+    window.addEventListener(POS_STOCK_EVENT, refreshWhenVisible);
     window.addEventListener("fnb-sync-complete", refreshWhenVisible);
     document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       window.clearInterval(interval);
       window.removeEventListener("focus", refreshWhenVisible);
       window.removeEventListener("online", refreshWhenVisible);
-      window.removeEventListener("onebiz:pos-stock-changed", refreshWhenVisible);
+      window.removeEventListener(POS_STOCK_EVENT, refreshWhenVisible);
       window.removeEventListener("fnb-sync-complete", refreshWhenVisible);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [refreshStocks]);
+
+  useEffect(() => {
+    if (!branchId) return;
+
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => void refreshStocks(), 250);
+    };
+
+    const realtimeChannel = getClient()
+      .channel(`pos-stock-${branchId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "branch_stock",
+          filter: `branch_id=eq.${branchId}`,
+        },
+        scheduleRefresh,
+      )
+      .subscribe();
+
+    const broadcast =
+      typeof BroadcastChannel !== "undefined"
+        ? new BroadcastChannel(POS_STOCK_CHANNEL)
+        : null;
+    if (broadcast) {
+      broadcast.onmessage = (event: MessageEvent<PosStockChangedMessage>) => {
+        if (
+          event.data?.type === "stock-changed" &&
+          event.data.branchId === branchId
+        ) {
+          scheduleRefresh();
+        }
+      };
+    }
+
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      broadcast?.close();
+      void getClient().removeChannel(realtimeChannel);
+    };
+  }, [branchId, refreshStocks]);
   // CEO 29/05/2026: KHÔNG ẩn SP giá bán = 0 nữa. Nhiều SKU (vd nhóm Bao bì)
   // chưa đặt giá bán vẫn cần hiện trên POS để bán / đặt giá tại quầy (bán 0đ
   // đã có popup xác nhận riêng). Trước đây lọc sellPrice>0 làm ẩn mất chúng.
@@ -501,6 +587,7 @@ function ProductTile({
       // CEO 08/07 (lần 2): KHÔNG tô nền/viền đỏ cả ô — rối mắt khi nhiều hàng hết.
       // Chip "Hết" đỏ đặc là đủ tín hiệu; ô giữ nền trắng bình thường, vẫn bấm được.
       className="flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px] hover:border-primary hover:shadow-sm"
+      style={{ contentVisibility: "auto", containIntrinsicSize: "60px" }}
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
       <div className="relative h-10 w-10 shrink-0 rounded-lg bg-surface-container-low flex items-center justify-center overflow-hidden">
