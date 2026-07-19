@@ -10,6 +10,7 @@ type TaskBody = {
   reason?: string;
   newAssigneeId?: string;
   contentItemId?: string;
+  externalInput?: string;
   contentUrl?: string;
   note?: string;
 };
@@ -61,6 +62,14 @@ export async function POST(
         p_task_id: taskId,
         p_new_assignee_id: body.newAssigneeId ?? null,
         p_reason: body.reason ?? null,
+      },
+    },
+    block: {
+      rpc: "mkt_block_task",
+      args: {
+        p_task_id: taskId,
+        p_reason: body.reason ?? null,
+        p_external_input: body.externalInput ?? null,
       },
     },
     cancel: { rpc: "mkt_cancel_task", args: { p_task_id: taskId, p_reason: body.reason ?? null } },

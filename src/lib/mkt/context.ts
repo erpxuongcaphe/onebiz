@@ -11,6 +11,7 @@ export type MktContext = {
   canManageTeam?: boolean;
   canOverride?: boolean;
   canViewAudit?: boolean;
+  canAuditRunner?: boolean;
   canTelegram?: boolean;
   canManageAssets?: boolean;
   tenantId?: string | null;

@@ -885,6 +885,84 @@ export async function getCampaignPlanNodes(
   }));
 }
 
+export type MktPendingPlanningWorkPackage = {
+  id: string;
+  campaignId: string;
+  campaignName: string;
+  title: string;
+  channelType: string;
+  ownerId: string | null;
+  ownerName: string | null;
+  campaignPlanId: string | null;
+  campaignPlanName: string | null;
+  createdAt: string;
+};
+
+/**
+ * Work packages that were saved but do not have an assigned planning owner yet.
+ *
+ * They must stay visible because mkt_channel_plans only exists after a leader
+ * assigns the package to a planning owner.
+ */
+export async function getPendingPlanningWorkPackages(
+  supabase: MktSupabaseClient,
+): Promise<MktPendingPlanningWorkPackage[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      campaign_id: string;
+      title: string;
+      channel_type: string;
+      owner_id: string | null;
+      campaign_plan_id: string | null;
+      created_at: string;
+    }>("mkt_channel_work_packages")
+    .select("id, campaign_id, title, channel_type, owner_id, campaign_plan_id, created_at")
+    .eq("status", "needs_split")
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const rows = requireRows(data, error, "pending_planning_work_packages");
+  if (rows.length === 0) return [];
+
+  const campaignIds = Array.from(new Set(rows.map((row) => row.campaign_id)));
+  const ownerIds = Array.from(new Set(rows.map((row) => row.owner_id).filter(Boolean) as string[]));
+  const planIds = Array.from(
+    new Set(rows.map((row) => row.campaign_plan_id).filter(Boolean) as string[]),
+  );
+  const [campaigns, owners, campaignPlans] = await Promise.all([
+    db.from<{ id: string; name: string }>("mkt_campaigns").select("id, name").in("id", campaignIds),
+    ownerIds.length
+      ? db.from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+          .select("id, full_name, email").in("id", ownerIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; email: string | null }> }),
+    planIds.length
+      ? db.from<{ id: string; name: string }>("mkt_campaign_plans").select("id, name").in("id", planIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; name: string }> }),
+  ]);
+  const campaignNames = new Map((campaigns.data ?? []).map((row) => [row.id, row.name] as const));
+  const ownerNames = new Map(
+    (owners.data ?? []).map((row) => [row.id, row.full_name || row.email || "Ch\u01b0a \u0111\u1eb7t t\u00ean"] as const),
+  );
+  const planNames = new Map((campaignPlans.data ?? []).map((row) => [row.id, row.name] as const));
+
+  return rows.map((row) => ({
+    id: row.id,
+    campaignId: row.campaign_id,
+    campaignName: campaignNames.get(row.campaign_id) ?? "Chi\u1ebfn d\u1ecbch",
+    title: row.title,
+    channelType: row.channel_type,
+    ownerId: row.owner_id,
+    ownerName: row.owner_id ? ownerNames.get(row.owner_id) ?? null : null,
+    campaignPlanId: row.campaign_plan_id,
+    campaignPlanName: row.campaign_plan_id ? planNames.get(row.campaign_plan_id) ?? null : null,
+    createdAt: row.created_at,
+  }));
+}
+
+
 export type MktCampaignDetail = {
   campaign: MktCampaign | null;
   campaignPlans: MktCampaignPlan[];

@@ -7,20 +7,26 @@ import {
   getPillars,
   getCampaignList,
   getCampaignPlanNodes,
+  getPendingPlanningWorkPackages,
 } from "@/lib/mkt/read-models";
 import { PlanningTree } from "@/components/mkt/planning-tree";
+import { PendingPlanningWorkPackages } from "@/components/mkt/pending-planning-work-packages";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MKT Hub — Lập kế hoạch" };
 
 export default async function PlanningPage() {
   const { supabase, ctx } = await getMktRequestContext();
-  const [plans, members, campaigns] = await Promise.all([
+  const [plans, members, campaigns, pendingWorkPackages] = await Promise.all([
     getPlanInbox(supabase),
     getMktMembers(supabase, ctx.tenantId ?? undefined),
     getCampaignList(supabase),
+    getPendingPlanningWorkPackages(supabase),
   ]);
-  const campaignIds = Array.from(new Set(plans.map((p) => p.campaignId).filter(Boolean)));
+  const campaignIds = Array.from(new Set([
+    ...plans.map((p) => p.campaignId),
+    ...pendingWorkPackages.map((item) => item.campaignId),
+  ].filter(Boolean)));
   // Nội dung + trụ gắn vào công đoạn; planNodes = TOÀN BỘ nút cấp 2/3 để
   // thao tác cây tại chỗ (tạo cấp, xếp thẻ) và hiện cả nhánh rỗng.
   const [contents, pillars, planNodes] = await Promise.all([
@@ -40,6 +46,11 @@ export default async function PlanningPage() {
             Cây tối đa 4 cấp, sâu bao nhiêu tùy từng kế hoạch: <b>Cấp 1 · Chiến dịch</b> → <b>Cấp 2</b> → <b>Cấp 3</b> (tự đặt tên) → <b>Kế hoạch phụ</b> (nơi chứa việc). Nộp Leader duyệt rồi hệ thống mới sinh việc thật.
           </p>
         </div>
+        <PendingPlanningWorkPackages
+          items={pendingWorkPackages}
+          members={members}
+          canManage={Boolean(ctx.canManageCampaigns)}
+        />
         <PlanningTree
           plans={plans}
           planNodes={planNodes}

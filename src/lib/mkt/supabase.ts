@@ -22,6 +22,7 @@ export interface MktQuery<T> extends PromiseLike<MktQueryResult<T>> {
     column: string,
     options?: { ascending?: boolean; nullsFirst?: boolean },
   ): MktQuery<T>;
+  delete(): MktQuery<T>;
   limit(count: number): MktQuery<T>;
   single(): MktQuery<RowFromResult<T>>;
   maybeSingle(): MktQuery<RowFromResult<T>>;

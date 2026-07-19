@@ -32,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/mkt/media", label: "Thư viện media", icon: "photo_library" },
   { href: "/mkt/documents", label: "Thư viện tài liệu", icon: "folder_open" },
   { href: "/mkt/reports", label: "Báo cáo", icon: "bar_chart" },
+  { href: "/mkt/audit-runner", label: "Ki\u1ec3m tra quy t\u1eafc", icon: "fact_check", requires: "canAuditRunner" },
   { href: "/mkt/settings", label: "Cài đặt", icon: "settings" },
 ];
 
