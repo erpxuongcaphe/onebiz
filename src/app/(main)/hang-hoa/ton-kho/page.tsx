@@ -51,6 +51,7 @@ import {
 import type { BranchStockRow, BranchDetail } from "@/lib/services/supabase";
 import type { StockMovement, UOMConversion } from "@/lib/types";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { StockDocumentLink } from "@/components/shared/stock-document-link";
 import { Icon } from "@/components/ui/icon";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate } from "@/lib/excel";
@@ -97,6 +98,7 @@ function StockRowDetail({
   // CEO 17/07 (Thẻ kho Đợt 1): tổng số giao dịch THẬT (count exact từ server)
   // — nhãn tab trước đây đếm movements.length nên kẹt trần 50 dù sổ dài hơn.
   const [movementsTotal, setMovementsTotal] = useState(0);
+  const [visibleMovementLimit, setVisibleMovementLimit] = useState(50);
   // Đợt 4 (17/07): đối soát tồn cộng dồn từ sổ vs tồn hệ thống (hiện băng
   // cảnh báo nếu lệch — sổ thiếu/thừa bút toán).
   const [stockDrift, setStockDrift] = useState<{ computed: number; system: number } | null>(null);
@@ -170,6 +172,7 @@ function StockRowDetail({
 
   useEffect(() => {
     let cancelled = false;
+    setVisibleMovementLimit(50);
     (async () => {
       setLoadingBranches(true);
       try {
@@ -455,11 +458,12 @@ function StockRowDetail({
                     Chưa có giao dịch nào của sản phẩm này tại chi nhánh {row.branchName}.
                   </div>
                 ) : (
-                  <div className="border rounded-lg overflow-hidden">
-                    <table className="w-full text-sm">
+                  <div className="border rounded-lg overflow-x-auto">
+                    <table className="w-full min-w-[1080px] text-sm">
                       <thead className="bg-muted/30">
                         <tr>
                           <th className="text-left p-2 font-medium">Thời gian</th>
+                          <th className="text-left p-2 font-medium">Mã phiếu</th>
                           <th className="text-left p-2 font-medium">Loại</th>
                           <th className="text-right p-2 font-medium">Số lượng</th>
                           {/* Đợt 4 (17/07): cột Tồn cuối kiểu KiotViet — tồn sau
@@ -471,7 +475,7 @@ function StockRowDetail({
                         </tr>
                       </thead>
                       <tbody>
-                        {movements.map((m) => {
+                        {movements.slice(0, visibleMovementLimit).map((m) => {
                           // CEO 10/06/2026 — màu đối tác theo loại
                           const partnerColor: Record<string, string> = {
                             customer: "text-blue-600",
@@ -484,6 +488,13 @@ function StockRowDetail({
                           <tr key={m.id} className="border-t">
                             <td className="p-2 text-xs text-muted-foreground whitespace-nowrap">
                               {formatDate(m.date)}
+                            </td>
+                            <td className="p-2 whitespace-nowrap">
+                              <StockDocumentLink
+                                referenceType={m.referenceType}
+                                referenceId={m.referenceId}
+                                code={m.referenceCode ?? m.code}
+                              />
                             </td>
                             <td className="p-2">
                               <Badge variant="outline" className="text-xs">
@@ -507,11 +518,6 @@ function StockRowDetail({
                             </td>
                             <td className={`p-2 text-xs max-w-[200px] truncate ${pColor}`} title={m.partner ?? ""}>
                               {m.partner ?? "—"}
-                              {m.referenceCode && (
-                                <span className="ml-1 text-[10px] text-muted-foreground font-mono">
-                                  ({m.referenceCode})
-                                </span>
-                              )}
                             </td>
                             <td className="p-2 text-xs">
                               {m.createdByName || "—"}
@@ -523,6 +529,19 @@ function StockRowDetail({
                         );})}
                       </tbody>
                     </table>
+                  </div>
+                )}
+                {visibleMovementLimit < movements.length && (
+                  <div className="flex justify-center pt-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setVisibleMovementLimit((current) => current + 50)}
+                    >
+                      <Icon name="expand_more" size={15} />
+                      Xem thêm 50 giao dịch
+                    </Button>
                   </div>
                 )}
               </div>
