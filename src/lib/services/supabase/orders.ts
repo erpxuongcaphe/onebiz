@@ -20,7 +20,6 @@
 
 import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
-import { isRpcUnavailable } from "./rpc-utils";
 import {
   posCheckout,
   applyStockDecrement,
@@ -971,159 +970,42 @@ export async function completeDraftOrder(
     tenantId: string;
     branchId: string;
     createdBy: string;
-    /** Tách thanh toán hỗn hợp — truyền khi method="mixed" */
     paymentBreakdown?: import("./pos-checkout").PaymentBreakdownItem[];
-    /**
-     * CEO 05/06/2026 FIX BUG KẾT CA 0Đ:
-     * shiftId của ca cashier đang mở — PHẢI truyền để link vào:
-     *  - invoices.shift_id (nếu nháp tạo trước khi mở ca)
-     *  - cash_transactions.shift_id (qua createAutoCashReceipt)
-     * Nếu null → cash_transactions.shift_id=null → RPC close_shift_atomic
-     * filter `WHERE shift_id = p_shift_id` không match → tổng = 0đ.
-     */
     shiftId?: string | null;
-  }
+    allowBomShortage?: boolean;
+  },
 ): Promise<{ invoiceCode: string }> {
   const supabase = getClient();
-  const paid = payment.paid;
-  const shiftId = payment.shiftId ?? null;
-
-  // P0-7 13/06/2026: Ưu tiên gọi RPC atomic. Nếu thành công → 5 op chạy
-  // trong 1 transaction PG → all-or-nothing → không có ghost invoice.
-  // Fallback xuống luồng cũ (5 op rời) nếu RPC chưa apply (migration 00139
-  // chưa chạy). Sau khi verify ngon 24-48h → xoá fallback.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-      "complete_draft_atomic",
-      {
-        p_invoice_id: invoiceId,
-        p_tenant_id: payment.tenantId,
-        p_branch_id: payment.branchId,
-        p_created_by: payment.createdBy,
-        p_method: payment.method,
-        p_paid: paid,
-        p_payment_breakdown: payment.paymentBreakdown ?? null,
-        p_shift_id: shiftId,
-      },
-    );
-    if (!atomicError && atomicData) {
-      const result = atomicData as { invoice_code?: string };
-      if (result.invoice_code) {
-        return { invoiceCode: result.invoice_code };
-      }
-    }
-    if (atomicError && !isRpcUnavailable(atomicError)) {
-      // RPC có nhưng raise exception (vd "Đơn này đã được xử lý...").
-      // Throw thẳng để cashier thấy lỗi rõ ràng, KHÔNG fallback (tránh
-      // double xử lý nếu RPC đã claim được status=completed).
-      handleError(atomicError, "completeDraftOrder:atomic_rpc");
-    }
-    // RPC unavailable (migration chưa chạy) → fallback xuống luồng cũ.
-    console.warn(
-      "[completeDraftOrder] RPC complete_draft_atomic chưa có (migration 00139), fallback 5-step legacy",
-    );
-  } catch (err) {
-    // RPC throw client-side (vd network) → throw lại để cashier biết.
-    if (err instanceof Error && /draft|đã được xử lý|status/i.test(err.message)) {
-      throw err;
-    }
-    console.warn("[completeDraftOrder] RPC exception, fallback legacy:", err);
-  }
-
-  // ─── LEGACY 5-step path (kept 24-48h sau khi apply migration 00139) ───
-  // 1. ATOMIC status flip: UPDATE + WHERE status='draft' claims this invoice.
-  //    If two concurrent calls race, only one matches and succeeds.
-
-  const { data: invoice, error: updErr } = await supabase
-    .from("invoices")
-    .update({
-      status: "completed",
-      paid,
-      debt: 0, // placeholder — will recompute below
-      payment_method: payment.method,
-      // Link shift_id vào invoice — nháp tạo trước khi mở ca cũng được claim
-      // bởi ca khi cashier hoàn tất. Nếu shiftId=null thì giữ giá trị cũ.
-      ...(shiftId ? { shift_id: shiftId } : {}),
-    })
-    .eq("tenant_id", payment.tenantId)
-    .eq("id", invoiceId)
-    .eq("status", "draft")
-    .select("id, code, status, total, customer_name, branch_id, tenant_id")
-    .maybeSingle();
-  if (updErr) handleError(updErr, "completeDraftOrder:update");
-  if (!invoice) {
-    // Either not found or already completed by another call
-    const { data: existing } = await supabase
-      .from("invoices")
-      .select("status")
-      .eq("tenant_id", payment.tenantId)
-      .eq("id", invoiceId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy đơn nháp");
-    throw new Error(`Đơn này đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`);
-  }
-
-  const total = invoice.total ?? 0;
-  const debt = Math.max(0, total - paid);
-
-  // Update debt (computed from real total)
-  if (debt !== 0) {
-    await supabase
-      .from("invoices")
-      .update({ debt })
-      .eq("tenant_id", payment.tenantId)
-      .eq("id", invoiceId);
-  }
-
-  // Load invoice_items for stock decrement — scope qua invoice_id (đã verify ownership)
-  const { data: itemsRaw, error: itemsErr } = await supabase
-    .from("invoice_items")
-    .select("*")
-    .eq("invoice_id", invoiceId);
-  if (itemsErr) handleError(itemsErr, "completeDraftOrder:items");
-
-  // 3. Build items payload for stock decrement
-  const rawItems = itemsRaw ?? [];
-  const items: PosCheckoutItem[] = rawItems.map(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (it: any) => ({
-      productId: it.product_id,
-      productName: it.product_name,
-      unit: it.unit,
-      quantity: it.quantity,
-      unitPrice: it.unit_price,
-      discount: it.discount ?? 0,
-    })
-  );
-
-  // 4. Decrement stock
-  await applyStockDecrement(supabase, invoiceId, items, {
-    tenantId: payment.tenantId,
-    branchId: payment.branchId,
-    createdBy: payment.createdBy,
-    invoiceCode: invoice.code,
-  });
-
-  // 5. Cash transaction — hỗ trợ tách thanh toán hỗn hợp
-  // CEO 05/06/2026 FIX KẾT CA 0Đ: truyền shiftId xuống → cash_transactions.shift_id
-  await createAutoCashReceipt(
-    supabase,
-    invoiceId,
-    invoice.code,
-    paid,
-    payment.method,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "complete_draft_atomic_v3",
     {
-      tenantId: payment.tenantId,
-      branchId: payment.branchId,
-      createdBy: payment.createdBy,
-      customerName: invoice.customer_name ?? "Khách lẻ",
-      shiftId,
+      p_invoice_id: invoiceId,
+      p_method: payment.method,
+      p_paid: payment.paid,
+      p_payment_breakdown: payment.paymentBreakdown ?? null,
+      p_shift_id: payment.shiftId ?? null,
+      p_allow_bom_shortage: payment.allowBomShortage ?? false,
     },
-    payment.paymentBreakdown
   );
 
-  return { invoiceCode: invoice.code };
+  if (error) {
+    if (
+      error.code === "PGRST202" ||
+      /complete_draft_atomic_v3|schema cache/i.test(error.message)
+    ) {
+      throw new Error(
+        "Chưa có migration 00203. Không thể thanh toán đơn cũ an toàn.",
+      );
+    }
+    handleError(error, "completeDraftOrder:atomic_v3");
+  }
+
+  const result = data as { invoice_code?: string } | null;
+  if (!result?.invoice_code) {
+    throw new Error("Phản hồi thanh toán thiếu mã hóa đơn.");
+  }
+  return { invoiceCode: result.invoice_code };
 }
 
 // ============================================================

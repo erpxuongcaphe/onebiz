@@ -43,7 +43,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         nextCodeCounter++;
         return { data: `PT${String(nextCodeCounter).padStart(5, "0")}`, error: null };
       }
-      if (fn === "pos_complete_checkout_atomic") {
+      if (fn === "pos_complete_checkout_atomic_v2") {
         return {
           data: { invoice_id: "inv-new-1", invoice_code: "HD00001" },
           error: null,
@@ -271,7 +271,7 @@ describe("posCheckout", () => {
 
     expect(result.invoiceCode).toBe("HD00001");
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v2");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_payment_method).toBe("mixed");
@@ -280,6 +280,8 @@ describe("posCheckout", () => {
       { method: "transfer", amount: 300_000 },
     ]);
     expect(params.p_paid).toBe(500_000);
+    expect(params).not.toHaveProperty("p_tenant_id");
+    expect(params).not.toHaveProperty("p_created_by");
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
   });
 
@@ -299,7 +301,7 @@ describe("posCheckout", () => {
       paid: 500_000,
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v2");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_payment_method).toBe("transfer");

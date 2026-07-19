@@ -38,9 +38,9 @@ export async function getBomAvailabilityBatch(
     },
   );
   if (error) {
-    // Fail silent — frontend fallback dùng product.stock như cũ
-    console.warn("[getBomAvailabilityBatch] RPC error:", error);
-    return result;
+    throw new Error(
+      `[getBomAvailabilityBatch] Không xác minh được tồn BOM: ${error.message}`,
+    );
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

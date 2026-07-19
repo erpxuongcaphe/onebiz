@@ -262,10 +262,12 @@ function simulateReceivePurchaseItemsAtomic(params: any): { data: unknown; error
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error: unknown } {
+  const tenantId = params.p_tenant_id ?? "tenant-1";
+  const branchId = params.p_branch_id ?? "branch-1";
   rpcCodeCounter++;
   rpcCalls.push({
     fn: "next_code",
-    params: { p_tenant_id: params.p_tenant_id, p_entity_type: "invoice" },
+    params: { p_tenant_id: tenantId, p_entity_type: "invoice" },
   });
   const invoiceId = `inv-sim-${rpcCodeCounter}`;
   const invoiceCode = `HD${String(rpcCodeCounter).padStart(5, "0")}`;
@@ -284,8 +286,8 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
     data: {
       id: invoiceId,
       code: invoiceCode,
-      tenant_id: params.p_tenant_id,
-      branch_id: params.p_branch_id,
+      tenant_id: tenantId,
+      branch_id: branchId,
       customer_id: params.p_customer_id ?? null,
       customer_name: params.p_customer_name,
       payment_method: params.p_payment_method,
@@ -330,8 +332,8 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
     rpcCalls.push({
       fn: "upsert_branch_stock",
       params: {
-        p_tenant_id: params.p_tenant_id,
-        p_branch_id: params.p_branch_id,
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
         p_product_id: item.productId,
         p_delta: -Number(item.quantity ?? 0),
       },
@@ -363,6 +365,83 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function simulateCompleteDraftAtomicV3(params: any): { data: unknown; error: unknown } {
+  const invoice = tableMocks.invoices?.data;
+  if (!invoice || (invoice.status && invoice.status !== "draft")) {
+    return { data: null, error: { message: "Draft already processed" } };
+  }
+
+  const tenantId = invoice.tenant_id ?? "tenant-1";
+  const branchId = invoice.branch_id ?? "branch-1";
+  const items = (tableMocks.invoice_items?.data ?? []) as Array<{
+    product_id: string;
+    quantity: number;
+  }>;
+
+  updateCalls.push({
+    table: "invoices",
+    data: {
+      status: "completed",
+      payment_method: params.p_method,
+      paid: params.p_paid,
+      debt: Math.max(0, Number(invoice.total ?? 0) - Number(params.p_paid ?? 0)),
+    },
+    filters: { id: params.p_invoice_id, status: "draft" },
+  });
+
+  for (const item of items) {
+    insertCalls.push({
+      table: "stock_movements",
+      data: {
+        tenant_id: tenantId,
+        branch_id: branchId,
+        product_id: item.product_id,
+        type: "out",
+        quantity: item.quantity,
+        reference_type: "invoice",
+        reference_id: params.p_invoice_id,
+      },
+    });
+    rpcCalls.push({
+      fn: "increment_product_stock",
+      params: { p_product_id: item.product_id, p_delta: -Number(item.quantity ?? 0) },
+    });
+    rpcCalls.push({
+      fn: "upsert_branch_stock",
+      params: {
+        p_tenant_id: tenantId,
+        p_branch_id: branchId,
+        p_product_id: item.product_id,
+        p_delta: -Number(item.quantity ?? 0),
+      },
+    });
+  }
+
+  const paid = Number(params.p_paid ?? 0);
+  if (paid > 0) {
+    const breakdown = Array.isArray(params.p_payment_breakdown)
+      ? params.p_payment_breakdown
+      : [{ method: params.p_method, amount: paid }];
+    for (const part of breakdown) {
+      insertCalls.push({
+        table: "cash_transactions",
+        data: {
+          type: "receipt",
+          payment_method: part.method,
+          amount: part.amount,
+          reference_type: "invoice",
+          reference_id: params.p_invoice_id,
+        },
+      });
+    }
+  }
+
+  return {
+    data: { invoice_id: params.p_invoice_id, invoice_code: invoice.code ?? "HD-DRAFT" },
+    error: null,
+  };
+}
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function simulateCompleteStockTransferAtomic(params: any): { data: unknown; error: unknown } {
   const transfer = tableMocks.stock_transfers?.data;
@@ -457,8 +536,11 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "receive_purchase_items_atomic") {
         return simulateReceivePurchaseItemsAtomic(params);
       }
-      if (fn === "pos_complete_checkout_atomic") {
+      if (fn === "pos_complete_checkout_atomic_v2") {
         return simulatePosCompleteCheckoutAtomic(params);
+      }
+      if (fn === "complete_draft_atomic_v3") {
+        return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
         return simulateCompleteStockTransferAtomic(params);

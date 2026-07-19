@@ -57,6 +57,7 @@ export interface PendingOrder {
   serverOrderId?: string;
   serverOrderNumber?: string;
   paymentData?: unknown;
+  syncError?: string;
   serverInvoiceId?: string;
   serverInvoiceCode?: string;
   createdAt: string;

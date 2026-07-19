@@ -71,6 +71,8 @@ export interface PosCheckoutInput {
    * detect trùng session_id → return existing invoice thay vì tạo mới.
    */
   clientSessionId?: string | null;
+  /** Explicit cashier confirmation for BOM shortage only. */
+  allowBomShortage?: boolean;
 }
 
 /**
@@ -361,11 +363,9 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   // missing; falling back to the legacy multi-step client flow can create drift.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-    "pos_complete_checkout_atomic",
+    "pos_complete_checkout_atomic_v2",
     {
-      p_tenant_id: input.tenantId,
       p_branch_id: input.branchId,
-      p_created_by: input.createdBy,
       p_customer_id: input.customerId ?? null,
       p_customer_name: input.customerName || "Khách lẻ",
       p_items: input.items,
@@ -382,6 +382,7 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
       p_promotion_discount: input.promotionDiscount ?? 0,
       p_promotion_free_value: input.promotionFreeValue ?? 0,
       p_client_session_id: input.clientSessionId ?? null,
+      p_allow_bom_shortage: input.allowBomShortage ?? false,
     },
   );
 
@@ -403,9 +404,9 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
 
   if (atomicError) {
     if (isRpcUnavailable(atomicError)) {
-      throw new Error("Chưa có RPC pos_complete_checkout_atomic. Vui lòng chạy migration POS/FnB atomic trước khi thanh toán.");
+      throw new Error("Chưa có migration 00203. Không thể thanh toán an toàn.");
     }
-    handleError(atomicError, "posCheckout:atomic_rpc");
+    handleError(atomicError, "posCheckout:atomic_v2_rpc");
   }
 
   throw new Error("Server không trả kết quả thanh toán POS hợp lệ.");
