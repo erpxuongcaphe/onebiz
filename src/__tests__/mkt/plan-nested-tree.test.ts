@@ -127,6 +127,24 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     expect(planningTree).toMatch(/if \(hasFilter\) \{[\s\S]{0,400}r\.plans\.length > 0 \|\| r\.children\.length > 0/);
   });
 
+  it("CEO 19/07: nhớ trạng thái gập theo máy (localStorage) — lọc thì mở hết, có Gập/Mở tất cả", () => {
+    const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
+    // Đọc SAU mount (server không biết máy người dùng), ghi mỗi lần đóng/mở.
+    expect(planningTree).toContain('const COLLAPSED_KEY = "mkt-planning-collapsed"');
+    expect(planningTree).toMatch(/useEffect\(\(\) => \{[\s\S]{0,400}setCollapsed\(readCollapsed\(\)\)/);
+    expect(planningTree).toContain("localStorage.setItem(COLLAPSED_KEY");
+    // Đang lọc: MỞ HẾT — kết quả khớp không bị giấu; toggle lúc lọc không ghi đè bộ nhớ.
+    expect(planningTree).toContain("const isOpen = (id: string) => hasFilter || !collapsed.has(id)");
+    expect(planningTree).toMatch(/if \(hasFilter\) return;\s*\n\s*handleToggle/);
+    // Cả khối chiến dịch lẫn nhánh cấp 2/3 đều nhớ; toggle của con không lẫn sang cha.
+    expect(planningTree).toContain("open={isOpen(g.campaignId)}");
+    expect(planningTree).toContain("open={isOpen(node.id)}");
+    expect(planningTree).toContain("if (e.target !== e.currentTarget) return;");
+    // Toàn cảnh một cú bấm.
+    expect(planningTree).toContain("Gập tất cả");
+    expect(planningTree).toContain("Mở tất cả");
+  });
+
   it("CEO chốt 18/07 khuya: NÂNG thẻ thành nút cấp — Test Plan thành nhánh, không mất công đoạn", () => {
     const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
     // Thẻ trực thuộc → cấp 2; trong cấp 2 → cấp 3; trong cấp 3 → ẨN (trần 4 cấp).
