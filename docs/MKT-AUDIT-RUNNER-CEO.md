@@ -1,45 +1,54 @@
-# Hướng dẫn CEO dùng AI chạy MKT Audit Runner
+# Hướng dẫn CEO sử dụng MKT Audit Runner với AI
 
-## Điều kiện một lần trước khi dùng
+## Mục đích
 
-1. Các migration Audit Runner (`00209` và bản vá `00210` nếu hệ thống đã cài `00209`) đã được chạy trên Supabase.
-2. Bản web chứa Audit Runner đã được đưa lên production.
-3. CEO đăng nhập MKT Hub bằng Google Chrome và có quyền `mkt.audit_runner`.
-4. Mở: `https://mkthub.onebiz.com.vn/audit-runner`.
+Audit Runner giúp AI kiểm tra 10 quy tắc quan trọng của MKT Hub mà không cần tài khoản OneBiz, cookie hoặc phiên Chrome của CEO.
 
-Chủ tài khoản OneBiz có quyền mặc định. Người khác chỉ thấy trang này khi được cấp đúng quyền, không phụ thuộc chức danh.
+Liên kết dành cho AI chỉ hoạt động với **Audit Sandbox**. Đây là môi trường dữ liệu giả, tách khỏi dữ liệu công ty và không gửi Telegram hoặc email.
 
-## Khởi tạo lần đầu
+## Tạo liên kết cho AI
 
-1. Bấm **Khởi tạo môi trường thử**.
-2. Chờ màn hình hiện **Môi trường: Audit Sandbox**.
-3. Kiểm tra có mã tenant thử nghiệm ở bên phải.
-4. Chỉ khởi tạo một lần. Các lần sau dùng lại sandbox này.
+1. CEO đăng nhập `https://mkthub.onebiz.com.vn/audit-runner`.
+2. Xác nhận màn hình hiển thị **Môi trường: Audit Sandbox**.
+3. Tại mục **Liên kết kiểm tra dành cho AI CEO**, chọn thời hạn 1 giờ, 4 giờ hoặc 24 giờ.
+4. Bấm **Tạo liên kết cho AI**.
+5. Bấm **Sao chép** và gửi liên kết vừa tạo cho AI.
 
-Sandbox nằm chung dự án Supabase nhưng là tenant giả riêng biệt. Tất cả người dùng, chiến dịch, nội dung và công việc dùng để test đều là dữ liệu giả. Telegram và email bị chặn trong tenant này.
+Mỗi liên kết được chạy tối đa 3 lượt. Khi tạo liên kết mới, liên kết cũ tự hết hiệu lực.
 
-## Cách giao cho AI trên laptop CEO
+## Câu lệnh gửi AI
 
-CEO giữ Chrome đang đăng nhập, sau đó yêu cầu AI điều khiển Chrome bằng nội dung sau:
+> Mở liên kết Audit Runner tôi gửi. Xác nhận trang ghi “Môi trường: Audit Sandbox”, sau đó bấm “Chạy tất cả”. Chờ hoàn tất và báo cáo tổng số PASS, FAIL, ERROR. Liệt kê từng tình huống không PASS cùng nội dung Thực tế, mã lỗi và trạng thái Nhật ký. Không mở trang khác, không thay đổi quyền hoặc cài đặt.
 
-> Mở https://mkthub.onebiz.com.vn/audit-runner bằng tab Chrome hiện tại. Xác nhận trang ghi “Môi trường: Audit Sandbox”, sau đó bấm “Chạy tất cả”. Chờ hoàn tất, đọc bảng kết quả và báo cáo: số PASS, FAIL, ERROR; liệt kê từng dòng không PASS cùng Thực tế, mã lỗi và trạng thái Nhật ký. Không mở Supabase, không chạy SQL, không thay đổi quyền và không truy cập trang dữ liệu thật.
-
-AI không cần tài khoản riêng. AI dùng phiên đăng nhập Chrome của CEO để thao tác giao diện, nhưng quyền vẫn bị backend kiểm tra như thao tác của CEO.
+AI mở liên kết trong môi trường riêng của AI. CEO không cần mở sẵn Chrome và không cần cung cấp tài khoản, mật khẩu hoặc mã xác thực.
 
 ## Cách đọc kết quả
 
-- **PASS**: quy tắc backend hoạt động đúng mong đợi.
-- **FAIL**: backend cho phép hoặc từ chối sai so với quy tắc.
-- **ERROR**: chính môi trường runner hoặc dữ liệu giả chưa sẵn sàng.
-- **Nhật ký = Có**: lần từ chối hoặc thay đổi đã được ghi lại để kiểm tra.
+- **PASS**: Quy tắc hoạt động đúng.
+- **FAIL**: Quy tắc xử lý chưa đúng mong đợi.
+- **ERROR**: Môi trường kiểm tra hoặc quá trình chạy gặp lỗi.
+- **Nhật ký = Có**: Hành động đã được ghi để đối chiếu.
 
-Có thể bấm biểu tượng chạy ở từng dòng để kiểm tra lại một tình huống. Nút **Sao chép kết quả JSON** tạo bản kết quả gọn để gửi cho đội phát triển.
+Kết quả tốt là cả 10 tình huống đều **PASS**, không có **FAIL** hoặc **ERROR**.
+
+## Kết thúc kiểm tra
+
+1. Nhận báo cáo từ AI.
+2. Quay lại trang `https://mkthub.onebiz.com.vn/audit-runner`.
+3. Bấm **Thu hồi** tại mục liên kết dành cho AI.
+
+Liên kết cũng tự hết hiệu lực khi hết thời hạn hoặc đã dùng đủ 3 lượt.
+
+## Khi gặp lỗi
+
+- AI báo **Cache miss** khi mở `/audit-runner`: AI đang dùng sai đường dẫn có yêu cầu đăng nhập. Hãy gửi lại liên kết có dạng `https://mkthub.onebiz.com.vn/ai-audit/...`.
+- Trang báo liên kết không hợp lệ: Tạo liên kết mới và gửi lại cho AI.
+- Trang không hiện **Audit Sandbox**: Dừng ngay và báo người phụ trách MKT Hub.
+- Có **FAIL** hoặc **ERROR**: Sao chép JSON kết quả và gửi người phụ trách xử lý.
 
 ## Quy tắc an toàn
 
-- Không đưa cho AI mật khẩu, service role key, token Telegram hoặc quyền truy cập Supabase.
-- Không cho AI tự chạy SQL.
-- Chỉ chạy khi trang hiện rõ **Audit Sandbox**.
-- Nếu trang không hiện Audit Sandbox, dừng ngay và báo đội phát triển.
-- Runner không đọc, sửa hoặc xóa dữ liệu công ty.
-- Dữ liệu nghiệp vụ giả được dọn sau từng tình huống; kết quả và nhật ký thử nghiệm được giữ lại.
+- Chỉ gửi liên kết cho đúng AI hoặc người được CEO giao kiểm tra.
+- Không gửi mật khẩu, mã xác thực hay khóa hệ thống.
+- Thu hồi liên kết ngay sau khi nhận kết quả.
+- Không chạy kiểm tra nếu trang không ghi rõ **Audit Sandbox**.

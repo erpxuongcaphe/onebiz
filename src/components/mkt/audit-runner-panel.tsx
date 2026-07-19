@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { AuditAiAccessManager } from "@/components/mkt/audit-ai-access-manager";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -157,6 +158,8 @@ export function AuditRunnerPanel() {
           <code className="ml-auto text-xs text-emerald-900">{sandbox.sandboxTenantId}</code>
         ) : null}
       </div>
+
+      <AuditAiAccessManager sandboxReady={sandbox.ready} />
 
       {error ? (
         <div className="border-y border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">

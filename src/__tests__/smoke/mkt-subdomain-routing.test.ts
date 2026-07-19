@@ -99,6 +99,49 @@ describe("MKT Hub subdomain routing", () => {
     );
   });
 
+  it("allows a short-lived AI audit link without an ERP session", async () => {
+    const token = "a".repeat(43);
+    const { updateSession } = await import("@/lib/supabase/middleware");
+
+    const response = await updateSession(
+      makeRequest(`https://mkthub.onebiz.com.vn/ai-audit/${token}`),
+    );
+
+    expect(response.headers.get("location")).toBeNull();
+    expect(response.headers.get("x-middleware-rewrite")).toBe(
+      `https://mkthub.onebiz.com.vn/mkt-ai-audit/${token}`,
+    );
+    expect(response.headers.get("x-mkt-subdomain")).toBe("1");
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    expect(response.headers.get("x-robots-tag")).toContain("noindex");
+    expect(response.headers.get("referrer-policy")).toBe("no-referrer");
+  });
+
+  it("still requires login for the normal Audit Runner", async () => {
+    const { updateSession } = await import("@/lib/supabase/middleware");
+
+    const response = await updateSession(
+      makeRequest("https://mkthub.onebiz.com.vn/audit-runner"),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      "https://mkthub.onebiz.com.vn/dang-nhap?redirect=%2Faudit-runner",
+    );
+  });
+
+  it("does not expose AI audit links on the main OneBiz domain", async () => {
+    const token = "a".repeat(43);
+    const { updateSession } = await import("@/lib/supabase/middleware");
+
+    const response = await updateSession(
+      makeRequest(`https://onebiz.com.vn/ai-audit/${token}`),
+    );
+
+    expect(response.headers.get("location")).toBe(
+      `https://onebiz.com.vn/dang-nhap?redirect=%2Fai-audit%2F${token}`,
+    );
+  });
+
   it("does not change the main OneBiz login destination", async () => {
     supabaseState.subject = "user-1";
     const { updateSession } = await import("@/lib/supabase/middleware");

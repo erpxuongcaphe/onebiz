@@ -34,6 +34,22 @@ function isMktSubdomain(request: NextRequest): boolean {
   return host.startsWith("mkthub.") || host.startsWith("mkthub-");
 }
 
+function isMktAiAuditPublicPath(pathname: string): boolean {
+  return pathname === "/ai-audit" || pathname.startsWith("/ai-audit/");
+}
+
+function rewriteMktAiAuditPublicPath(request: NextRequest): NextResponse {
+  const url = request.nextUrl.clone();
+  const suffix = request.nextUrl.pathname.slice("/ai-audit".length);
+  url.pathname = `/mkt-ai-audit${suffix}`;
+  const response = NextResponse.rewrite(url);
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  response.headers.set("Referrer-Policy", "no-referrer");
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+  response.headers.set("x-mkt-subdomain", "1");
+  return response;
+}
 function getFnbPublicPath(pathname: string): string {
   if (pathname === "/pos/fnb" || pathname === "/pos/fnb/") return "/";
   if (pathname.startsWith("/pos/fnb/")) {
@@ -242,6 +258,15 @@ function copySetCookies(from: NextResponse, to: NextResponse): void {
  * Gọi từ src/proxy.ts.
  */
 export async function updateSession(request: NextRequest) {
+  // External AI links are authenticated by a short-lived, hashed capability
+  // token inside their own route. Skip ERP session handling entirely.
+  if (
+    isMktSubdomain(request) &&
+    isMktAiAuditPublicPath(request.nextUrl.pathname)
+  ) {
+    return rewriteMktAiAuditPublicPath(request);
+  }
+
   // DEV-only auth bypass. Gate kép để production TUYỆT ĐỐI không bypass:
   //   1. NODE_ENV phải khác "production" (Vercel + Next build prod sẽ là "production")
   //   2. BYPASS_AUTH phải === "true" (set trong .env.local)
