@@ -195,10 +195,27 @@ export async function POST(request: NextRequest) {
   }
 
   for (const scenarioKey of scenarioKeys) {
-    await db.rpc("mkt_audit_execute_scenario", {
+    const execution = await db.rpc("mkt_audit_execute_scenario", {
       p_run_id: run.id,
       p_scenario_key: scenarioKey,
     });
+    if (execution.error) {
+      const scenario = MKT_AUDIT_SCENARIOS.find((item) => item.key === scenarioKey);
+      const errorCode = execution.error.code ?? "AUDIT_SCENARIO_FAILED";
+      await db.from("mkt_audit_results").upsert(
+        {
+          run_id: run.id,
+          scenario_key: scenarioKey,
+          expected: scenario?.expected ?? "Scenario execution",
+          actual: "Runner error: " + execution.error.message,
+          error_code: errorCode,
+          audit_recorded: false,
+          result: "ERROR",
+          duration_ms: 0,
+        },
+        { onConflict: "run_id,scenario_key" },
+      );
+    }
   }
 
   const { data: results, error: resultError } = await db

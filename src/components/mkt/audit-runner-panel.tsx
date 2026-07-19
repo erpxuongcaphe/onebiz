@@ -27,6 +27,7 @@ const UI = {
   duration: "Th\u1eddi gian",
   yes: "C\u00f3",
   no: "Kh\u00f4ng",
+  empty: "\u2014",
   neverReal: "Kh\u00f4ng d\u00f9ng d\u1eef li\u1ec7u c\u00f4ng ty; kh\u00f4ng g\u1eedi Telegram ho\u1eb7c email.",
 };
 
@@ -239,7 +240,7 @@ function Summary({ label, value, tone }: { label: string; value: number; tone: s
 }
 
 function ResultBadge({ item }: { item?: MktAuditResult }) {
-  if (!item) return <span className="text-on-surface-variant">\u2014</span>;
+  if (!item) return <span className="text-on-surface-variant">{UI.empty}</span>;
   const cls = item.result === "PASS"
     ? "bg-emerald-50 text-emerald-700"
     : item.result === "FAIL"
