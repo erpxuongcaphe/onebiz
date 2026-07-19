@@ -466,6 +466,9 @@ function StockRowDetail({
                           <th className="text-left p-2 font-medium">Mã phiếu</th>
                           <th className="text-left p-2 font-medium">Loại</th>
                           <th className="text-right p-2 font-medium">Số lượng</th>
+                          {/* Đợt 6 (19/07): giá ghi lúc bán/nhập (trigger). */}
+                          <th className="text-right p-2 font-medium">Đơn giá</th>
+                          <th className="text-right p-2 font-medium">Giá trị</th>
                           {/* Đợt 4 (17/07): cột Tồn cuối kiểu KiotViet — tồn sau
                               mỗi lần nhập/xuất, cộng dồn từ đầu sổ. */}
                           <th className="text-right p-2 font-medium">Tồn cuối</th>
@@ -510,6 +513,22 @@ function StockRowDetail({
                                 isInflow={m.type !== "export"}
                               />
                             </td>
+                            {/* Đợt 6: đơn giá (nhập→giá phiếu, xuất→giá vốn) + giá trị. */}
+                            {(() => {
+                              const up = m.type === "export"
+                                ? m.unitCost
+                                : (m.unitPrice ?? m.unitCost);
+                              return (
+                                <>
+                                  <td className="p-2 text-right tabular-nums whitespace-nowrap">
+                                    {up != null ? formatCurrency(up) : "—"}
+                                  </td>
+                                  <td className="p-2 text-right tabular-nums whitespace-nowrap font-medium">
+                                    {up != null ? formatCurrency(up * Math.abs(m.quantity)) : "—"}
+                                  </td>
+                                </>
+                              );
+                            })()}
                             {/* Đợt 4: Tồn cuối sau giao dịch (KiotViet). */}
                             <td className="p-2 text-right font-medium tabular-nums whitespace-nowrap">
                               {m.runningBalance != null

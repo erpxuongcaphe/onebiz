@@ -558,6 +558,8 @@ export async function getAllStockMovements(
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
+      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
+      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
     };
   });
 
@@ -875,6 +877,8 @@ export async function getStockMovements(
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
+      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
+      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
     };
   });
 
@@ -974,6 +978,8 @@ export async function getStockCard(
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
       runningBalance: runningById.get(row.id),
+      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
+      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
     };
     return m;
   });

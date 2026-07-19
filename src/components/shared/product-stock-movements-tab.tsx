@@ -7,7 +7,7 @@
 
 import { useEffect, useState } from "react";
 import { getStockCard } from "@/lib/services";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatNumber, formatCurrency } from "@/lib/format";
 import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
@@ -119,11 +119,14 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           CEO 10/06/2026: thay cột "Còn lại" (để "—") bằng "Đối tác" thật.
           Đợt 4 (17/07): thêm lại cột "Tồn cuối" ĐÚNG (cộng dồn từ sổ). */}
       <div className="rounded-lg border overflow-x-auto">
-        <div className="grid grid-cols-[110px_130px_180px_80px_100px_200px_160px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[1000px]">
+        <div className="grid grid-cols-[110px_130px_150px_70px_90px_110px_90px_170px_140px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[1140px]">
           <span>Ngày</span>
           <span>Mã phiếu</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
+          {/* Đợt 6 (19/07): đơn giá + giá trị */}
+          <span className="text-right">Đơn giá</span>
+          <span className="text-right">Giá trị</span>
           <span className="text-right">Tồn cuối</span>
           <span>Đối tác</span>
           <span>Ghi chú</span>
@@ -143,7 +146,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_130px_180px_80px_100px_200px_160px] gap-2 items-center px-3 py-2 text-sm"
+                className="grid grid-cols-[110px_130px_150px_70px_90px_110px_90px_170px_140px] gap-2 items-center px-3 py-2 text-sm"
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
@@ -165,6 +168,20 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                   {signed > 0 ? "+" : ""}
                   {formatNumber(signed)}
                 </span>
+                {/* Đợt 6: đơn giá + giá trị (nhập→giá phiếu, xuất→giá vốn). */}
+                {(() => {
+                  const up = m.type === "export" ? m.unitCost : (m.unitPrice ?? m.unitCost);
+                  return (
+                    <>
+                      <span className="text-right tabular-nums text-xs">
+                        {up != null ? formatCurrency(up) : "—"}
+                      </span>
+                      <span className="text-right tabular-nums text-xs font-medium">
+                        {up != null ? formatCurrency(up * Math.abs(m.quantity)) : "—"}
+                      </span>
+                    </>
+                  );
+                })()}
                 {/* Đợt 4: Tồn cuối toàn công ty sau giao dịch. */}
                 <span className="text-right font-medium tabular-nums">
                   {m.runningBalance != null ? formatNumber(m.runningBalance) : "—"}

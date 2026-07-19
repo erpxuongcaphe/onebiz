@@ -125,6 +125,10 @@ export interface StockMovement {
   /** Đợt 4 (17/07): tồn CUỐI sau giao dịch này (cộng dồn tiến từ đầu sổ,
    * theo chi nhánh nếu xem per-branch). Chỉ có ở thẻ kho (getStockCard). */
   runningBalance?: number;
+  /** Đợt 6 (19/07): giá ghi lúc tạo (trigger 00206). unitCost=giá vốn (xuất),
+   * unitPrice=đơn giá phiếu nhập. NULL với dòng cũ chưa có giá. */
+  unitCost?: number;
+  unitPrice?: number;
 }
 
 /** Đợt 4 — Thẻ kho: sổ 1 mặt hàng (± theo chi nhánh) kèm tồn cuối cộng dồn
