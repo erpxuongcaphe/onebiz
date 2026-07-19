@@ -329,9 +329,6 @@ export default async function CampaignDetailPage({
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                              Kế hoạch phụ
-                            </span>
                             {w.channelType !== "other" ? (
                               <span className="rounded-full border border-outline-variant px-2 py-0.5 text-xs font-medium">
                                 Nhãn kênh: {CHANNEL_LABEL[w.channelType] ?? w.channelType}
@@ -434,7 +431,7 @@ export default async function CampaignDetailPage({
                       const kids = childrenOf(p.id);
                       const own = subPlansOf(p.id);
                       return (
-                        <div key={p.id} className="space-y-2 rounded-lg border border-orange-200 border-l-4 border-l-orange-500 bg-surface-container-lowest p-3">
+                        <div key={p.id} className="space-y-2 rounded-lg border border-orange-200 border-l-4 border-l-orange-500 bg-surface-container-lowest p-2.5">
                           <CampaignPlanHeader
                             plan={p}
                             level={2}
@@ -448,7 +445,7 @@ export default async function CampaignDetailPage({
                           {kids.map((k) => {
                             const kidSub = subPlansOf(k.id);
                             return (
-                              <div key={k.id} className="ml-3 space-y-2 rounded-lg border border-sky-200 border-l-4 border-l-sky-500 bg-background/60 p-3 sm:ml-5">
+                              <div key={k.id} className="ml-2 space-y-2 rounded-lg border border-sky-200 border-l-4 border-l-sky-500 bg-background/60 p-2.5 sm:ml-3.5">
                                 <CampaignPlanHeader
                                   plan={k}
                                   level={3}
