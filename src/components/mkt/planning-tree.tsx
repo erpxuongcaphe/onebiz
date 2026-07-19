@@ -270,18 +270,19 @@ export function PlanningTree({
           </div>
         ) : null}
         {canManage ? (
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              {nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
+          // "Nằm trong" một hàng riêng đủ rộng (không bị nút khác chèn cụt chữ);
+          // nút nâng thành nhánh là hành động hiếm → ghost nhẹ, hàng riêng căn phải.
+          <div className="space-y-1 border-t border-outline-variant/50 pt-2">
+            {nodes.length > 0 ? <MoveSubPlan entry={p} nodes={nodes} /> : null}
+            <div className="flex justify-end">
+              <PromoteSubPlanButton
+                campaignId={p.campaignId}
+                workPackageId={p.workPackageId}
+                title={p.channelTitle ?? "Kế hoạch phụ"}
+                currentPlanId={p.campaignPlanId}
+                nodes={nodes}
+              />
             </div>
-            {/* Nâng thẻ thành NÚT cấp 2/3 (CEO 18/07: "muốn thêm cấp 3 cho nó") */}
-            <PromoteSubPlanButton
-              campaignId={p.campaignId}
-              workPackageId={p.workPackageId}
-              title={p.channelTitle ?? "Kế hoạch phụ"}
-              currentPlanId={p.campaignPlanId}
-              nodes={nodes}
-            />
           </div>
         ) : null}
         <div className="mt-auto flex flex-wrap justify-end gap-2 pt-1">
@@ -328,8 +329,16 @@ export function PlanningTree({
           </p>
         ) : null}
         {canManage ? (
-          // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn "Nằm trong".
-          <div className="flex flex-wrap justify-end gap-2 border-t border-outline-variant/60 pt-2">
+          // ➕ tại nhánh (CEO 18/07): thêm thẳng vào ĐÚNG nhánh này, khỏi chọn
+          // "Nằm trong". Ghost nhẹ + căn trái theo dòng nội dung — không nặng mắt.
+          <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1.5">
+            <WorkPackageForm
+              campaignId={campaignId}
+              members={members}
+              campaignPlans={nodes}
+              defaultCampaignPlanId={node.id}
+              compact
+            />
             {level === 2 ? (
               <CampaignPlanFormButton
                 campaignId={campaignId}
@@ -337,18 +346,12 @@ export function PlanningTree({
                 plans={nodes}
                 defaultParentPlanId={node.id}
                 trigger={
-                  <button type="button" className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary">
+                  <button type="button" className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary">
                     <Icon name="add" size={13} /> Thêm cấp 3 vào nhánh này
                   </button>
                 }
               />
             ) : null}
-            <WorkPackageForm
-              campaignId={campaignId}
-              members={members}
-              campaignPlans={nodes}
-              defaultCampaignPlanId={node.id}
-            />
           </div>
         ) : null}
       </div>
@@ -416,9 +419,12 @@ export function PlanningTree({
               <div className="space-y-3 border-t border-outline-variant p-3">
                 {canManage ? (
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <span className="mr-auto text-xs text-on-surface-variant">
-                      Dựng cây ngay tại đây: thêm cấp 2/3 rồi xếp các Kế hoạch phụ vào bằng ô “Nằm trong” trên từng thẻ.
-                    </span>
+                    {g.roots.length === 0 ? (
+                      // Gợi ý chỉ hiện khi CHƯA có nhánh nào — có cây rồi thì tự khắc hiểu.
+                      <span className="mr-auto text-xs text-on-surface-variant">
+                        Dựng cây ngay tại đây: thêm cấp 2/3 rồi xếp các Kế hoạch phụ vào bằng ô “Nằm trong” trên từng thẻ.
+                      </span>
+                    ) : null}
                     <CampaignPlanFormButton
                       campaignId={g.campaignId}
                       members={members}

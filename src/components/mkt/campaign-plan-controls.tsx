@@ -249,17 +249,19 @@ export function PromoteSubPlanButton({
     }
   }
 
+  // Hành động HIẾM dùng → nút "ghost" nhẹ (không viền), chỉ nổi khi rê chuột —
+  // không tranh chỗ với thông tin chính của thẻ.
   return (
     <div className="flex flex-col items-end gap-1">
       <button
         type="button"
         disabled={saving || refreshing}
         onClick={promote}
-        className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-2 py-1 text-xs font-medium text-on-surface-variant hover:border-primary/40 hover:text-primary disabled:opacity-60"
-        title={`Biến thẻ này thành một nhánh cấp ${newLevel} — công đoạn/việc giữ nguyên bên trong`}
+        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-on-surface-variant/80 transition hover:bg-surface-container hover:text-primary disabled:opacity-60"
+        title={`Chuyển "${title}" thành Kế hoạch cấp ${newLevel} (một nhánh của cây) — công đoạn/việc giữ nguyên bên trong`}
       >
         <Icon name="move_up" size={13} />
-        {saving ? "Đang chuyển…" : `Chuyển thành Kế hoạch cấp ${newLevel}`}
+        {saving ? "Đang chuyển…" : `Nâng thành cấp ${newLevel}`}
       </button>
       {error ? <p className="text-xs font-medium text-rose-600">{error}</p> : null}
     </div>
