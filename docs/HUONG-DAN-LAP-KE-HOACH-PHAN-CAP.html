@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hướng dẫn: Lập kế hoạch phân cấp — MKT Hub</title>
+</head>
+<body>
+<style>
+  :root {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+    --orange: #c2410c; --orange-soft: #ffedd5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+      --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+      --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+      --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+      --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+      --slate: #94a3b8; --slate-soft: #232c34;
+      --orange: #fb923c; --orange-soft: #3c2413;
+    }
+  }
+  :root[data-theme="light"] {
+    --ink: #1c2430; --ink-soft: #5b6472; --paper: #ffffff; --soft: #f4f6fa;
+    --line: #d9dfe9; --primary: #2b4fce; --primary-soft: #e8edfb;
+    --green: #0e9a6c; --green-soft: #e2f5ee; --amber: #b45309; --amber-soft: #fdf0dd;
+    --rose: #ce2b4f; --rose-soft: #fbe8ed; --sky: #0369a1; --sky-soft: #e0f2fe;
+    --pink: #be185d; --pink-soft: #fce7f3; --indigo: #4f46e5; --indigo-soft: #e8eafb;
+    --slate: #64748b; --slate-soft: #f1f5f9;
+    --orange: #c2410c; --orange-soft: #ffedd5;
+  }
+  :root[data-theme="dark"] {
+    --ink: #e8ebf0; --ink-soft: #9aa4b2; --paper: #14181f; --soft: #1c222c;
+    --line: #323a47; --primary: #7c95ec; --primary-soft: #232c45;
+    --green: #34c799; --green-soft: #17352b; --amber: #e5a04c; --amber-soft: #3a2c17;
+    --rose: #ec7c95; --rose-soft: #451f2a; --sky: #67c3f3; --sky-soft: #14303f;
+    --pink: #f18ab8; --pink-soft: #3d1a2c; --indigo: #a5b4fc; --indigo-soft: #24263f;
+    --slate: #94a3b8; --slate-soft: #232c34;
+    --orange: #fb923c; --orange-soft: #3c2413;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65; font-size: 16px; }
+  .wrap { max-width: 800px; margin: 0 auto; padding: 40px 22px 80px; }
+
+  header.doc { border-bottom: 3px solid var(--primary); padding-bottom: 22px; margin-bottom: 30px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin: 0 0 8px; }
+  h1 { font-size: 33px; line-height: 1.2; margin: 0 0 10px; letter-spacing: -.01em; text-wrap: balance; }
+  .lede { color: var(--ink-soft); font-size: 17px; margin: 0; max-width: 64ch; }
+  .meta { margin-top: 14px; font-size: 13.5px; color: var(--ink-soft); display: flex; flex-wrap: wrap; gap: 6px 18px; }
+  .meta b { color: var(--ink); font-weight: 600; }
+
+  nav.toc { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 18px 22px; margin: 26px 0 8px; }
+  nav.toc p { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft); }
+  nav.toc ol { margin: 0; padding-left: 22px; }
+  nav.toc li { margin: 3px 0; }
+  nav.toc a { color: var(--ink); text-decoration: none; border-bottom: 1px dotted var(--line); }
+  nav.toc a:hover, nav.toc a:focus-visible { color: var(--primary); border-bottom-color: var(--primary); }
+
+  h2 { font-size: 23px; margin: 54px 0 6px; padding-top: 18px; letter-spacing: -.01em; border-top: 1px solid var(--line); text-wrap: balance; }
+  h2 .phan { display: block; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--primary); margin-bottom: 4px; }
+  h3 { font-size: 17.5px; margin: 30px 0 8px; }
+  p { margin: 10px 0; max-width: 70ch; }
+  ul, ol { max-width: 68ch; padding-left: 24px; }
+  li { margin: 5px 0; }
+  a { color: var(--primary); }
+
+  .chip { display: inline-block; font-size: 12.5px; font-weight: 700; padding: 2px 10px; border-radius: 999px; vertical-align: 2px; margin-left: 8px; }
+  .chip.lead { background: var(--pink-soft); color: var(--pink); }
+  .chip.exec { background: var(--sky-soft); color: var(--sky); }
+
+  .path { display: inline-block; background: var(--soft); border: 1px solid var(--line); border-radius: 7px; padding: 1px 9px; font-weight: 600; font-size: 14.5px; white-space: nowrap; }
+  .btn-name { font-weight: 700; color: var(--primary); }
+
+  .note, .warn, .good { border-radius: 10px; padding: 13px 16px; margin: 16px 0; font-size: 15px; max-width: none; }
+  .note { background: var(--primary-soft); border-left: 4px solid var(--primary); }
+  .warn { background: var(--amber-soft); border-left: 4px solid var(--amber); }
+  .good { background: var(--green-soft); border-left: 4px solid var(--green); }
+  .note p, .warn p, .good p { margin: 4px 0; }
+
+  figure { margin: 20px 0 26px; }
+  .fig-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--paper); overflow-x: auto; }
+  figure svg { display: block; width: 100%; height: auto; font-family: inherit; }
+  figcaption { font-size: 13.5px; color: var(--ink-soft); margin-top: 8px; padding-left: 2px; }
+  figcaption b { color: var(--ink); }
+
+  table.roles { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14.5px; }
+  table.roles th, table.roles td { border: 1px solid var(--line); padding: 9px 12px; text-align: left; vertical-align: top; }
+  table.roles th { background: var(--soft); font-size: 13px; letter-spacing: .04em; text-transform: uppercase; }
+  .table-scroll { overflow-x: auto; }
+
+  ol.steps { counter-reset: step; list-style: none; padding-left: 0; max-width: none; }
+  ol.steps > li { counter-increment: step; position: relative; padding-left: 46px; margin: 14px 0; }
+  ol.steps > li::before { content: counter(step); position: absolute; left: 0; top: 1px;
+    width: 30px; height: 30px; border-radius: 999px; background: var(--primary); color: #fff;
+    font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: center; }
+  ol.steps > li > b:first-child { display: block; margin-bottom: 2px; font-size: 16px; }
+
+  .faq dt { font-weight: 700; margin-top: 18px; }
+  .faq dd { margin: 4px 0 0 0; color: var(--ink-soft); max-width: 70ch; }
+
+  footer.doc { margin-top: 60px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-soft); }
+
+  @page { size: A4; margin: 15mm 14mm 16mm; }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; background:#fff; }
+    body { font-size: 10.8pt; color:#1c2430; }
+    .wrap { max-width: none; padding: 0; }
+    a { text-decoration: none; }
+    h1 { font-size: 22pt; }
+    h2 { font-size: 15pt; break-after: avoid; }
+    h3 { break-after: avoid; }
+    p, li { orphans: 2; widows: 2; }
+    figure, .note, .warn, .good, table.roles, ol.steps > li, .faq dt { break-inside: avoid; }
+    nav.toc { break-inside: avoid; }
+    .fig-card { background:#fff; }
+  }
+</style>
+
+<div class="wrap">
+
+<header class="doc">
+  <p class="eyebrow">OneBiz · MKT Hub · Tài liệu nội bộ</p>
+  <h1>Hướng dẫn: Lập kế hoạch phân cấp</h1>
+  <p class="lede">Mỗi chiến dịch là một <b>cây kế hoạch tối đa 4 cấp</b> — bạn tự chia tầng để quản lý những kế hoạch lớn: chia theo tháng, theo kênh, theo khu vực… tuỳ cách bạn nghĩ. Tài liệu này hướng dẫn trọn bộ: tư duy chia cấp, ba cách tạo nhánh, xếp việc vào nhánh, gập/mở để nhìn toàn cảnh.</p>
+  <div class="meta">
+    <span>Địa chỉ: <b>mkthub.onebiz.com.vn</b> → mục <b>Lập kế hoạch</b></span>
+    <span>Dành cho: <b>Leader &amp; người lập kế hoạch</b></span>
+    <span>Cập nhật: <b>19/07/2026</b></span>
+  </div>
+</header>
+
+<nav class="toc">
+  <p>Nội dung</p>
+  <ol>
+    <li><a href="#tu-duy">Vì sao phải chia cấp — tư duy nền</a></li>
+    <li><a href="#mo-hinh">Cây 4 cấp: mỗi tầng là gì, luật nào phải nhớ</a></li>
+    <li><a href="#hai-man">Hai màn hình làm việc &amp; bản đồ màu</a></li>
+    <li><a href="#tao-nhanh">Ba cách tạo nhánh (cấp 2/3)</a></li>
+    <li><a href="#xep-the">Xếp Kế hoạch phụ vào nhánh — ô "Nằm trong"</a></li>
+    <li><a href="#gap-mo">Gập/mở nhánh — nhìn toàn cảnh không phải cuộn</a></li>
+    <li><a href="#sua-xoa">Sửa &amp; xoá nhánh — không mất gì bên trong</a></li>
+    <li><a href="#bo-loc">Bộ lọc &amp; tìm kiếm</a></li>
+    <li><a href="#kich-ban">Kịch bản mẫu từ đầu đến cuối</a></li>
+    <li><a href="#faq">Câu hỏi thường gặp</a></li>
+  </ol>
+</nav>
+
+<h2 id="tu-duy"><span class="phan">Phần 1</span>Vì sao phải chia cấp — tư duy nền</h2>
+<p>Một chiến dịch lớn thường gồm hàng chục đầu việc. Nếu đổ hết vào một danh sách phẳng, sẽ không ai nhìn ra <b>việc nào thuộc mảng nào</b>, mảng nào đang chậm, mảng nào chưa ai lo. Cách xử lý quen thuộc của người quản lý là <b>chia nhỏ</b>: chiến dịch chia thành vài mảng, mảng chia thành giai đoạn, giai đoạn mới đến việc cụ thể.</p>
+<p>Cây kế hoạch trong MKT Hub làm đúng điều đó, với hai nguyên tắc:</p>
+<ul>
+  <li><b>Các cấp là của bạn</b> — hệ thống không ép "cấp 2 phải là kênh" hay "cấp 3 phải là tháng". Bạn đặt tên tầng theo cách mình quản lý: "Kênh Online", "Tháng 7", "Khu vực Quận 7", "Giai đoạn khai trương"… đều được.</li>
+  <li><b>Sâu bao nhiêu tuỳ từng kế hoạch, nhưng tối đa 4 cấp</b> — kế hoạch gọn thì đi thẳng, kế hoạch lớn thì chia đủ tầng. Trần 4 cấp giữ cho cây không bao giờ rối đến mức không ai đọc nổi.</li>
+</ul>
+<div class="note">
+  <p><b>Một câu tóm cả mô hình:</b> Chiến dịch là gốc, các tầng giữa do bạn tự đặt tên, và <b>việc luôn nằm trong "Kế hoạch phụ"</b> — tấm thẻ xanh lá ở cuối mỗi nhánh. Mỗi cấp đều treo được nhiều Kế hoạch phụ.</p>
+</div>
+
+<h2 id="mo-hinh"><span class="phan">Phần 2</span>Cây 4 cấp: mỗi tầng là gì, luật nào phải nhớ</h2>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 320" role="img" aria-label="Cây kế hoạch 4 cấp với nhánh sâu và nhánh nông">
+    <rect x="8" y="10" width="744" height="50" rx="11" fill="var(--indigo-soft)" stroke="var(--indigo)"/>
+    <rect x="22" y="21" width="120" height="20" rx="10" fill="var(--indigo)"/>
+    <text x="82" y="35" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Cấp 1 · Chiến dịch</text>
+    <text x="154" y="36" font-size="13" font-weight="700" fill="var(--ink)">"Quý 3 – Phủ thương hiệu"</text>
+    <text x="742" y="36" font-size="11" text-anchor="end" fill="var(--ink-soft)">ngân sách · thời hạn · % sẵn sàng</text>
+
+    <g stroke="var(--ink-soft)" stroke-width="1.6" fill="none">
+      <path d="M200 60 200 82"/><path d="M560 60 560 82"/>
+    </g>
+    <path d="M196 82 200 90 204 82 Z" fill="var(--ink-soft)"/>
+    <path d="M556 82 560 90 564 82 Z" fill="var(--ink-soft)"/>
+
+    <rect x="16" y="90" width="368" height="220" rx="11" fill="var(--orange-soft)" stroke="var(--orange)"/>
+    <rect x="30" y="102" width="96" height="20" rx="10" fill="var(--orange)"/>
+    <text x="78" y="116" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Cấp 2</text>
+    <text x="136" y="117" font-size="12.5" font-weight="700" fill="var(--ink)">"Kênh Online"</text>
+
+    <rect x="34" y="132" width="332" height="168" rx="10" fill="var(--sky-soft)" stroke="var(--sky)"/>
+    <rect x="48" y="144" width="96" height="20" rx="10" fill="var(--sky)"/>
+    <text x="96" y="158" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Cấp 3</text>
+    <text x="154" y="159" font-size="12.5" font-weight="700" fill="var(--ink)">"Tháng 7"</text>
+
+    <rect x="52" y="174" width="296" height="116" rx="10" fill="var(--green-soft)" stroke="var(--green)"/>
+    <rect x="66" y="186" width="110" height="20" rx="10" fill="var(--green)"/>
+    <text x="121" y="200" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch phụ</text>
+    <text x="184" y="201" font-size="12.5" font-weight="700" fill="var(--ink)">"Tuần 1"</text>
+    <rect x="66" y="214" width="268" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="76" y="229" font-size="11" fill="var(--ink)">Việc: viết 10 bài — giao người làm</text>
+    <rect x="66" y="242" width="268" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="76" y="257" font-size="11" fill="var(--ink)">Việc: quay 2 clip — giao người làm</text>
+    <rect x="66" y="268" width="130" height="16" rx="8" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="131" y="280" font-size="9.5" font-weight="600" text-anchor="middle" fill="var(--ink)">Nhãn kênh: Website</text>
+
+    <rect x="408" y="90" width="344" height="116" rx="11" fill="var(--green-soft)" stroke="var(--green)"/>
+    <rect x="422" y="102" width="110" height="20" rx="10" fill="var(--green)"/>
+    <text x="477" y="116" font-size="10.5" font-weight="700" text-anchor="middle" fill="#fff">Kế hoạch phụ</text>
+    <text x="540" y="117" font-size="12.5" font-weight="700" fill="var(--ink)">"Việc gấp tuần này"</text>
+    <rect x="422" y="132" width="316" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="432" y="147" font-size="11" fill="var(--ink)">Việc: in băng rôn khai trương</text>
+    <rect x="422" y="160" width="316" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="432" y="175" font-size="11" fill="var(--ink)">Việc: đặt quà tặng khách</text>
+    <text x="422" y="197" font-size="10.5" fill="var(--ink-soft)">Gắn thẳng vào Chiến dịch — không cần qua cấp 2/3</text>
+
+    <text x="408" y="234" font-size="11.5" fill="var(--ink-soft)">Cùng một chiến dịch có thể vừa có</text>
+    <text x="408" y="251" font-size="11.5" fill="var(--ink-soft)">nhánh sâu (trái) vừa có nhánh nông (trên) —</text>
+    <text x="408" y="268" font-size="11.5" fill="var(--ink-soft)">tuỳ nhu cầu của từng kế hoạch,</text>
+    <text x="408" y="285" font-size="11.5" font-weight="700" fill="var(--ink)">nhưng tối đa 4 cấp.</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 1.</b> Một chiến dịch, hai kiểu nhánh. Nhánh trái đi đủ 4 cấp; nhánh phải đi tắt — Kế hoạch phụ gắn thẳng vào Chiến dịch.</figcaption>
+</figure>
+
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:22%">Tầng</th><th style="width:14%">Màu</th><th>Là gì — dùng làm gì</th></tr>
+  <tr><td><b>Cấp 1 · Chiến dịch</b></td><td>Tím</td><td>Gốc của cây. Giữ ngân sách, khung thời gian, mức sẵn sàng, nút Chạy chiến dịch. Tạo ở mục <span class="path">Chiến dịch</span>.</td></tr>
+  <tr><td><b>Cấp 2</b> (tuỳ chọn)</td><td>Cam</td><td>Tầng gom lớn — tên do bạn đặt. Chỉ để tổ chức, không có vòng duyệt riêng.</td></tr>
+  <tr><td><b>Cấp 3</b> (tuỳ chọn)</td><td>Xanh dương</td><td>Tầng gom nhỏ hơn, nằm trong một cấp 2. Cũng do bạn đặt tên.</td></tr>
+  <tr><td><b>Kế hoạch phụ</b></td><td>Xanh lá</td><td><b>Nơi duy nhất chứa việc.</b> Mang trọn vòng: giao lập kế hoạch → soạn công đoạn → nộp → duyệt → sinh việc → báo cáo tiến độ. Gắn được vào cấp 1, 2 hoặc 3 — mỗi cấp bao nhiêu cái cũng được.</td></tr>
+</table>
+</div>
+
+<p>Bốn luật phải nhớ:</p>
+<ul>
+  <li><b>Trần 4 cấp</b> — cấp 3 không mở thêm tầng con. Hệ thống chặn ở cả nút bấm lẫn tầng dữ liệu.</li>
+  <li><b>Việc chỉ nằm trong Kế hoạch phụ</b> — muốn giao việc ở đâu, tạo Kế hoạch phụ ở đó.</li>
+  <li><b>Kênh (TikTok, Facebook…) là nhãn, không phải tầng</b> — gắn nhãn kênh vào Kế hoạch phụ nếu muốn đánh dấu, bỏ trống cũng được.</li>
+  <li><b>Xoá nhánh không mất gì bên trong</b> — mọi thứ tự nối lên tầng trên (chi tiết ở Phần 7).</li>
+</ul>
+
+<h2 id="hai-man"><span class="phan">Phần 3</span>Hai màn hình làm việc &amp; bản đồ màu</h2>
+<p>Cây kế hoạch hiện ở hai chỗ, dùng chỗ nào cũng được — thao tác giống hệt nhau:</p>
+<ul>
+  <li><span class="path">Lập kế hoạch</span> (menu trái) — <b>màn làm việc chính</b>: thấy mọi chiến dịch đang có kế hoạch, dựng cây, xếp thẻ, soạn/nộp/duyệt, lọc tìm. Gần như mọi thao tác trong tài liệu này làm tại đây.</li>
+  <li><span class="path">Chiến dịch</span> → mở một chiến dịch → tab <span class="path">Cây kế hoạch</span> — khi bạn muốn nhìn riêng một chiến dịch cùng các tab Nội dung / Bảng công việc / Sẵn sàng của nó.</li>
+</ul>
+<div class="good">
+  <p><b>Đọc màu là biết tầng:</b> viền <b>tím</b> = Chiến dịch · <b>cam</b> = cấp 2 · <b>xanh dương</b> = cấp 3 · <b>xanh lá</b> = Kế hoạch phụ. Trong hộp soạn kế hoạch, dòng định vị trên cùng cũng tô đúng các màu này: <i>Cấp 1 → Cấp 2 → Cấp 3 → Kế hoạch phụ</i> — liếc một giây là biết mình đang đứng ở nhánh nào.</p>
+</div>
+
+<h2 id="tao-nhanh"><span class="phan">Phần 4</span>Ba cách tạo nhánh (cấp 2/3)</h2>
+
+<h3>Cách 1 — nút "Thêm Kế hoạch": ô "Nằm trong" quyết định cấp</h3>
+<ol class="steps">
+  <li><b>Bấm <span class="btn-name">+ Thêm Kế hoạch</span></b>Nút nằm ở góc phải, ngay dưới tên chiến dịch (màn Lập kế hoạch), hoặc đầu tab Cây kế hoạch.</li>
+  <li><b>Chọn "Nằm trong"</b>Đây là ô quan trọng nhất của hộp thoại: chọn <b>Chiến dịch</b> → nhánh mới là <b>cấp 2</b>; chọn một nhánh cấp 2 có sẵn → nhánh mới là <b>cấp 3</b>. Huy hiệu màu trên hộp tự đổi theo lựa chọn để bạn thấy trước mình đang tạo cấp mấy.</li>
+  <li><b>Đặt tên + thông tin tuỳ chọn</b>Tên là bắt buộc (VD "Kênh Online", "Tháng 7"). Mục tiêu, người phụ trách, từ ngày/đến ngày — điền nếu muốn. Bấm <span class="btn-name">Tạo Kế hoạch</span>.</li>
+</ol>
+
+<h3>Cách 2 — nút ➕ ngay tại nhánh: khỏi chọn "Nằm trong"</h3>
+<p>Cuối mỗi nhánh có hàng nút mờ: <span class="btn-name">+ Thêm Kế hoạch phụ</span> và (ở nhánh cấp 2) <span class="btn-name">+ Thêm cấp 3 vào nhánh này</span>. Bấm từ đây thì cái mới <b>tự rơi vào đúng nhánh đang đứng</b> — nhanh nhất khi bạn đang dựng một nhánh dở.</p>
+
+<h3>Cách 3 — "Nâng thành cấp 2/3": biến một thẻ thành nhánh</h3>
+<p>Có lúc bạn tạo một Kế hoạch phụ, làm được một thời gian rồi mới thấy nó cần lớn thành cả một mảng có tầng con. Không phải làm lại từ đầu:</p>
+<ol class="steps">
+  <li><b>Bấm <span class="btn-name">Nâng thành cấp 2</span> (hoặc cấp 3) trên thẻ</b>Nút chữ mờ nằm cạnh ô "Nằm trong" của thẻ.</li>
+  <li><b>Xác nhận</b>Hệ thống tạo một nhánh <b>cùng tên</b> tại đúng chỗ thẻ đang đứng, rồi đưa thẻ (giữ nguyên toàn bộ mục tiêu, công đoạn, việc, lịch sử duyệt) vào <b>trong</b> nhánh đó — không mất gì.</li>
+  <li><b>Chia tiếp</b>Giờ nhánh mới nhận thêm cấp 3 (nếu là cấp 2) và bao nhiêu Kế hoạch phụ tuỳ ý.</li>
+</ol>
+
+<figure>
+  <div class="fig-card">
+  <svg viewBox="0 0 760 190" role="img" aria-label="Nâng một thẻ thành nhánh: trước và sau">
+    <text x="14" y="24" font-size="12" font-weight="700" fill="var(--ink-soft)">TRƯỚC</text>
+    <rect x="14" y="34" width="320" height="120" rx="10" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="30" y="58" font-size="13" font-weight="700" fill="var(--ink)">Test Plan</text>
+    <text x="30" y="78" font-size="11" fill="var(--ink-soft)">Kế hoạch phụ · 1 công đoạn · bản v2</text>
+    <rect x="30" y="92" width="180" height="22" rx="7" fill="var(--paper)" stroke="var(--line)"/>
+    <text x="40" y="107" font-size="10.5" fill="var(--ink)">Nằm trong: Chiến dịch</text>
+    <text x="30" y="138" font-size="10.5" font-weight="600" fill="var(--primary)">⤴ Nâng thành cấp 2</text>
+
+    <g stroke="var(--ink-soft)" stroke-width="1.8" fill="none"><path d="M352 96 H398"/></g>
+    <path d="M398 91 408 96 398 101 Z" fill="var(--ink-soft)"/>
+
+    <text x="424" y="24" font-size="12" font-weight="700" fill="var(--ink-soft)">SAU</text>
+    <rect x="424" y="34" width="322" height="140" rx="10" fill="var(--orange-soft)" stroke="var(--orange)"/>
+    <rect x="438" y="46" width="76" height="18" rx="9" fill="var(--orange)"/>
+    <text x="476" y="59" font-size="9.5" font-weight="700" text-anchor="middle" fill="#fff">Cấp 2</text>
+    <text x="524" y="60" font-size="12.5" font-weight="700" fill="var(--ink)">Test Plan</text>
+    <rect x="438" y="72" width="294" height="60" rx="9" fill="var(--green-soft)" stroke="var(--green)"/>
+    <text x="452" y="93" font-size="12" font-weight="700" fill="var(--ink)">Test Plan</text>
+    <text x="452" y="111" font-size="10.5" fill="var(--ink-soft)">công đoạn/việc giữ nguyên bên trong</text>
+    <text x="438" y="156" font-size="10.5" font-weight="600" fill="var(--primary)">+ Thêm cấp 3 · + Thêm Kế hoạch phụ</text>
+  </svg>
+  </div>
+  <figcaption><b>Hình 2.</b> Nâng thẻ thành nhánh: thẻ cũ chui vào trong nhánh cùng tên, không mất dữ liệu; nhánh mới sẵn sàng nhận tầng con.</figcaption>
+</figure>
+
+<div class="warn">
+  <p><b>Lưu ý trần 4 cấp:</b> thẻ đang nằm trong một nhánh <b>cấp 3</b> thì không còn nút Nâng — vì nâng nữa là vượt trần. Tương tự, ô "Nằm trong" của hộp Thêm Kế hoạch chỉ liệt kê Chiến dịch và các nhánh cấp 2.</p>
+</div>
+
+<h2 id="xep-the"><span class="phan">Phần 5</span>Xếp Kế hoạch phụ vào nhánh — ô "Nằm trong"</h2>
+<p>Mỗi thẻ Kế hoạch phụ có ô <b>"Nằm trong"</b> (người có quyền quản trị chiến dịch mới thấy). Muốn dời thẻ sang nhánh khác — hoặc xếp những thẻ cũ chưa thuộc nhánh nào — chỉ cần chọn lại trong ô này:</p>
+<ul>
+  <li>Chọn <b>Chiến dịch (không qua cấp 2/3)</b> → thẻ đứng thẳng dưới chiến dịch.</li>
+  <li>Chọn một nhánh cấp 2, hoặc dòng thụt <b>↳ … (cấp 3)</b> → thẻ chui vào nhánh đó. Đổi xong cây cập nhật ngay.</li>
+</ul>
+<div class="note">
+  <p><b>Dời thẻ không ảnh hưởng việc đang chạy:</b> các công đoạn, việc đã giao, lịch sử duyệt… đi theo thẻ nguyên vẹn. "Nằm trong" chỉ đổi chỗ đứng của thẻ trên cây.</p>
+</div>
+
+<h2 id="gap-mo"><span class="phan">Phần 6</span>Gập/mở nhánh — nhìn toàn cảnh không phải cuộn</h2>
+<ul>
+  <li><b>Bấm vào thanh tiêu đề</b> của một chiến dịch hay một nhánh (chỗ có mũi tên ›) để gập cả khối còn <b>một dòng</b>; bấm lại để mở. Dòng tóm tắt vẫn hiện đủ: bao nhiêu kế hoạch phụ, bao nhiêu việc xong, sức khỏe xấu nhất.</li>
+  <li><b>Nút <span class="btn-name">Gập tất cả / Mở tất cả</span></b> ở cuối thanh lọc — toàn cảnh mọi chiến dịch trong một cú bấm.</li>
+  <li><b>Máy nhớ cách nhìn của bạn:</b> gập nhánh nào thì sau khi lưu thao tác, tải lại trang, hay quay lại hôm sau, nhánh đó vẫn gập — mỗi người một cách nhìn riêng trên máy mình, không ảnh hưởng người khác.</li>
+  <li><b>Đang lọc thì mọi nhánh tự mở</b> — để kết quả tìm không bao giờ bị giấu trong nhánh gập. Xoá lọc là trở về đúng cách nhìn bạn đã lưu.</li>
+</ul>
+
+<h2 id="sua-xoa"><span class="phan">Phần 7</span>Sửa &amp; xoá nhánh — không mất gì bên trong</h2>
+<p>Trên thanh tiêu đề mỗi nhánh có hai nút nhỏ: <b>✏️ Sửa</b> (đổi tên, mục tiêu, người phụ trách, khung ngày, hoặc dời cả nhánh sang chỗ khác) và <b>🗑 Xoá</b>.</p>
+<div class="good">
+  <p><b>Xoá là "rút một tầng", không phải đập cả nhánh:</b> xoá một nhánh cấp 2 thì các nhánh cấp 3 bên trong <b>nối lên</b> thành cấp 2, các Kế hoạch phụ nối lên tầng trên — công đoạn, việc, lịch sử còn nguyên. Chỉ khi xoá <b>một Kế hoạch phụ</b> thì việc bên trong nó mới bị ẩn theo (hộp xác nhận sẽ nói rõ trước khi bạn bấm).</p>
+</div>
+<p>Một nhánh <b>đang có nhánh con</b> thì không dời xuống làm cấp 3 được (con của nó sẽ vượt trần 4 cấp) — hộp Sửa sẽ khoá ô "Nằm trong" kèm giải thích; muốn dời, hãy dời các nhánh con ra trước.</p>
+
+<h2 id="bo-loc"><span class="phan">Phần 8</span>Bộ lọc &amp; tìm kiếm</h2>
+<div class="table-scroll">
+<table class="roles">
+  <tr><th style="width:30%">Ô lọc</th><th>Cách dùng</th></tr>
+  <tr><td><b>Tìm theo tên kế hoạch</b></td><td>Khớp tên Kế hoạch phụ, tên chiến dịch, <b>tên nhánh cấp 2/3</b> và cả mục tiêu. Gõ "Tháng 7" là ra đúng nhánh Tháng 7 dù thẻ tên khác.</td></tr>
+  <tr><td><b>Hạn từ / đến</b></td><td>Lọc theo hạn hoàn thành của Kế hoạch phụ.</td></tr>
+  <tr><td><b>Mọi người phụ trách</b></td><td>Chỉ liệt kê người thật sự đang phụ trách kế hoạch nào đó.</td></tr>
+  <tr><td><b>Mọi trạng thái</b></td><td>Đang lập kế hoạch / Chờ duyệt / Cần sửa / Đang thực thi.</td></tr>
+</table>
+</div>
+<p>Đang lọc, nhánh nào không có kết quả khớp sẽ tạm ẩn cho đỡ nhiễu. Bấm <span class="btn-name">Xoá lọc</span> để về nguyên trạng.</p>
+
+<h2 id="kich-ban"><span class="phan">Phần 9</span>Kịch bản mẫu từ đầu đến cuối</h2>
+<p>Giả sử bạn là Leader, tháng tới chạy chiến dịch "Quý 3 – Phủ thương hiệu" với một mảng Online lớn và vài việc lẻ:</p>
+<ol class="steps">
+  <li><b>Tạo chiến dịch</b>Mục <span class="path">Chiến dịch</span> → <span class="btn-name">Tạo Campaign</span>: tên "Quý 3 – Phủ thương hiệu", ngân sách, khung ngày.</li>
+  <li><b>Dựng khung cây</b>Sang <span class="path">Lập kế hoạch</span> → <span class="btn-name">+ Thêm Kế hoạch</span>: tạo "Kênh Online" (Nằm trong: Chiến dịch → thành cấp 2). Vào cuối nhánh vừa tạo bấm <span class="btn-name">+ Thêm cấp 3 vào nhánh này</span>: tạo "Tháng 7".</li>
+  <li><b>Treo Kế hoạch phụ</b>Ở nhánh "Tháng 7" bấm <span class="btn-name">+ Thêm Kế hoạch phụ</span>: tạo "Tuần 1 – Chuẩn bị nội dung", gắn nhãn kênh Website nếu muốn. Việc lẻ thì tạo Kế hoạch phụ "Việc gấp tuần này" nằm thẳng dưới Chiến dịch.</li>
+  <li><b>Giao lập kế hoạch</b>Trên thẻ "Tuần 1" bấm <span class="btn-name">Giao lập kế hoạch</span>: chọn người phụ trách, đặt mục tiêu, thông điệp, hạn.</li>
+  <li><b>Người phụ trách soạn → nộp → Leader duyệt → việc tự sinh</b>Trọn vòng này (soạn công đoạn, chiến lược &amp; KPI, nộp, duyệt, sinh việc, báo cáo tiến độ) đã có tài liệu riêng chi tiết từng nút: <b>"Hướng dẫn: Lập kế hoạch kênh"</b> — đọc tiếp ở đó.</li>
+  <li><b>Theo dõi hằng ngày</b>Mở <span class="path">Lập kế hoạch</span>, gập các nhánh chưa cần nhìn, để mắt huy hiệu sức khỏe (Đúng nhịp / Có rủi ro / Lệch nhịp) trên từng tầng — tầng trên luôn hiện <b>sức khỏe xấu nhất</b> của tầng dưới nên không sót điểm nóng.</li>
+</ol>
+
+<h2 id="faq"><span class="phan">Hỏi đáp</span>Câu hỏi thường gặp</h2>
+<dl class="faq">
+  <dt>Tôi cần cấp 4, cấp 5 thì sao?</dt>
+  <dd>Không có — trần là 4 cấp (Chiến dịch → cấp 2 → cấp 3 → Kế hoạch phụ). Nếu thấy thiếu tầng, thường là dấu hiệu nên tách thành một chiến dịch riêng, hoặc dùng "Nhóm công đoạn" bên trong bản kế hoạch của Kế hoạch phụ để chia nhỏ thêm một lớp khi soạn.</dd>
+  <dt>Xoá nhánh có mất việc không?</dt>
+  <dd>Không. Xoá nhánh cấp 2/3 chỉ rút tầng — mọi thứ bên trong nối lên tầng trên. Chỉ xoá trực tiếp một Kế hoạch phụ mới ẩn việc bên trong nó.</dd>
+  <dt>Ai được dựng cây, xếp thẻ?</dt>
+  <dd>Người có quyền quản trị chiến dịch (Leader). Người khác vẫn xem cây, soạn và nộp kế hoạch được giao như bình thường.</dd>
+  <dt>Tôi gập nhánh, đồng nghiệp có bị gập theo không?</dt>
+  <dd>Không — cách nhìn (gập/mở) lưu trên máy từng người. Bạn gập gọn để theo dõi, đồng nghiệp vẫn thấy cây theo cách của họ.</dd>
+  <dt>Kênh TikTok/Facebook giờ nằm đâu?</dt>
+  <dd>Kênh là <b>nhãn tuỳ chọn</b> gắn trên Kế hoạch phụ (chọn lúc tạo, ô "Nhãn kênh"). Muốn quản lý theo kênh, cứ đặt tên nhánh cấp 2 là "Kênh TikTok" — cách chia là của bạn.</dd>
+  <dt>"Kế hoạch phụ" và "Nhóm công đoạn" khác gì nhau?</dt>
+  <dd>Kế hoạch phụ là tấm thẻ xanh lá trên cây — nơi chứa việc. Nhóm công đoạn nằm <b>bên trong</b> hộp soạn kế hoạch của một Kế hoạch phụ, để gom các công đoạn thành cụm (Tuần 1, Tuần 2…) khi bản kế hoạch dài — nó không phải một tầng của cây.</dd>
+  <dt>Thẻ tôi vừa tạo nằm nhầm chỗ?</dt>
+  <dd>Chọn lại trong ô "Nằm trong" trên thẻ — một giây là xong, việc bên trong không suy suyển.</dd>
+</dl>
+
+<footer class="doc">
+  <p>Tài liệu nội bộ Xưởng Cà Phê · MKT Hub — cập nhật 19/07/2026. Tài liệu liên quan: <b>Hướng dẫn: Lập kế hoạch kênh</b> (vòng soạn → nộp → duyệt → sinh việc → báo cáo tiến độ) · <b>Hướng dẫn MKT Executive</b> (dành cho người nhận việc).</p>
+</footer>
+
+</div>
+</body>
+</html>
