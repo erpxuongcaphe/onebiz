@@ -640,7 +640,7 @@ grant execute on function public.complete_draft_atomic_v3(
   uuid, text, numeric, jsonb, uuid, boolean
 ) to authenticated;
 
-do $
+do $$
 begin
   if exists (
     select 1 from pg_catalog.pg_publication where pubname = 'supabase_realtime'

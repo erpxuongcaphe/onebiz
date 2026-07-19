@@ -31,6 +31,7 @@ describe("00203 POS stock integrity migration", () => {
     expect(sql).toContain("complete_draft_atomic_v3");
     expect(sql).toContain("set search_path = ''");
     expect(sql).toContain("POS_DRAFT_ALREADY_PROCESSED");
+    expect(sql).toContain("do " + "$".repeat(2));
     expect(sql).toContain("POS_PAYMENT_INVALID");
     expect(sql).toContain("POS_PAYMENT_BREAKDOWN_MISMATCH");
     expect(sql).toContain(
