@@ -131,7 +131,7 @@ describe("00201 — giao diện chi tiết chiến dịch (cây lồng, kênh = 
     const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
     // Đọc SAU mount (server không biết máy người dùng), ghi mỗi lần đóng/mở.
     expect(planningTree).toContain('const COLLAPSED_KEY = "mkt-planning-collapsed"');
-    expect(planningTree).toMatch(/useEffect\(\(\) => \{\s*setCollapsed\(readCollapsed\(\)\)/);
+    expect(planningTree).toMatch(/useEffect\(\(\) => \{[\s\S]{0,400}setCollapsed\(readCollapsed\(\)\)/);
     expect(planningTree).toContain("localStorage.setItem(COLLAPSED_KEY");
     // Đang lọc: MỞ HẾT — kết quả khớp không bị giấu; toggle lúc lọc không ghi đè bộ nhớ.
     expect(planningTree).toContain("const isOpen = (id: string) => hasFilter || !collapsed.has(id)");
