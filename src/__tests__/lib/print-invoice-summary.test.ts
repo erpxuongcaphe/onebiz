@@ -107,4 +107,19 @@ describe("buildInvoicePrintData — khối tổng tiền đối xứng, rõ ngh�
     expect(con?.value).toContain("370"); // tổng đã gồm ship
     expect(con?.tone).toBe("danger");
   });
+
+  // CEO 20/07: cột Ghi chú LUÔN có trên phiếu bán — trống để ghi tay.
+  it("items KHÔNG note → itemColumns vẫn có 'Ghi chú'", () => {
+    const d = buildInvoicePrintData(row(), undefined, [
+      { name: "Trái Cam", quantity: 60, unitPrice: 4000, total: 240000 },
+    ]);
+    expect(d.itemColumns).toContain("Ghi chú");
+  });
+
+  it("items có note → itemColumns có 'Ghi chú' (không đổi)", () => {
+    const d = buildInvoicePrintData(row(), undefined, [
+      { name: "Bìa nút", quantity: 1, unitPrice: 5000, total: 5000, note: "ít đá" },
+    ]);
+    expect(d.itemColumns).toContain("Ghi chú");
+  });
 });
