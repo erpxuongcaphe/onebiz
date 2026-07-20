@@ -112,6 +112,14 @@ export async function recordInvoicePayment(
   const currentDebt = Number(inv.debt ?? 0);
   const currentPaid = Number(inv.paid ?? 0);
 
+  // 20/07/2026 — HD001438 thu 2 lần: nháp mang debt=total nên thu nợ được cả
+  // ĐƠN NHÁP; checkout sau đó ghi đè paid → nợ hiện lại → thu lần 2.
+  // Chỉ hóa đơn đã hoàn tất mới có nợ thật để thu.
+  if (inv.status !== "completed") {
+    throw new Error(
+      `Hóa đơn ${inv.code} chưa hoàn tất — đơn nháp/đặt hàng thu tiền khi thanh toán trên POS, không thu nợ ở đây`,
+    );
+  }
   if (currentDebt <= 0) {
     throw new Error("Hóa đơn này không còn công nợ");
   }
@@ -278,6 +286,13 @@ export async function recordPurchasePayment(
   const currentDebt = Number(po.debt ?? 0);
   const currentPaid = Number(po.paid ?? 0);
 
+  // 20/07/2026 — cùng lý do HD001438: chỉ trả nợ phiếu nhập đã nhập kho
+  // (completed/partial); phiếu nháp chưa có nợ thật.
+  if (po.status !== "completed" && po.status !== "partial") {
+    throw new Error(
+      `Phiếu nhập ${po.code} chưa nhập kho hoàn tất — không trả nợ được`,
+    );
+  }
   if (currentDebt <= 0) {
     throw new Error("Đơn nhập hàng này không còn công nợ");
   }
@@ -396,7 +411,9 @@ export async function getOpenInvoicesByCustomer(
     .eq("tenant_id", ctx.tenantId)
     .eq("customer_id", customerId)
     .gt("debt", 0)
-    .neq("status", "cancelled")
+    // 20/07/2026 — chỉ HĐ hoàn tất (nháp/đặt hàng mang debt=total hiển thị,
+    // không phải nợ thật; HD001438 bị thu 2 lần vì lọt nháp vào đây)
+    .eq("status", "completed")
     .order("created_at", { ascending: true });
 
   if (error) handleError(error, "getOpenInvoicesByCustomer");
@@ -442,7 +459,8 @@ export async function getOpenPurchasesBySupplier(
     .eq("tenant_id", ctx.tenantId)
     .eq("supplier_id", supplierId)
     .gt("debt", 0)
-    .neq("status", "cancelled")
+    // 20/07/2026 — chỉ phiếu đã nhập kho (completed/partial) mới có nợ thật
+    .in("status", ["completed", "partial"])
     .order("created_at", { ascending: true });
 
   if (error) handleError(error, "getOpenPurchasesBySupplier");

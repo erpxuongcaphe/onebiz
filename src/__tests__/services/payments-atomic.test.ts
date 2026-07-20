@@ -55,7 +55,10 @@ vi.mock("@/lib/services/supabase/shifts", () => ({
   getOpenShift: vi.fn().mockResolvedValue(null),
 }));
 
-import { recordInvoicePayment } from "@/lib/services/supabase/payments";
+import {
+  recordInvoicePayment,
+  recordPurchasePayment,
+} from "@/lib/services/supabase/payments";
 
 describe("recordInvoicePayment — atomic RPC path", () => {
   beforeEach(() => {
@@ -184,6 +187,67 @@ describe("recordInvoicePayment — atomic RPC path", () => {
         paymentMethod: "cash",
       }),
     ).rejects.toThrow("Số tiền thanh toán phải lớn hơn 0");
+  });
+
+  // 20/07/2026 — HD001438: nháp mang debt=total bị thu nợ 2 lần.
+  // Chặn thu nợ trên chứng từ chưa hoàn tất (cả invoice lẫn PO).
+  it("chặn thu nợ trên hóa đơn NHÁP (draft)", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "function does not exist", code: "PGRST202" },
+    });
+    mockResult.mockResolvedValueOnce({
+      data: {
+        id: "inv-uuid-002",
+        code: "NH000023",
+        customer_id: null,
+        customer_name: "Khách B",
+        total: 540000,
+        paid: 0,
+        debt: 540000,
+        status: "draft",
+      },
+      error: null,
+    });
+
+    await expect(
+      recordInvoicePayment({
+        referenceId: "inv-uuid-002",
+        amount: 540000,
+        paymentMethod: "transfer",
+      }),
+    ).rejects.toThrow(/chưa hoàn tất/);
+    // Không được insert phiếu thu
+    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
+  });
+
+  it("chặn trả nợ NCC trên phiếu nhập chưa nhập kho", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "function does not exist", code: "PGRST202" },
+    });
+    mockResult.mockResolvedValueOnce({
+      data: {
+        id: "po-uuid-001",
+        code: "PN000099",
+        supplier_id: null,
+        supplier_name: "NCC A",
+        total: 200000,
+        paid: 0,
+        debt: 200000,
+        status: "draft",
+      },
+      error: null,
+    });
+
+    await expect(
+      recordPurchasePayment({
+        referenceId: "po-uuid-001",
+        amount: 200000,
+        paymentMethod: "cash",
+      }),
+    ).rejects.toThrow(/chưa nhập kho hoàn tất/);
+    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
   });
 
   it("validate amount không vượt quá debt", async () => {
