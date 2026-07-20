@@ -17,6 +17,8 @@ export interface ReceiptData {
     unitPrice: number;
     discount: number;
     total: number;
+    /** 00208: ghi chú món — in dòng nghiêng dưới tên. */
+    note?: string;
   }[];
   subtotal: number;
   discountAmount: number;
@@ -142,6 +144,7 @@ export function PrintReceipt({ data, width = "80mm" }: PrintReceiptProps) {
         {data.items.map((item, i) => (
           <div key={i}>
             <div className="item-name">{item.name}</div>
+            {item.note && <div className="item-detail">↳ {item.note}</div>}
             <div className="item-detail row">
               <span>
                 {formatNumber(item.quantity)} x {formatCurrency(item.unitPrice)}
@@ -255,6 +258,7 @@ export function printReceiptDirect(data: ReceiptData, width: "58mm" | "80mm" = "
     .map(
       (item) => `
       <div class="item-name">${item.name}</div>
+      ${item.note ? `<div class="item-detail">↳ ${item.note}</div>` : ""}
       <div class="item-detail row">
         <span>${formatNumber(item.quantity)} x ${formatCurrency(item.unitPrice)}</span>
         <span>${formatCurrency(item.total)}</span>

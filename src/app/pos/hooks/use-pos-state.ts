@@ -75,6 +75,8 @@ export interface OrderLine {
   /** Packaging variant (250g, 500g, …). If undefined, line uses base product. */
   variantId?: string;
   variantLabel?: string;
+  /** CEO 19/07: ghi chú từng món — lưu invoice_items.note, in ra phiếu. */
+  note?: string;
 }
 
 /** Optional overrides when adding a line — for variant-based pricing / labelling. */
@@ -263,6 +265,16 @@ export function usePosState() {
     []
   );
 
+  // CEO 19/07: ghi chú từng món. Rỗng → undefined (không lưu chuỗi trống).
+  const updateLineNote = useCallback((lineId: string, note: string): void => {
+    const trimmed = note.trim();
+    setLines((prev) =>
+      prev.map((l) =>
+        l.lineId === lineId ? { ...l, note: trimmed || undefined } : l
+      )
+    );
+  }, []);
+
   const applyStockSnapshot = useCallback((snapshot: PosStockSnapshot): void => {
     setLines((prev) => mergePosStockSnapshot(prev, snapshot));
   }, []);
@@ -307,6 +319,8 @@ export function usePosState() {
         unitPrice: it.unitPrice,
         vatRate: (it as any).vatRate ?? 0,
         discount: { mode: "amount", value: it.discount },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        note: (it as any).note ?? undefined,
       }))
     );
     // Customer resolution (draft stores id+name, not full object).
@@ -518,6 +532,7 @@ export function usePosState() {
     updateLineQty,
     updateLinePrice,
     updateLineDiscount,
+    updateLineNote,
     applyStockSnapshot,
     clearCart,
     loadDraft,

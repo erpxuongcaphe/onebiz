@@ -592,6 +592,8 @@ export interface InvoiceItemRow {
   discount: number;
   total: number;
   unit?: string;
+  /** 00208: ghi chú từng món — in ra phiếu. */
+  note?: string;
 }
 
 export async function getInvoiceItems(
@@ -613,11 +615,10 @@ export async function getInvoiceItems(
   // Schema invoice_items không có cột product_code — phải join `products(code)`.
   // Schema cũng dùng `discount` (không phải `discount_amount`) cho line item.
   // Field `unit` có sẵn trên invoice_items (snapshot lúc tạo HD).
+  // 00208: select("*") + join để lấy cả note mà không vỡ trước khi migrate.
   const { data, error } = await supabase
     .from("invoice_items")
-    .select(
-      "id, product_id, product_name, unit, quantity, unit_price, discount, total, products!invoice_items_product_id_fkey(code)",
-    )
+    .select("*, products!invoice_items_product_id_fkey(code)")
     .eq("invoice_id", invoiceId);
 
   if (error) {
@@ -635,6 +636,7 @@ export async function getInvoiceItems(
     discount: Number(row.discount ?? 0),
     total: Number(row.total ?? 0),
     unit: row.unit ?? undefined,
+    note: row.note ?? undefined, // 00208
   }));
 }
 

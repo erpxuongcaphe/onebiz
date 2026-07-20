@@ -405,6 +405,8 @@ export interface SalesOrderItemRow {
   unitPrice: number;
   discount: number;
   total: number;
+  /** 00208: ghi chú từng món. */
+  note?: string;
 }
 
 export async function getSalesOrderItems(
@@ -466,11 +468,10 @@ export async function getDraftOrderItems(
     .maybeSingle();
   if (!inv) return [];
 
+  // 00208: select("*") để lấy cả note mà không vỡ khi cột chưa migrate.
   const { data, error } = await supabase
     .from("invoice_items")
-    .select(
-      "id, product_id, product_name, unit, quantity, unit_price, discount, total",
-    )
+    .select("*")
     .eq("invoice_id", invoiceId);
 
   if (error) {
@@ -488,6 +489,7 @@ export async function getDraftOrderItems(
     unitPrice: Number(row.unit_price ?? 0),
     discount: Number(row.discount ?? 0),
     total: Number(row.total ?? 0),
+    note: row.note ?? undefined, // 00208
   }));
 }
 
@@ -674,13 +676,40 @@ export async function saveDraftOrder(
   }));
 
   if (itemsData.length > 0) {
-    const { error: itemsErr } = await supabase
+    const { data: inserted, error: itemsErr } = await supabase
       .from("invoice_items")
-      .insert(itemsData);
+      .insert(itemsData)
+      .select("id");
     if (itemsErr) handleError(itemsErr, "saveDraftOrder:items");
+    // 00208: ghi chú từng món — update RIÊNG best-effort (chưa migrate → bỏ
+    // qua, KHÔNG vỡ lưu nháp). inserted trả id theo thứ tự insert.
+    await applyItemNotes(supabase, inserted, input.items);
   }
 
   return { invoiceId: invoice.id, invoiceCode: invoice.code };
+}
+
+// 00208 — ghi note từng món sau insert. Best-effort: cột note chưa có thì thôi.
+async function applyItemNotes(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  inserted: Array<{ id: string }> | null,
+  items: PosCheckoutInput["items"],
+): Promise<void> {
+  if (!inserted || inserted.length !== items.length) return;
+  const updates = items
+    .map((item, i) => ({ id: inserted[i].id, note: item.note?.trim() }))
+    .filter((u) => u.note);
+  if (!updates.length) return;
+  try {
+    await Promise.all(
+      updates.map((u) =>
+        supabase.from("invoice_items").update({ note: u.note }).eq("id", u.id),
+      ),
+    );
+  } catch {
+    // Cột note chưa tồn tại (chưa chạy 00208) — bỏ qua, nháp vẫn lưu bình thường.
+  }
 }
 
 /**
@@ -754,10 +783,13 @@ async function updateDraftOrderInternal(
       total: item.quantity * item.unitPrice - item.discount,
     }));
 
-    const { error: itemsErr } = await supabase
+    const { data: inserted, error: itemsErr } = await supabase
       .from("invoice_items")
-      .insert(itemsData);
+      .insert(itemsData)
+      .select("id");
     if (itemsErr) handleError(itemsErr, "updateDraftOrderInternal:items");
+    // 00208: note từng món (best-effort, xem applyItemNotes).
+    await applyItemNotes(supabase, inserted, input.items);
   }
 
   return { invoiceId: updated.id, invoiceCode: updated.code };

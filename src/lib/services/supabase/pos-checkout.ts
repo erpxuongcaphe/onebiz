@@ -28,6 +28,8 @@ export interface PosCheckoutItem {
   unitPrice: number;
   discount: number;
   vatRate?: number; // Thuế suất GTGT (%) — 0, 5, 8, 10
+  /** CEO 19/07: ghi chú từng món — RPC 00208 ghi vào invoice_items.note. */
+  note?: string;
 }
 
 /** Một dòng trong bảng tách thanh toán hỗn hợp */

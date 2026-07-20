@@ -1454,6 +1454,7 @@ function PosPageInner() {
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
           total: state.computeLineTotal(l),
+          note: l.note, // 00208
         })),
         subtotal: state.subtotal,
         discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
@@ -1515,6 +1516,7 @@ function PosPageInner() {
                 quantity: l.quantity,
                 unitPrice: l.unitPrice,
                 total: state.computeLineTotal(l),
+                note: l.note, // 00208: ghi chú món trên phiếu tạm tính
               })),
             );
             const base = buildInvoicePrintData(
@@ -1574,6 +1576,7 @@ function PosPageInner() {
             discount: l.discount.mode === "percent"
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
+            note: l.note, // 00208
           })),
           paymentMethod: state.paymentMethod,
           subtotal: state.subtotal,
@@ -1904,6 +1907,7 @@ function PosPageInner() {
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
             vatRate: l.vatRate ?? 0,
+            note: l.note, // 00208 — RPC ghi vào invoice_items.note
           })),
           paymentMethod: state.paymentMethod,
           paymentBreakdown: breakdown,
@@ -2105,6 +2109,7 @@ function PosPageInner() {
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
             total: state.computeLineTotal(l),
+            note: l.note, // 00208
           })),
           subtotal: state.subtotal,
           discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
@@ -2954,6 +2959,7 @@ function PosPageInner() {
                     onQtyChange={(qty) => state.updateLineQty(line.lineId, qty)}
                     onPriceChange={(price) => state.updateLinePrice(line.lineId, price)}
                     onDiscountChange={(d) => state.updateLineDiscount(line.lineId, d)}
+                    onNoteChange={(note) => state.updateLineNote(line.lineId, note)}
                     onRemove={() => state.removeLine(line.lineId)}
                   />
                 ))}
@@ -4038,6 +4044,7 @@ function CartItem({
   onQtyChange,
   onPriceChange,
   onDiscountChange,
+  onNoteChange,
   onRemove,
 }: {
   index: number;
@@ -4046,6 +4053,7 @@ function CartItem({
   onQtyChange: (qty: number) => void;
   onPriceChange: (price: number) => void;
   onDiscountChange: (d: DiscountInput) => void;
+  onNoteChange: (note: string) => void;
   onRemove: () => void;
 }) {
   const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
@@ -4064,6 +4072,8 @@ function CartItem({
     line.availableStock <= 5;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
+  // 00208: ô ghi chú món — mở khi bấm nút, Enter/blur để lưu.
+  const [editingNote, setEditingNote] = useState(false);
   // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
   // Cashier không có quyền → button disable, không edit được.
   // Owner/Manager có quyền → click sửa như cũ.
@@ -4111,6 +4121,20 @@ function CartItem({
             </p>
           )}
         </div>
+        {/* 00208: nút ghi chú món — xanh khi đã có note. */}
+        <button
+          type="button"
+          onClick={() => setEditingNote((v) => !v)}
+          className={cn(
+            "shrink-0 -mt-0.5 p-1 rounded transition-all",
+            line.note
+              ? "text-primary opacity-100"
+              : "text-muted-foreground opacity-50 hover:opacity-100 hover:text-primary hover:bg-primary-fixed/40",
+          )}
+          title={line.note ? `Ghi chú: ${line.note}` : "Thêm ghi chú món"}
+        >
+          <Icon name="edit_note" size={15} />
+        </button>
         <button
           type="button"
           onClick={onRemove}
@@ -4120,6 +4144,44 @@ function CartItem({
           <Icon name="close" size={14} />
         </button>
       </div>
+
+      {/* 00208: ô nhập / dòng hiển thị ghi chú món */}
+      {editingNote ? (
+        <div className="px-3 pl-[26px] mt-1">
+          <input
+            type="text"
+            autoFocus
+            defaultValue={line.note ?? ""}
+            placeholder="Ghi chú món (Enter để lưu)…"
+            maxLength={200}
+            onBlur={(e) => {
+              onNoteChange(e.target.value);
+              setEditingNote(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onNoteChange((e.target as HTMLInputElement).value);
+                setEditingNote(false);
+              } else if (e.key === "Escape") {
+                setEditingNote(false);
+              }
+              e.stopPropagation();
+            }}
+            className="w-full h-7 px-2 rounded-md border border-primary/40 bg-surface-container-low text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      ) : line.note ? (
+        <button
+          type="button"
+          onClick={() => setEditingNote(true)}
+          className="block w-full text-left px-3 pl-[26px] mt-0.5"
+          title="Bấm để sửa ghi chú"
+        >
+          <span className="text-[10.5px] italic text-primary/90 line-clamp-2">
+            ↳ {line.note}
+          </span>
+        </button>
+      ) : null}
 
       {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
       <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">

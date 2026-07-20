@@ -13,6 +13,8 @@ export interface DocumentLineItem {
   unitPrice?: number;
   discount?: number;
   total: number;
+  /** 00208: ghi chú từng món — A4/A5 in cột "Ghi chú", bill nhiệt in dòng phụ. */
+  note?: string;
 }
 
 export interface DocumentPrintData {
@@ -220,14 +222,19 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   const hasDiscountCol = colHeaders.includes("Giảm giá") || colHeaders.includes("Giảm");
   const NUMERIC = ["SL", "Số lượng", "Đơn giá", "Đơn giá nhập", "Giảm", "Giảm giá", "Thành tiền"];
 
+  // 00208: cột "Ghi chú" chỉ khi ≥1 dòng có note (không có → bảng như cũ).
+  const hasNoteCol = colHeaders.includes("Ghi chú");
+
   // Dòng hàng — thermal: 2 dòng/món (như bill); A4/A5: bảng sổ cái có cột.
   let itemsBlock = "";
   if (d.items && d.items.length) {
     if (isThermal) {
+      // 00208: bill nhiệt hẹp không chia cột — note in dòng nghiêng dưới tên.
       const rows = d.items
         .map(
           (it) => `<div class="t-item">
-        <div class="t-name">${esc(it.name)}</div>
+        <div class="t-name">${esc(it.name)}</div>${it.note ? `
+        <div class="t-note">↳ ${esc(it.note)}</div>` : ""}
         <div class="t-line"><span>${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""} × ${money(it.unitPrice ?? 0)}</span><span class="t-total tnum">${money(it.total)}</span></div>
       </div>`,
         )
@@ -242,7 +249,9 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
               ? `<col />`
               : h === "Mã hàng"
                 ? `<col class="c-code" />`
-                : `<col class="c-num" />`,
+                : h === "Ghi chú"
+                  ? `<col class="c-note" />`
+                  : `<col class="c-num" />`,
           )
           .join("");
       const ths = colHeaders
@@ -261,6 +270,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         ${hasPriceCol ? `<td class="right tnum">${money(it.unitPrice ?? 0)}</td>` : ""}
         ${hasDiscountCol ? `<td class="right tnum">${it.discount && it.discount > 0 ? money(it.discount) : "0"}</td>` : ""}
         <td class="right tnum">${money(it.total)}</td>
+        ${hasNoteCol ? `<td class="note-cell">${esc(it.note ?? "")}</td>` : ""}
       </tr>`,
         )
         .join("");
@@ -312,6 +322,8 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .items col.c-stt { width: 34px; }
   .items col.c-code { width: 13%; }
   .items col.c-num { width: 15%; }
+  .items col.c-note { width: 18%; }
+  .items td.note-cell { font-style: italic; color: #444; }
   .items th { border: 1px solid #bdbdbd; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; background: #f3f3f3; }
   .items td { border: 1px solid #bdbdbd; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
   .items th.right, .items td.right { text-align: right; }
@@ -323,6 +335,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .t-items { margin: 8px 0; }
   .t-item { margin-bottom: 5px; }
   .t-name { font-weight: 600; }
+  .t-note { font-style: italic; font-size: 0.92em; }
   .t-line { display: flex; justify-content: space-between; gap: 8px; }
   .t-total { font-weight: 600; }
   .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }${

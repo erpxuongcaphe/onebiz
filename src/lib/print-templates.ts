@@ -19,6 +19,11 @@ const formatCurrency = (n: number | null | undefined) => `${fmtNum(n)} đ`;
 
 /** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
 const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
+// 00208: đơn có ≥1 món ghi chú → thêm cột "Ghi chú" cuối bảng; không có → như cũ.
+const saleColumnsFor = (items?: DocumentLineItem[]) =>
+  items?.some((it) => it.note)
+    ? [...SALE_ITEM_COLUMNS, "Ghi chú"]
+    : SALE_ITEM_COLUMNS;
 // Phiếu phía MUA (nhập/đặt NCC/HĐ đầu vào/trả NCC): "Đơn giá nhập" cho rõ ngữ cảnh.
 const PURCHASE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá nhập", "Thành tiền"];
 
@@ -42,6 +47,7 @@ export function toPrintLines(
     total?: number;
     lineTotal?: number;
     amount?: number;
+    note?: string; // 00208: ghi chú từng món
   }>,
 ): DocumentLineItem[] {
   return rows.map((r) => ({
@@ -51,6 +57,7 @@ export function toPrintLines(
     unit: r.unit,
     unitPrice: r.unitPrice ?? r.price ?? 0,
     total: r.total ?? r.lineTotal ?? r.amount ?? 0,
+    note: r.note || undefined,
   }));
 }
 
@@ -123,7 +130,7 @@ export function buildInternalSalePrintData(row: {
       { label: "Bên mua", value: row.toBranchName || "—" },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: saleColumnsFor(items) } : {}),
     summaryRows: [
       { label: "Tạm tính", value: formatCurrency(row.subtotal) },
       { label: "Thuế VAT", value: formatCurrency(row.taxAmount) },
@@ -355,7 +362,7 @@ export function buildInvoicePrintData(
     businessFooter: on(f.footer) ? business?.invoiceFooter : undefined,
     headerFields,
     ...(items && items.length
-      ? { items, itemColumns: SALE_ITEM_COLUMNS }
+      ? { items, itemColumns: saleColumnsFor(items) }
       : {}),
     summaryRows,
     // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
@@ -436,7 +443,7 @@ export function buildSalesOrderPrintData(
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: saleColumnsFor(items) } : {}),
     summaryRows,
     note: row.note,
     createdBy: user,
@@ -525,7 +532,7 @@ export function buildReturnPrintData(
       { label: "Người bán", value: row.sellerName || "" },
       { label: "Người tạo", value: user },
     ],
-    ...(items && items.length ? { items, itemColumns: SALE_ITEM_COLUMNS } : {}),
+    ...(items && items.length ? { items, itemColumns: saleColumnsFor(items) } : {}),
     summaryRows: [
       { label: "Tổng tiền trả", value: formatCurrency(row.totalRefund), bold: true },
     ],
