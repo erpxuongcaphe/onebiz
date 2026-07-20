@@ -787,7 +787,8 @@ export default function HoaDonPage() {
     },
     {
       accessorKey: "debt",
-      header: "Công nợ",
+      // CEO 20/07: "Công nợ" gây tưởng là TỔNG nợ khách — đây là nợ CỦA ĐƠN NÀY.
+      header: "Còn nợ (đơn)",
       cell: ({ row }) => {
         const debt = row.original.debt;
         return debt > 0 ? (

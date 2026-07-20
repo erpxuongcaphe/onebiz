@@ -1127,13 +1127,14 @@ export async function duplicateInvoice(
   if (srcErr) handleError(srcErr, "duplicateInvoice:source");
   if (!source) throw new Error("Không tìm thấy hoá đơn để sao chép");
 
-  // 2. Generate new code
+  // 2. Generate new code — CEO 20/07: bản sao là ĐƠN ĐẶT HÀNG (dãy DH),
+  // KHÔNG ăn số HD (HD chỉ cấp khi thanh toán — 00169).
   const { data: code, error: codeErr } = await supabase.rpc("next_code", {
     p_tenant_id: tenantId,
-    p_entity_type: "invoice",
+    p_entity_type: "order",
   });
   if (codeErr) handleError(codeErr, "duplicateInvoice:next_code");
-  const newCode = code ?? `HD${Date.now()}`;
+  const newCode = code ?? `DH${Date.now()}`;
 
   // 3. Insert new draft với cùng customer/payment, RESET paid+debt
   const profile = await import("./base").then((m) => m.getCurrentContext());
@@ -1147,13 +1148,19 @@ export async function duplicateInvoice(
     customer_id: source.customer_id,
     customer_name: source.customer_name,
     status: "draft",
+    // source='order' → bản sao hiện ở trang Đặt hàng (trước đây thiếu → đơn
+    // "lửng lơ" chỉ thấy trong nháp POS). Nguồn gốc sao chép tra ở audit log.
+    source: "order",
     subtotal: source.subtotal,
     discount_amount: source.discount_amount,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delivery_fee: (source as any).delivery_fee ?? 0,
     total: source.total,
     paid: 0,
     debt: source.total,
     payment_method: source.payment_method,
-    note: source.note ? `[Sao chép từ ${source.code}] ${source.note}` : `[Sao chép từ ${source.code}]`,
+    // CEO 20/07: ghi chú là CỦA KHÁCH — không nhét "[Sao chép từ ...]" nội bộ.
+    note: source.note ?? null,
     created_by: profile.userId,
   };
 
