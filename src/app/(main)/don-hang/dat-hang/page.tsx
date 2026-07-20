@@ -157,10 +157,9 @@ function OrderDetail({
       onClose={onClose}
       onEdit={onEdit}
       onDelete={onDelete}
-      // CEO 11/07: nút "Sửa" thực chất là "Chuyển thành hóa đơn" (mở đơn trong
-      // POS để thanh toán). Đổi nhãn cho đúng nghĩa — chỉ hiện khi đơn chưa
-      // hoàn tất/hủy (onEdit != null).
-      editLabel="Chuyển thành hóa đơn"
+      // CEO 20/07: mở POS vừa SỬA (thêm/bớt hàng, tự lưu) vừa thanh toán được
+      // — nhãn cũ "Chuyển thành hóa đơn" làm tưởng chỉ để thanh toán.
+      editLabel="Sửa / Chuyển thành hóa đơn"
       deleteLabel="Hủy đơn"
     >
       <DetailTabs

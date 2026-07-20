@@ -59,3 +59,28 @@ export function canOpenStockDocument(
 ): boolean {
   return Boolean(referenceId) && getStockDocumentKind(referenceType) !== "unsupported";
 }
+
+// Trang list của từng loại chứng từ — đích cho nút "Mở trang chứng từ".
+const ROUTE_BY_KIND: Partial<Record<StockDocumentKind, string>> = {
+  invoice: "/don-hang/hoa-don",
+  purchase_order: "/hang-hoa/nhap-hang",
+  input_invoice: "/hang-hoa/hoa-don-dau-vao",
+  production_order: "/san-xuat",
+  inventory_check: "/hang-hoa/kiem-kho",
+  disposal_export: "/hang-hoa/xuat-huy",
+  sales_return: "/don-hang/tra-hang",
+  internal_sale: "/hang-hoa/ban-noi-bo",
+  internal_export: "/hang-hoa/ban-noi-bo",
+  stock_transfer: "/hang-hoa/chuyen-kho",
+  supplier_return: "/hang-hoa/tra-hang-nhap",
+};
+
+/** URL trang chứng từ, kèm ?tim=<mã> để trang đích tự đổ vào ô tìm kiếm. */
+export function getStockDocumentRoute(
+  referenceType?: string | null,
+  code?: string | null,
+): string | null {
+  const route = ROUTE_BY_KIND[getStockDocumentKind(referenceType)];
+  if (!route) return null;
+  return code && code !== "—" ? `${route}?tim=${encodeURIComponent(code)}` : route;
+}

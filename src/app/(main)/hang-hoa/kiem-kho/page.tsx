@@ -394,6 +394,11 @@ export default function KiemKhoPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // Nút "Mở trang chứng từ" (thẻ kho) truyền ?tim=<mã> → đổ vào ô tìm.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("tim");
+    if (q) setSearch(q);
+  }, []);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);

@@ -518,6 +518,8 @@ export interface DraftOrderSummary {
   autoSaved?: boolean;
   /** UUID idempotency key — client store để tiếp tục auto-save sau khi load. */
   clientSessionId?: string | null;
+  /** 'order' = đơn đặt hàng (POS hiện banner riêng, không xóa nhầm). */
+  source?: string | null;
 }
 
 export interface DraftOrderDetail extends DraftOrderSummary {
@@ -877,7 +879,7 @@ export async function getDraftOrderById(
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, updated_at, status, auto_saved, client_session_id, invoice_items(*)",
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, updated_at, status, auto_saved, client_session_id, source, invoice_items(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -904,6 +906,7 @@ export async function getDraftOrderById(
     updatedAt: raw.updated_at,
     autoSaved: raw.auto_saved ?? false,
     clientSessionId: raw.client_session_id ?? null,
+    source: raw.source ?? null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (raw.invoice_items ?? []).map((it: any) => ({
       id: it.id,
@@ -914,6 +917,7 @@ export async function getDraftOrderById(
       unitPrice: it.unit_price,
       discount: it.discount ?? 0,
       total: it.total ?? 0,
+      note: it.note ?? undefined, // 00208 — kẻo mở nháp rớt ghi chú món
     })),
   };
 }

@@ -527,6 +527,11 @@ export default function HoaDonPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  // Nút "Mở trang chứng từ" (thẻ kho) truyền ?tim=<mã> → đổ vào ô tìm.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("tim");
+    if (q) setSearch(q);
+  }, []);
   // CEO 28/05/2026: debounce search 300ms — tránh gọi server mỗi keystroke.
   const debouncedSearch = useDebounce(search, 300);
   // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên KH như cũ.

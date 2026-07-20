@@ -2882,7 +2882,11 @@ function PosPageInner() {
           {state.loadedDraftId && (
             <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-[11px]">
               <Icon name="save" size={14} className="text-status-warning" />
-              <span className="text-status-warning font-medium">Đang sửa nháp</span>
+              <span className="text-status-warning font-medium">
+                {state.loadedDraftSource === "order"
+                  ? "Đang sửa ĐƠN ĐẶT HÀNG — thay đổi tự lưu, chỉ bấm Thanh toán khi thu tiền"
+                  : "Đang sửa nháp"}
+              </span>
               <button
                 type="button"
                 onClick={() =>

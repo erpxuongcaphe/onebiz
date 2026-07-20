@@ -154,6 +154,8 @@ export function usePosState() {
   ]);
   const [note, setNote] = useState<string>("");
   const [loadedDraftId, setLoadedDraftId] = useState<string | null>(null);
+  // source của draft đang mở ('order' = đơn đặt hàng) — đổi chữ banner POS.
+  const [loadedDraftSource, setLoadedDraftSource] = useState<string | null>(null);
   const [sellingMode, setSellingMode] = useState<SellingMode>("normal");
   // P0-1 fix 12/06/2026: VAT đơn (0/5/8/10%) áp cấp đơn. Trước đây local-state ở
   // pos/page.tsx, render cộng "+orderVatAmount" vào "Khách cần trả" NHƯNG không
@@ -292,6 +294,7 @@ export function usePosState() {
     setOrderVatRate(0);
     setNote("");
     setLoadedDraftId(null);
+    setLoadedDraftSource(null);
     setDeliveryInfo({
       recipientName: "",
       recipientPhone: "",
@@ -306,6 +309,8 @@ export function usePosState() {
 
   const loadDraft = useCallback((draft: DraftOrderDetail): void => {
     setLoadedDraftId(draft.id);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    setLoadedDraftSource((draft as any).source ?? null);
     setLines(
       draft.items.map((it) => ({
         lineId: nextLineId(),
@@ -490,6 +495,7 @@ export function usePosState() {
     orderDiscount,
     note,
     loadedDraftId,
+    loadedDraftSource,
     sellingMode,
     deliveryInfo,
     orderVatRate,

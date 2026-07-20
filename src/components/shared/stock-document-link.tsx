@@ -17,7 +17,11 @@ import {
   getStockDocumentDetail,
   type StockDocumentDetail,
 } from "@/lib/services/supabase/stock-documents";
-import { canOpenStockDocument, getStockDocumentLabel } from "@/lib/stock-document";
+import {
+  canOpenStockDocument,
+  getStockDocumentLabel,
+  getStockDocumentRoute,
+} from "@/lib/stock-document";
 
 interface StockDocumentLinkProps {
   referenceType?: string;
@@ -88,11 +92,31 @@ export function StockDocumentLink({
           if (!nextOpen) setError(null);
         }}
       >
-        <DialogContent className="grid max-h-[min(860px,calc(100vh-2rem))] w-[min(1040px,calc(100vw-2rem))] max-w-none grid-rows-[auto,minmax(0,1fr)] overflow-hidden p-0">
+        {/* sm:max-w-none: base dialog có sm:max-w-sm (384px) — thiếu là bị bóp nhỏ */}
+        <DialogContent className="grid max-h-[min(860px,calc(100vh-2rem))] w-[min(1040px,calc(100vw-2rem))] max-w-none sm:max-w-none grid-rows-[auto,minmax(0,1fr)] overflow-hidden p-0">
           <DialogHeader className="border-b px-5 py-4 pr-12">
             <div className="flex flex-wrap items-center gap-2">
               <DialogTitle>{detail?.code ?? displayCode}</DialogTitle>
               {detail?.status && <Badge variant="outline">{detail.status}</Badge>}
+              {(() => {
+                const route = getStockDocumentRoute(
+                  referenceType,
+                  detail?.code ?? displayCode,
+                );
+                if (!route) return null;
+                return (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="ml-auto h-7 gap-1"
+                    onClick={() => window.location.assign(route)}
+                  >
+                    <Icon name="open_in_new" size={14} />
+                    Mở trang chứng từ
+                  </Button>
+                );
+              })()}
             </div>
             <DialogDescription>
               {detail?.kindLabel ?? getStockDocumentLabel(referenceType)}
