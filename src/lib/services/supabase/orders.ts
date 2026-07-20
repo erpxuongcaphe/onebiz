@@ -1062,7 +1062,9 @@ export async function deleteDraftOrder(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let delQuery = (supabase as any)
     .from("invoices")
-    .update({ deleted_at: new Date().toISOString() })
+    // client_session_id: null — nhả session khi xóa mềm, kẻo unique
+    // (tenant, session) chặn auto-save tạo nháp mới cùng phiên (409).
+    .update({ deleted_at: new Date().toISOString(), client_session_id: null })
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .eq("status", "draft")
