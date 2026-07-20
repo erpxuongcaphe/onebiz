@@ -24,6 +24,7 @@ type PaymentRow = {
   paymentMethod: string;
   note: string | null;
   date: string;
+  cancelled?: boolean;
 };
 
 const METHOD_LABELS: Record<string, string> = {
@@ -54,7 +55,9 @@ export function PaymentHistoryTab({
     };
   }, [referenceType, referenceId]);
 
-  const total = rows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
+  // 20/07: phiếu đã hủy vẫn hiện (giữ vết) nhưng KHÔNG cộng vào tổng
+  const activeRows = rows.filter((r) => !r.cancelled);
+  const total = activeRows.reduce((s, r) => s + Number(r.amount ?? 0), 0);
 
   if (loading) {
     return (
@@ -83,7 +86,12 @@ export function PaymentHistoryTab({
     <div className="space-y-3">
       <div className="flex items-center justify-between bg-status-success/10 border border-status-success/25 rounded-lg px-3 py-2">
         <span className="text-sm font-medium">
-          Đã ghi nhận {rows.length} phiếu {referenceType === "invoice" ? "thu" : "chi"}
+          Đã ghi nhận {activeRows.length} phiếu {referenceType === "invoice" ? "thu" : "chi"}
+          {rows.length > activeRows.length && (
+            <span className="text-muted-foreground font-normal">
+              {" "}(+{rows.length - activeRows.length} đã hủy)
+            </span>
+          )}
         </span>
         <span className="text-base font-bold text-status-success tabular-nums">
           {formatCurrency(total)}
@@ -101,10 +109,15 @@ export function PaymentHistoryTab({
         {rows.map((r) => (
           <div
             key={r.id}
-            className="grid grid-cols-12 px-3 py-2 text-sm items-center"
+            className={`grid grid-cols-12 px-3 py-2 text-sm items-center ${r.cancelled ? "opacity-50" : ""}`}
           >
             <div className="col-span-3 font-mono text-primary text-xs">
-              {r.code}
+              <span className={r.cancelled ? "line-through" : undefined}>{r.code}</span>
+              {r.cancelled && (
+                <span className="ml-1.5 inline-flex px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive font-sans font-medium not-italic">
+                  Đã hủy
+                </span>
+              )}
             </div>
             <div className="col-span-2 text-xs">
               {r.type === "receipt" ? (

@@ -491,9 +491,12 @@ export async function getPaymentHistory(
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  const { data, error } = await supabase
-    .from("cash_transactions")
-    .select("id, code, type, amount, payment_method, note, created_at")
+  // 20/07: lấy cả status — phiếu ĐÃ HỦY vẫn hiện (giữ vết đối soát) nhưng
+  // UI gắn badge và không cộng vào tổng (vụ HD001438 hủy PT000117).
+  // Cast any: generated types chưa biết cột status của cash_transactions.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.from("cash_transactions") as any)
+    .select("id, code, type, amount, payment_method, note, created_at, status")
     .eq("tenant_id", ctx.tenantId)
     .eq("reference_type", referenceType)
     .eq("reference_id", referenceId)
@@ -501,7 +504,8 @@ export async function getPaymentHistory(
 
   if (error) handleError(error, "getPaymentHistory");
 
-  return (data ?? []).map((row) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((row) => ({
     id: row.id,
     code: row.code,
     type: row.type as "receipt" | "payment",
@@ -509,5 +513,6 @@ export async function getPaymentHistory(
     paymentMethod: row.payment_method,
     note: row.note,
     date: row.created_at,
+    cancelled: (row as { status?: string }).status === "cancelled",
   }));
 }

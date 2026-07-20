@@ -797,6 +797,8 @@ export async function getDSO(branchId?: string): Promise<DSOResult> {
             .eq("tenant_id", tenantId)
             .eq("branch_id", branchId)
             .gt("debt", 0)
+            // 20/07: chỉ HĐ hoàn tất — nháp/đặt hàng mang debt hiển thị, không phải phải-thu
+            .eq("status", "completed")
             .order("created_at", { ascending: true })
         : supabase
             .from("customers")
@@ -845,6 +847,8 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
         .gt("debt", 0)
+        // 20/07: chỉ HĐ hoàn tất — không cảnh báo nợ ảo từ nháp/đặt hàng
+        .eq("status", "completed")
         .order("debt", { ascending: false })
         .limit(20)
     : supabase
