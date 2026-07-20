@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -28,10 +28,37 @@ import { Icon } from "@/components/ui/icon";
 type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
 type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 
+/** Đơn cần SỬA — truyền vào → dialog chuyển chế độ sửa (giữ mã, prefill, cảnh báo diff). */
+export interface EditOrderInput {
+  id: string;
+  code: string;
+  customerId: string | null;
+  customerName: string;
+  deliveryFee: number;
+  note: string | null;
+  items: Array<{
+    productId: string;
+    productCode?: string;
+    productName: string;
+    unit: string;
+    quantity: number;
+    price: number;
+  }>;
+}
+
 interface CreateOrderDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /** Có giá trị → chế độ SỬA đơn đã có (thay vì tạo mới). */
+  editOrder?: EditOrderInput | null;
+}
+
+/** 1 dòng thay đổi hiện trên bảng cảnh báo trước khi lưu. */
+interface ChangeRow {
+  type: "add" | "remove" | "qty" | "price";
+  name: string;
+  detail: string;
 }
 
 interface OrderLineItem {
@@ -70,8 +97,14 @@ export function CreateOrderDialog({
   open,
   onOpenChange,
   onSuccess,
+  editOrder = null,
 }: CreateOrderDialogProps) {
   const { toast } = useToast();
+  const isEdit = !!editOrder;
+  // Ảnh chụp trạng thái GỐC (lúc mở sửa) để so ra danh sách thay đổi.
+  const originalRef = useRef<{ items: OrderLineItem[]; deliveryFee: number; note: string } | null>(null);
+  // Danh sách thay đổi đang chờ CEO duyệt (null = chưa bấm Lưu).
+  const [pendingChanges, setPendingChanges] = useState<ChangeRow[] | null>(null);
   const [code, setCode] = useState("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [selectedCustomer, setSelectedCustomer] = useState<{ id: string; name: string } | null>(null);
@@ -95,28 +128,57 @@ export function CreateOrderDialog({
   useEffect(() => {
     if (!open) return;
 
-    // CEO 10/07: đơn đặt hàng lấy dãy 'order' (DH...), KHÔNG lấy 'invoice' (HD).
-    // Số HD chỉ cấp khi thanh toán (complete_draft_atomic v2 gán HD + order_code).
-    nextEntityCode("order")
-      .then((c) => setCode(c))
-      .catch(() => setCode(`DH${Date.now()}`));
-
-    setCustomerSearch("");
-    setSelectedCustomer(null);
+    setPendingChanges(null);
     setShowCustomerDropdown(false);
     setFilteredCustomers([]);
     setProductSearch("");
     setShowProductDropdown(false);
     setFilteredProducts([]);
-    setItems([]);
     setSelectedPartner("");
-    setShippingFee(0);
     setReceiverName("");
     setReceiverPhone("");
     setReceiverAddress("");
-    setNotes("");
     setErrors({});
     setSaving(false);
+
+    if (editOrder) {
+      // ── Chế độ SỬA: giữ mã, prefill từ đơn ──
+      setCode(editOrder.code);
+      setSelectedCustomer(
+        editOrder.customerId ? { id: editOrder.customerId, name: editOrder.customerName } : null,
+      );
+      setCustomerSearch(editOrder.customerName ?? "");
+      const prefillItems: OrderLineItem[] = editOrder.items.map((it) => ({
+        id: it.productId,
+        productCode: it.productCode,
+        productName: it.productName,
+        unit: it.unit || "Cái",
+        quantity: it.quantity,
+        price: it.price,
+      }));
+      setItems(prefillItems);
+      setShippingFee(editOrder.deliveryFee ?? 0);
+      setNotes(editOrder.note ?? "");
+      // Chụp gốc để diff khi lưu (deep copy items).
+      originalRef.current = {
+        items: prefillItems.map((it) => ({ ...it })),
+        deliveryFee: editOrder.deliveryFee ?? 0,
+        note: editOrder.note ?? "",
+      };
+    } else {
+      // ── Chế độ TẠO: sinh mã mới, reset trắng ──
+      // CEO 10/07: đơn đặt hàng lấy dãy 'order' (DH...), KHÔNG lấy 'invoice' (HD).
+      // Số HD chỉ cấp khi thanh toán (complete_draft_atomic v2 gán HD + order_code).
+      nextEntityCode("order")
+        .then((c) => setCode(c))
+        .catch(() => setCode(`DH${Date.now()}`));
+      setCustomerSearch("");
+      setSelectedCustomer(null);
+      setItems([]);
+      setShippingFee(0);
+      setNotes("");
+      originalRef.current = null;
+    }
 
     (async () => {
       const supabase = getClient();
@@ -130,7 +192,8 @@ export function CreateOrderDialog({
 
       setDeliveryPartners((data ?? []).map((d) => ({ id: d.id, name: d.name })));
     })();
-  }, [open]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editOrder?.id]);
 
   useEffect(() => {
     if (!customerSearch || customerSearch.length < 1) {
@@ -238,6 +301,52 @@ export function CreateOrderDialog({
     if (items.length === 0) newErrors.items = "Chưa có sản phẩm nào";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  }
+
+  /** So trạng thái hiện tại với gốc → danh sách thay đổi cho bảng cảnh báo. */
+  function computeChanges(): ChangeRow[] {
+    const orig = originalRef.current;
+    if (!orig) return [];
+    const changes: ChangeRow[] = [];
+    const origById = new Map(orig.items.map((it) => [it.id, it]));
+    const nowById = new Map(items.map((it) => [it.id, it]));
+
+    for (const it of items) {
+      const before = origById.get(it.id);
+      if (!before) {
+        changes.push({ type: "add", name: it.productName, detail: `thêm mới · SL ${formatNumber(it.quantity)}` });
+        continue;
+      }
+      if (before.quantity !== it.quantity) {
+        changes.push({ type: "qty", name: it.productName, detail: `SL ${formatNumber(before.quantity)} → ${formatNumber(it.quantity)}` });
+      }
+      if (before.price !== it.price) {
+        changes.push({ type: "price", name: it.productName, detail: `đơn giá ${formatCurrency(before.price)} → ${formatCurrency(it.price)}` });
+      }
+    }
+    for (const it of orig.items) {
+      if (!nowById.has(it.id)) {
+        changes.push({ type: "remove", name: it.productName, detail: `bỏ khỏi đơn (đang có SL ${formatNumber(it.quantity)})` });
+      }
+    }
+    if (orig.deliveryFee !== shippingFee) {
+      changes.push({ type: "price", name: "Phí giao hàng", detail: `${formatCurrency(orig.deliveryFee)} → ${formatCurrency(shippingFee)}` });
+    }
+    if ((orig.note ?? "") !== (notes ?? "")) {
+      changes.push({ type: "qty", name: "Ghi chú đơn", detail: "đã thay đổi" });
+    }
+    return changes;
+  }
+
+  /** Bấm Lưu ở chế độ SỬA → tính diff → mở bảng cảnh báo (không lưu ngay). */
+  function handleReviewChanges() {
+    if (!validate()) return;
+    const changes = computeChanges();
+    if (changes.length === 0) {
+      toast({ title: "Không có thay đổi nào để lưu", variant: "default" });
+      return;
+    }
+    setPendingChanges(changes);
   }
 
   async function handleSave() {
@@ -360,15 +469,109 @@ export function CreateOrderDialog({
     }
   }
 
+  /** CEO đã DUYỆT bảng cảnh báo → ghi thay đổi vào đơn (chỉ khi vẫn là nháp). */
+  async function handleUpdate() {
+    if (!editOrder) return;
+    setSaving(true);
+    try {
+      const supabase = getClient();
+      const ctx = await getCurrentContext();
+
+      // GUARD: chỉ sửa đơn CÒN LÀ nháp + đúng đơn đặt hàng (source='order').
+      // .eq (không .or) an toàn với PostgREST mới. Đơn đã thành hóa đơn
+      // (status='completed') sẽ khớp 0 dòng → báo lỗi, KHÔNG đụng sổ sách.
+      const { data: updated, error: updErr } = await supabase
+        .from("invoices")
+        .update({
+          customer_id: selectedCustomer?.id || null,
+          customer_name: selectedCustomer?.name ?? "Khách lẻ",
+          subtotal: total,
+          discount_amount: 0,
+          delivery_fee: shippingFee,
+          total: grandTotal,
+          debt: grandTotal,
+          note: notes || null,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any)
+        .eq("tenant_id", ctx.tenantId)
+        .eq("id", editOrder.id)
+        .eq("status", "draft")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .eq("source", "order" as any)
+        .select("id")
+        .maybeSingle();
+      if (updErr) throw new Error(updErr.message);
+      if (!updated) {
+        throw new Error(
+          "Đơn đã chuyển thành hóa đơn (hoặc đã hủy) — không sửa được nữa. Tải lại danh sách.",
+        );
+      }
+
+      // Thay toàn bộ dòng hàng: xóa cũ + chèn mới (đơn nháp, chưa động kho).
+      const { error: delErr } = await supabase
+        .from("invoice_items")
+        .delete()
+        .eq("invoice_id", editOrder.id);
+      if (delErr) throw new Error(delErr.message);
+
+      if (items.length > 0) {
+        const { error: insErr } = await supabase.from("invoice_items").insert(
+          items.map((item) => ({
+            invoice_id: editOrder.id,
+            product_id: item.id,
+            product_name: item.productName,
+            unit: item.unit || "Cái",
+            quantity: item.quantity,
+            unit_price: item.price,
+            discount: 0,
+            total: item.quantity * item.price,
+          } satisfies InvoiceItemInsert)),
+        );
+        if (insErr) throw new Error(insErr.message);
+      }
+
+      // Đồng bộ phí giao + COD sang VẬN ĐƠN đã gắn (nếu có) — no-op nếu không.
+      try {
+        await supabase
+          .from("shipping_orders")
+          .update({ shipping_fee: shippingFee, cod_amount: grandTotal })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("invoice_id", editOrder.id);
+      } catch {
+        // Vận đơn lỗi không chặn lưu đơn — bỏ qua lặng (đơn đã lưu OK).
+      }
+
+      setPendingChanges(null);
+      onOpenChange(false);
+      toast({
+        title: "Đã lưu thay đổi đơn đặt hàng",
+        description: `Đơn ${code} đã cập nhật.`,
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Lỗi lưu thay đổi",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-[1450px] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(1200px,calc(100vw-48px))] xl:max-w-[1450px] sm:rounded-2xl">
         <div className="shrink-0 border-b bg-white px-4 py-3 md:px-5">
           <DialogHeader className="gap-0 pr-10">
             <div className="flex flex-wrap items-center gap-3">
-              <DialogTitle className="text-xl">Tạo đơn đặt hàng</DialogTitle>
+              <DialogTitle className="text-xl">
+                {isEdit ? "Sửa đơn đặt hàng" : "Tạo đơn đặt hàng"}
+              </DialogTitle>
               <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                Đơn nháp
+                {isEdit ? "Đang sửa" : "Đơn nháp"}
               </span>
               <span className="ml-auto mr-8 max-w-none whitespace-nowrap rounded-lg border bg-primary/5 px-3 py-1.5 text-sm font-bold text-primary sm:text-base">
                 {code}
@@ -645,17 +848,69 @@ export function CreateOrderDialog({
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>
-                Hủy
+                {isEdit ? "Đóng" : "Hủy"}
               </Button>
-              <Button onClick={handleSave} disabled={saving}>
+              <Button onClick={isEdit ? handleReviewChanges : handleSave} disabled={saving}>
                 {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
-                Tạo đơn hàng
+                {isEdit ? "Lưu thay đổi" : "Tạo đơn hàng"}
               </Button>
             </div>
           </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Cảnh báo thay đổi — CEO 20/07: luôn xác nhận trước khi ghi đè đơn */}
+    <Dialog open={!!pendingChanges} onOpenChange={(o) => { if (!o) setPendingChanges(null); }}>
+      <DialogContent className="w-[min(560px,calc(100vw-2rem))] max-w-none sm:max-w-none">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Icon name="warning" size={20} className="text-status-warning" />
+            Xác nhận thay đổi đơn {code}
+          </DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-muted-foreground">
+          Đơn sẽ được cập nhật theo các thay đổi dưới đây. Kiểm tra kỹ trước khi lưu:
+        </p>
+        <div className="max-h-[46vh] space-y-1.5 overflow-y-auto rounded-lg border bg-muted/20 p-2">
+          {(pendingChanges ?? []).map((c, i) => (
+            <div key={i} className="flex items-start gap-2 text-sm">
+              <Icon
+                name={
+                  c.type === "add" ? "add_circle"
+                    : c.type === "remove" ? "remove_circle"
+                    : "edit"
+                }
+                size={16}
+                className={
+                  c.type === "add" ? "mt-0.5 shrink-0 text-status-success"
+                    : c.type === "remove" ? "mt-0.5 shrink-0 text-status-danger"
+                    : "mt-0.5 shrink-0 text-status-warning"
+                }
+              />
+              <span className="min-w-0">
+                <span className="font-medium">{c.name}</span>
+                <span className="text-muted-foreground"> — {c.detail}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-lg border bg-surface-container-lowest px-3 py-2 text-sm">
+          <span className="text-muted-foreground">Khách cần trả sau khi sửa</span>
+          <span className="text-lg font-bold tabular-nums text-primary">{formatCurrency(grandTotal)}</span>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setPendingChanges(null)} disabled={saving}>
+            Xem lại
+          </Button>
+          <Button onClick={handleUpdate} disabled={saving}>
+            {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
+            Đồng ý lưu
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

@@ -41,9 +41,11 @@ import {
   getOrders,
   cancelInvoice,
   getDraftOrderItems,
+  getDraftOrderById,
   getShippingOrderByInvoice,
   type SalesOrderItemRow,
 } from "@/lib/services";
+import type { EditOrderInput } from "@/components/shared/dialogs/create-order-dialog";
 import type { SalesOrder, ShippingOrder } from "@/lib/types";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipment-dialog";
@@ -157,9 +159,9 @@ function OrderDetail({
       onClose={onClose}
       onEdit={onEdit}
       onDelete={onDelete}
-      // CEO 20/07: mở POS vừa SỬA (thêm/bớt hàng, tự lưu) vừa thanh toán được
-      // — nhãn cũ "Chuyển thành hóa đơn" làm tưởng chỉ để thanh toán.
-      editLabel="Sửa / Chuyển thành hóa đơn"
+      // CEO 20/07: nút chính = "Sửa đơn" (mở form giống form tạo, có cảnh báo);
+      // "Chuyển thành hóa đơn (thu tiền)" nằm trong menu "..." của dòng.
+      editLabel="Sửa đơn"
       deleteLabel="Hủy đơn"
     >
       <DetailTabs
@@ -373,6 +375,9 @@ export default function DatHangPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
+  // CEO 20/07: sửa đơn qua chính form tạo (đồng bộ) — null = không sửa.
+  const [editingOrder, setEditingOrder] = useState<EditOrderInput | null>(null);
+  const [loadingEdit, setLoadingEdit] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<SalesOrder | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
@@ -436,6 +441,44 @@ export default function DatHangPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // CEO 20/07: mở form SỬA đơn — load đủ dòng hàng rồi bật dialog (chế độ sửa).
+  const openEditOrder = useCallback(
+    async (row: SalesOrder) => {
+      setLoadingEdit(true);
+      try {
+        const detail = await getDraftOrderById(row.id);
+        if (!detail) {
+          toast({ title: "Không tải được đơn để sửa", variant: "error" });
+          return;
+        }
+        setEditingOrder({
+          id: detail.id,
+          code: detail.code,
+          customerId: detail.customerId,
+          customerName: detail.customerName,
+          deliveryFee: detail.deliveryFee ?? row.shippingFee ?? 0,
+          note: detail.note,
+          items: detail.items.map((it) => ({
+            productId: it.productId,
+            productName: it.productName,
+            unit: it.unit,
+            quantity: it.quantity,
+            price: it.unitPrice,
+          })),
+        });
+      } catch (err) {
+        toast({
+          title: "Không tải được đơn để sửa",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "error",
+        });
+      } finally {
+        setLoadingEdit(false);
+      }
+    },
+    [toast],
+  );
 
   // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
   useRevalidateOnFocus(fetchData);
@@ -830,11 +873,10 @@ export default function DatHangPage() {
             onClose={onClose}
             onDataChanged={fetchData}
             onEdit={
-              // CEO 08/07: "Chuyển thành hóa đơn" — mở đơn trong POS để sửa +
-              // thanh toán. POS gắn session (adoptDraftSession) → hoàn tất ĐÚNG
-              // đơn này (giữ mã), KHÔNG tạo hóa đơn trùng. Chỉ cho đơn chưa hủy/tất toán.
+              // CEO 20/07: nút chính "Sửa đơn" → mở form sửa (giống form tạo,
+              // có cảnh báo thay đổi). Chuyển thành hóa đơn/thanh toán nằm ở menu.
               order.status !== "completed" && order.status !== "cancelled"
-                ? () => router.push(`/pos?draftId=${order.id}`)
+                ? () => openEditOrder(order)
                 : undefined
             }
             onDelete={
@@ -849,6 +891,11 @@ export default function DatHangPage() {
             row,
             kind: "sales_order",
             permissions: txPerms,
+            // CEO 20/07: "Sửa đơn" mở form sửa (thêm/bớt hàng + cảnh báo).
+            onEdit:
+              row.status !== "completed" && row.status !== "cancelled"
+                ? () => openEditOrder(row)
+                : undefined,
             onPrint: async () => {
               const items = await getDraftOrderItems(row.id);
               printWithPicker(
@@ -857,6 +904,15 @@ export default function DatHangPage() {
                 { channel: "retail", docType: "sales_order", branchId: activeBranchId },
               );
             },
+            // "Chuyển thành hóa đơn" (thu tiền) → mở POS. Chỉ đơn chưa hủy/tất toán.
+            workflowActions:
+              row.status !== "completed" && row.status !== "cancelled"
+                ? [{
+                    label: "Chuyển thành hóa đơn (thu tiền)",
+                    icon: <Icon name="point_of_sale" size={16} />,
+                    onClick: () => router.push(`/pos?draftId=${row.id}`),
+                  }]
+                : [],
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
             // Hủy — chỉ chưa completed/cancelled
@@ -874,6 +930,25 @@ export default function DatHangPage() {
       onOpenChange={setCreateOpen}
       onSuccess={fetchData}
     />
+
+    {loadingEdit && (
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/20">
+        <div className="flex items-center gap-2 rounded-lg bg-popover px-4 py-3 text-sm shadow-lg">
+          <Icon name="progress_activity" size={18} className="animate-spin" />
+          Đang tải đơn để sửa...
+        </div>
+      </div>
+    )}
+
+    {/* CEO 20/07: SỬA đơn qua chính form tạo (đồng bộ) — cùng component, chế độ edit */}
+    {editingOrder && (
+      <CreateOrderDialog
+        open={!!editingOrder}
+        onOpenChange={(o) => { if (!o) setEditingOrder(null); }}
+        onSuccess={fetchData}
+        editOrder={editingOrder}
+      />
+    )}
 
     <ConfirmDialog
       open={!!cancellingItem}

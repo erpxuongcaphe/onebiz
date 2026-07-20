@@ -520,6 +520,8 @@ export interface DraftOrderSummary {
   clientSessionId?: string | null;
   /** 'order' = đơn đặt hàng (POS hiện banner riêng, không xóa nhầm). */
   source?: string | null;
+  /** Phí giao hàng (invoices.delivery_fee) — dùng khi mở sửa đơn. */
+  deliveryFee?: number;
 }
 
 export interface DraftOrderDetail extends DraftOrderSummary {
@@ -879,7 +881,7 @@ export async function getDraftOrderById(
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, total, note, created_at, updated_at, status, auto_saved, client_session_id, source, invoice_items(*)",
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, source, invoice_items(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -907,6 +909,7 @@ export async function getDraftOrderById(
     autoSaved: raw.auto_saved ?? false,
     clientSessionId: raw.client_session_id ?? null,
     source: raw.source ?? null,
+    deliveryFee: Number(raw.delivery_fee ?? 0),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (raw.invoice_items ?? []).map((it: any) => ({
       id: it.id,
