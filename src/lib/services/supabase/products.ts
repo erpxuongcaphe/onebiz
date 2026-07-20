@@ -19,6 +19,39 @@ function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undef
   return applyCreatedAtRangeFilter(query, filters);
 }
 
+/**
+ * Phương án B (CEO 20/07): giới hạn danh mục theo NGÀNH của chi nhánh.
+ * - cascade_mode='production' (Kho Tổng): NVL (channel NULL) + SKU không phải
+ *   F&B — hiện ĐỦ kể cả chưa từng có tồn.
+ * - cascade_mode='outlet' (quán F&B / VP): món F&B + mọi mã ĐANG có dòng tồn
+ *   thật tại CN (SKU Retail thành phần quán đã nhận).
+ * "Tất cả chi nhánh" không đi qua đây (hiện toàn bộ).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function applyBranchIndustryScope(supabase: any, query: any, tenantId: string, branchId: string) {
+  const { data: br } = await supabase
+    .from("branches")
+    .select("cascade_mode")
+    .eq("tenant_id", tenantId)
+    .eq("id", branchId)
+    .maybeSingle();
+  if (br?.cascade_mode === "outlet") {
+    const { data: rows } = await supabase
+      .from("branch_stock")
+      .select("product_id")
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId)
+      .is("variant_id", null)
+      .limit(2000);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ids = Array.from(new Set((rows ?? []).map((r: any) => r.product_id)));
+    return ids.length
+      ? query.or(`channel.eq.fnb,id.in.(${ids.join(",")})`)
+      : query.eq("channel", "fnb");
+  }
+  return query.or("channel.is.null,channel.neq.fnb");
+}
+
 // --- Products ---
 
 export async function getProducts(params: QueryParams): Promise<QueryResult<Product>> {
@@ -30,14 +63,18 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   // 4 tenant khác nhau (1 row hiện nhóm "Bao bì" lạ vì cross-tenant).
   const tenantId = await getCurrentTenantId();
 
-  // Branch-scope (CEO 13/07): khi truyền branchId → CHỈ SP có dòng branch_stock
-  // (base variant_id IS NULL) ở CN đó (kể cả tồn 0 = hàng đã từng nhập/nhận), và
-  // lấy tồn CN đó vào cột "Tồn". Không truyền → toàn chuỗi, tồn tổng products.stock.
+  // Branch-scope Phương án B (CEO 20/07): chế độ CHI NHÁNH hiện DANH MỤC theo
+  // NGÀNH của CN (branches.cascade_mode) — production (Kho Tổng): NVL + SKU
+  // Retail đủ hết (kể cả chưa có dòng tồn; SKU xem "≈ khả dụng" từ BOM);
+  // outlet (quán F&B): món F&B + mọi mã ĐANG có tồn thật tại quán. Tồn hiển
+  // thị = tồn CN (LEFT join, chưa có dòng → 0). Khi BẬT lọc tồn kho → INNER
+  // join tồn thật như trước (PostgREST không lọc parent qua LEFT join).
   const branchId =
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
+  const hasStockFilter = Boolean(params.filters?.stock);
   const selectCols =
     "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)" +
-    (branchId ? ", branch_stock!inner(quantity)" : "");
+    (branchId ? `, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
@@ -49,6 +86,7 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query
       .eq("branch_stock.branch_id", branchId)
       .is("branch_stock.variant_id", null);
+    query = await applyBranchIndustryScope(supabase, query, tenantId, branchId);
   }
 
   // Search — dùng `or` với escape `%` để search ký tự đặc biệt OK.
@@ -148,15 +186,18 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   const branchId =
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
 
+  // Khớp getProducts (Phương án B): LEFT join khi không lọc tồn + scope ngành.
+  const hasStockFilter = Boolean(params.filters?.stock);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("products")
-    .select(branchId ? "id, branch_stock!inner(quantity)" : "id")
+    .select(branchId ? `id, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "id")
     .eq("tenant_id", tenantId);
   if (branchId) {
     query = query
       .eq("branch_stock.branch_id", branchId)
       .is("branch_stock.variant_id", null);
+    query = await applyBranchIndustryScope(supabase, query, tenantId, branchId);
   }
 
   // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.

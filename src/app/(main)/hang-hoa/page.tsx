@@ -78,6 +78,7 @@ import {
   getProductIdsWithActiveBom,
   getUOMConversionsByProductIds,
 } from "@/lib/services";
+import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -308,6 +309,11 @@ export default function HangHoaPage() {
   const [conversionsMap, setConversionsMap] = useState<
     Map<string, UOMConversion[]>
   >(new Map());
+  // Phương án B (CEO 20/07): SKU có BOM ở chế độ CHI NHÁNH hiện "≈ khả dụng"
+  // tính từ tồn nguyên liệu tại CN (tái dùng snapshot của POS G3).
+  const [bomAvailability, setBomAvailability] = useState<
+    Map<string, { available: number; bottleneck?: string }>
+  >(new Map());
   const [stats, setStats] = useState<{
     totalCount: number;
     stockValue: number;
@@ -523,6 +529,31 @@ export default function HangHoaPage() {
       }
     } else {
       setConversionsMap(new Map());
+    }
+
+    // Phương án B: khả dụng BOM cho SKU trong trang (chỉ chế độ chi nhánh).
+    if (!viewAllBranches && activeBranchId) {
+      const bomRows = result.data.filter((p) => p.hasBom);
+      if (bomRows.length > 0) {
+        try {
+          const snap = await getPosStockSnapshot(
+            bomRows.map((p) => ({ productId: p.id, hasBom: true })),
+            activeBranchId,
+          );
+          const m = new Map<string, { available: number; bottleneck?: string }>();
+          snap.forEach((v, k) => {
+            if (v.source === "bom")
+              m.set(k, { available: v.availableStock, bottleneck: v.bottleneckMaterialName });
+          });
+          setBomAvailability(m);
+        } catch {
+          setBomAvailability(new Map());
+        }
+      } else {
+        setBomAvailability(new Map());
+      }
+    } else {
+      setBomAvailability(new Map());
     }
   }, [page, pageSize, debouncedSearch, searchField, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo, activeBranchId, viewAllBranches]);
 
@@ -1076,6 +1107,31 @@ export default function HangHoaPage() {
       header: "Tồn kho",
       size: 150,
       cell: ({ row }) => {
+        // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
+        if (branchStockView && row.original.hasBom) {
+          const avail = bomAvailability.get(row.original.id);
+          if (avail) {
+            return (
+              <span
+                className={avail.available === 0 ? "text-destructive" : "text-primary"}
+                title={
+                  "Khả dụng tính từ tồn nguyên liệu tại chi nhánh" +
+                  (avail.bottleneck ? ` — giới hạn bởi: ${avail.bottleneck}` : "")
+                }
+              >
+                ≈ {formatNumber(avail.available)} {row.original.unit ?? ""}
+              </span>
+            );
+          }
+        }
+        // Món F&B không công thức: không giữ tồn → gạch ngang.
+        if (branchStockView && row.original.channel === "fnb" && !row.original.hasBom) {
+          return (
+            <span className="text-muted-foreground" title="Món F&B không giữ tồn — bán trừ nguyên liệu qua công thức">
+              —
+            </span>
+          );
+        }
         // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
         const stock = branchStockView
           ? row.original.branchStock ?? 0
@@ -1227,6 +1283,31 @@ export default function HangHoaPage() {
       header: "Tồn kho",
       size: 150,
       cell: ({ row }) => {
+        // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
+        if (branchStockView && row.original.hasBom) {
+          const avail = bomAvailability.get(row.original.id);
+          if (avail) {
+            return (
+              <span
+                className={avail.available === 0 ? "text-destructive" : "text-primary"}
+                title={
+                  "Khả dụng tính từ tồn nguyên liệu tại chi nhánh" +
+                  (avail.bottleneck ? ` — giới hạn bởi: ${avail.bottleneck}` : "")
+                }
+              >
+                ≈ {formatNumber(avail.available)} {row.original.unit ?? ""}
+              </span>
+            );
+          }
+        }
+        // Món F&B không công thức: không giữ tồn → gạch ngang.
+        if (branchStockView && row.original.channel === "fnb" && !row.original.hasBom) {
+          return (
+            <span className="text-muted-foreground" title="Món F&B không giữ tồn — bán trừ nguyên liệu qua công thức">
+              —
+            </span>
+          );
+        }
         // Branch-scope: hiện tồn của chi nhánh đang chọn; toàn chuỗi → tồn tổng.
         const stock = branchStockView
           ? row.original.branchStock ?? 0
