@@ -156,8 +156,8 @@ export function applyTemplateToDocData(
     if (hasPrice) headers.push(priceLabel);
     if (hasDiscount) headers.push("Giảm giá");
     headers.push("Thành tiền");
-    // 00208: đơn có món ghi chú → giữ cột Ghi chú (luôn cuối bảng).
-    if ((data.items as DocumentLineItem[]).some((it) => it.note)) {
+    // CEO 20/07: phiếu bán (base có "Ghi chú") LUÔN giữ cột — trống để ghi tay.
+    if (baseCols.includes("Ghi chú")) {
       headers.push("Ghi chú");
     }
     data.itemColumns = headers;

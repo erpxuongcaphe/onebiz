@@ -19,11 +19,11 @@ const formatCurrency = (n: number | null | undefined) => `${fmtNum(n)} đ`;
 
 /** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
 const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
-// 00208: đơn có ≥1 món ghi chú → thêm cột "Ghi chú" cuối bảng; không có → như cũ.
-const saleColumnsFor = (items?: DocumentLineItem[]) =>
-  items?.some((it) => it.note)
-    ? [...SALE_ITEM_COLUMNS, "Ghi chú"]
-    : SALE_ITEM_COLUMNS;
+// 00208 + CEO 20/07: cột "Ghi chú" LUÔN có trên phiếu bán — trống thì để ghi tay.
+const saleColumnsFor = (_items?: DocumentLineItem[]) => [
+  ...SALE_ITEM_COLUMNS,
+  "Ghi chú",
+];
 // Phiếu phía MUA (nhập/đặt NCC/HĐ đầu vào/trả NCC): "Đơn giá nhập" cho rõ ngữ cảnh.
 const PURCHASE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá nhập", "Thành tiền"];
 
