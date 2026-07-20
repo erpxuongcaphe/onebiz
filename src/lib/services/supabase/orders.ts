@@ -1067,7 +1067,9 @@ export async function deleteDraftOrder(
     .eq("id", invoiceId)
     .eq("status", "draft")
     .is("deleted_at", null)
-    .or("source.is.null,source.neq.order");
+    // isdistinct (= IS DISTINCT FROM): PostgREST mới không nhận .or() trong
+    // UPDATE/DELETE (42703) — tương đương (is null OR neq order).
+    .filter("source", "isdistinct", "order");
   // CEO 16/06/2026 — onlyAutoSaved: dọn-giỏ-trống chỉ được xóa nháp KỸ THUẬT
   // (auto_saved=true). Nháp bấm "Nháp" tay (auto_saved=false, sticky) KHÔNG bị
   // auto-xóa. Guard này vẫn giữ nguyên tác dụng.

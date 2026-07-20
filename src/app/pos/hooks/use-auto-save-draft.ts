@@ -247,6 +247,7 @@ function computeStateHash(s: AutoSaveSnapshot): string {
       l.unitPrice,
       l.discount.value,
       l.discount.mode,
+      l.note ?? "", // 00208: gõ ghi chú món cũng phải kích save
     ]),
     c: s.customer?.id ?? "",
     od: [s.orderDiscount.value, s.orderDiscount.mode],
@@ -271,6 +272,7 @@ function buildInput(
         ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
         : l.discount.value,
     vatRate: l.vatRate ?? 0,
+    note: l.note, // 00208
   }));
 
   return {
