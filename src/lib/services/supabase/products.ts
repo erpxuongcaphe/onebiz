@@ -27,15 +27,24 @@ function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undef
  *   thật tại CN (SKU Retail thành phần quán đã nhận).
  * "Tất cả chi nhánh" không đi qua đây (hiện toàn bộ).
  */
+// LƯU Ý: hàm áp filter phải SYNC — PostgREST builder là thenable, để nó lọt
+// qua async return là JS "await" luôn builder → query bắn non thiếu filter.
+interface BranchIndustryScope {
+  isOutlet: boolean;
+  stockedIds: string[];
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function applyBranchIndustryScope(supabase: any, query: any, tenantId: string, branchId: string) {
+async function getBranchIndustryScope(supabase: any, tenantId: string, branchId: string): Promise<BranchIndustryScope> {
   const { data: br } = await supabase
     .from("branches")
     .select("cascade_mode")
     .eq("tenant_id", tenantId)
     .eq("id", branchId)
     .maybeSingle();
-  if (br?.cascade_mode === "outlet") {
+  const isOutlet = br?.cascade_mode === "outlet";
+  let stockedIds: string[] = [];
+  if (isOutlet) {
     const { data: rows } = await supabase
       .from("branch_stock")
       .select("product_id")
@@ -44,9 +53,16 @@ async function applyBranchIndustryScope(supabase: any, query: any, tenantId: str
       .is("variant_id", null)
       .limit(2000);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const ids = Array.from(new Set((rows ?? []).map((r: any) => r.product_id)));
-    return ids.length
-      ? query.or(`channel.eq.fnb,id.in.(${ids.join(",")})`)
+    stockedIds = Array.from(new Set((rows ?? []).map((r: any) => r.product_id)));
+  }
+  return { isOutlet, stockedIds };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyBranchIndustryScope(query: any, scope: BranchIndustryScope) {
+  if (scope.isOutlet) {
+    return scope.stockedIds.length
+      ? query.or(`channel.eq.fnb,id.in.(${scope.stockedIds.join(",")})`)
       : query.eq("channel", "fnb");
   }
   return query.or("channel.is.null,channel.neq.fnb");
@@ -86,7 +102,8 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query
       .eq("branch_stock.branch_id", branchId)
       .is("branch_stock.variant_id", null);
-    query = await applyBranchIndustryScope(supabase, query, tenantId, branchId);
+    const industryScope = await getBranchIndustryScope(supabase, tenantId, branchId);
+    query = applyBranchIndustryScope(query, industryScope);
   }
 
   // Search — dùng `or` với escape `%` để search ký tự đặc biệt OK.
@@ -197,7 +214,8 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
     query = query
       .eq("branch_stock.branch_id", branchId)
       .is("branch_stock.variant_id", null);
-    query = await applyBranchIndustryScope(supabase, query, tenantId, branchId);
+    const industryScope = await getBranchIndustryScope(supabase, tenantId, branchId);
+    query = applyBranchIndustryScope(query, industryScope);
   }
 
   // Search — CEO 04/07: khớp getProducts để "chọn tất cả khớp lọc" đúng cột.
