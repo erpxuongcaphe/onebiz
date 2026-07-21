@@ -103,7 +103,9 @@ export function TaskActions({ task }: { task: MktMyTask }) {
             )
           ) : task.contentItemId ? (
             <button className={primary} disabled={busy} onClick={() => setDialog("submit")}>
-              <Icon name="upload" size={15} /> Nộp duyệt
+              <Icon name="upload" size={15} />
+              {/* 00217: bài bị trả → nói rõ đây là nộp LẠI bản sửa (bản mới). */}
+              {task.contentStatus === "revision_required" ? "Nộp lại bản sửa" : "Nộp duyệt"}
             </button>
           ) : needsApproval ? (
             // 00197: kế hoạch đã chỉ định người duyệt → không tự Hoàn tất;
@@ -121,7 +123,10 @@ export function TaskActions({ task }: { task: MktMyTask }) {
 
       {/* Đang chờ duyệt / kẹt phụ thuộc */}
       {task.taskStatus === "reviewing" ? (
-        <span className="text-xs font-medium text-on-surface-variant">Đang chờ duyệt</span>
+        <span className="text-xs font-medium text-on-surface-variant">
+          {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
+          {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
+        </span>
       ) : null}
       {task.taskStatus === "blocked" ? (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600">

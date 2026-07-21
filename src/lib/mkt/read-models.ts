@@ -82,6 +82,10 @@ export type MktMyTask = {
   // 00197: UI cần biết việc có người duyệt riêng để hiện "Nộp duyệt" thay vì
   // "Hoàn tất" (việc có reviewer phải qua cột Chờ duyệt).
   reviewerId: string | null;
+  // 00217: việc gắn Bài → hiện trạng thái bài + link bản mới nhất ngay trên thẻ
+  // (người làm xem lại bản đã nộp; hết cảnh "không vào xem được nội dung").
+  contentStatus: string | null;
+  contentUrl: string | null;
 };
 
 // Việc đang CHỜ CHÍNH TÔI duyệt (00197) — kèm tên người làm để biết của ai.
@@ -142,6 +146,36 @@ export async function getMyTasks(
     (camps ?? []).forEach((c) => campaignNames.set(c.id, c.name));
   }
 
+  // 00217: trạng thái Bài + link bản MỚI NHẤT cho việc gắn nội dung — người
+  // làm thấy ngay bản đã nộp, khỏi "nộp xong không biết bài mình đâu".
+  const contentIds = Array.from(
+    new Set(rows.map((r) => r.content_item_id).filter(Boolean) as string[]),
+  );
+  const contentStatus = new Map<string, string>();
+  const contentUrl = new Map<string, string>();
+  if (contentIds.length > 0) {
+    const [itemsRes, versRes] = await Promise.all([
+      db
+        .from<{ id: string; content_status: string }>("mkt_content_items")
+        .select("id, content_status")
+        .in("id", contentIds),
+      db
+        .from<{ content_item_id: string; version_number: number; content_url: string | null }>(
+          "mkt_content_versions",
+        )
+        .select("content_item_id, version_number, content_url")
+        .in("content_item_id", contentIds)
+        .order("version_number", { ascending: false }),
+    ]);
+    (itemsRes.data ?? []).forEach((c) => contentStatus.set(c.id, c.content_status));
+    // Đã xếp version giảm dần — bản gặp ĐẦU TIÊN của mỗi bài là bản mới nhất.
+    (versRes.data ?? []).forEach((v) => {
+      if (v.content_url && !contentUrl.has(v.content_item_id)) {
+        contentUrl.set(v.content_item_id, v.content_url);
+      }
+    });
+  }
+
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
@@ -157,6 +191,8 @@ export async function getMyTasks(
     blockedReason: r.blocked_reason,
     assigneeId: r.assignee_id,
     reviewerId: r.reviewer_id,
+    contentStatus: r.content_item_id ? contentStatus.get(r.content_item_id) ?? null : null,
+    contentUrl: r.content_item_id ? contentUrl.get(r.content_item_id) ?? null : null,
   }));
 }
 
@@ -248,6 +284,10 @@ export async function getTasksAwaitingMyReview(
     blockedReason: r.blocked_reason,
     assigneeId: r.assignee_id,
     reviewerId: r.reviewer_id,
+    // Hàng chờ này chỉ chứa việc KHÔNG gắn bài (việc gắn bài duyệt ở màn
+    // Duyệt nội dung) — nên 2 trường bài luôn null.
+    contentStatus: null,
+    contentUrl: null,
     assigneeName: r.assignee_id ? names.get(r.assignee_id) ?? "Chưa gán tên" : null,
   }));
 }
