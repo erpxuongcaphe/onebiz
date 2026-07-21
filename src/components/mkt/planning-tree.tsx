@@ -9,6 +9,7 @@ import {
   PlanReviewButton,
   ChangeRequestButton,
   PlanReconcileButton,
+  PlanActivityButton,
 } from "@/components/mkt/plan-controls";
 import {
   PlanHealthBadge,
@@ -402,6 +403,7 @@ export function PlanningTree({
         ) : null}
         <div className="mt-auto flex flex-wrap justify-end gap-1.5">
           <PlanEditorButton plan={p} members={members} pillars={pillars} contents={contents.filter((c) => c.campaignId === p.campaignId)} />
+          {p.status !== "planning" || p.versionNumber > 1 ? <PlanActivityButton plan={p} /> : null}
           {isLead && p.status === "submitted" ? <PlanReviewButton plan={p} members={members} /> : null}
           {p.status === "in_execution" ? <ProgressReportButton plan={p} /> : null}
           {p.progressReports.length > 0 ? <PlanProgressHistoryButton plan={p} /> : null}

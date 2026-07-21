@@ -128,11 +128,12 @@ export function TaskActions({ task }: { task: MktMyTask }) {
             {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
             {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
           </span>
-          {/* 00219: lỡ dán nhầm link? Thu hồi bản đã nộp để sửa, không phải chờ
-              người duyệt trả lại. Chỉ với việc gắn nội dung, do chính người làm. */}
+          {/* 00221 (NỚI 2): lỡ dán nhầm link, hay có bản tốt hơn? Cập nhật bản
+              nộp ngay — bản cũ tự hạ thành "cần sửa", không phải thu hồi trước
+              rồi mới nộp lại. Chỉ với việc gắn nội dung, do chính người làm. */}
           {task.contentItemId ? (
-            <button className={outline} disabled={busy} onClick={() => run("recall-review")}>
-              <Icon name="undo" size={15} /> Thu hồi để sửa
+            <button className={outline} disabled={busy} onClick={() => setDialog("submit")}>
+              <Icon name="edit" size={15} /> Cập nhật bản nộp
             </button>
           ) : null}
         </>

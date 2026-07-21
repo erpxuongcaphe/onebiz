@@ -12,11 +12,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
-import { mktPost } from "@/lib/mkt/client";
+import { mktGet, mktPost } from "@/lib/mkt/client";
 import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
 import { formatVnd } from "@/lib/mkt/format";
 import type {
+  MktActivityEntry,
   MktMember,
   MktPillar,
   MktPlanInboxEntry,
@@ -1076,8 +1077,9 @@ export function PlanReviewButton({
 }
 
 // ══════════════════════════════════════════════════════════════
-// Đổi kế hoạch (Change Request) — mở lại kế hoạch đã duyệt để sửa.
-// Đợt 3 chỉ cho khi mọi việc còn chưa ai nhận.
+// Đổi kế hoạch (Change Request) — mở lại kế hoạch đang chạy để sửa.
+// NỚI 3 (00222): mở được BẤT CỨ LÚC NÀO, không huỷ việc; duyệt bản mới thì
+// generate đối soát (giữ/cập nhật/tạo/huỷ-việc-chưa-bắt-đầu).
 // ══════════════════════════════════════════════════════════════
 export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
   const [open, setOpen] = useState(false);
@@ -1098,12 +1100,7 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
       await mktPost(`/api/mkt/v1/plans/${plan.id}/change-request`, { reason: reason.trim() });
       refresh(() => setOpen(false));
     } catch (e) {
-      const raw = e instanceof Error ? e.message : "";
-      setError(
-        raw.includes("PLAN_TASKS_IN_PROGRESS")
-          ? "Có việc đã được nhận hoặc đang chạy — chưa đổi được ở đây. (Sửa kế hoạch khi việc đã chạy sẽ có ở bản kế tiếp.)"
-          : raw || "Không mở lại được kế hoạch",
-      );
+      setError(e instanceof Error ? e.message : "Không mở lại được kế hoạch");
     } finally {
       setSaving(false);
     }
@@ -1119,8 +1116,9 @@ export function ChangeRequestButton({ plan }: { plan: MktPlanInboxEntry }) {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-on-surface-variant">
-              Mở lại kế hoạch để chỉnh sửa rồi trình duyệt lại. Chỉ làm được khi <b>chưa ai nhận việc</b> —
-              các việc đang chờ sẽ được thu hồi và sinh lại sau khi duyệt bản mới.
+              Mở lại kế hoạch để chỉnh sửa rồi trình duyệt lại. Việc <b>đang chạy / đã xong vẫn giữ nguyên</b>;
+              khi duyệt bản mới: công đoạn còn thì giữ &amp; cập nhật, công đoạn mới thì tạo việc, công đoạn bỏ
+              đi mà việc <b>chưa ai bắt đầu</b> thì tự huỷ. Mọi thay đổi đều ghi vào nhật ký.
             </p>
             <textarea
               value={reason}
@@ -1162,14 +1160,17 @@ export function PlanReconcileButton({
   const [reason, setReason] = useState("");
 
   async function act(taskId: string, decision: "cancel" | "reassign", newAssigneeId?: string) {
-    if (!reason.trim()) {
-      setError("Vui l\u00f2ng nh\u1eadp l\u00fd do thay \u0111\u1ed5i.");
+    // N\u1edaI (00222): giao/\u0111\u1ed5i ng\u01b0\u1eddi KH\u00d4NG b\u1eaft bu\u1ed9c l\u00fd do (m\u1eb7c \u0111\u1ecbnh b\u00ean d\u01b0\u1edbi);
+    // ri\u00eang HU\u1ef6 vi\u1ec7c v\u1eabn c\u1ea7n l\u00fd do r\u00f5 r\u00e0ng \u0111\u1ec3 c\u00f2n truy \u0111\u01b0\u1ee3c.
+    const effReason = reason.trim() || (decision === "reassign" ? "Giao/\u0111\u1ed5i ng\u01b0\u1eddi ph\u1ee5 tr\u00e1ch" : "");
+    if (!effReason) {
+      setError("Vui l\u00f2ng nh\u1eadp l\u00fd do hu\u1ef7 vi\u1ec7c.");
       return;
     }
     setBusyId(taskId);
     setError(null);
     try {
-      await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId, reason: reason.trim() });
+      await mktPost(`/api/mkt/v1/plans/${plan.id}/reconcile-task`, { taskId, decision, newAssigneeId, reason: effReason });
       refresh(() => {
         setReassignFor(null);
         setReassignTo("");
@@ -1192,8 +1193,9 @@ export function PlanReconcileButton({
           </DialogHeader>
           <div className="space-y-2">
             <p className="text-xs text-on-surface-variant">
-              Khi cần đổi kế hoạch mà việc đã có người nhận: <b>giữ</b>, <b>huỷ</b>, hoặc <b>đổi người</b> từng việc.
-              Muốn thêm việc mới thì dùng chức năng tạo việc tay ở gói việc. Việc đã Xong không đổi được.
+              Giao/đổi người hoặc huỷ từng việc đang chạy. Việc <b>chưa giao</b> (nộp kế hoạch để trống người)
+              hiện ngay ở đây — bấm <b>Giao người</b> (không cần lý do). Muốn đổi cả cấu trúc kế hoạch thì dùng
+              nút <b>Đổi kế hoạch</b>. Việc đã Xong không đổi được.
             </p>
             <textarea
               value={reason}
@@ -1226,7 +1228,7 @@ export function PlanReconcileButton({
                             <option value="">— Chọn người mới —</option>
                             {members.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                           </select>
-                          <Button size="sm" disabled={!reassignTo || !reason.trim() || busyId === t.id} onClick={() => act(t.id, "reassign", reassignTo)}>
+                          <Button size="sm" disabled={!reassignTo || busyId === t.id} onClick={() => act(t.id, "reassign", reassignTo)}>
                             {busyId === t.id ? "…" : "Xác nhận"}
                           </Button>
                           <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(null); setReassignTo(""); }}>Huỷ</Button>
@@ -1234,7 +1236,7 @@ export function PlanReconcileButton({
                       ) : (
                         <div className="mt-2 flex flex-wrap gap-2">
                           <Button size="sm" variant="outline" disabled={busyId === t.id} onClick={() => { setReassignFor(t.id); setReassignTo(""); }}>
-                            Đổi người
+                            {t.assigneeName ? "Đổi người" : "Giao người"}
                           </Button>
                           <Button size="sm" variant="outline" className="text-rose-600" disabled={!reason.trim() || busyId === t.id} onClick={() => act(t.id, "cancel")}>
                             {busyId === t.id ? "…" : "Huỷ việc"}
@@ -1254,6 +1256,113 @@ export function PlanReconcileButton({
           </div>
           <DialogFooter>
             <Button variant="outline" disabled={Boolean(busyId)} onClick={() => setOpen(false)}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════
+// Nhật ký thay đổi (00222) — dòng thời gian mọi lần nộp/duyệt/mở lại/đối soát
+// của MỘT kế hoạch. Tải lười khi mở (đọc audit_log qua RLS tenant).
+// ══════════════════════════════════════════════════════════════
+const ACTIVITY_LABEL: Record<string, string> = {
+  mkt_channel_plan_saved: "Lưu nháp kế hoạch",
+  mkt_channel_plan_submitted: "Nộp kế hoạch chờ duyệt",
+  mkt_channel_plan_approve: "Duyệt kế hoạch — sinh việc",
+  mkt_channel_plan_request_revision: "Yêu cầu sửa kế hoạch",
+  mkt_channel_plan_reject: "Từ chối kế hoạch",
+  mkt_channel_plan_change_requested: "Mở lại kế hoạch để sửa",
+  mkt_tasks_generated_from_plan: "Đối soát / sinh việc",
+  mkt_plan_progress_submitted: "Báo cáo tiến độ",
+};
+
+function activityDetail(e: MktActivityEntry): string | null {
+  const d = e.detail ?? {};
+  if (e.action === "mkt_tasks_generated_from_plan") {
+    const created = Number(d["created"] ?? 0);
+    const updated = Number(d["updated"] ?? 0);
+    const canceled = Number(d["canceled"] ?? 0);
+    const parts: string[] = [];
+    if (created) parts.push(`tạo ${created}`);
+    if (updated) parts.push(`cập nhật ${updated}`);
+    if (canceled) parts.push(`huỷ ${canceled}`);
+    return parts.length ? `Việc: ${parts.join(" · ")}` : `Việc: ${Number(d["task_count"] ?? 0)}`;
+  }
+  if (e.action === "mkt_channel_plan_change_requested") {
+    const r = d["reason"];
+    return typeof r === "string" && r ? `Lý do: ${r}` : null;
+  }
+  if (e.action === "mkt_channel_plan_request_revision" || e.action === "mkt_channel_plan_reject") {
+    const c = d["comment"];
+    return typeof c === "string" && c ? `Ghi chú: ${c}` : null;
+  }
+  return null;
+}
+
+export function PlanActivityButton({ plan }: { plan: MktPlanInboxEntry }) {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [entries, setEntries] = useState<MktActivityEntry[] | null>(null);
+
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await mktGet<{ entries: MktActivityEntry[] }>(`/api/mkt/v1/plans/${plan.id}/activity`);
+      setEntries(res.entries ?? []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không đọc được nhật ký");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          setOpen(true);
+          void load();
+        }}
+      >
+        <Icon name="history" size={15} /> Nhật ký
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Nhật ký thay đổi — {plan.channelTitle ?? "Kế hoạch"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            {loading ? <p className="text-sm text-on-surface-variant">Đang tải…</p> : null}
+            {error ? <p className="text-sm font-medium text-rose-600">{error}</p> : null}
+            {entries && entries.length === 0 && !loading ? (
+              <p className="text-sm text-on-surface-variant">Chưa có thay đổi nào được ghi.</p>
+            ) : null}
+            {entries?.map((e) => {
+              const detail = activityDetail(e);
+              return (
+                <div key={e.id} className="rounded-lg border border-outline-variant bg-background p-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium">{ACTIVITY_LABEL[e.action] ?? e.action}</span>
+                    <span className="shrink-0 text-xs text-on-surface-variant">
+                      {e.createdAt ? new Date(e.createdAt).toLocaleString("vi-VN") : ""}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-on-surface-variant">
+                    {e.userName ?? "—"}
+                    {detail ? ` · ${detail}` : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Đóng</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
