@@ -123,10 +123,19 @@ export function TaskActions({ task }: { task: MktMyTask }) {
 
       {/* Đang chờ duyệt / kẹt phụ thuộc */}
       {task.taskStatus === "reviewing" ? (
-        <span className="text-xs font-medium text-on-surface-variant">
-          {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
-          {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
-        </span>
+        <>
+          <span className="text-xs font-medium text-on-surface-variant">
+            {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
+            {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
+          </span>
+          {/* 00219: lỡ dán nhầm link? Thu hồi bản đã nộp để sửa, không phải chờ
+              người duyệt trả lại. Chỉ với việc gắn nội dung, do chính người làm. */}
+          {task.contentItemId ? (
+            <button className={outline} disabled={busy} onClick={() => run("recall-review")}>
+              <Icon name="undo" size={15} /> Thu hồi để sửa
+            </button>
+          ) : null}
+        </>
       ) : null}
       {task.taskStatus === "blocked" ? (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600">
