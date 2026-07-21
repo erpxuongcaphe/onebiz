@@ -258,7 +258,10 @@ export function CancelImpactDialog({
                   </div>
                   <Select value={method} onValueChange={(v) => setMethod((v as RefundMethod) ?? "cash")}>
                     <SelectTrigger className="h-7 w-[120px] text-xs">
-                      <SelectValue />
+                      {/* Base UI Select.Value hiện raw value → map sang nhãn Việt */}
+                      <SelectValue>
+                        {(v: unknown) => METHOD_LABELS[(v as RefundMethod)] ?? METHOD_LABELS.cash}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="cash">Tiền mặt</SelectItem>
@@ -268,8 +271,9 @@ export function CancelImpactDialog({
                   </Select>
                 </div>
                 <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-400/70">
-                  Máy ghi phiếu {impact.cashDirection === "refund_to_customer" ? "chi" : "thu"} tự động ·
-                  {" "}bạn {impact.cashDirection === "refund_to_customer" ? "trả" : "nhận"} tiền {METHOD_LABELS[method].toLowerCase()} thực tế.
+                  {impact.cashDirection === "refund_to_customer"
+                    ? `Máy ghi phiếu chi tự động · bạn trả khách bằng ${METHOD_LABELS[method].toLowerCase()}.`
+                    : `Máy ghi phiếu thu tự động · bạn nhận lại bằng ${METHOD_LABELS[method].toLowerCase()}.`}
                 </p>
               </div>
             )}
