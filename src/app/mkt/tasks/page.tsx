@@ -7,7 +7,7 @@ import {
   type MktMyTask,
   type MktReviewQueueTask,
 } from "@/lib/mkt/read-models";
-import { AcceptanceBadge, TaskStatusBadge } from "@/components/mkt/badges";
+import { AcceptanceBadge, ContentStatusBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { TaskActions, ReviewTaskActions } from "@/components/mkt/task-actions";
 
 export const dynamic = "force-dynamic";
@@ -58,10 +58,29 @@ function TaskCard({
         {task.campaignName ?? "Không thuộc chiến dịch"}
         {reviewMode && task.assigneeName ? <> · Người làm: <b>{task.assigneeName}</b></> : null}
       </div>
+      {/* 00217: đề bài ngay trên thẻ — người làm biết viết gì, người duyệt biết duyệt gì. */}
+      {task.description ? (
+        <p className="mt-1.5 line-clamp-3 whitespace-pre-line text-xs leading-relaxed text-on-surface-variant">
+          {task.description}
+        </p>
+      ) : null}
       <div className="mt-2 flex flex-wrap items-center gap-1.5">
         <AcceptanceBadge value={task.acceptanceStatus} />
         <TaskStatusBadge value={task.taskStatus} />
+        {task.contentStatus ? <ContentStatusBadge value={task.contentStatus} /> : null}
       </div>
+      {/* 00217: link bản bài mới nhất — bấm là xem, hết cảnh nộp xong mất dấu. */}
+      {task.contentUrl ? (
+        <a
+          href={task.contentUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1.5 inline-flex max-w-full items-center gap-1 text-xs font-medium text-primary hover:underline"
+        >
+          <Icon name="open_in_new" size={13} />
+          <span className="truncate">Xem bài đã nộp</span>
+        </a>
+      ) : null}
       <div className="mt-2 flex items-center gap-3 text-xs text-on-surface-variant">
         <span className={"inline-flex items-center gap-1 " + (due.urgent ? "font-semibold text-rose-600" : "")}>
           <Icon name="schedule" size={13} /> {due.text}
