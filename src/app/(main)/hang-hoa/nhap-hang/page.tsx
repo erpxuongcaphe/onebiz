@@ -53,6 +53,7 @@ import {
 } from "@/lib/services";
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
+import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
 // PERF (CEO 23/05/2026): Lazy-load CreatePurchaseOrderDialog (819 dòng).
 import dynamic from "next/dynamic";
@@ -495,6 +496,8 @@ export default function NhapHangPage() {
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
   // Day 2 16/05: Đóng đơn còn thiếu — partial/ordered → completed kèm reason
   const [closeShortTarget, setCloseShortTarget] = useState<PurchaseOrder | null>(null);
+  // 21/07: mục tiêu hủy phiếu nhập cho CancelImpactDialog (bảng tác động).
+  const [cancelPOTarget, setCancelPOTarget] = useState<PurchaseOrder | null>(null);
   const [closeShortReason, setCloseShortReason] = useState("");
   const [closingShort, setClosingShort] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
@@ -928,37 +931,24 @@ export default function NhapHangPage() {
   //   (RPC revert_received_purchase_order_atomic, migration 00120) rồi mới set
   //   'cancelled' — tránh sai tồn. RPC có chốt chặn: hàng đã bán bớt → tồn âm →
   //   raise, không hủy; hoá đơn đầu vào đã ghi sổ → không xoá, raise.
-  const handleCancelPO = async (order: PurchaseOrder) => {
+  // 21/07: mở dialog bảng-tác-động (thay window.confirm). Dialog tính sẵn tồn
+  // sẽ trừ + cảnh báo tồn âm (đã bán bớt) + đòi lại tiền NCC/xóa nợ, rồi mới hủy.
+  const handleCancelPO = (order: PurchaseOrder) => {
+    setCancelPOTarget(order);
+  };
+
+  const performCancelPO = async (allowNegative: boolean) => {
+    const order = cancelPOTarget;
+    if (!order) return;
     const received =
       order.status === "completed" || order.status === "partial";
-    const ok = window.confirm(
-      received
-        ? `Hủy phiếu ${order.code}?\n\nPhiếu này đã nhập kho — hủy sẽ TRỪ LẠI tồn đã cộng + xoá hoá đơn đầu vào liên kết (nếu chưa ghi sổ), rồi đánh dấu Đã hủy.\n\nKhông hủy được nếu hàng đã bán bớt khiến tồn âm.\n\nTiếp tục?`
-        : `Hủy phiếu ${order.code}? Phiếu sẽ chuyển sang trạng thái Đã hủy.`,
-    );
-    if (!ok) return;
-    try {
-      if (received) {
-        // 1) revert tồn (đưa về Nháp) — atomic
-        await reopenPurchaseOrderForEdit(order.id);
-      }
-      // 2) đánh dấu Đã hủy
-      await updatePurchaseOrderStatus(order.id, "cancelled");
-      toast({
-        title: "Đã hủy phiếu",
-        description: received
-          ? `${order.code} · đã trừ lại tồn + đánh dấu Đã hủy`
-          : `${order.code} → Đã hủy`,
-        variant: "success",
-      });
-      fetchData();
-    } catch (err) {
-      toast({
-        title: "Không thể hủy phiếu",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
+    if (received) {
+      // 1) revert tồn (đưa về Nháp) — atomic; allowNegative theo cảnh báo dialog
+      await reopenPurchaseOrderForEdit(order.id, allowNegative);
     }
+    // 2) đánh dấu Đã hủy
+    await updatePurchaseOrderStatus(order.id, "cancelled");
+    fetchData();
   };
 
   // Day 2 16/05: Đóng đơn còn thiếu — RPC close_purchase_order_short
@@ -1457,6 +1447,21 @@ export default function NhapHangPage() {
       }}
       onSuccess={fetchData}
       editingPO={editingPO}
+    />
+
+    {/* 21/07: hủy/hoàn nhập phiếu — bảng tác động (trừ tồn, cảnh báo tồn âm,
+        đòi lại tiền NCC, xóa nợ) thay window.confirm. */}
+    <CancelImpactDialog
+      target={
+        cancelPOTarget
+          ? { type: "purchase", id: cancelPOTarget.id, code: cancelPOTarget.code }
+          : null
+      }
+      onClose={() => setCancelPOTarget(null)}
+      onDone={fetchData}
+      onConfirm={async ({ allowNegativeStock }) => {
+        await performCancelPO(allowNegativeStock);
+      }}
     />
 
     {payingItem && (

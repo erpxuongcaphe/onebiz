@@ -456,6 +456,8 @@ export async function cancelInvoice(id: string): Promise<void> {
 export async function voidCompletedInvoice(params: {
   invoiceId: string;
   reason: string;
+  /** 21/07: phương thức hoàn tiền do người dùng chọn (mặc định = theo lúc bán). */
+  refundMethod?: "cash" | "transfer" | "card";
 }): Promise<{
   reversedCash: number;
   reversedStockMovements: number;
@@ -487,6 +489,25 @@ export async function voidCompletedInvoice(params: {
     reversed_cash?: number;
     reversed_stock_movements?: number;
   };
+
+  // 21/07: RPC tạo phiếu chi hoàn tiền theo phương thức lúc bán. Nếu người
+  // dùng chọn phương thức khác (bán CK nhưng hoàn tiền mặt) → cập nhật nhãn
+  // các phiếu hoàn (reference_type='invoice_void') của HĐ này. Best-effort —
+  // lỗi ở đây không hủy việc void (tiền đã đảo đúng, chỉ là nhãn phương thức).
+  if (params.refundMethod && Number(result.reversed_cash ?? 0) > 0) {
+    try {
+      await supabase
+        .from("cash_transactions")
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .update({ payment_method: params.refundMethod } as any)
+        .eq("tenant_id", ctx.tenantId)
+        .eq("reference_type", "invoice_void")
+        .eq("reference_id", params.invoiceId)
+        .eq("type", "payment");
+    } catch (err) {
+      console.warn("voidCompletedInvoice: cập nhật phương thức hoàn thất bại", err);
+    }
+  }
 
   await recordAuditLog({
     entityType: "invoice",

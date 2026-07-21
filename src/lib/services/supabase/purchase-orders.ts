@@ -416,6 +416,9 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
  */
 export async function reopenPurchaseOrderForEdit(
   orderId: string,
+  /** 21/07 (00214): true → hoàn nhập DÙ tồn âm (đã bán bớt). Mặc định false =
+   *  giữ chặn cứng như cũ. UI cảnh báo đỏ rồi mới truyền true. */
+  allowNegative = false,
 ): Promise<{
   revertedLines: number;
   revertedQtyTotal: number;
@@ -425,13 +428,24 @@ export async function reopenPurchaseOrderForEdit(
   const supabase = getClient();
   const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(
+  let { data, error } = await (supabase.rpc as any)(
     "revert_received_purchase_order_atomic",
     {
       p_order_id: orderId,
       p_user_id: ctx.userId,
+      p_allow_negative: allowNegative,
     },
   );
+  // Fallback: 00214 chưa chạy → hàm chưa có p_allow_negative (PGRST202).
+  // Gọi lại bản 2 tham số (chặn tồn âm như cũ). Chỉ fallback khi KHÔNG cần
+  // bỏ chặn — nếu cần allowNegative mà RPC cũ → để lỗi gốc nổi lên.
+  if (error && !allowNegative && /PGRST202|does not exist|could not find/i.test(error.message ?? "")) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ data, error } = await (supabase.rpc as any)(
+      "revert_received_purchase_order_atomic",
+      { p_order_id: orderId, p_user_id: ctx.userId },
+    ));
+  }
   if (error) handleError(error, "reopenPurchaseOrderForEdit");
 
   const res = data as {

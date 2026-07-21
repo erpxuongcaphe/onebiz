@@ -47,7 +47,7 @@ import {
 } from "@/lib/services";
 import type { EditOrderInput } from "@/components/shared/dialogs/create-order-dialog";
 import type { SalesOrder, ShippingOrder } from "@/lib/types";
-import { ConfirmDialog } from "@/components/shared/dialogs";
+import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
 import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipment-dialog";
 import { Button } from "@/components/ui/button";
 // PERF (CEO 23/05/2026): Lazy-load CreateOrderDialog (562 dòng).
@@ -379,7 +379,6 @@ export default function DatHangPage() {
   const [editingOrder, setEditingOrder] = useState<EditOrderInput | null>(null);
   const [loadingEdit, setLoadingEdit] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<SalesOrder | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<SalesOrder | null>(null);
 
@@ -950,38 +949,19 @@ export default function DatHangPage() {
       />
     )}
 
-    <ConfirmDialog
-      open={!!cancellingItem}
-      onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
-      title="Hủy đơn đặt hàng"
-      description={`Bạn có chắc muốn hủy đơn đặt hàng ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
-      confirmLabel="Hủy đơn"
-      cancelLabel="Đóng"
-      variant="destructive"
-      loading={cancelLoading}
+    {/* 21/07: dialog hủy hợp nhất — đơn đặt hàng chưa phát sinh giao dịch nên
+        bảng tác động hiện gọn "chỉ gỡ đơn". Đồng bộ khuôn với trang Hóa đơn. */}
+    <CancelImpactDialog
+      target={
+        cancellingItem
+          ? { type: "invoice", id: cancellingItem.id, code: cancellingItem.code }
+          : null
+      }
+      onClose={() => setCancellingItem(null)}
+      onDone={fetchData}
       onConfirm={async () => {
         if (!cancellingItem) return;
-        setCancelLoading(true);
-        try {
-          // Wire DB cancel thật. Trước đây chỉ toast success → user bấm
-          // hủy nhưng đơn vẫn live (mock).
-          await cancelInvoice(cancellingItem.id);
-          toast({
-            title: "Đã hủy đơn đặt hàng",
-            description: `Đơn ${cancellingItem.code} đã được hủy.`,
-            variant: "success",
-          });
-          await fetchData();
-        } catch (err) {
-          toast({
-            title: "Lỗi hủy đơn",
-            description: err instanceof Error ? err.message : "Vui lòng thử lại",
-            variant: "error",
-          });
-        } finally {
-          setCancelLoading(false);
-          setCancellingItem(null);
-        }
+        await cancelInvoice(cancellingItem.id);
       }}
     />
 

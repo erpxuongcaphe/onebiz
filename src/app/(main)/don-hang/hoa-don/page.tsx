@@ -26,12 +26,11 @@ import {
   InlineDetailPanel,
   DetailTabs,
   DetailHeader,
-  DetailInfoGrid,
   DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { PaymentHistoryTab } from "@/components/shared/payment-history-tab";
-import { ConfirmDialog } from "@/components/shared/dialogs";
+import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
 import { CreateShipmentDialog } from "@/components/shared/dialogs/create-shipment-dialog";
 // PERF (CEO 23/05/2026): Lazy-load 2 dialog nặng — chỉ load khi user click
 // "Sửa" / "Ghi nhận thanh toán". Save ~300KB initial.
@@ -72,14 +71,6 @@ import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice, ShippingOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 
 const statusMap: Record<
@@ -383,140 +374,6 @@ function InvoiceDetail({
   );
 }
 
-/**
- * VoidInvoiceDialog — Hủy + HOÀN TÁC hóa đơn ĐÃ HOÀN THÀNH (CEO 29/05/2026).
- *
- * Khác "Hủy" thường (chỉ áp dụng cho phiếu tạm/chưa hoàn thành — flip status),
- * dialog này gọi RPC atomic đảo ngược TOÀN BỘ side-effect của hóa đơn đã chốt:
- * hoàn kho (SKU + NVL theo BOM), hồi lô FIFO, ghi phiếu chi hoàn tiền, xóa công
- * nợ HĐ, hoàn điểm tích lũy. Bản ghi hóa đơn được GIỮ LẠI (status='cancelled')
- * để truy vết. Có ô nhập lý do (tùy chọn) ghi vào audit log.
- */
-function VoidInvoiceDialog({
-  invoice,
-  onClose,
-  onSuccess,
-}: {
-  invoice: Invoice | null;
-  onClose: () => void;
-  onSuccess: () => void;
-}) {
-  const { toast } = useToast();
-  const [reason, setReason] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  // Reset lý do mỗi lần mở cho hóa đơn khác.
-  useEffect(() => {
-    setReason("");
-  }, [invoice?.id]);
-
-  const handleConfirm = async () => {
-    if (!invoice) return;
-    setLoading(true);
-    try {
-      const res = await voidCompletedInvoice({
-        invoiceId: invoice.id,
-        reason: reason.trim(),
-      });
-      toast({
-        title: "Đã hủy & hoàn tác hóa đơn",
-        description: `${invoice.code}: hoàn ${res.reversedStockMovements} dòng kho, chi hoàn ${formatCurrency(res.reversedCash)}.`,
-        variant: "success",
-      });
-      onSuccess();
-      onClose();
-    } catch (err) {
-      toast({
-        title: "Lỗi hủy & hoàn tác",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={!!invoice}
-      onOpenChange={(o) => {
-        if (!o && !loading) onClose();
-      }}
-    >
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Icon name="warning" size={20} className="text-destructive" />
-            Hủy &amp; hoàn tác hóa đơn
-          </DialogTitle>
-          <DialogDescription>
-            Hóa đơn <strong>{invoice?.code}</strong>
-            {invoice ? ` (${formatCurrency(invoice.totalAmount)})` : ""} đã hoàn
-            thành. Hệ thống sẽ tự động hoàn tác toàn bộ tác động:
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-3 text-sm">
-          <div className="rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Icon name="inventory_2" size={15} className="text-status-warning" />
-              Hoàn lại tồn kho đã trừ (SKU + nguyên vật liệu theo BOM)
-            </div>
-            <div className="flex items-center gap-2">
-              <Icon name="layers" size={15} className="text-status-warning" />
-              Hồi lại lô đã xuất (FIFO)
-            </div>
-            <div className="flex items-center gap-2">
-              <Icon name="payments" size={15} className="text-status-warning" />
-              Ghi phiếu chi hoàn lại số tiền đã thu
-            </div>
-            <div className="flex items-center gap-2">
-              <Icon name="account_balance_wallet" size={15} className="text-status-warning" />
-              Xóa công nợ của hóa đơn này
-            </div>
-            <div className="flex items-center gap-2">
-              <Icon name="loyalty" size={15} className="text-status-warning" />
-              Hoàn lại điểm tích lũy đã cộng (nếu có)
-            </div>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            Bản ghi hóa đơn vẫn được <strong>giữ lại</strong> (trạng thái “Đã
-            hủy”) để truy vết. Thao tác này an toàn với dữ liệu và không thể đảo
-            ngược lần thứ hai.
-          </p>
-
-          <div>
-            <label className="block text-xs font-medium mb-1">
-              Lý do hủy (không bắt buộc)
-            </label>
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Ví dụ: nhập sai khách, bán nhầm giá, đơn test..."
-              className="w-full text-sm border rounded-lg px-2 py-1.5 min-h-[60px] resize-none bg-white outline-none focus:border-primary"
-              disabled={loading}
-            />
-          </div>
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" disabled={loading} onClick={onClose}>
-            Đóng
-          </Button>
-          <Button
-            variant="destructive"
-            disabled={loading}
-            onClick={handleConfirm}
-          >
-            {loading ? "Đang hoàn tác..." : "Xác nhận hủy & hoàn tác"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 export default function HoaDonPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
@@ -542,14 +399,13 @@ export default function HoaDonPage() {
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
   const [editingItem, setEditingItem] = useState<Invoice | null>(null);
+  // 21/07: 1 dialog hủy DUY NHẤT (CancelImpactDialog) cho cả nháp + đã hoàn
+  // thành — hiện bảng tác động 3 sổ + chọn phương thức hoàn. Route theo status.
   const [cancellingItem, setCancellingItem] = useState<Invoice | null>(null);
-  const [cancelLoading, setCancelLoading] = useState(false);
   const [payingItem, setPayingItem] = useState<Invoice | null>(null);
   // Sprint UX-1 Stage 4: Audit log dialog + duplicating state
   const [auditDialogTarget, setAuditDialogTarget] = useState<Invoice | null>(null);
   const [duplicating, setDuplicating] = useState(false);
-  // CEO 29/05/2026: Hủy + hoàn tác hóa đơn ĐÃ HOÀN THÀNH (giữ bản ghi).
-  const [voidingItem, setVoidingItem] = useState<Invoice | null>(null);
 
   // Tenant business info — load 1 lần khi page mount để in hóa đơn có
   // MST + địa chỉ pháp lý (HT-2 wire).
@@ -1064,7 +920,7 @@ export default function HoaDonPage() {
               onDelete={
                 invoice.status === "completed"
                   ? txPerms.canCancel
-                    ? () => setVoidingItem(invoice)
+                    ? () => setCancellingItem(invoice)
                     : undefined
                   : invoice.status !== "cancelled"
                     ? () => setCancellingItem(invoice)
@@ -1160,7 +1016,7 @@ export default function HoaDonPage() {
                         icon: <Icon name="cancel" size={16} />,
                         variant: "destructive" as const,
                         separator: true,
-                        onClick: () => setVoidingItem(row),
+                        onClick: () => setCancellingItem(row),
                       },
                     ]
                   : []),
@@ -1202,44 +1058,29 @@ export default function HoaDonPage() {
         />
       )}
 
-      <ConfirmDialog
-        open={!!cancellingItem}
-        onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
-        title="Hủy hoá đơn"
-        description={`Bạn có chắc muốn hủy hoá đơn ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
-        confirmLabel="Hủy hoá đơn"
-        cancelLabel="Đóng"
-        variant="destructive"
-        loading={cancelLoading}
-        onConfirm={async () => {
+      {/* 21/07: 1 dialog hủy hợp nhất — bảng tác động 3 sổ + chọn phương thức
+          hoàn. Route theo status: completed → void atomic (hoàn kho/tiền/nợ/
+          điểm); nháp/xử lý → cancelInvoice (flip status). */}
+      <CancelImpactDialog
+        target={
+          cancellingItem
+            ? { type: "invoice", id: cancellingItem.id, code: cancellingItem.code }
+            : null
+        }
+        onClose={() => setCancellingItem(null)}
+        onDone={fetchData}
+        onConfirm={async ({ refundMethod, reason }) => {
           if (!cancellingItem) return;
-          setCancelLoading(true);
-          try {
+          if (cancellingItem.status === "completed") {
+            await voidCompletedInvoice({
+              invoiceId: cancellingItem.id,
+              reason,
+              refundMethod,
+            });
+          } else {
             await cancelInvoice(cancellingItem.id);
-            toast({
-              title: "Đã hủy hoá đơn",
-              description: `Hoá đơn ${cancellingItem.code} đã được hủy thành công`,
-              variant: "success",
-            });
-            await fetchData();
-          } catch (err) {
-            toast({
-              title: "Lỗi hủy hoá đơn",
-              description: err instanceof Error ? err.message : "Vui lòng thử lại",
-              variant: "error",
-            });
-          } finally {
-            setCancelLoading(false);
-            setCancellingItem(null);
           }
         }}
-      />
-
-      {/* CEO 29/05/2026: Hủy + hoàn tác HĐ đã hoàn thành (giữ bản ghi + audit) */}
-      <VoidInvoiceDialog
-        invoice={voidingItem}
-        onClose={() => setVoidingItem(null)}
-        onSuccess={fetchData}
       />
     </>
   );
