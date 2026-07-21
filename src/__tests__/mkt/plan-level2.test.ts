@@ -73,7 +73,8 @@ describe("giao diện cây lồng (00201 — thuần Việt, nhãn theo độ s�
   });
 
   it("cây lồng dựng từ campaignPlanPath: chiến dịch → cấp 2 → cấp 3; nhánh nông hiện 'Trực thuộc Chiến dịch'", () => {
-    expect(planningTree).toContain("byCampaign");
+    // 00215: gom theo chiến dịch qua Set campaignIds (thay Map byCampaign cũ).
+    expect(planningTree).toContain("const campaignIds = new Set(filtered.map((p) => p.campaignId))");
     expect(planningTree).toContain("campaignPlanPath");
     expect(planningTree).toContain("type TreeNode");
     expect(planningTree).toContain("Trực thuộc Chiến dịch (không qua cấp 2/3)");

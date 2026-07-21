@@ -8,6 +8,7 @@ import {
   getCampaignList,
   getCampaignPlanNodes,
   getPendingPlanningWorkPackages,
+  getMyAssignedNodeCampaignIds,
 } from "@/lib/mkt/read-models";
 import { PlanningTree } from "@/components/mkt/planning-tree";
 import { PendingPlanningWorkPackages } from "@/components/mkt/pending-planning-work-packages";
@@ -16,16 +17,20 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "MKT Hub — Lập kế hoạch" };
 
 export default async function PlanningPage() {
-  const { supabase, ctx } = await getMktRequestContext();
-  const [plans, members, campaigns, pendingWorkPackages] = await Promise.all([
+  const { supabase, ctx, userId } = await getMktRequestContext();
+  const [plans, members, campaigns, pendingWorkPackages, myNodeCampaignIds] = await Promise.all([
     getPlanInbox(supabase),
     getMktMembers(supabase, ctx.tenantId ?? undefined),
     getCampaignList(supabase),
     getPendingPlanningWorkPackages(supabase),
+    // 00215: chiến dịch có mảng giao cho chính người đang xem — để họ THẤY mảng
+    // dù chưa có Kế hoạch phụ nào (lỗi "giao việc mà người được giao không thấy").
+    getMyAssignedNodeCampaignIds(supabase, userId),
   ]);
   const campaignIds = Array.from(new Set([
     ...plans.map((p) => p.campaignId),
     ...pendingWorkPackages.map((item) => item.campaignId),
+    ...myNodeCampaignIds,
   ].filter(Boolean)));
   // Nội dung + trụ gắn vào công đoạn; planNodes = TOÀN BỘ nút cấp 2/3 để
   // thao tác cây tại chỗ (tạo cấp, xếp thẻ) và hiện cả nhánh rỗng.
@@ -35,7 +40,11 @@ export default async function PlanningPage() {
     getCampaignPlanNodes(supabase, campaignIds),
   ]);
   const campaignBudget: Record<string, number> = {};
-  campaigns.forEach((c) => (campaignBudget[c.id] = c.budget));
+  const campaignNames: Record<string, string> = {};
+  campaigns.forEach((c) => {
+    campaignBudget[c.id] = c.budget;
+    campaignNames[c.id] = c.name;
+  });
 
   return (
     <div className="px-4 py-4 sm:px-5 lg:px-6">
@@ -55,6 +64,8 @@ export default async function PlanningPage() {
           plans={plans}
           planNodes={planNodes}
           campaignBudget={campaignBudget}
+          campaignNames={campaignNames}
+          currentUserId={userId}
           members={members}
           contents={contents}
           pillars={pillars}

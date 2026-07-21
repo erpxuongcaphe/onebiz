@@ -885,6 +885,24 @@ export async function getCampaignPlanNodes(
   }));
 }
 
+// 00215: các CHIẾN DỊCH có ít nhất một mảng (nút cấp 2/3) giao cho người đang
+// xem — để màn Lập kế hoạch hiện mảng đó dù chưa có Kế hoạch phụ nào (lỗi
+// "giao việc mà người được giao không thấy").
+export async function getMyAssignedNodeCampaignIds(
+  supabase: MktSupabaseClient,
+  userId: string | null | undefined,
+): Promise<string[]> {
+  if (!userId) return [];
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{ campaign_id: string }>("mkt_campaign_plans")
+    .select("campaign_id")
+    .eq("owner_id", userId)
+    .is("deleted_at", null);
+  const rows = requireRows(data, error, "my_assigned_node_campaigns");
+  return Array.from(new Set(rows.map((r) => r.campaign_id)));
+}
+
 export type MktPendingPlanningWorkPackage = {
   id: string;
   campaignId: string;
