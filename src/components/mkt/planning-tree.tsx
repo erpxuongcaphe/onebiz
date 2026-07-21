@@ -153,10 +153,77 @@ function MoveSubPlan({
   );
 }
 
+// Người ĐƯỢC GIAO MẢNG (owner của nút cấp 2/3) tự thêm Kế hoạch phụ vào mảng
+// của mình (00215) — tạo luôn plan owner = chính họ để soạn ngay, không cần
+// Leader giao lại từng cái.
+function OwnerAddSubplan({ nodeId }: { nodeId: string }) {
+  const { refresh, refreshing } = useMktRefresh();
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit() {
+    if (!title.trim()) { setError("Hãy đặt tên Kế hoạch phụ."); return; }
+    setSaving(true);
+    setError(null);
+    try {
+      await mktPost(`/api/mkt/v1/plan-nodes/${nodeId}/subplan`, { title: title.trim() });
+      refresh(() => { setOpen(false); setTitle(""); });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Không thêm được Kế hoạch phụ");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-primary transition hover:bg-surface-container"
+      >
+        <Icon name="add" size={13} /> Thêm Kế hoạch phụ để soạn
+      </button>
+    );
+  }
+  return (
+    <div className="flex w-full flex-wrap items-center gap-1.5">
+      <Input
+        autoFocus
+        value={title}
+        onChange={(e) => setTitle(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") submit(); }}
+        placeholder="Tên Kế hoạch phụ (VD: Bài viết Website tuần 1)"
+        className="h-8 min-w-[180px] flex-1 text-xs"
+      />
+      <button
+        type="button"
+        disabled={saving || refreshing}
+        onClick={submit}
+        className="h-8 rounded-lg bg-primary px-2.5 text-xs font-medium text-white disabled:opacity-60"
+      >
+        {saving ? "Đang thêm…" : "Thêm & soạn"}
+      </button>
+      <button
+        type="button"
+        onClick={() => { setOpen(false); setError(null); }}
+        className="h-8 rounded-lg border border-outline-variant px-2 text-xs text-on-surface-variant"
+      >
+        Huỷ
+      </button>
+      {error ? <p className="w-full text-xs font-medium text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
 export function PlanningTree({
   plans,
   planNodes,
   campaignBudget,
+  campaignNames,
+  currentUserId,
   members,
   contents,
   pillars,
@@ -166,6 +233,8 @@ export function PlanningTree({
   plans: MktPlanInboxEntry[];
   planNodes: MktCampaignPlanNode[];
   campaignBudget: Record<string, number>;
+  campaignNames: Record<string, string>;
+  currentUserId: string | null;
   members: MktMember[];
   contents: MktContentOption[];
   pillars: MktPillar[];
@@ -247,13 +316,12 @@ export function PlanningTree({
   // Cây: Chiến dịch (cấp 1) → nút cấp 2 → nút cấp 3 → Kế hoạch phụ.
   // Dựng từ planNodes để nhánh RỖNG vẫn hiện; đang lọc thì ẩn nhánh không khớp.
   const tree = useMemo(() => {
-    const byCampaign = new Map<string, MktPlanInboxEntry[]>();
-    filtered.forEach((p) => {
-      const arr = byCampaign.get(p.campaignId) ?? [];
-      arr.push(p);
-      byCampaign.set(p.campaignId, arr);
-    });
-    return Array.from(byCampaign.entries()).map(([campaignId, campPlans]) => {
+    // Chiến dịch xuất hiện nếu có plan khớp lọc HOẶC (khi không lọc) có mảng
+    // được giao — nhờ vậy người được giao thấy mảng dù chưa có Kế hoạch phụ nào.
+    const campaignIds = new Set(filtered.map((p) => p.campaignId));
+    if (!hasFilter) planNodes.forEach((n) => campaignIds.add(n.campaignId));
+    return Array.from(campaignIds).map((campaignId) => {
+      const campPlans = filtered.filter((p) => p.campaignId === campaignId);
       const nodes = planNodes.filter((n) => n.campaignId === campaignId);
       const plansAt = (nodeId: string) => campPlans.filter((p) => p.campaignPlanId === nodeId);
       const knownIds = new Set(nodes.map((n) => n.id));
@@ -276,14 +344,14 @@ export function PlanningTree({
       }
       return {
         campaignId,
-        campaignName: campPlans[0]?.campaignName ?? "Chiến dịch",
+        campaignName: campaignNames[campaignId] ?? campPlans[0]?.campaignName ?? "Chiến dịch",
         campPlans,
         nodes,
         roots,
         direct,
       };
     });
-  }, [filtered, planNodes, hasFilter]);
+  }, [filtered, planNodes, hasFilter, campaignNames]);
 
   const inputCls = "h-9 rounded-lg border border-outline-variant bg-background px-2 text-sm";
   const ghostBtnCls =
@@ -359,6 +427,8 @@ export function PlanningTree({
         ? { box: "border-orange-200 border-l-orange-500", chip: "bg-orange-50 text-orange-700" }
         : { box: "border-sky-200 border-l-sky-500", chip: "bg-sky-50 text-sky-700" };
     const nodeData = nodes.find((n) => n.id === node.id);
+    // Mảng này được giao cho CHÍNH người đang xem → cho họ thấy rõ + tự thêm việc.
+    const isMine = Boolean(currentUserId && nodeData?.ownerId === currentUserId);
     return (
       <details
         key={node.id}
@@ -370,6 +440,13 @@ export function PlanningTree({
           <Icon name="expand_more" size={15} className="shrink-0 -rotate-90 text-on-surface-variant transition-transform group-open/node:rotate-0" />
           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone.chip}`}>Kế hoạch cấp {level}</span>
           <span className="min-w-0 truncate text-sm font-semibold">{node.name}</span>
+          {isMine ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
+              <Icon name="assignment_ind" size={12} /> Giao cho bạn
+            </span>
+          ) : nodeData?.ownerName ? (
+            <span className="text-xs text-on-surface-variant">· {nodeData.ownerName}</span>
+          ) : null}
           <HealthChip health={worstHealth(all)} />
           <span className="ml-auto flex flex-wrap items-center gap-2.5 text-xs text-on-surface-variant">
             <span>{all.length} kế hoạch phụ</span>
@@ -403,7 +480,9 @@ export function PlanningTree({
           {node.children.map((child) => nodeBlock(child, 3, nodes, campaignId))}
           {node.plans.length === 0 && node.children.length === 0 ? (
             <p className="text-xs text-on-surface-variant">
-              Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới.
+              {isMine
+                ? "Mảng này được giao cho bạn — bấm “Thêm Kế hoạch phụ để soạn” ngay dưới để bắt đầu."
+                : "Nhánh trống — thêm Kế hoạch phụ vào nhánh này bằng nút ngay dưới."}
             </p>
           ) : null}
           {canManage ? (
@@ -430,6 +509,12 @@ export function PlanningTree({
                   }
                 />
               ) : null}
+            </div>
+          ) : isMine ? (
+            // Không phải Leader nhưng là người ĐƯỢC GIAO mảng → tự thêm Kế hoạch
+            // phụ (00215) để soạn ngay, không phải chờ Leader giao lại.
+            <div className="flex flex-wrap items-center gap-1 border-t border-outline-variant/50 pt-1">
+              <OwnerAddSubplan nodeId={node.id} />
             </div>
           ) : null}
         </div>
@@ -490,9 +575,9 @@ export function PlanningTree({
         )}
       </div>
 
-      {filtered.length === 0 ? (
+      {tree.length === 0 ? (
         <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
-          {hasFilter ? "Không có kế hoạch nào khớp bộ lọc. Thử nới điều kiện hoặc Xoá lọc." : "Chưa có kế hoạch nào. Kế hoạch xuất hiện khi Leader giao lập kế hoạch cho một Kế hoạch phụ."}
+          {hasFilter ? "Không có kế hoạch nào khớp bộ lọc. Thử nới điều kiện hoặc Xoá lọc." : "Chưa có kế hoạch nào. Kế hoạch xuất hiện khi bạn được giao một mảng, hoặc Leader giao lập kế hoạch cho một Kế hoạch phụ."}
         </div>
       ) : (
         tree.map((g) => {
