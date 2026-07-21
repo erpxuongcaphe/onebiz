@@ -3,6 +3,10 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const mig = readFileSync(resolve("supabase/migrations/00215_mkt_owner_add_subplan.sql"), "utf8");
+const mig216 = readFileSync(
+  resolve("supabase/migrations/00216_mkt_branch_assign_notify.sql"),
+  "utf8",
+);
 const readModels = readFileSync(resolve("src/lib/mkt/read-models.ts"), "utf8");
 const planningPage = readFileSync(resolve("src/app/mkt/planning/page.tsx"), "utf8");
 const planningTree = readFileSync(resolve("src/components/mkt/planning-tree.tsx"), "utf8");
@@ -34,6 +38,21 @@ describe("00215 — hàm để người được giao mảng tự thêm Kế ho�
   it("khoá quyền gọi hàm đúng chuẩn (revoke public/anon, grant authenticated)", () => {
     expect(mig).toContain("revoke all on function public.mkt_owner_add_subplan(uuid, text, text) from public, anon");
     expect(mig).toContain("grant execute on function public.mkt_owner_add_subplan(uuid, text, text) to authenticated");
+  });
+});
+
+describe("00216 — gán mảng cho ai thì BÁO người đó (Telegram)", () => {
+  it("enqueue thông báo loại mkt_branch_assigned tới owner mới, đi outbox → Telegram", () => {
+    expect(mig216).toContain("mkt_enqueue_notification");
+    expect(mig216).toContain("'mkt_branch_assigned'");
+    expect(mig216).toMatch(/v_tenant, v_notify, 'mkt_branch_assigned'/);
+  });
+
+  it("chỉ báo khi owner mới KHÁC người thao tác và (khi sửa) thật sự ĐỔI người", () => {
+    // create or replace cùng chữ ký 8 tham số — KHÔNG drop (tránh 42P13 ngược).
+    expect(mig216).not.toContain("drop function");
+    expect(mig216).toContain("p_owner_id <> v_actor");
+    expect(mig216).toContain("p_owner_id is distinct from v_old_owner");
   });
 });
 
