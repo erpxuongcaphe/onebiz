@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const mig = readFileSync(resolve("supabase/migrations/00217_mkt_auto_content_from_plan.sql"), "utf8");
+const mig218 = readFileSync(resolve("supabase/migrations/00218_mkt_auto_content_pillar.sql"), "utf8");
 const readModels = readFileSync(resolve("src/lib/mkt/read-models.ts"), "utf8");
 const tasksPage = readFileSync(resolve("src/app/mkt/tasks/page.tsx"), "utf8");
 const taskActions = readFileSync(resolve("src/components/mkt/task-actions.tsx"), "utf8");
@@ -41,6 +42,21 @@ describe("00217 — SQL: sinh việc tự tạo/thừa hưởng Bài", () => {
   it("backfill CHỈ việc chưa kết thúc (không dựng việc done/canceled) + publish thừa hưởng theo dependency", () => {
     expect(mig).toMatch(/task_type in \('idea', 'shooting', 'editing'\)[\s\S]{0,80}task_status not in \('done', 'canceled'\)/);
     expect(mig).toMatch(/p\.dependency_task_id = d\.id[\s\S]{0,200}d\.content_item_id is not null/);
+  });
+});
+
+describe("00218 — bài tự sinh phải gắn Trụ (kẻo trigger 00189 đá MISSING_PILLAR)", () => {
+  it("tra trụ mặc định (active đầu tiên) + insert bài kèm pillar_id", () => {
+    expect(mig218).toMatch(/select id into v_pillar from public\.mkt_content_pillars[\s\S]{0,120}is_active and deleted_at is null/);
+    expect(mig218).toContain("title, channel_type, pillar_id");
+    expect(mig218).toMatch(/v_it ->> 'title', v_wp_channel, v_pillar/);
+  });
+
+  it("không có trụ nào → BỎ QUA tạo bài (giữ việc thường, không chặn duyệt) — degrade êm", () => {
+    expect(mig218).toContain("and v_pillar is not null then");
+    expect(mig218).toContain("if v_pillar is null then continue;");
+    // Chép nguyên khung 00217, cùng chữ ký → replace, không DROP.
+    expect(mig218).not.toContain("drop function");
   });
 });
 
