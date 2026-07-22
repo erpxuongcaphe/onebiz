@@ -12,6 +12,9 @@ import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
+import { useToast } from "@/lib/contexts";
+import { exportToExcel } from "@/lib/utils/export";
+import { REFERENCE_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
 import {
   getSignedStockQuantity,
   getStockMovementTotalValue,
@@ -20,6 +23,8 @@ import {
 
 interface ProductStockMovementsTabProps {
   productId: string;
+  productCode: string;
+  productName: string;
   branchId?: string;
   branchName?: string;
   canViewCost?: boolean;
@@ -38,16 +43,20 @@ const TYPE_STYLE: Record<
 
 export function ProductStockMovementsTab({
   productId,
+  productCode,
+  productName,
   branchId,
   branchName,
   canViewCost = false,
 }: ProductStockMovementsTabProps) {
+  const { toast } = useToast();
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [total, setTotal] = useState(0);
   const [visibleLimit, setVisibleLimit] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [drift, setDrift] = useState<{ computed: number; system: number } | null>(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,6 +88,69 @@ export function ProductStockMovementsTab({
     : canViewCost
       ? "grid-cols-[110px_130px_150px_70px_150px_90px_110px_90px_170px_140px] min-w-[1300px]"
       : "grid-cols-[110px_130px_150px_70px_150px_90px_170px_140px] min-w-[1090px]";
+
+  const handleExportExcel = async () => {
+    if (movements.length === 0 || exporting) return;
+    setExporting(true);
+    try {
+      const scopeName = branchId ? branchName ?? "Chi nhánh đã chọn" : "Toàn chuỗi";
+      const columns = [
+        { header: "Mã hàng", key: "productCode", width: 16 },
+        { header: "Tên hàng", key: "productName", width: 28 },
+        { header: "Phạm vi", key: "scopeName", width: 24 },
+        { header: "Ngày", key: "date", width: 18, format: (value: string) => formatDate(value) },
+        { header: "Mã phiếu", key: "referenceCode", width: 16 },
+        { header: "Loại chứng từ", key: "referenceTypeName", width: 24 },
+        { header: "Hướng", key: "typeName", width: 14 },
+        { header: "Số lượng biến động", key: "signedQuantity", width: 20 },
+        ...(!branchId ? [{ header: "Chi nhánh", key: "branchName", width: 26 }] : []),
+        ...(canViewCost
+          ? [
+              { header: "Đơn giá", key: "unitValue", width: 16 },
+              { header: "Giá trị", key: "movementValue", width: 18 },
+            ]
+          : []),
+        { header: "Tồn cuối", key: "runningBalance", width: 14 },
+        { header: "Đối tác/Bộ phận", key: "partner", width: 26 },
+        { header: "Người tạo", key: "createdByName", width: 20 },
+        { header: "Ghi chú", key: "note", width: 42 },
+      ];
+      const rows = movements.map((movement) => ({
+        ...movement,
+        productCode,
+        productName,
+        scopeName,
+        referenceCode: movement.referenceCode ?? movement.code ?? "—",
+        referenceTypeName:
+          REFERENCE_TYPE_LABELS[movement.referenceType ?? ""] ?? movement.referenceType ?? "—",
+        signedQuantity: getSignedStockQuantity(movement),
+        unitValue: getStockMovementUnitValue(movement),
+        movementValue: getStockMovementTotalValue(movement),
+      }));
+      const safeCode = productCode.replace(/[^a-zA-Z0-9_-]+/g, "-");
+      const safeScope = scopeName
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+      const today = new Date().toISOString().slice(0, 10);
+      await exportToExcel(rows, columns, `the-kho_${safeCode}_${safeScope}_${today}`);
+      toast({
+        title: "Đã xuất Excel thẻ kho",
+        description: `${movements.length} giao dịch · ${scopeName}`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Xuất Excel thẻ kho thất bại",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -112,12 +184,29 @@ export function ProductStockMovementsTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+        <span className="text-xs text-muted-foreground">
           Hiển thị {Math.min(visibleLimit, movements.length)}/{movements.length} giao dịch
           {branchId ? ` tại ${branchName ?? "chi nhánh đã chọn"}` : " (toàn chuỗi)"}
         </span>
-        <span>Tổng: {formatNumber(total)}</span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground">Tổng: {formatNumber(total)}</span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void handleExportExcel()}
+            disabled={exporting}
+            className="gap-2"
+          >
+            <Icon
+              name={exporting ? "progress_activity" : "table_view"}
+              size={15}
+              className={exporting ? "animate-spin" : undefined}
+            />
+            {exporting ? "Đang xuất..." : "Xuất Excel thẻ kho"}
+          </Button>
+        </div>
       </div>
 
       {/* Đợt 4: băng cảnh báo khi tồn cộng dồn từ sổ ≠ products.stock. */}

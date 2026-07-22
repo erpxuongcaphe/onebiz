@@ -19,6 +19,10 @@ const stockCardTab = readFileSync(
   join(process.cwd(), "src/components/shared/product-stock-movements-tab.tsx"),
   "utf8",
 );
+const stockHistoryPage = readFileSync(
+  join(process.cwd(), "src/app/(main)/hang-hoa/lich-su-kho/page.tsx"),
+  "utf8",
+);
 
 describe("stock card completion", () => {
   it("uses negative quantities for outbound movements", () => {
@@ -67,6 +71,14 @@ describe("stock card completion", () => {
     );
     expect(stockCardTab).toContain("getStockCard(productId, branchId)");
     expect(stockCardTab).toContain("!branchId && <span>");
+  });
+
+  it("labels the two stock exports explicitly and keeps full filtered history export", () => {
+    expect(stockCardTab).toContain("Xuất Excel thẻ kho");
+    expect(stockHistoryPage).toContain("Xuất Excel lịch sử kho");
+    expect(stockHistoryPage).toContain("const CHUNK = 1000");
+    expect(stockHistoryPage).toContain("all.push(...r.data)");
+    expect(stockHistoryPage).not.toContain("onExport={{");
   });
 
   it("enforces authenticated permission and branch scope in the RPC", () => {

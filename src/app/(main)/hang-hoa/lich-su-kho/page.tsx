@@ -15,6 +15,7 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
@@ -96,6 +97,7 @@ export default function LichSuKhoPage() {
   });
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -194,6 +196,8 @@ export default function LichSuKhoPage() {
         format: (v: string) => formatDate(v),
       },
     ];
+    if (exporting) return;
+    setExporting(true);
     try {
       const presetRange = computeListPresetRange(datePreset);
       const filters = {
@@ -218,8 +222,18 @@ export default function LichSuKhoPage() {
         unitValue: getStockMovementUnitValue(row),
         movementValue: getStockMovementTotalValue(row),
       }));
-      if (type === "excel") await exportToExcel(exportRows, exportColumns, "lich-su-kho");
-      else await exportToCsv(exportRows, exportColumns, "lich-su-kho");
+      const selectedBranch = branches.find((branch) => branch.id === branchFilter)?.name;
+      const scopeName = branchFilter === "all" ? "toan-chuoi" : selectedBranch ?? "chi-nhanh";
+      const safeScope = scopeName
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-zA-Z0-9_-]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase();
+      const today = new Date().toISOString().slice(0, 10);
+      const fileName = `lich-su-kho_${safeScope}_${today}`;
+      if (type === "excel") await exportToExcel(exportRows, exportColumns, fileName);
+      else await exportToCsv(exportRows, exportColumns, fileName);
       toast({
         title: "Đã xuất file",
         description: `${all.length} dòng (đầy đủ theo bộ lọc hiện tại)`,
@@ -231,6 +245,8 @@ export default function LichSuKhoPage() {
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -440,10 +456,6 @@ export default function LichSuKhoPage() {
         searchPlaceholder="Theo tên hàng, mã hàng, ghi chú..."
         searchValue={search}
         onSearchChange={setSearch}
-        onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
-        }}
       />
 
       {/* Summary cards */}
@@ -465,6 +477,34 @@ export default function LichSuKhoPage() {
           value={formatNumber(movementCounts.outbound)}
           danger={movementCounts.outbound > 0}
         />
+      </div>
+
+      <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void handleExport("csv")}
+          disabled={exporting}
+          className="gap-2"
+        >
+          <Icon name="description" size={15} />
+          Xuất CSV
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          onClick={() => void handleExport("excel")}
+          disabled={exporting}
+          className="gap-2"
+        >
+          <Icon
+            name={exporting ? "progress_activity" : "table_view"}
+            size={15}
+            className={exporting ? "animate-spin" : undefined}
+          />
+          {exporting ? "Đang xuất..." : "Xuất Excel lịch sử kho"}
+        </Button>
       </div>
 
       <DataTable
