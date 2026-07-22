@@ -16,7 +16,7 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getAllStockMovements, getBranches } from "@/lib/services";
 import type { AllStockMovementRow } from "@/lib/services/supabase";
@@ -24,6 +24,13 @@ import type { BranchDetail } from "@/lib/services/supabase";
 import { Icon } from "@/components/ui/icon";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
 import { getStockMovementCounts } from "@/lib/services/supabase/products";
+import { usePermissions } from "@/lib/permissions/use-permission";
+import { PERMISSIONS } from "@/lib/permissions/constants";
+import {
+  getSignedStockQuantity,
+  getStockMovementTotalValue,
+  getStockMovementUnitValue,
+} from "@/lib/stock-movement-values";
 
 // === Movement type badge config ===
 const movementTypeBadge: Record<
@@ -78,6 +85,8 @@ import { REFERENCE_TYPE_LABELS as referenceTypeLabels } from "@/lib/constants/st
 
 export default function LichSuKhoPage() {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COST);
   const [data, setData] = useState<AllStockMovementRow[]>([]);
   const [total, setTotal] = useState(0);
   const [movementCounts, setMovementCounts] = useState({
@@ -169,6 +178,12 @@ export default function LichSuKhoPage() {
       { header: "Tên hàng", key: "productName", width: 25 },
       { header: "ĐVT", key: "productUnit", width: 10 },
       { header: "Số lượng biến động", key: "signedQuantity", width: 18 },
+      ...(canViewCost
+        ? [
+            { header: "Đơn giá", key: "unitValue", width: 16 },
+            { header: "Giá trị", key: "movementValue", width: 18 },
+          ]
+        : []),
       { header: "Đối tác/Bộ phận", key: "partner", width: 25 },
       { header: "Người tạo", key: "createdByName", width: 20 },
       { header: "Ghi chú", key: "note", width: 25 },
@@ -199,8 +214,9 @@ export default function LichSuKhoPage() {
         ...row,
         referenceTypeName:
           referenceTypeLabels[row.referenceType ?? ""] ?? row.referenceType ?? "",
-        signedQuantity:
-          row.type === "export" ? -Math.abs(row.quantity) : Math.abs(row.quantity),
+        signedQuantity: getSignedStockQuantity(row),
+        unitValue: getStockMovementUnitValue(row),
+        movementValue: getStockMovementTotalValue(row),
       }));
       if (type === "excel") await exportToExcel(exportRows, exportColumns, "lich-su-kho");
       else await exportToCsv(exportRows, exportColumns, "lich-su-kho");
@@ -217,6 +233,38 @@ export default function LichSuKhoPage() {
       });
     }
   };
+
+  // Giá kho chỉ hiện khi tài khoản có quyền xem giá vốn.
+  const costColumns: ColumnDef<AllStockMovementRow, unknown>[] = canViewCost
+    ? [
+        {
+          id: "unitValue",
+          header: "Đơn giá",
+          size: 130,
+          cell: ({ row }) => {
+            const value = getStockMovementUnitValue(row.original);
+            return (
+              <span className="block text-right tabular-nums">
+                {value != null ? formatCurrency(value) : "—"}
+              </span>
+            );
+          },
+        },
+        {
+          id: "movementValue",
+          header: "Giá trị",
+          size: 140,
+          cell: ({ row }) => {
+            const value = getStockMovementTotalValue(row.original);
+            return (
+              <span className="block text-right font-medium tabular-nums">
+                {value != null ? formatCurrency(value) : "—"}
+              </span>
+            );
+          },
+        },
+      ]
+    : [];
 
   // === Columns ===
   const columns: ColumnDef<AllStockMovementRow, unknown>[] = [
@@ -299,6 +347,7 @@ export default function LichSuKhoPage() {
         );
       },
     },
+    ...costColumns,
     {
       accessorKey: "partner",
       header: "Đối tác",

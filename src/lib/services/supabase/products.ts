@@ -961,6 +961,73 @@ export async function getStockCard(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
+  // Chi nhánh cụ thể dùng RPC để DB tính tồn cuối trên toàn bộ sổ trước khi
+  // trả dữ liệu. Nếu migration chưa được chạy, fallback bên dưới giữ web hoạt động.
+  if (branchId) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase.rpc as any)("get_stock_card_v2", {
+      p_product_id: productId,
+      p_branch_id: branchId,
+    });
+
+    if (!error && data) {
+      const raw = data as {
+        rows?: Array<
+          Record<string, unknown> & {
+            reference_type: string | null;
+            reference_id: string | null;
+          }
+        >;
+        total?: number;
+        system_stock?: number;
+        computed_final?: number;
+        drift?: number;
+      };
+      const rows = raw.rows ?? [];
+      const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+      const typeNameMap = MOVEMENT_TYPE_LABELS;
+      const movements: StockMovement[] = rows.map((row) => {
+        const p = resolvePartner(row);
+        return {
+          id: String(row.id),
+          code: p.referenceCode ?? "—",
+          type: mapMovementType(String(row.type ?? "")),
+          typeName: typeNameMap[String(row.type ?? "")] ?? String(row.type ?? ""),
+          quantity: Number(row.quantity ?? 0),
+          costPrice: 0,
+          totalAmount: 0,
+          date: String(row.created_at),
+          note: row.note ? String(row.note) : undefined,
+          createdBy: row.created_by ? String(row.created_by) : "",
+          createdByName: row.created_by_name ? String(row.created_by_name) : "",
+          referenceType: row.reference_type ? String(row.reference_type) : undefined,
+          referenceId: row.reference_id ? String(row.reference_id) : undefined,
+          branchId: row.branch_id ? String(row.branch_id) : undefined,
+          branchName: row.branch_name ? String(row.branch_name) : undefined,
+          branchCode: row.branch_code ? String(row.branch_code) : undefined,
+          partner: p.partner,
+          partnerType: p.partnerType,
+          referenceCode: p.referenceCode,
+          runningBalance: Number(row.running_balance ?? 0),
+          unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
+          unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
+        };
+      });
+
+      return {
+        data: movements,
+        total: Number(raw.total ?? movements.length),
+        systemStock: Number(raw.system_stock ?? 0),
+        computedFinal: Number(raw.computed_final ?? 0),
+        drift: Number(raw.drift ?? 0),
+      };
+    }
+
+    if (error && !isRpcUnavailable(error)) {
+      handleError(error, "getStockCard.rpc");
+    }
+  }
+
   // 1) Fetch TOÀN BỘ sổ của cặp này (loop phân trang phòng >1000, dù nay max 114)
   //    theo thứ tự TĂNG (created_at, id) để cộng dồn tiến chuẩn xác.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1016,6 +1083,21 @@ export async function getStockCard(
 
   // 4) Enrich (đối tác + mã chứng từ thật) + đảo MỚI TRÊN CÙNG cho hiển thị.
   const resolvePartner = await buildMovementPartnerResolver(supabase, ledger);
+  const branchIds = Array.from(
+    new Set(ledger.map((row) => row.branch_id).filter((id): id is string => Boolean(id))),
+  );
+  const branchMap = new Map<string, { name: string; code: string | null }>();
+  if (branchIds.length > 0) {
+    const { data: branchRows, error: branchError } = await supabase
+      .from("branches")
+      .select("id, name, code")
+      .eq("tenant_id", tenantId)
+      .in("id", branchIds);
+    if (branchError) handleError(branchError, "getStockCard.branches");
+    (branchRows ?? []).forEach((branch) => {
+      branchMap.set(branch.id, { name: branch.name, code: branch.code });
+    });
+  }
   const typeNameMap = MOVEMENT_TYPE_LABELS;
   const display = [...ledger].reverse().map((row) => {
     const p = resolvePartner(row);
@@ -1033,6 +1115,9 @@ export async function getStockCard(
       createdByName: (row.profiles as { full_name: string } | null)?.full_name ?? "",
       referenceType: row.reference_type ?? undefined,
       referenceId: row.reference_id ?? undefined,
+      branchId: row.branch_id ?? undefined,
+      branchName: branchMap.get(row.branch_id)?.name,
+      branchCode: branchMap.get(row.branch_id)?.code ?? undefined,
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,

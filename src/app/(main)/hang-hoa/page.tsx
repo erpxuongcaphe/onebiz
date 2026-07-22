@@ -130,6 +130,8 @@ function ProductDetail({
   onEdit,
   onDelete,
   canViewCost,
+  stockCardBranchId,
+  stockCardBranchName,
 }: {
   product: Product;
   onClose: () => void;
@@ -137,6 +139,8 @@ function ProductDetail({
   onDelete?: () => void;
   /** Sprint A.2: ẩn "Giá vốn" / "Lợi nhuận" khi user không có quyền products.view_cost */
   canViewCost: boolean;
+  stockCardBranchId?: string;
+  stockCardBranchName?: string;
 }) {
   const isNvl = product.productType === "nvl";
   return (
@@ -256,7 +260,15 @@ function ProductDetail({
           {
             id: "stock_card",
             label: "Thẻ kho",
-            content: <ProductStockMovementsTab productId={product.id} />,
+            content: (
+              <ProductStockMovementsTab
+                key={`${product.id}:${stockCardBranchId ?? "all"}`}
+                productId={product.id}
+                branchId={stockCardBranchId}
+                branchName={stockCardBranchName}
+                canViewCost={canViewCost}
+              />
+            ),
           },
           {
             id: "lots",
@@ -1822,6 +1834,8 @@ export default function HangHoaPage() {
                 setDeleteConfirmOpen(true);
               }}
               canViewCost={canViewCost}
+              stockCardBranchId={branchStockView ? activeBranchId : undefined}
+              stockCardBranchName={branchStockView ? currentBranch?.name : undefined}
             />
           )}
           rowActions={(row) => {
