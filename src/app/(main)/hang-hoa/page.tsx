@@ -264,6 +264,8 @@ function ProductDetail({
               <ProductStockMovementsTab
                 key={`${product.id}:${stockCardBranchId ?? "all"}`}
                 productId={product.id}
+                productCode={product.code}
+                productName={product.name}
                 branchId={stockCardBranchId}
                 branchName={stockCardBranchName}
                 canViewCost={canViewCost}
