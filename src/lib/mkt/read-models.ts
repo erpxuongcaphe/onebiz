@@ -870,6 +870,56 @@ export async function getExceptionLog(
   }));
 }
 
+// ── Nhật ký thay đổi kế hoạch (00222 — "Cho làm — Ghi lại — Nhắc") ──
+// Dòng thời gian mọi thay đổi của MỘT kế hoạch: nộp, duyệt/trả, mở lại để sửa,
+// sinh/đối soát việc (kèm số tạo/cập nhật/huỷ). Đọc thẳng audit_log qua RLS
+// tenant (policy audit_select) — không cần RPC riêng.
+export type MktActivityEntry = {
+  id: string;
+  action: string;
+  userName: string | null;
+  createdAt: string | null;
+  detail: Record<string, unknown> | null;
+};
+
+export async function getPlanActivity(
+  supabase: MktSupabaseClient,
+  planId: string,
+): Promise<MktActivityEntry[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      action: string;
+      user_id: string | null;
+      new_data: Record<string, unknown> | null;
+      created_at: string | null;
+    }>("audit_log")
+    .select("id, action, user_id, new_data, created_at")
+    .eq("entity_type", "mkt_channel_plan")
+    .eq("entity_id", planId)
+    .order("created_at", { ascending: false })
+    .limit(80);
+  if (error) throw new Error(`MKT_READ_FAILED:plan_activity:${error.message}`);
+  const rows = data ?? [];
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id).filter(Boolean) as string[]));
+  const names = new Map<string, string>();
+  if (userIds.length > 0) {
+    const { data: profs } = await db
+      .from<{ id: string; full_name: string | null; email: string | null }>("profiles")
+      .select("id, full_name, email")
+      .in("id", userIds);
+    (profs ?? []).forEach((p) => names.set(p.id, p.full_name || p.email || "Chưa gán tên"));
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    action: r.action,
+    userName: r.user_id ? names.get(r.user_id) ?? "Chưa gán tên" : null,
+    createdAt: r.created_at,
+    detail: r.new_data,
+  }));
+}
+
 // Nút KẾ HOẠCH trong cây (00200/00201) — người làm kế hoạch tự đặt tên.
 // parentPlanId null = Kế hoạch cấp 2 (ngay dưới Chiến dịch); có cha = cấp 3.
 export type MktCampaignPlan = {

@@ -123,10 +123,20 @@ export function TaskActions({ task }: { task: MktMyTask }) {
 
       {/* Đang chờ duyệt / kẹt phụ thuộc */}
       {task.taskStatus === "reviewing" ? (
-        <span className="text-xs font-medium text-on-surface-variant">
-          {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
-          {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
-        </span>
+        <>
+          <span className="text-xs font-medium text-on-surface-variant">
+            {/* 00217: bài đã nộp có link ngay trên thẻ (nút "Xem bài đã nộp"). */}
+            {task.contentItemId ? "Đang chờ duyệt bài" : "Đang chờ duyệt"}
+          </span>
+          {/* 00221 (NỚI 2): lỡ dán nhầm link, hay có bản tốt hơn? Cập nhật bản
+              nộp ngay — bản cũ tự hạ thành "cần sửa", không phải thu hồi trước
+              rồi mới nộp lại. Chỉ với việc gắn nội dung, do chính người làm. */}
+          {task.contentItemId ? (
+            <button className={outline} disabled={busy} onClick={() => setDialog("submit")}>
+              <Icon name="edit" size={15} /> Cập nhật bản nộp
+            </button>
+          ) : null}
+        </>
       ) : null}
       {task.taskStatus === "blocked" ? (
         <span className="inline-flex items-center gap-1 text-xs font-medium text-rose-600">

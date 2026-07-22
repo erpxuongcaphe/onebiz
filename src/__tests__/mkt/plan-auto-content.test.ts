@@ -80,4 +80,23 @@ describe("00217 — read-model + UI: thấy đề bài, thấy bài, nộp lại
     expect(taskActions).toContain('task.contentStatus === "revision_required"');
     expect(taskActions).toContain("Đang chờ duyệt bài");
   });
+
+  it("00219: người làm THU HỒI bản đã nộp để sửa link (lúc đang chờ duyệt) — không phải chờ người duyệt trả lại", () => {
+    const mig219 = readFileSync(resolve("supabase/migrations/00219_mkt_recall_task_review.sql"), "utf8");
+    const route = readFileSync(
+      resolve("src/app/api/mkt/v1/tasks/[taskId]/[action]/route.ts"),
+      "utf8",
+    );
+    // RPC: chỉ người làm, chỉ khi CÒN chờ duyệt; bản pending → cần sửa (bỏ chặn nộp lại).
+    expect(mig219).toContain("v_task.assignee_id <> v_actor");
+    expect(mig219).toContain("v_content.content_status <> 'pending_review'");
+    expect(mig219).toMatch(/status = 'revision_required'\s*\n\s*where content_item_id = v_task\.content_item_id and status = 'pending'/);
+    expect(mig219).toContain("set task_status = 'doing'");
+    // Route giữ nguyên (RPC recall vẫn còn, vô hại).
+    expect(route).toContain('"recall-review": { rpc: "mkt_recall_task_review"');
+    // 00221 (NỚI 2) thay nút "Thu hồi": nay CẬP NHẬT bản nộp thẳng (mở submit
+    // dialog) — resubmit chạy cả khi đang 'reviewing', không cần thu hồi trước.
+    expect(taskActions).toContain("Cập nhật bản nộp");
+    expect(taskActions).not.toContain('run("recall-review")');
+  });
 });
