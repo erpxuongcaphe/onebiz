@@ -920,6 +920,57 @@ export async function getPlanActivity(
   }));
 }
 
+// ── Chuông thông báo MKT Hub ────────────────────────────────────────
+// Dùng CHUNG bảng notifications với ERP chính; mỗi dòng thuộc về ĐÚNG 1 người
+// (user_id). Ở đây lọc 2 lớp: (1) user_id = chính mình, (2) RLS
+// notifications_select (user_id = auth.uid()) — không ai đọc được của người khác.
+// Chỉ lấy loại 'mkt_%' để Hub tập trung việc marketing.
+export type MktNotification = {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  isRead: boolean;
+  referenceType: string | null;
+  referenceId: string | null;
+  createdAt: string | null;
+};
+
+export async function getMktNotifications(
+  supabase: MktSupabaseClient,
+  userId: string,
+  limit = 30,
+): Promise<MktNotification[]> {
+  const db = getMktDatabaseClient(supabase);
+  const { data, error } = await db
+    .from<{
+      id: string;
+      type: string;
+      title: string;
+      description: string | null;
+      is_read: boolean;
+      reference_type: string | null;
+      reference_id: string | null;
+      created_at: string | null;
+    }>("notifications")
+    .select("id, type, title, description, is_read, reference_type, reference_id, created_at")
+    .eq("user_id", userId)
+    .like("type", "mkt_%")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(`MKT_READ_FAILED:notifications:${error.message}`);
+  return (data ?? []).map((n) => ({
+    id: n.id,
+    type: n.type,
+    title: n.title,
+    description: n.description,
+    isRead: Boolean(n.is_read),
+    referenceType: n.reference_type,
+    referenceId: n.reference_id,
+    createdAt: n.created_at,
+  }));
+}
+
 // Nút KẾ HOẠCH trong cây (00200/00201) — người làm kế hoạch tự đặt tên.
 // parentPlanId null = Kế hoạch cấp 2 (ngay dưới Chiến dịch); có cha = cấp 3.
 export type MktCampaignPlan = {
