@@ -67,11 +67,22 @@ export function MktNotificationBell() {
     }
   }, []);
 
-  // Nạp lúc vào Hub + tự làm mới mỗi phút (nhẹ, chỉ 1 truy vấn).
+  // Nạp lúc vào Hub + tự làm mới mỗi phút (nhẹ, chỉ 1 truy vấn có index).
+  // KHÔNG gọi API khi tab đang ẩn — tránh nện server suốt ngày với tab bỏ quên;
+  // quay lại tab thì làm mới ngay để số chưa đọc không bị cũ.
   useEffect(() => {
     void load();
-    const t = setInterval(() => void load(), 60_000);
-    return () => clearInterval(t);
+    const t = setInterval(() => {
+      if (!document.hidden) void load();
+    }, 60_000);
+    const onVisible = () => {
+      if (!document.hidden) void load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(t);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
 
   // Đóng khi bấm ra ngoài hoặc nhấn Esc.
