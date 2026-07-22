@@ -1268,7 +1268,10 @@ export function PlanReconcileButton({
 // của MỘT kế hoạch. Tải lười khi mở (đọc audit_log qua RLS tenant).
 // ══════════════════════════════════════════════════════════════
 const ACTIVITY_LABEL: Record<string, string> = {
+  mkt_channel_plan_assigned: "Giao lập kế hoạch",
+  mkt_owner_subplan_added: "Thêm kế hoạch phụ",
   mkt_channel_plan_saved: "Lưu nháp kế hoạch",
+  mkt_plan_strategy_saved: "Lưu chiến lược & KPI",
   mkt_channel_plan_submitted: "Nộp kế hoạch chờ duyệt",
   mkt_channel_plan_approve: "Duyệt kế hoạch — sinh việc",
   mkt_channel_plan_request_revision: "Yêu cầu sửa kế hoạch",
@@ -1276,7 +1279,14 @@ const ACTIVITY_LABEL: Record<string, string> = {
   mkt_channel_plan_change_requested: "Mở lại kế hoạch để sửa",
   mkt_tasks_generated_from_plan: "Đối soát / sinh việc",
   mkt_plan_progress_submitted: "Báo cáo tiến độ",
+  mkt_plan_progress_deleted: "Xoá báo cáo tiến độ",
 };
+
+// Không bao giờ hiện mã kỹ thuật thô (mkt_...) cho người dùng — có nhãn thì
+// dùng, không thì gọi chung "Cập nhật kế hoạch".
+function activityLabel(action: string): string {
+  return ACTIVITY_LABEL[action] ?? "Cập nhật kế hoạch";
+}
 
 function activityDetail(e: MktActivityEntry): string | null {
   const d = e.detail ?? {};
@@ -1348,7 +1358,7 @@ export function PlanActivityButton({ plan }: { plan: MktPlanInboxEntry }) {
               return (
                 <div key={e.id} className="rounded-lg border border-outline-variant bg-background p-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium">{ACTIVITY_LABEL[e.action] ?? e.action}</span>
+                    <span className="text-sm font-medium">{activityLabel(e.action)}</span>
                     <span className="shrink-0 text-xs text-on-surface-variant">
                       {e.createdAt ? new Date(e.createdAt).toLocaleString("vi-VN") : ""}
                     </span>
