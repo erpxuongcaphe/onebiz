@@ -100,6 +100,19 @@ describe("00222 — Nhật ký thay đổi + Việc chưa giao (UI)", () => {
     // tiếng Việt ở vùng này lưu dạng \u escape).
     expect(planControls).toContain('decision === "reassign" ? "');
   });
+  it("Nhật ký gắn nhãn tiếng Việt cho MỌI hành động (không lộ mã mkt_ thô)", () => {
+    // UAT prod bắt: 2 action thiếu nhãn → hiện mã thô. Phủ đủ + fallback sạch.
+    for (const a of [
+      "mkt_channel_plan_assigned",
+      "mkt_plan_strategy_saved",
+      "mkt_owner_subplan_added",
+      "mkt_plan_progress_deleted",
+    ]) {
+      expect(planControls).toContain(`${a}: "`);
+    }
+    expect(planControls).toContain("activityLabel(e.action)");
+    expect(planControls).not.toContain("ACTIVITY_LABEL[e.action] ?? e.action");
+  });
   it("ChangeRequestButton: bỏ câu 'chỉ khi chưa ai nhận việc' + bỏ bẫy lỗi cũ", () => {
     expect(planControls).not.toContain("Chỉ làm được khi");
     expect(planControls).not.toContain("PLAN_TASKS_IN_PROGRESS");
