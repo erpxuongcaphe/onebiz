@@ -3,6 +3,7 @@ import { Icon } from "@/components/ui/icon";
 import { getMktRequestContext } from "@/lib/mkt/request-context";
 import { MktNav } from "@/components/mkt/mkt-nav";
 import { MktUserMenu } from "@/components/mkt/mkt-user-menu";
+import { MktNotificationBell } from "@/components/mkt/notification-bell";
 import { MktLink, MktRoutingProvider } from "@/components/mkt/mkt-routing";
 import { getMktBasePath } from "@/lib/mkt/server-routing";
 
@@ -68,6 +69,7 @@ export default async function MktLayout({ children }: { children: React.ReactNod
             <Icon name="grid_view" size={18} />
             <span className="hidden sm:inline">OneBiz ERP</span>
           </Link>
+          <MktNotificationBell />
           <MktUserMenu />
         </div>
       </header>

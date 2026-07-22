@@ -13,6 +13,7 @@ type RowFromResult<T> = T extends Array<infer TRow> ? TRow : T;
 export interface MktQuery<T> extends PromiseLike<MktQueryResult<T>> {
   select(columns?: string): MktQuery<T>;
   eq(column: string, value: unknown): MktQuery<T>;
+  like(column: string, pattern: string): MktQuery<T>;
   is(column: string, value: unknown): MktQuery<T>;
   gt(column: string, value: unknown): MktQuery<T>;
   lte(column: string, value: unknown): MktQuery<T>;
