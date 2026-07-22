@@ -12,9 +12,17 @@ import type { StockMovement } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
+import {
+  getSignedStockQuantity,
+  getStockMovementTotalValue,
+  getStockMovementUnitValue,
+} from "@/lib/stock-movement-values";
 
 interface ProductStockMovementsTabProps {
   productId: string;
+  branchId?: string;
+  branchName?: string;
+  canViewCost?: boolean;
 }
 
 const TYPE_STYLE: Record<
@@ -28,23 +36,22 @@ const TYPE_STYLE: Record<
   return: { icon: "undo", label: "Trả hàng", color: "text-muted-foreground" },
 };
 
-export function ProductStockMovementsTab({ productId }: ProductStockMovementsTabProps) {
+export function ProductStockMovementsTab({
+  productId,
+  branchId,
+  branchName,
+  canViewCost = false,
+}: ProductStockMovementsTabProps) {
   const [movements, setMovements] = useState<StockMovement[]>([]);
   const [total, setTotal] = useState(0);
   const [visibleLimit, setVisibleLimit] = useState(50);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Đợt 4 (17/07): thẻ kho ở chi tiết SP KHÔNG lọc chi nhánh → tồn cuối là tồn
-  // TOÀN CÔNG TY sau mỗi giao dịch; drift đối soát với products.stock.
   const [drift, setDrift] = useState<{ computed: number; system: number } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setVisibleLimit(50);
-
-    getStockCard(productId)
+    getStockCard(productId, branchId)
       .then((result) => {
         if (!cancelled) {
           setMovements(result.data);
@@ -63,7 +70,15 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
     return () => {
       cancelled = true;
     };
-  }, [productId]);
+  }, [productId, branchId]);
+
+  const gridColumns = branchId
+    ? canViewCost
+      ? "grid-cols-[110px_130px_150px_70px_90px_110px_90px_170px_140px] min-w-[1140px]"
+      : "grid-cols-[110px_130px_150px_70px_90px_170px_140px] min-w-[930px]"
+    : canViewCost
+      ? "grid-cols-[110px_130px_150px_70px_150px_90px_110px_90px_170px_140px] min-w-[1300px]"
+      : "grid-cols-[110px_130px_150px_70px_150px_90px_170px_140px] min-w-[1090px]";
 
   if (loading) {
     return (
@@ -98,7 +113,10 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between text-xs text-muted-foreground px-1">
-        <span>Hiển thị {Math.min(visibleLimit, movements.length)}/{movements.length} giao dịch (toàn công ty)</span>
+        <span>
+          Hiển thị {Math.min(visibleLimit, movements.length)}/{movements.length} giao dịch
+          {branchId ? ` tại ${branchName ?? "chi nhánh đã chọn"}` : " (toàn chuỗi)"}
+        </span>
         <span>Tổng: {formatNumber(total)}</span>
       </div>
 
@@ -119,23 +137,25 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
           CEO 10/06/2026: thay cột "Còn lại" (để "—") bằng "Đối tác" thật.
           Đợt 4 (17/07): thêm lại cột "Tồn cuối" ĐÚNG (cộng dồn từ sổ). */}
       <div className="rounded-lg border overflow-x-auto">
-        <div className="grid grid-cols-[110px_130px_150px_70px_90px_110px_90px_170px_140px] gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground min-w-[1140px]">
+        <div className={`grid ${gridColumns} gap-2 px-3 py-2 bg-muted/50 text-xs font-medium text-muted-foreground`}>
           <span>Ngày</span>
           <span>Mã phiếu</span>
           <span>Loại</span>
           <span className="text-right">SL</span>
-          {/* Đợt 6 (19/07): đơn giá + giá trị */}
-          <span className="text-right">Đơn giá</span>
-          <span className="text-right">Giá trị</span>
+          {!branchId && <span>Chi nhánh</span>}
+          {canViewCost && <span className="text-right">Đơn giá</span>}
+          {canViewCost && <span className="text-right">Giá trị</span>}
           <span className="text-right">Tồn cuối</span>
           <span>Đối tác</span>
           <span>Ghi chú</span>
         </div>
 
-        <ul className="divide-y min-w-[1000px]">
+        <ul className={`divide-y ${gridColumns}`}>
           {movements.slice(0, visibleLimit).map((m) => {
             const style = TYPE_STYLE[m.type] ?? TYPE_STYLE.import;
-            const signed = m.type === "export" ? -Math.abs(m.quantity) : m.quantity;
+            const signed = getSignedStockQuantity(m);
+            const unitValue = getStockMovementUnitValue(m);
+            const totalValue = getStockMovementTotalValue(m);
             const partnerColor: Record<NonNullable<typeof m.partnerType>, string> = {
               customer: "text-blue-600",
               supplier: "text-emerald-600",
@@ -146,7 +166,7 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
             return (
               <li
                 key={m.id}
-                className="grid grid-cols-[110px_130px_150px_70px_90px_110px_90px_170px_140px] gap-2 items-center px-3 py-2 text-sm"
+                className={`grid ${gridColumns} gap-2 items-center px-3 py-2 text-sm`}
               >
                 <span className="text-xs text-muted-foreground">
                   {formatDate(m.date)}
@@ -168,21 +188,22 @@ export function ProductStockMovementsTab({ productId }: ProductStockMovementsTab
                   {signed > 0 ? "+" : ""}
                   {formatNumber(signed)}
                 </span>
-                {/* Đợt 6: đơn giá + giá trị (nhập→giá phiếu, xuất→giá vốn). */}
-                {(() => {
-                  const up = m.type === "export" ? m.unitCost : (m.unitPrice ?? m.unitCost);
-                  return (
-                    <>
-                      <span className="text-right tabular-nums text-xs">
-                        {up != null ? formatCurrency(up) : "—"}
-                      </span>
-                      <span className="text-right tabular-nums text-xs font-medium">
-                        {up != null ? formatCurrency(up * Math.abs(m.quantity)) : "—"}
-                      </span>
-                    </>
-                  );
-                })()}
-                {/* Đợt 4: Tồn cuối toàn công ty sau giao dịch. */}
+                {!branchId && (
+                  <span className="truncate text-xs" title={m.branchName ?? ""}>
+                    {m.branchName ?? "—"}
+                  </span>
+                )}
+                {canViewCost && (
+                  <span className="text-right tabular-nums text-xs">
+                    {unitValue != null ? formatCurrency(unitValue) : "—"}
+                  </span>
+                )}
+                {canViewCost && (
+                  <span className="text-right tabular-nums text-xs font-medium">
+                    {totalValue != null ? formatCurrency(totalValue) : "—"}
+                  </span>
+                )}
+                {/* Tồn cuối theo đúng phạm vi chi nhánh đang xem. */}
                 <span className="text-right font-medium tabular-nums">
                   {m.runningBalance != null ? formatNumber(m.runningBalance) : "—"}
                 </span>

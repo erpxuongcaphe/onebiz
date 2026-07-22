@@ -122,6 +122,9 @@ export interface StockMovement {
   /** Đợt 3 (17/07): loại + id chứng từ gốc — để sau liên kết bấm mở chứng từ. */
   referenceType?: string;
   referenceId?: string;
+  branchId?: string;
+  branchName?: string;
+  branchCode?: string;
   /** Đợt 4 (17/07): tồn CUỐI sau giao dịch này (cộng dồn tiến từ đầu sổ,
    * theo chi nhánh nếu xem per-branch). Chỉ có ở thẻ kho (getStockCard). */
   runningBalance?: number;
