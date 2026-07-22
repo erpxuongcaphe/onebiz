@@ -184,12 +184,12 @@ export function ProductStockMovementsTab({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
         <span className="text-xs text-muted-foreground">
           Hiển thị {Math.min(visibleLimit, movements.length)}/{movements.length} giao dịch
           {branchId ? ` tại ${branchName ?? "chi nhánh đã chọn"}` : " (toàn chuỗi)"}
         </span>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           <span className="text-xs text-muted-foreground">Tổng: {formatNumber(total)}</span>
           <Button
             type="button"
@@ -197,7 +197,7 @@ export function ProductStockMovementsTab({
             size="sm"
             onClick={() => void handleExportExcel()}
             disabled={exporting}
-            className="gap-2"
+            className="shrink-0 gap-2"
           >
             <Icon
               name={exporting ? "progress_activity" : "table_view"}
