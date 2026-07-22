@@ -52,6 +52,11 @@ describe("Chuông MKT Hub — giao diện mobile", () => {
     expect(bell).toContain("break-words");
   });
 
+  it("KHÔNG gọi API khi tab đang ẩn (đỡ tải web), quay lại tab thì làm mới ngay", () => {
+    expect(bell).toContain("document.hidden");
+    expect(bell).toContain('"visibilitychange"');
+  });
+
   it("đóng được bằng bấm/chạm ra ngoài / Esc (chạm quan trọng trên điện thoại)", () => {
     expect(bell).toContain('"mousedown"');
     expect(bell).toContain('"touchstart"');
