@@ -239,7 +239,10 @@ export async function getTasksAwaitingMyReview(
     )
     .eq("reviewer_id", userId)
     .eq("task_status", "reviewing")
-    .is("content_item_id", null)
+    // TRƯỚC: hàng chờ này lọc bỏ việc CÓ GẮN BÀI, vì bài phải chốt ở màn "Duyệt
+    // nội dung". Hậu quả: người duyệt nội dung mở Lịch cá nhân thấy TRỐNG TRƠN
+    // dù đang có bài chờ mình duyệt. Nay vẫn liệt kê ra để biết việc, thẻ dẫn
+    // sang màn Duyệt nội dung thay vì nút duyệt tại chỗ (RPC chặn loại này).
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
     .limit(100);

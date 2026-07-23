@@ -9,6 +9,7 @@ import {
 } from "@/lib/mkt/read-models";
 import { AcceptanceBadge, ContentStatusBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { TaskActions, ReviewTaskActions } from "@/components/mkt/task-actions";
+import { MktLink } from "@/components/mkt/mkt-routing";
 
 export const dynamic = "force-dynamic";
 
@@ -24,12 +25,37 @@ function dueLabel(value: string | null): { text: string; urgent: boolean } {
     month: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
+    // Trang render ở máy chủ (UTC) — không ghim múi giờ thì hạn hiện lệch 7 tiếng.
+    timeZone: "Asia/Ho_Chi_Minh",
   }).format(d);
   return { text, urgent: hours <= 48 };
 }
 
+// Trang chạy phía máy chủ (giờ UTC) nên phải so NGÀY theo giờ Việt Nam, không
+// thì lệch 7 tiếng: việc hạn 00:00 ngày mai sẽ bị tính nhầm là "hôm nay".
+const VN_DAY = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+const vnDay = (ms: number) => VN_DAY.format(new Date(ms));
+
+/** Đến hạn HÔM NAY hoặc đã quá hạn (theo ngày Việt Nam). */
+function isDueTodayOrOverdue(task: MktMyTask): boolean {
+  if (!task.dueAt) return false;
+  return vnDay(new Date(task.dueAt).getTime()) <= vnDay(Date.now());
+}
+
+/**
+ * "Deadline gần (24-48h)" = đến hạn TỪ NGÀY MAI trở đi và trong vòng 48h.
+ * Việc đến hạn HÔM NAY (và việc quá hạn) KHÔNG thuộc cột này — nó thuộc cột
+ * "Hôm nay làm gì", đúng như tên cột. Trước đây mọi việc ≤48h đều bị hút vào
+ * cột "Deadline gần" nên đặt hạn hôm nay cũng không bao giờ nhảy cột.
+ */
 function isDueSoonTask(task: MktMyTask): boolean {
   if (!task.dueAt) return false;
+  if (isDueTodayOrOverdue(task)) return false;
   return (new Date(task.dueAt).getTime() - Date.now()) / 36e5 <= 48;
 }
 
@@ -90,7 +116,22 @@ function TaskCard({
         </span>
       </div>
       <div className="mt-3 border-t border-outline-variant pt-3">
-        {reviewMode ? <ReviewTaskActions task={task} /> : <TaskActions task={task} />}
+        {reviewMode ? (
+          task.contentItemId ? (
+            // Bài phải chốt ở màn "Duyệt nội dung" (RPC duyệt tại chỗ chặn việc
+            // gắn bài) → dẫn thẳng sang đó thay vì nút duyệt không bấm được.
+            <MktLink
+              href={`/approvals?content=${task.contentItemId}`}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary px-3 text-xs font-medium text-primary-foreground hover:bg-primary-hover"
+            >
+              <Icon name="rate_review" size={15} /> Mở màn duyệt nội dung
+            </MktLink>
+          ) : (
+            <ReviewTaskActions task={task} />
+          )
+        ) : (
+          <TaskActions task={task} />
+        )}
       </div>
     </article>
   );
@@ -224,7 +265,7 @@ export default async function MyTasksPage({
             title="Hôm nay làm gì"
             icon="timer"
             tasks={doing}
-            emptyLabel="Chưa có việc đang làm"
+            emptyLabel="Không có việc đến hạn hôm nay"
             highlightId={highlightId}
           />
           <Column
