@@ -154,16 +154,18 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
         <Icon name="download" size={16} />
         Xuất file
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="max-w-[280px]">
+      {/* CEO 23/07: mỗi mục 1 DÒNG NGANG, không xuống dòng (trước bó hẹp →
+          chữ vỡ dọc). Mô tả dài đưa vào tooltip hover cho gọn. */}
+      <DropdownMenuContent align="end" className="min-w-[200px]">
         {onExport.items?.map((it, i) => (
-          <DropdownMenuItem key={i} onClick={it.onClick} className="items-start">
-            <Icon name={it.icon ?? "table_view"} size={16} className="mt-0.5" />
-            <span className="flex flex-col">
-              <span>{it.label}</span>
-              {it.hint && (
-                <span className="text-xs text-muted-foreground">{it.hint}</span>
-              )}
-            </span>
+          <DropdownMenuItem
+            key={i}
+            onClick={it.onClick}
+            title={it.hint}
+            className="whitespace-nowrap"
+          >
+            <Icon name={it.icon ?? "table_view"} size={16} />
+            {it.label}
           </DropdownMenuItem>
         ))}
         {onExport.excel && (

@@ -1666,19 +1666,19 @@ export default function HangHoaPage() {
           onExport={{
             items: [
               {
-                label: "Excel — Sửa & nhập lại",
-                hint: "Đúng mẫu nhập, sửa xong upload ngược",
+                label: "Sửa & nhập lại",
+                hint: "Đúng mẫu nhập — sửa xong upload ngược",
                 icon: "edit_note",
                 onClick: () => void handleExport("import"),
               },
               {
-                label: "Excel — Báo cáo chi tiết",
+                label: "Báo cáo chi tiết",
                 hint: "Mã, tên, nhóm, giá, tồn, giá trị tồn",
                 icon: "table_view",
                 onClick: () => void handleExport("report"),
               },
               {
-                label: "Excel — Tổng hợp theo nhóm",
+                label: "Tổng hợp theo nhóm",
                 hint: "Mỗi nhóm 1 dòng: số mã, tồn, giá trị",
                 icon: "summarize",
                 onClick: () => void handleExport("summary"),
