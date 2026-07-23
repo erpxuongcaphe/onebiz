@@ -565,6 +565,9 @@ export type MktWorkspaceTask = {
   workloadPoints: number;
   campaignId: string | null;
   campaignName: string | null;
+  // Để thẻ ở Bảng tiến độ mở thẳng sang trang quản lý tương ứng (tab mới).
+  channelPlanId: string | null;
+  contentItemId: string | null;
   dueAt: string | null;
   completedAt: string | null;
 };
@@ -583,13 +586,15 @@ export async function getWorkspaceTasks(
     task_type: string | null;
     workload_points: number | null;
     campaign_id: string | null;
+    channel_plan_id: string | null;
+    content_item_id: string | null;
     due_at: string | null;
     completed_at: string | null;
   };
   const { data, error } = await db
     .from<Row>("mkt_tasks")
     .select(
-      "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, due_at, completed_at",
+      "id, title, assignee_id, acceptance_status, task_status, task_type, workload_points, campaign_id, channel_plan_id, content_item_id, due_at, completed_at",
     )
     .is("deleted_at", null)
     .order("due_at", { ascending: true, nullsFirst: false })
@@ -630,6 +635,8 @@ export async function getWorkspaceTasks(
     workloadPoints: r.workload_points ?? 1,
     campaignId: r.campaign_id,
     campaignName: r.campaign_id ? campaignNames.get(r.campaign_id) ?? null : null,
+    channelPlanId: r.channel_plan_id,
+    contentItemId: r.content_item_id,
     dueAt: r.due_at,
     completedAt: r.completed_at,
   }));
