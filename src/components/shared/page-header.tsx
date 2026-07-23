@@ -35,6 +35,17 @@ interface ExportHandlers {
   excel?: () => void;
   csv?: () => void;
   pdf?: () => void;
+  /**
+   * CEO 23/07: lựa chọn xuất tự đặt tên theo MỤC ĐÍCH (thay vì "Excel/CSV"
+   * chung chung). Có `items` → menu hiện danh sách này; excel/csv/pdf vẫn
+   * dùng được cho các trang chưa đổi.
+   */
+  items?: Array<{
+    label: string;
+    hint?: string;
+    icon?: string;
+    onClick: () => void;
+  }>;
 }
 
 interface BreadcrumbItem {
@@ -143,7 +154,18 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
         <Icon name="download" size={16} />
         Xuất file
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="max-w-[280px]">
+        {onExport.items?.map((it, i) => (
+          <DropdownMenuItem key={i} onClick={it.onClick} className="items-start">
+            <Icon name={it.icon ?? "table_view"} size={16} className="mt-0.5" />
+            <span className="flex flex-col">
+              <span>{it.label}</span>
+              {it.hint && (
+                <span className="text-xs text-muted-foreground">{it.hint}</span>
+              )}
+            </span>
+          </DropdownMenuItem>
+        ))}
         {onExport.excel && (
           <DropdownMenuItem onClick={onExport.excel}>
             <Icon name="table_view" size={16} />

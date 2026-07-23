@@ -535,6 +535,8 @@ export interface DraftOrderDetail extends DraftOrderSummary {
     unitPrice: number;
     discount: number;
     total: number;
+    /** 00208: ghi chú riêng từng mã hàng — giữ khi mở lại đơn để sửa. */
+    note?: string;
   }>;
 }
 

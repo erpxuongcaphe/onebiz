@@ -19,8 +19,12 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import {
+  getBranchSalesChannel,
+  type BranchSalesChannel,
+} from "@/lib/services/supabase/products";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
@@ -43,6 +47,8 @@ export interface EditOrderInput {
     unit: string;
     quantity: number;
     price: number;
+    /** Ghi chú riêng của dòng (invoice_items.note) — giữ khi mở lại để sửa. */
+    note?: string;
   }>;
 }
 
@@ -68,6 +74,8 @@ interface OrderLineItem {
   unit: string;
   quantity: number;
   price: number;
+  /** CEO 23/07: ghi chú riêng cho từng mã hàng (dùng cột invoice_items.note). */
+  note?: string;
 }
 
 interface SearchProduct {
@@ -113,6 +121,10 @@ export function CreateOrderDialog({
   const [productSearch, setProductSearch] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<SearchProduct[]>([]);
+  // CEO 23/07: ngành hàng bán được tại CN đang chọn (Kho Tổng→retail, quán→fnb,
+  // "Tất cả chi nhánh"→null = không lọc). Chặn NVL + món F&B lọt vào đơn Retail.
+  const { activeBranchId } = useBranchFilter();
+  const [salesChannel, setSalesChannel] = useState<BranchSalesChannel>(null);
   const [items, setItems] = useState<OrderLineItem[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState("");
@@ -155,6 +167,7 @@ export function CreateOrderDialog({
         unit: it.unit || "Cái",
         quantity: it.quantity,
         price: it.price,
+        note: it.note,
       }));
       setItems(prefillItems);
       setShippingFee(editOrder.deliveryFee ?? 0);
@@ -221,6 +234,17 @@ export function CreateOrderDialog({
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
+  // Nạp ngành hàng theo chi nhánh đang chọn (1 lần mỗi lần đổi CN).
+  useEffect(() => {
+    let cancelled = false;
+    getBranchSalesChannel(activeBranchId)
+      .then((ch) => !cancelled && setSalesChannel(ch))
+      .catch(() => !cancelled && setSalesChannel(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId]);
+
   useEffect(() => {
     if (!productSearch || productSearch.length < 1) {
       setFilteredProducts([]);
@@ -230,13 +254,22 @@ export function CreateOrderDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      const { data } = await supabase
+      // CEO 23/07: trước đây tìm trong TOÀN BỘ bảng sản phẩm → lọt cả NVL
+      // (không được bán) lẫn món F&B của quán khi đang đứng ở Kho Tổng.
+      // Nay: chỉ hàng BÁN (sku) + đúng ngành của chi nhánh đang chọn.
+      let query = supabase
         .from("products")
         .select("id, code, name, unit, sell_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
-        .limit(10);
+        .eq("product_type", "sku");
+      if (salesChannel === "fnb") {
+        query = query.eq("channel", "fnb");
+      } else if (salesChannel === "retail") {
+        query = query.or("channel.is.null,channel.neq.fnb");
+      }
+      const { data } = await query.limit(10);
 
       setFilteredProducts((data ?? []).map((p) => ({
         id: p.id,
@@ -248,7 +281,7 @@ export function CreateOrderDialog({
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [productSearch]);
+  }, [productSearch, salesChannel]);
 
   function addProduct(product: SearchProduct) {
     const existing = items.find((item) => item.id === product.id);
@@ -405,7 +438,9 @@ export function CreateOrderDialog({
             unit_price: item.price,
             discount: 0,
             total: item.quantity * item.price,
-          } satisfies InvoiceItemInsert)));
+            // Cast: generated types chưa có cột note (00208 thêm ở DB).
+            note: item.note?.trim() || null,
+          } as unknown as InvoiceItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
       }
 
@@ -525,7 +560,9 @@ export function CreateOrderDialog({
             unit_price: item.price,
             discount: 0,
             total: item.quantity * item.price,
-          } satisfies InvoiceItemInsert)),
+            // Cast: generated types chưa có cột note (00208 thêm ở DB).
+            note: item.note?.trim() || null,
+          } as unknown as InvoiceItemInsert)),
         );
         if (insErr) throw new Error(insErr.message);
       }
@@ -782,6 +819,14 @@ export function CreateOrderDialog({
                         {item.productCode && (
                           <div className="mt-0.5 truncate text-xs text-muted-foreground">{item.productCode}</div>
                         )}
+                        {/* CEO 23/07: ghi chú riêng từng mã hàng — in ra ở cột "Ghi chú". */}
+                        <Input
+                          value={item.note ?? ""}
+                          onChange={(e) => updateItem(item.id, "note", e.target.value)}
+                          placeholder="Ghi chú riêng mã này (tùy chọn)"
+                          className="mt-1 h-7 text-xs"
+                          aria-label={`Ghi chú ${item.productName}`}
+                        />
                       </div>
                       <div className="flex justify-center">
                         <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">

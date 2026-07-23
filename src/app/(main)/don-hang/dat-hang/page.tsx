@@ -464,6 +464,7 @@ export default function DatHangPage() {
             unit: it.unit,
             quantity: it.quantity,
             price: it.unitPrice,
+            note: it.note,
           })),
         });
       } catch (err) {

@@ -56,7 +56,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
-import { exportToCsv } from "@/lib/utils/export";
+import { exportToExcel } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { ProductImportRow } from "@/lib/excel/schemas";
 import {
@@ -318,6 +318,8 @@ export default function HangHoaPage() {
   const [data, setData] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Xuất file tải TOÀN BỘ dòng khớp lọc → có thể lâu, khoá nút tránh bấm kép.
+  const [exporting, setExporting] = useState(false);
   // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch load UOM conversions
   // cho list view → cell "Tồn kho" hiện "24 hộp · 2 thùng".
   const [conversionsMap, setConversionsMap] = useState<
@@ -465,14 +467,15 @@ export default function HangHoaPage() {
     };
   }, [scope]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  // Bộ lọc danh sách hiện hành — dùng chung cho tải trang VÀ xuất file, để
+  // file xuất ra đúng tập đang lọc (không phải chỉ trang đang xem).
+  const buildListFilters = useCallback(() => {
     const createdRange = computeListPresetRange(createdDatePreset);
     const effectiveCreatedFrom =
       createdDatePreset === "custom" ? createdDateFrom : createdRange.from;
     const effectiveCreatedTo =
       createdDatePreset === "custom" ? createdDateTo : createdRange.to;
-    const listFilters = {
+    return {
       productType: scope,
       ...(categoryFilter !== "all" && { category: [categoryFilter] }),
       ...(stockFilter !== "all" && { stock: stockFilter }),
@@ -481,6 +484,20 @@ export default function HangHoaPage() {
       ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
       ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
     };
+  }, [
+    scope,
+    categoryFilter,
+    stockFilter,
+    statusFilter,
+    brandFilter,
+    createdDatePreset,
+    createdDateFrom,
+    createdDateTo,
+  ]);
+
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const listFilters = buildListFilters();
     const result = await getProducts({
       page,
       pageSize,
@@ -569,7 +586,7 @@ export default function HangHoaPage() {
     } else {
       setBomAvailability(new Map());
     }
-  }, [page, pageSize, debouncedSearch, searchField, scope, categoryFilter, stockFilter, statusFilter, brandFilter, createdDatePreset, createdDateFrom, createdDateTo, activeBranchId, viewAllBranches]);
+  }, [page, pageSize, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches]);
 
   // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
   useEffect(() => {
@@ -964,10 +981,92 @@ export default function HangHoaPage() {
   const totalStock = data.reduce((sum, p) => sum + p.stock, 0);
   const totalOrdered = data.reduce((sum, p) => sum + p.ordered, 0);
 
-  const handleExport = (type: "excel" | "csv") => {
-    if (type === "excel") {
-      // Xuất theo schema import → user edit rồi upload lại không mất cột
-      const rows: ProductImportRow[] = data.map((p) => ({
+  /**
+   * CEO 23/07: trước đây xuất từ `data` = ĐÚNG TRANG ĐANG XEM (100 dòng) nên
+   * 269 NVL chỉ ra 100. Nay tải TOÀN BỘ dòng khớp bộ lọc hiện hành rồi mới xuất.
+   * 3 lựa chọn theo mục đích (bỏ CSV — trùng công dụng Excel mà thiếu cột):
+   *  - import : đúng mẫu nhập → sửa hàng loạt rồi upload ngược
+   *  - report : cột đọc được + dòng tổng → gửi kế toán
+   *  - summary: gộp theo nhóm hàng → nhìn tổng quan
+   */
+  const handleExport = async (type: "import" | "report" | "summary") => {
+    if (exporting) return; // đang tải toàn bộ dòng — chặn bấm kép
+    setExporting(true);
+    try {
+      const all = await getProducts({
+        page: 0,
+        pageSize: 100000, // lấy hết dòng khớp lọc, không giới hạn theo trang
+        search: debouncedSearch,
+        searchField,
+        branchId: viewAllBranches ? undefined : activeBranchId,
+        filters: buildListFilters(),
+      });
+      const rows = all.data;
+      if (rows.length === 0) {
+        toast({ title: "Không có dòng nào để xuất", variant: "warning" });
+        return;
+      }
+      const scopeLabel = scope === "nvl" ? "nguyen-vat-lieu" : "hang-ban";
+
+      if (type === "summary") {
+        // Gộp theo nhóm hàng: số mã · tổng tồn · tổng giá trị tồn.
+        const byGroup = new Map<
+          string,
+          { group: string; skuCount: number; stock: number; value: number }
+        >();
+        for (const p of rows) {
+          const key = p.categoryName || "(Chưa phân nhóm)";
+          const cur =
+            byGroup.get(key) ?? { group: key, skuCount: 0, stock: 0, value: 0 };
+          cur.skuCount += 1;
+          cur.stock += p.stock ?? 0;
+          cur.value += (p.stock ?? 0) * (p.costPrice ?? 0);
+          byGroup.set(key, cur);
+        }
+        const summaryRows = [...byGroup.values()].sort((a, b) => b.value - a.value);
+        await exportToExcel(
+          summaryRows,
+          [
+            { header: "Nhóm hàng", key: "group", width: 30 },
+            { header: "Số mã", key: "skuCount", width: 10 },
+            { header: "Tổng tồn", key: "stock", width: 14 },
+            { header: "Giá trị tồn", key: "value", width: 18 },
+          ],
+          `tong-hop-nhom-${scopeLabel}`,
+        );
+        toast({
+          title: "Đã xuất tổng hợp",
+          description: `${summaryRows.length} nhóm · ${rows.length} mã hàng.`,
+          variant: "success",
+        });
+        return;
+      }
+
+      if (type === "report") {
+        await exportToExcel(
+          rows,
+          [
+            { header: "Mã hàng", key: "code", width: 16 },
+            { header: "Tên hàng", key: "name", width: 34 },
+            { header: "Nhóm", key: "categoryName", width: 22 },
+            { header: "ĐVT", key: "unit", width: 10 },
+            { header: "Giá vốn", key: "costPrice", width: 14 },
+            { header: "Giá bán", key: "sellPrice", width: 14 },
+            { header: "Tồn kho", key: "stock", width: 12 },
+            { header: "Giá trị tồn", key: "stockValue", width: 16 },
+          ],
+          `bao-cao-${scopeLabel}`,
+        );
+        toast({
+          title: "Đã xuất báo cáo",
+          description: `${rows.length} mã hàng.`,
+          variant: "success",
+        });
+        return;
+      }
+
+      // type === "import": theo schema nhập → sửa rồi upload lại không mất cột
+      const importRows: ProductImportRow[] = rows.map((p) => ({
         code: p.code,
         name: p.name,
         productType: p.productType,
@@ -988,19 +1087,21 @@ export default function HangHoaPage() {
         description: p.description,
         isActive: p.status !== "inactive",
       }));
-      exportToExcelFromSchema(rows, productExcelSchema);
-      return;
+      await exportToExcelFromSchema(importRows, productExcelSchema);
+      toast({
+        title: "Đã xuất file sửa & nhập lại",
+        description: `${importRows.length} mã hàng — sửa xong upload lại ở nút "Nhập Excel".`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Xuất file thất bại",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setExporting(false);
     }
-    // CSV giữ format ngắn gọn cho báo cáo
-    const exportColumns = [
-      { header: "Mã hàng", key: "code", width: 12 },
-      { header: "Tên hàng", key: "name", width: 30 },
-      { header: "Giá bán", key: "sellPrice", width: 15, format: (v: number) => v },
-      { header: "Giá vốn", key: "costPrice", width: 15, format: (v: number) => v },
-      { header: "Tồn kho", key: "stock", width: 10 },
-      { header: "Nhóm", key: "categoryName", width: 20 },
-    ];
-    exportToCsv(data, exportColumns, "danh-sach-hang-hoa");
   };
 
   // Day 20/05/2026 (CEO): bỏ tính năng arrow up/down move sort_order SP
@@ -1563,8 +1664,26 @@ export default function HangHoaPage() {
             setPage(0);
           }}
           onExport={{
-            excel: () => handleExport("excel"),
-            csv: () => handleExport("csv"),
+            items: [
+              {
+                label: "Excel — Sửa & nhập lại",
+                hint: "Đúng mẫu nhập, sửa xong upload ngược",
+                icon: "edit_note",
+                onClick: () => void handleExport("import"),
+              },
+              {
+                label: "Excel — Báo cáo chi tiết",
+                hint: "Mã, tên, nhóm, giá, tồn, giá trị tồn",
+                icon: "table_view",
+                onClick: () => void handleExport("report"),
+              },
+              {
+                label: "Excel — Tổng hợp theo nhóm",
+                hint: "Mỗi nhóm 1 dòng: số mã, tồn, giá trị",
+                icon: "summarize",
+                onClick: () => void handleExport("summary"),
+              },
+            ],
           }}
           actions={[
             {

@@ -2017,3 +2017,36 @@ export async function duplicateProduct(sourceId: string): Promise<Product> {
   if (error) handleError(error, "duplicateProduct");
   return mapProduct(data);
 }
+
+/* ------------------------------------------------------------------ */
+/*  Ngành hàng BÁN ĐƯỢC theo chi nhánh (CEO 23/07)                     */
+/* ------------------------------------------------------------------ */
+
+/** 'fnb' = chỉ món quán · 'retail' = chỉ hàng bán Retail · null = không lọc. */
+export type BranchSalesChannel = "fnb" | "retail" | null;
+
+/**
+ * Ngành hàng được phép BÁN tại 1 chi nhánh, suy từ `branches.cascade_mode`:
+ *  - 'outlet'     (quán F&B)   → 'fnb'
+ *  - 'production' (kho/xưởng)  → 'retail'
+ *  - không truyền branchId ("Tất cả chi nhánh") → null = hiện hết, lọc sau.
+ *
+ * Dùng cho các màn CHỌN HÀNG ĐỂ BÁN (đơn đặt hàng, POS) — tránh lọt món F&B
+ * của quán vào đơn Kho Tổng và ngược lại. Cùng luật với Phương án B ở trang
+ * Hàng hóa, nhưng bản gọn (không cần danh sách mã có tồn).
+ */
+export async function getBranchSalesChannel(
+  branchId?: string | null,
+): Promise<BranchSalesChannel> {
+  if (!branchId) return null;
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const { data } = await supabase
+    .from("branches")
+    .select("cascade_mode")
+    .eq("tenant_id", tenantId)
+    .eq("id", branchId)
+    .maybeSingle();
+  const mode = (data as { cascade_mode?: string | null } | null)?.cascade_mode;
+  return mode === "outlet" ? "fnb" : "retail";
+}
