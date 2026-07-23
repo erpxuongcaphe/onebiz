@@ -85,12 +85,15 @@ describe("00197 — API + read-model", () => {
     expect(actionRoute).toContain('"return-review"');
   });
 
-  it("hộp 'Chờ tôi duyệt' lấy đúng: tôi là reviewer + đang reviewing + không nội dung", () => {
+  it("hộp 'Chờ tôi duyệt' lấy đúng: tôi là reviewer + đang reviewing", () => {
     expect(readModels).toContain("getTasksAwaitingMyReview");
     const fn = readModels.slice(readModels.indexOf("getTasksAwaitingMyReview"));
     expect(fn).toContain('.eq("reviewer_id", userId)');
     expect(fn).toContain('.eq("task_status", "reviewing")');
-    expect(fn).toContain('.is("content_item_id", null)');
+    // 23/07: TRƯỚC đây còn loại việc gắn bài ra khỏi hàng chờ này, khiến người
+    // duyệt nội dung mở Lịch cá nhân thấy trống trơn. Nay việc gắn bài VẪN được
+    // liệt kê, thẻ dẫn sang màn "Duyệt nội dung" — xem my-tasks-buckets.test.ts.
+    expect(tasksPage).toContain("Mở màn duyệt nội dung");
   });
 });
 
