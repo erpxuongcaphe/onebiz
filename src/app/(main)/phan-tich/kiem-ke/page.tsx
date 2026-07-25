@@ -247,7 +247,7 @@ export default function KiemKeReportPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       <ReportPageHeader
         title="Báo cáo kiểm kê"
         preset={preset}

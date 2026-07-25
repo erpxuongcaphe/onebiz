@@ -309,7 +309,7 @@ export default function FnbShipperReportPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <Icon
@@ -322,7 +322,7 @@ export default function FnbShipperReportPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {reportHeader}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">

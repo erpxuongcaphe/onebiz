@@ -515,7 +515,7 @@ export default function ThietLapGiaPage() {
   ];
 
   return (
-    <div className="h-[calc(100vh-64px)] flex flex-col">
+    <div className="h-[calc(100vh-4rem)] flex flex-col">
       <PageHeader
         title="Bảng giá"
         tabs={

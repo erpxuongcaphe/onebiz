@@ -123,7 +123,7 @@ export default function NhomKhachHangPage() {
 
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-4rem)]">
         <PageHeader
           title="Nhóm khách hàng"
           searchPlaceholder="Theo tên nhóm..."

@@ -291,7 +291,7 @@ export default function LuongTienPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       <ReportPageHeader
         title="Lưu chuyển tiền tệ"
         subtitle="Dòng tiền quản trị theo phạm vi và kỳ đã chọn"

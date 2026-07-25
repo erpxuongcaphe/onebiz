@@ -430,7 +430,7 @@ export default function BanHangPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
         <div className="flex-1 flex flex-col items-center justify-center">
           <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
@@ -451,7 +451,7 @@ export default function BanHangPage() {
 
   if (!hasData) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)]">
+      <div className="flex flex-col h-[calc(100vh-4rem)]">
         {reportHeader}
         <div className="flex-1 flex items-center justify-center">
           <p className="text-muted-foreground">
@@ -487,7 +487,7 @@ export default function BanHangPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {reportHeader}
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">

@@ -3,6 +3,7 @@ import { AppSidebar } from "@/components/shared/app-sidebar";
 import { CommandPaletteProvider } from "@/components/shared/command-palette";
 import { MobileBottomNav } from "@/components/shared/mobile-bottom-nav";
 import { DiscountAuditRetry } from "@/components/shared/discount-audit-retry";
+import { UiScale } from "@/components/shared/ui-scale";
 
 export default function MainLayout({
   children,
@@ -11,6 +12,8 @@ export default function MainLayout({
 }) {
   return (
     <CommandPaletteProvider>
+      {/* CEO 25/07: back-office hiển thị 90%, POS giữ 100% */}
+      <UiScale />
       <TopNav />
       {/*
         Cap chiều cao = viewport - TopNav (h-16 = 64px = 4rem) để:

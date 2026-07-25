@@ -83,7 +83,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
               <Icon name="close" size={16} />
             </Button>
           </SheetTitle>
-          <ScrollArea className="h-[calc(100vh-57px)]">
+          <ScrollArea className="h-[calc(100vh-4rem)]">
             <div className="p-4 space-y-3">{children}</div>
           </ScrollArea>
         </SheetContent>

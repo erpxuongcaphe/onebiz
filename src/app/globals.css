@@ -463,6 +463,24 @@
   html {
     @apply font-sans;
   }
+  /* CEO 25/07/2026: back-office hiển thị 90% để thấy được nhiều nội dung hơn.
+     Class do <UiScale> gắn lên <html> khi vào khu (main); POS/MKT/SOP không gắn
+     nên giữ 100%. Đặt ở <html> để popup render qua portal (dialog/toast/dropdown
+     ở body) cũng co theo.
+
+     Dùng font-size chứ KHÔNG dùng `zoom` — đã đo trên chính app này: với
+     zoom:0.9 thì 100vh vẫn trả về chiều cao viewport chưa co, làm mọi trang hở
+     72px ở đáy. Với font-size:90% và các khung tính theo rem thì khớp tuyệt đối.
+     Breakpoint media query luôn tính theo font gốc trình duyệt nên layout không
+     nhảy về cỡ mobile. Bản in giữ 100%. */
+  html.ui-scale-90 {
+    font-size: 90%;
+  }
+  @media print {
+    html.ui-scale-90 {
+      font-size: 100%;
+    }
+  }
   /* Headline utility — dùng cho page title, KPI numbers, section heading.
      Áp dụng qua class .font-heading hoặc Tailwind utility font-heading. */
   .font-heading,

@@ -97,7 +97,7 @@ export default function DonHangOnlinePage() {
   });
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {/* Header */}
       <div className="border-b bg-white px-4 md:px-6 py-3">
         <div className="flex items-center justify-between mb-3">

@@ -54,7 +54,10 @@ export function Icon({
         className,
       )}
       style={{
-        fontSize: `${size}px`,
+        // rem chứ không px: back-office chạy font-size 90% (xem .ui-scale-90
+        // trong globals.css), icon phải co cùng nhịp với chữ. size vẫn khai
+        // bằng px cho quen tay — quy đổi ở đây theo gốc 16px.
+        fontSize: `${size / 16}rem`,
         fontVariationSettings,
         ...style,
       }}

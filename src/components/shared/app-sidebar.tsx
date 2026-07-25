@@ -495,7 +495,7 @@ function GroupCollapsed({
             onMouseEnter={cancelClose}
             onMouseLeave={scheduleClose}
           >
-            <div className="bg-sidebar text-sidebar-foreground rounded-lg ambient-shadow-lg min-w-[240px] max-w-[320px] py-2 max-h-[calc(100vh-32px)] flex flex-col border border-sidebar-border">
+            <div className="bg-sidebar text-sidebar-foreground rounded-lg ambient-shadow-lg min-w-[240px] max-w-[320px] py-2 max-h-[calc(100vh-2rem)] flex flex-col border border-sidebar-border">
               <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/55 uppercase border-b border-sidebar-border mb-1 shrink-0">
                 {group.label}
               </div>

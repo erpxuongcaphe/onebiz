@@ -266,7 +266,7 @@ export default function KhuyenMaiAnalyticsPage() {
   }, [fetchData, isReady]);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       <ReportPageHeader
         title="Hiệu quả khuyến mãi"
         subtitle="Lượt dùng, doanh thu và ROI của các chương trình khuyến mãi"

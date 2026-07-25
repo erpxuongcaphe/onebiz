@@ -176,7 +176,7 @@ export default function CustomerCohortPage() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
       <ReportPageHeader
         title="Khách hàng quay lại theo tháng đầu mua"
         subtitle={`Theo dõi ${months} nhóm tháng gần nhất và tỷ lệ khách tiếp tục mua`}

@@ -207,18 +207,25 @@ function useBreakpointName():
     "2xl",
   );
   useEffect(() => {
+    // Dùng matchMedia (KHÔNG phải window.innerWidth) để cùng thước đo với
+    // useBreakpoint + media query CSS. innerWidth không đổi theo CSS zoom nên
+    // khi back-office chạy 90% (UiScale) bảng sẽ ẩn/hiện cột lệch pha với
+    // sidebar và layout nếu đo bằng innerWidth.
+    const queries = [
+      ["2xl", "(min-width: 1536px)"],
+      ["xl", "(min-width: 1280px)"],
+      ["lg", "(min-width: 1024px)"],
+      ["md", "(min-width: 768px)"],
+      ["sm", "(min-width: 640px)"],
+    ] as const;
+    const mqls = queries.map(([, q]) => window.matchMedia(q));
     const compute = () => {
-      const w = typeof window !== "undefined" ? window.innerWidth : 1536;
-      if (w < 640) setBp("xs");
-      else if (w < 768) setBp("sm");
-      else if (w < 1024) setBp("md");
-      else if (w < 1280) setBp("lg");
-      else if (w < 1536) setBp("xl");
-      else setBp("2xl");
+      const hit = queries.findIndex((_, i) => mqls[i].matches);
+      setBp(hit === -1 ? "xs" : queries[hit][0]);
     };
     compute();
-    window.addEventListener("resize", compute);
-    return () => window.removeEventListener("resize", compute);
+    mqls.forEach((m) => m.addEventListener("change", compute));
+    return () => mqls.forEach((m) => m.removeEventListener("change", compute));
   }, []);
   return bp;
 }

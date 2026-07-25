@@ -87,7 +87,7 @@ export default function SoDoBanPage() {
   const selectedBranch = branches.find((b) => b.id === selectedBranchId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] p-4 gap-3">
+    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 gap-3">
       {/* Header — chọn chi nhánh */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold">Sơ đồ bàn</h1>

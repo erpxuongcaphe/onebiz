@@ -480,7 +480,7 @@ function MobileNav() {
       </SheetTrigger>
       <SheetContent side="left" className="w-[320px] p-0">
         <SheetTitle className="px-5 py-4 border-b font-semibold text-base">Menu</SheetTitle>
-        <nav className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-60px)]">
+        <nav className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-4rem)]">
           {/* Branch selector for mobile */}
           <div className="pb-3 border-b">
             <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">

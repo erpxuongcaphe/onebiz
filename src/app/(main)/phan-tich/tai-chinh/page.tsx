@@ -492,7 +492,7 @@ export default function TaiChinhPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-[calc(100vh-64px)] items-center justify-center">
+      <div className="flex flex-col h-[calc(100vh-4rem)] items-center justify-center">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
         <p className="mt-2 text-sm text-muted-foreground">Đang tải dữ liệu...</p>
       </div>
@@ -500,7 +500,7 @@ export default function TaiChinhPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] overflow-y-auto">
+    <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       <ReportPageHeader
         title="Phân tích tài chính"
         subtitle="Tổng quan doanh thu, chi phí và lợi nhuận"
