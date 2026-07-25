@@ -13,7 +13,11 @@ const settingsNav: ModuleNavGroup[] = [
       { label: "Chi nhánh", href: "/cai-dat/chi-nhanh", icon: "fork_right" },
       { label: "Phân quyền", href: "/cai-dat/phan-quyen", icon: "shield" },
       { label: "Ngôn ngữ", href: "/cai-dat/ngon-ngu", icon: "public" },
-      { label: "Giao diện", href: "/cai-dat/giao-dien", icon: "palette" },
+      // 25/07: ẩn "Giao diện" — cả 5 lựa chọn (chủ đề/màu/bố cục nav/cỡ chữ/bo
+      // góc) đều lưu vào settings.appearance rồi báo "Đã lưu" nhưng KHÔNG có
+      // nơi nào đọc ra để áp → bấm xong không đổi gì. Giữ nguyên route + code
+      // để dựng lại tử tế khi cần; hiện chỉ gỡ khỏi menu cho khỏi đánh lừa.
+      // Cỡ chữ còn mâu thuẫn với mức 90% cố định của back-office (xem UiScale).
     ],
   },
   {

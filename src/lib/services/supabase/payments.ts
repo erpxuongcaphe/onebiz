@@ -516,3 +516,99 @@ export async function getPaymentHistory(
     cancelled: (row as { status?: string }).status === "cancelled",
   }));
 }
+
+// ============================================================
+// Bù chứng từ chi cho tiền trả NCC ghi thẳng trên phiếu nhập
+// (CEO 25/07/2026 — audit phát hiện 107/115 phiếu thiếu phiếu chi, 318 triệu)
+// ============================================================
+
+/**
+ * Đảm bảo số tiền đã trả trên phiếu nhập có chứng từ chi tương ứng trong sổ quỹ.
+ *
+ * Vì sao cần: form phiếu nhập có ô "Đã thanh toán NCC" ghi thẳng vào
+ * `purchase_orders.paid` mà không hề tạo `cash_transactions` — trong khi nút
+ * "Trả nợ NCC" (recordPurchasePayment) thì luôn tạo. Hai đường đi lệch nhau nên
+ * sổ quỹ thiếu đúng phần tiền trả qua form.
+ *
+ * Cách làm: so số đã trả trên phiếu với tổng phiếu chi đã có, chỉ bù phần
+ * THIẾU. Nhờ vậy gọi lại bao nhiêu lần cũng không sinh chứng từ trùng — quan
+ * trọng vì hàm này nằm trên đường nhận hàng, vốn có thể chạy lại khi lỗi mạng.
+ *
+ * KHÔNG đụng `paid`/`debt` của phiếu (form đã ghi đúng rồi) và không đụng công
+ * nợ NCC — chỉ bổ sung chứng từ còn thiếu cho sổ quỹ.
+ *
+ * Best-effort: lỗi ở đây không được làm hỏng việc nhận hàng đã thành công.
+ */
+export async function ensurePurchasePaymentRecorded(
+  orderId: string,
+  paymentMethod: "cash" | "transfer" | "card" | "ewallet" = "cash",
+): Promise<{ created: boolean; amount: number; cashCode?: string }> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+
+  const { data: po } = await supabase
+    .from("purchase_orders")
+    .select("id, code, paid, supplier_id, supplier_name, branch_id, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("id", orderId)
+    .maybeSingle();
+  if (!po) return { created: false, amount: 0 };
+
+  const paid = Number(po.paid ?? 0);
+  if (paid <= 0) return { created: false, amount: 0 };
+
+  // Đã ghi được bao nhiêu? (bỏ qua phiếu đã huỷ)
+  // Generated types chưa biết cột `status` của cash_transactions (có thật trên
+  // DB) → cast, cùng cách getPaymentHistory đang dùng.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: existing } = await (supabase as any)
+    .from("cash_transactions")
+    .select("amount, status")
+    .eq("tenant_id", ctx.tenantId)
+    .eq("type", "payment")
+    .eq("reference_type", "purchase_order")
+    .eq("reference_id", orderId);
+
+  const recorded = ((existing ?? []) as Array<{ amount: number | null; status?: string }>)
+    .filter((c) => c.status !== "cancelled")
+    .reduce((sum, c) => sum + Number(c.amount ?? 0), 0);
+
+  const missing = paid - recorded;
+  if (missing <= 1) return { created: false, amount: 0 }; // <=1đ coi như đủ (làm tròn)
+
+  const cashCode = await nextEntityCode("cash_payment", { tenantId: ctx.tenantId });
+
+  let shiftId: string | null = null;
+  try {
+    const shift = await getOpenShift(po.branch_id ?? ctx.branchId, ctx.userId);
+    shiftId = shift?.id ?? null;
+  } catch {
+    // không có ca mở → vẫn ghi phiếu, chỉ thiếu liên kết ca
+  }
+
+  const payload: CashTransactionInsert = {
+    tenant_id: ctx.tenantId,
+    branch_id: po.branch_id ?? ctx.branchId,
+    code: cashCode,
+    type: "payment",
+    category: "Trả nhà cung cấp",
+    amount: missing,
+    counterparty: po.supplier_name,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    payment_method: paymentMethod as any,
+    reference_type: "purchase_order",
+    reference_id: orderId,
+    note: `Thanh toán khi nhập hàng — phiếu ${po.code}`,
+    created_by: ctx.userId,
+    ...(shiftId ? { shift_id: shiftId } : {}),
+  };
+
+  const { data: cash, error } = await supabase
+    .from("cash_transactions")
+    .insert(payload)
+    .select("id, code")
+    .single();
+  if (error) handleError(error, "ensurePurchasePaymentRecorded.insertCash");
+
+  return { created: true, amount: missing, cashCode: cash?.code ?? cashCode };
+}

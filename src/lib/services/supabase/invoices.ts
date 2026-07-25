@@ -409,8 +409,15 @@ export async function cancelInvoice(id: string): Promise<void> {
    
   const { error } = await supabase
     .from("invoices")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "cancelled" as any })
+    .update({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      status: "cancelled" as any,
+      // CEO 25/07: nhả phiên POS khi huỷ. Trước đây chỉ lật status nên phiên
+      // vẫn bị đơn đã huỷ giữ → thu ngân mở POS ra là kẹt, phải F5 mới bán
+      // tiếp được (27 đơn cũ đang dính). Cùng gốc với sự cố 20/07, lần đó mới
+      // vá nhánh xoá mềm.
+      client_session_id: null,
+    })
     .eq("tenant_id", tenantId)
     .eq("id", id);
 

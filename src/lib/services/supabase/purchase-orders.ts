@@ -1,4 +1,5 @@
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { ensurePurchasePaymentRecorded } from "./payments";
 /**
  * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
  *
@@ -389,6 +390,17 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
   const res = data as ReceivePurchaseItemsRpcResponse | null;
   if (!res || !res.new_status) {
     throw new Error("RPC receive_purchase_items_atomic không trả về kết quả");
+  }
+
+  // CEO 25/07: tiền điền ở ô "Đã thanh toán NCC" trên form trước nay chỉ ghi
+  // vào purchase_orders.paid, KHÔNG đẻ phiếu chi → sổ quỹ thiếu 318 triệu.
+  // Bù ngay khi nhận hàng xong (mọi đường nhận hàng đều qua đây). Hàm tự so
+  // với phiếu chi đã có nên gọi lại không sinh trùng.
+  // Best-effort: hàng đã vào kho rồi, lỗi ghi sổ quỹ không được rollback.
+  try {
+    await ensurePurchasePaymentRecorded(orderId);
+  } catch (err) {
+    console.error("[receivePurchaseOrder] bù phiếu chi thất bại:", err);
   }
 }
 
