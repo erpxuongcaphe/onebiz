@@ -11,12 +11,13 @@
  *  - exposes load/save helpers for F9 draft workflow
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Product } from "@/lib/types";
 import type { Customer } from "@/lib/types";
 import type { DraftOrderDetail } from "@/lib/services/supabase";
 import type { PosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { mergePosStockSnapshot } from "../lib/stock-freshness";
+import { logCustomerChange } from "../lib/customer-blackbox";
 
 // ============================================================
 // Types
@@ -134,7 +135,37 @@ function computeLineTotal(line: OrderLine): number {
 
 export function usePosState() {
   const [lines, setLines] = useState<OrderLine[]>([]);
-  const [customer, setCustomer] = useState<Customer | null>(null);
+  const [customer, setCustomerState] = useState<Customer | null>(null);
+
+  // Hộp đen 28/07: mọi lần đổi khách đi qua setCustomer bọc log (xem
+  // customer-blackbox.ts). Ref giữ giá trị hiện tại để log "từ ai → sang ai"
+  // mà không dính stale closure.
+  const customerRef = useRef<Customer | null>(null);
+  const linesCountRef = useRef(0);
+  useEffect(() => {
+    customerRef.current = customer;
+  }, [customer]);
+  useEffect(() => {
+    linesCountRef.current = lines.length;
+  }, [lines.length]);
+
+  const setCustomer = useCallback(
+    (next: Customer | null, reason: string = "truc-tiep") => {
+      const prev = customerRef.current;
+      // Chỉ log khi ĐỔI thật (khác id hoặc khác null-ness) — refetch cùng
+      // khách sau F5 không spam log.
+      if ((prev?.id ?? null) !== (next?.id ?? null)) {
+        logCustomerChange({
+          from: prev ? { id: prev.id, name: prev.name } : null,
+          to: next ? { id: next.id, name: next.name } : null,
+          reason,
+          linesCount: linesCountRef.current,
+        });
+      }
+      setCustomerState(next);
+    },
+    [],
+  );
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
   const [paid, setPaid] = useState<number>(0);
   const [orderDiscount, setOrderDiscount] = useState<DiscountInput>({
@@ -283,7 +314,7 @@ export function usePosState() {
 
   const clearCart = useCallback((): void => {
     setLines([]);
-    setCustomer(null);
+    setCustomer(null, "clear-cart");
     setPaid(0);
     setPaymentBreakdown([
       { method: "cash", amount: 0 },
@@ -330,19 +361,22 @@ export function usePosState() {
     );
     // Customer resolution (draft stores id+name, not full object).
     if (draft.customerId) {
-      setCustomer({
-        id: draft.customerId,
-        code: "",
-        name: draft.customerName,
-        phone: "",
-        currentDebt: 0,
-        totalSales: 0,
-        totalSalesMinusReturns: 0,
-        type: "individual",
-        createdAt: draft.createdAt,
-      });
+      setCustomer(
+        {
+          id: draft.customerId,
+          code: "",
+          name: draft.customerName,
+          phone: "",
+          currentDebt: 0,
+          totalSales: 0,
+          totalSalesMinusReturns: 0,
+          type: "individual",
+          createdAt: draft.createdAt,
+        },
+        "load-draft",
+      );
     } else {
-      setCustomer(null);
+      setCustomer(null, "load-draft");
     }
     setOrderDiscount({ mode: "amount", value: draft.discountAmount });
     setNote(draft.note ?? "");
@@ -460,6 +494,7 @@ export function usePosState() {
               createdAt: new Date().toISOString(),
             }
           : null,
+        "f5-restore",
       );
     }
     if (data.orderDiscount) setOrderDiscount(data.orderDiscount);
@@ -469,7 +504,7 @@ export function usePosState() {
 
   const restoreSnapshot = useCallback((snap: PosSnapshot): void => {
     setLines(snap.lines);
-    setCustomer(snap.customer);
+    setCustomer(snap.customer, "tab-switch");
     setPaymentMethod(snap.paymentMethod);
     setPaid(snap.paid);
     setPaymentBreakdown(snap.paymentBreakdown ?? [

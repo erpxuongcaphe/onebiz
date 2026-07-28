@@ -87,9 +87,10 @@ export function loadLocalCart(
       localStorage.removeItem(lsKey(tenantId, branchId));
       return null;
     }
-    if (!Array.isArray(parsed.lines) || parsed.lines.length === 0) {
-      return null;
-    }
+    // 28/07: chấp nhận backup CHỈ CÓ KHÁCH (0 dòng hàng) — xem ghi chú ở
+    // saveLocalCart. Chỉ coi là rỗng khi không có cả hàng lẫn khách.
+    if (!Array.isArray(parsed.lines)) return null;
+    if (parsed.lines.length === 0 && !parsed.customer) return null;
     return parsed;
   } catch {
     return null;
@@ -168,7 +169,11 @@ export function useAutoSaveDraft({
 
     // ── 1. localStorage backup IMMEDIATELY (sync, không network) ──
     // F5/cúp điện trong khoảng debounce vẫn cứu được vì LS đã có data.
-    if (snapshot.lines.length > 0) {
+    // 28/07: giữ backup cả khi GIỎ TRỐNG nhưng ĐÃ CHỌN KHÁCH. Trước đây giỏ
+    // trống là xoá backup → thu ngân chọn khách trước khi thêm hàng (hoặc xoá
+    // hết hàng để sửa), tablet idle bị thu hồi bộ nhớ → reload → khách bay về
+    // "Khách lẻ". Chỉ xoá khi cả giỏ lẫn khách đều trống.
+    if (snapshot.lines.length > 0 || snapshot.customer) {
       saveLocalCart(ctx.tenantId, ctx.branchId, {
         lines: snapshot.lines,
         customer: snapshot.customer,

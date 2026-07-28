@@ -644,6 +644,10 @@ function PosPageInner() {
     // popup hỏi (đỡ thao tác cashier — giỏ vẫn đó như anh chưa F5).
     const localBackup = loadLocalCart(tenant.id, branchSnapshot);
     if (localBackup) {
+      // 28/07: backup giờ có thể CHỈ CÓ KHÁCH (0 dòng) — thu ngân chọn khách
+      // trước khi thêm hàng rồi tablet reload. Khôi phục khách im lặng, không
+      // toast "0 sản phẩm".
+      const hasLines = localBackup.lines.length > 0;
       state.restoreFromLocalBackup({
         lines: localBackup.lines,
         customer: localBackup.customer,
@@ -652,12 +656,14 @@ function PosPageInner() {
         paymentMethod: localBackup.paymentMethod,
       });
       setClientSessionId(localBackup.sessionId);
-      toast({
-        title: "Đã khôi phục giỏ tự lưu",
-        description: `${localBackup.lines.length} sản phẩm — tiếp tục bán hoặc bấm "Huỷ đơn" để bỏ.`,
-        variant: "info",
-        duration: 4000,
-      });
+      if (hasLines) {
+        toast({
+          title: "Đã khôi phục giỏ tự lưu",
+          description: `${localBackup.lines.length} sản phẩm — tiếp tục bán hoặc bấm "Huỷ đơn" để bỏ.`,
+          variant: "info",
+          duration: 4000,
+        });
+      }
       // P0-5 fix 12/06/2026: backup chỉ lưu slim {id,name} của KH → currentDebt=0
       // sau restore là RÁC. Re-fetch full customer từ DB để cashier thấy nợ cũ
       // và bị cảnh báo nếu KH đang nợ. Best-effort: lỗi/offline thì skip silent.
@@ -666,7 +672,7 @@ function PosPageInner() {
         getCustomerById(restoredCustomerId)
           .then((fresh) => {
             if (cancelled || !fresh) return;
-            state.setCustomer(fresh);
+            state.setCustomer(fresh, "refetch-sau-f5");
             if ((fresh.currentDebt ?? 0) > 0) {
               toast({
                 title: `⚠️ ${fresh.name} đang nợ ${formatCurrency(fresh.currentDebt)} ₫`,
@@ -680,11 +686,14 @@ function PosPageInner() {
             console.warn("[POS] re-fetch customer after F5 restore failed:", err);
           });
       }
-      // Không mở recovery dialog vì cart đã hồi phục — các draft khác trong
-      // /don-hang/hoa-don list cashier có thể vào riêng nếu muốn.
-      return () => {
-        cancelled = true;
-      };
+      // Có hàng trong giỏ → không mở recovery dialog (cart đã hồi phục).
+      // Backup chỉ-có-khách → vẫn rơi xuống Priority 2 để dialog nháp
+      // hoạt động như cũ.
+      if (hasLines) {
+        return () => {
+          cancelled = true;
+        };
+      }
     }
 
     // Priority 2: load all drafts → recovery dialog (race-safe)
@@ -3004,7 +3013,7 @@ function PosPageInner() {
               {state.customer && (
                 <button
                   type="button"
-                  onClick={() => state.setCustomer(null)}
+                  onClick={() => state.setCustomer(null, "user-clear")}
                   className="p-2 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                   title="Gỡ khách"
                 >
@@ -3559,7 +3568,7 @@ function PosPageInner() {
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSelect={(customer) => {
-          state.setCustomer(customer);
+          state.setCustomer(customer, "user-pick");
           // R2: Cảnh báo nợ cũ — KH có currentDebt > 0 → toast warning
           // ngay khi chọn để cashier biết trước khi cộng thêm đơn mới.
           if (customer && customer.currentDebt > 0) {
@@ -3595,7 +3604,7 @@ function PosPageInner() {
           })
             .then((res) => {
               if (res.data.length > 0) {
-                state.setCustomer(res.data[0]);
+                state.setCustomer(res.data[0], "user-pick-scan");
                 toast({
                   title: "Đã chọn khách hàng",
                   description: res.data[0].name,
