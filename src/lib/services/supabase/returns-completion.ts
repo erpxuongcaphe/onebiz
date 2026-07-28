@@ -210,17 +210,44 @@ export async function completeReturn(input: CompleteReturnInput): Promise<void> 
     if (error) handleError(error, "completeReturn:cash_payment");
   }
 
-  // 3. Partial-refund: credit the delta against customer debt
-  //    CEO 06/06/2026 Plan A research: KHÔNG còn write customers.debt
-  //    trực tiếp ở đây nữa. Trigger 00130 fire khi invoices.debt update
-  //    sẽ recompute customers.debt = SUM(invoices.debt). Code cũ chạy
-  //    đua với trigger → bug Xưởng Premium BL 280k sai.
+  // ── 3. Phần KHÔNG hoàn tiền mặt → cấn vào công nợ hoá đơn gốc.
   //
-  //    Nếu CEO refund < totalAmount → debtCredit > 0 nghĩa là KH đã trả
-  //    1 phần rồi và phiếu trả hàng giảm nợ. Khoản giảm này sẽ được
-  //    sales_returns flow update lên invoices.paid hoặc invoices.debt
-  //    (đường khác), trigger 00130 sẽ pick up.
+  //    Nguyên tắc giữ nguyên từ 06/06: KHÔNG đụng customers.debt ở đây.
+  //    Nguồn sự thật là invoices.debt, trigger 00130 tự tính lại tổng nợ
+  //    khách = SUM(invoices.debt). Ghi tay hai nơi sẽ chạy đua với trigger
+  //    (đã từng làm sai 280k của Xưởng Premium BL).
   //
-  //    Single Source of Truth = invoices.debt → trigger. Cấm app-side
-  //    write customers.debt từ đây trở đi.
+  //    NHƯNG 28/07 rà lại thì phần "đường khác sẽ cập nhật invoices.debt"
+  //    mà ghi chú cũ nhắc tới THỰC RA KHÔNG TỒN TẠI — không chỗ nào trong
+  //    luồng trả hàng đụng tới hoá đơn gốc. Hệ quả: thu ngân chọn "cấn trừ
+  //    công nợ" thì hàng về kho, phiếu trả ghi nhận, mà nợ khách y nguyên.
+  //    Giờ giảm nợ ngay tại đây — vẫn chỉ ghi invoices.debt, để trigger lo
+  //    phần khách.
+  const debtCredit = Math.max(
+    0,
+    (input.totalAmount ?? 0) - (input.refundAmount ?? 0),
+  );
+  if (debtCredit > 0 && input.invoiceId) {
+    const { data: inv } = await supabase
+      .from("invoices")
+      .select("debt, paid, total")
+      .eq("tenant_id", ctx.tenantId)
+      .eq("id", input.invoiceId)
+      .maybeSingle();
+
+    if (inv) {
+      const currentDebt = Number(inv.debt ?? 0);
+      // Chỉ cấn được tối đa phần đang còn nợ. Khách đã trả đủ (nợ 0) mà chọn
+      // cấn nợ là thao tác sai — không tự ý biến thành nợ âm.
+      const applied = Math.min(debtCredit, currentDebt);
+      if (applied > 0) {
+        const { error } = await supabase
+          .from("invoices")
+          .update({ debt: currentDebt - applied })
+          .eq("tenant_id", ctx.tenantId)
+          .eq("id", input.invoiceId);
+        if (error) handleError(error, "completeReturn:debt_credit");
+      }
+    }
+  }
 }

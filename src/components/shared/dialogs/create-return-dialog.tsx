@@ -45,6 +45,12 @@ interface InvoiceLineItem {
   quantity: number;
   unit_price: number;
   total: number;
+  /**
+   * 28/07 — Đơn giá THỰC KHÁCH ĐÃ TRẢ cho 1 đơn vị, tức đã trừ chiết khấu
+   * của dòng đó. Hoàn tiền phải theo giá này, không phải giá niêm yết.
+   * Suy từ total/quantity vì bảng dòng hàng đã lưu sẵn thành tiền sau chiết khấu.
+   */
+  effective_unit_price: number;
   selected: boolean;
   returnQty: number;
   /** BATCH 3R: SL đã trả ở các phiếu trước → clamp trả ≤ (quantity - returnedQty). */
@@ -152,6 +158,13 @@ export function CreateReturnDialog({
           quantity: qty,
           unit_price: Number(item.unit_price ?? 0),
           total: Number(item.total ?? 0),
+          // Giá thực = thành tiền dòng / số lượng. Dòng có chiết khấu thì
+          // total đã trừ rồi, nên chia ra là ra đúng giá khách trả mỗi đơn vị.
+          // qty = 0 (không xảy ra) thì lùi về giá niêm yết cho an toàn.
+          effective_unit_price:
+            qty > 0
+              ? Number(item.total ?? 0) / qty
+              : Number(item.unit_price ?? 0),
           selected: false,
           // Mặc định trả hết phần CÒN LẠI (không phải SL mua gốc).
           returnQty: remaining,
@@ -190,7 +203,9 @@ export function CreateReturnDialog({
   const selectedItems = useMemo(() => invoiceItems.filter((item) => item.selected), [invoiceItems]);
 
   const returnTotal = useMemo(
-    () => selectedItems.reduce((sum, item) => sum + item.returnQty * item.unit_price, 0),
+    // 28/07: nhân GIÁ THỰC (đã trừ chiết khấu), không phải giá niêm yết —
+    // trước đây khách mua giảm giá 70k trả lại được hoàn 100k.
+    () => selectedItems.reduce((sum, item) => sum + item.returnQty * item.effective_unit_price, 0),
     [selectedItems],
   );
 
@@ -258,8 +273,8 @@ export function CreateReturnDialog({
             product_name: item.product_name,
             unit: item.unit,
             quantity: item.returnQty,
-            unit_price: item.unit_price,
-            total: item.returnQty * item.unit_price,
+            unit_price: item.effective_unit_price,
+            total: item.returnQty * item.effective_unit_price,
           } satisfies ReturnItemInsert)));
         if (itemsErr) throw new Error(itemsErr.message);
 
@@ -286,7 +301,7 @@ export function CreateReturnDialog({
             productId: item.product_id,
             productName: item.product_name,
             quantity: item.returnQty,
-            unitPrice: item.unit_price,
+            unitPrice: item.effective_unit_price,
             invoiceItemId: item.id,
           })),
           refundAmount: effectiveRefund,

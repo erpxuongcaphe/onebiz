@@ -378,7 +378,21 @@ export function usePosState() {
     } else {
       setCustomer(null, "load-draft");
     }
-    setOrderDiscount({ mode: "amount", value: draft.discountAmount });
+    // 28/07 — CHỐNG TRỪ GIẢM GIÁ HAI LẦN khi mở lại đơn nháp.
+    // Lúc lưu, cột discount_amount được ghi = giảm giá cả đơn CỘNG tổng chiết
+    // khấu từng dòng (xem buildInput trong use-auto-save-draft). Nếu mở lại mà
+    // gán nguyên cục đó vào ô giảm giá đơn, trong khi từng dòng vẫn giữ chiết
+    // khấu riêng, thì phần chiết khấu dòng bị trừ lần thứ hai — mỗi lần mở lại
+    // đơn lại thất thu thêm đúng bằng số đó.
+    // Trả lại đúng phần của đơn: tổng đã lưu trừ đi chiết khấu các dòng.
+    const lineDiscountSum = draft.items.reduce(
+      (sum, it) => sum + (Number(it.discount) || 0),
+      0,
+    );
+    setOrderDiscount({
+      mode: "amount",
+      value: Math.max(0, (draft.discountAmount ?? 0) - lineDiscountSum),
+    });
     setNote(draft.note ?? "");
     setPaid(0);
   }, []);
