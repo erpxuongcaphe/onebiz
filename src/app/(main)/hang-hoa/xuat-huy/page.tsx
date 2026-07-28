@@ -500,7 +500,7 @@ export default function XuatHuyPage() {
             variant: "destructive",
             onClick: async (selectedRows) => {
               const cancellable = selectedRows.filter(
-                (r) => r.status === "draft",
+                (r) => r.status === "draft" || r.status === "completed",
               );
               if (cancellable.length === 0) {
                 toast({
@@ -553,8 +553,11 @@ export default function XuatHuyPage() {
                 base: buildDisposalPrintData(row),
               }),
             onAuditLog: () => setAuditDialogTarget(row),
+            // 28/07: cho huỷ cả phiếu ĐÃ HOÀN THÀNH — hoàn kho theo sổ cái
+            // qua RPC 00228. Trước đây chỉ nhận 'draft' nên nút này là nút
+            // chết (mọi phiếu xuất huỷ đều tạo thẳng ở 'completed').
             onCancel:
-              row.status === "draft"
+              row.status === "draft" || row.status === "completed"
                 ? () => setCancellingItem(row)
                 : undefined,
           })
@@ -580,7 +583,11 @@ export default function XuatHuyPage() {
         open={!!cancellingItem}
         onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
         title="Hủy phiếu xuất hủy"
-        description={`Bạn có chắc muốn hủy phiếu xuất hủy ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        description={
+          cancellingItem?.status === "completed"
+            ? `Hủy phiếu ${cancellingItem?.code ?? ""}? Số hàng đã xuất hủy sẽ được CỘNG TRẢ LẠI kho, kèm bút toán đối ứng để tra cứu. Không thể hoàn tác.`
+            : `Bạn có chắc muốn hủy phiếu xuất hủy ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`
+        }
         confirmLabel="Hủy phiếu"
         cancelLabel="Đóng"
         variant="destructive"

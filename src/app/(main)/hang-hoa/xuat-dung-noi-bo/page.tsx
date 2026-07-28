@@ -479,7 +479,7 @@ export default function XuatDungNoiBoPage() {
             variant: "destructive",
             onClick: async (selectedRows) => {
               const cancellable = selectedRows.filter(
-                (r) => r.status === "draft",
+                (r) => r.status === "draft" || r.status === "completed",
               );
               if (cancellable.length === 0) {
                 toast({
@@ -532,8 +532,11 @@ export default function XuatDungNoiBoPage() {
                 base: buildInternalExportPrintData(row),
               }),
             onAuditLog: () => setAuditDialogTarget(row),
+            // 28/07: cho huỷ cả phiếu ĐÃ HOÀN THÀNH — hoàn kho theo sổ cái
+            // qua RPC 00228. Trước đây chỉ nhận 'draft' nên nút này là nút
+            // chết (mọi phiếu xuất dùng nội bộ đều tạo thẳng ở 'completed').
             onCancel:
-              row.status === "draft"
+              row.status === "draft" || row.status === "completed"
                 ? () => setCancellingItem(row)
                 : undefined,
           })
@@ -559,7 +562,11 @@ export default function XuatDungNoiBoPage() {
         open={!!cancellingItem}
         onOpenChange={(open) => { if (!open) setCancellingItem(null); }}
         title="Hủy phiếu xuất nội bộ"
-        description={`Bạn có chắc muốn hủy phiếu xuất nội bộ ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`}
+        description={
+          cancellingItem?.status === "completed"
+            ? `Hủy phiếu ${cancellingItem?.code ?? ""}? Số hàng đã xuất sẽ được CỘNG TRẢ LẠI kho, kèm bút toán đối ứng để tra cứu. Không thể hoàn tác.`
+            : `Bạn có chắc muốn hủy phiếu xuất nội bộ ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác.`
+        }
         confirmLabel="Hủy phiếu"
         cancelLabel="Đóng"
         variant="destructive"

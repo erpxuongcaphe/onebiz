@@ -215,9 +215,18 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
 }
 
 /**
- * Hủy phiếu xuất hủy — chỉ cho phép hủy khi ở trạng thái draft.
+ * Hủy phiếu xuất hủy.
+ *
+ * - draft   → chỉ lật trạng thái (chưa trừ kho nên không phải hoàn gì).
+ * - completed → gọi RPC 00228 hoàn kho theo sổ cái rồi mới đánh dấu huỷ.
+ *
+ * CEO 28/07: phiếu xuất huỷ được tạo thẳng ở 'completed', trước đây nút Huỷ
+ * chỉ nhận 'draft' nên là nút chết — nhập nhầm phải đi điều chỉnh tồn tay.
  */
-export async function cancelDisposalExport(disposalId: string): Promise<void> {
+export async function cancelDisposalExport(
+  disposalId: string,
+  reason?: string,
+): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -232,15 +241,33 @@ export async function cancelDisposalExport(disposalId: string): Promise<void> {
     .select("id")
     .maybeSingle();
   if (error) handleError(error, "cancelDisposalExport");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("disposal_exports")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", disposalId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
-    throw new Error(`Không thể hủy phiếu ở trạng thái "${existing.status}".`);
+  if (claimed) return;
+
+  const { data: existing } = await sb
+    .from("disposal_exports")
+    .select("status")
+    .eq("tenant_id", tenantId)
+    .eq("id", disposalId)
+    .single();
+  if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
+  if (existing.status === "cancelled") {
+    throw new Error("Phiếu này đã hủy trước đó.");
+  }
+
+  // completed → hoàn kho atomic
+  const ctx = await getCurrentContext();
+  const { error: rpcErr } = await sb.rpc("void_disposal_export_atomic", {
+    p_disposal_id: disposalId,
+    p_created_by: ctx.userId,
+    p_reason: reason ?? null,
+  });
+  if (rpcErr) {
+    if (isRpcUnavailable(rpcErr)) {
+      throw new Error(
+        "Chưa có RPC void_disposal_export_atomic. Vui lòng chạy migration 00228 trước.",
+      );
+    }
+    handleError(rpcErr, "cancelDisposalExport.void");
   }
 }
 
@@ -276,9 +303,15 @@ export async function completeInternalExport(exportId: string): Promise<void> {
 }
 
 /**
- * Hủy phiếu xuất nội bộ — chỉ cho phép hủy khi ở trạng thái draft.
+ * Hủy phiếu xuất dùng nội bộ.
+ *
+ * Cùng cơ chế cancelDisposalExport: draft thì lật trạng thái, completed thì
+ * gọi RPC 00228 hoàn kho theo sổ cái trước khi đánh dấu huỷ.
  */
-export async function cancelInternalExport(exportId: string): Promise<void> {
+export async function cancelInternalExport(
+  exportId: string,
+  reason?: string,
+): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -293,15 +326,32 @@ export async function cancelInternalExport(exportId: string): Promise<void> {
     .select("id")
     .maybeSingle();
   if (error) handleError(error, "cancelInternalExport");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("internal_exports")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", exportId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
-    throw new Error(`Không thể hủy phiếu ở trạng thái "${existing.status}".`);
+  if (claimed) return;
+
+  const { data: existing } = await sb
+    .from("internal_exports")
+    .select("status")
+    .eq("tenant_id", tenantId)
+    .eq("id", exportId)
+    .single();
+  if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
+  if (existing.status === "cancelled") {
+    throw new Error("Phiếu này đã hủy trước đó.");
+  }
+
+  const ctx = await getCurrentContext();
+  const { error: rpcErr } = await sb.rpc("void_internal_export_atomic", {
+    p_export_id: exportId,
+    p_created_by: ctx.userId,
+    p_reason: reason ?? null,
+  });
+  if (rpcErr) {
+    if (isRpcUnavailable(rpcErr)) {
+      throw new Error(
+        "Chưa có RPC void_internal_export_atomic. Vui lòng chạy migration 00228 trước.",
+      );
+    }
+    handleError(rpcErr, "cancelInternalExport.void");
   }
 }
 
