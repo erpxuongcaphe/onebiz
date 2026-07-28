@@ -1512,7 +1512,16 @@ function FnbPosPageInner() {
       // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
       // await → trước đây koId undefined → bấm Thanh toán đơ im lặng, mất đơn).
       let koId = tab?.kitchenOrderId ?? null;
-      if (!koId && tab && tab.lines.length > 0) {
+      // 29/07 — GIỎ CÒN MÓN THÌ PHẢI GỬI BẾP TRƯỚC KHI TÍNH TIỀN.
+      // Giỏ được dọn sau mỗi lần gửi bếp, nên món còn lại trong giỏ là món
+      // MỚI THÊM chưa ai biết. Trước đây chỉ gửi khi đơn chưa tồn tại
+      // (!koId) — thu ngân thêm món rồi bấm thẳng Thanh toán thì món mới
+      // không vào đơn bếp: bếp không làm, hoá đơn thiếu món, mà màn hình vẫn
+      // cộng tiền món đó vào tổng → thu thừa của khách.
+      // handleSendToKitchen tự phân nhánh: chưa có đơn thì tạo mới, có rồi
+      // thì gửi bổ sung.
+      const soMonChuaGui = tab?.lines.length ?? 0;
+      if (tab && soMonChuaGui > 0) {
         koId = await handleSendToKitchen();
       }
 

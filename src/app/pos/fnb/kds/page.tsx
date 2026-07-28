@@ -1139,9 +1139,20 @@ function KdsOrderCard({
     >
       <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card p-4">
         <div className="min-w-0 space-y-2">
-          <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
-            {typeLabelCaption}
-          </span>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
+              {typeLabelCaption}
+            </span>
+            {/* 29/07: khách trả tiền trước thì đơn VẪN nằm trên màn bếp (xem
+                00229). Gắn dấu để bếp biết đơn này đã thu tiền — làm xong là
+                giao luôn, không phải hỏi thu ngân. */}
+            {order.invoiceId && (
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                <Icon name="paid" size={13} />
+                ĐÃ THANH TOÁN
+              </span>
+            )}
+          </div>
           <div className="space-y-1">
             <span className="block truncate font-heading text-4xl font-extrabold leading-none tracking-tight text-foreground md:text-5xl">
               {typeLabel}
