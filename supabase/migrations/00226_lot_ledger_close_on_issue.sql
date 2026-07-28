@@ -427,7 +427,7 @@ begin
       on bs.product_id = l.product_id
      and bs.branch_id = l.branch_id
      and bs.variant_id is null
-    where l.status <> cancelled
+    where l.status <> 'cancelled'
     group by l.tenant_id, l.product_id, l.branch_id
     having sum(l.current_qty) > coalesce(max(bs.quantity), 0) + 0.01
   loop
@@ -438,7 +438,7 @@ begin
       from public.product_lots
       where product_id = r.product_id
         and branch_id  = r.branch_id
-        and status <> cancelled
+        and status <> 'cancelled'
         and current_qty > 0
       order by received_date nulls last, created_at
     loop
@@ -446,7 +446,7 @@ begin
       v_tru := least(v_lo.current_qty, v_du);
       update public.product_lots
       set current_qty = current_qty - v_tru,
-          status = case when current_qty - v_tru <= 0.01 then consumed else status end,
+          status = case when current_qty - v_tru <= 0.01 then 'consumed' else status end,
           updated_at = now()
       where id = v_lo.id;
       v_du := v_du - v_tru;
@@ -464,7 +464,7 @@ $nan$;
 -- join public.products p on p.id = l.product_id
 -- left join public.branch_stock bs on bs.product_id = l.product_id
 --   and bs.branch_id = l.branch_id and bs.variant_id is null
--- where l.status <> cancelled
+-- where l.status <> 'cancelled'
 -- group by p.code, l.product_id, l.branch_id
 -- having abs(sum(l.current_qty) - coalesce(max(bs.quantity), 0)) > 0.01;
 --
