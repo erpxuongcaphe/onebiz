@@ -6,7 +6,13 @@ import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { getPurchaseForecast } from "@/lib/services";
+// getCustomerGroups() (đồng bộ) luôn trả mảng RỖNG — phải dùng bản Async,
+// nếu không ô chọn nhóm khách sẽ trống mãi mà không báo lỗi gì.
+import {
+  getPurchaseForecast,
+  getCustomers,
+  getCustomerGroupsAsync,
+} from "@/lib/services";
 import type { PurchaseForecastResult } from "@/lib/services";
 import {
   exportReportToExcel,
@@ -24,11 +30,46 @@ export default function DuKienMuaHangPage() {
   const [data, setData] = useState<PurchaseForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // 29/07 (CEO): xem nhu cầu mua hàng theo TỪNG KHÁCH hoặc NHÓM KHÁCH —
+  // trả lời câu "đơn của nhóm khách sỉ cần mua bao nhiêu nguyên liệu".
+  const [customerId, setCustomerId] = useState<string>("");
+  const [groupId, setGroupId] = useState<string>("");
+  const [dsKhach, setDsKhach] = useState<{ id: string; name: string }[]>([]);
+  const [dsNhom, setDsNhom] = useState<{ id: string; name: string }[]>([]);
+
+  useEffect(() => {
+    let huy = false;
+    void (async () => {
+      try {
+        const [kh, nhom] = await Promise.all([
+          getCustomers({ page: 1, pageSize: 500 }),
+          getCustomerGroupsAsync(),
+        ]);
+        if (huy) return;
+        setDsKhach(
+          (kh.data ?? []).map((c) => ({ id: c.id, name: c.name })),
+        );
+        // getCustomerGroupsAsync trả { label, value, count }
+        setDsNhom((nhom ?? []).map((g) => ({ id: g.value, name: g.label })));
+      } catch {
+        // Không tải được danh sách thì ô lọc để trống — không chặn báo cáo
+      }
+    })();
+    return () => {
+      huy = true;
+    };
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       const res = await getPurchaseForecast(
-        { dateFrom: range.from, dateTo: range.to },
+        {
+          dateFrom: range.from,
+          dateTo: range.to,
+          customerId: customerId || undefined,
+          customerGroupId: groupId || undefined,
+        },
         activeBranchId,
       );
       setData(res);
@@ -42,7 +83,7 @@ export default function DuKienMuaHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, activeBranchId, toast]);
+  }, [range.from, range.to, activeBranchId, customerId, groupId, toast]);
 
   useEffect(() => {
     void fetchData();
@@ -147,6 +188,73 @@ export default function DuKienMuaHangPage() {
         onExportFull={handleExport}
         exportDisabled={loading || !data}
       />
+
+      {/* 29/07 (CEO): lọc theo khách / nhóm khách. Đặt ngay dưới đầu trang để
+          thấy trước khi đọc số — tránh nhìn nhầm số đã lọc thành số toàn bộ. */}
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[200px]">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Nhóm khách
+          </label>
+          <select
+            value={groupId}
+            onChange={(e) => {
+              setGroupId(e.target.value);
+              if (e.target.value) setCustomerId(""); // chọn nhóm thì bỏ chọn khách lẻ
+            }}
+            className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
+          >
+            <option value="">Tất cả nhóm</option>
+            {dsNhom.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="min-w-[240px]">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
+            Khách hàng cụ thể
+          </label>
+          <select
+            value={customerId}
+            onChange={(e) => {
+              setCustomerId(e.target.value);
+              if (e.target.value) setGroupId(""); // chọn khách thì bỏ lọc nhóm
+            }}
+            className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
+          >
+            <option value="">Tất cả khách</option>
+            {dsKhach.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {(groupId || customerId) && (
+          <button
+            type="button"
+            onClick={() => {
+              setGroupId("");
+              setCustomerId("");
+            }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-sm hover:bg-muted/50"
+          >
+            <Icon name="filter_alt_off" size={16} />
+            Bỏ lọc
+          </button>
+        )}
+
+        {(groupId || customerId) && (
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-amber-500/10 px-3 text-sm text-amber-700">
+            <Icon name="info" size={16} />
+            Đang xem số liệu đã lọc, không phải toàn bộ
+          </span>
+        )}
+      </div>
 
       {/* Ghi chú nguồn số liệu */}
       <div className="rounded-lg border border-primary/25 bg-primary/5 px-4 py-2.5 text-sm text-muted-foreground flex flex-wrap items-center gap-x-4 gap-y-1">

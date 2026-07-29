@@ -112,7 +112,17 @@ async function fetchBomItems(
 }
 
 export async function getPurchaseForecast(
-  filters?: { dateFrom?: string; dateTo?: string },
+  /**
+   * 29/07 (CEO): thêm lọc theo KHÁCH và NHÓM KHÁCH — để biết "đơn của nhóm
+   * khách sỉ này cần mua bao nhiêu nguyên liệu". Dùng customers.group_id có
+   * sẵn (5 nhóm đã gán), không cần bảng mới.
+   */
+  filters?: {
+    dateFrom?: string;
+    dateTo?: string;
+    customerId?: string;
+    customerGroupId?: string;
+  },
   branchId?: string,
 ): Promise<PurchaseForecastResult> {
   const supabase = getClient() as AnyRow;
@@ -136,6 +146,31 @@ export async function getPurchaseForecast(
     .in("status", OPEN_ORDER_STATUSES as unknown as string[]);
   orderQ = applyCreatedAtRangeFilter(orderQ, filters);
   if (branchId) orderQ = orderQ.eq("branch_id", branchId);
+
+  // Lọc theo khách cụ thể
+  if (filters?.customerId) orderQ = orderQ.eq("customer_id", filters.customerId);
+
+  // Lọc theo NHÓM khách: lấy danh sách khách thuộc nhóm rồi lọc đơn theo đó.
+  // Không join thẳng vì đơn có thể là khách vãng lai (customer_id null) —
+  // lọc theo nhóm thì những đơn đó phải bị loại, đúng ý "đơn của nhóm này".
+  if (filters?.customerGroupId) {
+    const { data: khachTrongNhom } = await supabase
+      .from("customers")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("group_id", filters.customerGroupId);
+    const ids = ((khachTrongNhom ?? []) as AnyRow[]).map((c) => c.id as string);
+    if (ids.length === 0) {
+      return {
+        khoTongName: khoTong?.name ?? null,
+        orderCount: 0,
+        skuRows: [],
+        materials: [],
+        totalToBuyAmount: 0,
+      };
+    }
+    orderQ = orderQ.in("customer_id", ids);
+  }
   const { data: orders, error: orderErr } = await orderQ;
   if (orderErr) handleError(orderErr, "getPurchaseForecast.orders");
 
