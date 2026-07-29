@@ -30,59 +30,86 @@
 -- quỹ những khoản tiền vốn đã chi thật — việc ghi đó là đúng, cái sai là
 -- báo cáo xếp nhầm chúng vào chi phí vận hành.
 --
--- SỬA: thêm 2 loại vào danh sách loại trừ, ở CẢ HAI chỗ trong RPC (kỳ hiện
--- tại và kỳ trước) để so sánh hai kỳ không bị lệch chuẩn.
+-- ⚠️ SỬA LẠI SAU LẦN CHẠY ĐẦU THẤT BẠI
+-- Bản đầu đoán "2 chỗ loại trừ nằm trong CÙNG một hàm (kỳ này + kỳ trước)"
+-- nên guard đòi đúng 2 và dừng lại khi chỉ thấy 1. Guard đã làm đúng việc.
+-- Thực tế 2 chỗ đó thuộc HAI HÀM KHÁC NHAU, mỗi hàm một chỗ:
+--     get_profit_and_loss_report          → lãi/lỗ toàn công ty
+--     get_branch_profit_and_loss_report   → lãi/lỗ từng chi nhánh
+-- Cả hai đều thiếu, nên vá cả hai.
+--
 -- KHÔNG đụng một dòng dữ liệu nào — chỉ sửa cách báo cáo đọc.
 -- ============================================================
 
 do $$
 declare
-  v_def text;
-  v_moi text;
-  v_dem int;
+  v_ten   text;
+  v_def   text;
+  v_moi   text;
+  v_dem   int;
+  v_tong  int := 0;
 begin
-  select pg_get_functiondef(oid) into v_def
-    from pg_proc
-   where proname = 'get_profit_and_loss_report'
-   limit 1;
+  foreach v_ten in array array[
+    'get_profit_and_loss_report',
+    'get_branch_profit_and_loss_report'
+  ]
+  loop
+    select pg_get_functiondef(oid) into v_def
+      from pg_proc
+     where proname = v_ten
+     limit 1;
 
-  if v_def is null then
-    raise exception 'Không tìm thấy hàm get_profit_and_loss_report';
-  end if;
+    if v_def is null then
+      raise exception 'Không tìm thấy hàm %', v_ten;
+    end if;
 
-  -- Đếm số chỗ cần vá (phải là 2: kỳ này + kỳ trước)
-  v_dem := (length(v_def) - length(replace(v_def, '''Trả hàng''', ''))) / length('''Trả hàng''');
-  if v_dem <> 2 then
-    raise exception 'Mong 2 chỗ loại trừ, tìm thấy % — dừng để không vá nhầm', v_dem;
-  end if;
+    -- Đã vá rồi thì bỏ qua (chạy lại được)
+    if v_def like '%Trả nhà cung cấp%' then
+      raise notice '% — đã có sẵn, bỏ qua', v_ten;
+      continue;
+    end if;
 
-  -- Chèn 2 loại mới ngay trước 'Trả hàng' trong cả hai mảng
-  v_moi := replace(
-    v_def,
-    '''Trả hàng''',
-    '''Trả hàng'',' || chr(10) ||
-    '          ''Trả nhà cung cấp'',' || chr(10) ||
-    '          ''supplier_payment'''
-  );
+    -- Mỗi hàm phải có ĐÚNG 1 chỗ loại trừ
+    v_dem := (length(v_def) - length(replace(v_def, '''Trả hàng''', '')))
+             / length('''Trả hàng''');
+    if v_dem <> 1 then
+      raise exception '% : mong 1 chỗ loại trừ, tìm thấy % — dừng để không vá nhầm',
+        v_ten, v_dem;
+    end if;
 
-  execute v_moi;
-  raise notice 'Đã vá % chỗ trong get_profit_and_loss_report', v_dem;
+    v_moi := replace(
+      v_def,
+      '''Trả hàng''',
+      '''Trả hàng'',' || chr(10) ||
+      '          ''Trả nhà cung cấp'',' || chr(10) ||
+      '          ''supplier_payment'''
+    );
+
+    execute v_moi;
+    v_tong := v_tong + 1;
+    raise notice 'Đã vá %', v_ten;
+  end loop;
+
+  raise notice 'Tổng cộng vá % hàm', v_tong;
 end $$;
 
 -- ============================================================
 -- ĐỐI CHIẾU — chạy sau khi áp
 -- ============================================================
--- 1) Hàm đã nhận 2 loại mới (cả 2 phải true):
--- select
---   pg_get_functiondef(oid) like '%Trả nhà cung cấp%' as co_tra_ncc,
---   pg_get_functiondef(oid) like '%supplier_payment%' as co_supplier_payment
--- from pg_proc where proname = 'get_profit_and_loss_report';
+-- 1) Cả HAI hàm phải nhận 2 loại mới (4 cột đều true):
+-- select proname,
+--        pg_get_functiondef(oid) like '%Trả nhà cung cấp%' as co_tra_ncc,
+--        pg_get_functiondef(oid) like '%supplier_payment%' as co_supplier_payment
+--   from pg_proc
+--  where proname in ('get_profit_and_loss_report',
+--                    'get_branch_profit_and_loss_report');
 --
 -- 2) Xem lại lợi nhuận tháng 7 — phải chuyển từ ÂM sang DƯƠNG:
 --    mở Báo cáo → Tổng quan kinh doanh, chọn "Tháng này".
 --
 -- 3) Rà xem còn loại chi nào là "trả tiền mua hàng" mà chưa loại:
--- select category, count(*), sum(amount)
+-- select category, count(*) as so_phieu,
+--        to_char(sum(amount), 'FM999,999,999,999') as tong
 --   from public.cash_transactions
 --  where type = 'payment' and coalesce(status,'') <> 'cancelled'
 --  group by category order by sum(amount) desc;
