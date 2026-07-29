@@ -184,6 +184,9 @@ export interface PurchaseOrderItemRow {
   /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập (migration 00102) */
   expiryDate?: string | null;
   lotNumber?: string | null;
+  /** 29/07: cần cho màn "Sửa phiếu nhập" — sửa giá không đụng kho. */
+  discount?: number;
+  vatRate?: number;
 }
 
 export async function getPurchaseOrderItems(
@@ -194,7 +197,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, unit, expiry_date, lot_number, products(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, expiry_date, lot_number, products(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -208,6 +211,8 @@ export async function getPurchaseOrderItems(
     quantity: number | string;
     received_quantity: number | string;
     unit_price: number | string;
+    discount: number | string | null;
+    vat_rate: number | string | null;
     unit: string | null;
     expiry_date: string | null;
     lot_number: string | null;
@@ -229,6 +234,8 @@ export async function getPurchaseOrderItems(
       lineTotal: qty * price,
       expiryDate: row.expiry_date,
       lotNumber: row.lot_number,
+      discount: Number(row.discount ?? 0),
+      vatRate: Number(row.vat_rate ?? 0),
     };
   });
 }
@@ -476,6 +483,131 @@ export async function reopenPurchaseOrderForEdit(
     revertedQtyTotal: res.reverted_qty_total,
     consumedLotsCancelled: res.consumed_lots_cancelled,
     inputInvoiceDeleted: res.input_invoice_deleted,
+  };
+}
+
+// ============================================================
+// Sửa phiếu nhập KHÔNG cần huỷ — phần không đụng kho (CEO 29/07/2026)
+// ============================================================
+
+/**
+ * Nạp đúng những trường màn "Sửa phiếu nhập" cần.
+ *
+ * Không lấy từ dòng danh sách vì kiểu `PurchaseOrder` không mang ghi chú và
+ * các khoản chi phí — dialog tự đọc để luôn thấy số mới nhất, không lệ thuộc
+ * bảng ngoài đã tải trước đó.
+ */
+export async function getPurchaseOrderEditData(orderId: string): Promise<{
+  note: string | null;
+  shippingCost: number;
+  otherCost: number;
+  orderDiscount: number;
+  total: number;
+  paid: number;
+  supplierName: string | null;
+  status: string;
+}> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("purchase_orders")
+    .select("note, shipping_cost, other_cost, order_discount, total, paid, supplier_name, status")
+    .eq("id", orderId)
+    .single();
+  if (error) handleError(error, "getPurchaseOrderEditData");
+  return {
+    note: data?.note ?? null,
+    shippingCost: Number(data?.shipping_cost ?? 0),
+    otherCost: Number(data?.other_cost ?? 0),
+    orderDiscount: Number(data?.order_discount ?? 0),
+    total: Number(data?.total ?? 0),
+    paid: Number(data?.paid ?? 0),
+    supplierName: data?.supplier_name ?? null,
+    status: String(data?.status ?? ""),
+  };
+}
+
+export interface SuaGiaDongHang {
+  /** id dòng trong purchase_order_items */
+  id: string;
+  unitPrice?: number;
+  discount?: number;
+  vatRate?: number;
+}
+
+export interface KetQuaSuaPhieuNhap {
+  soDongSua: number;
+  tongCu: number;
+  tongMoi: number;
+  chenhLech: number;
+  daTra: number;
+  conNo: number;
+}
+
+/**
+ * Sửa phiếu nhập đã nhập kho mà KHÔNG hoàn nhập.
+ *
+ * Sửa được: nhà cung cấp, ghi chú, đơn giá, chiết khấu, thuế, phí vận
+ * chuyển, chi phí khác, giảm giá cả phiếu.
+ *
+ * KHÔNG sửa được số lượng — đổi số lượng là đụng kho, vẫn phải hoàn nhập.
+ * Lý do: phiếu nhập 33, đã bán còn 32, sửa xuống 30 thì phải rút ra 3 đơn vị
+ * không còn tồn tại → sổ âm.
+ *
+ * RPC 00234 chỉ CỘNG PHẦN CHÊNH chứ không tính lại tổng từ đầu, để không
+ * làm xê dịch các phiếu cũ vốn đã có sai lệch lịch sử (3/40 phiếu).
+ * Giá vốn KHÔNG đổi — hàng đã bán thì giá vốn đã chốt vào hoá đơn bán.
+ */
+export async function suaGiaPhieuNhap(input: {
+  orderId: string;
+  items: SuaGiaDongHang[];
+  supplierId?: string | null;
+  supplierName?: string | null;
+  note?: string | null;
+  shippingCost?: number | null;
+  otherCost?: number | null;
+  orderDiscount?: number | null;
+}): Promise<KetQuaSuaPhieuNhap> {
+  const supabase = getClient();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "update_purchase_order_prices",
+    {
+      p_order_id: input.orderId,
+      p_items: input.items.map((i) => ({
+        id: i.id,
+        unit_price: i.unitPrice,
+        discount: i.discount,
+        vat_rate: i.vatRate,
+      })),
+      p_supplier_id: input.supplierId ?? null,
+      p_supplier_name: input.supplierName ?? null,
+      p_note: input.note ?? null,
+      p_shipping_cost: input.shippingCost ?? null,
+      p_other_cost: input.otherCost ?? null,
+      p_order_discount: input.orderDiscount ?? null,
+    },
+  );
+  if (error) handleError(error, "suaGiaPhieuNhap");
+
+  const r = data as {
+    so_dong_sua: number;
+    tong_cu: number;
+    tong_moi: number;
+    chenh_lech: number;
+    da_tra: number;
+    con_no: number;
+  } | null;
+  if (!r) throw new Error("Không sửa được phiếu nhập — máy chủ không trả kết quả");
+
+  return {
+    soDongSua: r.so_dong_sua,
+    tongCu: Number(r.tong_cu),
+    tongMoi: Number(r.tong_moi),
+    chenhLech: Number(r.chenh_lech),
+    daTra: Number(r.da_tra),
+    conNo: Number(r.con_no),
   };
 }
 

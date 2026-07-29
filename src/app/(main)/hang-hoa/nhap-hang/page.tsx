@@ -54,6 +54,7 @@ import {
 import type { PurchaseOrder, PurchaseOrderStatus } from "@/lib/types";
 import { RecordPaymentDialog } from "@/components/shared/dialogs/record-payment-dialog";
 import { CancelImpactDialog } from "@/components/shared/dialogs/cancel-impact-dialog";
+import { EditPurchaseOrderDialog } from "@/components/shared/dialogs/edit-purchase-order-dialog";
 import { PartialReceiveDialog } from "@/components/shared/dialogs/partial-receive-dialog";
 // PERF (CEO 23/05/2026): Lazy-load CreatePurchaseOrderDialog (819 dòng).
 import dynamic from "next/dynamic";
@@ -496,6 +497,9 @@ export default function NhapHangPage() {
   const [partialReceiveOrder, setPartialReceiveOrder] = useState<PurchaseOrder | null>(null);
   // Day 2 16/05: Đóng đơn còn thiếu — partial/ordered → completed kèm reason
   const [closeShortTarget, setCloseShortTarget] = useState<PurchaseOrder | null>(null);
+  // 29/07 (CEO): sửa phiếu nhập KHÔNG cần huỷ — chỉ phần không đụng kho.
+  const [editTarget, setEditTarget] = useState<{ id: string; code: string } | null>(null);
+
   // 21/07: mục tiêu hủy phiếu nhập cho CancelImpactDialog (bảng tác động).
   const [cancelPOTarget, setCancelPOTarget] = useState<PurchaseOrder | null>(null);
   const [closeShortReason, setCloseShortReason] = useState("");
@@ -1405,6 +1409,13 @@ export default function NhapHangPage() {
               row.status === "completed"
                 ? [
                     {
+                      // CEO 29/07: sửa giá/chiết khấu/thuế/chi phí/ghi chú mà
+                      // KHÔNG đụng kho — không phải huỷ phiếu như trước.
+                      label: "Sửa phiếu (giá, chi phí)",
+                      icon: <Icon name="edit_document" size={16} />,
+                      onClick: () => setEditTarget({ id: row.id, code: row.code }),
+                    },
+                    {
                       label: "Mở lại để sửa (revert tồn)",
                       icon: <Icon name="restart_alt" size={16} />,
                       onClick: async () => {
@@ -1462,6 +1473,17 @@ export default function NhapHangPage() {
       onConfirm={async ({ allowNegativeStock }) => {
         await performCancelPO(allowNegativeStock);
       }}
+    />
+
+    {/* 29/07 (CEO): sửa phiếu nhập KHÔNG cần huỷ — chỉ phần không đụng kho
+        (giá, chiết khấu, thuế, chi phí, ghi chú). Số lượng vẫn khoá. */}
+    <EditPurchaseOrderDialog
+      open={editTarget !== null}
+      onOpenChange={(o) => {
+        if (!o) setEditTarget(null);
+      }}
+      order={editTarget}
+      onDone={fetchData}
     />
 
     {payingItem && (
