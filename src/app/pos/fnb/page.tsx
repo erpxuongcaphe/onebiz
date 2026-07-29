@@ -41,7 +41,7 @@ import {
   hapticError,
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
-import { validateCoupon } from "@/lib/services/supabase/coupons";
+import { validateCoupon, applyCouponAtomic } from "@/lib/services/supabase/coupons";
 import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService, setDeliveryPlatform as setDeliveryPlatformService } from "@/lib/services/supabase/kitchen-orders";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
@@ -1749,6 +1749,29 @@ function FnbPosPageInner() {
           }
         }
 
+        // 29/07: Trừ lượt dùng mã giảm giá. POS Retail (pos/page.tsx) gọi
+        // applyCouponAtomic sau checkout từ lâu; F&B chỉ KIỂM mã rồi thôi, nên
+        // mã "giới hạn 1 lượt" dùng lại được vô hạn ở quán. Best-effort giống
+        // Retail: hỏng thì log, KHÔNG chặn đơn đã thu tiền.
+        if (
+          networkStatus.isOnline &&
+          couponApplied &&
+          couponApplied.discount > 0 &&
+          payResult.invoiceId
+        ) {
+          const couponCode = couponApplied.code;
+          applyCouponAtomic({
+            code: couponCode,
+            invoiceId: payResult.invoiceId,
+            customerId: tab?.customerId ?? null,
+            discountAmount: couponApplied.discount,
+          }).then((r) => {
+            if (!r.ok) {
+              console.warn(`[FnB] coupon ${couponCode} consume failed:`, r.reason);
+            }
+          });
+        }
+
         // L-2: Earn loyalty points cho KH có account — bg fire
         if (
           networkStatus.isOnline &&
@@ -1785,6 +1808,10 @@ function FnbPosPageInner() {
         pos.closeTab(pos.activeTabId);
         setAppliedPromotion(null);
         setPromotionCleared(false);
+        // Gỡ mã giảm giá TƯỜNG MINH như khuyến mãi ngay trên. Trước đây chỉ
+        // dựa vào effect reset-khi-đổi-tab — mã đã trừ lượt mà còn nằm trên
+        // màn hình thì đơn kế tiếp giảm giá oan + trừ lượt lần nữa.
+        setCouponApplied(null);
         hapticSuccess();
 
         if (!networkStatus.isOnline) {
@@ -2146,6 +2173,42 @@ function FnbPosPageInner() {
     }
   }, [pos, toast]);
 
+  // 29/07: rót món của đơn con vừa tách vào tab con. Bắt buộc — màn thanh
+  // toán lấy số tiền khách đưa từ GIỎ (pos.total), giỏ rỗng thì bấm thanh
+  // toán sẽ đưa 0đ và hoá đơn ghi nợ nguyên đơn (RPC tự tính đúng tổng từ
+  // đơn bếp, nên lệch ra thành công nợ ảo).
+  const loadChildOrderIntoTab = useCallback(
+    async (childOrderId: string, tabId: string) => {
+      try {
+        const child = await getKitchenOrderById(childOrderId);
+        pos.loadLinesIntoTab(
+          tabId,
+          (child.items ?? []).map((it) => ({
+            productId: it.productId,
+            productName: it.productName,
+            variantId: it.variantId ?? undefined,
+            variantLabel: it.variantLabel ?? undefined,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            toppings: (it.toppings ?? []) as unknown as FnbOrderLine["toppings"],
+            modifierSelections: it.modifierSelections,
+            note: it.note ?? undefined,
+          })),
+        );
+      } catch (err) {
+        // Không chặn: đơn con đã nằm trong DB và tab đã cầm mã đơn. Thu ngân
+        // bấm lại vào tab là màn hình tự nạp; báo để không thu nhầm 0đ.
+        console.error("[FnB] nạp món đơn con thất bại:", err);
+        toast({
+          title: "Chưa tải được món của bill tách",
+          description: "Mở lại tab đó trước khi thu tiền để số tiền hiện đúng.",
+          variant: "warning",
+        });
+      }
+    },
+    [pos, toast],
+  );
+
   const handleSplitByItems = useCallback(
     async (itemIds: string[]) => {
       const tab = pos.activeTab;
@@ -2164,13 +2227,18 @@ function FnbPosPageInner() {
         return;
       }
       try {
-        await splitByItems(tab.kitchenOrderId, itemIds);
-        // Create a new tab for the child order
-        pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
+        const result = await splitByItems(tab.kitchenOrderId, itemIds);
+        // 29/07: NỐI tab mới với đơn con vừa tách. Trước đây tab được tạo
+        // rỗng, không cầm mã đơn bếp nào → bấm thanh toán trên tab đó sẽ mở
+        // một đơn MỚI, còn đơn con đã tách nằm mồ côi: bếp đã làm món mà
+        // không ai thu được tiền.
+        const newTabId = pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
+        pos.updateTabMeta(newTabId, { kitchenOrderId: result.childOrderId });
+        await loadChildOrderIntoTab(result.childOrderId, newTabId);
         hapticSuccess();
         toast({
           title: "Đã tách bill",
-          description: `${itemIds.length} món chuyển sang đơn ${tab.label}-B`,
+          description: `${itemIds.length} món chuyển sang tab "${tab.label}-B" — thu tiền ở tab đó`,
           variant: "success",
         });
       } catch (err) {
@@ -2182,7 +2250,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos, networkStatus.isOnline, toast]
+    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab]
   );
 
   const handleSplitEqually = useCallback(
@@ -2207,16 +2275,23 @@ function FnbPosPageInner() {
         return;
       }
       try {
-        await splitEqually(tab.kitchenOrderId, numberOfWays);
-        // Create tabs for child orders
+        const { childOrderIds } = await splitEqually(tab.kitchenOrderId, numberOfWays);
+        // 29/07: mỗi tab con NỐI với một đơn con đã tách (xem ghi chú ở
+        // handleSplitByItems) — không nối thì các phần chia ra không thu
+        // được tiền.
         for (let i = 1; i < numberOfWays; i++) {
           const suffix = String.fromCharCode(65 + i);
-          pos.createTab(`${tab.label}-${suffix}`, tab.orderType, tab.tableId);
+          const newTabId = pos.createTab(`${tab.label}-${suffix}`, tab.orderType, tab.tableId);
+          const childId = childOrderIds[i - 1];
+          if (childId) {
+            pos.updateTabMeta(newTabId, { kitchenOrderId: childId });
+            await loadChildOrderIntoTab(childId, newTabId);
+          }
         }
         hapticSuccess();
         toast({
           title: "Đã tách bill",
-          description: `Đơn đã chia thành ${numberOfWays} phần bằng nhau`,
+          description: `Chia thành ${numberOfWays} phần — thu tiền lần lượt từng tab`,
           variant: "success",
         });
       } catch (err) {
@@ -2228,7 +2303,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos, networkStatus.isOnline, toast]
+    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab]
   );
 
   // ── Keyboard shortcuts (F3/F4/F9/F10/Ctrl+Tab) ──

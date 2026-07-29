@@ -98,6 +98,12 @@ export interface UseFnbPosStateReturn {
    */
   updateLine: (lineId: string, line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   clearCart: () => void;
+  /**
+   * 29/07: nạp món vào MỘT tab chỉ định (không cần tab đó đang mở). Dùng cho
+   * tách bill: tab con phải cầm sẵn món của đơn con, nếu không màn thanh toán
+   * hiện 0đ và hoá đơn ghi nợ toàn bộ.
+   */
+  loadLinesIntoTab: (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => void;
 
   // Discount
   setOrderDiscount: (tabId: string, discount: FnbDiscountInput | undefined) => void;
@@ -368,6 +374,28 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     updateActiveTab(() => []);
   }, [updateActiveTab]);
 
+  // 29/07: nạp món vào tab chỉ định — khác addLine ở chỗ KHÔNG bám activeTab,
+  // vì tách bill phải rót món vào tab con trong khi thu ngân vẫn đứng ở tab gốc.
+  const loadLinesIntoTab = useCallback(
+    (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => {
+      setTabs((prev) =>
+        prev.map((t) =>
+          t.id === tabId
+            ? {
+                ...t,
+                lines: lines.map((l) => ({
+                  ...l,
+                  id: nextLineId(),
+                  lineTotal: calcLineTotal(l),
+                })),
+              }
+            : t,
+        ),
+      );
+    },
+    [],
+  );
+
   // ── Discount ──
 
   const setOrderDiscount = useCallback(
@@ -526,6 +554,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     removeLine,
     updateLine,
     clearCart,
+    loadLinesIntoTab,
     setOrderDiscount,
     attachDiscountAudit,
     orderDiscountAmount,
