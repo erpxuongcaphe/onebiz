@@ -62,6 +62,7 @@ const ACTION_LABELS: Record<string, string> = {
   opening_debt_import: "Nhập công nợ đầu kỳ",
   role_grant: "Cấp quyền",
   role_revoke: "Gỡ quyền",
+  auto_reset: "Tự mất khách",
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
@@ -87,6 +88,10 @@ const ENTITY_TYPE_LABELS: Record<string, string> = {
   purchase_return: "Phiếu trả hàng nhập",
   shipping_order: "Vận đơn",
   kitchen_order: "Đơn bếp",
+  // 29/07: POS tự báo về khi khách trên màn hình bị gỡ ngoài ý muốn. Trước
+  // đây hộp đen chỉ nằm ở máy nhân viên nên chủ quán không xem được — CEO
+  // phải sang tận máy mới lấy được thông tin.
+  pos_customer: "POS — khách tự mất",
 };
 
 const UUID_RE =

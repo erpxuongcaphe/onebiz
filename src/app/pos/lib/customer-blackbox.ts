@@ -33,6 +33,64 @@ export interface CustomerChangeEntry {
   stack?: string;
 }
 
+/**
+ * Lý do đổi khách do NGƯỜI DÙNG chủ động — không cần báo về máy chủ.
+ * Mọi lý do khác mà làm MẤT khách đang chọn đều là bất thường.
+ */
+const DO_NGUOI_DUNG = new Set([
+  "user-pick",
+  "user-pick-scan",
+  "user-clear",
+  "load-draft",
+]);
+
+/** Chống spam: cùng một lý do chỉ báo lại sau 60 giây. */
+const lanBaoCuoi = new Map<string, number>();
+
+/**
+ * 29/07: gửi ca BẤT THƯỜNG về máy chủ.
+ *
+ * CEO: "bắt anh qua máy nhân viên lấy thông tin rất là vô lý". Đúng — hộp đen
+ * chỉ nằm ở máy nhân viên thì chủ quán không bao giờ xem được. Nay mỗi lần
+ * khách bị gỡ NGOÀI Ý MUỐN, POS tự ghi một dòng vào nhật ký hệ thống để xem
+ * từ xa ở Hệ thống → Nhật ký.
+ *
+ * Nguyên tắc giữ cho nhẹ:
+ *  - CHỈ gửi ca mất khách ngoài ý muốn (bỏ mọi thao tác người dùng chủ động)
+ *  - Cùng lý do chỉ gửi lại sau 60 giây
+ *  - Gửi ngầm, hỏng thì thôi — tuyệt đối không chặn bán hàng
+ */
+function baoVeMayChu(entry: CustomerChangeEntry): void {
+  const matKhach = entry.from && !entry.to;
+  if (!matKhach || DO_NGUOI_DUNG.has(entry.reason)) return;
+
+  const now = Date.now();
+  const truoc = lanBaoCuoi.get(entry.reason) ?? 0;
+  if (now - truoc < 60_000) return;
+  lanBaoCuoi.set(entry.reason, now);
+
+  // import động: không kéo tầng dịch vụ vào bundle POS lúc khởi động
+  import("@/lib/services/supabase/audit")
+    .then(({ recordAuditLog }) =>
+      recordAuditLog({
+        entityType: "pos_customer",
+        entityId: entry.from?.id ?? "unknown",
+        action: "auto_reset",
+        oldData: { khach: entry.from?.name ?? null },
+        newData: {
+          lyDo: entry.reason,
+          soDongGio: entry.linesCount,
+          luc: entry.ts,
+          duongCode: entry.stack?.slice(0, 300) ?? null,
+          manHinh: typeof window !== "undefined" ? window.location.pathname : null,
+        },
+      }),
+    )
+    .catch(() => {
+      // mất mạng / chưa đăng nhập — hộp đen ở máy vẫn còn bản ghi
+    });
+}
+
 export function logCustomerChange(entry: Omit<CustomerChangeEntry, "ts" | "stack">): void {
   if (typeof window === "undefined") return;
   try {
@@ -41,12 +99,18 @@ export function logCustomerChange(entry: Omit<CustomerChangeEntry, "ts" | "stack
       .slice(3, 7)
       .map((l) => l.trim())
       .join(" ← ");
+    const full: CustomerChangeEntry = {
+      ...entry,
+      ts: new Date().toISOString(),
+      stack,
+    };
     const arr: CustomerChangeEntry[] = JSON.parse(
       localStorage.getItem(KEY) ?? "[]",
     );
-    arr.push({ ...entry, ts: new Date().toISOString(), stack });
+    arr.push(full);
     while (arr.length > MAX_ENTRIES) arr.shift();
     localStorage.setItem(KEY, JSON.stringify(arr));
+    baoVeMayChu(full);
   } catch {
     // localStorage đầy/tắt — bỏ qua, không được làm hỏng POS
   }
