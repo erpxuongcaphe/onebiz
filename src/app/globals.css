@@ -473,11 +473,24 @@
      72px ở đáy. Với font-size:90% và các khung tính theo rem thì khớp tuyệt đối.
      Breakpoint media query luôn tính theo font gốc trình duyệt nên layout không
      nhảy về cỡ mobile. Bản in giữ 100%. */
-  html.ui-scale-90 {
+  /* Cỡ chữ back-office — 3 mức, mặc định 90% theo yêu cầu CEO 25/07 (100%
+     quá to, bị giới hạn nội dung nhìn thấy). 29/07: mở cho người dùng chọn
+     ở Cài đặt → Giao diện thay vì ép cứng, để ai cần chữ to vẫn đọc được.
+     Một cơ chế duy nhất — trước đây ô "Cỡ chữ" trong Cài đặt cũng định đổi
+     font-size gốc, để cả hai cùng chạy là đá nhau. */
+  html.ui-scale-sm {
     font-size: 90%;
   }
+  html.ui-scale-md {
+    font-size: 100%;
+  }
+  html.ui-scale-lg {
+    font-size: 110%;
+  }
   @media print {
-    html.ui-scale-90 {
+    html.ui-scale-sm,
+    html.ui-scale-md,
+    html.ui-scale-lg {
       font-size: 100%;
     }
   }

@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
@@ -33,21 +39,24 @@ const themes = [
   },
 ];
 
+// Ô xem trước dùng ĐÚNG màu sẽ được áp (khớp bảng ACCENTS trong
+// components/shared/appearance.tsx). Trước 29/07 "Chàm" và "Tím" cùng trỏ
+// bg-status-info nên hai ô nhìn y hệt nhau, chọn xong không biết mình chọn gì.
 const accentColors = [
-  { id: "blue", label: "Xanh dương", color: "bg-primary" },
-  { id: "indigo", label: "Chàm", color: "bg-status-info" },
-  { id: "purple", label: "Tím", color: "bg-status-info" },
-  { id: "pink", label: "Hồng", color: "bg-pink-500" },
-  { id: "red", label: "Đỏ", color: "bg-status-error" },
-  { id: "orange", label: "Cam", color: "bg-status-warning" },
-  { id: "green", label: "Xanh lá", color: "bg-status-success" },
-  { id: "teal", label: "Xanh ngọc", color: "bg-teal-500" },
+  { id: "blue", label: "Xanh dương", hex: "oklch(0.43 0.19 263)" },
+  { id: "indigo", label: "Chàm", hex: "oklch(0.45 0.20 285)" },
+  { id: "purple", label: "Tím", hex: "oklch(0.48 0.22 305)" },
+  { id: "pink", label: "Hồng", hex: "oklch(0.58 0.22 355)" },
+  { id: "red", label: "Đỏ", hex: "oklch(0.53 0.21 27)" },
+  { id: "orange", label: "Cam", hex: "oklch(0.62 0.18 55)" },
+  { id: "green", label: "Xanh lá", hex: "oklch(0.52 0.15 155)" },
+  { id: "teal", label: "Xanh ngọc", hex: "oklch(0.55 0.12 195)" },
 ];
 
 const fontSizes = [
-  { id: "small", label: "Nhỏ", size: "text-xs" },
-  { id: "medium", label: "Trung bình", size: "text-sm" },
-  { id: "large", label: "Lớn", size: "text-base" },
+  { id: "small", label: "Nhỏ", size: "text-xs", hint: "Thấy nhiều nội dung nhất" },
+  { id: "medium", label: "Vừa", size: "text-sm", hint: "Cỡ chuẩn" },
+  { id: "large", label: "Lớn", size: "text-base", hint: "Dễ đọc nhất" },
 ];
 
 const borderRadii = [
@@ -63,23 +72,26 @@ export default function AppearanceSettingsPage() {
 
   const [theme, setTheme] = useState(settings.appearance.theme);
   const [accentColor, setAccentColor] = useState(settings.appearance.accentColor);
-  const [navLayout, setNavLayout] = useState(settings.appearance.navLayout);
   const [fontSize, setFontSize] = useState(settings.appearance.fontSize);
   const [borderRadius, setBorderRadius] = useState(settings.appearance.borderRadius);
 
   useEffect(() => {
     setTheme(settings.appearance.theme);
     setAccentColor(settings.appearance.accentColor);
-    setNavLayout(settings.appearance.navLayout);
     setFontSize(settings.appearance.fontSize);
     setBorderRadius(settings.appearance.borderRadius);
   }, [settings.appearance]);
+
+  // Màu đang chọn — dùng cho cả ô chọn lẫn khung Xem trước bên dưới.
+  const mauDangChon =
+    accentColors.find((c) => c.id === accentColor)?.hex ?? accentColors[0].hex;
 
   const handleSave = () => {
     updateSettings("appearance", {
       theme: theme as "light" | "dark" | "system",
       accentColor,
-      navLayout: navLayout as "horizontal" | "vertical",
+      // navLayout giữ nguyên giá trị cũ — ô chọn đã bỏ (xem ghi chú bên dưới)
+      navLayout: settings.appearance.navLayout,
       fontSize: fontSize as "small" | "medium" | "large",
       borderRadius: borderRadius as "none" | "sm" | "md" | "lg",
     });
@@ -159,11 +171,11 @@ export default function AppearanceSettingsPage() {
                 title={c.label}
               >
                 <div
+                  style={{ backgroundColor: c.hex }}
                   className={cn(
                     "h-10 w-10 rounded-full flex items-center justify-center transition-all",
-                    c.color,
                     accentColor === c.id
-                      ? "ring-2 ring-offset-2 ring-gray-400"
+                      ? "ring-2 ring-offset-2 ring-foreground/40"
                       : "hover:scale-110"
                   )}
                 >
@@ -180,54 +192,18 @@ export default function AppearanceSettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Bố cục thanh điều hướng</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {[
-              { id: "horizontal", label: "Ngang", desc: "Thanh điều hướng nằm ngang phía trên" },
-              { id: "vertical", label: "Dọc", desc: "Thanh điều hướng dọc bên trái" },
-            ].map((layout) => (
-              <button
-                key={layout.id}
-                type="button"
-                onClick={() => setNavLayout(layout.id as "horizontal" | "vertical")}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-4 text-left transition-colors",
-                  navLayout === layout.id
-                    ? "border-primary bg-primary/5 ring-2 ring-primary"
-                    : "border-border hover:border-primary/50"
-                )}
-              >
-                <div
-                  className={cn(
-                    "mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                    navLayout === layout.id
-                      ? "border-primary bg-primary"
-                      : "border-muted-foreground"
-                  )}
-                >
-                  {navLayout === layout.id && (
-                    <div className="h-2 w-2 rounded-full bg-white" />
-                  )}
-                </div>
-                <div>
-                  <div className="text-sm font-medium">{layout.label}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {layout.desc}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      {/* 29/07: bỏ ô "Bố cục thanh điều hướng". Toàn bộ back-office dựng trên
+          thanh dọc bên trái + thanh trên cố định; làm bản "ngang" là dựng lại
+          khung của mọi trang, trong khi không ai đổi kiểu điều hướng hằng ngày.
+          Để ô đó nằm lại chỉ là một nút bấm không có tác dụng. */}
 
       <Card>
         <CardHeader>
-          <CardTitle>Kích thước chữ</CardTitle>
+          <CardTitle>Cỡ chữ</CardTitle>
+          <CardDescription>
+            Áp cho toàn bộ khu quản lý. Màn bán hàng giữ nguyên cỡ chuẩn để nút
+            bấm không bị nhỏ khi dùng máy tính bảng. Bản in luôn cỡ chuẩn.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-3">
@@ -243,7 +219,10 @@ export default function AppearanceSettingsPage() {
                     : "border-border hover:border-primary/50"
                 )}
               >
-                <span className={cn("font-medium", fs.size)}>{fs.label}</span>
+                <span className={cn("block font-medium", fs.size)}>{fs.label}</span>
+                <span className="mt-0.5 block text-[0.6875rem] text-muted-foreground">
+                  {fs.hint}
+                </span>
               </button>
             ))}
           </div>
@@ -290,10 +269,8 @@ export default function AppearanceSettingsPage() {
           <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
             <div className="flex items-center gap-2">
               <div
-                className={cn(
-                  "h-3 w-20 rounded-full",
-                  accentColors.find((c) => c.id === accentColor)?.color
-                )}
+                style={{ backgroundColor: mauDangChon }}
+                className="h-3 w-20 rounded-full"
               />
               <div className="h-3 w-16 rounded-full bg-muted" />
               <div className="h-3 w-12 rounded-full bg-muted" />
@@ -305,10 +282,8 @@ export default function AppearanceSettingsPage() {
               )}
             >
               <div
-                className={cn(
-                  "h-2 w-24 rounded-full mb-2",
-                  accentColors.find((c) => c.id === accentColor)?.color
-                )}
+                style={{ backgroundColor: mauDangChon }}
+                className="h-2 w-24 rounded-full mb-2"
               />
               <div className="space-y-2">
                 <div className="h-2 w-full rounded-full bg-muted" />
@@ -318,9 +293,9 @@ export default function AppearanceSettingsPage() {
             </div>
             <div className="flex gap-2">
               <div
+                style={{ backgroundColor: mauDangChon }}
                 className={cn(
                   "h-7 px-4 flex items-center text-xs text-white font-medium",
-                  accentColors.find((c) => c.id === accentColor)?.color,
                   borderRadii.find((b) => b.id === borderRadius)?.radius
                 )}
               >
