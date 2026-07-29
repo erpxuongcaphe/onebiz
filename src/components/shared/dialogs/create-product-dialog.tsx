@@ -1703,6 +1703,14 @@ export function CreateProductDialog({
                   onChange={(e) => setCostPrice(parseVnd(e.target.value))}
                   placeholder="0"
                 />
+                {/* Có công thức thì giá vốn do công thức quyết định (00236) —
+                    nói rõ để không ai sửa tay rồi tưởng bị mất số. */}
+                {hasBom && (
+                  <p className="text-xs text-muted-foreground">
+                    Tự tính từ công thức. Sửa tay sẽ bị ghi đè khi công thức
+                    hoặc giá nguyên liệu thay đổi.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">
