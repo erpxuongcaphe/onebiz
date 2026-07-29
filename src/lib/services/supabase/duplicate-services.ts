@@ -225,7 +225,7 @@ export async function duplicateProductionOrder(
 
   const { data: src, error: fErr } = await sb
     .from("production_orders")
-    .select("branch_id, product_id, planned_qty, bom_id, note")
+    .select("branch_id, product_id, planned_qty, bom_id, notes")
     .eq("tenant_id", ctx.tenantId)
     .eq("id", sourceId)
     .single();
@@ -239,11 +239,16 @@ export async function duplicateProductionOrder(
       tenant_id: ctx.tenantId,
       branch_id: src.branch_id ?? ctx.branchId,
       code,
-      status: "draft",
+      // 29/07: BỎ `status: "draft"`. Lệnh sản xuất chỉ nhận planned /
+      // material_check / in_production / quality_check / completed /
+      // cancelled — 'draft' chưa bao giờ hợp lệ nên nút Sao chép chết 100%
+      // (lỗi 23514). Để trống thì CSDL tự điền 'planned', đúng như đường
+      // tạo lệnh chuẩn ở production.ts.
       product_id: src.product_id,
       planned_qty: src.planned_qty,
       bom_id: src.bom_id ?? null,
-      note: src.note ? `[Sao chép] ${src.note}` : null,
+      // Cột thật tên là `notes` (số nhiều) — `note` không tồn tại.
+      notes: src.notes ? `[Sao chép] ${src.notes}` : null,
       created_by: ctx.userId,
     })
     .select("id, code")
