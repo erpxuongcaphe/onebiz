@@ -442,9 +442,18 @@ export async function getProfitAndLoss(
   // 'Hoàn trả' (void bill POS/F&B 00055/00086/00162). Đây là phiếu CHI hoàn tiền
   // — đảo ngược doanh thu, KHÔNG phải chi phí vận hành. Trước đây bị tính vào
   // OpEx → OpEx phồng, lãi ròng thấp giả.
+  // 29/07 (CEO): thêm 2 loại TRẢ TIỀN NHÀ CUNG CẤP. Nhập hàng không phải chi
+  // phí — bỏ tiền mua hàng về kho là đổi tiền lấy hàng, tài sản không đổi;
+  // chỉ khi bán ra thì giá vốn phần đã bán mới thành chi phí (đã tính riêng
+  // ở COGS). Thiếu 2 loại này nên tiền trả NCC bị đếm thành chi phí vận hành.
+  // Đo tháng 7: 'Trả nhà cung cấp' 125.313.290đ + 'supplier_payment'
+  // 53.094.428đ = 178.407.718đ → lợi nhuận báo −82.843.452đ trong khi thực
+  // tế +95.564.266đ.
   const excludeFromOpEx = [
     "Nhập hàng",
     "Mua hàng nội bộ",
+    "Trả nhà cung cấp",
+    "supplier_payment",
     "Hoàn tiền hủy đơn",
     "Hoàn trả",
     "Trả hàng",
@@ -1222,9 +1231,12 @@ export async function getConsolidatedPnL(
   const prevCOGS = calcConsolidatedCOGS(prevItems as Record<string, unknown>[], prevInternalIds);
 
   // OpEx excluding purchase categories
+  // 29/07: kèm 2 loại TRẢ TIỀN NHÀ CUNG CẤP — xem ghi chú ở excludeFromOpEx.
   const purchaseCats = [
     "Nhập hàng",
     "Mua hàng nội bộ",
+    "Trả nhà cung cấp",
+    "supplier_payment",
     "Hoàn tiền hủy đơn",
     "Hoàn trả",
     "Trả hàng",
@@ -1445,9 +1457,12 @@ export async function getBranchPnLComparison(
   }
 
   // OpEx per branch (exclude purchase categories)
+  // 29/07: kèm 2 loại TRẢ TIỀN NHÀ CUNG CẤP — xem ghi chú ở excludeFromOpEx.
   const purchaseCats = [
     "Nhập hàng",
     "Mua hàng nội bộ",
+    "Trả nhà cung cấp",
+    "supplier_payment",
     "Hoàn tiền hủy đơn",
     "Hoàn trả",
     "Trả hàng",
