@@ -69,8 +69,10 @@ export async function GET(req: NextRequest) {
         .select("type, amount")
         .eq("tenant_id", tenant.id)
         .eq("status", "completed")
-        .gte("date", dayStart)
-        .lte("date", dayEnd);
+        // Cột đúng là transaction_date — "date" không tồn tại nên query cũ
+        // lỗi 42703, tổng thu/chi cuối ngày luôn về 0.
+        .gte("transaction_date", dayStart)
+        .lte("transaction_date", dayEnd);
       let totalReceipt = 0;
       let totalPayment = 0;
       (cashRows ?? []).forEach(

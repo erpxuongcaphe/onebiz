@@ -897,7 +897,9 @@ export async function getOrdersByDeliveryStaff(
   /* eslint-disable @typescript-eslint/no-explicit-any */
   let query: any = (supabase.from("kitchen_orders") as any)
     .select(
-      "id, order_number, customer_name, delivery_fee, delivery_distance_tier, delivery_assigned_at, delivery_completed_at, created_at, invoice_id, invoices(id, code, total, customer_name)",
+      // kitchen_orders KHÔNG có cột customer_name → để trong select là query
+      // lỗi 42703, cả báo cáo shipper trắng. Tên khách lấy từ hoá đơn kèm.
+      "id, order_number, delivery_fee, delivery_distance_tier, delivery_assigned_at, delivery_completed_at, created_at, invoice_id, invoices(id, code, total, customer_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("delivery_staff_id", staffId);

@@ -1475,21 +1475,32 @@ export async function getChannelRevenue(
   // Online orders by channel — P1-3B-R5 12/06/2026: filter status=completed
   // để cân với POS (chỉ completed) → kênh online không phồng giả vì
   // pending/cancelled.
-  let onlineQuery = supabase
+  // online_orders KHÔNG có cột branch_id — lọc .eq("branch_id") cũ làm query
+  // lỗi 42703, chọn 1 chi nhánh là kênh online mất trắng. Chi nhánh suy từ
+  // hoá đơn gắn kèm. Lưu ý: đơn online chưa xuất hoá đơn sẽ không hiện ở
+  // chế độ xem theo chi nhánh (vẫn hiện ở "Tất cả chi nhánh").
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let onlineQuery: any = supabase
     .from("online_orders")
-    .select("channel_name, total_amount")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .select(
+      (branchId
+        ? "channel_name, total_amount, invoices!inner(branch_id)"
+        : "channel_name, total_amount") as any,
+    )
     .eq("tenant_id", tenantId)
     .eq("status", "completed" as never)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
+  if (branchId) onlineQuery = (onlineQuery as any).eq("invoices.branch_id", branchId);
   const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
 
   const channelMap = new Map<string, number>();
   channelMap.set("Tại quầy", posRevenue);
 
-  (onlineData ?? []).forEach(o => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ((onlineData ?? []) as any[]).forEach(o => {
     const name = o.channel_name || "Khác";
     channelMap.set(name, (channelMap.get(name) ?? 0) + (o.total_amount ?? 0));
   });
@@ -1519,21 +1530,29 @@ export async function getChannelPerformance(
   const posCount = posData?.length ?? 0;
 
   // P1-3B-R5 12/06/2026: filter status=completed cho online_orders (cân với POS).
-  let onlineQuery = supabase
+  // Chi nhánh suy từ hoá đơn gắn kèm — online_orders không có cột branch_id.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let onlineQuery: any = supabase
     .from("online_orders")
-    .select("channel_name, total_amount")
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .select(
+      (branchId
+        ? "channel_name, total_amount, invoices!inner(branch_id)"
+        : "channel_name, total_amount") as any,
+    )
     .eq("tenant_id", tenantId)
     .eq("status", "completed" as never)
     .gte("created_at", r.start)
     .lt("created_at", r.end);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (branchId) onlineQuery = (onlineQuery as any).eq("branch_id", branchId);
+  if (branchId) onlineQuery = (onlineQuery as any).eq("invoices.branch_id", branchId);
   const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
   map.set("Tại quầy", { revenue: posRev, orders: posCount });
 
-  (onlineData ?? []).forEach(o => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ((onlineData ?? []) as any[]).forEach(o => {
     const name = o.channel_name || "Khác";
     const existing = map.get(name) ?? { revenue: 0, orders: 0 };
     existing.revenue += o.total_amount ?? 0;

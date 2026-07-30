@@ -322,7 +322,10 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
   const { data: invRaw, error: invErr } = await supabase
     .from("invoices")
-    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at, platform_commission_amount, platform_commission_percent")
+    // invoices có platform_commission (KHÔNG có platform_commission_amount —
+    // cột đó thuộc kitchen_orders). Danh sách cột cũ copy nhầm nên select lỗi
+    // 42703 → in lại hoá đơn F&B chết hoàn toàn.
+    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at, platform_commission, platform_commission_percent")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
@@ -342,8 +345,9 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
   const { data: items, error: itemsErr } = await supabase
     .from("invoice_items")
     .select("product_name, quantity, unit_price, total")
-    .eq("invoice_id", invoiceId)
-    .order("created_at", { ascending: true });
+    // invoice_items KHÔNG có created_at → .order("created_at") lỗi 42703.
+    // Dòng trả về theo thứ tự ghi, đúng thứ tự trên bill gốc.
+    .eq("invoice_id", invoiceId);
 
   if (itemsErr) handleError(itemsErr, "getFnbInvoiceForReprint.items");
 
@@ -366,7 +370,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     orderType: k?.order_type ?? "takeaway",
     deliveryPlatform: k?.delivery_platform ?? null,
     platformCommissionPercent: Number(inv.platform_commission_percent ?? 0),
-    platformCommissionAmount: Number(inv.platform_commission_amount ?? 0),
+    platformCommissionAmount: Number(inv.platform_commission ?? 0),
     items: (items ?? []).map((it) => ({
       name: it.product_name,
       quantity: Number(it.quantity),

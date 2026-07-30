@@ -102,8 +102,9 @@ export async function splitEqually(
   const { data: allItems } = await supabase
     .from("kitchen_order_items")
     .select("*")
-    .eq("kitchen_order_id", orderId)
-    .order("created_at" as string);
+    // kitchen_order_items KHÔNG có created_at → .order("created_at") lỗi 42703
+    // làm nút "Chia bill" chết. Thứ tự ghi đã đúng thứ tự gọi món.
+    .eq("kitchen_order_id", orderId);
 
   const items = allItems ?? [];
   if (items.length < numberOfWays) {
