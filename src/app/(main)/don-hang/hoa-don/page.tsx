@@ -448,6 +448,9 @@ export default function HoaDonPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
+    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
+    try {
     const range = dateRange();
     const commonFilters: Record<string, string | string[]> = {};
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
@@ -479,8 +482,16 @@ export default function HoaDonPage() {
     } else {
       setOtherBranchCount(0);
     }
-    setLoading(false);
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange, viewAllBranches]);
+    } catch (e) {
+      toast({
+        variant: "error",
+        title: "Không tải được danh sách hoá đơn",
+        description: e instanceof Error ? e.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();
