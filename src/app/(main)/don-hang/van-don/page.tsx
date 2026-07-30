@@ -381,6 +381,9 @@ export default function VanDonPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
+    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
+    try {
     // CEO 08/07 (verify DB): shipping_orders KHÔNG có branch_id — vận đơn xem
     // toàn tenant, KHÔNG lọc theo chi nhánh (filter cũ làm query lỗi).
     const result = await getShippingOrders({
@@ -395,8 +398,16 @@ export default function VanDonPage() {
     });
     setData(result.data);
     setTotal(result.total);
-    setLoading(false);
-  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter]);
+    } catch (e) {
+      toast({
+        variant: "error",
+        title: "Không tải được danh sách vận đơn",
+        description: e instanceof Error ? e.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter, toast]);
 
   useEffect(() => {
     fetchData();
