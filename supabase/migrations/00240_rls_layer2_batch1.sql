@@ -31,9 +31,12 @@
 
 do $$
 declare
-  v_bang text;
-  v_lenh text[];
-  v_thieu text[];
+  v_bang  text;
+  v_doc   boolean;
+  v_them  boolean;
+  v_sua   boolean;
+  v_xoa   boolean;
+  v_thieu text;
   v_loi   text := '';
   v_so    int := 0;
   -- 29 bảng có 4 quy tắc, theo đúng kết quả CEO đo
@@ -55,24 +58,29 @@ begin
       continue;
     end if;
 
-    -- Gom các lệnh mà quy tắc của bảng này phủ. polcmd: r=đọc a=thêm w=sửa d=xoá *=tất cả
-    select array_agg(distinct c) into v_lenh
-      from (
-        select case p.polcmd when '*' then unnest(array['r','a','w','d']) else p.polcmd::text end as c
-          from pg_policy p
-          join pg_class cl on cl.oid = p.polrelid
-          join pg_namespace n on n.oid = cl.relnamespace
-         where n.nspname = 'public' and cl.relname = v_bang
-      ) t;
+    -- Quy tắc của bảng này phủ những lệnh nào?
+    -- polcmd: r=đọc · a=thêm · w=sửa · d=xoá · *=tất cả
+    -- Dùng bool_or thay vì unnest — Postgres KHÔNG cho hàm trả nhiều dòng
+    -- nằm trong CASE (lỗi 0A000), và cách này cũng dễ đọc hơn.
+    select coalesce(bool_or(p.polcmd::text in ('r', '*')), false),
+           coalesce(bool_or(p.polcmd::text in ('a', '*')), false),
+           coalesce(bool_or(p.polcmd::text in ('w', '*')), false),
+           coalesce(bool_or(p.polcmd::text in ('d', '*')), false)
+      into v_doc, v_them, v_sua, v_xoa
+      from pg_policy p
+      join pg_class cl     on cl.oid = p.polrelid
+      join pg_namespace n  on n.oid = cl.relnamespace
+     where n.nspname = 'public' and cl.relname = v_bang;
 
-    v_thieu := array(
-      select x from unnest(array['r','a','w','d']) x
-       where not (x = any(coalesce(v_lenh, array[]::text[])))
+    v_thieu := concat_ws(', ',
+      case when not v_doc  then 'đọc'  end,
+      case when not v_them then 'thêm' end,
+      case when not v_sua  then 'sửa'  end,
+      case when not v_xoa  then 'xoá'  end
     );
 
-    if array_length(v_thieu, 1) > 0 then
-      v_loi := v_loi || format('  %s: thiếu quy tắc cho lệnh %s%s',
-                               v_bang, array_to_string(v_thieu, ','), chr(10));
+    if v_thieu <> '' then
+      v_loi := v_loi || format('  %s: thiếu quy tắc cho lệnh %s%s', v_bang, v_thieu, chr(10));
     end if;
   end loop;
 
