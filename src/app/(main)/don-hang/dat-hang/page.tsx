@@ -400,6 +400,9 @@ export default function DatHangPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // Trước đây không có try/finally: truy vấn lỗi là cờ loading không bao giờ
+    // tắt → trang treo mãi ở vòng xoay, không nói vì sao.
+    try {
     // FIX (CEO 08/07): áp ô "Thời gian" (trước đây không lọc ngày). getOrders
     // đọc hóa đơn nháp — bỏ lọc status cũ (mọi đơn đều là nháp/chờ xử lý).
     const presetRange = computeListPresetRange(datePreset);
@@ -434,8 +437,16 @@ export default function DatHangPage() {
     } else {
       setOtherBranchCount(0);
     }
-    setLoading(false);
-  }, [page, pageSize, search, searchField, datePreset, selectedStatuses, activeBranchId, viewAllBranches]);
+    } catch (e) {
+      toast({
+        variant: "error",
+        title: "Không tải được danh sách đơn đặt hàng",
+        description: e instanceof Error ? e.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, searchField, datePreset, selectedStatuses, activeBranchId, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();
