@@ -521,6 +521,9 @@ export default function KiemKhoPage() {
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
+    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
+    try {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
@@ -554,8 +557,16 @@ export default function KiemKhoPage() {
     } else {
       setOtherBranchCount(0);
     }
-    setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches]);
+    } catch (e) {
+      toast({
+        variant: "error",
+        title: "Không tải được danh sách phiếu kiểm kho",
+        description: e instanceof Error ? e.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();

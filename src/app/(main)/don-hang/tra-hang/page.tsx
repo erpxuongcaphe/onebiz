@@ -258,6 +258,9 @@ export default function TraHangPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
+    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
+    try {
     const commonFilters = {
       ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
       ...(selectedTypes.length > 0 && { type: selectedTypes }),
@@ -286,8 +289,16 @@ export default function TraHangPage() {
     } else {
       setOtherBranchCount(0);
     }
-    setLoading(false);
-  }, [page, pageSize, search, selectedStatuses, selectedTypes, activeBranchId, viewAllBranches]);
+    } catch (e) {
+      toast({
+        variant: "error",
+        title: "Không tải được danh sách phiếu trả hàng",
+        description: e instanceof Error ? e.message : "Lỗi không xác định",
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, search, selectedStatuses, selectedTypes, activeBranchId, viewAllBranches, toast]);
 
   useEffect(() => {
     fetchData();
