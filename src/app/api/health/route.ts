@@ -16,7 +16,7 @@
 // Không cần auth — public endpoint (uptime monitor không có credential).
 
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { getAdminClient } from "@/lib/supabase/admin";
 
 // Force dynamic — không cache, mỗi request check thật
 export const dynamic = "force-dynamic";
@@ -46,16 +46,7 @@ export async function GET() {
 
   // Check DB connectivity — simple query
   try {
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => [],
-          setAll: () => {},
-        },
-      },
-    );
+    const supabase = getAdminClient();
 
     // Lightweight query — đếm 1 row trong tenants table (luôn có ít nhất 1)
     const { error } = await supabase
