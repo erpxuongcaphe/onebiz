@@ -22,6 +22,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { hasEffectivePermission } from "@/lib/permissions/server";
+import { validateManagedUserScope } from "@/lib/admin/managed-user-scope";
 
 export const runtime = "nodejs";
 
@@ -66,15 +68,10 @@ export async function POST(req: NextRequest) {
 
     const isOwner = callerProfile.role === "owner";
     if (!isOwner) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: permRows } = await (sb as any)
-        .from("role_permissions")
-        .select("permission_code")
-        .eq("role_id", callerProfile.role_id)
-        .in("permission_code", ["system.manage_users"]);
-      if (!permRows || permRows.length === 0) {
+      const allowed = await hasEffectivePermission(sb, caller.id, ["system.manage_users"]);
+      if (!allowed) {
         return NextResponse.json(
-          { success: false, message: "Không đủ quyền sửa thông tin user" },
+          { success: false, message: "Không đủ quyền sửa thông tin người dùng" },
           { status: 403 },
         );
       }
@@ -95,7 +92,7 @@ export async function POST(req: NextRequest) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: targetProfile } = await (admin as any)
       .from("profiles")
-      .select("id, tenant_id, role")
+      .select("id, tenant_id, role, branch_id")
       .eq("id", body.userId)
       .single();
     if (!targetProfile || targetProfile.tenant_id !== tenantId) {
@@ -113,96 +110,78 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ========================================
-    // 1. Update profile fields
-    // ========================================
-    const profileUpdate: Record<string, unknown> = {};
-    if (body.fullName !== undefined) profileUpdate.full_name = body.fullName;
-    if (body.phone !== undefined) profileUpdate.phone = body.phone || null;
-    if (body.roleId !== undefined) profileUpdate.role_id = body.roleId;
-    if (body.isActive !== undefined) profileUpdate.is_active = body.isActive;
+    const updatesBranchAccess =
+      body.allBranches !== undefined || body.branchIds !== undefined;
+    const scope = await validateManagedUserScope(admin, tenantId, {
+      roleId: body.roleId,
+      branchIds: body.branchIds,
+      allBranches: body.allBranches,
+      requireBranchSelection: updatesBranchAccess,
+    });
+    if (scope.error) {
+      return NextResponse.json(
+        { success: false, message: scope.error },
+        { status: 400 },
+      );
+    }
 
-    if (Object.keys(profileUpdate).length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (admin as any)
-        .from("profiles")
-        .update(profileUpdate)
-        .eq("id", body.userId);
+    if (body.newPassword && body.newPassword.length < 8) {
+      return NextResponse.json(
+        { success: false, message: "Mật khẩu mới phải ≥ 8 ký tự" },
+        { status: 400 },
+      );
+    }
+
+    const profilePatch: Record<string, unknown> = {};
+    if (body.fullName !== undefined) profilePatch.full_name = body.fullName;
+    if (body.phone !== undefined) profilePatch.phone = body.phone || null;
+    if (body.roleId !== undefined) profilePatch.role_id = scope.roleId ?? null;
+    if (body.isActive !== undefined) profilePatch.is_active = body.isActive;
+
+    let branchIds: string[] | null = null;
+    if (updatesBranchAccess) {
+      branchIds = scope.branchIds;
+      if (body.allBranches) {
+        const { data, error } = await admin
+          .from("branches")
+          .select("id")
+          .eq("tenant_id", tenantId)
+          .eq("is_active", true);
+        if (error || !data || data.length === 0) {
+          return NextResponse.json(
+            { success: false, message: "Không lấy được danh sách chi nhánh đang hoạt động" },
+            { status: 500 },
+          );
+        }
+        branchIds = data.map((branch) => branch.id);
+      }
+    }
+
+    if (Object.keys(profilePatch).length > 0 || branchIds !== null) {
+      const { error } = await (sb.rpc as any)("update_managed_user_atomic", {
+        p_target_user_id: body.userId,
+        p_profile_patch: profilePatch,
+        p_branch_ids: branchIds,
+      });
       if (error) {
         return NextResponse.json(
-          { success: false, message: `Update profile thất bại: ${error.message}` },
+          { success: false, message: `Không cập nhật được hồ sơ và quyền chi nhánh: ${error.message}` },
           { status: 500 },
         );
       }
     }
 
-    // ========================================
-    // 2. Reset password (nếu có)
-    // ========================================
+    // Auth là hệ thống riêng với database. Giao diện gọi bước này riêng để
+    // nếu đặt lại mật khẩu lỗi thì hồ sơ/quyền chi nhánh vẫn có thông báo đúng.
     if (body.newPassword) {
-      if (body.newPassword.length < 8) {
-        return NextResponse.json(
-          { success: false, message: "Mật khẩu mới phải ≥ 8 ký tự" },
-          { status: 400 },
-        );
-      }
       const { error } = await admin.auth.admin.updateUserById(body.userId, {
         password: body.newPassword,
       });
       if (error) {
         return NextResponse.json(
-          { success: false, message: `Reset mật khẩu thất bại: ${error.message}` },
+          { success: false, message: `Không đặt lại được mật khẩu: ${error.message}` },
           { status: 500 },
         );
-      }
-    }
-
-    // ========================================
-    // 3. Update branch access (nếu có)
-    // ========================================
-    if (body.allBranches !== undefined || body.branchIds !== undefined) {
-      // Xoá user_branches cũ
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin as any)
-        .from("user_branches")
-        .delete()
-        .eq("user_id", body.userId);
-
-      let primaryBranchId: string | null = null;
-      if (body.allBranches) {
-        const { data: allBranches } = await admin
-          .from("branches")
-          .select("id")
-          .eq("tenant_id", tenantId);
-        if (allBranches && allBranches.length > 0) {
-          primaryBranchId = allBranches[0].id;
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (admin as any).from("user_branches").insert(
-            allBranches.map((b: { id: string }) => ({
-              user_id: body.userId,
-              branch_id: b.id,
-              granted_by: caller.id,
-            })),
-          );
-        }
-      } else if (body.branchIds && body.branchIds.length > 0) {
-        primaryBranchId = body.branchIds[0];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin as any).from("user_branches").insert(
-          body.branchIds.map((bid) => ({
-            user_id: body.userId,
-            branch_id: bid,
-            granted_by: caller.id,
-          })),
-        );
-      }
-
-      if (primaryBranchId) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin as any)
-          .from("profiles")
-          .update({ branch_id: primaryBranchId })
-          .eq("id", body.userId);
       }
     }
 

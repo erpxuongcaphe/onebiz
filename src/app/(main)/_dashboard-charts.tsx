@@ -21,7 +21,6 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
 } from "recharts";
 import {
   Card,
@@ -62,16 +61,28 @@ const VIEW_OPTIONS: { value: ChartView; label: string }[] = [
   { value: "weekday", label: "Tuần" },
 ];
 
-function ChartFrame({ children }: { children: ReactNode }) {
+interface ChartSize {
+  width: number;
+  height: number;
+}
+
+function ChartFrame({ children }: { children: (size: ChartSize) => ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  const [ready, setReady] = useState(false);
+  const [size, setSize] = useState<ChartSize | null>(null);
 
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const update = () => {
-      setReady(el.clientWidth > 0 && el.clientHeight > 0);
+      const next = {
+        width: Math.floor(el.clientWidth),
+        height: Math.floor(el.clientHeight),
+      };
+      if (next.width <= 0 || next.height <= 0) return;
+      setSize((current) =>
+        current?.width === next.width && current.height === next.height ? current : next,
+      );
     };
 
     const frame = window.requestAnimationFrame(update);
@@ -89,8 +100,8 @@ function ChartFrame({ children }: { children: ReactNode }) {
 
   return (
     <div ref={ref} className="h-52 min-w-0 xl:h-56">
-      {ready ? (
-        children
+      {size ? (
+        children(size)
       ) : (
         <div className="h-full rounded-lg bg-surface-container-low animate-pulse" />
       )}
@@ -175,8 +186,10 @@ export default function DashboardCharts({
         </CardHeader>
         <CardContent className="min-w-0">
           <ChartFrame>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={208}>
+            {({ width, height }) => (
               <AreaChart
+                width={width}
+                height={height}
                 data={chartData[chartView]}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
               >
@@ -210,7 +223,7 @@ export default function DashboardCharts({
                   name="Doanh thu"
                 />
               </AreaChart>
-            </ResponsiveContainer>
+            )}
           </ChartFrame>
         </CardContent>
       </Card>
@@ -222,8 +235,10 @@ export default function DashboardCharts({
         </CardHeader>
         <CardContent className="min-w-0">
           <ChartFrame>
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={208}>
+            {({ width, height }) => (
               <BarChart
+                width={width}
+                height={height}
                 data={orders}
                 margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
               >
@@ -259,7 +274,7 @@ export default function DashboardCharts({
                   name="cancelled"
                 />
               </BarChart>
-            </ResponsiveContainer>
+            )}
           </ChartFrame>
         </CardContent>
       </Card>

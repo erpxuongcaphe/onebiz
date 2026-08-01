@@ -10,28 +10,28 @@ function Pill({ label, cls }: { label: string; cls: string }) {
 }
 
 const ACCEPTANCE: Record<string, { label: string; cls: string }> = {
-  pending: { label: "Pending Acceptance", cls: "border-orange-200 bg-orange-50 text-orange-700" },
-  accepted: { label: "Accepted", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  need_discussion: { label: "Need Discussion", cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  rejected: { label: "Rejected", cls: "border-rose-200 bg-rose-50 text-rose-700" },
+  pending: { label: "Chờ nhận việc", cls: "border-orange-200 bg-orange-50 text-orange-700" },
+  accepted: { label: "Đã nhận việc", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  need_discussion: { label: "Cần trao đổi", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  rejected: { label: "Từ chối", cls: "border-rose-200 bg-rose-50 text-rose-700" },
 };
 
 const TASK_STATUS: Record<string, { label: string; cls: string }> = {
-  blocked: { label: "Blocked", cls: "border-rose-200 bg-rose-50 text-rose-700" },
-  todo: { label: "To Do", cls: "border-slate-200 bg-slate-50 text-slate-700" },
-  doing: { label: "Doing", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
-  reviewing: { label: "Reviewing", cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  done: { label: "Done", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  canceled: { label: "Canceled", cls: "border-slate-200 bg-slate-100 text-slate-500" },
+  blocked: { label: "Đang bị chặn", cls: "border-rose-200 bg-rose-50 text-rose-700" },
+  todo: { label: "Cần làm", cls: "border-slate-200 bg-slate-50 text-slate-700" },
+  doing: { label: "Đang làm", cls: "border-indigo-200 bg-indigo-50 text-indigo-700" },
+  reviewing: { label: "Đang duyệt", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  done: { label: "Hoàn thành", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  canceled: { label: "Đã hủy", cls: "border-slate-200 bg-slate-100 text-slate-500" },
 };
 
 const CONTENT_STATUS: Record<string, { label: string; cls: string }> = {
-  draft: { label: "Draft", cls: "border-slate-200 bg-slate-50 text-slate-700" },
-  pending_review: { label: "Pending Review", cls: "border-amber-200 bg-amber-50 text-amber-700" },
-  revision_required: { label: "Revision Required", cls: "border-orange-200 bg-orange-50 text-orange-700" },
-  approved: { label: "Approved", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  rejected: { label: "Rejected", cls: "border-rose-200 bg-rose-50 text-rose-700" },
-  published: { label: "Published", cls: "border-sky-200 bg-sky-50 text-sky-700" },
+  draft: { label: "Bản nháp", cls: "border-slate-200 bg-slate-50 text-slate-700" },
+  pending_review: { label: "Chờ duyệt", cls: "border-amber-200 bg-amber-50 text-amber-700" },
+  revision_required: { label: "Cần chỉnh sửa", cls: "border-orange-200 bg-orange-50 text-orange-700" },
+  approved: { label: "Đã duyệt", cls: "border-emerald-200 bg-emerald-50 text-emerald-700" },
+  rejected: { label: "Từ chối", cls: "border-rose-200 bg-rose-50 text-rose-700" },
+  published: { label: "Đã đăng", cls: "border-sky-200 bg-sky-50 text-sky-700" },
 };
 
 const RISK: Record<string, { label: string; cls: string }> = {

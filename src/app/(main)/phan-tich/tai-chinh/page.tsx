@@ -32,9 +32,7 @@ import {
   formatChartTooltipCurrency,
 } from "@/lib/format";
 import {
-  getFinanceKpis,
-  getRevenueVsExpense,
-  getExpenseBreakdown,
+  getFinanceDashboardReport,
   getCashFlow,
 } from "@/lib/services";
 import type {
@@ -260,7 +258,7 @@ export default function TaiChinhPage() {
         rows: [
           {
             stt: "1",
-            metric: "Doanh thu bán hàng",
+            metric: "Doanh thu thuần hàng hóa",
             current: kpis?.revenue ?? 0,
             prev: kpis?.prevRevenue ?? 0,
             diff: (kpis?.revenue ?? 0) - (kpis?.prevRevenue ?? 0),
@@ -268,7 +266,7 @@ export default function TaiChinhPage() {
           },
           {
             stt: "2",
-            metric: "Tổng chi phí hoạt động",
+            metric: "Tổng chi phí (giá vốn + vận hành)",
             current: kpis?.expense ?? 0,
             prev: kpis?.prevExpense ?? 0,
             diff: (kpis?.expense ?? 0) - (kpis?.prevExpense ?? 0),
@@ -458,21 +456,18 @@ export default function TaiChinhPage() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const [kpiResult, revExpResult, expBkResult, cashResult] =
-        await Promise.all([
-          getFinanceKpis(activeBranchId, range),
-          getRevenueVsExpense(12, activeBranchId, range),
-          getExpenseBreakdown(activeBranchId, range),
-          getCashFlow(6, activeBranchId, range),
-        ]);
+      const [financeResult, cashResult] = await Promise.all([
+        getFinanceDashboardReport(activeBranchId, range),
+        getCashFlow(6, activeBranchId, range),
+      ]);
       if (requestId !== requestIdRef.current) return;
-      setKpis(kpiResult);
-      setRevenueVsExpenseData(revExpResult);
-      setExpenseBreakdownData(expBkResult);
+      setKpis(financeResult.kpis);
+      setRevenueVsExpenseData(financeResult.trend);
+      setExpenseBreakdownData(financeResult.expenseBreakdown);
       setMonthlyProfitData(
-        revExpResult.map((point) => ({
+        financeResult.trend.map((point) => ({
           label: String(point.label),
-          value: Number(point.revenue ?? 0) - Number(point.expense ?? 0),
+          value: Number(point.profit ?? 0),
         })),
       );
       setCashFlowData(cashResult);
@@ -519,7 +514,7 @@ export default function TaiChinhPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Doanh thu"
+            label="Doanh thu thuần"
             value={kpis ? formatCurrency(kpis.revenue) : "—"}
             change={
               kpis
@@ -533,7 +528,7 @@ export default function TaiChinhPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Chi phí"
+            label="Tổng chi phí"
             value={kpis ? formatCurrency(kpis.expense) : "—"}
             change={
               kpis
@@ -577,7 +572,7 @@ export default function TaiChinhPage() {
         </div>
 
         {/* Revenue vs Expense line chart */}
-        <ChartCard title="Doanh thu và Chi phí" subtitle={selectedPeriodLabel}>
+        <ChartCard title="Doanh thu thuần và tổng chi phí" subtitle={selectedPeriodLabel}>
           {revenueVsExpenseData.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-12">
               Chưa có dữ liệu doanh thu và chi phí.
@@ -617,7 +612,7 @@ export default function TaiChinhPage() {
                     strokeWidth={2}
                     dot={{ fill: "#004AC6", r: 3 }}
                     activeDot={{ r: 5, fill: "#004AC6" }}
-                    name="Doanh thu"
+                    name="Doanh thu thuần"
                   />
                   <Line
                     type="linear"
@@ -626,7 +621,7 @@ export default function TaiChinhPage() {
                     strokeWidth={2}
                     dot={{ fill: "#ef4444", r: 3 }}
                     activeDot={{ r: 5, fill: "#ef4444" }}
-                    name="Chi phí"
+                    name="Tổng chi phí"
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -636,7 +631,7 @@ export default function TaiChinhPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Expense breakdown pie chart */}
-          <ChartCard title="Cơ cấu chi phí" subtitle={selectedPeriodLabel}>
+          <ChartCard title="Cơ cấu giá vốn và chi phí" subtitle={selectedPeriodLabel}>
             {expenseBreakdownData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
                 Chưa có dữ liệu chi phí.
@@ -678,7 +673,7 @@ export default function TaiChinhPage() {
           </ChartCard>
 
           {/* Monthly profit bar chart */}
-          <ChartCard title="Lợi nhuận theo tháng" subtitle={selectedPeriodLabel}>
+          <ChartCard title="Lợi nhuận theo thời gian" subtitle={selectedPeriodLabel}>
             {monthlyProfitData.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
                 Chưa có dữ liệu lợi nhuận.

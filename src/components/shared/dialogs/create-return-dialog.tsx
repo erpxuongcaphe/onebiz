@@ -15,14 +15,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
-import { completeReturn } from "@/lib/services/supabase/returns-completion";
+import { createSalesReturnAtomic } from "@/lib/services/supabase/returns-completion";
 import { getOpenShift } from "@/lib/services/supabase/shifts";
-import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
-
-type SalesReturnInsert = Database["public"]["Tables"]["sales_returns"]["Insert"];
-type ReturnItemInsert = Database["public"]["Tables"]["return_items"]["Insert"];
 
 interface CreateReturnDialogProps {
   open: boolean;
@@ -35,6 +30,7 @@ interface InvoiceResult {
   code: string;
   customer_id: string | null;
   customer_name: string;
+  debt: number;
 }
 
 interface InvoiceLineItem {
@@ -118,9 +114,10 @@ export function CreateReturnDialog({
       const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("invoices")
-        .select("id, code, customer_id, customer_name")
+        .select("id, code, customer_id, customer_name, debt")
         .ilike("code", `%${invoiceSearch}%`)
         .eq("tenant_id", ctx.tenantId)
+        .eq("branch_id", ctx.branchId)
         .eq("status", "completed")
         .limit(8);
 
@@ -129,6 +126,7 @@ export function CreateReturnDialog({
         code: inv.code,
         customer_id: inv.customer_id,
         customer_name: inv.customer_name,
+        debt: Number(inv.debt ?? 0),
       })));
     }, 300);
 
@@ -230,6 +228,10 @@ export function CreateReturnDialog({
     const newErrors: Record<string, string> = {};
     if (!selectedInvoice) newErrors.invoice = "Vui lòng chọn hóa đơn gốc";
     if (selectedItems.length === 0) newErrors.items = "Vui lòng chọn ít nhất một sản phẩm để trả";
+    if (selectedInvoice && debtCredit > selectedInvoice.debt) {
+      newErrors.refund =
+        "Ph\u1ea7n c\u1ea5n tr\u1eeb c\u00f4ng n\u1ee3 v\u01b0\u1ee3t qu\u00e1 s\u1ed1 n\u1ee3 c\u00f2n l\u1ea1i c\u1ee7a h\u00f3a \u0111\u01a1n";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -238,78 +240,31 @@ export function CreateReturnDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
       const ctx = await getCurrentContext();
-      const returnCode = await nextEntityCode("sales_return", { tenantId: ctx.tenantId });
-      setCode(returnCode);
-
-      const { data: salesReturn, error: returnErr } = await supabase
-        .from("sales_returns")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          code: returnCode,
-          invoice_id: selectedInvoice!.id,
-          customer_id: selectedInvoice!.customer_id,
-          customer_name: selectedInvoice!.customer_name,
-          status: "completed" as const,
-          total: returnTotal,
-          refunded: effectiveRefund,
-          reason: reason || null,
-          note: notes || null,
-          created_by: ctx.userId,
-        } satisfies SalesReturnInsert)
-        .select("id")
-        .single();
-
-      if (returnErr) throw new Error(returnErr.message);
-
-      if (salesReturn && selectedItems.length > 0) {
-        const { error: itemsErr } = await supabase
-          .from("return_items")
-          .insert(selectedItems.map((item) => ({
-            return_id: salesReturn.id,
-            product_id: item.product_id,
-            product_name: item.product_name,
-            unit: item.unit,
-            quantity: item.returnQty,
-            unit_price: item.effective_unit_price,
-            total: item.returnQty * item.effective_unit_price,
-          } satisfies ReturnItemInsert)));
-        if (itemsErr) throw new Error(itemsErr.message);
-
-        // P1-3A 12/06/2026: fetch open shift để gắn shift_id vào phiếu chi hoàn tiền.
-        // Best-effort: nếu cashier chưa mở ca thì null (refund vẫn ghi sổ quỹ).
-        let openShiftId: string | null = null;
-        try {
-          const shift = await getOpenShift(ctx.branchId, ctx.userId);
-          openShiftId = shift?.id ?? null;
-        } catch (err) {
-          console.warn("[create-return] getOpenShift failed:", err);
-        }
-
-        await completeReturn({
-          returnId: salesReturn.id,
-          returnCode,
-          invoiceCode: selectedInvoice!.code,
-          // BATCH 3R: truyền invoiceId + invoiceItemId → BOM-aware revert +
-          // cập nhật returned_qty chính xác per line (chống trả vượt).
-          invoiceId: selectedInvoice!.id,
-          customerId: selectedInvoice!.customer_id,
-          customerName: selectedInvoice!.customer_name,
-          items: selectedItems.map((item) => ({
-            productId: item.product_id,
-            productName: item.product_name,
-            quantity: item.returnQty,
-            unitPrice: item.effective_unit_price,
-            invoiceItemId: item.id,
-          })),
-          refundAmount: effectiveRefund,
-          refundPaymentMethod,
-          totalAmount: returnTotal,
-          shiftId: openShiftId,
-        });
+      // Link the refund to the open shift when one exists. The database owns
+      // the return document, stock, refund, debt and audit transaction.
+      let openShiftId: string | null = null;
+      try {
+        const shift = await getOpenShift(ctx.branchId, ctx.userId);
+        openShiftId = shift?.id ?? null;
+      } catch (err) {
+        console.warn("[create-return] getOpenShift failed:", err);
       }
+
+      const result = await createSalesReturnAtomic({
+        invoiceId: selectedInvoice!.id,
+        items: selectedItems.map((item) => ({
+          invoiceItemId: item.id,
+          quantity: item.returnQty,
+        })),
+        refundAmount: effectiveRefund,
+        refundPaymentMethod,
+        reason,
+        note: notes,
+        shiftId: openShiftId,
+      });
+      const returnCode = result.code;
+      setCode(returnCode);
 
       onOpenChange(false);
       const descParts: string[] = [];
@@ -467,6 +422,9 @@ export function CreateReturnDialog({
                       </button>
                     ))}
                   </div>
+                )}
+                {errors.refund && (
+                  <p className="mt-2 text-xs text-destructive">{errors.refund}</p>
                 )}
               </section>
             </div>

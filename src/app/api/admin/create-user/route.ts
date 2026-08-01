@@ -31,6 +31,8 @@ import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { getAdminClient } from "@/lib/supabase/admin";
+import { hasEffectivePermission } from "@/lib/permissions/server";
+import { validateManagedUserScope } from "@/lib/admin/managed-user-scope";
 import {
   INTERNAL_AUTH_EMAIL_DOMAIN,
   isInternalAuthEmail,
@@ -86,19 +88,15 @@ export async function POST(req: NextRequest) {
 
     const isOwner = callerProfile.role === "owner";
     if (!isOwner) {
-      // Check permission code
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: permRows } = await (sb as any)
-        .from("role_permissions")
-        .select("permission_code")
-        .eq("role_id", callerProfile.role_id)
-        .in("permission_code", ["system.create_user", "system.manage_users"]);
-
-      if (!permRows || permRows.length === 0) {
+      const allowed = await hasEffectivePermission(sb, caller.id, [
+        "system.create_user",
+        "system.manage_users",
+      ]);
+      if (!allowed) {
         return NextResponse.json(
           {
             success: false,
-            message: "Không đủ quyền tạo tài khoản. Yêu cầu quyền 'system.create_user' hoặc role owner.",
+            message: "Không đủ quyền tạo tài khoản",
           },
           { status: 403 },
         );
@@ -152,6 +150,18 @@ export async function POST(req: NextRequest) {
     // 4. Tạo user qua admin API
     // ========================================
     const admin = getAdminClient();
+    const scope = await validateManagedUserScope(admin, tenantId, {
+      roleId: body.roleId,
+      branchIds: body.branchIds,
+      allBranches: body.allBranches,
+      requireBranchSelection: true,
+    });
+    if (scope.error) {
+      return NextResponse.json(
+        { success: false, message: scope.error },
+        { status: 400 },
+      );
+    }
     const authEmail = email || `staff-${randomUUID()}@${INTERNAL_AUTH_EMAIL_DOMAIN}`;
     const { data: created, error: createErr } = await admin.auth.admin.createUser({
       email: authEmail,
@@ -163,7 +173,7 @@ export async function POST(req: NextRequest) {
         contact_email: email || null,
         internal_login_email: !email,
         invited_tenant_id: tenantId,
-        invited_role_id: body.roleId ?? null,
+        invited_role_id: scope.roleId ?? null,
         invited_role: "staff", // default staff (không phải owner)
       },
     });
@@ -180,76 +190,43 @@ export async function POST(req: NextRequest) {
 
     const newUserId = created.user.id;
 
-    // ========================================
-    // 5. Profile được handle_new_user trigger tạo tự động
-    //    nhưng phòng trường hợp trigger chưa có invited_tenant_id metadata
-    //    → upsert profile cho chắc
-    // ========================================
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: profileError } = await (admin as any)
-      .from("profiles")
-      .upsert(
-        {
-          id: newUserId,
-          tenant_id: tenantId,
-          role_id: body.roleId ?? null,
-          role: "staff",
-          full_name: fullName,
-          email: email || null,
-          phone: phone || null,
-        },
-        { onConflict: "id" },
-      );
-
-    if (profileError) {
-      await admin.auth.admin.deleteUser(newUserId);
-      return NextResponse.json(
-        { success: false, message: `Không tạo được hồ sơ nhân viên: ${profileError.message}` },
-        { status: 500 },
-      );
-    }
-
-    // ========================================
-    // 6. Gán chi nhánh
-    // ========================================
-    let primaryBranchId: string | null = null;
-
+    let branchIds = scope.branchIds;
     if (body.allBranches) {
-      // Grant ALL branches của tenant qua user_branches
-      const { data: allBranches } = await admin
+      const { data, error } = await admin
         .from("branches")
         .select("id")
-        .eq("tenant_id", tenantId);
-      if (allBranches && allBranches.length > 0) {
-        primaryBranchId = allBranches[0].id;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (admin as any).from("user_branches").insert(
-          allBranches.map((b: { id: string }) => ({
-            user_id: newUserId,
-            branch_id: b.id,
-            granted_by: caller.id,
-          })),
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true);
+      if (error || !data || data.length === 0) {
+        await admin.auth.admin.deleteUser(newUserId);
+        return NextResponse.json(
+          { success: false, message: "Không lấy được danh sách chi nhánh đang hoạt động" },
+          { status: 500 },
         );
       }
-    } else if (body.branchIds && body.branchIds.length > 0) {
-      primaryBranchId = body.branchIds[0];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin as any).from("user_branches").insert(
-        body.branchIds.map((bid) => ({
-          user_id: newUserId,
-          branch_id: bid,
-          granted_by: caller.id,
-        })),
-      );
+      branchIds = data.map((branch) => branch.id);
     }
 
-    // Update profile.branch_id = primary branch (default khi đăng nhập)
-    if (primaryBranchId) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (admin as any)
-        .from("profiles")
-        .update({ branch_id: primaryBranchId })
-        .eq("id", newUserId);
+    const { error: initializeError } = await (sb.rpc as any)(
+      "initialize_managed_user_atomic",
+      {
+        p_target_user_id: newUserId,
+        p_full_name: fullName,
+        p_email: email || null,
+        p_phone: phone || null,
+        p_role_id: scope.roleId ?? null,
+        p_branch_ids: branchIds,
+      },
+    );
+    if (initializeError) {
+      await admin.auth.admin.deleteUser(newUserId);
+      return NextResponse.json(
+        {
+          success: false,
+          message: `Không khởi tạo được hồ sơ và quyền chi nhánh: ${initializeError.message}`,
+        },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({

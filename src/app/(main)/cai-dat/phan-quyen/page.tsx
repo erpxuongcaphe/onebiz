@@ -46,11 +46,20 @@ import {
   setRolePermissions,
 } from "@/lib/services/supabase/roles";
 import type { DbRole, DbRoleDetail } from "@/lib/services/supabase/roles";
-import { PERMISSION_GROUPS, DEFAULT_ROLE_TEMPLATES } from "@/lib/permissions/constants";
+import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_ROLE_TEMPLATES } from "@/lib/permissions/constants";
 import type { PermissionCode } from "@/lib/permissions/constants";
 import { Icon } from "@/components/ui/icon";
+import { PermissionPage } from "@/components/shared/permission-page";
 
-export default function PermissionSettingsPage() {
+export default function PermissionSettingsPageGuarded() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_ROLES}>
+      <PermissionSettingsPage />
+    </PermissionPage>
+  );
+}
+
+function PermissionSettingsPage() {
   const { tenant } = useAuth();
   const { toast } = useToast();
   const tenantId = tenant?.id ?? "";

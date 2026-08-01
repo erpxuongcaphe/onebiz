@@ -19,21 +19,15 @@
  */
 
 import type { SalesOrder, QueryParams, QueryResult } from "@/lib/types";
-import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId, getCurrentContext } from "./base";
 import {
   posCheckout,
-  applyStockDecrement,
-  createAutoCashReceipt,
   type PosCheckoutInput,
   type PosCheckoutResult,
   type PosCheckoutItem,
 } from "./pos-checkout";
 import { recordAuditLog } from "./audit";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
-import type { Database } from "@/lib/supabase/types";
-
-type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
-type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 
 // ============================================================
 // Sales Orders — real Supabase queries against `sales_orders`
@@ -207,132 +201,22 @@ export function getOrderStatuses() {
  * Kết quả: 1 sales order → 1 invoice + stock trừ + sổ quỹ ghi phiếu thu.
  */
 export async function completeSalesOrder(
-  orderId: string
+  orderId: string,
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // 1. ATOMIC claim — flip sales_order status
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-  const { data: claimed, error: claimErr } = await sb
-    .from("sales_orders")
-    .update({ status: "completed" })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .in("status", ["confirmed", "delivering"])
-    .select("id, code, customer_id, customer_name, total, tenant_id, branch_id, created_by")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "completeSalesOrder:claim");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("sales_orders")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", orderId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
-    throw new Error(
-      `Đơn hàng đã được xử lý (trạng thái: ${existing.status}). Không thể hoàn tất lại.`
-    );
-  }
-  const order = claimed;
-
-  // 2. Load sales_order_items — scope qua order_id (đã verify ownership ở step 1)
-  const { data: soItems, error: soItemsErr } = await sb
-    .from("sales_order_items")
-    .select("id, product_id, product_name, unit, quantity, unit_price, discount, total")
-    .eq("order_id", orderId);
-  if (soItemsErr) handleError(soItemsErr, "completeSalesOrder:items");
-  if (!soItems || soItems.length === 0) {
-    throw new Error("Đơn hàng không có sản phẩm nào");
-  }
-
-  // 3. Create invoice (completed)
-  const { data: invCode, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: order.tenant_id,
-    p_entity_type: "invoice",
-  });
-  if (codeErr) handleError(codeErr, "completeSalesOrder:invoice_code");
-  const invoiceCode = invCode ?? `HD${Date.now()}`;
-
-  const totalAmount = Number(order.total ?? 0);
-
-  const invoiceData: InvoiceInsert = {
-    tenant_id: order.tenant_id,
-    branch_id: order.branch_id,
-    code: invoiceCode,
-    customer_id: order.customer_id ?? null,
-    customer_name: order.customer_name || "Khách lẻ",
-    status: "completed",
-    subtotal: totalAmount,
-    discount_amount: 0,
-    total: totalAmount,
-    paid: totalAmount,
-    debt: 0,
-    payment_method: "cash",
-    note: `Tạo tự động từ đơn hàng ${order.code}`,
-    created_by: order.created_by,
-  };
-
-  const { data: invoice, error: invErr } = await supabase
-    .from("invoices")
-    .insert(invoiceData)
-    .select("id, code")
-    .single();
-  if (invErr) handleError(invErr, "completeSalesOrder:invoice_insert");
-  if (!invoice) throw new Error("Không tạo được hóa đơn");
-
-  // 4. Create invoice_items from SO items
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const invoiceItems: InvoiceItemInsert[] = (soItems as any[]).map((it: any) => ({
-    invoice_id: invoice.id,
-    product_id: it.product_id,
-    product_name: it.product_name ?? "",
-    unit: it.unit ?? "Cái",
-    quantity: Number(it.quantity ?? 0),
-    unit_price: Number(it.unit_price ?? 0),
-    discount: Number(it.discount ?? 0),
-    total: Number(it.total ?? 0),
-  }));
-
-  const { error: iiErr } = await supabase.from("invoice_items").insert(invoiceItems);
-  if (iiErr) handleError(iiErr, "completeSalesOrder:invoice_items");
-
-  // 5. Decrement stock
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const checkoutItems: PosCheckoutItem[] = (soItems as any[]).map((it: any) => ({
-    productId: it.product_id,
-    productName: it.product_name ?? "",
-    unit: it.unit ?? "Cái",
-    quantity: Number(it.quantity ?? 0),
-    unitPrice: Number(it.unit_price ?? 0),
-    discount: Number(it.discount ?? 0),
-  }));
-
-  await applyStockDecrement(supabase, invoice.id, checkoutItems, {
-    tenantId: order.tenant_id,
-    branchId: order.branch_id,
-    createdBy: order.created_by,
-    invoiceCode: invoice.code,
-  });
-
-  // 6. Auto cash receipt
-  await createAutoCashReceipt(
-    supabase,
-    invoice.id,
-    invoice.code,
-    totalAmount,
-    "cash",
-    {
-      tenantId: order.tenant_id,
-      branchId: order.branch_id,
-      createdBy: order.created_by,
-      customerName: order.customer_name || "Khách lẻ",
-    }
+  const { data, error } = await (supabase.rpc as any)(
+    "complete_legacy_sales_order_atomic",
+    { p_order_id: orderId },
   );
-
-  return { invoiceId: invoice.id, invoiceCode: invoice.code };
+  if (error) handleError(error, "completeSalesOrder");
+  const result = data as Record<string, unknown> | null;
+  if (!result?.invoice_id || !result.invoice_code) {
+    throw new Error("Máy chủ không trả về hóa đơn hoàn tất hợp lệ.");
+  }
+  return {
+    invoiceId: String(result.invoice_id),
+    invoiceCode: String(result.invoice_code),
+  };
 }
 
 // ============================================================
@@ -341,47 +225,14 @@ export async function completeSalesOrder(
 
 export async function cancelSalesOrder(orderId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  // Snapshot trước khi flip để có data cho audit log
-  const { data: prev } = await sb
-    .from("sales_orders")
-    .select("code, customer_name, total, status")
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .maybeSingle();
-
-  const { data: claimed, error: claimErr } = await sb
-    .from("sales_orders")
-    .update({ status: "cancelled" })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .in("status", ["new", "confirmed"])
-    .select("id")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "cancelSalesOrder");
-  if (!claimed) {
-    const { data: existing } = await sb
-      .from("sales_orders")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", orderId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy đơn hàng bán");
-    throw new Error(
-      `Không thể hủy đơn ở trạng thái "${existing.status}".`
-    );
-  }
-
-  await recordAuditLog({
-    entityType: "sales_order",
-    entityId: orderId,
-    action: "cancel",
-    oldData: (prev as Record<string, unknown>) ?? null,
-    newData: { status: "cancelled" },
-  });
+  const { error } = await (supabase.rpc as any)(
+    "cancel_legacy_sales_order_atomic",
+    {
+      p_order_id: orderId,
+      p_reason: "Hủy từ giao diện đơn hàng",
+    },
+  );
+  if (error) handleError(error, "cancelSalesOrder");
 }
 
 // ============================================================
@@ -529,6 +380,7 @@ export interface DraftOrderDetail extends DraftOrderSummary {
   items: Array<{
     id: string;
     productId: string;
+    variantId?: string;
     productName: string;
     unit: string;
     quantity: number;
@@ -538,6 +390,77 @@ export interface DraftOrderDetail extends DraftOrderSummary {
     /** 00208: ghi chú riêng từng mã hàng — giữ khi mở lại đơn để sửa. */
     note?: string;
   }>;
+}
+
+export interface SaveSalesOrderItemInput {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  note?: string | null;
+}
+
+export interface SaveSalesOrderInput {
+  orderId?: string | null;
+  requestedCode?: string | null;
+  branchId: string;
+  customerId?: string | null;
+  deliveryFee?: number;
+  note?: string | null;
+  partnerId?: string | null;
+  receiverName?: string | null;
+  receiverPhone?: string | null;
+  receiverAddress?: string | null;
+  items: SaveSalesOrderItemInput[];
+}
+
+export interface SaveSalesOrderResult {
+  orderId: string;
+  orderCode: string;
+  total: number;
+  shipmentId: string | null;
+  shipmentCode: string | null;
+  created: boolean;
+}
+
+export async function saveSalesOrderAtomic(
+  input: SaveSalesOrderInput,
+): Promise<SaveSalesOrderResult> {
+  const supabase = getClient();
+  const { data, error } = await (supabase.rpc as any)(
+    "save_sales_order_atomic",
+    {
+      p_order_id: input.orderId ?? null,
+      p_requested_code: input.requestedCode ?? null,
+      p_branch_id: input.branchId,
+      p_customer_id: input.customerId ?? null,
+      p_items: input.items.map((item) => ({
+        product_id: item.productId,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unitPrice),
+        note: item.note ?? null,
+      })),
+      p_delivery_fee: Number(input.deliveryFee ?? 0),
+      p_note: input.note ?? null,
+      p_partner_id: input.partnerId ?? null,
+      p_receiver_name: input.receiverName ?? null,
+      p_receiver_phone: input.receiverPhone ?? null,
+      p_receiver_address: input.receiverAddress ?? null,
+    },
+  );
+  if (error) handleError(error, "saveSalesOrderAtomic");
+
+  const result = data as Record<string, unknown> | null;
+  if (!result?.order_id || !result.order_code) {
+    throw new Error("Máy chủ không trả về kết quả lưu đơn đặt hàng hợp lệ.");
+  }
+  return {
+    orderId: String(result.order_id),
+    orderCode: String(result.order_code),
+    total: Number(result.total ?? 0),
+    shipmentId: result.shipment_id ? String(result.shipment_id) : null,
+    shipmentCode: result.shipment_code ? String(result.shipment_code) : null,
+    created: Boolean(result.created),
+  };
 }
 
 // ============================================================
@@ -569,236 +492,32 @@ export async function saveDraftOrder(
   },
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
-  const autoSaved = options?.autoSaved ?? false;
+  const { data, error } = await (supabase.rpc as any)(
+    "save_pos_draft_atomic",
+    {
+      p_branch_id: input.branchId,
+      p_customer_id: input.customerId ?? null,
+      p_items: input.items,
+      p_payment_method: input.paymentMethod,
+      p_subtotal: input.subtotal,
+      p_discount_amount: input.discountAmount,
+      p_total: input.total,
+      p_shipping_fee: input.shippingFee ?? 0,
+      p_note: input.note ?? null,
+      p_client_session_id: options?.sessionId ?? null,
+      p_auto_saved: options?.autoSaved ?? false,
+    },
+  );
+  if (error) handleError(error, "saveDraftOrder.atomic");
 
-  // ── Upsert path: nếu có sessionId, tìm row existing trước ──
-  if (options?.sessionId) {
-    // Cast as any vì supabase types chưa gen sau migration 00048
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: existing } = await (supabase as any)
-      .from("invoices")
-      .select("id, code, status, source")
-      .eq("tenant_id", input.tenantId)
-      .eq("client_session_id", options.sessionId)
-      // 00173: bỏ qua row đã xóa mềm → coi như chưa có → INSERT mới (không hồi sinh).
-      .is("deleted_at", null)
-      .maybeSingle();
-
-    if (existing) {
-      // Đã có row với sessionId này
-      if (existing.status !== "draft") {
-        // Đã được hoàn tất hoặc huỷ → KHÔNG update (idempotency safety net).
-        // Client coi như success, return existing → tránh tạo dup.
-        return { invoiceId: existing.id, invoiceCode: existing.code };
-      }
-      // Status='draft' → UPDATE fields + replace items. Truyền source để
-      // updateDraftOrderInternal KHÔNG lật auto_saved cho đơn đặt hàng (00173).
-      return await updateDraftOrderInternal(existing.id, input, autoSaved, existing.source);
-    }
+  const result = data as Record<string, unknown> | null;
+  if (!result?.invoice_id || !result.invoice_code) {
+    throw new Error("Máy chủ không trả về kết quả lưu đơn nháp hợp lệ.");
   }
-
-  // ── Insert path (mới) ──
-  // 1. CEO 10/07: nháp POS lấy dãy 'pos_draft' (NH...), KHÔNG lấy 'invoice' (HD)
-  //    nữa — số HD chỉ cấp khi THANH TOÁN (complete_draft_atomic v2). Nhờ vậy
-  //    nháp hủy không làm lỗ số hóa đơn hoàn thành.
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: input.tenantId,
-    p_entity_type: "pos_draft",
-  });
-  if (codeErr) handleError(codeErr, "saveDraftOrder:next_code");
-  const invoiceCode = code ?? `NH${Date.now()}`;
-
-  // 2. Insert draft invoice
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const invoiceData: any = {
-    tenant_id: input.tenantId,
-    branch_id: input.branchId,
-    code: invoiceCode,
-    customer_id: input.customerId ?? null,
-    customer_name: input.customerName || "Khách lẻ",
-    status: "draft" as const,
-    subtotal: input.subtotal,
-    discount_amount: input.discountAmount,
-    total: input.total,
-    paid: 0,
-    debt: input.total,
-    payment_method: input.paymentMethod,
-    note: input.note ?? null,
-    created_by: input.createdBy,
-    // 00048: idempotency + auto-save tracking
-    client_session_id: options?.sessionId ?? null,
-    auto_saved: autoSaved,
+  return {
+    invoiceId: String(result.invoice_id),
+    invoiceCode: String(result.invoice_code),
   };
-
-  let invoice: { id: string; code: string } | null = null;
-  try {
-    const result = await supabase
-      .from("invoices")
-      .insert(invoiceData as InvoiceInsert)
-      .select("id, code")
-      .single();
-    if (result.error) {
-      // Race condition: 2 calls cùng sessionId race INSERT → lần 2 fail
-      // 23505 (unique_violation). Retry SELECT để return existing.
-      if (
-        (result.error.code === "23505" || result.error.message?.includes("client_session_id_unique")) &&
-        options?.sessionId
-      ) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: raced } = await (supabase as any)
-          .from("invoices")
-          .select("id, code, status, source")
-          .eq("tenant_id", input.tenantId)
-          .eq("client_session_id", options.sessionId)
-          .single();
-        if (raced && raced.status === "draft") {
-          // Race lost — UPDATE row của winner thay vì INSERT
-          return await updateDraftOrderInternal(raced.id, input, autoSaved, raced.source);
-        }
-        if (raced) {
-          // Đã completed → return existing
-          return { invoiceId: raced.id, invoiceCode: raced.code };
-        }
-      }
-      handleError(result.error, "saveDraftOrder:invoice");
-    }
-    invoice = result.data;
-  } catch (err) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    handleError(err as any, "saveDraftOrder:invoice");
-  }
-  if (!invoice) throw new Error("Không lưu được đơn nháp");
-
-  // 3. Insert invoice_items
-  const itemsData: InvoiceItemInsert[] = input.items.map((item) => ({
-    invoice_id: invoice!.id,
-    product_id: item.productId,
-    product_name: item.productName,
-    unit: item.unit ?? "Cái",
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    discount: item.discount,
-    total: item.quantity * item.unitPrice - item.discount,
-  }));
-
-  if (itemsData.length > 0) {
-    const { data: inserted, error: itemsErr } = await supabase
-      .from("invoice_items")
-      .insert(itemsData)
-      .select("id");
-    if (itemsErr) handleError(itemsErr, "saveDraftOrder:items");
-    // 00208: ghi chú từng món — update RIÊNG best-effort (chưa migrate → bỏ
-    // qua, KHÔNG vỡ lưu nháp). inserted trả id theo thứ tự insert.
-    await applyItemNotes(supabase, inserted, input.items);
-  }
-
-  return { invoiceId: invoice.id, invoiceCode: invoice.code };
-}
-
-// 00208 — ghi note từng món sau insert. Best-effort: cột note chưa có thì thôi.
-async function applyItemNotes(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  supabase: any,
-  inserted: Array<{ id: string }> | null,
-  items: PosCheckoutInput["items"],
-): Promise<void> {
-  if (!inserted || inserted.length !== items.length) return;
-  const updates = items
-    .map((item, i) => ({ id: inserted[i].id, note: item.note?.trim() }))
-    .filter((u) => u.note);
-  if (!updates.length) return;
-  try {
-    await Promise.all(
-      updates.map((u) =>
-        supabase.from("invoice_items").update({ note: u.note }).eq("id", u.id),
-      ),
-    );
-  } catch {
-    // Cột note chưa tồn tại (chưa chạy 00208) — bỏ qua, nháp vẫn lưu bình thường.
-  }
-}
-
-/**
- * Internal: UPDATE existing draft (auto-save flow).
- * - Update invoice fields + auto_saved flag
- * - DELETE old items + INSERT new (simpler than diff)
- * - Trigger handle_updated_at refresh updated_at → TTL 30d tính đúng
- */
-async function updateDraftOrderInternal(
-  invoiceId: string,
-  input: PosCheckoutInput,
-  autoSaved: boolean,
-  existingSource?: string | null,
-): Promise<{ invoiceId: string; invoiceCode: string }> {
-  const supabase = getClient();
-
-  // 1. UPDATE invoice (chỉ update field thay đổi). WHERE status='draft'
-  // safety: nếu race condition đã flip sang completed → KHÔNG update.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const updatePayload: any = {
-    customer_id: input.customerId ?? null,
-    customer_name: input.customerName || "Khách lẻ",
-    subtotal: input.subtotal,
-    discount_amount: input.discountAmount,
-    total: input.total,
-    debt: input.total,
-    payment_method: input.paymentMethod,
-    note: input.note ?? null,
-  };
-  // 00173 — FIX MẤT ĐƠN: chỉ đơn NHÁP POS mới gắn auto_saved (để cleanup dọn).
-  // Đơn ĐẶT HÀNG (source='order') KHÔNG được lật auto_saved=true — nếu lật thì
-  // dọn-giỏ-trống + cleanup 30 ngày sẽ ăn mất đơn thật. Giữ nguyên cột cũ.
-  if (existingSource !== "order") {
-    updatePayload.auto_saved = autoSaved;
-  }
-
-  const { data: updated, error: updErr } = await (supabase as any)
-    .from("invoices")
-    .update(updatePayload)
-    .eq("tenant_id", input.tenantId)
-    .eq("id", invoiceId)
-    .eq("status", "draft")
-    // 00173: không cập nhật row đã xóa mềm.
-    .is("deleted_at", null)
-    .select("id, code")
-    .maybeSingle();
-  if (updErr) handleError(updErr, "updateDraftOrderInternal:update");
-  if (!updated) {
-    // Đã không còn ở trạng thái draft → idempotent return existing
-    const { data: snap } = await supabase
-      .from("invoices")
-      .select("id, code")
-      .eq("id", invoiceId)
-      .single();
-    if (snap) return { invoiceId: snap.id, invoiceCode: snap.code };
-    throw new Error("Không tìm thấy đơn nháp để cập nhật");
-  }
-
-  // 2. DELETE old items + INSERT new
-  await supabase.from("invoice_items").delete().eq("invoice_id", invoiceId);
-
-  if (input.items.length > 0) {
-    const itemsData: InvoiceItemInsert[] = input.items.map((item) => ({
-      invoice_id: invoiceId,
-      product_id: item.productId,
-      product_name: item.productName,
-      unit: item.unit ?? "Cái",
-      quantity: item.quantity,
-      unit_price: item.unitPrice,
-      discount: item.discount,
-      total: item.quantity * item.unitPrice - item.discount,
-    }));
-
-    const { data: inserted, error: itemsErr } = await supabase
-      .from("invoice_items")
-      .insert(itemsData)
-      .select("id");
-    if (itemsErr) handleError(itemsErr, "updateDraftOrderInternal:items");
-    // 00208: note từng món (best-effort, xem applyItemNotes).
-    await applyItemNotes(supabase, inserted, input.items);
-  }
-
-  return { invoiceId: updated.id, invoiceCode: updated.code };
 }
 
 // ============================================================
@@ -916,6 +635,7 @@ export async function getDraftOrderById(
     items: (raw.invoice_items ?? []).map((it: any) => ({
       id: it.id,
       productId: it.product_id,
+      variantId: it.variant_id ?? undefined,
       productName: it.product_name,
       unit: it.unit ?? "Cái",
       quantity: it.quantity,
@@ -947,15 +667,15 @@ export async function adoptDraftSession(
 ): Promise<void> {
   if (!invoiceId || !sessionId) return;
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("invoices")
-    .update({ client_session_id: sessionId })
-    .eq("tenant_id", tenantId)
-    .eq("id", invoiceId)
-    .eq("status", "draft");
-  if (error) handleError(error, "adoptDraftSession");
+  const { data, error } = await (supabase.rpc as any)(
+    "adopt_pos_draft_session_atomic",
+    { p_invoice_id: invoiceId, p_client_session_id: sessionId },
+  );
+  if (error) handleError(error, "adoptDraftSession.atomic");
+  const result = data as Record<string, unknown> | null;
+  if (!result?.invoice_id) {
+    throw new Error("Máy chủ không xác nhận phiên của đơn nháp.");
+  }
 }
 
 // ============================================================
@@ -1011,42 +731,95 @@ export async function completeDraftOrder(
     tenantId: string;
     branchId: string;
     createdBy: string;
+    customerId?: string | null;
+    items: PosCheckoutItem[];
     paymentBreakdown?: import("./pos-checkout").PaymentBreakdownItem[];
     shiftId?: string | null;
+    promotionId?: string | null;
+    couponCode?: string | null;
+    loyaltyPoints?: number;
+    discountSource?: PosCheckoutInput["discountSource"];
+    orderDiscountAmount?: number;
+    discountOtpId?: string | null;
+    discountReason?: string | null;
+    shippingFee?: number;
+    orderVatRate?: number;
+    amountTendered?: number | null;
+    customerCredit?: number;
     allowBomShortage?: boolean;
   },
-): Promise<{ invoiceCode: string }> {
+): Promise<{
+  invoiceCode: string;
+  total?: number;
+  paid?: number;
+  debt?: number;
+  taxAmount?: number;
+  discountAmount?: number;
+}> {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "complete_draft_atomic_v3",
+    "complete_draft_atomic_v4",
     {
       p_invoice_id: invoiceId,
+      p_customer_id: payment.customerId ?? null,
+      p_items: payment.items,
       p_method: payment.method,
       p_paid: payment.paid,
       p_payment_breakdown: payment.paymentBreakdown ?? null,
       p_shift_id: payment.shiftId ?? null,
+      p_promotion_id: payment.promotionId ?? null,
+      p_coupon_code: payment.couponCode ?? null,
+      p_loyalty_points: payment.loyaltyPoints ?? 0,
+      p_discount_source: payment.discountSource ?? null,
+      p_order_discount: payment.orderDiscountAmount ?? 0,
+      p_discount_otp_id: payment.discountOtpId ?? null,
+      p_discount_reason: payment.discountReason ?? null,
+      p_shipping_fee: payment.shippingFee ?? 0,
+      p_order_vat_rate: payment.orderVatRate ?? 0,
       p_allow_bom_shortage: payment.allowBomShortage ?? false,
+      p_amount_tendered: payment.amountTendered ?? payment.paid,
+      p_customer_credit: payment.customerCredit ?? 0,
     },
   );
 
   if (error) {
     if (
+      error.message === "POS_PRICE_CHANGED" ||
+      error.message === "POS_DISCOUNT_CHANGED"
+    ) {
+      throw new Error(`${error.message}|${error.details ?? "{}"}`);
+    }
+    if (
       error.code === "PGRST202" ||
-      /complete_draft_atomic_v3|schema cache/i.test(error.message)
+      /complete_draft_atomic_v4|schema cache/i.test(error.message)
     ) {
       throw new Error(
-        "Chưa có migration 00203. Không thể thanh toán đơn cũ an toàn.",
+        "Chưa có migration 00253. Không thể thanh toán đơn nháp an toàn.",
       );
     }
-    handleError(error, "completeDraftOrder:atomic_v3");
+    handleError(error, "completeDraftOrder:atomic_v4");
   }
 
-  const result = data as { invoice_code?: string } | null;
+  const result = data as {
+    invoice_code?: string;
+    total?: number;
+    paid?: number;
+    debt?: number;
+    tax_amount?: number;
+    discount_amount?: number;
+  } | null;
   if (!result?.invoice_code) {
     throw new Error("Phản hồi thanh toán thiếu mã hóa đơn.");
   }
-  return { invoiceCode: result.invoice_code };
+  return {
+    invoiceCode: result.invoice_code,
+    total: result.total,
+    paid: result.paid,
+    debt: result.debt,
+    taxAmount: result.tax_amount,
+    discountAmount: result.discount_amount,
+  };
 }
 
 // ============================================================
@@ -1058,41 +831,16 @@ export async function deleteDraftOrder(
   opts?: { onlyAutoSaved?: boolean },
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // 00173 SOFT-DELETE: KHÔNG xóa cứng nữa — SET deleted_at (khôi phục được bằng
-  // cách set NULL lại). Claim WHERE status='draft'; nếu completeDraftOrder đã
-  // flip 'completed' thì khớp 0 dòng, bail an toàn.
-  // GUARD TRIỆT ĐỂ chống mất đơn đặt hàng:
-  //  - KHÔNG BAO GIỜ đụng source='order' (đơn đặt hàng chỉ được "Hủy" ở trang
-  //    Đặt hàng, giữ bản ghi) — kể cả khi nó lỡ bị auto-save lật auto_saved.
-  //    source có thể NULL (nháp POS cũ) → dùng (is null OR neq order).
-  //  - chưa bị xóa mềm (deleted_at IS NULL) → idempotent.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let delQuery = (supabase as any)
-    .from("invoices")
-    // client_session_id: null — nhả session khi xóa mềm, kẻo unique
-    // (tenant, session) chặn auto-save tạo nháp mới cùng phiên (409).
-    .update({ deleted_at: new Date().toISOString(), client_session_id: null })
-    .eq("tenant_id", tenantId)
-    .eq("id", invoiceId)
-    .eq("status", "draft")
-    .is("deleted_at", null)
-    // isdistinct (= IS DISTINCT FROM): PostgREST mới không nhận .or() trong
-    // UPDATE/DELETE (42703) — tương đương (is null OR neq order).
-    .filter("source", "isdistinct", "order");
-  // CEO 16/06/2026 — onlyAutoSaved: dọn-giỏ-trống chỉ được xóa nháp KỸ THUẬT
-  // (auto_saved=true). Nháp bấm "Nháp" tay (auto_saved=false, sticky) KHÔNG bị
-  // auto-xóa. Guard này vẫn giữ nguyên tác dụng.
-  if (opts?.onlyAutoSaved) delQuery = delQuery.eq("auto_saved", true);
-
-  const { data: deleted, error: invErr } = await delQuery
-    .select("id")
-    .maybeSingle();
-  if (invErr) handleError(invErr, "deleteDraftOrder:invoice");
-  if (!deleted) {
-    // Either not found or not a draft — safe to ignore
-    return;
+  const { data, error } = await (supabase.rpc as any)(
+    "soft_delete_pos_draft_atomic",
+    {
+      p_invoice_id: invoiceId,
+      p_only_auto_saved: opts?.onlyAutoSaved ?? false,
+    },
+  );
+  if (error) handleError(error, "deleteDraftOrder.atomic");
+  if (!data) {
+    throw new Error("Máy chủ không trả về kết quả xử lý đơn nháp.");
   }
 }
 
@@ -1117,84 +865,22 @@ export async function duplicateInvoice(
   sourceInvoiceId: string,
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const context = await getCurrentContext();
+  const { data, error } = await (supabase.rpc as any)(
+    "duplicate_invoice_to_order_atomic",
+    {
+      p_source_invoice_id: sourceInvoiceId,
+      p_target_branch_id: context.branchId,
+    },
+  );
+  if (error) handleError(error, "duplicateInvoice");
 
-  // 1. Load source invoice + items
-  const { data: source, error: srcErr } = await supabase
-    .from("invoices")
-    .select("*, invoice_items(*)")
-    .eq("tenant_id", tenantId)
-    .eq("id", sourceInvoiceId)
-    .single();
-  if (srcErr) handleError(srcErr, "duplicateInvoice:source");
-  if (!source) throw new Error("Không tìm thấy hoá đơn để sao chép");
-
-  // 2. Generate new code — CEO 20/07: bản sao là ĐƠN ĐẶT HÀNG (dãy DH),
-  // KHÔNG ăn số HD (HD chỉ cấp khi thanh toán — 00169).
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: tenantId,
-    p_entity_type: "order",
-  });
-  if (codeErr) handleError(codeErr, "duplicateInvoice:next_code");
-  const newCode = code ?? `DH${Date.now()}`;
-
-  // 3. Insert new draft với cùng customer/payment, RESET paid+debt
-  const profile = await import("./base").then((m) => m.getCurrentContext());
-  if (!profile) throw new Error("Không xác định được người dùng hiện tại");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const newInvoice: any = {
-    tenant_id: tenantId,
-    branch_id: profile.branchId,
-    code: newCode,
-    customer_id: source.customer_id,
-    customer_name: source.customer_name,
-    status: "draft",
-    // source='order' → bản sao hiện ở trang Đặt hàng (trước đây thiếu → đơn
-    // "lửng lơ" chỉ thấy trong nháp POS). Nguồn gốc sao chép tra ở audit log.
-    source: "order",
-    subtotal: source.subtotal,
-    discount_amount: source.discount_amount,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delivery_fee: (source as any).delivery_fee ?? 0,
-    total: source.total,
-    paid: 0,
-    debt: source.total,
-    payment_method: source.payment_method,
-    // CEO 20/07: ghi chú là CỦA KHÁCH — không nhét "[Sao chép từ ...]" nội bộ.
-    note: source.note ?? null,
-    created_by: profile.userId,
-  };
-
-  const { data: invoice, error: invErr } = await supabase
-    .from("invoices")
-    .insert(newInvoice as InvoiceInsert)
-    .select("id, code")
-    .single();
-  if (invErr) handleError(invErr, "duplicateInvoice:insert");
-  if (!invoice) throw new Error("Không tạo được bản sao hoá đơn");
-
-  // 4. Clone items (reset id, link new invoice_id)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sourceItems = (source.invoice_items ?? []) as any[];
-  if (sourceItems.length > 0) {
-    const itemsData: InvoiceItemInsert[] = sourceItems.map((it) => ({
-      invoice_id: invoice.id,
-      product_id: it.product_id,
-      product_name: it.product_name,
-      unit: it.unit ?? "Cái",
-      quantity: it.quantity,
-      unit_price: it.unit_price,
-      discount: it.discount ?? 0,
-      vat_rate: it.vat_rate ?? 0,
-      vat_amount: it.vat_amount ?? 0,
-      total: it.total,
-    }));
-    const { error: itemsErr } = await supabase
-      .from("invoice_items")
-      .insert(itemsData);
-    if (itemsErr) handleError(itemsErr, "duplicateInvoice:items");
+  const result = data as Record<string, unknown> | null;
+  if (!result?.invoice_id || !result.invoice_code) {
+    throw new Error("Máy chủ không trả về bản sao hóa đơn hợp lệ.");
   }
-
-  return { invoiceId: invoice.id, invoiceCode: invoice.code };
+  return {
+    invoiceId: String(result.invoice_id),
+    invoiceCode: String(result.invoice_code),
+  };
 }

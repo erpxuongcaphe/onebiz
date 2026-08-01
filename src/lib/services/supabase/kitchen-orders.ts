@@ -335,52 +335,45 @@ export async function addItemsToOrder(
     modifierSelections?: import("@/lib/types/fnb").ModifierSelectionPayload[];
   }[],
   options?: {
-    /** P0-8: UUID identify 1 lần ấn "Gửi thêm" — replay cùng batchId sẽ bị DB chặn */
+    /** Stable key for one "Gửi thêm" action and its offline retries. */
     batchId?: string;
   },
 ): Promise<void> {
   const supabase = getClient();
+  const batchId = options?.batchId ??
+    (typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `batch-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`);
 
-  // Sprint KITCHEN-1: Auto-fill station_id cho items bổ sung (cùng logic).
-  const productIds = Array.from(new Set(items.map((i) => i.productId)));
-  const stationMap = await getStationsByProductIds(productIds).catch(
-    () => new Map<string, string | null>(),
+  // Reuse the same trusted server pipeline as a new kitchen order. The RPC
+  // locks the existing order, checks branch/status and registers one batch row
+  // before rebuilding product, price, topping and modifier snapshots.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.rpc as any)(
+    "fnb_send_to_kitchen_atomic_v2",
+    {
+      p_branch_id: null,
+      p_table_id: null,
+      p_order_type: "takeaway",
+      p_note: null,
+      p_idempotency_key: batchId,
+      p_items: items,
+      p_delivery_platform: null,
+      p_delivery_fee: 0,
+      p_platform_commission_percent: null,
+      p_delivery_staff_id: null,
+      p_delivery_distance_tier: null,
+      p_existing_order_id: orderId,
+    },
   );
 
-  const batchId = options?.batchId ?? null;
-
-  const itemsData: (KOItemInsert & {
-    kitchen_station_id?: string | null;
-    modifier_selections?: unknown;
-    batch_id?: string | null;
-  })[] = items.map((item) => ({
-    kitchen_order_id: orderId,
-    product_id: item.productId,
-    product_name: item.productName,
-    variant_id: item.variantId ?? null,
-    variant_label: item.variantLabel ?? null,
-    quantity: item.quantity,
-    unit_price: item.unitPrice,
-    note: item.note ?? null,
-    toppings: item.toppings ?? null,
-    // CEO 01/06/2026 — Sprint 2.4b
-    modifier_selections: item.modifierSelections ?? null,
-    kitchen_station_id: stationMap.get(item.productId) ?? null,
-    // P0-8 idempotency
-    batch_id: batchId,
-  }));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("kitchen_order_items")
-    .insert(itemsData);
-
   if (error) {
-    // P0-8: 23505 = unique_violation trên (kitchen_order_id, batch_id) → đã có batch này → coi như đã xử lý
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const code = (error as any).code;
-    if (batchId && code === "23505") return;
-    handleError(error, "addItemsToOrder");
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi thêm món.",
+      );
+    }
+    handleError(error, "addItemsToOrder:atomic_rpc");
   }
 }
 
@@ -389,18 +382,15 @@ export async function addItemsToOrder(
  */
 export async function updateKitchenOrderStatus(
   orderId: string,
-  newStatus: KitchenOrderStatus
+  newStatus: "served"
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  const { error } = await supabase
-    .from("kitchen_orders")
-    .update({ status: newStatus })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (error) handleError(error, "updateKitchenOrderStatus");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.rpc as any)(
+    "fnb_update_kitchen_order_status_v2",
+    { p_order_id: orderId, p_new_status: newStatus },
+  );
+  if (error) handleError(error, "updateKitchenOrderStatus:atomic_rpc");
 }
 
 /**
@@ -411,18 +401,12 @@ export async function updateKitchenItemStatus(
   newStatus: KitchenItemStatus
 ): Promise<void> {
   const supabase = getClient();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const update: Record<string, any> = { status: newStatus };
-  if (newStatus === "preparing") update.started_at = new Date().toISOString();
-  if (newStatus === "ready") update.completed_at = new Date().toISOString();
-
-  const { error } = await supabase
-    .from("kitchen_order_items")
-    .update(update)
-    .eq("id", itemId);
-
-  if (error) handleError(error, "updateKitchenItemStatus");
+  const { error } = await (supabase.rpc as any)(
+    "fnb_update_kitchen_item_status_v2",
+    { p_item_id: itemId, p_new_status: newStatus },
+  );
+  if (error) handleError(error, "updateKitchenItemStatus:atomic_rpc");
 }
 
 /**
@@ -778,22 +762,18 @@ export async function setDeliveryPlatform(
   platformCommissionPercent: number
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  const { error } = await supabase
-    .from("kitchen_orders")
-    .update({
-      delivery_platform: platform,
-      delivery_fee: deliveryFee,
-      // Migration 00070: lưu vào cột _percent mới. Giữ cột cũ
-      // platform_commission = 0 để tránh confuse báo cáo cũ.
-      platform_commission_percent: platformCommissionPercent,
-      platform_commission: 0,
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (error) handleError(error, "setDeliveryPlatform");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.rpc as any)(
+    "fnb_set_delivery_pricing_v2",
+    {
+      p_kitchen_order_id: orderId,
+      p_platform: platform,
+      p_delivery_fee: deliveryFee,
+      p_commission_percent: platformCommissionPercent,
+      p_distance_tier: null,
+    },
+  );
+  if (error) handleError(error, "setDeliveryPlatform:atomic_rpc");
 }
 
 // ============================================================
@@ -832,16 +812,12 @@ export async function assignDeliveryStaff(
  */
 export async function unassignDeliveryStaff(kitchenOrderId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("kitchen_orders").update as any)({
-    delivery_staff_id: null,
-    delivery_assigned_at: null,
-    delivery_completed_at: null,
-  })
-    .eq("tenant_id", tenantId)
-    .eq("id", kitchenOrderId);
-  if (error) handleError(error, "unassignDeliveryStaff");
+  const { error } = await (supabase.rpc as any)(
+    "assign_delivery_staff_to_order",
+    { p_kitchen_order_id: kitchenOrderId, p_staff_id: null },
+  );
+  if (error) handleError(error, "unassignDeliveryStaff:atomic_rpc");
 }
 
 /**
@@ -874,42 +850,30 @@ export async function setDeliveryDistanceTier(
   customFee?: number,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  const updatePayload: Record<string, unknown> = {
-    delivery_distance_tier: tier,
-  };
-
-  if (tier === "custom") {
-    if (typeof customFee === "number") {
-      updatePayload.delivery_fee = customFee;
-    }
-  } else {
-    // Tra cứu fee từ fnb_delivery_fee_tiers (ưu tiên branch-specific, fallback tenant)
-    // Cast as any vì bảng này mới (migration 00108) — chưa được codegen.
-    const { data: order } = await supabase
-      .from("kitchen_orders")
-      .select("branch_id, tenant_id")
-      .eq("id", kitchenOrderId)
-      .maybeSingle();
-    if (order?.tenant_id) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: tiersRaw } = await (supabase.from("fnb_delivery_fee_tiers") as any)
-        .select("branch_id, fee")
-        .eq("tenant_id", order.tenant_id)
-        .eq("tier_code", tier)
-        .eq("is_active", true);
-      const tiers = tiersRaw as { branch_id: string | null; fee: number }[] | null;
-      const matchBranch = tiers?.find((t) => t.branch_id === order.branch_id);
-      const matchTenant = tiers?.find((t) => t.branch_id === null);
-      const fee = matchBranch?.fee ?? matchTenant?.fee ?? 0;
-      updatePayload.delivery_fee = fee;
-    }
-  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: order, error: readError } = await (supabase
+    .from("kitchen_orders") as any)
+    .select("delivery_platform, delivery_fee, platform_commission_percent")
+    .eq("id", kitchenOrderId)
+    .maybeSingle();
+  if (readError) handleError(readError, "setDeliveryDistanceTier:read_order");
+  if (!order) throw new Error("Không tìm thấy đơn giao hàng.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase.from("kitchen_orders").update as any)(updatePayload)
-    .eq("tenant_id", tenantId)
-    .eq("id", kitchenOrderId);
-  if (error) handleError(error, "setDeliveryDistanceTier");
+  const { error } = await (supabase.rpc as any)(
+    "fnb_set_delivery_pricing_v2",
+    {
+      p_kitchen_order_id: kitchenOrderId,
+      p_platform: order.delivery_platform ?? "direct",
+      p_delivery_fee:
+        tier === "custom"
+          ? (customFee ?? Number(order.delivery_fee ?? 0))
+          : Number(order.delivery_fee ?? 0),
+      p_commission_percent: Number(
+        order.platform_commission_percent ?? 0,
+      ),
+      p_distance_tier: tier,
+    },
+  );
+  if (error) handleError(error, "setDeliveryDistanceTier:atomic_rpc");
 }

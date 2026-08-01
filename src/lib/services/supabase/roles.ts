@@ -5,7 +5,6 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
-import { recordAuditLog } from "./audit";
 import type { PermissionCode } from "@/lib/permissions/constants";
 
 // ── Types ──
@@ -123,155 +122,72 @@ export async function getRoleById(roleId: string): Promise<DbRoleDetail> {
 /** Create a custom role with optional initial permissions */
 export async function createRole(input: CreateRoleInput): Promise<DbRole> {
   const supabase = getClient();
-
-  const { data: role, error } = await supabase
-    .from("roles")
-    .insert({
-      tenant_id: input.tenantId,
+  const tenantId = await getCurrentTenantId();
+  if (input.tenantId && input.tenantId !== tenantId) {
+    throw new Error("Doanh nghiệp không khớp phiên đăng nhập.");
+  }
+  const { data, error } = await (supabase.rpc as any)("save_role_atomic", {
+    p_role_id: null,
+    p_payload: {
       name: input.name,
       description: input.description ?? null,
       color: input.color ?? "bg-primary",
-      is_system: false,
-    })
-    .select()
-    .single();
-  if (error || !role) handleError(error ?? { message: "Create role failed" }, "createRole");
-
-  // Assign initial permissions if provided
-  if (input.permissions && input.permissions.length > 0) {
-    const rows = input.permissions.map((code) => ({
-      role_id: role.id,
-      permission_code: code,
-    }));
-    const { error: permError } = await supabase.from("role_permissions").insert(rows);
-    if (permError) handleError(permError, "createRole.permissions");
-  }
-
-  // Audit log: tạo role là thao tác RBAC nhạy cảm — CEO cần trace ai
-  // tạo role gì kèm permission gì.
-  await recordAuditLog({
-    entityType: "role",
-    entityId: role.id,
-    action: "create",
-    newData: {
-      name: role.name,
-      description: role.description,
-      permissions: input.permissions ?? [],
     },
+    p_permission_codes: input.permissions ?? [],
   });
-
+  if (error || !data) {
+    handleError(error ?? { message: "Create role failed" }, "createRole");
+  }
+  const role = data as Record<string, unknown>;
   return {
-    id: role.id,
-    tenantId: role.tenant_id,
-    name: role.name,
-    description: role.description,
+    id: role.id as string,
+    tenantId: role.tenant_id as string,
+    name: role.name as string,
+    description: (role.description as string | null) ?? null,
     isSystem: false,
-    color: role.color ?? "bg-primary",
+    color: (role.color as string) ?? "bg-primary",
     memberCount: 0,
-    createdAt: role.created_at,
+    createdAt: role.created_at as string,
   };
 }
 
 /** Update role name/description/color (not permissions) */
 export async function updateRole(roleId: string, input: UpdateRoleInput): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  if (input.name !== undefined) updates.name = input.name;
-  if (input.description !== undefined) updates.description = input.description;
-  if (input.color !== undefined) updates.color = input.color;
-
-  const { error } = await supabase.from("roles").update(updates).eq("tenant_id", tenantId).eq("id", roleId);
+  const payload: Record<string, unknown> = {};
+  if (input.name !== undefined) payload.name = input.name;
+  if (input.description !== undefined) payload.description = input.description;
+  if (input.color !== undefined) payload.color = input.color;
+  if (Object.keys(payload).length === 0) return;
+  const { error } = await (supabase.rpc as any)("save_role_atomic", {
+    p_role_id: roleId,
+    p_payload: payload,
+    p_permission_codes: null,
+  });
   if (error) handleError(error, "updateRole");
 }
 
 /** Delete a custom role (system roles cannot be deleted) */
 export async function deleteRole(roleId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // Verify it's not a system role + ownership + snapshot for audit
-  const { data: role } = await supabase
-    .from("roles")
-    .select("is_system, name, description")
-    .eq("tenant_id", tenantId)
-    .eq("id", roleId)
-    .single();
-  if (!role) throw new Error("Không tìm thấy vai trò");
-  if (role?.is_system) throw new Error("Không thể xóa vai trò hệ thống");
-
-  // Unassign users with this role
-  const { error: unassignError } = await supabase
-    .from("profiles")
-    .update({ role_id: null })
-    .eq("tenant_id", tenantId)
-    .eq("role_id", roleId);
-  if (unassignError) handleError(unassignError, "deleteRole.unassign");
-
-  const { error } = await supabase.from("roles").delete().eq("tenant_id", tenantId).eq("id", roleId);
-  if (error) handleError(error, "deleteRole");
-
-  await recordAuditLog({
-    entityType: "role",
-    entityId: roleId,
-    action: "delete",
-    oldData: role as Record<string, unknown>,
+  const { error } = await (supabase.rpc as any)("delete_role_atomic", {
+    p_role_id: roleId,
   });
+  if (error) handleError(error, "deleteRole");
 }
 
 /** Bulk-replace all permissions for a role */
-export async function setRolePermissions(roleId: string, permissionCodes: string[]): Promise<void> {
+export async function setRolePermissions(
+  roleId: string,
+  permissionCodes: string[],
+): Promise<void> {
   const supabase = getClient();
-
-  // Phase 5 (CEO 12/05): snapshot quyền cũ + tên role để audit log diff.
-  // CEO cần trace "ai sửa quyền role X từ A sang B lúc nào" — đây là thao
-  // tác RBAC nhạy cảm nhất (1 click có thể disable cả 1 role).
-  let prevPerms: string[] = [];
-  let roleName: string | null = null;
-  try {
-    const [permsRes, roleRes] = await Promise.all([
-      supabase.from("role_permissions").select("permission_code").eq("role_id", roleId),
-      supabase.from("roles").select("name").eq("id", roleId).maybeSingle(),
-    ]);
-    prevPerms = (permsRes.data ?? []).map((r) => r.permission_code);
-    roleName = (roleRes.data as { name?: string } | null)?.name ?? null;
-  } catch {
-    /* snapshot best-effort */
-  }
-
-  // Delete existing
-  const { error: delError } = await supabase
-    .from("role_permissions")
-    .delete()
-    .eq("role_id", roleId);
-  if (delError) handleError(delError, "setRolePermissions.delete");
-
-  // Insert new
-  if (permissionCodes.length > 0) {
-    const rows = permissionCodes.map((code) => ({
-      role_id: roleId,
-      permission_code: code,
-    }));
-    const { error: insError } = await supabase.from("role_permissions").insert(rows);
-    if (insError) handleError(insError, "setRolePermissions.insert");
-  }
-
-  // Audit log diff: chỉ ghi nếu thực sự có thay đổi (sort + compare).
-  const sortedPrev = [...prevPerms].sort();
-  const sortedNew = [...permissionCodes].sort();
-  const changed =
-    sortedPrev.length !== sortedNew.length ||
-    sortedPrev.some((p, i) => p !== sortedNew[i]);
-  if (changed) {
-    const added = sortedNew.filter((p) => !sortedPrev.includes(p));
-    const removed = sortedPrev.filter((p) => !sortedNew.includes(p));
-    await recordAuditLog({
-      entityType: "role",
-      entityId: roleId,
-      action: "permissions_update",
-      oldData: { name: roleName, permissions: sortedPrev },
-      newData: { name: roleName, permissions: sortedNew, added, removed },
-    });
-  }
+  const { error } = await (supabase.rpc as any)("save_role_atomic", {
+    p_role_id: roleId,
+    p_payload: {},
+    p_permission_codes: Array.from(new Set(permissionCodes)),
+  });
+  if (error) handleError(error, "setRolePermissions");
 }
 
 /** Get all permission codes for a user (via their role) */
@@ -306,34 +222,17 @@ export async function getUserPermissions(userId: string): Promise<Set<string>> {
 }
 
 /** Assign a role to a user */
-export async function assignRoleToUser(userId: string, roleId: string | null): Promise<void> {
+export async function assignRoleToUser(
+  userId: string,
+  roleId: string | null,
+): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Snapshot prev role để audit log diff
-  const { data: prev } = await supabase
-    .from("profiles")
-    .select("role_id, full_name")
-    .eq("tenant_id", tenantId)
-    .eq("id", userId)
-    .maybeSingle();
-
-  const { error } = await supabase
-    .from("profiles")
-    .update({ role_id: roleId, updated_at: new Date().toISOString() })
-    .eq("tenant_id", tenantId)
-    .eq("id", userId);
-  if (error) handleError(error, "assignRoleToUser");
-
-  // Audit log: cấp/đổi/gỡ role là thao tác RBAC quan trọng — CEO cần
-  // trace ai cấp quyền cho ai, khi nào.
-  await recordAuditLog({
-    entityType: "user",
-    entityId: userId,
-    action: "role_grant",
-    oldData: { role_id: prev?.role_id ?? null, name: prev?.full_name ?? null },
-    newData: { role_id: roleId },
+  const { error } = await (supabase.rpc as any)("update_managed_user_atomic", {
+    p_target_user_id: userId,
+    p_profile_patch: { role_id: roleId },
+    p_branch_ids: null,
   });
+  if (error) handleError(error, "assignRoleToUser");
 }
 
 /** Get all users for a tenant (for user management) */

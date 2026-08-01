@@ -7,6 +7,8 @@ const state = vi.hoisted(() => ({
   profileUpsert: vi.fn(),
   profileUpdateEq: vi.fn(),
   branchInsert: vi.fn(),
+  branchRows: [{ id: "branch-1" }] as Array<{ id: string }>,
+  rpc: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -14,6 +16,7 @@ vi.mock("@/lib/supabase/server", () => ({
     auth: {
       getUser: vi.fn(async () => ({ data: { user: { id: "owner-1" } }, error: null })),
     },
+    rpc: state.rpc,
     from: vi.fn((table: string) => {
       if (table !== "profiles") throw new Error(`Unexpected caller table: ${table}`);
       return {
@@ -46,6 +49,15 @@ vi.mock("@/lib/supabase/admin", () => ({
         };
       }
       if (table === "user_branches") return { insert: state.branchInsert };
+      if (table === "branches") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              in: vi.fn(async () => ({ data: state.branchRows, error: null })),
+            })),
+          })),
+        };
+      }
       throw new Error(`Unexpected admin table: ${table}`);
     }),
   })),
@@ -71,6 +83,8 @@ beforeEach(() => {
   state.profileUpsert.mockResolvedValue({ data: {}, error: null });
   state.profileUpdateEq.mockResolvedValue({ data: {}, error: null });
   state.branchInsert.mockResolvedValue({ data: {}, error: null });
+  state.branchRows = [{ id: "branch-1" }];
+  state.rpc.mockResolvedValue({ data: {}, error: null });
 });
 
 describe("POST /api/admin/create-user with optional contact email", () => {
@@ -91,9 +105,14 @@ describe("POST /api/admin/create-user with optional contact email", () => {
         }),
       }),
     );
-    expect(state.profileUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ email: null, phone: "0912345678" }),
-      { onConflict: "id" },
+    expect(state.rpc).toHaveBeenCalledWith(
+      "initialize_managed_user_atomic",
+      expect.objectContaining({
+        p_target_user_id: "new-user-1",
+        p_email: null,
+        p_phone: "0912345678",
+        p_branch_ids: ["branch-1"],
+      }),
     );
     expect(await response.json()).toMatchObject({ success: true, userId: "new-user-1" });
   });
@@ -109,9 +128,9 @@ describe("POST /api/admin/create-user with optional contact email", () => {
         user_metadata: expect.objectContaining({ internal_login_email: false }),
       }),
     );
-    expect(state.profileUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({ email: "staff@example.com", phone: null }),
-      { onConflict: "id" },
+    expect(state.rpc).toHaveBeenCalledWith(
+      "initialize_managed_user_atomic",
+      expect.objectContaining({ p_email: "staff@example.com", p_phone: null }),
     );
   });
 
@@ -131,8 +150,17 @@ describe("POST /api/admin/create-user with optional contact email", () => {
     expect(state.createUser).not.toHaveBeenCalled();
   });
 
+  it("rejects a branch outside the caller tenant", async () => {
+    state.branchRows = [];
+    const { POST } = await import("@/app/api/admin/create-user/route");
+    const response = await POST(request({ phone: "0912345678" }));
+
+    expect(response.status).toBe(400);
+    expect(state.createUser).not.toHaveBeenCalled();
+  });
+
   it("removes the Auth user when profile setup fails", async () => {
-    state.profileUpsert.mockResolvedValue({ data: null, error: { message: "profile failed" } });
+    state.rpc.mockResolvedValue({ data: null, error: { message: "profile failed" } });
     const { POST } = await import("@/app/api/admin/create-user/route");
     const response = await POST(request({ phone: "0912345678" }));
 

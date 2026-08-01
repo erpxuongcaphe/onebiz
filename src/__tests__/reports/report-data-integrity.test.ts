@@ -25,6 +25,10 @@ describe("report data integrity", () => {
     "src/lib/services/supabase/xnt-report.ts",
     "utf8",
   );
+  const xntMigration = readFileSync(
+    "supabase/migrations/00259_historical_xnt_report.sql",
+    "utf8",
+  );
   const inventoryCheckReport = readFileSync(
     "src/lib/services/supabase/inventory-check-report.ts",
     "utf8",
@@ -77,7 +81,7 @@ describe("report data integrity", () => {
   });
   it("paginates finance, executive, channel, and stock aggregates", () => {
     expect(analytics).toContain("fetchAllPostgrestRows");
-    expect(analytics).toContain("[getFinanceKpis.currentInvoices]");
+    expect(analytics).toContain("get_finance_dashboard_report");
     expect(analytics).toContain("[getCrossChannelKpis]");
     expect(analytics).toContain("[getOverviewKpis.currentInvoices]");
     expect(branchStock).toContain("page.rawCount < pageSize");
@@ -107,10 +111,10 @@ describe("report data integrity", () => {
     expect(fnbAnalytics).toContain("fetchAllFnbRows");
     expect(promotionAnalytics).toContain("fetchAllPromotionRows");
     expect(abcAnalysis).toContain("fetchAllAbcRows");
-    expect(xntReport).toContain("fetchAllXntRows");
-    expect(xntReport).toContain("Promise.all([");
-    expect(xntReport).toContain('movementsQuery.in("product_id", productIds)');
-    expect(xntReport).toContain("productIds.length <= 200");
+    expect(xntReport).toContain('"get_xnt_report"');
+    expect(xntReport).not.toContain('.from("stock_movements")');
+    expect(xntMigration).toContain("period_movements");
+    expect(xntMigration).toContain("movements_after_period");
     expect(inventoryCheckReport).toContain("fetchAllInventoryCheckRows");
     expect(production).toContain(".range(offset, offset + pageSize - 1)");
     expect(production).not.toContain(".limit(200)");

@@ -13,8 +13,6 @@
 
 import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
-import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
-import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
 import { roundDecimals } from "@/lib/format";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
@@ -228,47 +226,14 @@ export async function cancelDisposalExport(
   reason?: string,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  const { data: claimed, error } = await sb
-    .from("disposal_exports")
-    .update({ status: "cancelled" })
-    .eq("tenant_id", tenantId)
-    .eq("id", disposalId)
-    .eq("status", "draft")
-    .select("id")
-    .maybeSingle();
+  const { error } = await (supabase.rpc as any)(
+    "cancel_disposal_export_atomic_v2",
+    {
+      p_disposal_id: disposalId,
+      p_reason: reason?.trim() || "Hủy từ giao diện xuất hủy",
+    },
+  );
   if (error) handleError(error, "cancelDisposalExport");
-  if (claimed) return;
-
-  const { data: existing } = await sb
-    .from("disposal_exports")
-    .select("status")
-    .eq("tenant_id", tenantId)
-    .eq("id", disposalId)
-    .single();
-  if (!existing) throw new Error("Không tìm thấy phiếu xuất hủy");
-  if (existing.status === "cancelled") {
-    throw new Error("Phiếu này đã hủy trước đó.");
-  }
-
-  // completed → hoàn kho atomic
-  const ctx = await getCurrentContext();
-  const { error: rpcErr } = await sb.rpc("void_disposal_export_atomic", {
-    p_disposal_id: disposalId,
-    p_created_by: ctx.userId,
-    p_reason: reason ?? null,
-  });
-  if (rpcErr) {
-    if (isRpcUnavailable(rpcErr)) {
-      throw new Error(
-        "Chưa có RPC void_disposal_export_atomic. Vui lòng chạy migration 00228 trước.",
-      );
-    }
-    handleError(rpcErr, "cancelDisposalExport.void");
-  }
 }
 
 // --- Complete / Cancel Internal Export ---
@@ -313,46 +278,14 @@ export async function cancelInternalExport(
   reason?: string,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  const { data: claimed, error } = await sb
-    .from("internal_exports")
-    .update({ status: "cancelled" })
-    .eq("tenant_id", tenantId)
-    .eq("id", exportId)
-    .eq("status", "draft")
-    .select("id")
-    .maybeSingle();
+  const { error } = await (supabase.rpc as any)(
+    "cancel_internal_export_atomic_v2",
+    {
+      p_export_id: exportId,
+      p_reason: reason?.trim() || "Hủy từ giao diện xuất nội bộ",
+    },
+  );
   if (error) handleError(error, "cancelInternalExport");
-  if (claimed) return;
-
-  const { data: existing } = await sb
-    .from("internal_exports")
-    .select("status")
-    .eq("tenant_id", tenantId)
-    .eq("id", exportId)
-    .single();
-  if (!existing) throw new Error("Không tìm thấy phiếu xuất nội bộ");
-  if (existing.status === "cancelled") {
-    throw new Error("Phiếu này đã hủy trước đó.");
-  }
-
-  const ctx = await getCurrentContext();
-  const { error: rpcErr } = await sb.rpc("void_internal_export_atomic", {
-    p_export_id: exportId,
-    p_created_by: ctx.userId,
-    p_reason: reason ?? null,
-  });
-  if (rpcErr) {
-    if (isRpcUnavailable(rpcErr)) {
-      throw new Error(
-        "Chưa có RPC void_internal_export_atomic. Vui lòng chạy migration 00228 trước.",
-      );
-    }
-    handleError(rpcErr, "cancelInternalExport.void");
-  }
 }
 
 // --- Create Internal Export / Xuất nội bộ ---
@@ -385,83 +318,28 @@ export interface CreateInternalExportInput {
  * transactional sẽ replace trong sprint KHO-2.
  */
 export async function createInternalExport(
-  input: CreateInternalExportInput
+  input: CreateInternalExportInput,
 ): Promise<{ id: string; code: string }> {
   const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  if (input.items.length === 0) {
-    throw new Error("Phiếu xuất nội bộ phải có ít nhất 1 sản phẩm");
-  }
-
   const ctx = await getCurrentContext();
-  const code = await nextEntityCode("internal_export", { tenantId: ctx.tenantId });
-  const totalAmount = input.items.reduce(
-    (sum, it) => sum + it.quantity * it.unitPrice,
-    0
-  );
-
-  // 1. Header — create as 'completed' (dialog finalize flow, không qua state draft)
-  const { data: header, error: headerErr } = await sb
-    .from("internal_exports")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
-      code,
-      status: "completed",
-      total_amount: totalAmount,
-      department: input.department,
-      note: input.note ?? null,
-      created_by: ctx.userId,
-    })
-    .select("id, code")
-    .single();
-  if (headerErr) handleError(headerErr, "createInternalExport:header");
-  if (!header) throw new Error("Không tạo được phiếu xuất nội bộ");
-
-  // 2. Items
-  const { error: itemsErr } = await sb.from("internal_export_items").insert(
-    input.items.map((it) => ({
-      export_id: header.id,
-      product_id: it.productId,
-      product_name: it.productName,
-      unit: it.unit,
-      quantity: it.quantity,
-      unit_price: it.unitPrice,
-      total: it.quantity * it.unitPrice,
-    }))
-  );
-  if (itemsErr) {
-    // Rollback: xoá header để list không show phiếu rỗng
-    await sb.from("internal_exports").delete().eq("id", header.id);
-    handleError(itemsErr, "createInternalExport:items");
-  }
-
-  // 3. Stock-out với referenceId = header vừa tạo (để FK + audit trail)
-  try {
-    await applyManualStockMovement(
-      input.items.map((it) => ({
-        productId: it.productId,
-        quantity: it.quantity,
-        type: "out" as const,
-        referenceType: "internal_export",
-        referenceId: header.id,
-        note: `${header.code} - Xuất nội bộ - ${it.productName} (-${it.quantity})`,
+  const { data, error } = await (supabase.rpc as any)(
+    "create_internal_export_atomic",
+    {
+      p_branch_id: ctx.branchId,
+      p_department: input.department,
+      p_note: input.note ?? null,
+      p_items: input.items.map((item) => ({
+        product_id: item.productId,
+        quantity: Number(item.quantity),
       })),
-      { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
-    );
-  } catch (err) {
-    // Stock fail → mark cancelled để list không show phiếu "ghost completed"
-    // mà stock chưa cập nhật (tránh CEO thấy phiếu completed nhưng tồn kho lệch).
-    await sb
-      .from("internal_exports")
-      .update({ status: "cancelled" })
-      .eq("id", header.id);
-    throw err;
+    },
+  );
+  if (error) handleError(error, "createInternalExport");
+  const result = data as Record<string, unknown> | null;
+  if (!result?.id || !result.code) {
+    throw new Error("Máy chủ không trả về phiếu xuất nội bộ hợp lệ.");
   }
-
-  return { id: header.id, code: header.code };
+  return { id: String(result.id), code: String(result.code) };
 }
 
 // --- Create Disposal Export / Xuất hủy ---
@@ -478,80 +356,28 @@ export interface CreateDisposalExportInput {
  * Same rationale as createInternalExport above.
  */
 export async function createDisposalExport(
-  input: CreateDisposalExportInput
+  input: CreateDisposalExportInput,
 ): Promise<{ id: string; code: string }> {
   const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  if (input.items.length === 0) {
-    throw new Error("Phiếu xuất hủy phải có ít nhất 1 sản phẩm");
-  }
-
   const ctx = await getCurrentContext();
-  const code = await nextEntityCode("disposal", { tenantId: ctx.tenantId });
-  const totalAmount = input.items.reduce(
-    (sum, it) => sum + it.quantity * it.unitPrice,
-    0
-  );
-
-  // 1. Header
-  const { data: header, error: headerErr } = await sb
-    .from("disposal_exports")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
-      code,
-      status: "completed",
-      total_amount: totalAmount,
-      reason: input.reason,
-      note: input.note ?? null,
-      created_by: ctx.userId,
-    })
-    .select("id, code")
-    .single();
-  if (headerErr) handleError(headerErr, "createDisposalExport:header");
-  if (!header) throw new Error("Không tạo được phiếu xuất hủy");
-
-  // 2. Items
-  const { error: itemsErr } = await sb.from("disposal_export_items").insert(
-    input.items.map((it) => ({
-      disposal_id: header.id,
-      product_id: it.productId,
-      product_name: it.productName,
-      unit: it.unit,
-      quantity: it.quantity,
-      unit_price: it.unitPrice,
-      total: it.quantity * it.unitPrice,
-    }))
-  );
-  if (itemsErr) {
-    await sb.from("disposal_exports").delete().eq("id", header.id);
-    handleError(itemsErr, "createDisposalExport:items");
-  }
-
-  // 3. Stock-out
-  try {
-    await applyManualStockMovement(
-      input.items.map((it) => ({
-        productId: it.productId,
-        quantity: it.quantity,
-        type: "out" as const,
-        referenceType: "disposal_export",
-        referenceId: header.id,
-        note: `${header.code} - Xuất hủy - ${it.productName} (-${it.quantity})`,
+  const { data, error } = await (supabase.rpc as any)(
+    "create_disposal_export_atomic",
+    {
+      p_branch_id: ctx.branchId,
+      p_reason: input.reason,
+      p_note: input.note ?? null,
+      p_items: input.items.map((item) => ({
+        product_id: item.productId,
+        quantity: Number(item.quantity),
       })),
-      { tenantId: ctx.tenantId, branchId: ctx.branchId, createdBy: ctx.userId }
-    );
-  } catch (err) {
-    await sb
-      .from("disposal_exports")
-      .update({ status: "cancelled" })
-      .eq("id", header.id);
-    throw err;
+    },
+  );
+  if (error) handleError(error, "createDisposalExport");
+  const result = data as Record<string, unknown> | null;
+  if (!result?.id || !result.code) {
+    throw new Error("Máy chủ không trả về phiếu xuất hủy hợp lệ.");
   }
-
-  return { id: header.id, code: header.code };
+  return { id: String(result.id), code: String(result.code) };
 }
 
 // --- Inventory Checks (Supabase) ---
@@ -621,13 +447,6 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     p_created_by: ctx.userId,
   });
   if (error) handleError(error, "applyInventoryCheck.atomic_rpc");
-
-  void recordAuditLog({
-    entityType: "inventory_check",
-    entityId: checkId,
-    action: "complete",
-    newData: { status: "balanced", atomic: true },
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -693,30 +512,15 @@ export async function getInventoryCheckItems(
  */
 export async function cancelInventoryCheck(checkId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const { data, error } = await (supabase.rpc as any)(
+    "cancel_inventory_check_atomic",
+    { p_check_id: checkId },
+  );
+  if (error) handleError(error, "cancelInventoryCheck");
 
-  const { data: claimed, error: claimErr } = await supabase
-    .from("inventory_checks")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: "cancelled" as any })
-    .eq("tenant_id", tenantId)
-    .eq("id", checkId)
-    .in("status", ["draft", "in_progress"])
-    .select("id")
-    .maybeSingle();
-
-  if (claimErr) handleError(claimErr, "cancelInventoryCheck");
-  if (!claimed) {
-    const { data: existing } = await supabase
-      .from("inventory_checks")
-      .select("status")
-      .eq("tenant_id", tenantId)
-      .eq("id", checkId)
-      .single();
-    if (!existing) throw new Error("Không tìm thấy phiếu kiểm kho");
-    throw new Error(
-      `Phiếu kiểm kho đã được xử lý (trạng thái: ${existing.status}). Không thể hủy.`
-    );
+  const result = data as Record<string, unknown> | null;
+  if (!result?.check_id || result.status !== "cancelled") {
+    throw new Error("Máy chủ không xác nhận hủy phiếu kiểm kho.");
   }
 }
 

@@ -200,13 +200,10 @@ export default function HoSoPage() {
         }
       }
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({
-          full_name: nameTrimmed,
-          phone: phoneCleaned,
-        })
-        .eq("id", user.id);
+      const { error } = await (supabase.rpc as any)(
+        "update_own_profile_atomic",
+        { p_full_name: nameTrimmed, p_phone: phoneCleaned },
+      );
 
       if (error) {
         // Thường là unique constraint hit (race condition với pre-check).

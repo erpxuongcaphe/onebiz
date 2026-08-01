@@ -44,7 +44,7 @@ const updateCalls: { table: string; data: unknown; filters: Record<string, unkno
 const deleteCalls: { table: string; filters: Record<string, unknown> }[] = [];
 const rpcCalls: { fn: string; args: unknown }[] = [];
 let nextCodeCounter = 0;
-// Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic mock
+// Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic_v2 mock
 // to simulate the server-side side effects (increment_product_stock per item/topping,
 // releaseTableMock if dine_in) that real RPC would perform.
 let currentScenario: Scenario | null = null;
@@ -88,6 +88,7 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
 let mockFromHandler: (table: string) => any;
 
 vi.mock("@/lib/services/supabase/base", () => ({
+  getCurrentContext: async () => ({ tenantId: "tenant-1", branchId: "branch-1", userId: "user-1" }),
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
     rpc: vi.fn((fn: string, args?: Record<string, unknown>) => {
@@ -104,7 +105,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_send_to_kitchen_atomic") {
+      if (fn === "fnb_send_to_kitchen_atomic_v2") {
         const orderId = `ko-${currentScenario?.id ?? "1"}`;
         if (args?.p_table_id) {
           claimTableMock(args.p_table_id, orderId);
@@ -154,7 +155,35 @@ vi.mock("@/lib/services/supabase/base", () => ({
         insertCalls.push({ table: "_rpc", data: { type: "payment", invoice_id: args?.p_invoice_id } });
         return { data: { success: true }, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic") {
+      if (fn === "split_kitchen_order_atomic") {
+        const ways = args?.p_mode === "equal"
+          ? Number(args?.p_number_of_ways ?? 2)
+          : 2;
+        const itemResult = mockFromHandler("kitchen_order_items").maybeSingle?.();
+        const currentItems = Array.isArray(itemResult?.data)
+          ? itemResult.data
+          : currentScenario?.items ?? [];
+        const movedItemCount = Array.isArray(args?.p_item_ids)
+          ? args.p_item_ids.length
+          : 0;
+        const parentItemsLeft = args?.p_mode === "items"
+          ? Math.max(0, currentItems.length - movedItemCount)
+          : Math.max(1, currentItems.length);
+        return {
+          data: {
+            parent_items_left: parentItemsLeft,
+            parent_discount_amount: 0,
+            children: Array.from({ length: ways - 1 }, (_, index) => ({
+              order_id: `split-${currentScenario?.id ?? "1"}-${index + 1}`,
+              order_number: `KB-${index + 2}`,
+              item_count: 1,
+              discount_amount: 0,
+            })),
+          },
+          error: null,
+        };
+      }
+      if (fn === "fnb_complete_payment_atomic_v2") {
         // Simulate server-side atomic RPC behavior:
         // - For each item → call increment_product_stock (logged to rpcCalls)
         // - For each non-zero topping → call increment_product_stock
@@ -893,10 +922,15 @@ describe("E1. Sửa đơn — modify items after kitchen send", () => {
       await addItemsToExistingOrder(`ko-${s.id}`, [
         { productId: "p-nuoc", productName: "Nước Suối", quantity: 1, unitPrice: 10000 },
       ]);
-      const waterInsert = insertCalls.find(
-        c => (c.data as Record<string, unknown>)?.product_name === "Nước Suối"
+      const addRpc = rpcCalls.find(
+        c => c.fn === "fnb_send_to_kitchen_atomic_v2"
       );
-      expect(waterInsert).toBeDefined();
+      expect(addRpc).toBeDefined();
+      const addParams = addRpc?.args as Record<string, unknown>;
+      expect(addParams.p_existing_order_id).toBe(`ko-${s.id}`);
+      expect(addParams.p_items).toEqual([
+        { productId: "p-nuoc", productName: "Nước Suối", quantity: 1, unitPrice: 10000 },
+      ]);
     }
   );
 });

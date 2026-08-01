@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockResult = vi.fn();
@@ -110,48 +111,46 @@ describe("inventory list status filters", () => {
   });
 });
 describe("cancelInventoryCheck", () => {
+  const migration = readFileSync(
+    "supabase/migrations/00263_atomic_inventory_check_cancel.sql",
+    "utf8",
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
     rpcCalls.length = 0;
-    rpcResponse = { data: { ok: true }, error: null };
+    rpcResponse = {
+      data: { check_id: "chk-1", code: "KK000001", status: "cancelled" },
+      error: null,
+    };
   });
 
-  it("cancels a draft inventory check (atomic claim succeeds)", async () => {
-    // .update().eq().in().select().maybeSingle() → claimed row
-    mockResult.mockResolvedValueOnce({
-      data: { id: "chk-1" },
-      error: null,
-    });
-
+  it("cancels through the guarded server transaction", async () => {
     await cancelInventoryCheck("chk-1");
 
-    expect(mockFrom).toHaveBeenCalledWith("inventory_checks");
-    expect(mockChain.update).toHaveBeenCalledWith({ status: "cancelled" });
-    expect(mockChain.in).toHaveBeenCalledWith("status", ["draft", "in_progress"]);
+    expect(rpcCalls).toEqual([
+      { fn: "cancel_inventory_check_atomic", params: { p_check_id: "chk-1" } },
+    ]);
+    expect(mockFrom).not.toHaveBeenCalledWith("inventory_checks");
   });
 
-  it("throws when check is already balanced (claim returns null)", async () => {
-    // Claim returns null (no row matched the in() filter)
-    mockResult.mockResolvedValueOnce({
+  it("fails closed when the server rejects the state transition", async () => {
+    rpcResponse = {
       data: null,
-      error: null,
-    });
-    // Fallback lookup to get actual status
-    mockResult.mockResolvedValueOnce({
-      data: { status: "balanced" },
-      error: null,
-    });
+      error: { message: "INVENTORY_CHECK_ALREADY_APPLIED" },
+    };
 
-    await expect(cancelInventoryCheck("chk-3")).rejects.toThrow("Không thể hủy");
+    await expect(cancelInventoryCheck("chk-3")).rejects.toThrow(
+      "INVENTORY_CHECK_ALREADY_APPLIED",
+    );
   });
 
-  it("throws when check does not exist", async () => {
-    // Claim returns null
-    mockResult.mockResolvedValueOnce({ data: null, error: null });
-    // Fallback: not found
-    mockResult.mockResolvedValueOnce({ data: null, error: null });
-
-    await expect(cancelInventoryCheck("chk-x")).rejects.toThrow("Không tìm thấy");
+  it("locks and checks permission, tenant and branch in SQL", () => {
+    expect(migration).toContain("for update");
+    expect(migration).toContain("inventory.check");
+    expect(migration).toContain("user_has_branch_access");
+    expect(migration).toContain("INVENTORY_CHECK_ALREADY_APPLIED");
+    expect(migration).toContain("'cancel', 'inventory_check'");
   });
 });
 

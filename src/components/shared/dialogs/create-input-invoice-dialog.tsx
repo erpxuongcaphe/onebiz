@@ -21,11 +21,10 @@ import {
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import type { Database } from "@/lib/supabase/types";
+import { savePurchaseOrderAtomic } from "@/lib/services/supabase/purchase-orders";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { Icon } from "@/components/ui/icon";
 
-type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
-type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
 
 interface CreateInputInvoiceDialogProps {
   open: boolean;
@@ -119,7 +118,10 @@ export function CreateInputInvoiceDialog({
       .then((ctx) => setCurrentTenantId(ctx.tenantId))
       .catch(() => setCurrentTenantId(null));
 
-    setCode(generateInputInvoiceCode());
+    setCode("");
+    nextEntityCode("purchase_order")
+      .then(setCode)
+      .catch(() => setCode(generateInputInvoiceCode()));
     setSupplierSearch("");
     setSelectedSupplier(null);
     setShowSupplierDropdown(false);
@@ -250,63 +252,36 @@ export function CreateInputInvoiceDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
       const ctx = await getCurrentContext();
-      const paymentLabel = paymentMethods.find((m) => m.value === paymentMethod)?.label ?? "Tiền mặt";
-      const paid = paymentMethod !== "credit" ? total : 0;
-      const debt = paymentMethod === "credit" ? total : 0;
+      const paymentLabel =
+        paymentMethods.find((method) => method.value === paymentMethod)?.label ??
+        "Tiền mặt";
+      const paidAmount = paymentMethod === "credit" ? 0 : total;
+      const saved = await savePurchaseOrderAtomic({
+        branchId: ctx.branchId,
+        supplierId: selectedSupplier!.id,
+        note: notes ? `[${paymentLabel}] ${notes}` : `[${paymentLabel}]`,
+        shippingCost: shippingFee,
+        otherCost,
+        orderDiscount: 0,
+        paidAmount,
+        paymentMethod:
+          paymentMethod === "bank_transfer" ? "transfer" : "cash",
+        receiveNow: true,
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: 0,
+          vatRate: item.vatRate,
+        })),
+      });
 
-      const { data: po, error: poErr } = await supabase
-        .from("purchase_orders")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          code,
-          supplier_id: selectedSupplier!.id,
-          supplier_name: selectedSupplier!.name,
-          status: "completed" as const,
-          subtotal,
-          discount_amount: 0,
-          tax_amount: taxAmount,
-          total,
-          paid,
-          debt,
-          note: notes ? `[${paymentLabel}] ${notes}` : `[${paymentLabel}]`,
-          created_by: ctx.userId,
-        } satisfies PurchaseOrderInsert)
-        .select("id")
-        .single();
-
-      if (poErr) throw new Error(poErr.message);
-
-      if (po && items.length > 0) {
-        const { error: itemsErr } = await supabase
-          .from("purchase_order_items")
-          .insert(items.map((item) => {
-            const lineBeforeTax = lineSubtotal(item);
-            const vatAmt = lineTax(item);
-
-            return {
-              purchase_order_id: po.id,
-              product_id: item.id,
-              product_name: item.productName,
-              unit: item.unit || "Cái",
-              quantity: item.quantity,
-              received_quantity: item.quantity,
-              unit_price: item.price,
-              discount: 0,
-              vat_rate: item.vatRate,
-              vat_amount: vatAmt,
-              total: lineBeforeTax,
-            } satisfies PurchaseOrderItemInsert;
-          }));
-        if (itemsErr) throw new Error(itemsErr.message);
-      }
-
+      setCode(saved.code);
       onOpenChange(false);
       toast({
         title: "Tạo hóa đơn đầu vào thành công",
-        description: `Đã tạo hóa đơn ${code}`,
+        description: `Đã tạo hóa đơn ${saved.code}`,
         variant: "success",
       });
       onSuccess?.();

@@ -161,19 +161,11 @@ export async function releaseTable(tableId: string): Promise<void> {
  */
 export async function markTableAvailable(tableId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  const { error } = await supabase
-    .from("restaurant_tables")
-    .update({
-      status: "available" as const,
-      current_order_id: null,
-    } satisfies TableUpdate)
-    .eq("tenant_id", tenantId)
-    .eq("id", tableId)
-    .eq("status", "cleaning");
-
-  if (error) handleError(error, "markTableAvailable");
+  const { error } = await (supabase.rpc as any)(
+    "mark_fnb_table_available_atomic",
+    { p_table_id: tableId },
+  );
+  if (error) handleError(error, "markTableAvailable.rpc");
 }
 
 // ── Table Management (Admin CRUD) ──

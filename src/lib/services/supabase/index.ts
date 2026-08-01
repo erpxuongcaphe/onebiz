@@ -1,6 +1,6 @@
 export { getProducts, getAllMatchingProductIds, getProductStats, getProductCategories, getProductCategoriesAsync, getProductBrands, getProductById, getAllStockMovements, getStockMovements as getProductStockMovements, getStockCard, getSalesHistory, createProduct, updateProduct, deleteProduct, duplicateProduct, moveProductSortOrder, bulkUpdateCategory, bulkUpdatePrice, bulkDeleteProducts, restoreProduct, bulkRestoreProducts, forceDeleteProduct, bulkForceDeleteProducts, cleanupTestProduct, bulkCleanupTestProducts, verifyCurrentUserPassword } from "./products";
 export type { AllStockMovementRow } from "./products";
-export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerGroupsFull, createCustomerGroup, updateCustomerGroup, deleteCustomerGroup, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer, adjustCustomerDebt } from "./customers";
+export { getCustomers, getCustomerGroups, getCustomerGroupsAsync, getCustomerGroupsFull, createCustomerGroup, updateCustomerGroup, deleteCustomerGroup, getCustomerById, createCustomer, updateCustomer, deleteCustomer, getOrCreateWalkInCustomer } from "./customers";
 export type { CustomerGroupFull } from "./customers";
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
 export { duplicateInvoice } from "./orders";
@@ -23,7 +23,6 @@ export {
   updateInvoice,
   getInvoicesForCustomer,
   getReturnsForCustomer,
-  setInvoiceAmountTendered,
   getInvoiceById,
 } from "./invoices";
 export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
@@ -33,6 +32,8 @@ export {
   getPurchaseOrderStatusMeta,
   updatePurchaseOrderStatus,
   receivePurchaseOrder,
+  savePurchaseOrderAtomic,
+  updateReceivedPurchaseOrderAtomic,
   canTransitionPurchaseStatus,
   getPurchaseOrderItems,
   receivePurchaseOrderPartial,
@@ -43,10 +44,15 @@ export type {
   PurchaseOrderItemRow,
   PartialReceiveLine,
   ClosePurchaseOrderShortResult,
+  SavePurchaseOrderItemInput,
+  UpdateReceivedPurchaseOrderInput,
+  SavePurchaseOrderInput,
+  SavePurchaseOrderResult,
 } from "./purchase-orders";
 export {
   getOrders,
   getOrderStatuses,
+  saveSalesOrderAtomic,
   saveDraftOrder,
   listDraftOrders,
   getDraftOrderById,
@@ -59,10 +65,17 @@ export {
   getSalesOrderItems,
   getDraftOrderItems,
 } from "./orders";
-export type { DraftOrderSummary, DraftOrderDetail, SalesOrderItemRow } from "./orders";
+export type {
+  DraftOrderSummary,
+  DraftOrderDetail,
+  SalesOrderItemRow,
+  SaveSalesOrderItemInput,
+  SaveSalesOrderInput,
+  SaveSalesOrderResult,
+} from "./orders";
 export { getReturns, getReturnStatuses, getReturnItems } from "./returns";
 export type { ReturnItemRow } from "./returns";
-export { completeReturn } from "./returns-completion";
+export { createSalesReturnAtomic } from "./returns-completion";
 export {
   getShippingOrders,
   getShippingOrderByInvoice,
@@ -80,7 +93,8 @@ export {
   SHIPPING_STATUS_LABEL,
 } from "./shipping";
 export type { CreateShipmentInput, AttachDeliveryInput } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createCashTransaction, deleteCashTransaction, cancelCashTransaction } from "./cash-book";
+export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createManualCashTransactionAtomic, createCashTransaction, deleteCashTransaction, cancelCashTransaction } from "./cash-book";
+export type { CreateManualCashTransactionInput } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
   getInventoryCheckItems,
@@ -127,6 +141,7 @@ export type {
 // Phase C 16/05/2026: báo cáo Tài chính + Marketing chuyên sâu
 export {
   getReceivableAgingReport,
+  getPayableAgingReport,
   getVatReport,
   getRfmReport,
   getFnbServeTimeReport,
@@ -134,6 +149,8 @@ export {
 export type {
   ReceivableAgingRow,
   ReceivableAgingReport,
+  PayableAgingRow,
+  PayableAgingReport,
   VatSummary,
   VatInvoiceDetail,
   VatPoDetail,
@@ -162,7 +179,6 @@ export {
   deletePromotion,
   getPromotionSettings,
   upsertPromotionSettings,
-  tagInvoicePromotion,
 } from "./promotions";
 export {
   getLoyaltySettings,
@@ -204,8 +220,9 @@ export {
   // Suppliers
   getSupplierKpis, getPurchaseByMonth, getTopSuppliersByPurchase, getSupplierPaymentStatus, getSupplierSummary,
   // Finance
-  getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
+  getFinanceDashboardReport, getFinanceKpis, getRevenueVsExpense, getExpenseBreakdown, getMonthlyProfit, getCashFlow, getCashFlowDetailed,
 } from "./analytics";
+export type { FinanceDashboardReport } from "./analytics";
 export type {
   CustomerProductSort,
   CustomerProductReportSummary,
@@ -296,11 +313,11 @@ export {
 
 // Reports & Financial Intelligence
 export {
-  getProfitAndLoss, getCOGSBreakdown, getGrossMarginTrend,
+  getProfitAndLoss, getFinancialAnalysisDetails, getCOGSBreakdown, getGrossMarginTrend,
   getInventoryTurnover, getDSO, getFinancialAlerts, getStockAlerts,
   getConsolidatedPnL, getBranchPnLComparison,
 } from "./reports";
-export type { ConsolidatedPnL, BranchPnLRow } from "./reports";
+export type { ConsolidatedPnL, BranchPnLRow, FinancialAnalysisDetails } from "./reports";
 
 // XNT Report — Xuất-Nhập-Tồn (Sprint REP-1, CEO 06/05/2026)
 // Format chuẩn KiotViet với 13 cột detail breakdown NHẬP/XUẤT

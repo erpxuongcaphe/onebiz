@@ -83,7 +83,7 @@ function ScoreBadge({ score }: { score: number }) {
 
 export default function RfmReportPage() {
   const { toast } = useToast();
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const {
     preset,
     range,
@@ -246,6 +246,7 @@ export default function RfmReportPage() {
           "Phân khúc theo lần mua gần nhất, tần suất mua và tổng chi tiêu",
         range,
         tenantName: "OneBiz",
+        branchName: branchLabel,
         generatedAt: new Date(),
         disclaimer:
           "Mỗi tiêu chí được chấm từ 1 đến 5; điểm càng cao thể hiện mức độ gắn bó và giá trị càng tốt.",
@@ -336,7 +337,7 @@ export default function RfmReportPage() {
         variant: "error",
       });
     }
-  }, [rows, segments, totalMonetary, range, toast]);
+  }, [branchLabel, rows, segments, totalMonetary, range, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">

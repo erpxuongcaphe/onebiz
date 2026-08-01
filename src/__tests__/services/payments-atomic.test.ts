@@ -1,71 +1,39 @@
 /**
- * Test atomic RPC flow trong payments.ts (Sprint SỔ-QUỸ-2).
- *
- * Verify 2 path:
- *   1. RPC available → gọi `record_invoice_payment` Postgres function
- *   2. RPC chưa migrate (PGRST202) → fall back 4-step legacy
- *
- * Cũng verify cancelCashTransaction qua RPC `cancel_cash_transaction`.
+ * Luồng thu/trả công nợ phải luôn chạy qua RPC nguyên tử.
+ * Khi RPC lỗi hoặc chưa có trên DB, client phải dừng và không được ghi nhiều bước.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const mockResult = vi.fn();
-const mockRpc = vi.fn();
-
-function createChain() {
-  const chain: Record<string, unknown> = {};
-  const self = () => chain;
-  chain.select = vi.fn(self);
-  chain.insert = vi.fn(self);
-  chain.update = vi.fn(self);
-  chain.delete = vi.fn(self);
-  chain.eq = vi.fn(self);
-  chain.in = vi.fn(self);
-  chain.single = mockResult;
-  chain.maybeSingle = mockResult;
-  return chain;
-}
-
-const mockChain = createChain();
-const mockFrom = vi.fn(() => mockChain);
+const { mockRpc, mockFrom } = vi.hoisted(() => ({
+  mockRpc: vi.fn(),
+  mockFrom: vi.fn(),
+}));
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: mockFrom, rpc: mockRpc }),
-  getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
   getCurrentContext: vi.fn().mockResolvedValue({
     tenantId: "tenant-test-1",
     branchId: "branch-test-1",
     userId: "user-test-1",
   }),
-  getPaginationRange: () => ({ from: 0, to: 10 }),
-  handleError: (error: { message: string }, ctx: string) => {
-    throw new Error(`[${ctx}] ${error.message}`);
+  handleError: (error: { message: string }, context: string) => {
+    throw new Error(`[${context}] ${error.message}`);
   },
 }));
 
-// nextEntityCode được dùng trong fallback path
-vi.mock("@/lib/services/supabase/stock-adjustments", () => ({
-  nextEntityCode: vi.fn().mockResolvedValue("PT000123"),
-}));
-
-// P1-3A 12/06: legacy path gắn shift_id qua getOpenShift — mock để không
-// tiêu mockResult trong chuỗi (test drift: expect cash id nhận nhầm shift row).
-vi.mock("@/lib/services/supabase/shifts", () => ({
-  getOpenShift: vi.fn().mockResolvedValue(null),
-}));
 
 import {
   recordInvoicePayment,
   recordPurchasePayment,
 } from "@/lib/services/supabase/payments";
 
-describe("recordInvoicePayment — atomic RPC path", () => {
+describe("payment RPC atomic", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("gọi RPC record_invoice_payment + return mapped result khi RPC available", async () => {
+  it("ghi thu nợ hóa đơn qua RPC và không tin user/branch từ client", async () => {
     mockRpc.mockResolvedValueOnce({
       data: {
         cash_transaction_id: "cash-uuid-001",
@@ -83,7 +51,6 @@ describe("recordInvoicePayment — atomic RPC path", () => {
       note: "Trả nợ",
     });
 
-    // RPC was called với đúng params
     expect(mockRpc).toHaveBeenCalledWith(
       "record_invoice_payment",
       expect.objectContaining({
@@ -91,183 +58,55 @@ describe("recordInvoicePayment — atomic RPC path", () => {
         p_amount: 50000,
         p_payment_method: "cash",
         p_note: "Trả nợ",
+        p_branch_id: null,
+        p_user_id: null,
       }),
     );
-
-    // Result mapping đúng
     expect(result).toEqual({
       cashTransactionId: "cash-uuid-001",
       cashCode: "PT000042",
       newPaid: 50000,
       newDebt: 0,
     });
-
-    // Không fall back vào legacy path → mockFrom KHÔNG gọi `invoices` /
-    // `cash_transactions`. Audit log gọi `audit_log` (best-effort) là OK.
-    expect(mockFrom).not.toHaveBeenCalledWith("invoices");
-    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("fall back legacy 4-step khi RPC chưa migrate (PGRST202)", async () => {
-    // RPC không tồn tại
+  it("ghi trả nợ nhà cung cấp qua RPC và không tin user/branch từ client", async () => {
     mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { message: "function record_invoice_payment(...) does not exist", code: "PGRST202" },
-    });
-
-    // Legacy path: fetch invoice → insert cash → update invoice → fetch+update customer
-    // 1. Fetch invoice
-    mockResult.mockResolvedValueOnce({
       data: {
-        id: "inv-uuid-001",
-        code: "HD001",
-        customer_id: "cust-uuid-001",
-        customer_name: "Khách A",
-        total: 100000,
-        paid: 50000,
-        debt: 50000,
-        status: "completed",
+        cash_transaction_id: "cash-uuid-002",
+        cash_code: "PC000011",
+        new_paid: 30000,
+        new_debt: 70000,
       },
       error: null,
     });
-    // 2. Insert cash → returns { id }
-    mockResult.mockResolvedValueOnce({
-      data: { id: "cash-uuid-001" },
-      error: null,
-    });
-    // 3. Update invoice — eq().eq() returns chain (default), no error from chain destructure
-    // Default chain.eq returns chain, await chain → chain (no error). OK.
-    // 4. customers.debt: KHÔNG fetch/update tay nữa (00133/00134 — trigger
-    //    recompute là Single Source of Truth) → không mock thêm, kẻo once
-    //    thừa tràn sang test sau (vi.clearAllMocks không xoá once-queue).
 
-    const result = await recordInvoicePayment({
-      referenceId: "inv-uuid-001",
-      amount: 50000,
+    const result = await recordPurchasePayment({
+      referenceId: "po-uuid-001",
+      amount: 30000,
       paymentMethod: "transfer",
     });
 
-    // RPC was attempted then fell back
-    expect(mockRpc).toHaveBeenCalled();
-    // Legacy path đã chạy
-    expect(mockFrom).toHaveBeenCalledWith("invoices");
-    expect(mockFrom).toHaveBeenCalledWith("cash_transactions");
-
-    expect(result.cashTransactionId).toBe("cash-uuid-001");
-    expect(result.cashCode).toBe("PT000123"); // từ mock nextEntityCode
-    expect(result.newPaid).toBe(100000);
-    expect(result.newDebt).toBe(0);
-  });
-
-  it("validate amount > 0", async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { message: "function does not exist", code: "PGRST202" },
-    });
-
-    // Fetch invoice với debt > 0
-    mockResult.mockResolvedValueOnce({
-      data: {
-        id: "inv-uuid-001",
-        code: "HD001",
-        customer_id: null,
-        customer_name: "Khách A",
-        total: 100000,
-        paid: 0,
-        debt: 100000,
-        status: "completed",
-      },
-      error: null,
-    });
-
-    await expect(
-      recordInvoicePayment({
-        referenceId: "inv-uuid-001",
-        amount: -5000,
-        paymentMethod: "cash",
+    expect(mockRpc).toHaveBeenCalledWith(
+      "record_purchase_payment",
+      expect.objectContaining({
+        p_purchase_order_id: "po-uuid-001",
+        p_branch_id: null,
+        p_user_id: null,
       }),
-    ).rejects.toThrow("Số tiền thanh toán phải lớn hơn 0");
+    );
+    expect(result.cashCode).toBe("PC000011");
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  // 20/07/2026 — HD001438: nháp mang debt=total bị thu nợ 2 lần.
-  // Chặn thu nợ trên chứng từ chưa hoàn tất (cả invoice lẫn PO).
-  it("chặn thu nợ trên hóa đơn NHÁP (draft)", async () => {
+  it("dừng an toàn khi RPC chưa có, không rơi về ghi nhiều bước", async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
-      error: { message: "function does not exist", code: "PGRST202" },
-    });
-    mockResult.mockResolvedValueOnce({
-      data: {
-        id: "inv-uuid-002",
-        code: "NH000023",
-        customer_id: null,
-        customer_name: "Khách B",
-        total: 540000,
-        paid: 0,
-        debt: 540000,
-        status: "draft",
+      error: {
+        message: "function record_invoice_payment(...) does not exist",
+        code: "PGRST202",
       },
-      error: null,
-    });
-
-    await expect(
-      recordInvoicePayment({
-        referenceId: "inv-uuid-002",
-        amount: 540000,
-        paymentMethod: "transfer",
-      }),
-    ).rejects.toThrow(/chưa hoàn tất/);
-    // Không được insert phiếu thu
-    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
-  });
-
-  it("chặn trả nợ NCC trên phiếu nhập chưa nhập kho", async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { message: "function does not exist", code: "PGRST202" },
-    });
-    mockResult.mockResolvedValueOnce({
-      data: {
-        id: "po-uuid-001",
-        code: "PN000099",
-        supplier_id: null,
-        supplier_name: "NCC A",
-        total: 200000,
-        paid: 0,
-        debt: 200000,
-        status: "draft",
-      },
-      error: null,
-    });
-
-    await expect(
-      recordPurchasePayment({
-        referenceId: "po-uuid-001",
-        amount: 200000,
-        paymentMethod: "cash",
-      }),
-    ).rejects.toThrow(/chưa nhập kho hoàn tất/);
-    expect(mockFrom).not.toHaveBeenCalledWith("cash_transactions");
-  });
-
-  it("validate amount không vượt quá debt", async () => {
-    mockRpc.mockResolvedValueOnce({
-      data: null,
-      error: { message: "function does not exist", code: "PGRST202" },
-    });
-
-    mockResult.mockResolvedValueOnce({
-      data: {
-        id: "inv-uuid-001",
-        code: "HD001",
-        customer_id: null,
-        customer_name: "Khách A",
-        total: 100000,
-        paid: 80000,
-        debt: 20000,
-        status: "completed",
-      },
-      error: null,
     });
 
     await expect(
@@ -276,6 +115,36 @@ describe("recordInvoicePayment — atomic RPC path", () => {
         amount: 50000,
         paymentMethod: "cash",
       }),
-    ).rejects.toThrow(/vượt quá công nợ/);
+    ).rejects.toThrow("recordInvoicePayment.rpc");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("dừng an toàn khi RPC trả lỗi nghiệp vụ", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "INSUFFICIENT_PERMISSION", code: "P0001" },
+    });
+
+    await expect(
+      recordPurchasePayment({
+        referenceId: "po-uuid-001",
+        amount: 30000,
+        paymentMethod: "cash",
+      }),
+    ).rejects.toThrow("recordPurchasePayment.rpc");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("dừng nếu RPC không trả dữ liệu xác nhận", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(
+      recordInvoicePayment({
+        referenceId: "inv-uuid-001",
+        amount: 10000,
+        paymentMethod: "cash",
+      }),
+    ).rejects.toThrow("Không nhận được kết quả");
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });

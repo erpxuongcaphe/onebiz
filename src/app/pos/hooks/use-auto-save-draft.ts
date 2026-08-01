@@ -268,6 +268,7 @@ function buildInput(
 ): PosCheckoutInput {
   const items: PosCheckoutItem[] = s.lines.map((l) => ({
     productId: l.productId,
+    variantId: l.variantId ?? null,
     productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
     unit: l.unit,
     quantity: l.quantity,

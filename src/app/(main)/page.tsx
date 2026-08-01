@@ -153,7 +153,11 @@ export default function TongQuanPage() {
     fetchPhase2();
   }, [fetchPhase1, fetchPhase2, isReady]);
 
-  const formattedDate = formatShortDate(new Date());
+  const [clientNow, setClientNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setClientNow(new Date());
+  }, []);
+  const formattedDate = clientNow ? formatShortDate(clientNow) : "";
 
   const chartData: Record<ChartView, ChartPoint[]> = {
     day: revenueDay,
@@ -207,8 +211,15 @@ export default function TongQuanPage() {
   // Lý do: dashboard rỗng/trống vì empty data → CEO mở thấy không có "weight".
   // Hero: "Chào anh [Tên], hôm nay [Y/M/D]".
   const firstName = user?.fullName?.split(" ").pop() ?? "anh";
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Chào buổi sáng" : hour < 18 ? "Chào buổi chiều" : "Chào buổi tối";
+  const hour = clientNow?.getHours();
+  const greeting =
+    hour === undefined
+      ? "Xin chào"
+      : hour < 12
+        ? "Chào buổi sáng"
+        : hour < 18
+          ? "Chào buổi chiều"
+          : "Chào buổi tối";
 
   return (
     <div className="p-3 md:p-4 space-y-3">
@@ -219,7 +230,7 @@ export default function TongQuanPage() {
         </h1>
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Icon name="schedule" size={14} className="text-muted-foreground" />
-          <span className="capitalize">{formattedDate}</span>
+          <span className="min-h-5 capitalize">{formattedDate}</span>
         </div>
       </div>
 

@@ -26,7 +26,7 @@
  *   - Bypass: auth routes, Supabase, /api/*, /monitoring (Sentry tunnel)
  */
 
-const CACHE_NAME = "onebiz-manager-v3";
+const CACHE_NAME = "onebiz-manager-v4";
 
 // Pre-cache CHỈ static assets — KHÔNG pre-cache HTML routes nữa.
 // Sprint LT-6 27/05: HTML phải đi qua network để middleware refresh cookie.
@@ -69,6 +69,9 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
+
+  // Local development must always use the latest Next.js bundle.
+  if (url.hostname === "localhost" || url.hostname === "127.0.0.1") return;
 
   // Bỏ qua non-GET
   if (event.request.method !== "GET") return;

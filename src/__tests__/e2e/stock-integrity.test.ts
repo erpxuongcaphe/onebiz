@@ -275,13 +275,17 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
       tenant_id: tenantId,
       branch_id: branchId,
       customer_id: params.p_customer_id,
-      customer_name: params.p_customer_name,
       status: "completed",
-      subtotal: params.p_subtotal,
-      discount_amount: params.p_discount_amount,
-      total: params.p_total,
+      subtotal: items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0),
+      discount_amount: items.reduce((sum, item) => sum + Number(item.discount ?? 0), 0) + Number(params.p_order_discount ?? 0),
+      total: items.reduce((sum, item) => sum + item.quantity * item.unitPrice - Number(item.discount ?? 0), 0) - Number(params.p_order_discount ?? 0),
       paid: params.p_paid,
-      debt: Math.max(0, Number(params.p_total ?? 0) - Number(params.p_paid ?? 0)),
+      debt: Math.max(
+        0,
+        items.reduce((sum, item) => sum + item.quantity * item.unitPrice - Number(item.discount ?? 0), 0)
+          - Number(params.p_order_discount ?? 0)
+          - Number(params.p_paid ?? 0),
+      ),
       payment_method: params.p_payment_method,
       created_by: actorId,
     },
@@ -533,13 +537,49 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
+      if (fn === "create_sales_return_atomic") {
+        return {
+          data: {
+            return_id: "return-atomic-1",
+            code: "TH000001",
+            total: 300_000,
+            refunded: 300_000,
+            debt_credit: 0,
+            warnings: [],
+          },
+          error: null,
+        };
+      }
+      if (fn === "create_supplier_return_atomic") {
+        return {
+          data: {
+            return_id: "supplier-return-atomic-1",
+            code: "THN000001",
+            total: 750_000,
+            debt_reduced: 500_000,
+            cash_refund: 250_000,
+            warnings: [],
+          },
+          error: null,
+        };
+      }
       if (fn === "receive_purchase_items_atomic") {
         return simulateReceivePurchaseItemsAtomic(params);
       }
-      if (fn === "pos_complete_checkout_atomic_v2") {
+      if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v3") {
+      if (fn === "save_pos_draft_atomic") {
+        return {
+          data: {
+            invoice_id: "inv-pos",
+            invoice_code: "HD00001",
+            created: true,
+          },
+          error: null,
+        };
+      }
+      if (fn === "complete_draft_atomic_v4") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
@@ -577,7 +617,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
-      if (fn === "complete_production_order") {
+      if (
+        fn === "complete_production_atomic" ||
+        fn === "complete_production_order"
+      ) {
         return { data: "lot-new-1", error: null };
       }
       if (fn === "consume_production_materials") {
@@ -863,69 +906,57 @@ describe("NHẬP HÀNG — Purchase Receive Stock IN", () => {
 // ============================================================
 
 describe("SẢN XUẤT — Production Stock Changes", () => {
-  it("MF-1: Consume materials — RPC gọi đúng production_order_id", async () => {
-    const { consumeProductionMaterials } = await import(
+  it("MF-1: Hoàn thành nguyên tử — RPC nhận đúng lệnh và số lượng", async () => {
+    const { completeProductionAtomic } = await import(
       "@/lib/services/supabase/production"
     );
 
-    await consumeProductionMaterials("prod-001");
+    await completeProductionAtomic("prod-001", 50);
 
-    // RPC consume_production_materials called with correct ID
-    const consumeRpc = rpcCalls.find(
-      (c) => c.fn === "consume_production_materials"
-    );
-    expect(consumeRpc).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((consumeRpc!.params as any).p_production_order_id).toBe("prod-001");
-  });
-
-  it("MF-2: Complete production — RPC gọi đúng completed_qty", async () => {
-    const { completeProductionOrder } = await import(
-      "@/lib/services/supabase/production"
-    );
-
-    const lotId = await completeProductionOrder("prod-001", 50);
-
-    // RPC complete_production_order called
     const completeRpc = rpcCalls.find(
-      (c) => c.fn === "complete_production_order"
+      (call) => call.fn === "complete_production_atomic"
     );
     expect(completeRpc).toBeDefined();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((completeRpc!.params as any).p_production_order_id).toBe("prod-001");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((completeRpc!.params as any).p_completed_qty).toBe(50);
+  });
 
-    // Returns lot ID
+  it("MF-2: Hoàn thành nguyên tử — trả đúng mã lô", async () => {
+    const { completeProductionAtomic } = await import(
+      "@/lib/services/supabase/production"
+    );
+
+    const lotId = await completeProductionAtomic("prod-001", 50);
     expect(lotId).toBe("lot-new-1");
   });
 
-  it("MF-3: Full production flow — consume materials + complete in correct order", async () => {
-    const { consumeProductionMaterials, completeProductionOrder } =
-      await import("@/lib/services/supabase/production");
-
-    // Step 1: Consume materials (NVL stock OUT — handled by RPC)
-    await consumeProductionMaterials("prod-001");
-
-    // Step 2: Complete production (SKU stock IN — handled by RPC)
-    await completeProductionOrder("prod-001", 100, "LOT-20260410-001");
-
-    // Verify 2 RPCs in order
-    const consumeIdx = rpcCalls.findIndex(
-      (c) => c.fn === "consume_production_materials"
+  it("MF-3: Trình duyệt không gọi riêng bước trừ NVL và nhập thành phẩm", async () => {
+    const { completeProductionAtomic } = await import(
+      "@/lib/services/supabase/production"
     );
-    const completeIdx = rpcCalls.findIndex(
-      (c) => c.fn === "complete_production_order"
-    );
-    expect(consumeIdx).toBeLessThan(completeIdx);
 
-    // Complete RPC has correct lot number
+    await completeProductionAtomic(
+      "prod-001",
+      100,
+      "LOT-20260410-001",
+    );
+
+    expect(
+      rpcCalls.filter((call) => call.fn === "consume_production_materials"),
+    ).toHaveLength(0);
+    expect(
+      rpcCalls.filter((call) => call.fn === "complete_production_order"),
+    ).toHaveLength(0);
+
+    const completeRpc = rpcCalls.find(
+      (call) => call.fn === "complete_production_atomic"
+    );
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((rpcCalls[completeIdx].params as any).p_lot_number).toBe(
+    expect((completeRpc!.params as any).p_lot_number).toBe(
       "LOT-20260410-001"
     );
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((rpcCalls[completeIdx].params as any).p_completed_qty).toBe(100);
   });
 
   it("MF-4: BOM cost calculation — returns correct total", async () => {
@@ -1064,7 +1095,6 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
     expect(inv.tenant_id).toBe("tenant-1");
     expect(inv.branch_id).toBe("branch-1");
     expect(inv.customer_id).toBe("cust-test");
-    expect(inv.customer_name).toBe("Nguyễn Văn Test");
     expect(inv.status).toBe("completed");
     expect(inv.subtotal).toBe(300_000);
     expect(inv.discount_amount).toBe(10_000);
@@ -1153,10 +1183,10 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
     expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
 
-    // Invoice created with status='draft'
-    const invoices = insertCalls.filter((c) => c.table === "invoices");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((invoices[0].data as any).status).toBe("draft");
+    // Draft is created by one atomic RPC; the browser does not insert invoices.
+    const draftRpc = rpcCalls.find((call) => call.fn === "save_pos_draft_atomic");
+    expect(draftRpc).toBeDefined();
+    expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
 
     // --- F10: Complete draft ---
     // Reset tracking
@@ -1177,6 +1207,9 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+      items: [
+        { productId: "sku-1", productName: "SP", quantity: 8, unitPrice: 100_000, discount: 0 },
+      ],
     });
 
     // NOW stock RPCs called
@@ -1198,66 +1231,58 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
 // ============================================================
 
 describe("TRẢ HÀNG — Returns Stock Changes", () => {
-  it("RET-1: Trả hàng KH — stock tăng +3, cash refund = 300,000", async () => {
-    const { completeReturn } = await import(
+  it("RET-1: customer return uses one atomic RPC", async () => {
+    const { createSalesReturnAtomic } = await import(
       "@/lib/services/supabase/returns-completion"
     );
 
-    await completeReturn({
-      returnId: "ret-1",
-      returnCode: "TH00001",
-      invoiceCode: "HD00001",
-      customerName: "Nguyễn Trả Hàng",
-      items: [
-        { productId: "sku-cafe", productName: "Cà phê 500g", quantity: 3, unitPrice: 100_000 },
-      ],
+    await createSalesReturnAtomic({
+      invoiceId: "invoice-1",
+      items: [{ invoiceItemId: "invoice-item-1", quantity: 3 }],
       refundAmount: 300_000,
     });
 
-    // Stock IN
-    const inputs = getStockMoveInputs(0);
-    expect(inputs).toHaveLength(1);
-    expect(inputs[0].productId).toBe("sku-cafe");
-    expect(inputs[0].quantity).toBe(3);
-    expect(inputs[0].type).toBe("in");
-    expect(inputs[0].referenceType).toBe("sales_return");
-    expect(inputs[0].referenceId).toBe("ret-1");
-
-    // Cash refund
-    const cash = insertCalls.filter((c) => c.table === "cash_transactions");
-    expect(cash).toHaveLength(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cashData = cash[0].data as any;
-    expect(cashData.type).toBe("payment");
-    expect(cashData.amount).toBe(300_000);
-    expect(cashData.category).toBe("Trả hàng");
-    expect(cashData.counterparty).toBe("Nguyễn Trả Hàng");
-    expect(cashData.reference_type).toBe("sales_return");
-    expect(cashData.reference_id).toBe("ret-1");
+    const returnCalls = rpcCalls.filter(
+      (call) => call.fn === "create_sales_return_atomic",
+    );
+    expect(returnCalls).toHaveLength(1);
+    expect(returnCalls[0].params).toEqual(
+      expect.objectContaining({
+        p_invoice_id: "invoice-1",
+        p_items: [{ invoiceItemId: "invoice-item-1", quantity: 3 }],
+        p_refund_amount: 300_000,
+      }),
+    );
+    expect(stockMovementCalls).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
-  it("RET-2: Trả hàng NCC (purchase return) — stock giảm type=out", async () => {
-    const { applyManualStockMovement } = await import(
-      "@/lib/services/supabase/stock-adjustments"
+  it("RET-2: supplier return delegates every write to one atomic RPC", async () => {
+    const { completeSupplierReturn } = await import(
+      "@/lib/services/supabase/purchase-entries"
     );
 
-    await applyManualStockMovement([
-      { productId: "nvl-arabica", quantity: 10, type: "out", referenceType: "purchase_return", referenceId: "pr-1", note: "Trả hàng nhập - hạt ẩm" },
-      { productId: "nvl-robusta", quantity: 5, type: "out", referenceType: "purchase_return", referenceId: "pr-1", note: "Trả hàng nhập - hạt ẩm" },
-    ]);
+    await completeSupplierReturn({
+      purchaseOrderId: "po-test",
+      items: [
+        { purchaseOrderItemId: "poi-arabica", quantity: 10 },
+        { purchaseOrderItemId: "poi-robusta", quantity: 5 },
+      ],
+    });
 
-    const inputs = getStockMoveInputs(0);
-    expect(inputs).toHaveLength(2);
-
-    // NVL Arabica: OUT 10
-    expect(inputs[0].productId).toBe("nvl-arabica");
-    expect(inputs[0].quantity).toBe(10);
-    expect(inputs[0].type).toBe("out");
-
-    // NVL Robusta: OUT 5
-    expect(inputs[1].productId).toBe("nvl-robusta");
-    expect(inputs[1].quantity).toBe(5);
-    expect(inputs[1].type).toBe("out");
+    expect(rpcCalls).toContainEqual({
+      fn: "create_supplier_return_atomic",
+      params: expect.objectContaining({
+        p_purchase_order_id: "po-test",
+        p_items: [
+          { purchaseOrderItemId: "poi-arabica", quantity: 10 },
+          { purchaseOrderItemId: "poi-robusta", quantity: 5 },
+        ],
+      }),
+    });
+    expect(stockMovementCalls).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "supplier_returns")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 });
 
@@ -1589,30 +1614,24 @@ describe("LUỒNG TỔNG — Full Stock Flow Verification", () => {
     expect(step1Inputs[0].quantity).toBe(100);
     expect(step1Inputs[0].type).toBe("in");
 
-    // Step 2: SX CONSUME NVL
-    const step1StockCalls = stockMovementCalls.length;
+    // Step 2: hoàn thành sản xuất trong một RPC nguyên tử.
     const step1RpcCalls = rpcCalls.length;
-
-    const { consumeProductionMaterials, completeProductionOrder } =
-      await import("@/lib/services/supabase/production");
-
-    await consumeProductionMaterials("prod-full");
-
-    // Verify: consume RPC called
-    const consumeRpc = rpcCalls.slice(step1RpcCalls).find(
-      (c) => c.fn === "consume_production_materials"
+    const { completeProductionAtomic } = await import(
+      "@/lib/services/supabase/production"
     );
-    expect(consumeRpc).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((consumeRpc!.params as any).p_production_order_id).toBe("prod-full");
 
-    // Step 3: SX COMPLETE → SKU stock IN
-    await completeProductionOrder("prod-full", 50, "LOT-TEST-001");
+    await completeProductionAtomic(
+      "prod-full",
+      50,
+      "LOT-TEST-001",
+    );
 
-    const completeRpc = rpcCalls.find(
-      (c) => c.fn === "complete_production_order"
+    const completeRpc = rpcCalls.slice(step1RpcCalls).find(
+      (call) => call.fn === "complete_production_atomic"
     );
     expect(completeRpc).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((completeRpc!.params as any).p_production_order_id).toBe("prod-full");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     expect((completeRpc!.params as any).p_completed_qty).toBe(50);
 
@@ -1682,29 +1701,28 @@ describe("LUỒNG TỔNG — Full Stock Flow Verification", () => {
     const sellDelta = getStockDelta("sku-test");
     expect(sellDelta).toBe(-20);
 
-    // Step 2: Customer returns 5 items
+    // Step 2: Customer return is committed by one database transaction.
     rpcCalls.length = 0;
     stockMovementCalls.length = 0;
 
-    const { completeReturn } = await import("@/lib/services/supabase/returns-completion");
-    await completeReturn({
-      returnId: "ret-f2",
-      returnCode: "TH-F2",
-      invoiceCode: "HD-F2",
-      customerName: "KH Test",
-      items: [
-        { productId: "sku-test", productName: "SP Test", quantity: 5, unitPrice: 100_000 },
-      ],
+    const { createSalesReturnAtomic } = await import(
+      "@/lib/services/supabase/returns-completion"
+    );
+    await createSalesReturnAtomic({
+      invoiceId: "inv-f2",
+      items: [{ invoiceItemId: "invoice-item-f2", quantity: 5 }],
       refundAmount: 500_000,
     });
 
-    // Verify: return stock is IN +5
-    const returnInputs = getStockMoveInputs(0);
-    expect(returnInputs[0].productId).toBe("sku-test");
-    expect(returnInputs[0].type).toBe("in");
-    expect(returnInputs[0].quantity).toBe(5);
-
-    // Net effect: sold 20 (OUT) + returned 5 (IN) = net -15
-    // In real DB: stock = original - 20 + 5 = original - 15
+    expect(rpcCalls).toContainEqual(
+      expect.objectContaining({
+        fn: "create_sales_return_atomic",
+        params: expect.objectContaining({
+          p_invoice_id: "inv-f2",
+          p_items: [{ invoiceItemId: "invoice-item-f2", quantity: 5 }],
+        }),
+      }),
+    );
+    expect(stockMovementCalls).toHaveLength(0);
   });
 });

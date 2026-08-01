@@ -190,7 +190,7 @@ export default async function MktHubPage() {
           </div>
 
           <div className="space-y-3">
-            <h2 className="font-heading text-lg font-semibold">Mức độ Sẵn sàng (Readiness)</h2>
+            <h2 className="font-heading text-lg font-semibold">Mức độ sẵn sàng</h2>
             <div className="rounded-lg border border-outline-variant bg-background p-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -218,7 +218,7 @@ export default async function MktHubPage() {
                     </div>
                   ))
                 ) : (
-                  <EmptyBlock label="Chưa có checklist readiness" />
+                  <EmptyBlock label="Chưa có danh sách kiểm tra mức độ sẵn sàng" />
                 )}
               </div>
             </div>

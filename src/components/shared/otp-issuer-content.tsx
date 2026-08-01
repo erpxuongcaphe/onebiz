@@ -74,6 +74,14 @@ const ACTION_CARDS: ActionCard[] = [
     color: "bg-primary/10 text-primary border-primary/30",
   },
   {
+    code: OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE,
+    icon: "percent",
+    label: OTP_ACTION_LABELS[OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE],
+    description: "Duyệt chiết khấu thủ công cho POS bán lẻ",
+    requiredPermission: PERMISSIONS.POS_RETAIL_DISCOUNT,
+    color: "bg-primary/10 text-primary border-primary/30",
+  },
+  {
     code: OTP_ACTION_CODES.FNB_EDIT_SENT_ORDER,
     icon: "edit_note",
     label: OTP_ACTION_LABELS[OTP_ACTION_CODES.FNB_EDIT_SENT_ORDER],

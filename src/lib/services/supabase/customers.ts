@@ -481,58 +481,6 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
 }
 
 /**
- * Điều chỉnh công nợ khách (cộng hoặc trừ). Dùng cho case POS Retail
- * "Ghi công nợ tiền thừa" — khách trả thừa, shop ghi credit (debt -= excess).
- *
- * `delta` dương = tăng nợ phải thu, âm = giảm nợ / tăng credit.
- *
- * Audit log để track nguồn (vd "POS-INV-XXX excess change → credit").
- */
-export async function adjustCustomerDebt(
-  customerId: string,
-  delta: number,
-  reason: string,
-): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // CEO 06/06/2026 — Plan A research warning:
-  // Hàm này hiện vẫn ghi đè customers.debt trực tiếp. Trigger 00130 sẽ
-  // RESET giá trị ngay khi KH có invoice tiếp theo update → mất adjustment.
-  // Hiện POS dùng hàm này cho "loyalty credit" (cộng/trừ điểm nợ).
-  // TODO bền vững: tạo bảng customer_debt_adjustments + cộng vào trigger
-  // 00130 formula. Hiện ghi note để CEO biết risk.
-
-  // Read current
-  const { data: cur, error: e1 } = await supabase
-    .from("customers")
-    .select("debt")
-    .eq("tenant_id", tenantId)
-    .eq("id", customerId)
-    .single();
-  if (e1) handleError(e1, "adjustCustomerDebt:read");
-
-  const oldDebt = Number(cur?.debt ?? 0);
-  const newDebt = oldDebt + delta;
-
-  const { error: e2 } = await supabase
-    .from("customers")
-    .update({ debt: newDebt } as CustomerUpdate)
-    .eq("tenant_id", tenantId)
-    .eq("id", customerId);
-  if (e2) handleError(e2, "adjustCustomerDebt:update");
-
-  // Audit log
-  await recordAuditLog({
-    entityType: "customer",
-    entityId: customerId,
-    action: "update",
-    oldData: { debt: oldDebt },
-    newData: { debt: newDebt, reason },
-  });
-}
-
-/**
  * Cập nhật khách hàng.
  */
 export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {

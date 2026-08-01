@@ -1,250 +1,219 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-/**
- * Debt Aging Analysis Tests — Sprint 7 "Toàn Cảnh"
- *
- * Tests:
- *   - getDebtAging: bucket classification (0-30, 31-60, 61-90, 90+)
- *   - getDebtAging: total calculations
- *   - getTopDebtors: sorting by debt desc
- */
-
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let rpcDataMap: Record<string, any> = {};
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let tableDataMap: Record<string, any> = {};
 
-function createChain(resolvedValue: unknown = { data: null, error: null }) {
+function createChain(resolvedValue: unknown = { data: [], error: null }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const chain: any = {};
   const self = () => chain;
   chain.select = vi.fn(self);
   chain.eq = vi.fn(self);
-  chain.gt = vi.fn(self);
-  chain.gte = vi.fn(self);
-  chain.lt = vi.fn(self);
   chain.in = vi.fn(self);
-  chain.or = vi.fn(self);
-  chain.order = vi.fn(self);
-  chain.limit = vi.fn(self);
-  chain.single = vi.fn(() => resolvedValue);
-  chain.maybeSingle = vi.fn(() => resolvedValue);
-  chain.then = (resolve: (v: unknown) => void) => resolve(resolvedValue);
+  chain.then = (resolve: (value: unknown) => void) => resolve(resolvedValue);
   return chain;
 }
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
-    from: vi.fn((table: string) => {
-      const mock = tableDataMap[table];
-      return createChain(mock ?? { data: [], error: null });
-    }),
-    rpc: vi.fn(() => ({ data: null, error: null })),
+    from: vi.fn((table: string) =>
+      createChain(tableDataMap[table] ?? { data: [], error: null }),
+    ),
+    rpc: vi.fn((fn: string) =>
+      Promise.resolve(rpcDataMap[fn] ?? { data: null, error: null }),
+    ),
   }),
-  getCurrentContext: vi.fn(() =>
-    Promise.resolve({ tenantId: "t1", branchId: "b1", userId: "u1" })
-  ),
-  getCurrentTenantId: () => Promise.resolve("t1"),
-  getPaginationRange: vi.fn(() => ({ from: 0, to: 49 })),
-  handleError: (error: { message: string }, ctx: string) => {
-    throw new Error(`[${ctx}] ${error.message}`);
+  getCurrentTenantId: vi.fn(() => Promise.resolve("tenant-1")),
+  handleError: (error: { message: string }, context: string) => {
+    throw new Error(`[${context}] ${error.message}`);
   },
 }));
 
-import { getDebtAging, getTopDebtors } from "@/lib/services/supabase/debt";
+import { getDebtAging, getDebtTotals, getTopDebtors } from "@/lib/services/supabase/debt";
+
+function receivableReport(rows: unknown[]) {
+  return {
+    data: {
+      generated_at: "2026-07-31T00:00:00Z",
+      as_of_date: "2026-07-31T00:00:00Z",
+      tenant_id: "tenant-1",
+      branch_id: null,
+      rows,
+    },
+    error: null,
+  };
+}
+
+function payableReport(rows: unknown[]) {
+  return {
+    data: {
+      generated_at: "2026-07-31T00:00:00Z",
+      as_of_date: "2026-07-31T00:00:00Z",
+      tenant_id: "tenant-1",
+      branch_id: null,
+      rows,
+    },
+    error: null,
+  };
+}
 
 beforeEach(() => {
+  rpcDataMap = {
+    get_receivable_aging_report: receivableReport([]),
+    get_payable_aging_report: payableReport([]),
+  };
   tableDataMap = {};
 });
 
-// ========================================
-// getDebtAging
-// ========================================
-
 describe("getDebtAging", () => {
-  it("classifies debts into correct aging buckets", async () => {
-    const now = new Date();
-    const daysAgo = (d: number) => {
-      const dt = new Date(now);
-      dt.setDate(dt.getDate() - d);
-      return dt.toISOString();
-    };
-
-    tableDataMap = {
-      customers: {
-        data: [
-          { id: "c1", code: "KH01", name: "Cust 1", debt: 1_000_000 },
-          { id: "c2", code: "KH02", name: "Cust 2", debt: 2_000_000 },
-          { id: "c3", code: "KH03", name: "Cust 3", debt: 500_000 },
-        ],
-        error: null,
+  it("splits one party's documents into their real aging buckets", async () => {
+    rpcDataMap.get_receivable_aging_report = receivableReport([
+      {
+        customer_id: "customer-1",
+        customer_name: "Khách A",
+        invoice_count: 2,
+        outstanding: 5_000_000,
+        bucket_0_30: 1_000_000,
+        bucket_31_60: 0,
+        bucket_61_90: 0,
+        bucket_91_plus: 4_000_000,
+        oldest_days: 120,
+        oldest_invoice_date: "2026-04-02T00:00:00Z",
       },
-      suppliers: {
-        data: [
-          { id: "s1", code: "NCC01", name: "Supp 1", debt: 3_000_000 },
-        ],
-        error: null,
+    ]);
+    rpcDataMap.get_payable_aging_report = payableReport([
+      {
+        supplier_id: "supplier-1",
+        supplier_name: "NCC A",
+        document_count: 1,
+        outstanding: 3_000_000,
+        bucket_0_30: 0,
+        bucket_31_60: 0,
+        bucket_61_90: 3_000_000,
+        bucket_91_plus: 0,
+        oldest_days: 75,
+        oldest_document_date: "2026-05-17T00:00:00Z",
       },
-      invoices: {
-        data: [
-          { id: "inv1", customer_id: "c1", debt: 1_000_000, created_at: daysAgo(15), status: "completed" }, // 0-30
-          { id: "inv2", customer_id: "c2", debt: 2_000_000, created_at: daysAgo(45), status: "completed" }, // 31-60
-          { id: "inv3", customer_id: "c3", debt: 500_000, created_at: daysAgo(100), status: "completed" }, // 90+
-        ],
-        error: null,
-      },
-      purchase_orders: {
-        data: [
-          { id: "po1", supplier_id: "s1", debt: 3_000_000, created_at: daysAgo(75) }, // 61-90
-        ],
-        error: null,
-      },
-    };
+    ]);
 
     const result = await getDebtAging();
 
-    // Check bucket classification
-    expect(result.buckets[0].customerCount).toBe(1); // 0-30: c1
     expect(result.buckets[0].customerAmount).toBe(1_000_000);
-
-    expect(result.buckets[1].customerCount).toBe(1); // 31-60: c2
-    expect(result.buckets[1].customerAmount).toBe(2_000_000);
-
-    expect(result.buckets[2].supplierCount).toBe(1); // 61-90: s1
     expect(result.buckets[2].supplierAmount).toBe(3_000_000);
-
-    expect(result.buckets[3].customerCount).toBe(1); // 90+: c3
-    expect(result.buckets[3].customerAmount).toBe(500_000);
+    expect(result.buckets[3].customerAmount).toBe(4_000_000);
+    expect(result.buckets[0].customerCount).toBe(1);
+    expect(result.buckets[3].customerCount).toBe(1);
+    expect(result.totalCustomerDebt).toBe(5_000_000);
+    expect(result.totalSupplierDebt).toBe(3_000_000);
+    expect(result.totalDebt).toBe(8_000_000);
   });
 
-  it("calculates totals correctly", async () => {
-    tableDataMap = {
-      customers: {
-        data: [
-          { id: "c1", code: "KH01", name: "C1", debt: 1_000_000 },
-          { id: "c2", code: "KH02", name: "C2", debt: 2_000_000 },
-        ],
-        error: null,
-      },
-      suppliers: {
-        data: [
-          { id: "s1", code: "NCC01", name: "S1", debt: 500_000 },
-        ],
-        error: null,
-      },
-      invoices: { data: [], error: null },
-      purchase_orders: { data: [], error: null },
-    };
-
+  it("returns four empty, clearly named buckets when no debt exists", async () => {
     const result = await getDebtAging();
 
-    expect(result.totalCustomerDebt).toBe(3_000_000);
-    expect(result.totalSupplierDebt).toBe(500_000);
-    expect(result.totalDebt).toBe(3_500_000);
-    expect(result.customersWithDebt).toBe(2);
-    expect(result.suppliersWithDebt).toBe(1);
-  });
-
-  it("returns empty report when no debt exists", async () => {
-    tableDataMap = {
-      customers: { data: [], error: null },
-      suppliers: { data: [], error: null },
-      invoices: { data: [], error: null },
-      purchase_orders: { data: [], error: null },
-    };
-
-    const result = await getDebtAging();
-
+    expect(result.buckets.map((bucket) => bucket.range)).toEqual([
+      "0-30 ngày",
+      "31-60 ngày",
+      "61-90 ngày",
+      "90+ ngày",
+    ]);
     expect(result.totalDebt).toBe(0);
     expect(result.customersWithDebt).toBe(0);
     expect(result.suppliersWithDebt).toBe(0);
-    result.buckets.forEach((b) => {
-      expect(b.totalAmount).toBe(0);
-    });
-  });
-
-  it("has 4 buckets with correct labels", async () => {
-    tableDataMap = {
-      customers: { data: [], error: null },
-      suppliers: { data: [], error: null },
-      invoices: { data: [], error: null },
-      purchase_orders: { data: [], error: null },
-    };
-
-    const result = await getDebtAging();
-
-    expect(result.buckets).toHaveLength(4);
-    expect(result.buckets[0].range).toBe("0-30 ngày");
-    expect(result.buckets[1].range).toBe("31-60 ngày");
-    expect(result.buckets[2].range).toBe("61-90 ngày");
-    expect(result.buckets[3].range).toBe("90+ ngày");
   });
 });
 
-// ========================================
-// getTopDebtors
-// ========================================
 
+describe("getDebtTotals", () => {
+  it("uses the same document-level source as the aging report", async () => {
+    rpcDataMap.get_receivable_aging_report = receivableReport([
+      {
+        customer_id: "customer-1",
+        customer_name: "Khách A",
+        outstanding: 5_000_000,
+      },
+      {
+        customer_id: "customer-2",
+        customer_name: "Khách B",
+        outstanding: 1_000_000,
+      },
+    ]);
+    rpcDataMap.get_payable_aging_report = payableReport([
+      {
+        supplier_id: "supplier-1",
+        supplier_name: "NCC A",
+        outstanding: 3_000_000,
+      },
+    ]);
+
+    const result = await getDebtTotals();
+
+    expect(result).toEqual({
+      customerDebtTotal: 6_000_000,
+      customerCount: 2,
+      supplierDebtTotal: 3_000_000,
+      supplierCount: 1,
+    });
+    expect(tableDataMap).toEqual({});
+  });
+});
 describe("getTopDebtors", () => {
-  it("returns debtors sorted by debt descending", async () => {
+  it("uses the same server aging result and keeps customer/supplier separate", async () => {
+    rpcDataMap.get_receivable_aging_report = receivableReport([
+      {
+        customer_id: "customer-1",
+        customer_name: "Khách A",
+        invoice_count: 2,
+        outstanding: 5_000_000,
+        bucket_0_30: 1_000_000,
+        bucket_31_60: 0,
+        bucket_61_90: 0,
+        bucket_91_plus: 4_000_000,
+        oldest_days: 120,
+        oldest_invoice_date: "2026-04-02T00:00:00Z",
+      },
+    ]);
+    rpcDataMap.get_payable_aging_report = payableReport([
+      {
+        supplier_id: "supplier-1",
+        supplier_name: "NCC A",
+        document_count: 1,
+        outstanding: 2_000_000,
+        bucket_0_30: 0,
+        bucket_31_60: 2_000_000,
+        bucket_61_90: 0,
+        bucket_91_plus: 0,
+        oldest_days: 45,
+        oldest_document_date: "2026-06-16T00:00:00Z",
+      },
+    ]);
     tableDataMap = {
       customers: {
-        data: [
-          { id: "c1", code: "KH01", name: "Small", phone: null, debt: 500_000 },
-          { id: "c2", code: "KH02", name: "Big", phone: "0901234567", debt: 5_000_000 },
-        ],
+        data: [{ id: "customer-1", code: "KH001", name: "Khách A", phone: "0901" }],
         error: null,
       },
       suppliers: {
-        data: [
-          { id: "s1", code: "NCC01", name: "Medium", phone: null, debt: 2_000_000 },
-        ],
+        data: [{ id: "supplier-1", code: "NCC001", name: "NCC A", phone: null }],
         error: null,
       },
-      invoices: { data: [], error: null },
-      purchase_orders: { data: [], error: null },
     };
 
-    const result = await getTopDebtors(10);
+    const result = await getTopDebtors(20);
 
-    expect(result.length).toBe(3);
-    expect(result[0].name).toBe("Big");
-    expect(result[0].debt).toBe(5_000_000);
-    expect(result[0].type).toBe("customer");
-
-    expect(result[1].name).toBe("Medium");
-    expect(result[1].debt).toBe(2_000_000);
-    expect(result[1].type).toBe("supplier");
-
-    expect(result[2].name).toBe("Small");
-    expect(result[2].debt).toBe(500_000);
-  });
-
-  it("includes bucket labels for each debtor", async () => {
-    const now = new Date();
-    const daysAgo = (d: number) => {
-      const dt = new Date(now);
-      dt.setDate(dt.getDate() - d);
-      return dt.toISOString();
-    };
-
-    tableDataMap = {
-      customers: {
-        data: [
-          { id: "c1", code: "KH01", name: "Old debt", phone: null, debt: 1_000_000 },
-        ],
-        error: null,
-      },
-      suppliers: { data: [], error: null },
-      invoices: {
-        data: [
-          { customer_id: "c1", created_at: daysAgo(95) },
-        ],
-        error: null,
-      },
-      purchase_orders: { data: [], error: null },
-    };
-
-    const result = await getTopDebtors(10);
-    expect(result[0].bucket).toBe("90+ ngày");
-    expect(result[0].ageDays).toBeGreaterThanOrEqual(95);
+    expect(result.map((row) => row.type)).toEqual(["customer", "supplier"]);
+    expect(result[0]).toMatchObject({
+      code: "KH001",
+      debt: 5_000_000,
+      ageDays: 120,
+      bucket: "90+ ngày",
+    });
+    expect(result[1]).toMatchObject({
+      code: "NCC001",
+      debt: 2_000_000,
+      ageDays: 45,
+      bucket: "31-60 ngày",
+    });
   });
 });

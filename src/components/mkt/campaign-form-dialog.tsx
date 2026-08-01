@@ -96,13 +96,13 @@ export function CampaignFormDialog() {
       <DialogTrigger
         render={
           <Button>
-            <Icon name="add" size={18} /> Tạo Campaign
+            <Icon name="add" size={18} /> Tạo chiến dịch
           </Button>
         }
       />
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Tạo Chiến dịch mới</DialogTitle>
+          <DialogTitle>Tạo chiến dịch mới</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <div className="space-y-1.5">

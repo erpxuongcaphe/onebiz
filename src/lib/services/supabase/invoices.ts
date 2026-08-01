@@ -4,8 +4,7 @@
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
-import { getClient, getPaginationRange, handleError, getCurrentTenantId, getCurrentContext } from "./base";
-import { recordAuditLog } from "./audit";
+import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
   const supabase = getClient();
@@ -382,73 +381,14 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
 export async function cancelInvoice(id: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Check current status first (snapshot toàn bộ field cần cho audit + reverse)
-  const { data: existing, error: fetchErr } = await supabase
-    .from("invoices")
-    .select("status, code, customer_id, customer_name, total, paid, debt")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "cancelInvoice.fetch");
-  if (!existing) throw new Error("Không tìm thấy hóa đơn");
-
-  const allowCancel = ["draft", "confirmed"];
-  if (!allowCancel.includes(existing.status)) {
-    throw new Error(
-      `Không thể hủy hóa đơn ở trạng thái "${existing.status}". Chỉ cho phép hủy hóa đơn phiếu tạm hoặc đã xác nhận.`
-    );
-  }
-
-  // Note: với "draft" → KHÔNG có stock/cash/debt change để rollback (chỉ là
-  // cart đã save). Với "confirmed" → cũng không qua flow stock/cash/debt
-  // vì pos-checkout tạo invoice ở status="completed" trực tiếp; "confirmed"
-  // là transient state rất hiếm gặp. Cancel hiện tại chỉ flip status —
-  // an toàn cho cả 2 case này. Atomic rollback sẽ làm khi cho phép cancel
-  // status="completed" (sprint riêng + RPC + reverse stock_movements +
-  // reverse cash_transactions + reverse customer.debt + reverse loyalty).
-
-   
-  const { error } = await supabase
-    .from("invoices")
-    .update({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      status: "cancelled" as any,
-      // CEO 25/07: nhả phiên POS khi huỷ. Trước đây chỉ lật status nên phiên
-      // vẫn bị đơn đã huỷ giữ → thu ngân mở POS ra là kẹt, phải F5 mới bán
-      // tiếp được (27 đơn cũ đang dính). Cùng gốc với sự cố 20/07, lần đó mới
-      // vá nhánh xoá mềm.
-      client_session_id: null,
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "cancelInvoice.update");
-
-  // CEO 08/07: hủy đơn → hủy kèm vận đơn CHƯA lấy hàng (pending) gắn đơn này,
-  // tránh vận đơn mồ côi chờ giao cho đơn đã hủy. Vận đơn đã lấy/đang giao thì
-  // giữ nguyên (xử lý tay theo thực tế). Best-effort — không chặn việc hủy đơn.
-  try {
-    await supabase
-      .from("shipping_orders")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .update({ status: "cancelled" as any })
-      .eq("tenant_id", tenantId)
-      .eq("invoice_id", id)
-      .eq("status", "pending");
-  } catch (err) {
-    console.warn("cancelInvoice: hủy vận đơn kèm theo thất bại", err);
-  }
-
-  await recordAuditLog({
-    entityType: "invoice",
-    entityId: id,
-    action: "cancel",
-    oldData: existing as Record<string, unknown>,
-    newData: { status: "cancelled" },
-  });
+  const { error } = await (supabase.rpc as any)(
+    "cancel_draft_invoice_atomic",
+    {
+      p_invoice_id: id,
+      p_reason: "Hủy từ giao diện hóa đơn",
+    },
+  );
+  if (error) handleError(error, "cancelInvoice");
 }
 
 /**
@@ -467,71 +407,30 @@ export async function cancelInvoice(id: string): Promise<void> {
 export async function voidCompletedInvoice(params: {
   invoiceId: string;
   reason: string;
-  /** 21/07: phương thức hoàn tiền do người dùng chọn (mặc định = theo lúc bán). */
+  /** Phương thức hoàn tiền; bỏ trống để giữ phương thức lúc bán. */
   refundMethod?: "cash" | "transfer" | "card";
 }): Promise<{
   reversedCash: number;
   reversedStockMovements: number;
 }> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
-
-  // Snapshot trước để audit (oldData)
-  const { data: before } = await supabase
-    .from("invoices")
-    .select("status, code, customer_id, customer_name, total, paid, debt")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", params.invoiceId)
-    .single();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("void_completed_invoice_atomic", {
-    p_tenant_id: ctx.tenantId,
-    p_invoice_id: params.invoiceId,
-    p_actor: ctx.userId,
-    p_reason: params.reason,
-    // v1: không gắn phiếu chi hoàn tiền vào ca cụ thể (đây là điều chỉnh kế
-    // toán, không phải sự kiện ngăn kéo POS). Có thể nâng cấp sau nếu cần.
-    p_shift_id: null,
-  });
-  if (error) handleError(error, "voidCompletedInvoice");
+  const { data, error } = await (supabase.rpc as any)(
+    "void_completed_invoice_atomic_v2",
+    {
+      p_invoice_id: params.invoiceId,
+      p_reason: params.reason,
+      p_refund_method: params.refundMethod ?? null,
+      p_shift_id: null,
+    },
+  );
+  if (error) handleError(error, "voidCompletedInvoice.atomic_v2");
 
   const result = (data ?? {}) as {
     reversed_cash?: number;
     reversed_stock_movements?: number;
   };
-
-  // 21/07: RPC tạo phiếu chi hoàn tiền theo phương thức lúc bán. Nếu người
-  // dùng chọn phương thức khác (bán CK nhưng hoàn tiền mặt) → cập nhật nhãn
-  // các phiếu hoàn (reference_type='invoice_void') của HĐ này. Best-effort —
-  // lỗi ở đây không hủy việc void (tiền đã đảo đúng, chỉ là nhãn phương thức).
-  if (params.refundMethod && Number(result.reversed_cash ?? 0) > 0) {
-    try {
-      await supabase
-        .from("cash_transactions")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .update({ payment_method: params.refundMethod } as any)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("reference_type", "invoice_void")
-        .eq("reference_id", params.invoiceId)
-        .eq("type", "payment");
-    } catch (err) {
-      console.warn("voidCompletedInvoice: cập nhật phương thức hoàn thất bại", err);
-    }
-  }
-
-  await recordAuditLog({
-    entityType: "invoice",
-    entityId: params.invoiceId,
-    action: "cancel",
-    oldData: (before ?? undefined) as Record<string, unknown> | undefined,
-    newData: {
-      status: "cancelled",
-      mode: "void_reverse",
-      reason: params.reason,
-      result: data,
-    },
-  });
 
   return {
     reversedCash: Number(result.reversed_cash ?? 0),
@@ -557,55 +456,21 @@ export interface UpdateInvoicePatch {
 
 export async function updateInvoice(
   id: string,
-  patch: UpdateInvoicePatch
+  patch: UpdateInvoicePatch,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const serverPatch: Record<string, unknown> = {};
+  if (patch.customerId !== undefined) serverPatch.customerId = patch.customerId;
+  if (patch.customerName !== undefined) serverPatch.customerName = patch.customerName;
+  if (patch.discountAmount !== undefined) serverPatch.discountAmount = patch.discountAmount;
+  if (patch.paymentMethod !== undefined) serverPatch.paymentMethod = patch.paymentMethod;
+  if (patch.note !== undefined) serverPatch.note = patch.note;
 
-  // Check current status first + snapshot full row for audit diff
-  const { data: existing, error: fetchErr } = await supabase
-    .from("invoices")
-    .select("status, customer_id, customer_name, discount_amount, payment_method, note")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "updateInvoice.fetch");
-  if (!existing) throw new Error("Không tìm thấy hóa đơn");
-
-  const allowEdit = ["draft", "confirmed"];
-  if (!allowEdit.includes(existing.status)) {
-    throw new Error(
-      `Không thể sửa hóa đơn ở trạng thái "${existing.status}". Chỉ cho phép sửa hóa đơn phiếu tạm hoặc đã xác nhận.`
-    );
-  }
-
-  // Build DB patch (camelCase → snake_case)
-  const dbPatch: Record<string, unknown> = {
-    updated_at: new Date().toISOString(),
-  };
-  if (patch.customerId !== undefined) dbPatch.customer_id = patch.customerId;
-  if (patch.customerName !== undefined) dbPatch.customer_name = patch.customerName;
-  if (patch.discountAmount !== undefined) dbPatch.discount_amount = patch.discountAmount;
-  if (patch.paymentMethod !== undefined) dbPatch.payment_method = patch.paymentMethod;
-  if (patch.note !== undefined) dbPatch.note = patch.note;
-
-   
-  const { error } = await supabase
-    .from("invoices")
-    .update(dbPatch as any)
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "updateInvoice.update");
-
-  await recordAuditLog({
-    entityType: "invoice",
-    entityId: id,
-    action: "update",
-    oldData: existing as Record<string, unknown>,
-    newData: dbPatch,
-  });
+  const { error } = await (supabase.rpc as any)(
+    "update_draft_invoice_atomic",
+    { p_invoice_id: id, p_patch: serverPatch },
+  );
+  if (error) handleError(error, "updateInvoice");
 }
 
 /**
@@ -726,27 +591,4 @@ function mapInvoice(row: any): Invoice {
       row.amount_tendered != null ? Number(row.amount_tendered) : undefined,
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",
   };
-}
-
-/**
- * 00179 (CEO 13/07): lưu "tiền khách đưa" sau khi POS thanh toán xong —
- * best-effort, nuốt lỗi (cột chưa có nếu 00179 chưa chạy / mất mạng).
- * KHÔNG được block checkout — tiền đã thu xong.
- */
-export async function setInvoiceAmountTendered(
-  invoiceId: string,
-  amount: number,
-): Promise<void> {
-  try {
-    const supabase = getClient();
-    const tenantId = await getCurrentTenantId();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any)
-      .from("invoices")
-      .update({ amount_tendered: amount })
-      .eq("tenant_id", tenantId)
-      .eq("id", invoiceId);
-  } catch {
-    /* best-effort */
-  }
 }

@@ -210,8 +210,8 @@ function buildProfileMap(profiles: ProfileRow[]) {
   );
 }
 
-function padCount(value: number) {
-  return value.toString().padStart(2, "0");
+function formatCount(value: number) {
+  return value.toString();
 }
 
 function buildMetrics(
@@ -223,22 +223,22 @@ function buildMetrics(
   return [
     {
       label: "Chiến dịch đang chạy",
-      value: padCount(campaigns.filter((item) => item.status === "running").length),
+      value: formatCount(campaigns.filter((item) => item.status === "running").length),
       tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
     },
     {
       label: "Cần nhận việc",
-      value: padCount(tasks.filter((item) => item.acceptance_status === "pending").length),
+      value: formatCount(tasks.filter((item) => item.acceptance_status === "pending").length),
       tone: "border-sky-200 bg-sky-50 text-sky-700",
     },
     {
       label: "Chờ duyệt nội dung",
-      value: padCount(contents.filter((item) => item.content_status === "pending_review").length),
+      value: formatCount(contents.filter((item) => item.content_status === "pending_review").length),
       tone: "border-amber-200 bg-amber-50 text-amber-700",
     },
     {
       label: "Cần Leader xử lý",
-      value: padCount(leaderQueue.length),
+      value: formatCount(leaderQueue.length),
       tone: "border-rose-200 bg-rose-50 text-rose-700",
     },
   ];

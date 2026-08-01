@@ -9,7 +9,6 @@ import {
   useReactTable,
   RowSelectionState,
   VisibilityState,
-  Row,
 } from "@tanstack/react-table";
 import { useState, useMemo, useEffect, ReactNode, Fragment } from "react";
 import {
@@ -20,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -36,7 +34,7 @@ import { cn } from "@/lib/utils";
 import { DataTablePagination } from "./pagination";
 import { Icon } from "@/components/ui/icon";
 
-export interface RowAction<TData> {
+export interface RowAction {
   label: string;
   icon?: ReactNode;
   onClick: () => void;
@@ -74,7 +72,7 @@ interface DataTableProps<TData, TValue> {
   selectable?: boolean;
   summaryRow?: Record<string, string | number>;
   onRowClick?: (row: TData, index: number) => void;
-  rowActions?: (row: TData) => RowAction<TData>[];
+  rowActions?: (row: TData) => RowAction[];
   bulkActions?: BulkAction<TData>[];
   columnToggle?: boolean;
   /** Inline detail panel — render function receives the row data */
@@ -344,7 +342,7 @@ export function DataTable<TData, TValue>({
 
     if (rowActions) {
       cols.push({
-        id: "actions",
+        id: "row_actions",
         header: "",
         size: 48,
         enableSorting: false,
@@ -415,7 +413,6 @@ export function DataTable<TData, TValue>({
     if (clearSelectionTrigger === undefined) return;
     setRowSelection({});
     setAllMatchingMode(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clearSelectionTrigger]);
 
   // Tính cột nào sẽ pin-left khi scroll ngang.
@@ -423,13 +420,13 @@ export function DataTable<TData, TValue>({
   // Override qua column meta `pinLeft: false` (vd nếu cột đầu là image quá rộng).
   const firstDataColumnId = useMemo(() => {
     const dataCol = allColumns.find(
-      (c) => c.id !== "select" && c.id !== "actions",
+      (c) => c.id !== "select" && c.id !== "row_actions",
     );
     return dataCol?.id;
   }, [allColumns]);
 
   const isPinnedColumn = (columnId: string): boolean => {
-    if (columnId === "select" || columnId === "actions") return false;
+    if (columnId === "select" || columnId === "row_actions") return false;
     const col = allColumns.find((c) => c.id === columnId);
     const meta = (col as { meta?: { pinLeft?: boolean } } | undefined)?.meta;
     if (typeof meta?.pinLeft === "boolean") return meta.pinLeft;
@@ -606,6 +603,7 @@ export function DataTable<TData, TValue>({
                   return (
                   <TableHead
                     key={header.id}
+                    data-column-id={header.id}
                     className={cn(
                       "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase",
                       header.column.getCanSort() &&
@@ -861,7 +859,7 @@ export function DataTable<TData, TValue>({
                   {row.getVisibleCells().map((cell) => {
                     if (
                       cell.column.id === "select" ||
-                      cell.column.id === "actions" ||
+                      cell.column.id === "row_actions" ||
                       cell.column.id === "star"
                     )
                       return null;

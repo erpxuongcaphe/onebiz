@@ -218,7 +218,10 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
   });
   const invoiceId = `inv-sim-${rpcCodeCounter}`;
   const invoiceCode = `HD${String(rpcCodeCounter).padStart(5, "0")}`;
-  const total = Number(params.p_total ?? 0);
+  const total = Number(params.p_total ?? (params.p_items ?? []).reduce(
+    (sum: number, item: any) => sum + Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) - Number(item.discount ?? 0),
+    0,
+  ));
   const paid = Number(params.p_paid ?? 0);
   const items = (params.p_items ?? []) as Array<{
     productId: string;
@@ -431,6 +434,86 @@ function simulateCompleteStockTransferAtomic(params: any): { data: unknown; erro
   return { data: { success: true }, error: null };
 }
 
+function simulateDebtAgingRpc(kind: "receivable" | "payable") {
+  const isReceivable = kind === "receivable";
+  const documents = (tableMocks[isReceivable ? "invoices" : "purchase_orders"]?.data ?? []) as Array<Record<string, unknown>>;
+  const parties = (tableMocks[isReceivable ? "customers" : "suppliers"]?.data ?? []) as Array<Record<string, unknown>>;
+  const partyById = new Map(parties.map((party) => [String(party.id), party]));
+  const grouped = new Map<string, Record<string, unknown>>();
+  const now = Date.now();
+
+  for (const document of documents) {
+    const partyId = String(document[isReceivable ? "customer_id" : "supplier_id"] ?? "");
+    if (!partyId) continue;
+    const outstanding = Number(document.debt ?? 0);
+    if (outstanding <= 0) continue;
+    const createdAt = String(document.created_at ?? new Date().toISOString());
+    const ageDays = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 86_400_000));
+    const bucketKey = ageDays <= 30
+      ? "bucket_0_30"
+      : ageDays <= 60
+        ? "bucket_31_60"
+        : ageDays <= 90
+          ? "bucket_61_90"
+          : "bucket_91_plus";
+    const party = partyById.get(partyId);
+    const row = grouped.get(partyId) ?? {
+      [isReceivable ? "customer_id" : "supplier_id"]: partyId,
+      [isReceivable ? "customer_name" : "supplier_name"]: String(party?.name ?? ""),
+      [isReceivable ? "invoice_count" : "document_count"]: 0,
+      outstanding: 0,
+      bucket_0_30: 0,
+      bucket_31_60: 0,
+      bucket_61_90: 0,
+      bucket_91_plus: 0,
+      oldest_days: 0,
+      [isReceivable ? "oldest_invoice_date" : "oldest_document_date"]: createdAt,
+    };
+    row[isReceivable ? "invoice_count" : "document_count"] = Number(row[isReceivable ? "invoice_count" : "document_count"] ?? 0) + 1;
+    row.outstanding = Number(row.outstanding ?? 0) + outstanding;
+    row[bucketKey] = Number(row[bucketKey] ?? 0) + outstanding;
+    if (ageDays > Number(row.oldest_days ?? 0)) {
+      row.oldest_days = ageDays;
+      row[isReceivable ? "oldest_invoice_date" : "oldest_document_date"] = createdAt;
+    }
+    grouped.set(partyId, row);
+  }
+
+  return {
+    data: {
+      generated_at: new Date().toISOString(),
+      as_of_date: new Date().toISOString(),
+      tenant_id: "tenant-1",
+      branch_id: null,
+      rows: Array.from(grouped.values()),
+    },
+    error: null,
+  };
+}
+
+function simulateTransferStateAtomic(params: unknown) {
+  const input = params as { p_transfer_id?: string; p_new_status?: string };
+  const source = tableMocks.stock_transfers?.data;
+  const transfer = Array.isArray(source)
+    ? source.find((row) => row.id === input.p_transfer_id)
+    : source;
+  if (!transfer || transfer.id !== input.p_transfer_id) {
+    return { data: null, error: { message: "TRANSFER_NOT_FOUND" } };
+  }
+  if (
+    input.p_new_status === "cancelled" &&
+    !["draft", "in_transit"].includes(transfer.status)
+  ) {
+    return { data: null, error: { message: "TRANSFER_STATUS_INVALID" } };
+  }
+  updateCalls.push({
+    table: "stock_transfers",
+    data: { status: input.p_new_status },
+    filters: { id: input.p_transfer_id },
+  });
+  return { data: { success: true, status: input.p_new_status }, error: null };
+}
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
@@ -441,17 +524,54 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
+      if (fn === "save_pos_draft_atomic") {
+        return {
+          data: {
+            invoice_id: "inv-draft",
+            invoice_code: "NH00001",
+            status: "draft",
+          },
+          error: null,
+        };
+      }
+      if (fn === "complete_legacy_sales_order_atomic") {
+        if (!tableMocks.sales_orders?.data) {
+          return { data: null, error: { message: "ORDER_NOT_COMPLETABLE" } };
+        }
+        return {
+          data: { invoice_id: "inv-so", invoice_code: "HD00001" },
+          error: null,
+        };
+      }
+      if (fn === "cancel_legacy_sales_order_atomic") {
+        if (!tableMocks.sales_orders?.data) {
+          return { data: null, error: { message: "ORDER_NOT_CANCELLABLE" } };
+        }
+        return {
+          data: { order_id: "so-1", status: "cancelled" },
+          error: null,
+        };
+      }
       if (fn === "receive_purchase_items_atomic") {
         return simulateReceivePurchaseItemsAtomic(params);
       }
-      if (fn === "pos_complete_checkout_atomic_v2") {
+      if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v3") {
+      if (fn === "complete_draft_atomic_v4") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
         return simulateCompleteStockTransferAtomic(params);
+      }
+      if (fn === "get_receivable_aging_report") {
+        return simulateDebtAgingRpc("receivable");
+      }
+      if (fn === "get_payable_aging_report") {
+        return simulateDebtAgingRpc("payable");
+      }
+      if (fn === "set_stock_transfer_state_atomic") {
+        return simulateTransferStateAtomic(params);
       }
       if (fn === "next_code") {
         rpcCodeCounter++;
@@ -676,12 +796,12 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
     };
   });
 
-  it("F9 draft creates invoice without stock changes", async () => {
+  it("F9 draft uses the atomic draft RPC without stock or cash writes", async () => {
     const { saveDraftOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
-    await saveDraftOrder({
+    const result = await saveDraftOrder({
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
@@ -702,26 +822,14 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       paid: 0,
     });
 
-    // Invoice created with status='draft'
-    const invoiceInserts = insertCalls.filter(
-      (c) => c.table === "invoices"
-    );
-    expect(invoiceInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const invoiceData = invoiceInserts[0].data as any;
-    expect(invoiceData.status).toBe("draft");
-
-    // NO stock_movements — no stock change for drafts
-    const smInserts = insertCalls.filter(
-      (c) => c.table === "stock_movements"
-    );
-    expect(smInserts.length).toBe(0);
-
-    // NO cash receipt for drafts
-    const cashInserts = insertCalls.filter(
-      (c) => c.table === "cash_transactions"
-    );
-    expect(cashInserts.length).toBe(0);
+    expect(result).toEqual({
+      invoiceId: "inv-draft",
+      invoiceCode: "NH00001",
+    });
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
   it("F10 completion applies stock + cash with mixed breakdown", async () => {
@@ -735,6 +843,10 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+      items: [
+        { productId: "p1", productName: "SP A", quantity: 2, unitPrice: 300_000, discount: 0 },
+        { productId: "p2", productName: "SP B", quantity: 4, unitPrice: 100_000, discount: 0 },
+      ],
       paymentBreakdown: [
         { method: "cash", amount: 500_000 },
         { method: "transfer", amount: 300_000 },
@@ -925,76 +1037,52 @@ describe("Flow D: Sales Order Completion", () => {
     };
   });
 
-  it("creates invoice from sales order", async () => {
+  it("creates invoice from sales order through one atomic RPC", async () => {
     const { completeSalesOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
-    await completeSalesOrder("so-1");
+    const result = await completeSalesOrder("so-1");
 
-    // Invoice created
-    const invoiceInserts = insertCalls.filter(
-      (c) => c.table === "invoices"
-    );
-    expect(invoiceInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inv = invoiceInserts[0].data as any;
-    expect(inv.status).toBe("completed");
-    expect(inv.customer_id).toBe("cust-1");
-
-    // Invoice items created
-    const itemInserts = insertCalls.filter(
-      (c) => c.table === "invoice_items"
-    );
-    expect(itemInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = itemInserts[0].data as any[];
-    expect(items).toHaveLength(2);
+    expect(result).toEqual({
+      invoiceId: "inv-so",
+      invoiceCode: "HD00001",
+    });
+    expect(rpcCalls).toContainEqual({
+      fn: "complete_legacy_sales_order_atomic",
+      params: { p_order_id: "so-1" },
+    });
+    expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "invoice_items")).toHaveLength(0);
   });
 
-  it("triggers stock decrement for all items", async () => {
+  it("keeps stock decrement inside the same server transaction", async () => {
     const { completeSalesOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
     await completeSalesOrder("so-1");
 
-    // Stock movements: one ledger insert per item
-    const smInserts = insertCalls.filter(
-      (c) => c.table === "stock_movements"
-    );
-    expect(smInserts.length).toBe(2);
-
-    // RPCs: 2 items × 2 RPCs = 4
-    const stockRpcs = rpcCalls.filter(
-      (c) =>
-        c.fn === "increment_product_stock" || c.fn === "upsert_branch_stock"
-    );
-    expect(stockRpcs.length).toBe(4);
-
-    // Verify product p1: delta = -5
-    const p1Rpc = rpcCalls.find(
-      (c) =>
-        c.fn === "increment_product_stock" &&
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (c.params as any).p_product_id === "p1"
-    );
-    expect(p1Rpc).toBeDefined();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((p1Rpc!.params as any).p_delta).toBe(-5);
+    expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
+    expect(
+      rpcCalls.filter(
+        (call) =>
+          call.fn === "increment_product_stock" ||
+          call.fn === "upsert_branch_stock",
+      ),
+    ).toHaveLength(0);
   });
 
-  it("creates cash receipt for full amount", async () => {
+  it("keeps the cash receipt inside the same server transaction", async () => {
     const { completeSalesOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
     await completeSalesOrder("so-1");
 
-    const cashInserts = insertCalls.filter(
-      (c) => c.table === "cash_transactions"
-    );
-    expect(cashInserts.length).toBe(1);
+    expect(
+      insertCalls.filter((call) => call.table === "cash_transactions"),
+    ).toHaveLength(0);
   });
 
   it("throws on already-completed order", async () => {

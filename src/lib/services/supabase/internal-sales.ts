@@ -12,8 +12,6 @@
 
 import type { InternalSaleImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, handleError } from "./base";
-import { applyManualStockMovement } from "./stock-adjustments";
-import { isRpcUnavailable } from "./rpc-utils";
 
 // ────────────────────────────────────────────
 // Types
@@ -308,293 +306,52 @@ export async function createInternalSale(
     );
   }
 
-  // ── P0-10: Thử RPC atomic trước. Pre-flight (validate + resolve cust/supp)
-  // đã pass → service tin tưởng input. RPC wrap 10+ op trong 1 transaction
-  // → all-or-nothing, không có ghost data.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-      "create_internal_sale_atomic",
-      {
-        p_tenant_id: ctx.tenantId,
-        p_from_branch_id: input.fromBranchId,
-        p_to_branch_id: input.toBranchId,
-        p_created_by: ctx.userId,
-        p_int_customer_id: intCustomer.id,
-        p_int_customer_name: intCustomer.name,
-        p_int_supplier_id: intSupplier.id,
-        p_int_supplier_name: intSupplier.name,
-        p_items: input.items,
-        p_payment_method: input.paymentMethod ?? "transfer",
-        p_paid_full: (input.paymentMethod ?? "transfer") !== "debt",
-        p_note: input.note ?? null,
-      },
-    );
-    if (!atomicError && atomicData) {
-      const r = atomicData as {
-        internal_sale_id?: string;
-        code?: string;
-        invoice_id?: string;
-        invoice_code?: string;
-        input_invoice_id?: string;
-        input_invoice_code?: string;
-        total?: number;
-      };
-      if (r.internal_sale_id && r.code && r.invoice_id) {
-        return {
-          internalSaleId: r.internal_sale_id,
-          code: r.code,
-          invoiceId: r.invoice_id,
-          invoiceCode: r.invoice_code ?? "",
-          inputInvoiceId: r.input_invoice_id ?? "",
-          inputInvoiceCode: r.input_invoice_code ?? "",
-          total: Number(r.total ?? total),
-        };
-      }
-    }
-    if (atomicError && !isRpcUnavailable(atomicError)) {
-      handleError(atomicError, "createInternalSale:atomic_rpc");
-    }
-    console.warn(
-      "[createInternalSale] RPC create_internal_sale_atomic chưa có (migration 00141), fallback luồng cũ 10-step",
-    );
-  } catch (err) {
-    if (err instanceof Error && /(không|không tìm|invalid|chi nhánh)/i.test(err.message)) {
-      throw err;
-    }
-    console.warn("[createInternalSale] RPC exception, fallback legacy:", err);
-  }
-
-  // ─── LEGACY 10-step path (kept 24-48h sau khi apply migration 00141) ───
-  // ── 2. Generate codes ──
-  const [invoiceCodeRes, inputInvCodeRes, saleCodeRes] = await Promise.all([
-    supabase.rpc("next_code", {
-      p_tenant_id: ctx.tenantId,
-      p_entity_type: "invoice",
-    }),
-    supabase.rpc("next_code", {
-      p_tenant_id: ctx.tenantId,
-      p_entity_type: "input_invoice",
-    }),
-    supabase.rpc("next_code", {
-      p_tenant_id: ctx.tenantId,
-      p_entity_type: "internal_sale",
-    }),
-  ]);
-
-  const invoiceCode = (invoiceCodeRes.data as string | null) ?? `HD${Date.now()}`;
-  const inputInvCode = (inputInvCodeRes.data as string | null) ?? `HDV${Date.now()}`;
-  const saleCode = (saleCodeRes.data as string | null) ?? `BNB${Date.now()}`;
-
-  if (invoiceCodeRes.error) handleError(invoiceCodeRes.error, "createInternalSale:invoiceCode");
-  if (inputInvCodeRes.error) handleError(inputInvCodeRes.error, "createInternalSale:inputInvCode");
-  if (saleCodeRes.error) handleError(saleCodeRes.error, "createInternalSale:saleCode");
-
-  // ── 3. Invoice trên branch BÁN (doanh thu cho seller) ──
-  const payMethod = input.paymentMethod === "debt" ? "cash" : (input.paymentMethod ?? "transfer");
-  const paid = input.paymentMethod === "debt" ? 0 : total;
-  const debt = total - paid;
-
-  const { data: invoice, error: invErr } = await supabase
-    .from("invoices")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: input.fromBranchId,
-      code: invoiceCode,
-      customer_id: intCustomer.id,
-      customer_name: intCustomer.name,
-      status: "completed",
-      subtotal,
-      discount_amount: 0,
-      tax_amount: taxAmount,
-      total,
-      paid,
-      debt,
-      payment_method: payMethod as "cash" | "transfer" | "card" | "mixed",
-      source: "internal",
-      note: `Bán nội bộ ${saleCode} → ${intCustomer.name}`,
-      created_by: ctx.userId,
-    })
-    .select("id, code")
-    .single();
-  if (invErr || !invoice) {
-    handleError(invErr!, "createInternalSale:invoice");
-    throw new Error("Không tạo được hoá đơn bán");
-  }
-
-  // ── 3b. Invoice items (invoice_items has no product_code column) ──
-  const invoiceItems = lines.map((l) => ({
-    invoice_id: invoice.id,
-    product_id: l.productId,
-    product_name: l.productName,
-    unit: l.unit,
-    quantity: l.quantity,
-    unit_price: l.unitPrice,
-    discount: 0,
-    vat_rate: l.vatRate,
-    vat_amount: l.taxAmount,
-    total: l.amount + l.taxAmount,
-  }));
-  const { error: iiErr } = await supabase
-    .from("invoice_items")
-    .insert(invoiceItems);
-  if (iiErr) handleError(iiErr, "createInternalSale:invoiceItems");
-
-  // ── 4. Input invoice trên branch MUA (chi phí cho buyer) ──
-  const { data: inputInv, error: inputInvErr } = await (supabase as any)
-    .from("input_invoices")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: input.toBranchId,
-      code: inputInvCode,
-      supplier_id: intSupplier.id,
-      supplier_name: intSupplier.name,
-      total_amount: total,
-      tax_amount: taxAmount,
-      status: "recorded",
-      note: `Mua nội bộ ${saleCode} ← ${intSupplier.name}`,
-      created_by: ctx.userId,
-    })
-    .select("id, code")
-    .single();
-  if (inputInvErr) {
-    handleError(inputInvErr, "createInternalSale:inputInvoice");
-    throw new Error("Không tạo được hoá đơn đầu vào");
-  }
-
-  // ── 5. Stock OUT branch bán ──
-  // CEO 03/06/2026 — Sprint 3 (fix G1): dùng RPC internal_sale_apply_stock_out
-  // để cascade BOM khi source là production branch + SKU has_bom=true. Outlet
-  // branch / SP đơn giản → trừ tồn SKU trực tiếp như cũ. Atomic per item.
-  for (const l of lines) {
-    const { error: outErr } = await supabase.rpc(
-      "internal_sale_apply_stock_out" as unknown as never,
-      {
-        p_tenant_id: ctx.tenantId,
-        p_branch_id: input.fromBranchId,
-        p_product_id: l.productId,
-        p_quantity: l.quantity,
-        p_reference_id: invoice.id,
-        p_reference_code: saleCode,
-        p_created_by: ctx.userId,
-      } as unknown as never,
-    );
-    if (outErr) handleError(outErr, "createInternalSale:stockOut");
-  }
-
-  // ── 6. Stock IN branch mua ──
-  await applyManualStockMovement(
-    lines.map((l) => ({
-      productId: l.productId,
-      quantity: l.quantity,
-      type: "in" as const,
-      referenceType: "internal_sale",
-      referenceId: inputInv.id,
-      note: `Nhập nội bộ ${saleCode} - ${l.productName}`,
-    })),
+  // Toàn bộ chứng từ, tồn kho và sổ quỹ phải hoàn tất trong một giao dịch DB.
+  // Không được rơi về luồng nhiều bước ở client khi RPC lỗi.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "create_internal_sale_atomic",
     {
-      tenantId: ctx.tenantId,
-      branchId: input.toBranchId,
-      createdBy: ctx.userId,
+      p_tenant_id: ctx.tenantId,
+      p_from_branch_id: input.fromBranchId,
+      p_to_branch_id: input.toBranchId,
+      p_created_by: ctx.userId,
+      p_int_customer_id: intCustomer.id,
+      p_int_customer_name: intCustomer.name,
+      p_int_supplier_id: intSupplier.id,
+      p_int_supplier_name: intSupplier.name,
+      p_items: input.items,
+      p_payment_method: input.paymentMethod ?? "transfer",
+      p_paid_full: (input.paymentMethod ?? "transfer") !== "debt",
+      p_note: input.note ?? null,
     },
   );
-
-  // ── 7. Cash transactions (nếu không ghi nợ) ──
-  if (paid > 0) {
-    const paymentNote = `Giao dịch nội bộ ${saleCode}`;
-
-    // Thu tiền bên BÁN
-    const { data: cashCode } = await supabase.rpc("next_code", {
-      p_tenant_id: ctx.tenantId,
-      p_entity_type: "cash_receipt",
-    });
-
-    const { error: cashReceiptErr } = await supabase.from("cash_transactions").insert({
-      tenant_id: ctx.tenantId,
-      branch_id: input.fromBranchId,
-      code: (cashCode as string | null) ?? `PT${Date.now()}`,
-      type: "receipt",
-      category: "Bán hàng nội bộ",
-      amount: paid,
-      payment_method: payMethod,
-      reference_type: "invoice",
-      reference_id: invoice.id,
-      note: paymentNote,
-      created_by: ctx.userId,
-    });
-    if (cashReceiptErr) handleError(cashReceiptErr, "createInternalSale:cashReceipt");
-
-    // Chi tiền bên MUA
-    const { data: cashPayCode } = await supabase.rpc("next_code", {
-      p_tenant_id: ctx.tenantId,
-      p_entity_type: "cash_payment",
-    });
-
-    const { error: cashPayErr } = await supabase.from("cash_transactions").insert({
-      tenant_id: ctx.tenantId,
-      branch_id: input.toBranchId,
-      code: (cashPayCode as string | null) ?? `PC${Date.now()}`,
-      type: "payment",
-      category: "Mua hàng nội bộ",
-      amount: paid,
-      payment_method: payMethod,
-      reference_type: "input_invoice",
-      reference_id: inputInv.id,
-      note: paymentNote,
-      created_by: ctx.userId,
-    });
-    if (cashPayErr) handleError(cashPayErr, "createInternalSale:cashPayment");
+  if (atomicError) handleError(atomicError, "createInternalSale:atomic_rpc");
+  if (!atomicData) {
+    throw new Error("Không nhận được kết quả tạo phiếu bán nội bộ");
   }
 
-  // ── 8. Internal sale header ──
-  const { data: sale, error: saleErr } = await supabase
-    .from("internal_sales")
-    .insert({
-      tenant_id: ctx.tenantId,
-      code: saleCode,
-      from_branch_id: input.fromBranchId,
-      to_branch_id: input.toBranchId,
-      invoice_id: invoice.id,
-      input_invoice_id: inputInv.id,
-      status: "completed",
-      subtotal,
-      tax_amount: taxAmount,
-      total,
-      note: input.note ?? null,
-      created_by: ctx.userId,
-    })
-    .select("id")
-    .single();
-  if (saleErr || !sale) {
-    handleError(saleErr!, "createInternalSale:header");
-    throw new Error("Không tạo được đơn nội bộ");
+  const result = atomicData as {
+    internal_sale_id?: string;
+    code?: string;
+    invoice_id?: string;
+    invoice_code?: string;
+    input_invoice_id?: string;
+    input_invoice_code?: string;
+    total?: number;
+  };
+  if (!result.internal_sale_id || !result.code || !result.invoice_id) {
+    throw new Error("Kết quả tạo phiếu bán nội bộ không đầy đủ");
   }
-
-  // ── 8b. Internal sale items ──
-  const saleItems = lines.map((l) => ({
-    internal_sale_id: sale.id,
-    product_id: l.productId,
-    product_code: l.productCode,
-    product_name: l.productName,
-    unit: l.unit,
-    quantity: l.quantity,
-    unit_price: l.unitPrice,
-    vat_rate: l.vatRate,
-    amount: l.amount,
-  }));
-  const { error: siErr } = await supabase
-    .from("internal_sale_items")
-    .insert(saleItems);
-  if (siErr) handleError(siErr, "createInternalSale:saleItems");
 
   return {
-    internalSaleId: sale.id,
-    code: saleCode,
-    invoiceId: invoice.id,
-    invoiceCode: invoice.code,
-    inputInvoiceId: inputInv.id,
-    inputInvoiceCode: inputInv.code,
-    total,
+    internalSaleId: result.internal_sale_id,
+    code: result.code,
+    invoiceId: result.invoice_id,
+    invoiceCode: result.invoice_code ?? "",
+    inputInvoiceId: result.input_invoice_id ?? "",
+    inputInvoiceCode: result.input_invoice_code ?? "",
+    total: Number(result.total ?? total),
   };
 }
 

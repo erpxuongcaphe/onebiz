@@ -10,16 +10,8 @@ import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/su
 import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
 import {
   resolveAppliedPromotion,
-  incrementPromotionUsage,
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
-import { tagInvoicePromotion } from "@/lib/services/supabase/promotions";
-import {
-  earnLoyaltyPoints,
-  getLoyaltySettings,
-  redeemLoyaltyPoints,
-  calculateRedeemDiscount,
-} from "@/lib/services/supabase/loyalty";
 import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
 import { recordDiscountAudit } from "@/lib/services/supabase/pos-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
@@ -33,6 +25,7 @@ import {
   getMenuFromCache,
   getTablesFromCache,
   shouldRefreshMenu,
+  invalidateMenuCache,
   saveVariantsToCache,
   getVariantsFromCache,
   shouldRefreshVariants,
@@ -41,8 +34,17 @@ import {
   hapticError,
 } from "@/lib/offline";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
-import { validateCoupon, applyCouponAtomic } from "@/lib/services/supabase/coupons";
-import { getKitchenOrderById, getKitchenOrders, cancelUnpaidKitchenOrder, transferTable as transferTableService, setDeliveryPlatform as setDeliveryPlatformService } from "@/lib/services/supabase/kitchen-orders";
+import { validateCoupon } from "@/lib/services/supabase/coupons";
+import {
+  getKitchenOrderById,
+  getKitchenOrders,
+  cancelUnpaidKitchenOrder,
+  transferTable as transferTableService,
+  setDeliveryPlatform as setDeliveryPlatformService,
+  assignDeliveryStaff as assignDeliveryStaffService,
+  unassignDeliveryStaff as unassignDeliveryStaffService,
+  setDeliveryDistanceTier as setDeliveryDistanceTierService,
+} from "@/lib/services/supabase/kitchen-orders";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
@@ -300,6 +302,7 @@ function FnbPosPageInner() {
     hasPermission(PERMISSIONS.POS_FNB_VOID);
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
+  const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -1357,7 +1360,58 @@ function FnbPosPageInner() {
       return result.kitchenOrderId ?? null;
     } catch (err) {
       hapticError();
-      toast({ title: "Gửi bếp thất bại", description: (err as Error).message, variant: "error" });
+      const message = err instanceof Error ? err.message : String(err);
+      const toppingPriceMatch = message.match(
+        /TOPPING_PRICE_CHANGED:(.*):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)/,
+      );
+      const itemPriceMatch = toppingPriceMatch
+        ? null
+        : message.match(
+            /PRICE_CHANGED:(.*):(-?\d+(?:\.\d+)?):(-?\d+(?:\.\d+)?)/,
+          );
+
+      if (itemPriceMatch || toppingPriceMatch) {
+        const match = itemPriceMatch ?? toppingPriceMatch!;
+        const changedName = match[1];
+        const expectedPrice = Number(match[3]);
+
+        for (const line of tab.lines) {
+          const isChangedItem = !!itemPriceMatch && line.productName === changedName;
+          const hasChangedTopping =
+            !!toppingPriceMatch && line.toppings.some((t) => t.name === changedName);
+          if (!isChangedItem && !hasChangedTopping) continue;
+
+          pos.updateLine(line.id, {
+            productId: line.productId,
+            productName: line.productName,
+            variantId: line.variantId,
+            variantLabel: line.variantLabel,
+            quantity: line.quantity,
+            modifierSelections: line.modifierSelections,
+            note: line.note,
+            unitPrice: isChangedItem ? expectedPrice : line.unitPrice,
+            toppings: hasChangedTopping
+              ? line.toppings.map((t) =>
+                  t.name === changedName ? { ...t, price: expectedPrice } : t,
+                )
+              : line.toppings,
+          });
+        }
+
+        void invalidateMenuCache(tenantId).catch(() => undefined);
+        toast({
+          title: "Giá vừa được cập nhật",
+          description: `Đã cập nhật giá ${changedName}. Vui lòng kiểm tra và gửi lại.`,
+          variant: "warning",
+        });
+        return null;
+      }
+
+      toast({
+        title: "Gửi bếp thất bại",
+        description: message,
+        variant: "error",
+      });
       return null;
     }
   }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
@@ -1441,6 +1495,118 @@ function FnbPosPageInner() {
       }
     },
     [toast],
+  );
+
+  const persistDeliveryStaff = useCallback(
+    async (kitchenOrderId: string, staffId: string | undefined) => {
+      if (kitchenOrderId.startsWith("local_")) return;
+      try {
+        if (staffId) {
+          await assignDeliveryStaffService(kitchenOrderId, staffId);
+        } else {
+          await unassignDeliveryStaffService(kitchenOrderId);
+        }
+      } catch (err) {
+        console.error("persistDeliveryStaff failed", err);
+        toast({
+          title: "Không lưu được người giao",
+          description: "Hãy thử chọn lại hoặc kiểm tra mạng.",
+          variant: "warning",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const persistDeliveryTier = useCallback(
+    async (
+      kitchenOrderId: string,
+      tier: "near" | "mid" | "far" | "custom",
+      fee?: number,
+    ) => {
+      if (kitchenOrderId.startsWith("local_")) return;
+      try {
+        await setDeliveryDistanceTierService(kitchenOrderId, tier, fee);
+      } catch (err) {
+        console.error("persistDeliveryTier failed", err);
+        toast({
+          title: "Không lưu được cấp giao hàng",
+          description: "Hãy thử chọn lại hoặc kiểm tra mạng.",
+          variant: "warning",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const handleDeliveryPlatformChange = useCallback(
+    (platform: import("@/lib/types/fnb").DeliveryPlatform) => {
+      const defaultCommission =
+        platformSettings?.[platform]?.commissionPercent ?? 0;
+      pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
+      const orderId = pos.activeTab?.kitchenOrderId;
+      if (orderId) {
+        void persistDeliveryPlatform(
+          orderId,
+          platform,
+          pos.activeTab?.deliveryFee ?? 0,
+          defaultCommission,
+        );
+      }
+    },
+    [platformSettings, pos, persistDeliveryPlatform],
+  );
+
+  const handleDeliveryFeeChange = useCallback(
+    (fee: number) => {
+      pos.setDeliveryFee(pos.activeTabId, fee);
+      const orderId = pos.activeTab?.kitchenOrderId;
+      const platform = pos.activeTab?.deliveryPlatform;
+      if (orderId && platform) {
+        void persistDeliveryPlatform(
+          orderId,
+          platform,
+          fee,
+          pos.activeTab?.platformCommissionPercent ?? 0,
+        );
+      }
+    },
+    [pos, persistDeliveryPlatform],
+  );
+
+  const handlePlatformCommissionChange = useCallback(
+    (percent: number) => {
+      pos.setPlatformCommissionPercent(pos.activeTabId, percent);
+      const orderId = pos.activeTab?.kitchenOrderId;
+      const platform = pos.activeTab?.deliveryPlatform;
+      if (orderId && platform) {
+        void persistDeliveryPlatform(
+          orderId,
+          platform,
+          pos.activeTab?.deliveryFee ?? 0,
+          percent,
+        );
+      }
+    },
+    [pos, persistDeliveryPlatform],
+  );
+
+  const handleDeliveryStaffChange = useCallback(
+    (staffId: string | undefined) => {
+      pos.setDeliveryStaff(pos.activeTabId, staffId);
+      const orderId = pos.activeTab?.kitchenOrderId;
+      if (orderId) void persistDeliveryStaff(orderId, staffId);
+    },
+    [pos, persistDeliveryStaff],
+  );
+
+  const handleDeliveryTierChange = useCallback(
+    (tier: "near" | "mid" | "far" | "custom", fee?: number) => {
+      pos.setDeliveryTier(pos.activeTabId, tier, fee);
+      const orderId = pos.activeTab?.kitchenOrderId;
+      if (orderId) void persistDeliveryTier(orderId, tier, fee);
+    },
+    [pos, persistDeliveryTier],
   );
 
   // ── Print pre-bill ──
@@ -1542,6 +1708,7 @@ function FnbPosPageInner() {
           tenantId,
           branchId: branchId!,
           createdBy: userId,
+          customerId: tab?.customerId ?? null,
           customerName: payload.customerName,
           paymentMethod: payload.paymentMethod,
           paymentBreakdown: payload.paymentBreakdown
@@ -1553,6 +1720,15 @@ function FnbPosPageInner() {
           discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
           shiftId: currentShift?.id ?? null,
           tipAmount: payload.tipAmount,
+          promotionId: appliedPromotion?.promotion.id ?? null,
+          promotionDiscount: appliedPromotion?.discountAmount ?? 0,
+          promotionFreeValue:
+            appliedPromotion?.freeItems?.reduce(
+              (sum, item) => sum + item.quantity * item.unitPrice,
+              0,
+            ) ?? 0,
+          couponCode: couponApplied?.code ?? null,
+          couponDiscount: couponApplied?.discount ?? 0,
         }, networkStatus.isOnline);
 
         // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (FnB online)
@@ -1722,87 +1898,7 @@ function FnbPosPageInner() {
           }).catch((err) => console.warn("[FnB] recordDiscountAudit:", err));
         }
 
-        // KM-2: Tăng usage_count atomic — chỉ khi online
-        // KM-4: Tag invoice với promotion_id để báo cáo hiệu quả KM
-        if (networkStatus.isOnline && appliedPromotion?.promotion.id) {
-          try {
-            await incrementPromotionUsage(appliedPromotion.promotion.id);
-          } catch (err) {
-            console.warn("incrementPromotionUsage failed:", err);
-          }
-          if (payResult.invoiceId) {
-            const freeValue =
-              appliedPromotion.freeItems?.reduce(
-                (s, f) => s + f.quantity * f.unitPrice,
-                0,
-              ) ?? 0;
-            tagInvoicePromotion({
-              invoiceId: payResult.invoiceId,
-              promotionId: appliedPromotion.promotion.id,
-              promotionDiscount: appliedPromotion.discountAmount,
-              promotionFreeValue: freeValue,
-            }).catch((err) => {
-              // Tag fail → KM count báo cáo có thể thiếu 1 đơn, nhưng đơn
-              // đã thanh toán xong. Không block UX. Log để admin biết.
-              console.error("[FnB] tagInvoicePromotion failed:", err);
-            });
-          }
-        }
-
-        // 29/07: Trừ lượt dùng mã giảm giá. POS Retail (pos/page.tsx) gọi
-        // applyCouponAtomic sau checkout từ lâu; F&B chỉ KIỂM mã rồi thôi, nên
-        // mã "giới hạn 1 lượt" dùng lại được vô hạn ở quán. Best-effort giống
-        // Retail: hỏng thì log, KHÔNG chặn đơn đã thu tiền.
-        if (
-          networkStatus.isOnline &&
-          couponApplied &&
-          couponApplied.discount > 0 &&
-          payResult.invoiceId
-        ) {
-          const couponCode = couponApplied.code;
-          applyCouponAtomic({
-            code: couponCode,
-            invoiceId: payResult.invoiceId,
-            customerId: tab?.customerId ?? null,
-            discountAmount: couponApplied.discount,
-          }).then((r) => {
-            if (!r.ok) {
-              console.warn(`[FnB] coupon ${couponCode} consume failed:`, r.reason);
-            }
-          });
-        }
-
-        // L-2: Earn loyalty points cho KH có account — bg fire
-        if (
-          networkStatus.isOnline &&
-          tab?.customerId &&
-          payResult.invoiceId
-        ) {
-          const customerId = tab.customerId;
-          const customerName = tab.customerName ?? "khách";
-          const invId = payResult.invoiceId;
-          const totalAmount = pos.total;
-          getLoyaltySettings()
-            .then((settings) => {
-              if (!settings?.isEnabled) return;
-              return earnLoyaltyPoints(customerId, invId, totalAmount).then(
-                (newPoints) => {
-                  const earned = Math.floor(
-                    (totalAmount / (settings.amountPerPoint || 1)) *
-                      (settings.pointsPerAmount || 0),
-                  );
-                  if (earned > 0) {
-                    toast({
-                      title: `Đã tích ${earned} điểm cho ${customerName}`,
-                      description: `Tổng điểm: ${newPoints}`,
-                      variant: "info",
-                    });
-                  }
-                },
-              );
-            })
-            .catch((err) => console.warn("earnLoyaltyPoints failed:", err));
-        }
+        // Khuyến mãi, coupon và điểm đã được ghi atomically cùng hóa đơn.
 
         setPaymentOpen(false);
         pos.closeTab(pos.activeTabId);
@@ -1867,12 +1963,28 @@ function FnbPosPageInner() {
           });
         }
       } else if (table.status === "cleaning") {
-        markTableAvailable(table.id).then(() => {
-          if (branchId) getTablesByBranch(branchId).then(setTables);
-        });
+        if (!canManageTables) {
+          toast({
+            title: "Không có quyền quản lý bàn",
+            description: "Cần quyền Quản lý bàn để xác nhận bàn đã dọn xong.",
+            variant: "warning",
+          });
+          return;
+        }
+        markTableAvailable(table.id)
+          .then(() => {
+            if (branchId) return getTablesByBranch(branchId).then(setTables);
+          })
+          .catch((error) => {
+            toast({
+              title: "Không thể cập nhật trạng thái bàn",
+              description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+              variant: "error",
+            });
+          });
       }
     },
-    [pos, branchId, toast],
+    [pos, branchId, canManageTables, toast],
   );
 
   // ── Shift handlers ──
@@ -2228,12 +2340,24 @@ function FnbPosPageInner() {
       }
       try {
         const result = await splitByItems(tab.kitchenOrderId, itemIds);
+        pos.setOrderDiscount(
+          tab.id,
+          result.parentDiscountAmount > 0
+            ? { mode: "amount", value: result.parentDiscountAmount }
+            : undefined,
+        );
         // 29/07: NỐI tab mới với đơn con vừa tách. Trước đây tab được tạo
         // rỗng, không cầm mã đơn bếp nào → bấm thanh toán trên tab đó sẽ mở
         // một đơn MỚI, còn đơn con đã tách nằm mồ côi: bếp đã làm món mà
         // không ai thu được tiền.
         const newTabId = pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
         pos.updateTabMeta(newTabId, { kitchenOrderId: result.childOrderId });
+        pos.setOrderDiscount(
+          newTabId,
+          result.childDiscountAmount > 0
+            ? { mode: "amount", value: result.childDiscountAmount }
+            : undefined,
+        );
         await loadChildOrderIntoTab(result.childOrderId, newTabId);
         hapticSuccess();
         toast({
@@ -2275,7 +2399,17 @@ function FnbPosPageInner() {
         return;
       }
       try {
-        const { childOrderIds } = await splitEqually(tab.kitchenOrderId, numberOfWays);
+        const {
+          childOrderIds,
+          childDiscountAmounts,
+          parentDiscountAmount,
+        } = await splitEqually(tab.kitchenOrderId, numberOfWays);
+        pos.setOrderDiscount(
+          tab.id,
+          parentDiscountAmount > 0
+            ? { mode: "amount", value: parentDiscountAmount }
+            : undefined,
+        );
         // 29/07: mỗi tab con NỐI với một đơn con đã tách (xem ghi chú ở
         // handleSplitByItems) — không nối thì các phần chia ra không thu
         // được tiền.
@@ -2285,6 +2419,13 @@ function FnbPosPageInner() {
           const childId = childOrderIds[i - 1];
           if (childId) {
             pos.updateTabMeta(newTabId, { kitchenOrderId: childId });
+            const childDiscount = childDiscountAmounts[i - 1] ?? 0;
+            pos.setOrderDiscount(
+              newTabId,
+              childDiscount > 0
+                ? { mode: "amount", value: childDiscount }
+                : undefined,
+            );
             await loadChildOrderIntoTab(childId, newTabId);
           }
         }
@@ -2671,55 +2812,11 @@ function FnbPosPageInner() {
           couponApplying={couponApplying}
           freeItems={appliedPromotion?.freeItems}
           onOrderNoteChange={(note) => pos.setOrderNote(pos.activeTabId, note)}
-          onDeliveryPlatformChange={(platform, _commission) => {
-            // Auto-fill commission% từ settings khi user pick platform.
-            // User vẫn override được sau qua input riêng.
-            const defaultCommission =
-              platformSettings?.[platform]?.commissionPercent ?? 0;
-            pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
-            // Migration 00070: persist nếu đơn đã gửi bếp.
-            const koId = pos.activeTab?.kitchenOrderId;
-            if (koId) {
-              void persistDeliveryPlatform(
-                koId,
-                platform,
-                pos.activeTab?.deliveryFee ?? 0,
-                defaultCommission,
-              );
-            }
-          }}
-          onDeliveryFeeChange={(fee) => {
-            pos.setDeliveryFee(pos.activeTabId, fee);
-            const koId = pos.activeTab?.kitchenOrderId;
-            const platform = pos.activeTab?.deliveryPlatform;
-            if (koId && platform && platform !== "direct") {
-              void persistDeliveryPlatform(
-                koId,
-                platform,
-                fee,
-                pos.activeTab?.platformCommissionPercent ?? 0,
-              );
-            }
-          }}
-          onPlatformCommissionChange={(pct) => {
-            pos.setPlatformCommissionPercent(pos.activeTabId, pct);
-            const koId = pos.activeTab?.kitchenOrderId;
-            const platform = pos.activeTab?.deliveryPlatform;
-            if (koId && platform && platform !== "direct") {
-              void persistDeliveryPlatform(
-                koId,
-                platform,
-                pos.activeTab?.deliveryFee ?? 0,
-                pct,
-              );
-            }
-          }}
-          onDeliveryStaffChange={(staffId) =>
-            pos.setDeliveryStaff(pos.activeTabId, staffId)
-          }
-          onDeliveryTierChange={(tier, fee) =>
-            pos.setDeliveryTier(pos.activeTabId, tier, fee)
-          }
+          onDeliveryPlatformChange={handleDeliveryPlatformChange}
+          onDeliveryFeeChange={handleDeliveryFeeChange}
+          onPlatformCommissionChange={handlePlatformCommissionChange}
+          onDeliveryStaffChange={handleDeliveryStaffChange}
+          onDeliveryTierChange={handleDeliveryTierChange}
           staffOptions={shipperOptions}
           selfDeliveryTiers={deliveryTiers}
           discountPresets={discountPresets}
@@ -2888,21 +2985,11 @@ function FnbPosPageInner() {
               couponApplying={couponApplying}
               freeItems={appliedPromotion?.freeItems}
               onOrderNoteChange={(note) => pos.setOrderNote(pos.activeTabId, note)}
-              onDeliveryPlatformChange={(platform, _commission) => {
-                const defaultCommission =
-                  platformSettings?.[platform]?.commissionPercent ?? 0;
-                pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
-              }}
-              onDeliveryFeeChange={(fee) => pos.setDeliveryFee(pos.activeTabId, fee)}
-              onPlatformCommissionChange={(pct) =>
-                pos.setPlatformCommissionPercent(pos.activeTabId, pct)
-              }
-              onDeliveryStaffChange={(staffId) =>
-                pos.setDeliveryStaff(pos.activeTabId, staffId)
-              }
-              onDeliveryTierChange={(tier, fee) =>
-                pos.setDeliveryTier(pos.activeTabId, tier, fee)
-              }
+              onDeliveryPlatformChange={handleDeliveryPlatformChange}
+              onDeliveryFeeChange={handleDeliveryFeeChange}
+              onPlatformCommissionChange={handlePlatformCommissionChange}
+              onDeliveryStaffChange={handleDeliveryStaffChange}
+              onDeliveryTierChange={handleDeliveryTierChange}
               staffOptions={shipperOptions}
               selfDeliveryTiers={deliveryTiers}
               discountPresets={discountPresets}

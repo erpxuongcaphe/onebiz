@@ -17,9 +17,9 @@ const mockInternalSupplier = {
 };
 
 let codeCounter = 0;
-let insertedTables: Record<string, unknown[]> = {};
-let stockMovements: Array<{ type: string; productId: string; quantity: number; branchId: string }> = [];
 let stockOutRpcCalls: Array<{ productId: string; quantity: number; branchId: string }> = [];
+let internalSaleRpcCalls: Array<Record<string, unknown>> = [];
+let internalSaleRpcError: { message: string; code?: string } | null = null;
 
 // === Chain mock builder ===
 
@@ -62,6 +62,24 @@ vi.mock("@/lib/services/supabase/base", () => ({
       return createChain({ data: [], error: null });
     }),
     rpc: vi.fn((funcName: string, params?: any) => {
+      if (funcName === "create_internal_sale_atomic") {
+        internalSaleRpcCalls.push(params ?? {});
+        if (internalSaleRpcError) {
+          return Promise.resolve({ data: null, error: internalSaleRpcError });
+        }
+        return Promise.resolve({
+          data: {
+            internal_sale_id: "is-001",
+            code: "BNB-001",
+            invoice_id: "inv-001",
+            invoice_code: "HD-001",
+            input_invoice_id: "iinv-001",
+            input_invoice_code: "HDV-001",
+            total: 2_430_000,
+          },
+          error: null,
+        });
+      }
       if (funcName === "next_code") {
         codeCounter++;
         return Promise.resolve({ data: `CODE-${codeCounter}`, error: null });
@@ -99,33 +117,18 @@ vi.mock("@/lib/services/supabase/base", () => ({
   },
 }));
 
-// Mock stock adjustments
-vi.mock("@/lib/services/supabase/stock-adjustments", () => ({
-  applyManualStockMovement: vi.fn(async (inputs: any[], ctx: any) => {
-    for (const input of inputs) {
-      stockMovements.push({
-        type: input.type,
-        productId: input.productId,
-        quantity: input.quantity,
-        branchId: ctx.branchId,
-      });
-    }
-  }),
-  nextEntityCode: vi.fn(async () => "NEXT-CODE"),
-}));
 
 import {
   createInternalSale,
   getInternalSales,
   cancelInternalSale,
 } from "@/lib/services/supabase/internal-sales";
-import { applyManualStockMovement } from "@/lib/services/supabase/stock-adjustments";
 
 beforeEach(() => {
   codeCounter = 0;
-  insertedTables = {};
-  stockMovements = [];
   stockOutRpcCalls = [];
+  internalSaleRpcCalls = [];
+  internalSaleRpcError = null;
   vi.clearAllMocks();
 
   // Setup table handlers
@@ -223,49 +226,49 @@ describe("createInternalSale", () => {
     expect(result.total).toBe(2_250_000 + 180_000);
   });
 
-  it("uses atomic RPC for outbound stock and helper for inbound stock", async () => {
-    await createInternalSale(validInput);
+  it("chỉ dùng một RPC nguyên tử cho toàn bộ chứng từ, tồn và sổ quỹ", async () => {
+    const result = await createInternalSale(validInput);
 
-    expect(applyManualStockMovement).toHaveBeenCalledTimes(1);
+    expect(internalSaleRpcCalls).toHaveLength(1);
+    expect(internalSaleRpcCalls[0]).toEqual(
+      expect.objectContaining({
+        p_tenant_id: TENANT_ID,
+        p_from_branch_id: FROM_BRANCH,
+        p_to_branch_id: TO_BRANCH,
+        p_created_by: USER_ID,
+        p_items: validInput.items,
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        internalSaleId: "is-001",
+        code: "BNB-001",
+        invoiceId: "inv-001",
+        total: 2_430_000,
+      }),
+    );
+  });
 
-    const inCall = (applyManualStockMovement as any).mock.calls[0];
-    expect(inCall[0]).toHaveLength(2);
-    expect(inCall[0][0].type).toBe("in");
-    expect(inCall[0][0].quantity).toBe(10);
-    expect(inCall[1].branchId).toBe(TO_BRANCH);
+  it("dừng an toàn khi RPC lỗi, không chạy lại luồng nhiều bước", async () => {
+    internalSaleRpcError = {
+      message: "create_internal_sale_atomic failed",
+      code: "P0001",
+    };
 
-    expect(stockOutRpcCalls).toEqual([
-      { productId: "prod-001", quantity: 10, branchId: FROM_BRANCH },
-      { productId: "prod-002", quantity: 5, branchId: FROM_BRANCH },
-    ]);
+    await expect(createInternalSale(validInput)).rejects.toThrow(
+      "createInternalSale:atomic_rpc",
+    );
+    expect(internalSaleRpcCalls).toHaveLength(1);
+    expect(stockOutRpcCalls).toHaveLength(0);
   });
 
   it("returns result with total matching calculation", async () => {
     const result = await createInternalSale(validInput);
 
-    // Total = subtotal + tax
-    // Subtotal: (10*200k) + (5*50k) = 2M + 250k = 2.25M
-    // Tax: 2M*8% + 250k*8% = 160k + 20k = 180k
-    // Total: 2.43M
     expect(result.total).toBe(2_430_000);
     expect(typeof result.code).toBe("string");
   });
 
-  it("tracks stock movements correctly per branch", async () => {
-    await createInternalSale(validInput);
-
-    const inMoves = stockMovements.filter((m) => m.type === "in");
-
-    expect(stockOutRpcCalls).toHaveLength(2);
-    expect(stockOutRpcCalls.every((m) => m.branchId === FROM_BRANCH)).toBe(true);
-    expect(inMoves).toHaveLength(2);
-    expect(inMoves.every((m) => m.branchId === TO_BRANCH)).toBe(true);
-
-    expect(stockOutRpcCalls[0].quantity).toBe(10);
-    expect(stockOutRpcCalls[1].quantity).toBe(5);
-    expect(inMoves[0].quantity).toBe(10);
-    expect(inMoves[1].quantity).toBe(5);
-  });
 });
 
 describe("getInternalSales", () => {

@@ -22,13 +22,13 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { receivePurchaseOrder } from "@/lib/services/supabase/purchase-orders";
+import {
+  savePurchaseOrderAtomic,
+  updateReceivedPurchaseOrderAtomic,
+} from "@/lib/services/supabase/purchase-orders";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
-import type { Database } from "@/lib/supabase/types";
 import { Icon } from "@/components/ui/icon";
 
-type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
-type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
 
 interface EditingPO {
   id: string;
@@ -137,7 +137,7 @@ function lineDiscountTotal(item: LineItem) {
 }
 
 function lineTax(item: LineItem) {
-  return Math.ceil((lineSubtotal(item) * item.vatRate) / 100);
+  return Math.round((lineSubtotal(item) * item.vatRate) / 100);
 }
 
 function lineTotal(item: LineItem) {
@@ -472,6 +472,9 @@ export function CreatePurchaseOrderDialog({
     const newErrors: Record<string, string> = {};
     if (!selectedSupplier) newErrors.supplier = "Vui lòng chọn nhà cung cấp";
     if (items.length === 0) newErrors.items = "Chưa có sản phẩm nào";
+    if (paidAmount < 0 || paidAmount > total) {
+      newErrors.payment = "Số đã thanh toán phải từ 0 đến tổng tiền phiếu.";
+    }
     // P1-3C-K3 12/06/2026: chặn qty <= 0 và giá < 0. Trước đây cashier xóa input
     // qty (default = 0) hoặc gõ âm → vẫn "Nhập kho ngay" được → cộng 0 hoặc trừ
     // âm tồn. RPC vẫn bảo vệ data, nhưng UX cho qua dễ tạo phiếu rỗng.
@@ -486,7 +489,6 @@ export function CreatePurchaseOrderDialog({
   async function handleSave(mode: "draft" | "receive") {
     if (!validate()) return;
     setSavingMode(mode);
-    let createdPoId: string | null = null;
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
@@ -495,17 +497,18 @@ export function CreatePurchaseOrderDialog({
       // paid/debt/note, KHÔNG đụng items/total/tồn. Items đã được khoá ở UI
       // (fieldset disabled). Atomic full sẽ làm sprint riêng.
       if (isOrderedLocked && editingPO) {
-        const baseTotal = editingPO.total ?? total;
-        const { error: ordErr } = await supabase
-          .from("purchase_orders")
-          .update({
-            paid: paidAmount,
-            debt: Math.max(0, baseTotal - paidAmount),
-            note: notes || null,
-          })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("id", editingPO.id);
-        if (ordErr) throw new Error(ordErr.message);
+        const previousPaid = Number(editingPO.paid ?? 0);
+        if (paidAmount < previousPaid) {
+          throw new Error(
+            "Không thể giảm số đã thanh toán trực tiếp. Hãy hủy phiếu chi sai rồi cập nhật lại.",
+          );
+        }
+        await updateReceivedPurchaseOrderAtomic({
+          orderId: editingPO.id,
+          requestedPaid: paidAmount,
+          note: notes || null,
+          paymentMethod: "cash",
+        });
         toast({
           title: "Đã cập nhật phiếu nhập",
           description: `Cập nhật "Đã thanh toán NCC" + Ghi chú cho ${editingPO.code}. Tồn kho không đổi.`,
@@ -516,145 +519,58 @@ export function CreatePurchaseOrderDialog({
         return;
       }
 
-      let poId: string;
+      const saveResult = await savePurchaseOrderAtomic({
+        orderId: isEdit && editingPO ? editingPO.id : null,
+        branchId: ctx.branchId,
+        supplierId: selectedSupplier!.id,
+        note: notes || null,
+        shippingCost: shippingFee,
+        otherCost,
+        orderDiscount: orderDiscountAmount,
+        paidAmount: mode === "receive" ? paidAmount : 0,
+        paymentMethod: "cash",
+        receiveNow: mode === "receive",
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: lineDiscountTotal(item),
+          vatRate: item.vatRate,
+          expiryDate: item.expiryDate || null,
+          lotNumber: item.lotNumber || null,
+        })),
+      });
 
-      if (isEdit && editingPO) {
-        const { error: poErr } = await supabase
-          .from("purchase_orders")
-          .update({
-            supplier_id: selectedSupplier!.id,
-            supplier_name: selectedSupplier!.name,
-            subtotal,
-            discount_amount: totalDiscount,
-            tax_amount: taxAmount,
-            total,
-            paid: paidAmount,
-            debt: Math.max(0, total - paidAmount),
-            note: notes || null,
-          })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("id", editingPO.id);
-        if (poErr) throw new Error(poErr.message);
-        poId = editingPO.id;
-
-        await supabase.from("purchase_order_items").delete().eq("purchase_order_id", poId);
-      } else {
-        const { data: { user } } = await supabase.auth.getUser();
-        const { data: po, error: poErr } = await supabase
-          .from("purchase_orders")
-          .insert({
-            tenant_id: ctx.tenantId,
-            branch_id: ctx.branchId,
-            code,
-            supplier_id: selectedSupplier!.id,
-            supplier_name: selectedSupplier!.name,
-            status: "draft" as const,
-            subtotal,
-            discount_amount: totalDiscount,
-            tax_amount: taxAmount,
-            total,
-            paid: paidAmount,
-            debt: Math.max(0, total - paidAmount),
-            note: notes || null,
-            created_by: user?.id ?? ctx.userId,
-          } satisfies PurchaseOrderInsert)
-          .select("id")
-          .single();
-        if (poErr) throw new Error(poErr.message);
-        poId = po!.id;
-      }
-
-      // CEO 14/07/2026: lưu chiết khấu cả đơn. Best-effort — cột order_discount
-      // thêm ở migration 00187; nếu CEO chưa chạy migration thì UPDATE này báo
-      // lỗi cột-không-tồn-tại và được BỎ QUA (total/debt đã trừ đúng ở trên,
-      // tiền không sai). Sau khi chạy 00187 thì giá trị này lưu để reload/đối soát.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from("purchase_orders")
-        .update({ order_discount: orderDiscountAmount })
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", poId);
-
-      if (items.length > 0) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: itemsErr } = await (supabase as any)
-          .from("purchase_order_items")
-          .insert(items.map((item) => {
-            // Day 05/06/2026 (CEO): chiết khấu per-dòng → giá hiệu lực sau CK
-            const lineDisc = lineDiscountTotal(item);
-            const lineAfterDisc = lineSubtotal(item); // = effectivePrice * qty
-            const vatAmt = Math.round((lineAfterDisc * item.vatRate) / 100);
-            return {
-              purchase_order_id: poId,
-              product_id: item.id,
-              product_name: item.productName,
-              unit: item.unit || "Cái",
-              quantity: item.quantity,
-              received_quantity: 0,
-              unit_price: item.price,
-              discount: lineDisc,
-              vat_rate: item.vatRate,
-              vat_amount: vatAmt,
-              total: lineAfterDisc,
-              // Day 18/05/2026 (CEO): HSD + lô từ form (cast vì
-              // Supabase types chưa regen sau migration 00102)
-              expiry_date: item.expiryDate || null,
-              lot_number: item.lotNumber || null,
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            } as PurchaseOrderItemInsert & { expiry_date: any; lot_number: any };
-          }));
-        if (itemsErr) throw new Error(itemsErr.message);
-      }
-
-      // "Nhập kho ngay": phiếu + dòng hàng đã lưu xong (vẫn 'draft'), giờ nâng
-      // 'ordered' rồi gọi RPC atomic cộng tồn (đã test, all-or-nothing).
-      // Làm sau cùng → nếu lỗi nửa chừng, phiếu chỉ ở 'draft'/'ordered', KHÔNG sai tồn.
-      if (mode === "receive") {
-        createdPoId = poId; // phiếu đã tồn tại — dùng cho thông báo nếu cộng tồn lỗi
-        const { error: stErr } = await supabase
-          .from("purchase_orders")
-          .update({ status: "ordered" as const })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("id", poId);
-        if (stErr) throw new Error(stErr.message);
-        await receivePurchaseOrder(poId);
-      }
+      setCode(saveResult.code);
 
       onOpenChange(false);
       if (mode === "receive") {
         toast({
           title: "Đã nhập kho — đã cộng tồn",
-          description: `${code}: đã cộng tồn kho cho ${formatNumber(items.length)} mặt hàng.`,
+          description: `${saveResult.code}: đã cộng tồn kho cho ${formatNumber(items.length)} mặt hàng.`,
           variant: "success",
         });
       } else {
         toast({
           title: isEdit ? "Đã lưu thay đổi" : "Đã lưu phiếu tạm",
           description: isEdit
-            ? `Đã cập nhật ${code} — phiếu vẫn ở dạng chờ, CHƯA cộng tồn.`
-            : `${code}: phiếu chờ, CHƯA cộng tồn kho.`,
+            ? `Đã cập nhật ${saveResult.code} — phiếu vẫn ở dạng chờ, CHƯA cộng tồn.`
+            : `${saveResult.code}: phiếu chờ, CHƯA cộng tồn kho.`,
           variant: "success",
         });
       }
       onSuccess?.();
     } catch (err) {
-      // Phiếu đã tạo (ordered) nhưng RPC cộng tồn lỗi → phiếu nằm ở "Đã đặt hàng",
-      // KHÔNG mất data. Báo rõ để vào danh sách bấm "Hoàn thành nhập" thử lại.
-      if (mode === "receive" && createdPoId) {
-        onOpenChange(false);
-        onSuccess?.();
-        toast({
-          title: "Phiếu đã tạo nhưng CHƯA cộng tồn",
-          description: `${code} đang ở trạng thái "Đã đặt hàng". Vào danh sách → mở phiếu → bấm "Hoàn thành nhập" để cộng tồn. (${err instanceof Error ? err.message : "lỗi không xác định"})`,
-          variant: "error",
-        });
-      } else {
-        toast({
-          title: mode === "receive" ? "Lỗi nhập kho" : isEdit ? "Lỗi cập nhật phiếu" : "Lỗi lưu phiếu tạm",
-          description: err instanceof Error ? err.message : "Vui lòng thử lại",
-          variant: "error",
-        });
-      }
+      toast({
+        title:
+          mode === "receive"
+            ? "Lỗi nhập kho"
+            : isEdit
+              ? "Lỗi cập nhật phiếu"
+              : "Lỗi lưu phiếu tạm",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
     } finally {
       setSavingMode(null);
     }

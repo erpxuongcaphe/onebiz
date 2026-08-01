@@ -42,7 +42,7 @@ describe("getMktDashboardData", () => {
 
     expect(data.tenantId).toBeNull();
     expect(data.readinessScore).toBe(0);
-    expect(data.metrics.map((item) => item.value)).toEqual(["00", "00", "00", "00"]);
+    expect(data.metrics.map((item) => item.value)).toEqual(["0", "0", "0", "0"]);
   });
 
   it("keeps readiness at 0 when the tenant has no campaign checklist", async () => {

@@ -7,7 +7,7 @@
  *   - Phân tích tuổi nợ (Aging Report) — Sprint 7
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -17,9 +17,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
@@ -41,13 +39,6 @@ import { bulkImportDebtOpening } from "@/lib/services/supabase/excel-import";
 
 type Mode = "customer" | "supplier" | "aging";
 
-const BUCKET_COLORS = [
-  "border-status-success/25 bg-status-success/10",
-  "border-status-warning/25 bg-status-warning/10",
-  "border-status-warning/25 bg-status-warning/10",
-  "border-status-error/25 bg-status-error/10",
-];
-
 const BUCKET_TEXT_COLORS = [
   "text-status-success",
   "text-status-warning",
@@ -55,8 +46,27 @@ const BUCKET_TEXT_COLORS = [
   "text-status-error",
 ];
 
+const REPORT_LOAD_TIMEOUT_MS = 15_000;
+
+async function withReportTimeout<T>(promise: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error("Dữ liệu phản hồi quá chậm. Vui lòng thử lại.")),
+      REPORT_LOAD_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
 export default function CongNoPage() {
   const { toast } = useToast();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const [mode, setMode] = useState<Mode>("customer");
   const [search, setSearch] = useState("");
 
@@ -78,6 +88,7 @@ export default function CongNoPage() {
   const [aging, setAging] = useState<DebtAgingReport | null>(null);
   const [topDebtors, setTopDebtors] = useState<DebtorDetail[]>([]);
   const [agingLoading, setAgingLoading] = useState(false);
+  const [agingError, setAgingError] = useState<string | null>(null);
 
   // Import opening debt
   const [importOpen, setImportOpen] = useState(false);
@@ -108,18 +119,15 @@ export default function CongNoPage() {
   } | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
     setLoading(true);
     try {
       // Luôn fetch tổng KPI (cả KH + NCC) song song với data tab.
-      const totalsPromise = getDebtTotals().catch(() => ({
-        customerDebtTotal: 0,
-        customerCount: 0,
-        supplierDebtTotal: 0,
-        supplierCount: 0,
-      }));
+      const reportBranchId = mode === "aging" ? activeBranchId : null;
+      const totalsPromise = getDebtTotals(reportBranchId);
 
       if (mode === "customer") {
-        const [result, totals] = await Promise.all([
+        const [result, totals] = await withReportTimeout(Promise.all([
           getCustomers({
             page: 0,
             pageSize: 200,
@@ -127,11 +135,11 @@ export default function CongNoPage() {
             filters: { debt: "has_debt" },
           }),
           totalsPromise,
-        ]);
+        ]));
         setCustomers(result.data);
         setDebtTotals(totals);
       } else if (mode === "supplier") {
-        const [result, totals] = await Promise.all([
+        const [result, totals] = await withReportTimeout(Promise.all([
           getSuppliers({
             page: 0,
             pageSize: 200,
@@ -139,20 +147,20 @@ export default function CongNoPage() {
             filters: { debt: "has_debt" },
           }),
           totalsPromise,
-        ]);
+        ]));
         setSuppliers(result.data);
         setDebtTotals(totals);
       } else if (mode === "aging") {
         setAgingLoading(true);
-        const [agingRes, debtorsRes, totals] = await Promise.all([
-          getDebtAging(),
-          getTopDebtors(20),
+        setAgingError(null);
+        const [agingRes, debtorsRes, totals] = await withReportTimeout(Promise.all([
+          getDebtAging(activeBranchId),
+          getTopDebtors(20, activeBranchId),
           totalsPromise,
-        ]);
+        ]));
         setAging(agingRes);
         setTopDebtors(debtorsRes);
         setDebtTotals(totals);
-        setAgingLoading(false);
       }
     } catch (err) {
       toast({
@@ -160,10 +168,16 @@ export default function CongNoPage() {
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
+      if (mode === "aging") {
+        setAgingError(
+          err instanceof Error ? err.message : "Không thể tải phân tích tuổi nợ",
+        );
+      }
     } finally {
+      setAgingLoading(false);
       setLoading(false);
     }
-  }, [mode, search, toast]);
+  }, [activeBranchId, isReady, mode, search, toast]);
 
   useEffect(() => {
     fetchData();
@@ -174,6 +188,24 @@ export default function CongNoPage() {
   const totalSupplierDebt = debtTotals.supplierDebtTotal;
   const customerDebtCount = debtTotals.customerCount;
   const supplierDebtCount = debtTotals.supplierCount;
+
+  const { receivableDebtors, payableDebtors } = useMemo(() => {
+    const keyword = search.trim().toLocaleLowerCase("vi");
+    const matches = (row: DebtorDetail) =>
+      !keyword ||
+      row.code.toLocaleLowerCase("vi").includes(keyword) ||
+      row.name.toLocaleLowerCase("vi").includes(keyword) ||
+      (row.phone ?? "").includes(keyword);
+
+    return {
+      receivableDebtors: topDebtors.filter(
+        (row) => row.type === "customer" && matches(row),
+      ),
+      payableDebtors: topDebtors.filter(
+        (row) => row.type === "supplier" && matches(row),
+      ),
+    };
+  }, [search, topDebtors]);
 
   const customerColumns: ColumnDef<Customer, unknown>[] = [
     {
@@ -224,7 +256,7 @@ export default function CongNoPage() {
     // CEO 03/06 — Công nợ C1: nút "Thanh toán". CEO 06/06 — thêm "Xem chi tiết"
     // (anh báo: "chưa xem được chi tiết công nợ là khách đó đang nợ đơn gì").
     {
-      id: "actions",
+      id: "debt_actions",
       header: "Thao tác",
       size: 220,
       enableSorting: false,
@@ -318,7 +350,7 @@ export default function CongNoPage() {
     },
     // CEO 03/06 — Trả nợ NCC. CEO 06/06 — thêm "Xem chi tiết PO đang nợ".
     {
-      id: "actions",
+      id: "debt_actions",
       header: "Thao tác",
       size: 220,
       enableSorting: false,
@@ -371,23 +403,6 @@ export default function CongNoPage() {
   ];
 
   const debtorColumns: ColumnDef<DebtorDetail, unknown>[] = [
-    {
-      accessorKey: "type",
-      header: "Loại",
-      size: 80,
-      cell: ({ row }) => (
-        <Badge
-          variant="secondary"
-          className={
-            row.original.type === "customer"
-              ? "bg-primary-fixed text-primary"
-              : "bg-status-warning/10 text-status-warning"
-          }
-        >
-          {row.original.type === "customer" ? "KH" : "NCC"}
-        </Badge>
-      ),
-    },
     {
       accessorKey: "code",
       header: "Mã",
@@ -545,18 +560,21 @@ export default function CongNoPage() {
         onValueChange={(v) => setMode(v as Mode)}
         className="px-4 pt-4 flex-1 flex flex-col min-h-0"
       >
-        <TabsList>
-          <TabsTrigger value="customer" className="gap-2">
-            <Icon name="group" size={16} />
-            KH còn nợ ({customerDebtCount})
+        <TabsList className="grid w-full grid-cols-3 sm:flex sm:w-fit">
+          <TabsTrigger value="customer" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+            <Icon name="group" size={16} className="shrink-0" />
+            <span className="sm:hidden">Phải thu</span>
+            <span className="hidden sm:inline">KH còn nợ ({customerDebtCount})</span>
           </TabsTrigger>
-          <TabsTrigger value="supplier" className="gap-2">
-            <Icon name="local_shipping" size={16} />
-            NCC ({supplierDebtCount})
+          <TabsTrigger value="supplier" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+            <Icon name="local_shipping" size={16} className="shrink-0" />
+            <span className="sm:hidden">Phải trả</span>
+            <span className="hidden sm:inline">NCC ({supplierDebtCount})</span>
           </TabsTrigger>
-          <TabsTrigger value="aging" className="gap-2">
-            <Icon name="bar_chart" size={16} />
-            Phân tích tuổi nợ
+          <TabsTrigger value="aging" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+            <Icon name="bar_chart" size={16} className="shrink-0" />
+            <span className="sm:hidden">Tuổi nợ</span>
+            <span className="hidden sm:inline">Phân tích tuổi nợ</span>
           </TabsTrigger>
         </TabsList>
 
@@ -615,120 +633,188 @@ export default function CongNoPage() {
           />
         </TabsContent>
 
-        <TabsContent value="aging" className="flex-1 min-h-0 space-y-4 overflow-auto pb-4">
-          {agingLoading || !aging ? (
-            <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
+        <TabsContent value="aging" className="flex-1 min-h-0 overflow-auto pb-4">
+          <div className="mb-3 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            <Icon name="location_on" size={15} />
+            <span>Phạm vi số liệu: <strong className="text-foreground">{branchLabel}</strong></span>
+          </div>
+          {agingLoading ? (
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               Đang tải phân tích...
             </div>
+          ) : agingError ? (
+            <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-center">
+              <div>
+                <p className="text-sm font-medium">Không tải được phân tích tuổi nợ</p>
+                <p className="mt-1 text-xs text-muted-foreground">{agingError}</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={fetchData}>
+                <Icon name="refresh" size={15} />
+                Thử lại
+              </Button>
+            </div>
+          ) : !aging ? (
+            <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
+              Chưa có dữ liệu tuổi nợ
+            </div>
           ) : (
-            <>
-              {/* Aging summary row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Card className="border-primary-fixed bg-primary-fixed/50">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Tổng công nợ</p>
-                    <p className="text-xl font-bold text-primary">
-                      {formatCurrency(aging.totalDebt)}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {aging.customersWithDebt} KH + {aging.suppliersWithDebt} NCC
-                    </p>
-                  </CardContent>
-                </Card>
-                <Card className="border-status-success/25 bg-status-success/10">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">KH đang nợ</p>
-                    <p className="text-xl font-bold text-status-success">
+            <div className="grid grid-cols-1 gap-4 2xl:grid-cols-2">
+              <section className="min-w-0 overflow-hidden rounded-md border bg-background">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Icon name="trending_up" size={16} className="text-status-success" />
+                      <h3 className="text-sm font-semibold">Phải thu khách hàng</h3>
+                    </div>
+                    <p className="mt-1 text-xl font-bold text-status-success">
                       {formatCurrency(aging.totalCustomerDebt)}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {aging.customersWithDebt} khách hàng
+                    <p className="text-xs text-muted-foreground">
+                      {aging.customersWithDebt} khách hàng còn nợ
                     </p>
-                  </CardContent>
-                </Card>
-                <Card className="border-status-warning/25 bg-status-warning/10">
-                  <CardContent className="pt-4">
-                    <p className="text-xs text-muted-foreground">Phải trả NCC</p>
-                    <p className="text-xl font-bold text-status-warning">
-                      {formatCurrency(aging.totalSupplierDebt)}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {aging.suppliersWithDebt} nhà cung cấp
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() =>
+                      exportToCsv(
+                        receivableDebtors,
+                        [
+                          { header: "Mã KH", key: "code", width: 14 },
+                          { header: "Tên khách hàng", key: "name", width: 28 },
+                          { header: "SĐT", key: "phone", width: 16 },
+                          { header: "Phải thu", key: "debt", width: 18 },
+                          { header: "Tuổi nợ (ngày)", key: "ageDays", width: 16 },
+                          { header: "Nhóm tuổi nợ", key: "bucket", width: 16 },
+                        ],
+                        "tuoi-no-phai-thu",
+                      )
+                    }
+                  >
+                    <Icon name="download" size={15} />
+                    Xuất phải thu
+                  </Button>
+                </div>
 
-              {/* Aging buckets */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Icon name="bar_chart" size={16} />
-                    Phân tích theo tuổi nợ
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                    {aging.buckets.map((bucket, idx) => (
-                      <div
-                        key={bucket.range}
-                        className={`border rounded-lg p-3 ${BUCKET_COLORS[idx]}`}
-                      >
-                        <div className="flex items-center gap-2 mb-2">
-                          {idx >= 2 && (
-                            <Icon name="warning"
-                              className={`h-3.5 w-3.5 ${BUCKET_TEXT_COLORS[idx]}`}
-                            />
-                          )}
-                          <span
-                            className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}
-                          >
-                            {bucket.label}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground mb-1">
+                <div className="grid grid-cols-1 border-b sm:grid-cols-2">
+                  {aging.buckets.map((bucket, idx) => (
+                    <div
+                      key={`receivable-${bucket.range}`}
+                      className="flex items-center justify-between gap-3 border-b px-4 py-2.5 sm:odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
+                    >
+                      <div>
+                        <p className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}>
                           {bucket.range}
                         </p>
-                        <p
-                          className={`text-lg font-bold ${BUCKET_TEXT_COLORS[idx]}`}
-                        >
-                          {formatCurrency(bucket.totalAmount)}
+                        <p className="text-xs text-muted-foreground">
+                          {bucket.customerCount} khách hàng
                         </p>
-                        <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
-                          <span>KH: {bucket.customerCount} ({formatCurrency(bucket.customerAmount)})</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          <span>NCC: {bucket.supplierCount} ({formatCurrency(bucket.supplierAmount)})</span>
-                        </div>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatCurrency(bucket.customerAmount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
 
-              {/* Top debtors table */}
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm">
-                    Top đối tượng nợ cao nhất
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
+                <div className="p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Khách hàng cần thu
+                  </p>
                   <DataTable
                     columns={debtorColumns}
-                    data={topDebtors}
+                    data={receivableDebtors}
                     loading={false}
-                    total={topDebtors.length}
+                    total={receivableDebtors.length}
                     pageIndex={0}
-                    pageSize={50}
+                    pageSize={20}
                     pageCount={1}
                     onPageChange={() => {}}
                     onPageSizeChange={() => {}}
-                    getRowId={(r) => r.id}
+                    getRowId={(row) => `customer-${row.id}`}
                   />
-                </CardContent>
-              </Card>
-            </>
+                </div>
+              </section>
+
+              <section className="min-w-0 overflow-hidden rounded-md border bg-background">
+                <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <Icon name="trending_down" size={16} className="text-status-warning" />
+                      <h3 className="text-sm font-semibold">Phải trả nhà cung cấp</h3>
+                    </div>
+                    <p className="mt-1 text-xl font-bold text-status-warning">
+                      {formatCurrency(aging.totalSupplierDebt)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {aging.suppliersWithDebt} nhà cung cấp còn nợ
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1.5"
+                    onClick={() =>
+                      exportToCsv(
+                        payableDebtors,
+                        [
+                          { header: "Mã NCC", key: "code", width: 14 },
+                          { header: "Tên nhà cung cấp", key: "name", width: 28 },
+                          { header: "SĐT", key: "phone", width: 16 },
+                          { header: "Phải trả", key: "debt", width: 18 },
+                          { header: "Tuổi nợ (ngày)", key: "ageDays", width: 16 },
+                          { header: "Nhóm tuổi nợ", key: "bucket", width: 16 },
+                        ],
+                        "tuoi-no-phai-tra",
+                      )
+                    }
+                  >
+                    <Icon name="download" size={15} />
+                    Xuất phải trả
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 border-b sm:grid-cols-2">
+                  {aging.buckets.map((bucket, idx) => (
+                    <div
+                      key={`payable-${bucket.range}`}
+                      className="flex items-center justify-between gap-3 border-b px-4 py-2.5 sm:odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
+                    >
+                      <div>
+                        <p className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}>
+                          {bucket.range}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {bucket.supplierCount} nhà cung cấp
+                        </p>
+                      </div>
+                      <span className="text-sm font-semibold tabular-nums">
+                        {formatCurrency(bucket.supplierAmount)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="p-3">
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Nhà cung cấp cần trả
+                  </p>
+                  <DataTable
+                    columns={debtorColumns}
+                    data={payableDebtors}
+                    loading={false}
+                    total={payableDebtors.length}
+                    pageIndex={0}
+                    pageSize={20}
+                    pageCount={1}
+                    onPageChange={() => {}}
+                    onPageSizeChange={() => {}}
+                    getRowId={(row) => `supplier-${row.id}`}
+                  />
+                </div>
+              </section>
+            </div>
           )}
         </TabsContent>
       </Tabs>

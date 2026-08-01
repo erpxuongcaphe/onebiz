@@ -124,4 +124,22 @@ describe("resolveAppliedTier — POS lookup tier", () => {
     expect(result!.priceMap.get("prod-1")).toBe(45000);
     expect(result!.priceMap.get("prod-2")).toBe(55000);
   });
+  it("chọn đúng giá theo ngưỡng số lượng và biến thể", async () => {
+    const { resolveTierPrice } = await import(
+      "@/lib/services/supabase/pricing"
+    );
+    const rules = [
+      { variantId: null, minQty: 1, price: 100_000, createdAt: "2026-01-01" },
+      { variantId: null, minQty: 10, price: 90_000, createdAt: "2026-01-02" },
+      { variantId: "variant-1", minQty: 1, price: 120_000, createdAt: "2026-01-01" },
+      { variantId: "variant-1", minQty: 5, price: 110_000, createdAt: "2026-01-02" },
+    ];
+
+    expect(resolveTierPrice(rules, 9, null)).toBe(100_000);
+    expect(resolveTierPrice(rules, 10, null)).toBe(90_000);
+    expect(resolveTierPrice(rules, 4, "variant-1")).toBe(120_000);
+    expect(resolveTierPrice(rules, 5, "variant-1")).toBe(110_000);
+    expect(resolveTierPrice(rules, 99, "variant-khac")).toBeNull();
+  });
+
 });

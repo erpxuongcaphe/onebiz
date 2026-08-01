@@ -21,7 +21,6 @@ import {
 import { useToast } from "@/lib/contexts";
 import {
   createCashTransaction,
-  nextEntityCode,
   getCustomers,
   getSuppliers,
   getOpenInvoicesByCustomer,
@@ -181,6 +180,10 @@ export function CreateCashTransactionDialog({
     const newErrors: Record<string, string> = {};
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0)
       newErrors.amount = "Số tiền không hợp lệ";
+    if (category === "customer_payment" || category === "supplier_payment") {
+      if (!selectedPartyId) newErrors.reference = "Cần chọn đối tượng công nợ";
+      else if (!selectedRefId) newErrors.reference = "Cần chọn chứng từ còn nợ";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -216,20 +219,8 @@ export function CreateCashTransactionDialog({
           note: note || undefined,
         });
       } else {
-        // Mã trống → tự sinh nối tiếp qua cửa chống trùng (00155). Lỗi RPC
-        // (offline/migration chưa chạy) → fallback epoch, không trùng dải số.
-        let finalCode = code.trim();
-        if (!finalCode) {
-          try {
-            finalCode = await nextEntityCode(
-              type === "receipt" ? "cash_receipt" : "cash_payment",
-            );
-          } catch {
-            finalCode = `${type === "receipt" ? "PT" : "PC"}${Date.now()}`;
-          }
-        }
-        await createCashTransaction({
-          code: finalCode,
+        const created = await createCashTransaction({
+          code: code.trim() || undefined,
           type,
           category: category || "other",
           amount: Number(amount),
@@ -237,7 +228,7 @@ export function CreateCashTransactionDialog({
           paymentMethod: method as "cash" | "transfer" | "card",
           note: note || undefined,
         });
-        setCode(finalCode); // toast dưới hiện đúng mã đã lưu
+        setCode(created.code);
       }
       onOpenChange(false);
       toast({
@@ -437,9 +428,11 @@ export function CreateCashTransactionDialog({
                       ))}
                     </SelectContent>
                   </Select>
+                  {errors.reference && (
+                    <p className="text-xs text-destructive">{errors.reference}</p>
+                  )}
                   <p className="text-xs text-muted-foreground">
-                    Chọn chứng từ để hệ thống tự cập nhật công nợ + ghi audit log.
-                    Không chọn → tạo phiếu thu/chi thường (không update debt).
+                    Bắt buộc chọn chứng từ để tiền và công nợ luôn được cập nhật cùng nhau.
                   </p>
                 </div>
               )}

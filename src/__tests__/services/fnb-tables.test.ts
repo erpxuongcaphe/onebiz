@@ -34,10 +34,12 @@ function createChain(resolvedValue?: unknown) {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let mockFromHandler: (table: string) => any;
+const mockRpc = vi.fn();
 
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
+    rpc: mockRpc,
   }),
   getCurrentTenantId: () => Promise.resolve("t1"),
   handleError: (error: { message: string }, ctx: string) => {
@@ -74,8 +76,13 @@ const TABLE_ROW = {
 };
 
 beforeEach(() => {
+  vi.clearAllMocks();
   lastUpdateFilter = {};
   lastInsertData = null;
+  mockRpc.mockResolvedValue({
+    data: { table_id: "t-1", status: "available" },
+    error: null,
+  });
   mockFromHandler = () =>
     createChain({ data: TABLE_ROW, error: null });
 });
@@ -181,8 +188,10 @@ describe("markTableAvailable", () => {
     mockFromHandler = () => createChain({ data: null, error: null });
 
     await markTableAvailable("t-1");
-    // eq called with "status", "cleaning"
-    expect(lastUpdateFilter.status).toBe("cleaning");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "mark_fnb_table_available_atomic",
+      { p_table_id: "t-1" },
+    );
   });
 });
 
@@ -237,6 +246,9 @@ describe("table lifecycle integration", () => {
     // Step 3: Mark available
     mockFromHandler = () => createChain({ data: null, error: null });
     await markTableAvailable("t-1");
-    expect(lastUpdateFilter.status).toBe("cleaning");
+    expect(mockRpc).toHaveBeenCalledWith(
+      "mark_fnb_table_available_atomic",
+      { p_table_id: "t-1" },
+    );
   });
 });

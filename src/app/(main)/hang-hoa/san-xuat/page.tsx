@@ -355,6 +355,15 @@ export default function SanXuatPage() {
     _fromColumnId: string,
     toColumnId: string
   ) => {
+    if (toColumnId === "completed") {
+      const order = data.find((item) => item.id === itemId);
+      if (order) {
+        setCompletingOrder(order);
+        setCompleteOpen(true);
+      }
+      return;
+    }
+
     try {
       await updateProductionStatus(itemId, toColumnId);
       toast({
@@ -662,9 +671,8 @@ export default function SanXuatPage() {
           if (!cancellingItem) return;
           setCancelLoading(true);
           try {
-            // SX-1: dùng cancelProductionOrder gọi RPC `revert_production_materials`
-            // để atomic đảo NVL nếu đã consume. Nếu RPC chưa migrate (00047),
-            // service tự fall back updateStatus với cảnh báo console.
+            // Hủy qua RPC nguyên tử: hoàn NVL, cập nhật trạng thái và audit
+            // trong cùng một giao dịch. RPC lỗi thì toàn bộ thao tác dừng.
             const result = await cancelProductionOrder(
               cancellingItem.id,
               "Hủy từ UI quản lý sản xuất",

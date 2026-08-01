@@ -28,6 +28,7 @@ export const OTP_ACTION_CODES = {
   FNB_CANCEL_UNPAID_BILL: "fnb.cancel_unpaid_bill",
   FNB_CANCEL_UNPAID_ITEM: "fnb.cancel_unpaid_item",
   FNB_DISCOUNT_OVERRIDE: "fnb.discount_override",
+  POS_RETAIL_DISCOUNT_OVERRIDE: "pos_retail.discount_override",
   FNB_VOID_PAID_BILL: "fnb.void_paid_bill",
   FNB_EDIT_SENT_ORDER: "fnb.edit_sent_order",
   // A.7: tách rõ entity type
@@ -46,6 +47,7 @@ export const OTP_ACTION_LABELS: Record<OtpActionCode, string> = {
   [OTP_ACTION_CODES.FNB_CANCEL_UNPAID_BILL]: "Xoá bill chưa thanh toán",
   [OTP_ACTION_CODES.FNB_CANCEL_UNPAID_ITEM]: "Xoá món chưa thanh toán",
   [OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE]: "Giảm giá ngoài phạm vi",
+  [OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE]: "Duyệt giảm giá POS bán lẻ",
   [OTP_ACTION_CODES.FNB_VOID_PAID_BILL]: "Huỷ bill đã thanh toán",
   [OTP_ACTION_CODES.FNB_EDIT_SENT_ORDER]: "Sửa món đã gửi bếp",
   [OTP_ACTION_CODES.CRM_DELETE_CUSTOMER]: "Xoá khách hàng",
