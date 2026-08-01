@@ -361,17 +361,12 @@ export async function createInternalSale(
 
 export async function cancelInternalSale(id: string, reason?: string): Promise<void> {
   const supabase = getClient();
-
-  const { data: sale, error } = await supabase
-    .from("internal_sales")
-    .update({ status: "cancelled", note: reason ?? "Huỷ đơn nội bộ" })
-    .eq("id", id)
-    .in("status", ["draft", "confirmed"])
-    .select("id")
-    .maybeSingle();
-
-  if (error) handleError(error, "cancelInternalSale");
-  if (!sale) throw new Error("Không thể huỷ — đơn đã hoàn thành hoặc đã huỷ");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase.rpc as any)("cancel_internal_sale_atomic", {
+    p_internal_sale_id: id,
+    p_reason: reason ?? "Hủy đơn bán nội bộ",
+  });
+  if (error) handleError(error, "cancelInternalSale.atomic_rpc");
 }
 
 // ────────────────────────────────────────────

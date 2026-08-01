@@ -20,7 +20,7 @@ export const debtOpeningExcelSchema: ExcelSchema<DebtOpeningImportRow> = {
   name: "Công nợ đầu kỳ",
   fileName: "Cong-no-dau-ky",
   description:
-    "Nhập công nợ đầu kỳ cho khách hàng / nhà cung cấp. Dấu dương = công nợ phải thu (KH nợ) hoặc phải trả (mình nợ NCC); số âm = ngược lại (tạm ứng). Chỉ dùng 1 lần khi onboard.",
+    "Nhập công nợ đầu kỳ cho khách hàng / nhà cung cấp tại chi nhánh đang chọn. Dấu dương = công nợ phải thu (KH nợ) hoặc phải trả (mình nợ NCC); số âm = ngược lại (tạm ứng). Chỉ dùng khi khởi tạo số dư.",
   columns: [
     {
       key: "partyType",

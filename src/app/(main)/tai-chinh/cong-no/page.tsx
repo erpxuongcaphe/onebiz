@@ -829,7 +829,7 @@ export default function CongNoPage() {
           toast({
             title: "Nhập công nợ đầu kỳ hoàn tất",
             description:
-              "Số dư nợ đầu kỳ đã được cập nhật cho các đối tượng KH/NCC.",
+              "Số dư đầu kỳ đã được cập nhật cho khách hàng/nhà cung cấp tại chi nhánh đang chọn.",
             variant: "success",
           });
         }}

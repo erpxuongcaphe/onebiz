@@ -16,7 +16,6 @@ import type {
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 import { getClient, getCurrentTenantId, getPaginationRange, handleError } from "./base";
-import { recordAuditLog } from "./audit";
 import { updatePurchaseOrderStatus } from "./purchase-orders";
 
 type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
@@ -343,6 +342,7 @@ export function getInputInvoiceStatuses() {
     { value: "all", label: "Tất cả" },
     { value: "recorded", label: "Đã ghi sổ" },
     { value: "unrecorded", label: "Chưa ghi sổ" },
+    { value: "cancelled", label: "Đã hủy" },
   ];
 }
 
@@ -385,111 +385,21 @@ export async function getInputInvoiceItems(invoiceId: string): Promise<PrintItem
 }
 
 /**
- * Xoá hóa đơn đầu vào (LEGACY — Stage 5b CEO 06/05/2026).
- *
- * Quy ước mới: KHÔNG xóa cứng nữa. Caller nên dùng `cancelInputInvoice()`
- * để giữ history. Hàm này chỉ giữ làm fallback khi caller cần xóa thật
- * (vd cleanup test data) — đã thêm audit log snapshot trước khi delete
- * để nếu cần truy lại vẫn có dấu vết.
- *
- * @deprecated Dùng `cancelInputInvoice` thay thế.
- */
-export async function deleteInputInvoice(id: string): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Snapshot trước khi xóa cứng — đảm bảo có dấu vết audit log
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-  let oldRow: Record<string, unknown> | null = null;
-  try {
-    const res = await sb
-      .from("input_invoices")
-      .select("code, supplier_id, supplier_name, total_amount, status")
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
-      .maybeSingle();
-    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
-  } catch {
-    /* snapshot optional */
-  }
-
-  const { error } = await sb
-    .from("input_invoices")
-    .delete()
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "deleteInputInvoice");
-
-  await recordAuditLog({
-    entityType: "input_invoice",
-    entityId: id,
-    action: "delete",
-    oldData: oldRow,
-    newData: null,
-  });
-}
-
-/**
- * Hủy hóa đơn đầu vào — Stage 5b refactor (CEO 06/05/2026).
- *
- * Schema input_invoices.status CHECK chỉ accept ('recorded', 'unrecorded')
- * → không thể set 'cancelled' nếu không migrate trước. Tạm thời cancel ở đây
- * = revert status về 'unrecorded' + ghi audit log với action='cancel' +
- * lý do reason. UI list page filter status='unrecorded' sẽ thấy phiếu này
- * nhưng badge "Đã hủy" hiển thị từ audit_log.action='cancel' (thay vì status).
- *
- * Khi nào cần thật sự thêm status='cancelled' → cần migration update CHECK
- * constraint (defer KHO-2 vì impact rộng).
- *
- * @param id — input invoice id
- * @param reason — lý do hủy
+ * Hủy hóa đơn đầu vào trong một giao dịch DB. RPC tự kiểm tra người dùng,
+ * chi nhánh, quyền, trạng thái và ghi audit; không thay đổi tồn kho.
  */
 export async function cancelInputInvoice(
   id: string,
   reason: string,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  // Snapshot
-  const { data: existing, error: fetchErr } = await sb
-    .from("input_invoices")
-    .select("code, status, supplier_id, supplier_name, total_amount")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .single();
-  if (fetchErr) handleError(fetchErr, "cancelInputInvoice.fetch");
-  if (!existing) throw new Error("Không tìm thấy hóa đơn đầu vào");
-
-  // Nếu đang là recorded → revert về unrecorded để mark "đã hủy ghi sổ"
-  if (existing.status === "recorded") {
-    const { error: updErr } = await sb
-      .from("input_invoices")
-      .update({ status: "unrecorded", note: `[ĐÃ HỦY] ${reason}` })
-      .eq("tenant_id", tenantId)
-      .eq("id", id);
-    if (updErr) handleError(updErr, "cancelInputInvoice.update");
-  } else {
-    // Đang unrecorded → chỉ append note marker
-    const { error: updErr } = await sb
-      .from("input_invoices")
-      .update({ note: `[ĐÃ HỦY] ${reason}` })
-      .eq("tenant_id", tenantId)
-      .eq("id", id);
-    if (updErr) handleError(updErr, "cancelInputInvoice.update");
-  }
-
-  await recordAuditLog({
-    entityType: "input_invoice",
-    entityId: id,
-    action: "cancel",
-    oldData: existing,
-    newData: { status: existing.status, note: `[ĐÃ HỦY] ${reason}` },
+  const { error } = await (supabase.rpc as any)("set_input_invoice_state_atomic", {
+    p_invoice_id: id,
+    p_action: "cancel",
+    p_reason: reason,
   });
+  if (error) handleError(error, "cancelInputInvoice.atomic_rpc");
 }
 
 /**
@@ -498,35 +408,13 @@ export async function cancelInputInvoice(
  */
 export async function recordInputInvoice(id: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  // Kiểm tra trạng thái hiện tại
-  const { data: existing, error: fetchErr } = await sb
-    .from("input_invoices")
-    .select("status")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "recordInputInvoice.fetch");
-  if (!existing) throw new Error("Không tìm thấy hóa đơn đầu vào");
-
-  if (existing.status !== "unrecorded") {
-    throw new Error(
-      `Không thể ghi sổ hóa đơn ở trạng thái "${existing.status}". Chỉ cho phép ghi sổ hóa đơn chưa ghi sổ.`
-    );
-  }
-
-  const { error } = await sb
-    .from("input_invoices")
-    .update({ status: "recorded" })
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) handleError(error, "recordInputInvoice.update");
+  const { error } = await (supabase.rpc as any)("set_input_invoice_state_atomic", {
+    p_invoice_id: id,
+    p_action: "record",
+    p_reason: null,
+  });
+  if (error) handleError(error, "recordInputInvoice.atomic_rpc");
 }
 
 // ==================== Complete Supplier Return (Trả hàng nhập hoàn chỉnh) ====================
@@ -658,6 +546,7 @@ function mapPurchaseReturn(row: any): PurchaseReturn {
 const inputInvoiceStatusNameMap: Record<string, string> = {
   recorded: "Đã ghi sổ",
   unrecorded: "Chưa ghi sổ",
+  cancelled: "Đã hủy",
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -671,7 +560,9 @@ function mapInputInvoice(row: any): InputInvoice {
     supplierName: row.supplier_name ?? "---",
     totalAmount: row.total_amount ?? row.total ?? 0,
     taxAmount: row.tax_amount ?? 0,
-    status: (row.status === "recorded" ? "recorded" : "unrecorded") as InputInvoice["status"],
+    status: (["recorded", "unrecorded", "cancelled"].includes(row.status)
+      ? row.status
+      : "unrecorded") as InputInvoice["status"],
     statusName: inputInvoiceStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "---",
     createdByName: profile?.full_name ?? undefined,

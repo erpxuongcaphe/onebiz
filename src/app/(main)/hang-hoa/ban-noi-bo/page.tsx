@@ -106,7 +106,7 @@ const STATUS_META: Record<
     badgeClass: "bg-status-success/10 text-status-success border-status-success/25",
   },
   cancelled: {
-    label: "Đã huỷ",
+    label: "Đã hủy",
     variant: "outline",
     badgeClass: "bg-destructive/10 text-destructive border-destructive/25",
   },
@@ -256,7 +256,7 @@ function InternalSaleDetail({
       open
       onClose={onClose}
       onDelete={canCancel ? onCancel : undefined}
-      deleteLabel="Huỷ đơn"
+      deleteLabel="Hủy đơn"
     >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
@@ -437,14 +437,14 @@ export default function InternalSalePage() {
     try {
       await cancelInternalSale(cancellingItem.id);
       toast({
-        title: "Đã huỷ đơn nội bộ",
-        description: `Đơn ${cancellingItem.code} đã được huỷ thành công.`,
+        title: "Đã hủy đơn nội bộ",
+        description: `Đơn ${cancellingItem.code} đã được hủy thành công.`,
         variant: "success",
       });
       await fetchData();
     } catch (err) {
       toast({
-        title: "Lỗi huỷ đơn",
+        title: "Lỗi hủy đơn",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
@@ -617,9 +617,9 @@ export default function InternalSalePage() {
         onOpenChange={(open) => {
           if (!open && !cancelLoading) setCancellingItem(null);
         }}
-        title="Huỷ đơn nội bộ"
-        description={`Bạn có chắc muốn huỷ đơn ${cancellingItem?.code ?? ""}? Thao tác này không thể hoàn tác — stock đã trừ sẽ được hoàn trả về kho bên bán.`}
-        confirmLabel="Huỷ đơn"
+        title="Hủy đơn nội bộ"
+        description={`Bạn có chắc muốn hủy đơn ${cancellingItem?.code ?? ""}? Chỉ đơn nháp hoặc đã xác nhận mới được hủy; thao tác này không làm thay đổi tồn kho.`}
+        confirmLabel="Hủy đơn"
         cancelLabel="Đóng"
         variant="destructive"
         loading={cancelLoading}

@@ -390,8 +390,8 @@ export async function bulkImportCashTransactions(
 // ---------------------------------------------------------------------------
 // Debt opening balance
 //
-// Ghi vào cột `debt` của customers/suppliers (cột hiện có).
-// Kèm audit_log để trace lại thay đổi.
+// Mỗi dòng được ghi qua RPC atomic vào sổ số dư đầu kỳ theo chi nhánh.
+// RPC tự kiểm tra quyền, phạm vi tenant/chi nhánh, cập nhật tổng nợ và audit.
 // ---------------------------------------------------------------------------
 
 export async function bulkImportDebtOpening(
@@ -404,68 +404,37 @@ export async function bulkImportDebtOpening(
     supabase.from("customers").select("id, code").eq("tenant_id", ctx.tenantId),
     supabase.from("suppliers").select("id, code").eq("tenant_id", ctx.tenantId),
   ]);
+  if (custRes.error) throw new Error(custRes.error.message);
+  if (suppRes.error) throw new Error(suppRes.error.message);
+
   const custMap = new Map<string, string>();
   for (const c of custRes.data ?? []) custMap.set(c.code, c.id);
   const suppMap = new Map<string, string>();
   for (const s of suppRes.data ?? []) suppMap.set(s.code, s.id);
 
   return runBulk(rows, async (row) => {
-    if (row.partyType === "customer") {
-      const id = custMap.get(row.partyCode);
-      if (!id) throw new Error(`Mã KH "${row.partyCode}" chưa tồn tại`);
-      // CEO 06/06/2026 — Plan A research note:
-      // Đây là TRƯỜNG HỢP RIÊNG cho opening balance (số dư đầu kỳ).
-      // Trigger 00130 chỉ tính từ invoices → KHÔNG bao gồm opening balance.
-      // Vì vậy write customers.debt trực tiếp ở đây OK với điều kiện:
-      //   1. KH chưa có invoice nào (mới setup tenant)
-      //   2. CEO không bán hàng cho KH này sau đó (vì trigger sẽ reset)
-      // TODO khi cần: tạo bảng customer_opening_balances + đổi formula
-      // trigger 00130 = SUM(invoices.debt) + opening_debt. Hiện chưa làm
-      // vì chuỗi cà phê 4 quán mới setup, chưa có data lịch sử cần import.
-      const { error } = await supabase
-        .from("customers")
-        .update({ debt: row.openingDebt })
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", id);
-      if (error) throw new Error(error.message);
-
-      await supabase.from("audit_log").insert({
-        tenant_id: ctx.tenantId,
-        user_id: ctx.userId,
-        action: "opening_debt_import",
-        entity_type: "customer",
-        entity_id: id,
-        new_data: {
-          partyCode: row.partyCode,
-          openingDate: row.openingDate.toISOString(),
-          openingDebt: row.openingDebt,
-          note: row.note ?? null,
-        },
-      });
-    } else {
-      const id = suppMap.get(row.partyCode);
-      if (!id) throw new Error(`Mã NCC "${row.partyCode}" chưa tồn tại`);
-      const { error } = await supabase
-        .from("suppliers")
-        .update({ debt: row.openingDebt })
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", id);
-      if (error) throw new Error(error.message);
-
-      await supabase.from("audit_log").insert({
-        tenant_id: ctx.tenantId,
-        user_id: ctx.userId,
-        action: "opening_debt_import",
-        entity_type: "supplier",
-        entity_id: id,
-        new_data: {
-          partyCode: row.partyCode,
-          openingDate: row.openingDate.toISOString(),
-          openingDebt: row.openingDebt,
-          note: row.note ?? null,
-        },
-      });
+    const partyId =
+      row.partyType === "customer"
+        ? custMap.get(row.partyCode)
+        : suppMap.get(row.partyCode);
+    if (!partyId) {
+      const partyLabel = row.partyType === "customer" ? "KH" : "NCC";
+      throw new Error(`Mã ${partyLabel} "${row.partyCode}" chưa tồn tại`);
     }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase.rpc as any)(
+      "upsert_debt_opening_balance_atomic",
+      {
+        p_party_type: row.partyType,
+        p_party_id: partyId,
+        p_branch_id: ctx.branchId,
+        p_amount: row.openingDebt,
+        p_opening_date: formatDateInputValue(row.openingDate),
+        p_note: row.note ?? null,
+      },
+    );
+    if (error) throw new Error(error.message);
   });
 }
 

@@ -104,7 +104,7 @@ export interface InputInvoice {
   supplierName: string;
   totalAmount: number;
   taxAmount: number;
-  status: "recorded" | "unrecorded";
+  status: "recorded" | "unrecorded" | "cancelled";
   statusName: string;
   createdBy: string;
   createdByName?: string;

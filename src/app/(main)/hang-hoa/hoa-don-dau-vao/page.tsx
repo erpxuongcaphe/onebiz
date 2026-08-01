@@ -59,10 +59,11 @@ import { Icon } from "@/components/ui/icon";
 // === Status config ===
 const statusMap: Record<
   InputInvoice["status"],
-  { label: string; variant: "default" | "secondary" }
+  { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
   recorded: { label: "Đã ghi sổ", variant: "default" },
   unrecorded: { label: "Chưa ghi sổ", variant: "secondary" },
+  cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
 const statusOptions = getInputInvoiceStatuses();
@@ -345,9 +346,9 @@ export default function HoaDonDauVaoPage() {
             exportToCsv(data, cols, "hoa-don-dau-vao");
           },
         }}
-        actions={[
+        actions={txPerms.canEdit ? [
           { label: "Tạo mới", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
-        ]}
+        ] : []}
       />
 
       <CreateInputInvoiceDialog
@@ -379,7 +380,10 @@ export default function HoaDonDauVaoPage() {
           icon={<Icon name="payments" size={16} />}
           label="Tổng tiền hàng"
           value={formatCurrency(
-            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
+            data.reduce(
+              (sum, r) => sum + (r.status === "cancelled" ? 0 : (r.totalAmount ?? 0)),
+              0,
+            ),
           )}
         />
       </div>
@@ -416,7 +420,11 @@ export default function HoaDonDauVaoPage() {
           <InputInvoiceDetail
             item={item}
             onClose={onClose}
-            onDelete={() => setDeletingInvoice(item)}
+            onDelete={
+              txPerms.canCancel && item.status !== "cancelled"
+                ? () => setDeletingInvoice(item)
+                : undefined
+            }
           />
         )}
         rowActions={(row) =>
@@ -439,7 +447,7 @@ export default function HoaDonDauVaoPage() {
             },
             // Workflow: "Ghi nhận" cho HĐ chưa ghi sổ
             workflowActions:
-              row.status === "unrecorded"
+              row.status === "unrecorded" && txPerms.canCancel
                 ? [
                     {
                       label: "Ghi nhận",
@@ -450,10 +458,13 @@ export default function HoaDonDauVaoPage() {
                 : [],
             onAuditLog: () => setAuditDialogTarget(row),
             // Phase 6.3: cancel = soft-delete + audit log + lý do bắt buộc.
-            onCancel: () => {
-              setDeletingInvoice(row);
-              setCancelReason("");
-            },
+            onCancel:
+              row.status !== "cancelled"
+                ? () => {
+                    setDeletingInvoice(row);
+                    setCancelReason("");
+                  }
+                : undefined,
           })
         }
       />

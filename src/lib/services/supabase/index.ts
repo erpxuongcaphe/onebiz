@@ -5,14 +5,6 @@ export type { CustomerGroupFull } from "./customers";
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
 export { duplicateInvoice } from "./orders";
 export { duplicatePurchaseOrder, reopenPurchaseOrderForEdit, suaGiaPhieuNhap } from "./purchase-orders";
-// Stage 8 (CEO 06/05/2026): duplicate services 5 kind warehouse + production
-export {
-  duplicateInventoryCheck,
-  duplicateStockTransfer,
-  duplicateDisposalExport,
-  duplicateInternalSale,
-  duplicateProductionOrder,
-} from "./duplicate-services";
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export {
   getInvoices,
@@ -166,7 +158,7 @@ export type {
   VatByRate,
 } from "./finance-marketing-reports";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems, getInputInvoices, getInputInvoiceStatuses, getInputInvoiceItems, deleteInputInvoice, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems, getInputInvoices, getInputInvoiceStatuses, getInputInvoiceItems, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory, getOpenInvoicesByCustomer, getOpenPurchasesBySupplier } from "./payments";
 export type { RecordPaymentInput, RecordPaymentResult, OpenInvoiceLine, OpenPurchaseLine } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";
@@ -298,7 +290,7 @@ export {
   cancelProductionOrder,
   updateProductionStatus, canTransitionProductionStatus,
   checkMaterialsAvailability,
-  getProductLots, getAllProductLots, allocateLotsFIFO, getExpiringLots, createPurchaseLot,
+  getProductLots, getAllProductLots, getExpiringLots,
 } from "./production";
 export type { MaterialCheckInput, MaterialCheckResult } from "./production";
 
