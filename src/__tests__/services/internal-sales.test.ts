@@ -20,6 +20,8 @@ let codeCounter = 0;
 let stockOutRpcCalls: Array<{ productId: string; quantity: number; branchId: string }> = [];
 let internalSaleRpcCalls: Array<Record<string, unknown>> = [];
 let internalSaleRpcError: { message: string; code?: string } | null = null;
+let cancelRpcCalls: Array<Record<string, unknown>> = [];
+let cancelRpcError: { message: string; code?: string } | null = null;
 
 // === Chain mock builder ===
 
@@ -80,6 +82,20 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         });
       }
+      if (funcName === "cancel_internal_sale_atomic") {
+        cancelRpcCalls.push(params ?? {});
+        if (cancelRpcError) {
+          return Promise.resolve({ data: null, error: cancelRpcError });
+        }
+        return Promise.resolve({
+          data: {
+            id: params?.p_internal_sale_id,
+            status: "cancelled",
+            idempotent: true,
+          },
+          error: null,
+        });
+      }
       if (funcName === "next_code") {
         codeCounter++;
         return Promise.resolve({ data: `CODE-${codeCounter}`, error: null });
@@ -132,6 +148,8 @@ beforeEach(() => {
   vi.clearAllMocks();
 
   // Setup table handlers
+  cancelRpcCalls = [];
+  cancelRpcError = null;
   tableHandlers = {
     customers: (() => {
       const chain = createChain({ data: mockInternalCustomer, error: null });
@@ -309,12 +327,29 @@ describe("getInternalSales", () => {
 });
 
 describe("cancelInternalSale", () => {
-  it("rejects cancel of completed/cancelled sale", async () => {
-    tableHandlers.internal_sales = () =>
-      createChain({ data: null, error: null });
+  it("delegates state validation to the atomic RPC and accepts idempotent cancel", async () => {
+    await expect(
+      cancelInternalSale("is-001", "Yêu cầu hủy lặp lại"),
+    ).resolves.toBeUndefined();
 
-    await expect(cancelInternalSale("is-001")).rejects.toThrow(
-      "Không thể huỷ",
+    expect(cancelRpcCalls).toEqual([
+      {
+        p_internal_sale_id: "is-001",
+        p_reason: "Yêu cầu hủy lặp lại",
+      },
+    ]);
+  });
+
+  it("surfaces the server rejection when a completed sale cannot be cancelled", async () => {
+    cancelRpcError = {
+      message: "INTERNAL_SALE_NOT_CANCELLABLE",
+      code: "22023",
+    };
+
+    await expect(
+      cancelInternalSale("is-001", "Không còn nhu cầu"),
+    ).rejects.toThrow(
+      "[cancelInternalSale.atomic_rpc] INTERNAL_SALE_NOT_CANCELLABLE",
     );
   });
 });
