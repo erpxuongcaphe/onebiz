@@ -125,8 +125,9 @@ function StockIntegrityPage() {
               #3
             </span>
             <div>
-              <strong>branch_stock ≈ SUM(product_lots)</strong> — với SP có lot
-              tracking (NVL), tổng số lượng các lô bằng tồn chi nhánh.
+              <strong>Tồn chi nhánh = tổng tồn theo lô</strong> — với hàng có
+              theo dõi lô, tổng lô còn hàng (kể cả lô hết hạn chưa xử lý) phải
+              bằng tồn tại chi nhánh.
             </div>
           </div>
 
@@ -325,11 +326,11 @@ function StockIntegrityPage() {
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">
-                  Invariant #3: branch_stock ≉ SUM(product_lots)
+                  Kiểm tra #3: Tồn chi nhánh lệch tổng tồn theo lô
                 </CardTitle>
                 <CardDescription>
-                  {result.invariant3.violationsCount} SP có tồn lệch với tổng lô
-                  FIFO (chỉ check SP có lot active)
+                  {result.invariant3.violationsCount} sản phẩm có tồn lệch với
+                  tổng lô còn hàng, gồm cả lô hết hạn chưa xử lý
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -341,8 +342,8 @@ function StockIntegrityPage() {
                         <th className="p-2">Mã SP</th>
                         <th className="p-2">Tên</th>
                         <th className="p-2 text-right">Tồn CN</th>
-                        <th className="p-2 text-right">SUM(lots)</th>
-                        <th className="p-2 text-right">Drift</th>
+                        <th className="p-2 text-right">Tổng theo lô</th>
+                        <th className="p-2 text-right">Chênh lệch</th>
                       </tr>
                     </thead>
                     <tbody>

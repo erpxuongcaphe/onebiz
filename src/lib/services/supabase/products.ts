@@ -1303,7 +1303,9 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       cost_price: product.costPrice ?? 0,
       category_id: product.categoryId || null,
       unit: product.unit ?? "Cái",
-      stock: product.stock ?? 0,
+      // Tồn chỉ phát sinh qua nghiệp vụ kho có sổ cái và chi nhánh.
+      // Tạo mã hàng mới luôn bắt đầu từ 0.
+      stock: 0,
       min_stock: product.minStock ?? 0,
       max_stock: product.maxStock ?? 1000,
       vat_rate: product.vatRate ?? 0,
@@ -1351,7 +1353,6 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   if (updates.costPrice !== undefined) payload.cost_price = updates.costPrice;
   if (updates.categoryId !== undefined) payload.category_id = updates.categoryId || null;
   if (updates.unit !== undefined) payload.unit = updates.unit;
-  if (updates.stock !== undefined) payload.stock = updates.stock;
   if (updates.minStock !== undefined) payload.min_stock = updates.minStock;
   if (updates.maxStock !== undefined) payload.max_stock = updates.maxStock;
   if (updates.vatRate !== undefined) payload.vat_rate = updates.vatRate;
