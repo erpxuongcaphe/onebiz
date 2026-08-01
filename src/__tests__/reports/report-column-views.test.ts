@@ -61,9 +61,14 @@ describe("report column views", () => {
         source.match(/<ReportDataTable\b[\s\S]*?\/>/g) ?? [];
       const tableFrames = source.match(/<ReportTableFrame\b[^>]*>/g) ?? [];
       for (const table of [...dataTables, ...tableFrames]) {
-        const match = table.match(/tablePreferenceKey="([^"]+)"/);
-        expect(match, path).not.toBeNull();
-        keys.push(match![1]);
+        const staticMatch = table.match(/tablePreferenceKey="([^"]+)"/);
+        const expressionMatch = table.match(/tablePreferenceKey=\{([^}]+)\}/);
+        const key = staticMatch?.[1] ??
+          (expressionMatch
+            ? path + ":" + expressionMatch[1].replace(/\s+/g, " ").trim()
+            : null);
+        expect(key, path).not.toBeNull();
+        keys.push(key!);
       }
 
       const nativeTableCount = source.match(/<table\b/g)?.length ?? 0;

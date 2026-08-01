@@ -35,7 +35,7 @@ import { KpiCard } from "../_components/kpi-card";
 
 export default function VatReportPage() {
   const { toast } = useToast();
-  const { activeBranchId, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { preset, range, setPreset, setCustomRange } = useReportState({
     forceTable: true,
   });
@@ -137,6 +137,7 @@ export default function VatReportPage() {
         description: "Tổng hợp VAT input + output theo kỳ — phục vụ khai thuế GTGT",
         range,
         tenantName: "OneBiz",
+        branchName: branchLabel,
         generatedAt: new Date(),
         disclaimer:
           "VAT output = invoices.tax_amount (status=completed). VAT input = purchase_orders.tax_amount (status=completed). Phải nộp = output − input.",
@@ -249,7 +250,7 @@ export default function VatReportPage() {
         variant: "error",
       });
     }
-  }, [report, outputDetail, inputDetail, taxPayable, range, toast]);
+  }, [branchLabel, report, outputDetail, inputDetail, taxPayable, range, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">

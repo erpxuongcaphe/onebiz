@@ -46,6 +46,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "fnb_cancel_unpaid_order_atomic") {
         return { data: { success: true }, error: null };
       }
+      if (fn === "fnb_send_to_kitchen_atomic_v2") {
+        return { data: { kitchen_order_id: "ko-1", order_number: "KB00001" }, error: null };
+      }
       return { data: null, error: null };
     }),
   }),
@@ -304,17 +307,26 @@ describe("addItemsToOrder", () => {
       },
     ]);
 
-    const itemInserts = insertCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.kitchen_order_id === "ko-1"
+    const rpcCall = rpcCalls.find(
+      (call) => call.fn === "fnb_send_to_kitchen_atomic_v2",
     );
-    expect(itemInserts.length).toBeGreaterThanOrEqual(1);
-    expect((itemInserts[0].data as Record<string, unknown>).product_name).toBe("Cold Brew");
+    expect(rpcCall).toBeDefined();
+    const params = rpcCall?.args as Record<string, unknown>;
+    expect(params.p_existing_order_id).toBe("ko-1");
+    expect(params.p_items).toEqual([
+      {
+        productId: "p3",
+        productName: "Cold Brew",
+        quantity: 1,
+        unitPrice: 55000,
+      },
+    ]);
   });
 });
 
 describe("updateKitchenOrderStatus", () => {
-  it("updates order status without throwing", async () => {
-    await updateKitchenOrderStatus("ko-1", "preparing");
+  it("marks a ready order as served", async () => {
+    await updateKitchenOrderStatus("ko-1", "served");
     // No throw = success
   });
 });

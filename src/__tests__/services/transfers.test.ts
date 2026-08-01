@@ -75,12 +75,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
-      if (fn === "next_code") {
-        rpcCodeCounter++;
-        return { data: `CK${String(rpcCodeCounter).padStart(5, "0")}`, error: null };
-      }
-      if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
-        return { data: null, error: null };
+      if (fn === "create_stock_transfer_atomic") {
+        if (tableMocks.create_transfer_error) {
+          return { data: null, error: tableMocks.create_transfer_error };
+        }
+        return {
+          data: { transfer_id: "t1", code: "CK00001" },
+          error: null,
+        };
       }
       if (fn === "complete_stock_transfer_atomic") {
         if (!tableMocks.stock_transfers?.data) {
@@ -90,6 +92,15 @@ vi.mock("@/lib/services/supabase/base", () => ({
           };
         }
         return { data: { ok: true }, error: null };
+      }
+      if (fn === "set_stock_transfer_state_atomic") {
+        if (!tableMocks.stock_transfers?.data) {
+          return {
+            data: null,
+            error: { message: "Phiếu chuyển kho không còn được phép hủy" },
+          };
+        }
+        return { data: { transfer_id: "t1", status: "cancelled" }, error: null };
       }
       return { data: null, error: null };
     }),
@@ -190,22 +201,19 @@ describe("createStockTransfer", () => {
     expect(result.id).toBe("t1");
     expect(result.code).toBe("CK00001");
 
-    // Should generate code via next_code RPC
-    const codeRpcs = rpcCalls.filter((c) => c.fn === "next_code");
-    expect(codeRpcs.length).toBe(1);
-
-    // Should insert header
-    const headerInserts = insertCalls.filter((c) => c.table === "stock_transfers");
-    expect(headerInserts.length).toBe(1);
-
-    // Should insert items
-    const itemInserts = insertCalls.filter((c) => c.table === "stock_transfer_items");
-    expect(itemInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = itemInserts[0].data as any[];
-    expect(items).toHaveLength(2);
-    expect(items[0].product_name).toBe("SP A");
-    expect(items[1].product_name).toBe("SP B");
+    const createRpc = rpcCalls.find(
+      (call) => call.fn === "create_stock_transfer_atomic",
+    );
+    expect(createRpc?.params).toEqual({
+      p_from_branch_id: "branch-a",
+      p_to_branch_id: "branch-b",
+      p_note: "Test transfer",
+      p_items: [
+        { product_id: "p1", quantity: 10, note: null },
+        { product_id: "p2", quantity: 5, note: null },
+      ],
+    });
+    expect(insertCalls).toHaveLength(0);
   });
 
   it("throws when branches are the same", async () => {
@@ -241,12 +249,8 @@ describe("createStockTransfer", () => {
   });
 
   it("throws when requested qty exceeds available stock — no DB writes", async () => {
-    tableMocks.branch_stock = {
-      data: [
-        // Chi nhánh xuất còn 5 SP A (reserved 2 = available 3)
-        { product_id: "p1", quantity: 5, reserved: 2 },
-      ],
-      error: null,
+    tableMocks.create_transfer_error = {
+      message: "Không đủ tồn kho: SP A cần 10, còn 3",
     };
 
     await expect(
@@ -265,12 +269,8 @@ describe("createStockTransfer", () => {
   });
 
   it("lists every over-stock product in the error message", async () => {
-    tableMocks.branch_stock = {
-      data: [
-        { product_id: "p1", quantity: 3, reserved: 0 },
-        { product_id: "p2", quantity: 2, reserved: 0 },
-      ],
-      error: null,
+    tableMocks.create_transfer_error = {
+      message: "Không đủ tồn kho: SP A; SP B",
     };
 
     await expect(

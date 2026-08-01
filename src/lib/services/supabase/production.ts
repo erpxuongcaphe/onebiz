@@ -1,7 +1,7 @@
 // Production service — Production orders, lot tracking, FIFO allocation
 
 import { getClient } from "./base";
-import { getCurrentTenantId, getCurrentContext } from "./base";
+import { getCurrentTenantId } from "./base";
 import type {
   ProductionOrder,
   ProductLot,
@@ -92,72 +92,33 @@ export async function createProductionOrder(order: {
     unit: string;
   }[];
 }) {
-  const ctx = await getCurrentContext();
-  const tenantId = ctx.tenantId;
-  // Generate code
-  const { data: codeData } = await supabase.rpc("next_code", {
-    p_tenant_id: tenantId,
-    p_entity_type: "production_order",
-  });
-
-  const { data, error } = await supabase
-    .from("production_orders")
-    .insert({
-      tenant_id: tenantId,
-      code: codeData as string,
-      branch_id: order.branchId,
-      bom_id: order.bomId,
-      product_id: order.productId,
-      variant_id: order.variantId ?? undefined,
-      planned_qty: order.plannedQty,
-      planned_start: order.plannedStart ?? undefined,
-      planned_end: order.plannedEnd ?? undefined,
-      notes: order.notes ?? undefined,
-      // created_by BẮT BUỘC: consume_production_materials + complete_production_order
-      // ghi stock_movements.created_by = production_orders.created_by (NOT NULL).
-      // Trước đây thiếu field này → mọi lệnh SX có created_by=null → "Hoàn thành" lỗi.
-      created_by: ctx.userId,
-    })
-    .select()
-    .single();
-
+  const { data, error } = await (supabase.rpc as any)(
+    "create_production_order_atomic",
+    {
+      p_input: {
+        branch_id: order.branchId,
+        bom_id: order.bomId,
+        product_id: order.productId,
+        variant_id: order.variantId ?? null,
+        planned_qty: order.plannedQty,
+        planned_start: order.plannedStart ?? null,
+        planned_end: order.plannedEnd ?? null,
+        notes: order.notes ?? null,
+        materials: order.materials.map((material) => ({
+          product_id: material.productId,
+          planned_qty: material.plannedQty,
+          unit: material.unit,
+        })),
+      },
+    },
+  );
   if (error) throw error;
-
-  // Insert materials — kèm unit_cost từ products.cost_price để tính COGS chính xác.
-  // Nếu không fetch được cost_price (lỗi mạng / sản phẩm không tồn tại) → vẫn
-  // insert với unit_cost = 0 để không chặn luồng tạo lệnh sản xuất.
-  if (order.materials.length > 0) {
-    const materialProductIds = order.materials.map((m) => m.productId);
-    const costMap = new Map<string, number>();
-    try {
-      const { data: products } = await supabase
-        .from("products")
-        .select("id, cost_price")
-        .in("id", materialProductIds);
-      (products ?? []).forEach((p) => {
-        const row = p as { id: string; cost_price: number | null };
-        costMap.set(row.id, Number(row.cost_price ?? 0));
-      });
-    } catch {
-      // Ignore — fallback về unit_cost = 0
-    }
-
-    const { error: matError } = await supabase
-      .from("production_order_materials")
-      .insert(
-        order.materials.map((m) => ({
-          production_order_id: data.id,
-          product_id: m.productId,
-          planned_qty: m.plannedQty,
-          unit: m.unit,
-          unit_cost: costMap.get(m.productId) ?? 0,
-        }))
-      );
-
-    if (matError) throw matError;
-  }
-
-  return data;
+  return data as {
+    id: string;
+    code: string;
+    status: string;
+    branch_id: string;
+  };
 }
 
 // Valid transitions for production status (state machine)
@@ -178,25 +139,21 @@ export async function updateProductionStatus(
   orderId: string,
   newStatus: string
 ) {
-  const { data: current, error: getErr } = await supabase
-    .from("production_orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (getErr) throw getErr;
-
-  const from = current?.status as string;
-  if (!canTransitionProductionStatus(from, newStatus)) {
+  if (newStatus === "completed" || newStatus === "cancelled") {
     throw new Error(
-      `Không thể chuyển trạng thái từ "${from}" sang "${newStatus}"`
+      newStatus === "completed"
+        ? "Hãy dùng nút Hoàn thành để hệ thống trừ nguyên liệu và nhập thành phẩm."
+        : "Hãy dùng nút Hủy để hệ thống hoàn nguyên tồn kho đúng cách.",
     );
   }
 
-  const { error } = await supabase
-    .from("production_orders")
-    .update({ status: newStatus })
-    .eq("id", orderId);
-
+  const { error } = await (supabase.rpc as any)(
+    "change_production_status_atomic",
+    {
+      p_production_order_id: orderId,
+      p_new_status: newStatus,
+    },
+  );
   if (error) throw error;
 }
 
@@ -211,50 +168,27 @@ export async function updateProductionStatus(
  * Status hợp lệ: planned/material_check/in_production/quality_check.
  * Completed KHÔNG cho cancel (lot đã tạo, cần luồng riêng xuất hủy).
  *
- * Fallback: nếu RPC chưa migrate (00047 chưa chạy) → flip status thông
- * thường + cảnh báo console.warn.
+ * Không có fallback đổi trạng thái đơn lẻ. Nếu RPC chưa sẵn sàng, thao tác
+ * phải dừng để tránh trạng thái lệnh và tồn kho lệch nhau.
  */
 export async function cancelProductionOrder(
   orderId: string,
   reason?: string,
 ): Promise<{ revertedMaterialsQty: number; revertedCogs: number }> {
-  // Try RPC atomic first
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any).rpc(
-      "revert_production_materials",
-      {
-        p_production_order_id: orderId,
-        p_reason: reason ?? null,
-      },
-    );
-    if (!error && data) {
-      const r = data as Record<string, unknown>;
-      return {
-        revertedMaterialsQty: Number(r.reverted_materials_qty ?? 0),
-        revertedCogs: Number(r.reverted_cogs ?? 0),
-      };
-    }
-    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
-      throw error;
-    }
-  } catch (err) {
-    console.warn(
-      "[cancelProductionOrder] RPC revert chưa migrate, fall back flip status:",
-      err,
-    );
-  }
-
-  // Fallback: chỉ flip status (không rollback NVL — log warning)
-  const { error } = await supabase
-    .from("production_orders")
-    .update({ status: "cancelled" })
-    .eq("id", orderId);
-  if (error) throw error;
-  console.warn(
-    `[cancelProductionOrder] Đã flip status nhưng KHÔNG rollback NVL — chạy migration 00047 để bật RPC.`,
+  const { data, error } = await (supabase.rpc as any)(
+    "revert_production_materials",
+    {
+      p_production_order_id: orderId,
+      p_reason: reason ?? null,
+    },
   );
-  return { revertedMaterialsQty: 0, revertedCogs: 0 };
+  if (error) throw error;
+
+  const result = (data ?? {}) as Record<string, unknown>;
+  return {
+    revertedMaterialsQty: Number(result.reverted_materials_qty ?? 0),
+    revertedCogs: Number(result.reverted_cogs ?? 0),
+  };
 }
 
 export async function completeProductionOrder(

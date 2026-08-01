@@ -34,11 +34,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
 import { formatNumber } from "@/lib/format";
-import {
-  getRoles,
-  getTenantUsers,
-  assignRoleToUser,
-} from "@/lib/services/supabase/roles";
+import { getRoles, getTenantUsers } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
@@ -48,7 +44,6 @@ import { SetPinDialog } from "@/components/shared/dialogs";
 import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getClient } from "@/lib/services/supabase/base";
 import { Icon } from "@/components/ui/icon";
 
 interface UserRow {
@@ -62,6 +57,29 @@ interface UserRow {
   branchId: string | null;
   isActive: boolean;
   createdAt: string;
+}
+
+interface ManagedUserUpdate {
+  userId: string;
+  fullName?: string;
+  phone?: string;
+  roleId?: string | null;
+  branchIds?: string[];
+  allBranches?: boolean;
+  newPassword?: string;
+  isActive?: boolean;
+}
+
+async function updateManagedUser(payload: ManagedUserUpdate): Promise<void> {
+  const response = await fetch("/api/admin/update-user", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json()) as { success?: boolean; message?: string };
+  if (!response.ok || !data.success) {
+    throw new Error(data.message ?? "Không thể cập nhật người dùng");
+  }
 }
 
 // S-2 13/06/2026 audit lần 2: wrap PermissionPage. Trước đây cashier gõ
@@ -125,27 +143,47 @@ function UsersPage() {
       });
       return;
     }
+    if (!editForm.allBranches && editForm.branchIds.length === 0) {
+      toast({
+        title: "Thiếu chi nhánh",
+        description: "Chọn ít nhất 1 chi nhánh hoặc chọn Tất cả chi nhánh",
+        variant: "error",
+      });
+      return;
+    }
     setEditBusy(true);
     try {
-      const res = await fetch("/api/admin/update-user", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: editTarget.id,
-          fullName: editForm.fullName.trim() || undefined,
-          phone: editForm.phone.trim(),
-          roleId: editForm.roleId || null,
-          branchIds: editForm.allBranches ? [] : editForm.branchIds,
-          allBranches: editForm.allBranches,
-          newPassword: editForm.newPassword || undefined,
-        }),
+      await updateManagedUser({
+        userId: editTarget.id,
+        fullName: editForm.fullName.trim() || undefined,
+        phone: editForm.phone.trim(),
+        roleId: editForm.roleId || null,
+        branchIds: editForm.allBranches ? [] : editForm.branchIds,
+        allBranches: editForm.allBranches,
       });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message ?? "Lỗi không xác định");
+
+      if (editForm.newPassword) {
+        try {
+          await updateManagedUser({
+            userId: editTarget.id,
+            newPassword: editForm.newPassword,
+          });
+        } catch (passwordError) {
+          toast({
+            title: "Đã lưu hồ sơ, chưa đổi mật khẩu",
+            description: (passwordError as Error).message,
+            variant: "error",
+            duration: 8000,
+          });
+          load();
+          return;
+        }
       }
+
       toast({
-        title: "Đã cập nhật thông tin",
+        title: editForm.newPassword
+          ? "Đã cập nhật hồ sơ và mật khẩu"
+          : "Đã cập nhật thông tin",
         description: editTarget.fullName,
         variant: "success",
       });
@@ -279,7 +317,7 @@ function UsersPage() {
   const handleAssignRole = async () => {
     if (!selectedUser) return;
     try {
-      await assignRoleToUser(selectedUser.id, selectedRoleId || null);
+      await updateManagedUser({ userId: selectedUser.id, roleId: selectedRoleId || null });
       toast({ title: "Đã cập nhật vai trò", variant: "success" });
       setAssignOpen(false);
       load();
@@ -290,17 +328,7 @@ function UsersPage() {
 
   const handleToggleActive = async (user: UserRow) => {
     try {
-      // Defense-in-depth: filter tenant_id để admin tenant A KHÔNG thể
-      // disable user tenant B nếu biết UUID. Trước đây chỉ filter id →
-      // RLS off (dev mode) sẽ leak cross-tenant.
-      const supabase = getClient();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from("profiles")
-        .update({ is_active: !user.isActive })
-        .eq("tenant_id", tenantId)
-        .eq("id", user.id);
-      if (error) throw error;
+      await updateManagedUser({ userId: user.id, isActive: !user.isActive });
       toast({
         title: user.isActive ? "Đã vô hiệu hóa" : "Đã kích hoạt",
         description: user.fullName,

@@ -438,14 +438,12 @@ export default function DatHangNhapPage() {
             icon: <Icon name="cancel" size={16} />,
             variant: "destructive",
             onClick: async (selectedRows) => {
-              const cancellable = selectedRows.filter(
-                (r) => r.status !== "completed" && r.status !== "cancelled",
-              );
+              const cancellable = selectedRows.filter((r) => r.status === "pending");
               if (cancellable.length === 0) {
                 toast({
                   title: "Không có đơn nào có thể hủy",
                   description:
-                    "Chỉ hủy được đơn chưa hoàn thành / chưa hủy",
+                    "Chỉ hủy đơn chưa nhập hàng. Đơn đã nhập một phần phải đóng phần còn thiếu tại trang Nhập hàng.",
                   variant: "info",
                 });
                 return;
@@ -483,7 +481,7 @@ export default function DatHangNhapPage() {
             item={item}
             onClose={onClose}
             onDelete={
-              item.status !== "completed" && item.status !== "cancelled"
+              item.status === "pending"
                 ? () => setCancellingItem(item)
                 : undefined
             }
@@ -520,9 +518,9 @@ export default function DatHangNhapPage() {
             ],
             // Audit log shortcut
             onAuditLog: () => setAuditDialogTarget(row),
-            // Hủy — chỉ chưa completed/cancelled
+            // Chỉ hủy đơn chưa nhận hàng; đơn partial phải đóng phần còn thiếu.
             onCancel:
-              row.status !== "completed" && row.status !== "cancelled"
+              row.status === "pending"
                 ? () => setCancellingItem(row)
                 : undefined,
           })

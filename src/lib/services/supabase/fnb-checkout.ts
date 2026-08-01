@@ -11,10 +11,7 @@
 
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
-import {
-  addItemsToOrder,
-  setDeliveryPlatform,
-} from "./kitchen-orders";
+import { addItemsToOrder } from "./kitchen-orders";
 import type { PaymentBreakdownItem } from "./pos-checkout";
 import type {
   ToppingAttachment,
@@ -109,6 +106,11 @@ export interface FnbPaymentInput {
   shiftId?: string | null;
   /** Tiền tip khách cho nhân viên. Cộng vào total + lưu invoices.tip_amount. */
   tipAmount?: number;
+  promotionId?: string | null;
+  promotionDiscount?: number;
+  promotionFreeValue?: number;
+  couponCode?: string | null;
+  couponDiscount?: number;
 }
 
 export interface FnbPaymentResult {
@@ -129,29 +131,25 @@ export interface FnbPaymentResult {
 export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKitchenResult> {
   const supabase = getClient();
 
-  // 1. Generate order number via RPC
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: input.tenantId,
-    p_entity_type: "kitchen_order",
-  });
-  if (codeErr) handleError(codeErr, "sendToKitchen:next_code");
-  const orderNumber = code ?? `KB${Date.now()}`;
-
-  // Server-side transaction only. Sending to kitchen must fail closed if this
-  // RPC is missing; the old client flow can leave table/order state divergent.
+  // The server derives actor/tenant and rebuilds catalog snapshots. Delivery
+  // metadata is included in the same transaction so a network interruption
+  // cannot leave a partially configured kitchen order.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-    "fnb_send_to_kitchen_atomic",
+    "fnb_send_to_kitchen_atomic_v2",
     {
-      p_tenant_id: input.tenantId,
       p_branch_id: input.branchId,
-      p_created_by: input.createdBy,
       p_table_id: input.tableId ?? null,
       p_order_type: input.orderType,
       p_note: input.note ?? null,
       p_idempotency_key: input.idempotencyKey ?? null,
-      p_order_number: orderNumber,
       p_items: input.items,
+      p_delivery_platform: input.deliveryPlatform ?? null,
+      p_delivery_fee: input.deliveryFee ?? 0,
+      p_platform_commission_percent:
+        input.platformCommissionPercent ?? input.platformCommission ?? null,
+      p_delivery_staff_id: input.deliveryStaffId ?? null,
+      p_delivery_distance_tier: input.deliveryDistanceTier ?? null,
     },
   );
 
@@ -161,56 +159,6 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
       order_number?: string;
     };
     if (result.kitchen_order_id && result.order_number) {
-      // Migration 00070 (CEO 13/05): RPC fnb_send_to_kitchen_atomic không
-      // nhận platform/fee/commission → cần update riêng sau khi tạo đơn.
-      // Nếu là đơn delivery với platform != "direct", persist xuống DB
-      // để RPC thanh toán đọc khi tính commission_amount.
-      const platform = input.deliveryPlatform;
-      const percent = input.platformCommissionPercent ?? input.platformCommission ?? 0;
-      const fee = input.deliveryFee ?? 0;
-      if (
-        input.orderType === "delivery" &&
-        platform &&
-        platform !== "direct" &&
-        (percent > 0 || fee > 0)
-      ) {
-        try {
-          await setDeliveryPlatform(result.kitchen_order_id, platform, fee, percent);
-        } catch (err) {
-          // Không rollback đơn — đơn đã gửi bếp thành công. Log để debug.
-          // User có thể chỉnh platform sau qua cart (handler page.tsx).
-          console.error("sendToKitchen:setDeliveryPlatform persist failed", err);
-        }
-      }
-
-      // Day 21/05/2026 (CEO): nếu cashier giao quán thực hiện (direct) và
-      // chọn cấp ngưỡng km → persist tier + delivery_fee từ bảng tiers.
-      // Tier 'custom' chỉ persist fee (đã có sẵn ở `fee` ở trên qua setDeliveryPlatform).
-      const tier = input.deliveryDistanceTier;
-      if (input.orderType === "delivery" && (tier || input.deliveryStaffId)) {
-        try {
-          const supabaseClient = getClient();
-          const updatePayload: Record<string, unknown> = {};
-          if (tier) updatePayload.delivery_distance_tier = tier;
-          if (input.deliveryStaffId) {
-            updatePayload.delivery_staff_id = input.deliveryStaffId;
-            updatePayload.delivery_assigned_at = new Date().toISOString();
-          }
-          // Khi có fee được truyền vào (vd nội bộ tự giao = direct) → giữ luôn
-          if (
-            fee > 0 &&
-            (!platform || platform === "direct")
-          ) {
-            updatePayload.delivery_fee = fee;
-          }
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabaseClient.from("kitchen_orders").update as any)(updatePayload)
-            .eq("id", result.kitchen_order_id);
-        } catch (err) {
-          console.error("sendToKitchen:persist delivery_staff/tier failed", err);
-        }
-      }
-
       return {
         kitchenOrderId: result.kitchen_order_id,
         orderNumber: result.order_number,
@@ -221,7 +169,9 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
 
   if (atomicError) {
     if (isRpcUnavailable(atomicError)) {
-      throw new Error("Chưa có RPC fnb_send_to_kitchen_atomic. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.");
+      throw new Error(
+        "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
+      );
     }
     handleError(atomicError, "sendToKitchen:atomic_rpc");
   }
@@ -246,7 +196,7 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic", {
+  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic_v2", {
     p_kitchen_order_id: input.kitchenOrderId,
     p_customer_id: input.customerId ?? null,
     p_customer_name: input.customerName || "Khách lẻ",
@@ -255,12 +205,24 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
     p_paid: input.paid,
     p_discount_amount: input.discountAmount ?? 0,
     p_note: input.note ?? null,
-    p_created_by: input.createdBy,
+    p_created_by: null,
     p_shift_id: input.shiftId ?? null,
     p_tip_amount: input.tipAmount ?? 0,
+    p_promotion_id: input.promotionId ?? null,
+    p_promotion_discount: input.promotionDiscount ?? 0,
+    p_promotion_free_value: input.promotionFreeValue ?? 0,
+    p_coupon_code: input.couponCode ?? null,
+    p_coupon_discount: input.couponDiscount ?? 0,
   });
 
-  if (error) handleError(error, "fnbPayment:atomic_rpc");
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có migration 00255. Không thể thanh toán FnB an toàn.",
+      );
+    }
+    handleError(error, "fnbPayment:atomic_v2_rpc");
+  }
   if (!data) throw new Error("Không nhận được phản hồi từ server khi thanh toán.");
 
   // RPC returns jsonb { invoice_id, invoice_code, total, paid, debt, bom_consume_results }

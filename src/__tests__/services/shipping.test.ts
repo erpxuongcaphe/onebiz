@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockResult = vi.fn();
 const mockUpdateResult = vi.fn();
 const mockInsertResult = vi.fn();
+const mockRpc = vi.fn();
 
 function createChain() {
   const chain: Record<string, unknown> = {};
@@ -23,7 +24,7 @@ const mockFrom = vi.fn((table: string) => {
 });
 
 vi.mock("@/lib/services/supabase/base", () => ({
-  getClient: () => ({ from: mockFrom }),
+  getClient: () => ({ from: mockFrom, rpc: mockRpc }),
   getCurrentContext: async () => ({
     tenantId: "tenant-1",
     branchId: "branch-1",
@@ -167,76 +168,70 @@ describe("getNextShippingStatuses", () => {
 });
 
 describe("updateShippingOrderStatus", () => {
+  const updatedOrder = {
+    id: "so-1",
+    code: "VD001",
+    status: "picked_up",
+    shipping_fee: 30000,
+    cod_amount: 200000,
+    receiver_name: "Nguyễn Văn A",
+    receiver_phone: "0900000000",
+    receiver_address: "123 Lê Duẩn",
+    created_at: "2026-04-21T00:00:00Z",
+    updated_at: "2026-04-21T01:00:00Z",
+    invoices: { code: "HD001" },
+    delivery_partners: { name: "GHN" },
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
-    mockInsertResult.mockResolvedValue({ error: null });
+    mockRpc.mockResolvedValue({ data: updatedOrder, error: null });
   });
 
-  it("rejects invalid transition without calling UPDATE", async () => {
-    mockResult.mockResolvedValueOnce({
-      data: { id: "so-1", status: "delivered", code: "VD001" },
-      error: null,
+  it("lets the server reject an invalid transition without a client UPDATE", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Không thể chuyển vận đơn từ delivered sang pending" },
     });
 
     await expect(
       updateShippingOrderStatus("so-1", "pending"),
     ).rejects.toThrow(/Không thể chuyển vận đơn/);
 
-    // UPDATE must not have been called (validation fails first)
     expect(mockChain.update).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalledWith("audit_log");
   });
 
-  it("updates status atomically (eq id + eq fromStatus) and writes audit_log", async () => {
-    // 1st single() = load current status
-    mockResult
-      .mockResolvedValueOnce({
-        data: { id: "so-1", status: "pending", code: "VD001" },
-        error: null,
-      })
-      // 2nd single() = update().select().single() result
-      .mockResolvedValueOnce({
-        data: {
-          id: "so-1",
-          code: "VD001",
-          status: "picked_up",
-          shipping_fee: 30000,
-          cod_amount: 200000,
-          receiver_name: "Nguyễn Văn A",
-          receiver_phone: "0900000000",
-          receiver_address: "123 Lê Duẩn",
-          created_at: "2026-04-21T00:00:00Z",
-          updated_at: "2026-04-21T01:00:00Z",
-          invoices: { code: "HD001" },
-          delivery_partners: { name: "GHN" },
-        },
-        error: null,
-      });
+  it("updates status and writes audit in one server transaction", async () => {
+    const result = await updateShippingOrderStatus(
+      "so-1",
+      "picked_up",
+      "Đã bàn giao",
+    );
 
-    const result = await updateShippingOrderStatus("so-1", "picked_up");
-
-    // Race-safe: must filter by both id AND current status
-    expect(mockChain.eq).toHaveBeenCalledWith("id", "so-1");
-    expect(mockChain.eq).toHaveBeenCalledWith("status", "pending");
-
-    // Audit log entry inserted
-    expect(mockFrom).toHaveBeenCalledWith("audit_log");
-
-    // Returns mapped order with new status + Vietnamese label
+    expect(mockRpc).toHaveBeenCalledWith(
+      "update_shipping_order_status_atomic",
+      {
+        p_shipping_order_id: "so-1",
+        p_next_status: "picked_up",
+        p_note: "Đã bàn giao",
+      },
+    );
+    expect(mockChain.update).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalledWith("audit_log");
     expect(result.status).toBe("picked_up");
     expect(result.statusName).toBe("Đã lấy hàng");
   });
 
-  it("raises race error when status already changed between load and update", async () => {
-    mockResult
-      .mockResolvedValueOnce({
-        data: { id: "so-1", status: "pending", code: "VD001" },
-        error: null,
-      })
-      // Update returned no row → another request won
-      .mockResolvedValueOnce({ data: null, error: null });
+  it("surfaces a race conflict returned by the server", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Trạng thái đã bị thay đổi, vui lòng tải lại" },
+    });
 
     await expect(
       updateShippingOrderStatus("so-1", "picked_up"),
-    ).rejects.toThrow(/đã bị thay đổi trạng thái|tải lại/i);
+    ).rejects.toThrow(/đã bị thay đổi|tải lại/i);
+    expect(mockChain.update).not.toHaveBeenCalled();
   });
 });

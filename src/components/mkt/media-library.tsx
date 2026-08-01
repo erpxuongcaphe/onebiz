@@ -16,6 +16,7 @@ import { parseMediaLink, buildMediaUrls } from "@/lib/mkt/media-links";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktMediaAsset } from "@/lib/mkt/read-models";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
+import { useToast } from "@/lib/contexts";
 
 export type MediaViewItem = MktMediaAsset & {
   /** Signed URL (1h) cho file upload trên Supabase Storage — server cấp */
@@ -73,6 +74,7 @@ export function MediaLibrary({
   canManageAssets: boolean;
 }) {
   const { refresh, refreshing } = useMktRefresh();
+  const { toast } = useToast();
   const [kindFilter, setKindFilter] = useState<"all" | "image" | "video">("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "used">("all");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -121,6 +123,16 @@ export function MediaLibrary({
       refresh(() => setPreview(null));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái media");
+    }
+  }
+
+  async function copyLink(url: string) {
+    setActionError(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Đã sao chép liên kết", variant: "success" });
+    } catch {
+      setActionError("Không thể sao chép liên kết. Hãy kiểm tra quyền clipboard của trình duyệt.");
     }
   }
 
@@ -303,11 +315,9 @@ export function MediaLibrary({
                   <>
                     <Button
                       variant="outline"
-                      onClick={() =>
-                        navigator.clipboard.writeText(openUrlOf(preview) as string).catch(() => {})
-                      }
+                      onClick={() => copyLink(openUrlOf(preview) as string)}
                     >
-                      <Icon name="content_copy" size={16} /> Copy link
+                      <Icon name="content_copy" size={16} /> Sao chép liên kết
                     </Button>
                     <a
                       href={openUrlOf(preview) as string}

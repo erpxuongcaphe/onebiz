@@ -23,8 +23,7 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
-import { recordAuditLog } from "./audit";
-import { formatNumber } from "@/lib/format";
+import { isRpcUnavailable } from "./rpc-utils";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -236,106 +235,52 @@ export async function getStockTransferById(id: string): Promise<{
 export async function createStockTransfer(
   input: CreateStockTransferInput
 ): Promise<{ id: string; code: string }> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-
   if (input.fromBranchId === input.toBranchId) {
     throw new Error("Chi nhánh nguồn và đích không được trùng nhau");
   }
   if (!input.items.length) {
     throw new Error("Phiếu chuyển kho phải có ít nhất 1 sản phẩm");
   }
-
-  // Validate quantities
-  for (const it of input.items) {
-    if (!Number.isFinite(it.quantity) || it.quantity <= 0) {
+  for (const item of input.items) {
+    if (!Number.isFinite(item.quantity) || item.quantity <= 0) {
       throw new Error(
-        `Số lượng của "${it.productName}" phải lớn hơn 0`,
+        "Số lượng của " + item.productName + " phải lớn hơn 0",
       );
     }
   }
 
-  // ─── Server-side stock guard ─────────────────────────────────────
-  // Trước khi tạo phiếu, verify từng SP còn đủ tồn ở chi nhánh xuất.
-  // Client UI cũng cap lại qty, nhưng race giữa nhiều người chuyển cùng
-  // lúc có thể xảy ra → check ở đây để fail sớm + descriptive error.
-  const productIds = Array.from(new Set(input.items.map((i) => i.productId)));
+  const supabase = getClient();
+  // Máy chủ tự xác định tenant, người thao tác và dữ liệu sản phẩm.
+  // Đầu phiếu và toàn bộ dòng hàng được ghi cùng một giao dịch.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: stockRows, error: stockErr } = await (supabase as any)
-    .from("branch_stock")
-    .select("product_id, quantity, reserved")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("branch_id", input.fromBranchId)
-    .in("product_id", productIds);
-  if (stockErr) handleError(stockErr, "createStockTransfer.checkStock");
+  const { data, error } = await (supabase.rpc as any)(
+    "create_stock_transfer_atomic",
+    {
+      p_from_branch_id: input.fromBranchId,
+      p_to_branch_id: input.toBranchId,
+      p_note: input.note?.trim() || null,
+      p_items: input.items.map((item) => ({
+        product_id: item.productId,
+        quantity: item.quantity,
+        note: item.note?.trim() || null,
+      })),
+    },
+  );
 
-  const availableMap = new Map<string, number>();
-   
-  for (const row of stockRows ?? []) {
-    const avail = Number(row.quantity ?? 0) - Number(row.reserved ?? 0);
-    availableMap.set(row.product_id as string, avail);
-  }
-
-  const violations: string[] = [];
-  for (const it of input.items) {
-    const avail = availableMap.get(it.productId) ?? 0;
-    if (it.quantity > avail) {
-      violations.push(
-        `${it.productName} (cần ${formatNumber(it.quantity)}${it.unit ? " " + it.unit : ""}, còn ${formatNumber(avail)}${it.unit ? " " + it.unit : ""})`,
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có migration 00256. Không thể tạo phiếu chuyển kho an toàn.",
       );
     }
-  }
-  if (violations.length > 0) {
-    throw new Error(
-      `Không đủ tồn kho tại chi nhánh xuất: ${violations.join("; ")}`,
-    );
+    handleError(error, "createStockTransfer.atomic");
   }
 
-  // Generate code
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: ctx.tenantId,
-    p_entity_type: "stock_transfer",
-  });
-  if (codeErr) handleError(codeErr, "createStockTransfer.code");
-  const transferCode = (code as string | null) ?? `CK${Date.now()}`;
-
-  // Insert header
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: transfer, error: insertErr } = await (supabase as any)
-    .from("stock_transfers")
-    .insert({
-      tenant_id: ctx.tenantId,
-      code: transferCode,
-      from_branch_id: input.fromBranchId,
-      to_branch_id: input.toBranchId,
-      status: "draft",
-      total_items: input.items.length,
-      note: input.note ?? null,
-      created_by: ctx.userId,
-    })
-    .select("id, code")
-    .single();
-
-  if (insertErr) handleError(insertErr, "createStockTransfer.insert");
-
-  // Insert items
-  const itemRows = input.items.map((item) => ({
-    transfer_id: transfer.id,
-    product_id: item.productId,
-    product_name: item.productName,
-    product_code: item.productCode,
-    unit: item.unit ?? null,
-    quantity: item.quantity,
-    note: item.note ?? null,
-  }));
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: itemsErr } = await (supabase as any)
-    .from("stock_transfer_items")
-    .insert(itemRows);
-  if (itemsErr) handleError(itemsErr, "createStockTransfer.items");
-
-  return { id: transfer.id, code: transfer.code };
+  const result = data as { transfer_id?: string; code?: string } | null;
+  if (!result?.transfer_id || !result.code) {
+    throw new Error("Máy chủ trả về kết quả tạo phiếu chuyển kho không hợp lệ");
+  }
+  return { id: result.transfer_id, code: result.code };
 }
 
 /* ------------------------------------------------------------------ */
@@ -358,13 +303,6 @@ export async function completeStockTransfer(transferId: string): Promise<void> {
     p_created_by: ctx.userId,
   });
   if (error) handleError(error, "completeStockTransfer.atomic_rpc");
-
-  void recordAuditLog({
-    entityType: "stock_transfer",
-    entityId: transferId,
-    action: "complete",
-    newData: { status: "completed", atomic: true },
-  });
 }
 
 /* ------------------------------------------------------------------ */
@@ -373,20 +311,21 @@ export async function completeStockTransfer(transferId: string): Promise<void> {
 
 export async function cancelStockTransfer(transferId: string): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: claimed, error: claimErr } = await (supabase as any)
-    .from("stock_transfers")
-    .update({ status: "cancelled" })
-    .eq("tenant_id", tenantId)
-    .eq("id", transferId)
-    .in("status", ["draft", "in_transit"])
-    .select("id")
-    .maybeSingle();
-  if (claimErr) handleError(claimErr, "cancelStockTransfer.claim");
-  if (!claimed) {
-    throw new Error("Không thể hủy phiếu chuyển kho đã hoàn thành");
+  const { error } = await (supabase.rpc as any)(
+    "set_stock_transfer_state_atomic",
+    {
+      p_transfer_id: transferId,
+      p_new_status: "cancelled",
+    },
+  );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có migration 00256. Không thể hủy phiếu chuyển kho an toàn.",
+      );
+    }
+    handleError(error, "cancelStockTransfer.atomic");
   }
 }
 
@@ -406,29 +345,25 @@ export async function updateTransferStatus(
     await cancelStockTransfer(transferId);
     return;
   }
-
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: current, error: readErr } = await (supabase as any)
-    .from("stock_transfers")
-    .select("status")
-    .eq("tenant_id", tenantId)
-    .eq("id", transferId)
-    .single();
-  if (readErr) handleError(readErr, "updateTransferStatus.read");
-  if (!current) throw new Error("Không tìm thấy phiếu chuyển kho");
-
-  if (!canTransitionTransfer(current.status, newStatus)) {
-    throw new Error(`Không thể chuyển từ "${current.status}" sang "${newStatus}"`);
+  if (newStatus !== "in_transit") {
+    throw new Error("Không thể chuyển phiếu sang trạng thái " + newStatus);
   }
 
+  const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updateErr } = await (supabase as any)
-    .from("stock_transfers")
-    .update({ status: newStatus })
-    .eq("tenant_id", tenantId)
-    .eq("id", transferId);
-  if (updateErr) handleError(updateErr, "updateTransferStatus.update");
+  const { error } = await (supabase.rpc as any)(
+    "set_stock_transfer_state_atomic",
+    {
+      p_transfer_id: transferId,
+      p_new_status: "in_transit",
+    },
+  );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có migration 00256. Không thể đổi trạng thái chuyển kho an toàn.",
+      );
+    }
+    handleError(error, "updateTransferStatus.atomic");
+  }
 }

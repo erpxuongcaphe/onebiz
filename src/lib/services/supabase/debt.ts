@@ -15,6 +15,10 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import {
+  getPayableAgingReport,
+  getReceivableAgingReport,
+} from "./finance-marketing-reports";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -66,46 +70,28 @@ export interface DebtorDetail {
  * Note: customer.debt và supplier.debt là field aggregate đã được trigger
  * DB maintain. Query SUM ở DB level để tránh fetch hết rows.
  */
-export async function getDebtTotals(): Promise<{
+export async function getDebtTotals(branchId?: string | null): Promise<{
   customerDebtTotal: number;
   customerCount: number;
   supplierDebtTotal: number;
   supplierCount: number;
 }> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Supabase client không có .sum() trực tiếp — query select(debt) với
-  // gt(debt, 0) rồi reduce ở client. Customers + suppliers thường <2000
-  // record cho cà phê chain → payload nhỏ. Khi DB hỗ trợ aggregate sẽ
-  // chuyển sang RPC.
-  const [custRes, suppRes] = await Promise.all([
-    supabase
-      .from("customers")
-      .select("debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0),
-    supabase
-      .from("suppliers")
-      .select("debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0),
+  const [receivable, payable] = await Promise.all([
+    getReceivableAgingReport({ branchId: branchId ?? null }),
+    getPayableAgingReport({ branchId: branchId ?? null }),
   ]);
 
-  const customerDebtTotal = (custRes.data ?? []).reduce(
-    (s, r) => s + Number(r.debt ?? 0),
-    0,
-  );
-  const supplierDebtTotal = (suppRes.data ?? []).reduce(
-    (s, r) => s + Number(r.debt ?? 0),
-    0,
-  );
-
   return {
-    customerDebtTotal,
-    customerCount: (custRes.data ?? []).length,
-    supplierDebtTotal,
-    supplierCount: (suppRes.data ?? []).length,
+    customerDebtTotal: receivable.rows.reduce(
+      (sum, row) => sum + Number(row.outstanding ?? 0),
+      0,
+    ),
+    customerCount: receivable.rows.filter((row) => row.outstanding > 0).length,
+    supplierDebtTotal: payable.rows.reduce(
+      (sum, row) => sum + Number(row.outstanding ?? 0),
+      0,
+    ),
+    supplierCount: payable.rows.filter((row) => row.outstanding > 0).length,
   };
 }
 
@@ -113,124 +99,67 @@ export async function getDebtTotals(): Promise<{
 /*  Aging report                                                       */
 /* ------------------------------------------------------------------ */
 
-export async function getDebtAging(): Promise<DebtAgingReport> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const now = new Date();
+function getBucketLabel(days: number): string {
+  if (days <= 30) return "0-30 ngày";
+  if (days <= 60) return "31-60 ngày";
+  if (days <= 90) return "61-90 ngày";
+  return "90+ ngày";
+}
 
-  // Parallel fetch: customers with debt + suppliers with debt + unpaid invoices + unpaid POs
-  const [customersRes, suppliersRes, invoicesRes, posRes] = await Promise.all([
-    supabase
-      .from("customers")
-      .select("id, code, name, debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0),
-    supabase
-      .from("suppliers")
-      .select("id, code, name, debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0),
-    supabase
-      .from("invoices")
-      .select("id, customer_id, debt, created_at")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0)
-      .eq("status", "completed"),
-    supabase
-      .from("purchase_orders")
-      .select("id, supplier_id, debt, created_at")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0)
-      .in("status", ["ordered", "partial", "completed"]),
+export async function getDebtAging(branchId?: string | null): Promise<DebtAgingReport> {
+  const [receivable, payable] = await Promise.all([
+    getReceivableAgingReport({ branchId: branchId ?? null }),
+    getPayableAgingReport({ branchId: branchId ?? null }),
   ]);
 
-  if (customersRes.error) handleError(customersRes.error, "getDebtAging.customers");
-  if (suppliersRes.error) handleError(suppliersRes.error, "getDebtAging.suppliers");
+  const definitions = [
+    { label: "Hiện tại", range: "0-30 ngày", receivableKey: "bucket0_30", payableKey: "bucket0_30" },
+    { label: "Quá hạn nhẹ", range: "31-60 ngày", receivableKey: "bucket31_60", payableKey: "bucket31_60" },
+    { label: "Quá hạn trung bình", range: "61-90 ngày", receivableKey: "bucket61_90", payableKey: "bucket61_90" },
+    { label: "Quá hạn nặng", range: "90+ ngày", receivableKey: "bucket91Plus", payableKey: "bucket91Plus" },
+  ] as const;
 
-  // Build per-customer oldest invoice date map
-  const customerOldest = new Map<string, Date>();
-  for (const inv of invoicesRes.data ?? []) {
-    const custId = inv.customer_id as string;
-    if (!custId) continue;
-    const invDate = new Date(inv.created_at);
-    const existing = customerOldest.get(custId);
-    if (!existing || invDate < existing) {
-      customerOldest.set(custId, invDate);
-    }
-  }
+  const buckets: AgingBucket[] = definitions.map((definition) => {
+    const customerAmount = receivable.rows.reduce(
+      (sum, row) => sum + Number(row[definition.receivableKey] ?? 0),
+      0,
+    );
+    const supplierAmount = payable.rows.reduce(
+      (sum, row) => sum + Number(row[definition.payableKey] ?? 0),
+      0,
+    );
 
-  // Build per-supplier oldest PO date map
-  const supplierOldest = new Map<string, Date>();
-  for (const po of posRes.data ?? []) {
-    const suppId = po.supplier_id as string;
-    if (!suppId) continue;
-    const poDate = new Date(po.created_at);
-    const existing = supplierOldest.get(suppId);
-    if (!existing || poDate < existing) {
-      supplierOldest.set(suppId, poDate);
-    }
-  }
+    return {
+      label: definition.label,
+      range: definition.range,
+      customerCount: receivable.rows.filter(
+        (row) => Number(row[definition.receivableKey] ?? 0) > 0,
+      ).length,
+      customerAmount,
+      supplierCount: payable.rows.filter(
+        (row) => Number(row[definition.payableKey] ?? 0) > 0,
+      ).length,
+      supplierAmount,
+      totalAmount: customerAmount + supplierAmount,
+    };
+  });
 
-  // Initialize buckets
-  const buckets: AgingBucket[] = [
-    { label: "Hiện tại", range: "0-30 ngày", customerCount: 0, customerAmount: 0, supplierCount: 0, supplierAmount: 0, totalAmount: 0 },
-    { label: "Quá hạn nhẹ", range: "31-60 ngày", customerCount: 0, customerAmount: 0, supplierCount: 0, supplierAmount: 0, totalAmount: 0 },
-    { label: "Quá hạn TB", range: "61-90 ngày", customerCount: 0, customerAmount: 0, supplierCount: 0, supplierAmount: 0, totalAmount: 0 },
-    { label: "Quá hạn nặng", range: "90+ ngày", customerCount: 0, customerAmount: 0, supplierCount: 0, supplierAmount: 0, totalAmount: 0 },
-  ];
-
-  function getBucketIndex(ageDays: number): number {
-    if (ageDays <= 30) return 0;
-    if (ageDays <= 60) return 1;
-    if (ageDays <= 90) return 2;
-    return 3;
-  }
-
-  let totalCustomerDebt = 0;
-  let totalSupplierDebt = 0;
-
-  // Classify customers
-  for (const cust of customersRes.data ?? []) {
-    const debt = Number(cust.debt ?? 0);
-    if (debt <= 0) continue;
-    totalCustomerDebt += debt;
-
-    const oldest = customerOldest.get(cust.id);
-    const ageDays = oldest
-      ? Math.floor((now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
-    const idx = getBucketIndex(ageDays);
-    buckets[idx].customerCount++;
-    buckets[idx].customerAmount += debt;
-  }
-
-  // Classify suppliers
-  for (const supp of suppliersRes.data ?? []) {
-    const debt = Number(supp.debt ?? 0);
-    if (debt <= 0) continue;
-    totalSupplierDebt += debt;
-
-    const oldest = supplierOldest.get(supp.id);
-    const ageDays = oldest
-      ? Math.floor((now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
-    const idx = getBucketIndex(ageDays);
-    buckets[idx].supplierCount++;
-    buckets[idx].supplierAmount += debt;
-  }
-
-  // Compute totals per bucket
-  for (const b of buckets) {
-    b.totalAmount = b.customerAmount + b.supplierAmount;
-  }
+  const totalCustomerDebt = receivable.rows.reduce(
+    (sum, row) => sum + Number(row.outstanding ?? 0),
+    0,
+  );
+  const totalSupplierDebt = payable.rows.reduce(
+    (sum, row) => sum + Number(row.outstanding ?? 0),
+    0,
+  );
 
   return {
     buckets,
     totalCustomerDebt,
     totalSupplierDebt,
     totalDebt: totalCustomerDebt + totalSupplierDebt,
-    customersWithDebt: (customersRes.data ?? []).filter((c) => Number(c.debt ?? 0) > 0).length,
-    suppliersWithDebt: (suppliersRes.data ?? []).filter((s) => Number(s.debt ?? 0) > 0).length,
+    customersWithDebt: receivable.rows.filter((row) => row.outstanding > 0).length,
+    suppliersWithDebt: payable.rows.filter((row) => row.outstanding > 0).length,
   };
 }
 
@@ -238,103 +167,86 @@ export async function getDebtAging(): Promise<DebtAgingReport> {
 /*  Top debtors (detailed list)                                        */
 /* ------------------------------------------------------------------ */
 
-export async function getTopDebtors(limit: number = 20): Promise<DebtorDetail[]> {
+export async function getTopDebtors(
+  limit: number = 20,
+  branchId?: string | null,
+): Promise<DebtorDetail[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const now = new Date();
-
-  const [customersRes, suppliersRes, invoicesRes, posRes] = await Promise.all([
-    supabase
-      .from("customers")
-      .select("id, code, name, phone, debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0)
-      .order("debt", { ascending: false })
-      .limit(limit),
-    supabase
-      .from("suppliers")
-      .select("id, code, name, phone, debt")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0)
-      .order("debt", { ascending: false })
-      .limit(limit),
-    supabase
-      .from("invoices")
-      .select("customer_id, created_at")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0)
-      .eq("status", "completed"),
-    supabase
-      .from("purchase_orders")
-      .select("supplier_id, created_at")
-      .eq("tenant_id", tenantId)
-      .gt("debt", 0),
+  const [receivable, payable] = await Promise.all([
+    getReceivableAgingReport({ branchId: branchId ?? null }),
+    getPayableAgingReport({ branchId: branchId ?? null }),
   ]);
 
-  // Oldest dates
-  const customerOldest = new Map<string, Date>();
-  for (const inv of invoicesRes.data ?? []) {
-    const id = inv.customer_id as string;
-    if (!id) continue;
-    const d = new Date(inv.created_at);
-    const e = customerOldest.get(id);
-    if (!e || d < e) customerOldest.set(id, d);
-  }
-  const supplierOldest = new Map<string, Date>();
-  for (const po of posRes.data ?? []) {
-    const id = po.supplier_id as string;
-    if (!id) continue;
-    const d = new Date(po.created_at);
-    const e = supplierOldest.get(id);
-    if (!e || d < e) supplierOldest.set(id, d);
-  }
+  const safeLimit = Math.max(1, Math.min(Math.trunc(limit), 100));
+  const receivableRows = [...receivable.rows]
+    .filter((row) => row.outstanding > 0)
+    .sort((a, b) => b.outstanding - a.outstanding)
+    .slice(0, safeLimit);
+  const payableRows = [...payable.rows]
+    .filter((row) => row.outstanding > 0)
+    .sort((a, b) => b.outstanding - a.outstanding)
+    .slice(0, safeLimit);
 
-  function getBucketLabel(days: number): string {
-    if (days <= 30) return "0-30 ngày";
-    if (days <= 60) return "31-60 ngày";
-    if (days <= 90) return "61-90 ngày";
-    return "90+ ngày";
-  }
+  const customerIds = receivableRows
+    .map((row) => row.customerId)
+    .filter((id) => id && !id.startsWith("walk-in:"));
+  const supplierIds = payableRows.map((row) => row.supplierId).filter(Boolean);
 
-  const debtors: DebtorDetail[] = [];
+  const [customersRes, suppliersRes] = await Promise.all([
+    customerIds.length > 0
+      ? supabase
+          .from("customers")
+          .select("id, code, name, phone")
+          .eq("tenant_id", tenantId)
+          .in("id", customerIds)
+      : Promise.resolve({ data: [], error: null }),
+    supplierIds.length > 0
+      ? supabase
+          .from("suppliers")
+          .select("id, code, name, phone")
+          .eq("tenant_id", tenantId)
+          .in("id", supplierIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
 
-  for (const c of customersRes.data ?? []) {
-    const oldest = customerOldest.get(c.id);
-    const ageDays = oldest
-      ? Math.floor((now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
-    debtors.push({
-      id: c.id,
-      code: c.code,
-      name: c.name,
-      phone: c.phone ?? undefined,
-      debt: Number(c.debt ?? 0),
-      ageDays,
-      bucket: getBucketLabel(ageDays),
-      type: "customer",
-      oldestInvoiceDate: oldest?.toISOString(),
-    });
-  }
+  if (customersRes.error) handleError(customersRes.error, "getTopDebtors.customers");
+  if (suppliersRes.error) handleError(suppliersRes.error, "getTopDebtors.suppliers");
 
-  for (const s of suppliersRes.data ?? []) {
-    const oldest = supplierOldest.get(s.id);
-    const ageDays = oldest
-      ? Math.floor((now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
-    debtors.push({
-      id: s.id,
-      code: s.code,
-      name: s.name,
-      phone: s.phone ?? undefined,
-      debt: Number(s.debt ?? 0),
-      ageDays,
-      bucket: getBucketLabel(ageDays),
-      type: "supplier",
-      oldestInvoiceDate: oldest?.toISOString(),
-    });
-  }
+  const customerMeta = new Map((customersRes.data ?? []).map((row) => [row.id, row]));
+  const supplierMeta = new Map((suppliersRes.data ?? []).map((row) => [row.id, row]));
 
-  // Sort by debt descending
+  const debtors: DebtorDetail[] = [
+    ...receivableRows.map((row) => {
+      const meta = customerMeta.get(row.customerId);
+      return {
+        id: row.customerId,
+        code: meta?.code ?? (row.customerId.startsWith("walk-in:") ? "KHACH-LE" : "—"),
+        name: meta?.name ?? row.customerName,
+        phone: meta?.phone ?? undefined,
+        debt: row.outstanding,
+        ageDays: row.oldestDays,
+        bucket: getBucketLabel(row.oldestDays),
+        type: "customer" as const,
+        oldestInvoiceDate: row.oldestInvoiceDate,
+      };
+    }),
+    ...payableRows.map((row) => {
+      const meta = supplierMeta.get(row.supplierId);
+      return {
+        id: row.supplierId,
+        code: meta?.code ?? "—",
+        name: meta?.name ?? row.supplierName,
+        phone: meta?.phone ?? undefined,
+        debt: row.outstanding,
+        ageDays: row.oldestDays,
+        bucket: getBucketLabel(row.oldestDays),
+        type: "supplier" as const,
+        oldestInvoiceDate: row.oldestDocumentDate,
+      };
+    }),
+  ];
+
   debtors.sort((a, b) => b.debt - a.debt);
-  return debtors.slice(0, limit);
+  return debtors;
 }

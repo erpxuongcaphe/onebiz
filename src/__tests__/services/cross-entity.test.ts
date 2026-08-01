@@ -84,6 +84,33 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock") {
         return { data: null, error: null };
       }
+      if (fn === "complete_legacy_sales_order_atomic") {
+        if (!tableMocks.sales_orders?.data) {
+          return { data: null, error: { message: "ORDER_NOT_COMPLETABLE" } };
+        }
+        return {
+          data: { invoice_id: "inv1", invoice_code: "HD00001" },
+          error: null,
+        };
+      }
+      if (fn === "cancel_legacy_sales_order_atomic") {
+        if (!tableMocks.sales_orders?.data) {
+          return { data: null, error: { message: "ORDER_NOT_CANCELLABLE" } };
+        }
+        return { data: { order_id: "so1", status: "cancelled" }, error: null };
+      }
+      if (fn === "cancel_disposal_export_atomic_v2") {
+        if (!tableMocks.disposal_exports?.data) {
+          return { data: null, error: { message: "DISPOSAL_NOT_CANCELLABLE" } };
+        }
+        return { data: { disposal_id: "d1", status: "cancelled" }, error: null };
+      }
+      if (fn === "cancel_internal_export_atomic_v2") {
+        if (!tableMocks.internal_exports?.data) {
+          return { data: null, error: { message: "INTERNAL_EXPORT_NOT_CANCELLABLE" } };
+        }
+        return { data: { export_id: "ie1", status: "cancelled" }, error: null };
+      }
       // Migration 00074: atomic disposal + internal export RPC trả { success: true }
       if (fn === "apply_disposal_export_atomic" || fn === "apply_internal_export_atomic") {
         return { data: { success: true, items_processed: 2 }, error: null };
@@ -155,61 +182,44 @@ describe("completeSalesOrder", () => {
     };
   });
 
-  it("creates an invoice from the sales order", async () => {
+  it("creates the invoice through one atomic server RPC", async () => {
     const result = await completeSalesOrder("so1");
 
-    expect(result.invoiceId).toBeDefined();
-    expect(result.invoiceCode).toBeDefined();
-
-    // Should have inserted into invoices
-    const invoiceInserts = insertCalls.filter((c) => c.table === "invoices");
-    expect(invoiceInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const invData = invoiceInserts[0].data as any;
-    expect(invData.status).toBe("completed");
-    expect(invData.customer_name).toBe("Khách ABC");
-    expect(invData.total).toBe(1_500_000);
+    expect(result).toEqual({
+      invoiceId: "inv1",
+      invoiceCode: "HD00001",
+    });
+    expect(rpcCalls).toContainEqual({
+      fn: "complete_legacy_sales_order_atomic",
+      params: { p_order_id: "so1" },
+    });
   });
 
-  it("creates invoice_items from SO items", async () => {
+  it("does not create invoice items from the browser", async () => {
     await completeSalesOrder("so1");
 
-    const itemInserts = insertCalls.filter((c) => c.table === "invoice_items");
-    expect(itemInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items = itemInserts[0].data as any[];
-    expect(items).toHaveLength(2);
-    expect(items[0].product_name).toBe("SP A");
-    expect(items[1].product_name).toBe("SP B");
+    expect(insertCalls.filter((call) => call.table === "invoice_items")).toHaveLength(0);
   });
 
-  it("decrements stock via applyStockDecrement (stock_movements + RPCs)", async () => {
+  it("does not decrement stock from the browser", async () => {
     await completeSalesOrder("so1");
 
-    // Stock movements inserted per item for ledger traceability
-    const smInserts = insertCalls.filter((c) => c.table === "stock_movements");
-    expect(smInserts.length).toBe(2);
-
-    // RPCs for stock decrement (2 items × 2 RPCs each = 4)
-    // + 2 next_code calls (invoice + cash)
-    const stockRpcs = rpcCalls.filter(
-      (c) => c.fn === "increment_product_stock" || c.fn === "upsert_branch_stock"
-    );
-    expect(stockRpcs.length).toBe(4); // 2 products × (product_stock + branch_stock)
+    expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
+    expect(
+      rpcCalls.filter(
+        (call) =>
+          call.fn === "increment_product_stock" ||
+          call.fn === "upsert_branch_stock",
+      ),
+    ).toHaveLength(0);
   });
 
-  it("creates cash receipt for the full amount", async () => {
+  it("does not create a separate client-side cash receipt", async () => {
     await completeSalesOrder("so1");
 
-    const cashInserts = insertCalls.filter(
-      (c) => c.table === "cash_transactions"
-    );
-    expect(cashInserts.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cashData = cashInserts[0].data as any;
-    expect(cashData.amount).toBe(1_500_000);
-    expect(cashData.type).toBe("receipt");
-    expect(cashData.category).toBe("Bán hàng");
+    expect(
+      insertCalls.filter((call) => call.table === "cash_transactions"),
+    ).toHaveLength(0);
   });
 
   it("throws when order is already completed", async () => {

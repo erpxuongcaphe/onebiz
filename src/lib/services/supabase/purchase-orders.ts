@@ -1,5 +1,4 @@
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
-import { ensurePurchasePaymentRecorded } from "./payments";
 /**
  * Supabase service: Purchase Orders (Đặt hàng / Nhập hàng)
  *
@@ -40,6 +39,125 @@ interface ReceivePurchaseItemsRpcResponse {
   received_qty_total: number;
   input_invoice_id: string | null;
   input_invoice_code: string | null;
+}
+
+export interface SavePurchaseOrderItemInput {
+  productId: string;
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  vatRate: number;
+  expiryDate?: string | null;
+  lotNumber?: string | null;
+}
+
+export interface SavePurchaseOrderInput {
+  orderId?: string | null;
+  requestedCode?: string | null;
+  branchId: string;
+  supplierId: string;
+  note?: string | null;
+  shippingCost?: number;
+  otherCost?: number;
+  orderDiscount?: number;
+  paidAmount?: number;
+  paymentMethod?: "cash" | "transfer" | "card" | "ewallet";
+  markOrdered?: boolean;
+  receiveNow?: boolean;
+  items: SavePurchaseOrderItemInput[];
+}
+
+export interface SavePurchaseOrderResult {
+  orderId: string;
+  code: string;
+  status: PurchaseOrderStatus;
+  total: number;
+  paid: number;
+  debt: number;
+}
+
+export interface UpdateReceivedPurchaseOrderInput {
+  orderId: string;
+  requestedPaid: number;
+  note?: string | null;
+  paymentMethod?: "cash" | "transfer" | "card" | "ewallet";
+}
+
+export async function updateReceivedPurchaseOrderAtomic(
+  input: UpdateReceivedPurchaseOrderInput,
+): Promise<SavePurchaseOrderResult> {
+  const supabase = getClient();
+  const { data, error } = await (supabase.rpc as any)(
+    "update_received_purchase_order_atomic",
+    {
+      p_purchase_order_id: input.orderId,
+      p_requested_paid: Number(input.requestedPaid),
+      p_note: input.note ?? null,
+      p_payment_method: input.paymentMethod ?? "cash",
+    },
+  );
+  if (error) handleError(error, "updateReceivedPurchaseOrderAtomic");
+
+  const result = data as Record<string, unknown> | null;
+  if (!result?.purchase_order_id || !result.code || !result.status) {
+    throw new Error("May chu khong tra ve ket qua cap nhat phieu nhap.");
+  }
+
+  return {
+    orderId: String(result.purchase_order_id),
+    code: String(result.code),
+    status: result.status as PurchaseOrderStatus,
+    total: Number(result.paid ?? 0) + Number(result.debt ?? 0),
+    paid: Number(result.paid ?? 0),
+    debt: Number(result.debt ?? 0),
+  };
+}
+
+export async function savePurchaseOrderAtomic(
+  input: SavePurchaseOrderInput,
+): Promise<SavePurchaseOrderResult> {
+  const supabase = getClient();
+  const { data, error } = await (supabase.rpc as any)(
+    "save_purchase_order_atomic",
+    {
+      p_purchase_order_id: input.orderId ?? null,
+      p_requested_code: input.requestedCode ?? null,
+      p_branch_id: input.branchId,
+      p_supplier_id: input.supplierId,
+      p_note: input.note ?? null,
+      p_shipping_cost: Number(input.shippingCost ?? 0),
+      p_other_cost: Number(input.otherCost ?? 0),
+      p_order_discount: Number(input.orderDiscount ?? 0),
+      p_paid_amount: Number(input.paidAmount ?? 0),
+      p_payment_method: input.paymentMethod ?? "cash",
+      p_mark_ordered: Boolean(input.markOrdered),
+      p_receive_now: Boolean(input.receiveNow),
+      p_items: input.items.map((item) => ({
+        product_id: item.productId,
+        quantity: Number(item.quantity),
+        unit_price: Number(item.unitPrice),
+        discount: Number(item.discount ?? 0),
+        vat_rate: Number(item.vatRate ?? 0),
+        expiry_date: item.expiryDate ?? null,
+        lot_number: item.lotNumber ?? null,
+      })),
+    },
+  );
+  if (error) handleError(error, "savePurchaseOrderAtomic");
+
+  const result = data as Record<string, unknown> | null;
+  if (!result?.purchase_order_id || !result.code || !result.status) {
+    throw new Error("Máy chủ không trả về kết quả lưu phiếu nhập.");
+  }
+
+  return {
+    orderId: String(result.purchase_order_id),
+    code: String(result.code),
+    status: result.status as PurchaseOrderStatus,
+    total: Number(result.total ?? 0),
+    paid: Number(result.paid ?? 0),
+    debt: Number(result.debt ?? 0),
+  };
 }
 
 /* ------------------------------------------------------------------ */
@@ -269,7 +387,6 @@ export async function receivePurchaseOrderPartial(
     throw new Error("Không có dòng nào để nhập");
   }
 
-  const ctx = await getCurrentContext();
   const payload = lines
     .filter((l) => Number(l.receiveQty) > 0)
     .map((l) => ({ item_id: l.itemId, receive_qty: Number(l.receiveQty) }));
@@ -284,7 +401,7 @@ export async function receivePurchaseOrderPartial(
     {
       p_order_id: orderId,
       p_lines: payload,
-      p_created_by: ctx.userId,
+      p_created_by: null,
     },
   );
   if (error) handleError(error, "receivePurchaseOrderPartial");
@@ -306,59 +423,32 @@ export async function receivePurchaseOrderPartial(
 
 export async function updatePurchaseOrderStatus(
   orderId: string,
-  newStatus: PurchaseOrderStatus
+  newStatus: PurchaseOrderStatus,
+  reason?: string,
 ): Promise<void> {
-  // "completed" transitions are special: they commit real inventory, so we
-  // route them through `receivePurchaseOrder` instead of a plain status flip.
-  // This keeps all callers (Kanban drag, row action menu) safe by default.
   if (newStatus === "completed") {
     await receivePurchaseOrder(orderId);
     return;
   }
+  if (newStatus !== "ordered" && newStatus !== "cancelled") {
+    throw new Error("Trạng thái phiếu nhập phải được thay đổi qua đúng nghiệp vụ.");
+  }
 
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const { data, error } = await (supabase.rpc as any)(
+    "set_purchase_order_state_atomic",
+    {
+      p_purchase_order_id: orderId,
+      p_new_status: newStatus,
+      p_reason: reason ?? null,
+    },
+  );
+  if (error) handleError(error, "updatePurchaseOrderStatus");
 
-  const { data: current, error: readErr } = await supabase
-    .from("purchase_orders")
-    .select("status")
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .single();
-
-  if (readErr) handleError(readErr, "updatePurchaseOrderStatus.read");
-  if (!current) throw new Error("Không tìm thấy đơn nhập hàng");
-
-  const fromStatus = current.status as PurchaseOrderStatus;
-
-  // D3 (CEO 07/07/2026): CHẶN lật-cờ 'partial'/'completed' → 'cancelled'. Đơn đã
-  // nhận hàng (một phần/toàn bộ) có TỒN THẬT + công nợ NCC; huỷ suông sẽ để lại
-  // TỒN MA + công nợ mồ côi. Phải "Hoàn nhập" (revert_received_purchase_order_atomic)
-  // để đảo tồn kho + công nợ. Chốt tập trung → mọi đường gọi (huỷ đơn lẻ + huỷ
-  // hàng loạt ở nhap-hang) đều an toàn.
-  if (
-    newStatus === "cancelled" &&
-    (fromStatus === "partial" || fromStatus === "completed")
-  ) {
-    throw new Error(
-      'Đơn đã nhận hàng (một phần/toàn bộ) — không thể huỷ trực tiếp. Dùng "Hoàn nhập" để đảo tồn kho + công nợ.',
-    );
+  const result = data as Record<string, unknown> | null;
+  if (!result?.purchase_order_id || result.status !== newStatus) {
+    throw new Error("Máy chủ không xác nhận trạng thái phiếu nhập.");
   }
-
-  if (!canTransitionPurchaseStatus(fromStatus, newStatus)) {
-    throw new Error(
-      `Không thể chuyển từ "${fromStatus}" sang "${newStatus}"`
-    );
-  }
-
-  const { error: updateErr } = await supabase
-    .from("purchase_orders")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ status: newStatus as any })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (updateErr) handleError(updateErr, "updatePurchaseOrderStatus.update");
 }
 
 /* ------------------------------------------------------------------ */
@@ -381,15 +471,13 @@ export async function updatePurchaseOrderStatus(
  */
 export async function receivePurchaseOrder(orderId: string): Promise<void> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "receive_purchase_items_atomic",
     {
       p_order_id: orderId,
       p_lines: null, // null = "nhận toàn bộ remaining"
-      p_created_by: ctx.userId,
+      p_created_by: null,
     },
   );
   if (error) handleError(error, "receivePurchaseOrder");
@@ -397,17 +485,6 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
   const res = data as ReceivePurchaseItemsRpcResponse | null;
   if (!res || !res.new_status) {
     throw new Error("RPC receive_purchase_items_atomic không trả về kết quả");
-  }
-
-  // CEO 25/07: tiền điền ở ô "Đã thanh toán NCC" trên form trước nay chỉ ghi
-  // vào purchase_orders.paid, KHÔNG đẻ phiếu chi → sổ quỹ thiếu 318 triệu.
-  // Bù ngay khi nhận hàng xong (mọi đường nhận hàng đều qua đây). Hàm tự so
-  // với phiếu chi đã có nên gọi lại không sinh trùng.
-  // Best-effort: hàng đã vào kho rồi, lỗi ghi sổ quỹ không được rollback.
-  try {
-    await ensurePurchasePaymentRecorded(orderId);
-  } catch (err) {
-    console.error("[receivePurchaseOrder] bù phiếu chi thất bại:", err);
   }
 }
 
@@ -445,26 +522,15 @@ export async function reopenPurchaseOrderForEdit(
   inputInvoiceDeleted: boolean;
 }> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let { data, error } = await (supabase.rpc as any)(
+  const { data, error } = await (supabase.rpc as any)(
     "revert_received_purchase_order_atomic",
     {
       p_order_id: orderId,
-      p_user_id: ctx.userId,
+      p_user_id: null,
       p_allow_negative: allowNegative,
     },
   );
-  // Fallback: 00214 chưa chạy → hàm chưa có p_allow_negative (PGRST202).
-  // Gọi lại bản 2 tham số (chặn tồn âm như cũ). Chỉ fallback khi KHÔNG cần
-  // bỏ chặn — nếu cần allowNegative mà RPC cũ → để lỗi gốc nổi lên.
-  if (error && !allowNegative && /PGRST202|does not exist|could not find/i.test(error.message ?? "")) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ({ data, error } = await (supabase.rpc as any)(
-      "revert_received_purchase_order_atomic",
-      { p_order_id: orderId, p_user_id: ctx.userId },
-    ));
-  }
   if (error) handleError(error, "reopenPurchaseOrderForEdit");
 
   const res = data as {
@@ -630,77 +696,52 @@ export async function duplicatePurchaseOrder(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const profile = await getCurrentContext();
-  if (!profile) throw new Error("Không xác định được người dùng hiện tại");
 
-  // 1. Load source PO + items
-  const { data: source, error: srcErr } = await supabase
+  const { data: source, error } = await supabase
     .from("purchase_orders")
     .select("*, purchase_order_items(*)")
     .eq("tenant_id", tenantId)
     .eq("id", sourceOrderId)
     .single();
-  if (srcErr) handleError(srcErr, "duplicatePurchaseOrder:source");
-  if (!source) throw new Error("Không tìm thấy đơn để sao chép");
+  if (error) handleError(error, "duplicatePurchaseOrder.source");
+  if (!source) throw new Error("Không tìm thấy phiếu nhập để sao chép.");
 
-  // 2. Generate new code
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: tenantId,
-    p_entity_type: "purchase_order",
-  });
-  if (codeErr) handleError(codeErr, "duplicatePurchaseOrder:next_code");
-  const newCode = code ?? `PN${Date.now()}`;
-
-  // 3. Insert new PO draft
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const newPO: any = {
-    tenant_id: tenantId,
-    branch_id: profile.branchId,
-    code: newCode,
-    supplier_id: source.supplier_id,
-    supplier_name: source.supplier_name,
-    status: "draft",
-    subtotal: source.subtotal,
-    discount_amount: source.discount_amount,
-    tax_amount: source.tax_amount,
-    total: source.total,
-    paid: 0,
-    debt: source.total,
-    note: source.note ? `[Sao chép từ ${source.code}] ${source.note}` : `[Sao chép từ ${source.code}]`,
-    created_by: profile.userId,
+  const sourceWithCosts = source as typeof source & {
+    shipping_cost?: number | null;
+    other_cost?: number | null;
+    order_discount?: number | null;
   };
-
-  const { data: po, error: poErr } = await supabase
-    .from("purchase_orders")
-    .insert(newPO)
-    .select("id, code")
-    .single();
-  if (poErr) handleError(poErr, "duplicatePurchaseOrder:insert");
-  if (!po) throw new Error("Không tạo được bản sao đơn nhập");
-
-  // 4. Clone items (reset received_quantity = 0)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sourceItems = (source.purchase_order_items ?? []) as any[];
-  if (sourceItems.length > 0) {
-    const itemsData = sourceItems.map((it) => ({
-      purchase_order_id: po.id,
-      product_id: it.product_id,
-      product_name: it.product_name,
-      unit: it.unit ?? "Cái",
-      quantity: it.quantity,
-      received_quantity: 0,
-      unit_price: it.unit_price,
-      discount: it.discount ?? 0,
-      vat_rate: it.vat_rate ?? 0,
-      vat_amount: it.vat_amount ?? 0,
-      total: it.total,
-    }));
-    const { error: itemsErr } = await supabase
-      .from("purchase_order_items")
-      .insert(itemsData);
-    if (itemsErr) handleError(itemsErr, "duplicatePurchaseOrder:items");
+  const sourceItems = (sourceWithCosts.purchase_order_items ?? []) as Array<
+    Record<string, unknown>
+  >;
+  if (sourceItems.length === 0) {
+    throw new Error("Phiếu nguồn không có dòng hàng để sao chép.");
   }
 
-  return { orderId: po.id, orderCode: po.code };
+  const saved = await savePurchaseOrderAtomic({
+    branchId: profile.branchId,
+    supplierId: source.supplier_id,
+    note: source.note
+      ? `[Sao chép từ ${source.code}] ${source.note}`
+      : `[Sao chép từ ${source.code}]`,
+    shippingCost: Number(sourceWithCosts.shipping_cost ?? 0),
+    otherCost: Number(sourceWithCosts.other_cost ?? 0),
+    orderDiscount: Number(sourceWithCosts.order_discount ?? 0),
+    paidAmount: 0,
+    markOrdered: false,
+    receiveNow: false,
+    items: sourceItems.map((item) => ({
+      productId: String(item.product_id),
+      quantity: Number(item.quantity ?? 0),
+      unitPrice: Number(item.unit_price ?? 0),
+      discount: Number(item.discount ?? 0),
+      vatRate: Number(item.vat_rate ?? 0),
+      expiryDate: item.expiry_date ? String(item.expiry_date) : null,
+      lotNumber: item.lot_number ? String(item.lot_number) : null,
+    })),
+  });
+
+  return { orderId: saved.orderId, orderCode: saved.code };
 }
 
 /* ------------------------------------------------------------------ */

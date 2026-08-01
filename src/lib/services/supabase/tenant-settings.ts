@@ -105,23 +105,7 @@ export async function updateTenantBusinessInfo(
   patch: Partial<TenantBusinessInfo>,
 ): Promise<TenantBusinessInfo> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Read current full settings để merge
-  const { data: current, error: readErr } = await supabase
-    .from("tenants")
-    .select("settings")
-    .eq("id", tenantId)
-    .single();
-  if (readErr) handleError(readErr, "updateTenantBusinessInfo.read");
-
-  const currentSettings =
-    (current?.settings as Record<string, unknown> | null) ?? {};
-  const currentBusiness =
-    (currentSettings.business_info as Record<string, unknown> | undefined) ?? {};
-
-  // Map camelCase → snake_case cho DB jsonb
-  const updates: Record<string, unknown> = { ...currentBusiness };
+  const updates: Record<string, unknown> = {};
   if (patch.businessName !== undefined) updates.business_name = patch.businessName;
   if (patch.taxCode !== undefined) updates.tax_code = patch.taxCode;
   if (patch.address !== undefined) updates.address = patch.address;
@@ -139,45 +123,32 @@ export async function updateTenantBusinessInfo(
   if (patch.invoiceTitle !== undefined) updates.invoice_title = patch.invoiceTitle;
   if (patch.invoiceFields !== undefined) updates.invoice_fields = patch.invoiceFields;
 
-  const newSettings = {
-    ...currentSettings,
-    business_info: updates,
-  };
-
-  const { error: updErr } = await supabase
-    .from("tenants")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ settings: newSettings as any, updated_at: new Date().toISOString() })
-    .eq("id", tenantId);
-  if (updErr) handleError(updErr, "updateTenantBusinessInfo.update");
-
-  // Audit log: thay đổi thông tin pháp lý doanh nghiệp là quan trọng,
-  // CEO cần trace ai sửa MST/tên/địa chỉ.
-  await recordAuditLog({
-    entityType: "tenant",
-    entityId: tenantId,
-    action: "update",
-    oldData: currentBusiness,
-    newData: updates,
-  });
-
+  if (Object.keys(updates).length === 0) {
+    return getTenantBusinessInfo();
+  }
+  const { data, error } = await (supabase.rpc as any)(
+    "patch_tenant_settings_atomic",
+    { p_section: "business_info", p_value: updates, p_replace: false },
+  );
+  if (error) handleError(error, "updateTenantBusinessInfo");
+  const business = (data ?? {}) as Record<string, unknown>;
   return {
-    businessName: updates.business_name as string | undefined,
-    taxCode: updates.tax_code as string | undefined,
-    address: updates.address as string | undefined,
-    phone: updates.phone as string | undefined,
-    email: updates.email as string | undefined,
-    website: updates.website as string | undefined,
-    logoUrl: updates.logo_url as string | undefined,
-    bankAccount: updates.bank_account as string | undefined,
-    bankName: updates.bank_name as string | undefined,
-    bankBin: updates.bank_bin as string | undefined,
-    bankCode: updates.bank_code as string | undefined,
-    bankHolder: updates.bank_holder as string | undefined,
-    vietQrEnabled: updates.vietqr_enabled as boolean | undefined,
-    invoiceFooter: updates.invoice_footer as string | undefined,
-    invoiceTitle: updates.invoice_title as string | undefined,
-    invoiceFields: updates.invoice_fields as InvoiceFieldFlags | undefined,
+    businessName: business.business_name as string | undefined,
+    taxCode: business.tax_code as string | undefined,
+    address: business.address as string | undefined,
+    phone: business.phone as string | undefined,
+    email: business.email as string | undefined,
+    website: business.website as string | undefined,
+    logoUrl: business.logo_url as string | undefined,
+    bankAccount: business.bank_account as string | undefined,
+    bankName: business.bank_name as string | undefined,
+    bankBin: business.bank_bin as string | undefined,
+    bankCode: business.bank_code as string | undefined,
+    bankHolder: business.bank_holder as string | undefined,
+    vietQrEnabled: business.vietqr_enabled as boolean | undefined,
+    invoiceFooter: business.invoice_footer as string | undefined,
+    invoiceTitle: business.invoice_title as string | undefined,
+    invoiceFields: business.invoice_fields as InvoiceFieldFlags | undefined,
   };
 }
 

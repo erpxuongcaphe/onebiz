@@ -294,6 +294,39 @@ export async function duplicatePriceTier(params: {
  * Dùng trong POS để re-price cart khi customer/branch thay đổi.
  * Trả null nếu không có tier mặc định → caller fallback giá niêm yết.
  */
+export interface TierPriceRule {
+  variantId: string | null;
+  minQty: number;
+  price: number;
+  createdAt: string;
+}
+
+export interface TierPriceBatchEntry {
+  base: number | null;
+  byVariant: Map<string, number>;
+  rules: TierPriceRule[];
+}
+
+export function resolveTierPrice(
+  rules: TierPriceRule[] | undefined,
+  quantity: number,
+  variantId?: string | null,
+): number | null {
+  const targetVariant = variantId ?? null;
+  let best: TierPriceRule | null = null;
+  for (const rule of rules ?? []) {
+    if (rule.variantId !== targetVariant || rule.minQty > quantity) continue;
+    if (
+      !best ||
+      rule.minQty > best.minQty ||
+      (rule.minQty === best.minQty && rule.createdAt > best.createdAt)
+    ) {
+      best = rule;
+    }
+  }
+  return best?.price ?? null;
+}
+
 export async function resolveAppliedTier(context: {
   channel: "retail" | "fnb";
   customerId?: string;
@@ -304,6 +337,7 @@ export async function resolveAppliedTier(context: {
   tierName: string;
   tierCode: string;
   priceMap: Map<string, number>;
+  rulesMap: Map<string, TierPriceRule[]>;
 } | null> {
   const tierId = await getApplicableTier({
     channel: context.channel,
@@ -326,12 +360,12 @@ export async function resolveAppliedTier(context: {
   // Batch lookup prices
   const tierPrices = await getTierPricesBatch(tierId, context.productIds);
   const priceMap = new Map<string, number>();
+  const rulesMap = new Map<string, TierPriceRule[]>();
   for (const [productId, entry] of tierPrices.entries()) {
     if (entry.base !== null) {
       priceMap.set(productId, entry.base);
     }
-    // variant prices (nếu cần) — POS hiện match by productId, variant
-    // override sẽ làm sau khi cần.
+    rulesMap.set(productId, entry.rules);
   }
 
   return {
@@ -339,6 +373,7 @@ export async function resolveAppliedTier(context: {
     tierName: tier.name,
     tierCode: tier.code,
     priceMap,
+    rulesMap,
   };
 }
 
@@ -559,38 +594,46 @@ export async function getProductPriceForCustomer(
 export async function getTierPricesBatch(
   tierId: string,
   productIds: string[]
-): Promise<Map<string, { base: number | null; byVariant: Map<string, number> }>> {
+): Promise<Map<string, TierPriceBatchEntry>> {
   if (productIds.length === 0) return new Map();
   const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("price_tier_items")
-    .select("product_id, variant_id, price, price_tiers!inner(tenant_id)")
+    .select(
+      "product_id, variant_id, price, min_qty, created_at, price_tiers!inner(tenant_id)",
+    )
     .eq("price_tiers.tenant_id", tenantId)
     .eq("price_tier_id", tierId)
     .in("product_id", productIds);
 
   if (error || !data) return new Map();
 
-  const result = new Map<
-    string,
-    { base: number | null; byVariant: Map<string, number> }
-  >();
-
+  const result = new Map<string, TierPriceBatchEntry>();
   for (const row of data) {
     const productId = row.product_id as string;
-    const variantId = row.variant_id as string | null;
-    const price = row.price as number;
-
+    const variantId = (row.variant_id as string | null) ?? null;
     if (!result.has(productId)) {
-      result.set(productId, { base: null, byVariant: new Map() });
+      result.set(productId, { base: null, byVariant: new Map(), rules: [] });
     }
-    const entry = result.get(productId)!;
+    result.get(productId)!.rules.push({
+      variantId,
+      minQty: Number(row.min_qty ?? 1),
+      price: Number(row.price ?? 0),
+      createdAt: String(row.created_at ?? ""),
+    });
+  }
 
-    if (variantId) {
-      entry.byVariant.set(variantId, price);
-    } else {
-      entry.base = price;
+  for (const entry of result.values()) {
+    entry.base = resolveTierPrice(entry.rules, 1, null);
+    const variantIds = new Set(
+      entry.rules
+        .map((rule) => rule.variantId)
+        .filter((variantId): variantId is string => Boolean(variantId)),
+    );
+    for (const variantId of variantIds) {
+      const price = resolveTierPrice(entry.rules, 1, variantId);
+      if (price !== null) entry.byVariant.set(variantId, price);
     }
   }
 

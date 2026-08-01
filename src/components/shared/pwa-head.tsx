@@ -44,6 +44,33 @@ export function PwaHead() {
     // - FnB subdomain → /sw-fnb.js (offline-first POS)
     // - Main ERP web (incl. /manager) → /sw-manager.js (Day 6 16/05/2026)
     if ("serviceWorker" in navigator) {
+      const isLocalhost =
+        window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1";
+
+      if (isLocalhost) {
+        // Dev chunks use stable URLs, so PWA caching can keep obsolete code.
+        navigator.serviceWorker
+          .getRegistrations()
+          .then((registrations) =>
+            Promise.all(registrations.map((registration) => registration.unregister())),
+          )
+          .catch(() => {});
+        if ("caches" in window) {
+          caches
+            .keys()
+            .then((keys) =>
+              Promise.all(
+                keys
+                  .filter((key) => key.startsWith("onebiz-"))
+                  .map((key) => caches.delete(key)),
+              ),
+            )
+            .catch(() => {});
+        }
+        return;
+      }
+
       const swPath = isFnb ? "/sw-fnb.js" : "/sw-manager.js";
       navigator.serviceWorker.register(swPath, { scope: "/" }).catch(() => {
         // Silent fail — SW registration is optional

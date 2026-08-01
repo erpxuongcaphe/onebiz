@@ -131,121 +131,77 @@ export interface CreateShipmentInput {
  *   - shipping_orders: mã VD (next_code), cod = total mới − paid
  * Chặn: hóa đơn cancelled, hoặc đã có vận đơn chưa hủy (1 đơn 1 vận đơn).
  */
+interface AttachShipmentRpcResult {
+  shipment_id?: string | null;
+  shipment_code?: string | null;
+  delivery_fee?: number;
+  total?: number;
+  debt?: number;
+  idempotent?: boolean;
+}
+
+async function attachInvoiceShipmentAtomic(input: {
+  invoiceId: string;
+  fee: number;
+  receiverName?: string | null;
+  receiverPhone?: string | null;
+  receiverAddress?: string | null;
+  partnerId?: string | null;
+  note?: string | null;
+}): Promise<AttachShipmentRpcResult> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "attach_invoice_shipment_atomic",
+    {
+      p_invoice_id: input.invoiceId,
+      p_delivery_fee: Math.max(0, Number(input.fee) || 0),
+      p_receiver_name: input.receiverName ?? null,
+      p_receiver_phone: input.receiverPhone ?? null,
+      p_receiver_address: input.receiverAddress ?? null,
+      p_partner_id: input.partnerId ?? null,
+      p_note: input.note ?? null,
+    },
+  );
+  if (error) handleError(error, "attachInvoiceShipmentAtomic.rpc");
+  if (!data) throw new Error("Máy chủ không trả kết quả tạo vận đơn");
+  return data as AttachShipmentRpcResult;
+}
+
 export async function createShipmentForInvoice(
   input: CreateShipmentInput,
 ): Promise<ShippingOrder> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  const fee = Math.max(0, Number(input.fee) || 0);
-  if (!input.receiverName.trim() || !input.receiverPhone.trim() || !input.receiverAddress.trim()) {
+  if (
+    !input.receiverName.trim() ||
+    !input.receiverPhone.trim() ||
+    !input.receiverAddress.trim()
+  ) {
     throw new Error("Cần đủ người nhận + SĐT + địa chỉ giao hàng");
   }
 
-  // 1. Load hóa đơn
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: inv, error: invErr } = await (supabase as any)
-    .from("invoices")
-    .select("id, code, status, delivery_fee, total, paid, debt, customer_id")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", input.invoiceId)
-    .single();
-  if (invErr) handleError(invErr, "createShipmentForInvoice.load");
-  if (!inv) throw new Error("Không tìm thấy hóa đơn");
-  if (inv.status === "cancelled") {
-    throw new Error("Hóa đơn đã hủy — không thể tạo vận đơn");
-  }
-
-  // 2. Chặn vận đơn trùng (còn hiệu lực)
-  const { data: existing } = await supabase
-    .from("shipping_orders")
-    .select("id, code, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("invoice_id", input.invoiceId)
-    .not("status", "in", "(cancelled,returned)")
-    .limit(1)
-    .maybeSingle();
-  if (existing) {
-    throw new Error(`Đơn này đã có vận đơn ${existing.code} — hủy vận đơn cũ trước khi tạo mới`);
-  }
-
-  // 3. Cập nhật tiền hóa đơn (diff phí giao)
-  const oldFee = Number(inv.delivery_fee ?? 0);
-  const diff = fee - oldFee;
-  const newTotal = Number(inv.total ?? 0) + diff;
-  const newDebt = Number(inv.debt ?? 0) + diff;
-  if (diff !== 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updErr } = await (supabase as any)
-      .from("invoices")
-      .update({ delivery_fee: fee, total: newTotal, debt: newDebt })
-      .eq("tenant_id", ctx.tenantId)
-      .eq("id", input.invoiceId);
-    if (updErr) handleError(updErr, "createShipmentForInvoice.updateInvoice");
-
-    // Nợ KH: chỉ hóa đơn completed mới đã cộng vào customers.debt
-    if (inv.status === "completed" && inv.customer_id) {
-      const { data: kh } = await supabase
-        .from("customers")
-        .select("debt")
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", inv.customer_id)
-        .single();
-      if (kh) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error: khErr } = await (supabase as any)
-          .from("customers")
-          .update({ debt: Number(kh.debt ?? 0) + diff })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("id", inv.customer_id);
-        if (khErr) handleError(khErr, "createShipmentForInvoice.updateCustomerDebt");
-      }
-    }
-  }
-
-  // 4. Sinh mã + tạo vận đơn (COD = số còn phải thu)
-  const { data: shipCode, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: ctx.tenantId,
-    p_entity_type: "shipping_order",
+  const result = await attachInvoiceShipmentAtomic({
+    invoiceId: input.invoiceId,
+    fee: input.fee,
+    receiverName: input.receiverName,
+    receiverPhone: input.receiverPhone,
+    receiverAddress: input.receiverAddress,
+    partnerId: input.partnerId,
+    note: input.note,
   });
-  if (codeErr) handleError(codeErr, "createShipmentForInvoice.code");
+  if (!result.shipment_id) {
+    throw new Error("Phản hồi tạo vận đơn thiếu mã vận đơn");
+  }
 
-  const { data: created, error: shipErr } = await supabase
+  const supabase = getClient();
+  const { data, error } = await supabase
     .from("shipping_orders")
-    .insert({
-      tenant_id: ctx.tenantId,
-      invoice_id: input.invoiceId,
-      partner_id: input.partnerId || null,
-      code: (shipCode as string) ?? `VD${Math.floor(performance.now())}`,
-      status: "pending" as const,
-      shipping_fee: fee,
-      cod_amount: Math.max(0, newTotal - Number(inv.paid ?? 0)),
-      receiver_name: input.receiverName.trim(),
-      receiver_phone: input.receiverPhone.trim(),
-      receiver_address: input.receiverAddress.trim(),
-      note: input.note || null,
-    })
     .select(
       `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
     )
+    .eq("id", result.shipment_id)
     .single();
-  if (shipErr) handleError(shipErr, "createShipmentForInvoice.insert");
-
-  // 5. Audit — best-effort
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: ctx.tenantId,
-      user_id: ctx.userId,
-      action: "attach_shipment",
-      entity_type: "invoice",
-      entity_id: input.invoiceId,
-      old_data: { delivery_fee: oldFee, total: inv.total, debt: inv.debt },
-      new_data: { delivery_fee: fee, total: newTotal, debt: newDebt, shipment: created?.code },
-    });
-  } catch (err) {
-    console.warn("createShipmentForInvoice: audit_log failed", err);
-  }
-
-  return mapShippingOrder(created);
+  if (error) handleError(error, "createShipmentForInvoice.read");
+  return mapShippingOrder(data);
 }
 
 export interface AttachDeliveryInput {
@@ -278,65 +234,18 @@ export interface AttachDeliveryInput {
 export async function attachDeliveryToInvoice(
   input: AttachDeliveryInput,
 ): Promise<{ shipmentCode: string | null }> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  const fee = Math.max(0, Number(input.deliveryFee) || 0);
-  const total = Math.max(0, Number(input.authoritativeTotal) || 0);
-  const paid = Math.max(0, Number(input.paid) || 0);
-  const newDebt = Math.max(0, total - paid);
-
-  // 1. Set delivery_fee + reconcile total/debt (nhánh nháp total có thể thiếu ship).
-  //    Trigger 00130 tự recompute customers.debt.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updErr } = await (supabase as any)
-    .from("invoices")
-    .update({ delivery_fee: fee, total, debt: newDebt })
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", input.invoiceId);
-  if (updErr) handleError(updErr, "attachDeliveryToInvoice.updateInvoice");
-
-  // 2. Tạo vận đơn — chỉ khi đủ người nhận (cột NOT NULL của shipping_orders).
-  const rName = (input.receiverName ?? "").trim();
-  const rPhone = (input.receiverPhone ?? "").trim();
-  const rAddr = (input.receiverAddress ?? "").trim();
-  if (!rName || !rPhone || !rAddr) return { shipmentCode: null };
-
-  // Chặn trùng (đã có vận đơn còn hiệu lực — vd double checkout).
-  const { data: existing } = await supabase
-    .from("shipping_orders")
-    .select("code")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("invoice_id", input.invoiceId)
-    .not("status", "in", "(cancelled,returned)")
-    .limit(1)
-    .maybeSingle();
-  if (existing) return { shipmentCode: (existing as { code: string }).code };
-
-  const { data: shipCode, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: ctx.tenantId,
-    p_entity_type: "shipping_order",
+  // authoritativeTotal/paid are retained in the public input for compatibility,
+  // but the server derives both from the locked invoice row.
+  const result = await attachInvoiceShipmentAtomic({
+    invoiceId: input.invoiceId,
+    fee: input.deliveryFee,
+    receiverName: input.receiverName,
+    receiverPhone: input.receiverPhone,
+    receiverAddress: input.receiverAddress,
+    partnerId: input.partnerId,
+    note: input.note,
   });
-  if (codeErr) handleError(codeErr, "attachDeliveryToInvoice.code");
-
-  const { data: created, error: shipErr } = await supabase
-    .from("shipping_orders")
-    .insert({
-      tenant_id: ctx.tenantId,
-      invoice_id: input.invoiceId,
-      partner_id: input.partnerId || null,
-      code: (shipCode as string) ?? `VD${Math.floor(performance.now())}`,
-      status: "pending" as const,
-      shipping_fee: fee,
-      cod_amount: newDebt, // COD = số còn phải thu khi giao
-      receiver_name: rName,
-      receiver_phone: rPhone,
-      receiver_address: rAddr,
-      note: input.note || null,
-    })
-    .select("code")
-    .single();
-  if (shipErr) handleError(shipErr, "attachDeliveryToInvoice.insertShipment");
-  return { shipmentCode: (created as { code: string } | null)?.code ?? null };
+  return { shipmentCode: result.shipment_code ?? null };
 }
 
 // --- Delivery Partners ---
@@ -461,65 +370,17 @@ export async function updateShippingOrderStatus(
   note?: string,
 ): Promise<ShippingOrder> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
-
-  // 1. Load current status + validate transition
-  const { data: current, error: loadErr } = await supabase
-    .from("shipping_orders")
-    .select("id, status, code")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", orderId)
-    .single();
-  if (loadErr) handleError(loadErr, "updateShippingOrderStatus.load");
-  if (!current) throw new Error("Không tìm thấy vận đơn");
-
-  const fromStatus = current.status as ShippingStatus;
-  if (!canTransitionShippingStatus(fromStatus, nextStatus)) {
-    throw new Error(
-      `Không thể chuyển vận đơn từ "${SHIPPING_STATUS_LABEL[fromStatus]}" sang "${SHIPPING_STATUS_LABEL[nextStatus]}"`,
-    );
-  }
-
-  // 2. Atomic status swap (race-safe): chỉ update nếu status còn khớp
-  const { data: updated, error: updErr } = await supabase
-    .from("shipping_orders")
-    .update({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      status: nextStatus as any,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      updated_at: new Date().toISOString() as any,
-    })
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", orderId)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .eq("status", fromStatus as any)
-    .select(
-      `*, invoices!shipping_orders_invoice_id_fkey(code), delivery_partners!shipping_orders_partner_id_fkey(name)`,
-    )
-    .single();
-  if (updErr) handleError(updErr, "updateShippingOrderStatus.update");
-  if (!updated) {
-    throw new Error(
-      "Vận đơn đã bị thay đổi trạng thái bởi request khác — vui lòng tải lại",
-    );
-  }
-
-  // 3. Audit log — best-effort (không block nếu audit ghi fail)
-  try {
-    await supabase.from("audit_log").insert({
-      tenant_id: ctx.tenantId,
-      user_id: ctx.userId,
-      action: "update_status",
-      entity_type: "shipping_order",
-      entity_id: orderId,
-      old_data: { status: fromStatus },
-      new_data: { status: nextStatus, note: note ?? null },
-    });
-  } catch (err) {
-    console.warn("updateShippingOrderStatus: audit_log insert failed", err);
-  }
-
-  return mapShippingOrder(updated);
+  const { data, error } = await (supabase.rpc as any)(
+    "update_shipping_order_status_atomic",
+    {
+      p_shipping_order_id: orderId,
+      p_next_status: nextStatus,
+      p_note: note ?? null,
+    },
+  );
+  if (error) handleError(error, "updateShippingOrderStatus.rpc");
+  if (!data) throw new Error("May chu khong tra ve van don da cap nhat.");
+  return mapShippingOrder(data);
 }
 
 // --- Write Operations ---

@@ -88,6 +88,7 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
 let mockFromHandler: (table: string) => any;
 
 vi.mock("@/lib/services/supabase/base", () => ({
+  getCurrentContext: async () => ({ tenantId: "tenant-1", branchId: "branch-1", userId: "user-1" }),
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
     rpc: vi.fn((fn: string, args?: Record<string, unknown>) => {
@@ -101,7 +102,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_send_to_kitchen_atomic") {
+      if (fn === "fnb_send_to_kitchen_atomic_v2") {
         const orderNumber = (args?.p_order_number as string) ?? `KB${String(++nextCodeCounter).padStart(5, "0")}`;
         const orderId = (args?.p_idempotency_key as string | null) ?? `ko-${orderNumber}`;
         if (args?.p_table_id) {
@@ -237,7 +238,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         });
         return { data: { success: true }, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic") {
+      if (fn === "fnb_complete_payment_atomic_v2") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         const paymentMethod = (args?.p_payment_method as string) ?? "cash";
         const paid = (args?.p_paid as number) ?? 0;
@@ -741,12 +742,15 @@ describe("Part 2: Delivery — Shopee Food (Matcha Latte, commission 25%)", () =
     mockFromHandler = () => createChain({ data: makeOrderRow({ order_type: "delivery" }), error: null });
     // Migration 00070: 4th param = % (vd 25 = 25%), không phải 0.25.
     await setDeliveryPlatform("ko-1", "shopee_food", 15000, 25);
-    const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).delivery_platform === "shopee_food");
-    expect(upd).toBeDefined();
-    expect((upd!.data as Record<string, unknown>).delivery_fee).toBe(15000);
-    expect((upd!.data as Record<string, unknown>).platform_commission_percent).toBe(25);
-    // Cột cũ platform_commission luôn = 0 sau migration 00070
-    expect((upd!.data as Record<string, unknown>).platform_commission).toBe(0);
+    const pricingRpc = rpcCalls.find(
+      (call) => call.fn === "fnb_set_delivery_pricing_v2",
+    );
+    expect(pricingRpc?.args).toMatchObject({
+      p_kitchen_order_id: "ko-1",
+      p_platform: "shopee_food",
+      p_delivery_fee: 15000,
+      p_commission_percent: 25,
+    });
   });
 });
 
@@ -1121,28 +1125,27 @@ describe("Part 4: Cash transaction records", () => {
 // ============================================================
 
 describe("Part 5: KDS — Order status lifecycle", () => {
-  it("transition: pending → preparing → ready → served → completed", async () => {
-    for (const [from, to] of [
-      ["pending", "preparing"],
-      ["preparing", "ready"],
-      ["ready", "served"],
-      ["served", "completed"],
-    ]) {
-      updateCalls.length = 0;
-      mockFromHandler = () => createChain({ data: makeOrderRow({ status: from }), error: null });
-      await updateKitchenOrderStatus("ko-kds", to as "preparing" | "ready" | "served" | "completed");
-      const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).status === to);
-      expect(upd).toBeDefined();
-    }
+  it("KDS chỉ đánh dấu đơn đã phục vụ; hoàn tất thuộc RPC thanh toán", async () => {
+    await updateKitchenOrderStatus("ko-kds", "served");
+    const statusRpc = rpcCalls.find(
+      (call) => call.fn === "fnb_update_kitchen_order_status_v2",
+    );
+    expect(statusRpc?.args).toEqual({
+      p_order_id: "ko-kds",
+      p_new_status: "served",
+    });
   });
 
   it("item status transition: pending → preparing → ready", async () => {
     for (const to of ["preparing", "ready"] as const) {
-      updateCalls.length = 0;
-      mockFromHandler = () => createChain({ data: { id: "item-1", status: to }, error: null });
       await updateKitchenItemStatus("item-1", to);
-      const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).status === to);
-      expect(upd).toBeDefined();
+      const statusRpc = [...rpcCalls].reverse().find(
+        (call) => call.fn === "fnb_update_kitchen_item_status_v2",
+      );
+      expect(statusRpc?.args).toEqual({
+        p_item_id: "item-1",
+        p_new_status: to,
+      });
     }
   });
 });
@@ -1282,10 +1285,16 @@ describe("Part 6: Complex combo — Delivery (GrabFood) + Topping-heavy order", 
     // Set delivery platform
     updateCalls.length = 0;
     mockFromHandler = () => createChain({ data: makeOrderRow(), error: null });
-    await setDeliveryPlatform("ko-1", "grab_food", 20000, 0.30);
-    const platUpdate = updateCalls.find((c) => (c.data as Record<string, unknown>).delivery_platform === "grab_food");
-    expect(platUpdate).toBeDefined();
-    expect((platUpdate!.data as Record<string, unknown>).delivery_fee).toBe(20000);
+    await setDeliveryPlatform("ko-1", "grab_food", 20000, 30);
+    const pricingRpc = [...rpcCalls].reverse().find(
+      (call) => call.fn === "fnb_set_delivery_pricing_v2",
+    );
+    expect(pricingRpc?.args).toMatchObject({
+      p_kitchen_order_id: "ko-1",
+      p_platform: "grab_food",
+      p_delivery_fee: 20000,
+      p_commission_percent: 30,
+    });
   });
 });
 

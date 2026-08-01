@@ -30,10 +30,7 @@ import {
 } from "@/lib/format";
 import {
   getProfitAndLoss,
-  getCOGSBreakdown,
-  getGrossMarginTrend,
-  getInventoryTurnover,
-  getDSO,
+  getFinancialAnalysisDetails,
   getConsolidatedPnL,
   getBranchPnLComparison,
 } from "@/lib/services";
@@ -139,7 +136,7 @@ export default function BaoCaoTaiChinhPage() {
   const branchId = activeBranchId ?? "all";
   // CEO view: khi bật, ở chế độ "Tất cả chi nhánh" sẽ dùng getConsolidatedPnL
   // (loại trừ doanh thu/COGS nội bộ) thay vì getProfitAndLoss thông thường.
-  const [ceoView, setCeoView] = useState<boolean>(false);
+  const [ceoView, setCeoView] = useState<boolean>(true);
   const [pnl, setPnl] = useState<{
     current: ProfitAndLoss;
     previous: ProfitAndLoss;
@@ -166,32 +163,27 @@ export default function BaoCaoTaiChinhPage() {
       // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
       // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
       const fetchConsolidated = !activeBranchId;
-      const [
-        pnlRes,
-        cogsRes,
-        marginRes,
-        turnoverRes,
-        dsoRes,
-        consolidatedRes,
-        branchPnLRes,
-      ] = await Promise.all([
-        getProfitAndLoss(bid, range),
-        getCOGSBreakdown(10, bid, range),
-        getGrossMarginTrend(6, bid),
-        getInventoryTurnover(bid),
-        getDSO(bid),
-        fetchConsolidated
-          ? getConsolidatedPnL(range)
-          : Promise.resolve(null),
-        fetchConsolidated
-          ? getBranchPnLComparison(range)
-          : Promise.resolve([] as BranchPnLRow[]),
-      ]);
+      const [pnlRes, detailsRes, consolidatedRes, branchPnLRes] =
+        await Promise.all([
+          getProfitAndLoss(bid, range),
+          getFinancialAnalysisDetails(
+            bid,
+            range,
+            fetchConsolidated && ceoView,
+            10,
+          ),
+          fetchConsolidated
+            ? getConsolidatedPnL(range)
+            : Promise.resolve(null),
+          fetchConsolidated
+            ? getBranchPnLComparison(range)
+            : Promise.resolve([] as BranchPnLRow[]),
+        ]);
       setPnl(pnlRes);
-      setCogsItems(cogsRes);
-      setMarginTrend(marginRes);
-      setTurnover(turnoverRes);
-      setDso(dsoRes);
+      setCogsItems(detailsRes.cogsItems);
+      setMarginTrend(detailsRes.marginTrend);
+      setTurnover(detailsRes.turnover);
+      setDso(detailsRes.dso);
       setConsolidated(consolidatedRes);
       setBranchPnL(branchPnLRes);
     } catch (err) {
@@ -204,7 +196,7 @@ export default function BaoCaoTaiChinhPage() {
     } finally {
       setLoading(false);
     }
-  }, [activeBranchId, isReady, range, toast]);
+  }, [activeBranchId, ceoView, isReady, range, toast]);
 
   useEffect(() => {
     fetchData();
@@ -302,6 +294,19 @@ export default function BaoCaoTaiChinhPage() {
 
     setExporting(true);
     try {
+      const exportDetails = await getFinancialAnalysisDetails(
+        activeBranchId,
+        range,
+        !activeBranchId && ceoView,
+        50_000,
+      );
+      if (exportDetails.cogsItems.length < exportDetails.cogsTotalCount) {
+        throw new Error("Chưa tải đủ toàn bộ sản phẩm để xuất file.");
+      }
+      const exportCogsItems = exportDetails.cogsItems;
+      const exportMarginTrend = exportDetails.marginTrend;
+      const exportTurnover = exportDetails.turnover;
+      const exportDso = exportDetails.dso;
       const selectedBranchName =
         branchId === "all"
           ? "Tất cả chi nhánh"
@@ -381,18 +386,18 @@ export default function BaoCaoTaiChinhPage() {
         });
       }
 
-      if (cogsItems.length > 0) {
+      if (exportCogsItems.length > 0) {
         sheets.push({
           name: "3. Giá vốn theo SP",
           columns: [
             { label: "STT", key: "index", width: 7, format: "number" },
             { label: "Sản phẩm", key: "product", width: 30 },
-            { label: "SL bán", key: "quantity", width: 12, format: "number" },
+            { label: "SL bán ròng", key: "quantity", width: 12, format: "number" },
             { label: "Giá vốn/SP", key: "unitCost", width: 18, format: "currency" },
             { label: "Tổng giá vốn", key: "totalCost", width: 18, format: "currency" },
-            { label: "% COGS", key: "share", width: 12, format: "percent" },
+            { label: "Tỷ trọng giá vốn", key: "share", width: 12, format: "percent" },
           ],
-          rows: cogsItems.map((item, index) => ({
+          rows: exportCogsItems.map((item, index) => ({
             index: index + 1,
             product: item.productName,
             quantity: item.qtySold,
@@ -403,21 +408,41 @@ export default function BaoCaoTaiChinhPage() {
         });
       }
 
+      if (exportMarginTrend.length > 0) {
+        sheets.push({
+          name: "4. Xu hướng biên lãi",
+          columns: [
+            { label: "Kỳ", key: "period", width: 14 },
+            { label: "Doanh thu thuần", key: "revenue", width: 18, format: "currency" },
+            { label: "Giá vốn", key: "cogs", width: 18, format: "currency" },
+            { label: "Lãi gộp", key: "grossProfit", width: 18, format: "currency" },
+            { label: "Biên lãi gộp", key: "grossMargin", width: 14, format: "percent" },
+          ],
+          rows: exportMarginTrend.map((item) => ({
+            period: item.month,
+            revenue: item.revenue,
+            cogs: item.cogs,
+            grossProfit: item.revenue - item.cogs,
+            grossMargin: item.grossMargin,
+          })),
+        });
+      }
+
       sheets.push({
-        name: "4. Chỉ số vận hành",
+        name: "5. Chỉ số vận hành",
         columns: [
           { label: "Chỉ số", key: "metric", width: 38 },
           { label: "Giá trị", key: "value", width: 20, format: "number" },
           { label: "Đơn vị", key: "unit", width: 18 },
         ],
         rows: [
-          { metric: "Vòng quay tồn kho", value: turnover?.turnoverRatio ?? 0, unit: "lần/kỳ" },
-          { metric: "Số ngày bán hết trung bình", value: turnover?.avgDaysToSell ?? 0, unit: "ngày" },
-          { metric: "Giá vốn bán trong kỳ", value: turnover?.totalCogsPeriod ?? 0, unit: "VND" },
-          { metric: "Giá trị tồn kho trung bình", value: turnover?.avgInventoryValue ?? 0, unit: "VND" },
-          { metric: "Số ngày thu tiền trung bình (DSO)", value: dso?.dso ?? 0, unit: "ngày" },
-          { metric: "Tổng phải thu", value: dso?.totalReceivables ?? 0, unit: "VND" },
-          { metric: "Doanh thu trung bình/ngày", value: Math.round(dso?.avgDailyRevenue ?? 0), unit: "VND" },
+          { metric: "Vòng quay tồn kho", value: exportTurnover.turnoverRatio ?? 0, unit: "lần/kỳ" },
+          { metric: "Số ngày bán hết trung bình", value: exportTurnover.avgDaysToSell ?? 0, unit: "ngày" },
+          { metric: "Giá vốn bán trong kỳ", value: exportTurnover.totalCogsPeriod ?? 0, unit: "VND" },
+          { metric: "Giá trị tồn kho trung bình", value: exportTurnover.avgInventoryValue ?? 0, unit: "VND" },
+          { metric: "Số ngày thu tiền trung bình (DSO)", value: exportDso.dso ?? 0, unit: "ngày" },
+          { metric: "Tổng phải thu hiện tại", value: exportDso.totalReceivables ?? 0, unit: "VND" },
+          { metric: "Doanh thu trung bình/ngày", value: Math.round(exportDso.avgDailyRevenue ?? 0), unit: "VND" },
         ],
       });
 
@@ -493,7 +518,7 @@ export default function BaoCaoTaiChinhPage() {
               className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
             />
             <span className="text-muted-foreground">
-              Số hợp nhất CEO (loại trừ giao dịch nội bộ)
+              Số hợp nhất toàn công ty (loại trừ giao dịch nội bộ)
             </span>
           </label>
         </div>
@@ -506,7 +531,7 @@ export default function BaoCaoTaiChinhPage() {
             <Icon name="compare_arrows" size={20} className="text-primary shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-primary">
-                Đang xem số hợp nhất (CEO view)
+                Đang xem số hợp nhất toàn công ty
               </p>
               <p className="text-xs text-primary/80 mt-0.5">
                 Đã loại trừ{" "}
@@ -1024,7 +1049,7 @@ export default function BaoCaoTaiChinhPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <ChartCard
             title="Vòng quay hàng tồn kho"
-            subtitle="Tháng hiện tại"
+            subtitle={selectedPeriodLabel}
           >
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
@@ -1035,7 +1060,7 @@ export default function BaoCaoTaiChinhPage() {
                 <p className="text-3xl font-bold text-primary">
                   {turnover?.turnoverRatio ?? 0}
                 </p>
-                <p className="text-xs text-muted-foreground">lần/tháng</p>
+                <p className="text-xs text-muted-foreground">lần/kỳ</p>
               </div>
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
@@ -1070,7 +1095,7 @@ export default function BaoCaoTaiChinhPage() {
 
           <ChartCard
             title="Số ngày thu tiền trung bình"
-            subtitle="3 tháng gần nhất"
+            subtitle={selectedPeriodLabel}
           >
             <div className="grid grid-cols-2 gap-4 py-4">
               <div className="text-center space-y-1">
@@ -1088,7 +1113,7 @@ export default function BaoCaoTaiChinhPage() {
               <div className="text-center space-y-1">
                 <div className="flex items-center justify-center gap-2 text-muted-foreground">
                   <Icon name="attach_money" className="size-4" />
-                  <span className="text-xs">Phải thu</span>
+                  <span className="text-xs">Phải thu hiện tại</span>
                 </div>
                 <p className="text-3xl font-bold text-status-warning">
                   {formatChartCurrency(dso?.totalReceivables ?? 0)}
@@ -1099,7 +1124,7 @@ export default function BaoCaoTaiChinhPage() {
             <div className="border-t pt-3 space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Doanh thu trung bình mỗi ngày
+                  Doanh thu thuần trung bình/ngày
                 </span>
                 <span className="font-medium">
                   {formatCurrency(Math.round(dso?.avgDailyRevenue ?? 0))}
@@ -1137,16 +1162,16 @@ export default function BaoCaoTaiChinhPage() {
                       Sản phẩm
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
-                      SL bán
+                      SL bán ròng
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
-                      Giá vốn/sp
+                      Giá vốn bình quân
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
                       Tổng giá vốn
                     </th>
                     <th className="text-right py-2 font-medium">
-                      % COGS
+                      Tỷ trọng giá vốn
                     </th>
                   </tr>
                 </thead>

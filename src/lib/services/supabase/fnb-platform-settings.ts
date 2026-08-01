@@ -11,7 +11,6 @@
  */
 
 import { getClient, getCurrentTenantId, handleError } from "./base";
-import { recordAuditLog } from "./audit";
 import type { DeliveryPlatform } from "@/lib/types/fnb";
 
 // ============================================================
@@ -71,42 +70,15 @@ export async function updateDeliveryPlatformSettings(
   patch: Partial<DeliveryPlatformSettings>,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Read current full settings
-  const { data: current } = await supabase
-    .from("tenants")
-    .select("settings")
-    .eq("id", tenantId)
-    .single();
-
-  const currentSettings =
-    (current?.settings as Record<string, unknown> | null) ?? {};
-  const currentPlatforms =
-    (currentSettings.fnb_delivery_platforms as Partial<DeliveryPlatformSettings>) ??
-    {};
-
-  const newPlatforms = { ...currentPlatforms, ...patch };
-  const newSettings = {
-    ...currentSettings,
-    fnb_delivery_platforms: newPlatforms,
-  };
-
-  const { error } = await supabase
-    .from("tenants")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ settings: newSettings as any })
-    .eq("id", tenantId);
-
+  const { error } = await (supabase.rpc as any)(
+    "patch_tenant_settings_atomic",
+    {
+      p_section: "fnb_delivery_platforms",
+      p_value: patch,
+      p_replace: false,
+    },
+  );
   if (error) handleError(error, "updateDeliveryPlatformSettings");
-
-  await recordAuditLog({
-    entityType: "tenant",
-    entityId: tenantId,
-    action: "update",
-    oldData: currentPlatforms,
-    newData: newPlatforms,
-  });
 }
 
 // ============================================================
@@ -143,26 +115,13 @@ export async function saveDiscountPresets(
   presets: DiscountPreset[],
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  const { data: current } = await supabase
-    .from("tenants")
-    .select("settings")
-    .eq("id", tenantId)
-    .single();
-
-  const currentSettings =
-    (current?.settings as Record<string, unknown> | null) ?? {};
-  const newSettings = {
-    ...currentSettings,
-    fnb_discount_presets: presets,
-  };
-
-  const { error } = await supabase
-    .from("tenants")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ settings: newSettings as any })
-    .eq("id", tenantId);
-
+  const { error } = await (supabase.rpc as any)(
+    "patch_tenant_settings_atomic",
+    {
+      p_section: "fnb_discount_presets",
+      p_value: presets,
+      p_replace: true,
+    },
+  );
   if (error) handleError(error, "saveDiscountPresets");
 }

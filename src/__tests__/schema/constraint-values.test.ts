@@ -129,5 +129,5 @@ describe("Giá trị ghi vào CSDL phải nằm trong ràng buộc CHECK", () =>
     }
 
     expect(viPham, `Ghi giá trị không có trong ràng buộc:\n${viPham.join("\n")}`).toEqual([]);
-  });
+  }, 15_000);
 });

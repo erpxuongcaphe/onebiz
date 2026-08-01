@@ -1,157 +1,114 @@
 /**
- * Split Bill Service — Split a kitchen order into multiple bills.
- *
- * splitByItems: moves selected items to a new child kitchen order
- * splitEqually: creates child orders by distributing items N ways
+ * Split Bill Service - all mutations run in one database transaction.
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 
-export interface SplitResult {
-  /** The newly created child order ID */
-  childOrderId: string;
-  /** Remaining parent order items count */
-  parentItemsLeft: number;
+export interface SplitChildResult {
+  orderId: string;
+  orderNumber: string;
+  itemCount: number;
+  discountAmount: number;
 }
 
-/**
- * Split specific items from a kitchen order into a new child order.
- * Moves the selected items to the child; parent keeps the rest.
- */
-export async function splitByItems(
-  orderId: string,
-  itemIds: string[]
-): Promise<SplitResult> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+export interface SplitResult {
+  childOrderId: string;
+  childDiscountAmount: number;
+  parentItemsLeft: number;
+  parentDiscountAmount: number;
+}
 
-  if (itemIds.length === 0) throw new Error("Chọn ít nhất 1 món để tách");
+interface SplitRpcResult {
+  parent_items_left?: number;
+  parent_discount_amount?: number;
+  children?: Array<{
+    order_id?: string;
+    order_number?: string;
+    item_count?: number;
+    discount_amount?: number;
+  }>;
+}
 
-  // 1. Get parent order (filter tenant defense)
-  const { data: parent, error: parentErr } = await supabase
-    .from("kitchen_orders")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .single();
-  if (parentErr || !parent) throw new Error("Không tìm thấy đơn bếp");
-
-  // 2. Get items to split — scope qua kitchen_order_id (đã verify ownership ở step 1)
-  const { data: allItems } = await supabase
-    .from("kitchen_order_items")
-    .select("*")
-    .eq("kitchen_order_id", orderId);
-
-  const remaining = (allItems ?? []).filter((i) => !itemIds.includes(i.id));
-  if (remaining.length === 0) throw new Error("Không thể tách hết món — cần giữ lại ít nhất 1 món");
-
-  // 3. Create child order
-  const { data: child, error: childErr } = await supabase
-    .from("kitchen_orders")
-    .insert({
-      tenant_id: parent.tenant_id,
-      branch_id: parent.branch_id,
-      table_id: parent.table_id,
-      order_number: parent.order_number + "-B",
-      order_type: parent.order_type,
-      status: parent.status,
-      note: `Tách từ ${parent.order_number}`,
-      created_by: parent.created_by,
-      parent_order_id: orderId,
-    })
-    .select()
-    .single();
-  if (childErr || !child) handleError(childErr ?? { message: "Split failed" }, "splitByItems");
-
-  // 4. Move items to child order
-  const { error: moveErr } = await supabase
-    .from("kitchen_order_items")
-    .update({ kitchen_order_id: child.id })
-    .in("id", itemIds);
-  if (moveErr) handleError(moveErr, "splitByItems.moveItems");
-
+function parseSplitResult(data: unknown): {
+  parentItemsLeft: number;
+  parentDiscountAmount: number;
+  children: SplitChildResult[];
+} {
+  const raw = (data ?? {}) as SplitRpcResult;
+  const children = (raw.children ?? []).map((child) => ({
+    orderId: String(child.order_id ?? ""),
+    orderNumber: String(child.order_number ?? ""),
+    itemCount: Number(child.item_count ?? 0),
+    discountAmount: Number(child.discount_amount ?? 0),
+  }));
+  if (children.length === 0 || children.some((child) => !child.orderId)) {
+    throw new Error("May chu khong tra ve ket qua tach bill hop le.");
+  }
   return {
-    childOrderId: child.id,
-    parentItemsLeft: remaining.length,
+    parentItemsLeft: Number(raw.parent_items_left ?? 0),
+    parentDiscountAmount: Number(raw.parent_discount_amount ?? 0),
+    children,
   };
 }
 
-/**
- * Split a kitchen order equally into N parts.
- * Creates N-1 child orders. Items are distributed round-robin.
- */
-export async function splitEqually(
+export async function splitByItems(
   orderId: string,
-  numberOfWays: number
-): Promise<{ childOrderIds: string[] }> {
-  if (numberOfWays < 2) throw new Error("Cần ít nhất 2 phần");
+  itemIds: string[],
+): Promise<SplitResult> {
+  if (itemIds.length === 0) throw new Error("Chon it nhat 1 mon de tach");
 
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const { data, error } = await (supabase.rpc as any)(
+    "split_kitchen_order_atomic",
+    {
+      p_order_id: orderId,
+      p_mode: "items",
+      p_item_ids: itemIds,
+      p_number_of_ways: null,
+    },
+  );
+  if (error) handleError(error, "splitByItems.rpc");
 
-  // 1. Get parent (filter tenant defense)
-  const { data: parent, error: parentErr } = await supabase
-    .from("kitchen_orders")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .single();
-  if (parentErr || !parent) throw new Error("Không tìm thấy đơn bếp");
+  const result = parseSplitResult(data);
+  const child = result.children[0];
+  return {
+    childOrderId: child.orderId,
+    childDiscountAmount: child.discountAmount,
+    parentItemsLeft: result.parentItemsLeft,
+    parentDiscountAmount: result.parentDiscountAmount,
+  };
+}
 
-  // 2. Get all items — scope qua kitchen_order_id (đã verify ownership ở step 1)
-  const { data: allItems } = await supabase
-    .from("kitchen_order_items")
-    .select("*")
-    // kitchen_order_items KHÔNG có created_at → .order("created_at") lỗi 42703
-    // làm nút "Chia bill" chết. Thứ tự ghi đã đúng thứ tự gọi món.
-    .eq("kitchen_order_id", orderId);
-
-  const items = allItems ?? [];
-  if (items.length < numberOfWays) {
-    throw new Error(`Chỉ có ${items.length} món, không đủ chia ${numberOfWays} phần`);
+export async function splitEqually(
+  orderId: string,
+  numberOfWays: number,
+): Promise<{
+  childOrderIds: string[];
+  childDiscountAmounts: number[];
+  parentDiscountAmount: number;
+}> {
+  if (numberOfWays < 2 || numberOfWays > 10) {
+    throw new Error("So phan tach phai tu 2 den 10");
   }
 
-  // 3. Distribute items: first batch stays with parent, rest go to children
-  const batches: string[][] = Array.from({ length: numberOfWays }, () => []);
-  items.forEach((item, idx) => {
-    batches[idx % numberOfWays].push(item.id);
-  });
+  const supabase = getClient();
+  const { data, error } = await (supabase.rpc as any)(
+    "split_kitchen_order_atomic",
+    {
+      p_order_id: orderId,
+      p_mode: "equal",
+      p_item_ids: null,
+      p_number_of_ways: numberOfWays,
+    },
+  );
+  if (error) handleError(error, "splitEqually.rpc");
 
-  // 4. Create children and move items
-  const childOrderIds: string[] = [];
-  for (let i = 1; i < numberOfWays; i++) {
-    const suffix = String.fromCharCode(65 + i); // B, C, D...
-    const { data: child, error: childErr } = await supabase
-      .from("kitchen_orders")
-      .insert({
-        tenant_id: parent.tenant_id,
-        branch_id: parent.branch_id,
-        table_id: parent.table_id,
-        order_number: `${parent.order_number}-${suffix}`,
-        order_type: parent.order_type,
-        status: parent.status,
-        note: `Chia đều từ ${parent.order_number} (phần ${i + 1}/${numberOfWays})`,
-        created_by: parent.created_by,
-        parent_order_id: orderId,
-      })
-      .select()
-      .single();
-
-    if (childErr || !child) handleError(childErr ?? { message: "Split failed" }, "splitEqually");
-
-    // Move items for this batch
-    if (batches[i].length > 0) {
-      const { error: moveErr } = await supabase
-        .from("kitchen_order_items")
-        .update({ kitchen_order_id: child.id })
-        .in("id", batches[i]);
-      if (moveErr) handleError(moveErr, "splitEqually.moveItems");
-    }
-
-    childOrderIds.push(child.id);
-  }
-
-  return { childOrderIds };
+  const result = parseSplitResult(data);
+  return {
+    childOrderIds: result.children.map((child) => child.orderId),
+    childDiscountAmounts: result.children.map((child) => child.discountAmount),
+    parentDiscountAmount: result.parentDiscountAmount,
+  };
 }
 
 /**

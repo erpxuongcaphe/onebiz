@@ -331,13 +331,12 @@ export async function getBranchPrintInfo(branchId: string): Promise<BranchPrintI
 /** Ghi override brand cho 1 chi nhánh (null = xoá override → kế thừa tenant). */
 export async function setBranchPrintBrand(
   branchId: string,
-  brand: Partial<ResolvedBrand> | null
+  brand: Partial<ResolvedBrand> | null,
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("branches")
-    .update({ print_brand: brand })
-    .eq("id", branchId);
+  const { error } = await (supabase.rpc as any)(
+    "set_branch_print_brand_atomic",
+    { p_branch_id: branchId, p_brand: brand },
+  );
   if (error) throw error;
 }
 

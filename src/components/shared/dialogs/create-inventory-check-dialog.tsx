@@ -13,16 +13,14 @@ import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { applyInventoryCheck } from "@/lib/services/supabase/inventory";
-import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
 import { pickBestConversion, getConversionText } from "@/lib/format-uom";
 import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
+import { isRpcUnavailable } from "@/lib/services/supabase/rpc-utils";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
 
-type InventoryCheckInsert = Database["public"]["Tables"]["inventory_checks"]["Insert"];
 type ProductRow = Pick<
   Database["public"]["Tables"]["products"]["Row"],
   "id" | "code" | "name" | "unit" | "cost_price"
@@ -308,80 +306,54 @@ export function CreateInventoryCheckDialog({
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      const realCode = await nextEntityCode("inventory", { tenantId: ctx.tenantId });
-      setCode(realCode);
 
-      const { data: checkRow, error: checkErr } = await supabase
-        .from("inventory_checks")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          code: realCode,
-          status: "in_progress" as const,
-          note: notes || null,
-          created_by: ctx.userId,
-        } satisfies InventoryCheckInsert)
-        .select("id")
-        .single();
-
-      if (checkErr) throw new Error(checkErr.message);
-
-      const itemsPayload = checkItems.map((item) => {
-        // CEO 28/05/2026: tồn thực tế quy về đơn vị cơ bản (thùng×factor + lẻ).
-        const actual = lineActual(item);
-        // Lưu ý: KHÔNG truyền `difference` — Migration 00031 đã đổi cột
-        // này thành GENERATED ALWAYS AS (actual_stock - system_stock) STORED
-        // để chống user sửa devtools. Truyền sẽ bị Postgres reject với
-        // "cannot insert a non-DEFAULT value into column difference".
-        return {
-          check_id: checkRow.id,
-          product_id: item.productId,
-          product_name: item.productName,
-          system_stock: item.systemStock,
-          actual_stock: actual,
-        };
-      });
-
+      // Tồn hệ thống được máy chủ đọc lại theo đúng chi nhánh ngay lúc hoàn tất.
+      // Tạo phiếu, tạo dòng và cân bằng kho cùng một giao dịch.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: itemsErr } = await (supabase as any)
-        .from("inventory_check_items")
-        .insert(itemsPayload);
+      const { data, error } = await (supabase.rpc as any)(
+        "create_and_apply_inventory_check_atomic",
+        {
+          p_branch_id: ctx.branchId,
+          p_note: notes.trim() || null,
+          p_items: checkItems.map((item) => ({
+            product_id: item.productId,
+            actual_stock: lineActual(item),
+          })),
+        },
+      );
 
-      if (itemsErr) {
-        await supabase
-          .from("inventory_checks")
-          .update({
-            status: "cancelled" as const,
-            note: notes
-              ? `${notes}\nTự hủy do lỗi ghi dòng kiểm kho: ${itemsErr.message}`
-              : `Tự hủy do lỗi ghi dòng kiểm kho: ${itemsErr.message}`,
-          })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("id", checkRow.id);
-        throw new Error(itemsErr.message);
+      if (error) {
+        if (isRpcUnavailable(error)) {
+          throw new Error(
+            "Chưa có migration 00256. Không thể hoàn tất kiểm kho an toàn.",
+          );
+        }
+        throw new Error(error.message);
       }
 
-      try {
-        await applyInventoryCheck(checkRow.id);
-      } catch (applyErr) {
-        const message =
-          applyErr instanceof Error ? applyErr.message : "Vui lòng thử áp dụng lại trong danh sách phiếu";
-        throw new Error(`Đã lưu phiếu ${realCode} nhưng chưa cân bằng được: ${message}`);
+      const result = data as {
+        check_id?: string;
+        code?: string;
+        status?: string;
+      } | null;
+      if (!result?.check_id || !result.code || result.status !== "balanced") {
+        throw new Error("Máy chủ trả về kết quả kiểm kho không hợp lệ.");
       }
 
+      setCode(result.code);
       onOpenChange(false);
       toast({
         title: "Hoàn thành kiểm kho thành công",
-        description: `Đã cân bằng ${realCode} với ${formatNumber(checkItems.length)} mặt hàng.`,
+        description:
+          "Đã cân bằng " + result.code + " với " +
+          formatNumber(checkItems.length) + " mặt hàng.",
         variant: "success",
       });
       onSuccess?.();
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Vui lòng thử lại";
-      const isPartialSave = message.startsWith("Đã lưu phiếu");
       toast({
-        title: isPartialSave ? "Phiếu đã lưu nhưng chưa cân bằng" : "Lỗi hoàn thành kiểm kho",
-        description: message,
+        title: "Lỗi hoàn thành kiểm kho",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
     } finally {

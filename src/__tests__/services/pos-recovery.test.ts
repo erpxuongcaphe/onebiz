@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 /**
@@ -155,7 +156,19 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       const hit = mockRpcResponse.get(fn);
       if (hit) return hit;
-      if (fn === "pos_complete_checkout_atomic_v2") {
+      if (fn === "adopt_pos_draft_session_atomic") {
+        return { data: { invoice_id: "inv-draft", invoice_code: "NH-00001" }, error: null };
+      }
+      if (fn === "soft_delete_pos_draft_atomic") {
+        return { data: { invoice_id: "inv-draft", deleted: true }, error: null };
+      }
+      if (fn === "save_pos_draft_atomic") {
+        return {
+          data: { invoice_id: "inv-draft", invoice_code: "NH-00001", status: "draft" },
+          error: null,
+        };
+      }
+      if (fn === "pos_complete_checkout_atomic_v3") {
         const data = mockInsertResponse.data as Record<string, unknown> | undefined;
         return {
           data: {
@@ -189,7 +202,7 @@ beforeEach(() => {
 // Imports under test
 // ──────────────────────────────────────────────
 
-import { saveDraftOrder } from "@/lib/services/supabase/orders";
+import { adoptDraftSession, deleteDraftOrder, saveDraftOrder } from "@/lib/services/supabase/orders";
 import { posCheckout } from "@/lib/services/supabase/pos-checkout";
 
 const baseInput = {
@@ -219,111 +232,69 @@ const baseInput = {
 // Test 1: saveDraftOrder upsert flow
 // ══════════════════════════════════════════════
 
-describe("saveDraftOrder — upsert by client_session_id", () => {
-  it("INSERT khi sessionId mới (chưa có row trong DB)", async () => {
-    // Mock: SELECT by session_id trả null (chưa có)
-    mockSelectByFilter.set("session:sid-new", { data: null, error: null });
-    mockInsertResponse = {
-      data: { id: "inv-fresh", code: "HD-00001" },
-      error: null,
-    };
+const draftMigration = readFileSync(
+  "supabase/migrations/00264_atomic_pos_draft_save.sql",
+  "utf8",
+);
 
+describe("saveDraftOrder — atomic by client_session_id", () => {
+  it("sends the full draft to one server transaction", async () => {
     const result = await saveDraftOrder(baseInput, {
-      sessionId: "sid-new",
+      sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f",
       autoSaved: true,
     });
 
-    expect(result.invoiceId).toBe("inv-fresh");
-    expect(result.invoiceCode).toBe("HD-00001");
-    // Đã INSERT vào invoices
-    const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
-    expect(invoiceInsert).toBeDefined();
-    // Có client_session_id + auto_saved trong payload
-    expect(invoiceInsert?.data).toMatchObject({
-      client_session_id: "sid-new",
-      auto_saved: true,
-      status: "draft",
+    expect(result).toEqual({ invoiceId: "inv-draft", invoiceCode: "NH-00001" });
+    const call = rpcCalls.find((entry) => entry.fn === "save_pos_draft_atomic");
+    expect(call?.args).toMatchObject({
+      p_branch_id: "branch-1",
+      p_client_session_id: "31e9d753-0c76-45af-a509-d4dce67c042f",
+      p_auto_saved: true,
+      p_items: baseInput.items,
     });
-    // Không có UPDATE
-    const invoiceUpdate = updateCalls.find((c) => c.table === "invoices");
-    expect(invoiceUpdate).toBeUndefined();
+    expect(call?.args).not.toHaveProperty("p_tenant_id");
+    expect(call?.args).not.toHaveProperty("p_created_by");
+    expect(insertCalls.find((entry) => entry.table === "invoices")).toBeUndefined();
+    expect(deleteCalls.find((entry) => entry.table === "invoice_items")).toBeUndefined();
   });
 
-  it("UPDATE khi sessionId đã có row status='draft'", async () => {
-    // Mock: SELECT trả existing draft
-    mockSelectByFilter.set("session:sid-existing", {
-      data: { id: "inv-old", code: "HD-EXISTING", status: "draft" },
-      error: null,
+  it("fails closed when the draft transaction fails", async () => {
+    mockRpcResponse.set("save_pos_draft_atomic", {
+      data: null,
+      error: { message: "POS_DRAFT_ITEM_INVALID" },
     });
 
-    const result = await saveDraftOrder(baseInput, {
-      sessionId: "sid-existing",
-      autoSaved: true,
-    });
-
-    expect(result.invoiceId).toBe("inv-old");
-    // Phải UPDATE invoices, không INSERT
-    const invoiceUpdate = updateCalls.find((c) => c.table === "invoices");
-    expect(invoiceUpdate).toBeDefined();
-    expect(invoiceUpdate?.data).toMatchObject({
-      auto_saved: true,
-    });
-    // Không có invoice INSERT mới
-    const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
-    expect(invoiceInsert).toBeUndefined();
-    // Items: DELETE cũ + INSERT mới
-    expect(deleteCalls.find((c) => c.table === "invoice_items")).toBeDefined();
-    expect(insertCalls.find((c) => c.table === "invoice_items")).toBeDefined();
+    await expect(saveDraftOrder(baseInput)).rejects.toThrow("POS_DRAFT_ITEM_INVALID");
   });
 
-  it("Idempotent — return existing khi sessionId có row đã 'completed'", async () => {
-    // Race case: auto-save chậm hơn manual submit. Sau khi user ấn Thanh
-    // toán, invoice đã flip 'completed'. Auto-save lần kế phải KHÔNG update,
-    // chỉ return existing để client cleanup gracefully.
-    mockSelectByFilter.set("session:sid-completed", {
-      data: { id: "inv-paid", code: "HD-PAID", status: "completed" },
-      error: null,
-    });
-
-    const result = await saveDraftOrder(baseInput, {
-      sessionId: "sid-completed",
-      autoSaved: true,
-    });
-
-    expect(result.invoiceId).toBe("inv-paid");
-    expect(result.invoiceCode).toBe("HD-PAID");
-    // KHÔNG insert, KHÔNG update — pure idempotent return
-    expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
-    expect(updateCalls.find((c) => c.table === "invoices")).toBeUndefined();
+  it("locks the session and validates permission, branch and products in SQL", () => {
+    expect(draftMigration).toContain("pg_advisory_xact_lock");
+    expect(draftMigration).toContain("pos_retail.save_draft");
+    expect(draftMigration).toContain("user_has_branch_access");
+    expect(draftMigration).toContain("POS_PRODUCT_INVALID");
+    expect(draftMigration).toContain("delete from public.invoice_items");
   });
 
-  it("INSERT bình thường khi không truyền sessionId (backward compat F9 cũ)", async () => {
-    // Không pass sessionId → behavior cũ, INSERT mỗi lần
-    mockInsertResponse = {
-      data: { id: "inv-no-session", code: "HD-00099" },
-      error: null,
-    };
+  it("adopts and soft-deletes drafts only through guarded RPCs", async () => {
+    const sessionId = "31e9d753-0c76-45af-a509-d4dce67c042f";
+    await adoptDraftSession("inv-draft", sessionId);
+    await deleteDraftOrder("inv-draft", { onlyAutoSaved: true });
 
-    const result = await saveDraftOrder(baseInput);
-
-    expect(result.invoiceId).toBe("inv-no-session");
-    const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
-    expect(invoiceInsert).toBeDefined();
-    // client_session_id = null + auto_saved = false default
-    expect(invoiceInsert?.data).toMatchObject({
-      client_session_id: null,
-      auto_saved: false,
+    expect(rpcCalls).toContainEqual({
+      fn: "adopt_pos_draft_session_atomic",
+      args: { p_invoice_id: "inv-draft", p_client_session_id: sessionId },
     });
+    expect(rpcCalls).toContainEqual({
+      fn: "soft_delete_pos_draft_atomic",
+      args: { p_invoice_id: "inv-draft", p_only_auto_saved: true },
+    });
+    expect(draftMigration).toContain("coalesce(v_invoice.source, 'pos') = 'order'");
   });
 });
 
-// ══════════════════════════════════════════════
-// Test 2: posCheckout idempotency
-// ══════════════════════════════════════════════
-
 describe("posCheckout — idempotency by client_session_id", () => {
   it("Return existing khi sessionId đã có invoice 'completed'", async () => {
-    mockRpcResponse.set("pos_complete_checkout_atomic_v2", {
+    mockRpcResponse.set("pos_complete_checkout_atomic_v3", {
       data: {
         invoice_id: "inv-already",
         invoice_code: "HD-ALREADY",
@@ -343,11 +314,11 @@ describe("posCheckout — idempotency by client_session_id", () => {
     // KHÔNG insert invoice mới (idempotent)
     const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
     expect(invoiceInsert).toBeUndefined();
-    expect(rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v2")).toBeDefined();
+    expect(rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3")).toBeDefined();
   });
 
   it("Throw khi sessionId đã có invoice 'draft' (chưa hoàn tất)", async () => {
-    mockRpcResponse.set("pos_complete_checkout_atomic_v2", {
+    mockRpcResponse.set("pos_complete_checkout_atomic_v3", {
       data: null,
       error: { message: "Invoice HD-DRAFT đang ở trạng thái nháp; Tiếp tục đơn" },
     });
@@ -377,11 +348,11 @@ describe("posCheckout — idempotency by client_session_id", () => {
 
     expect(result.invoiceId).toBe("inv-fresh-checkout");
     expect(result.invoiceCode).toBe("HD-00010");
-    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v2");
+    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3");
     expect(checkoutRpc?.args).toMatchObject({
       p_client_session_id: "sid-fresh",
-      p_total: 290000,
     });
+    expect(checkoutRpc?.args).not.toHaveProperty("p_total");
     expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 
@@ -399,11 +370,11 @@ describe("posCheckout — idempotency by client_session_id", () => {
     expect(result.invoiceId).toBe("inv-legacy");
     // RPC find không được gọi
     expect(rpcCalls.find((c) => c.fn === "find_invoice_by_session_id")).toBeUndefined();
-    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v2");
+    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3");
     expect(checkoutRpc?.args).toMatchObject({
       p_client_session_id: null,
-      p_total: 290000,
     });
+    expect(checkoutRpc?.args).not.toHaveProperty("p_total");
     expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 });

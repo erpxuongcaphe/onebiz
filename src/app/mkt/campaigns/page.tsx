@@ -98,7 +98,7 @@ export default async function CampaignsPage() {
         ) : (
           <div className="rounded-lg border border-dashed border-outline-variant bg-background p-8 text-center text-sm font-medium text-on-surface-variant">
             Chưa có chiến dịch nào.
-            {ctx.canManageCampaigns ? " Bấm “Tạo Campaign” để bắt đầu." : ""}
+            {ctx.canManageCampaigns ? " Bấm “Tạo chiến dịch” để bắt đầu." : ""}
           </div>
         )}
       </div>

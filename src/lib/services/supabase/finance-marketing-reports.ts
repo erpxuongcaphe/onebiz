@@ -68,7 +68,7 @@ export async function getReceivableAgingReport(params?: {
     branchId: raw.branch_id,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rows: (raw.rows ?? []).map((r: any) => ({
-      customerId: r.customer_id,
+      customerId: r.customer_id ?? `walk-in:${r.customer_name ?? "Khách lẻ"}`,
       customerName: r.customer_name ?? "Khách lẻ",
       invoiceCount: Number(r.invoice_count ?? 0),
       outstanding: Number(r.outstanding ?? 0),
@@ -83,7 +83,78 @@ export async function getReceivableAgingReport(params?: {
 }
 
 // ============================================================
-// 2. VAT Report
+// 2. Payable Aging
+// ============================================================
+
+export interface PayableAgingRow {
+  supplierId: string;
+  supplierName: string;
+  documentCount: number;
+  outstanding: number;
+  bucket0_30: number;
+  bucket31_60: number;
+  bucket61_90: number;
+  bucket91Plus: number;
+  oldestDays: number;
+  oldestDocumentDate: string;
+}
+
+export interface PayableAgingReport {
+  generatedAt: string;
+  asOfDate: string;
+  tenantId: string;
+  branchId: string | null;
+  rows: PayableAgingRow[];
+}
+
+export async function getPayableAgingReport(params?: {
+  branchId?: string | null;
+  asOfDate?: string | null;
+}): Promise<PayableAgingReport> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "get_payable_aging_report",
+    {
+      p_branch_id: params?.branchId ?? null,
+      p_as_of_date: params?.asOfDate ?? null,
+    },
+  );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chưa có migration 00257. Không thể tải tuổi nợ phải trả.",
+      );
+    }
+    handleError(error, "getPayableAgingReport");
+  }
+  if (!data) throw new Error("Máy chủ không trả kết quả tuổi nợ phải trả.");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = data as any;
+  return {
+    generatedAt: raw.generated_at,
+    asOfDate: raw.as_of_date ?? raw.generated_at,
+    tenantId: raw.tenant_id,
+    branchId: raw.branch_id,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rows: (raw.rows ?? []).map((r: any) => ({
+      supplierId: r.supplier_id,
+      supplierName: r.supplier_name ?? "Nhà cung cấp",
+      documentCount: Number(r.document_count ?? 0),
+      outstanding: Number(r.outstanding ?? 0),
+      bucket0_30: Number(r.bucket_0_30 ?? 0),
+      bucket31_60: Number(r.bucket_31_60 ?? 0),
+      bucket61_90: Number(r.bucket_61_90 ?? 0),
+      bucket91Plus: Number(r.bucket_91_plus ?? 0),
+      oldestDays: Number(r.oldest_days ?? 0),
+      oldestDocumentDate: r.oldest_document_date,
+    })),
+  };
+}
+
+// ============================================================
+// 3. VAT Report
 // ============================================================
 
 export interface VatSummary {
@@ -207,7 +278,7 @@ export async function getVatReport(params?: {
 }
 
 // ============================================================
-// 3. RFM Report
+// 4. RFM Report
 // ============================================================
 
 export type RfmSegment =
@@ -290,7 +361,7 @@ export async function getRfmReport(params?: {
 }
 
 // ============================================================
-// 4. FnB Serve Time
+// 5. FnB Serve Time
 // ============================================================
 
 export interface ServeTimeSummary {

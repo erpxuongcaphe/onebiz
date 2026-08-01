@@ -22,11 +22,9 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
-import type { Database } from "@/lib/supabase/types";
+import { savePurchaseOrderAtomic } from "@/lib/services/supabase/purchase-orders";
 import { Icon } from "@/components/ui/icon";
 
-type PurchaseOrderInsert = Database["public"]["Tables"]["purchase_orders"]["Insert"];
-type PurchaseOrderItemInsert = Database["public"]["Tables"]["purchase_order_items"]["Insert"];
 
 interface CreatePurchaseEntryDialogProps {
   open: boolean;
@@ -241,60 +239,31 @@ export function CreatePurchaseEntryDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
       const ctx = await getCurrentContext();
+      const saved = await savePurchaseOrderAtomic({
+        branchId: ctx.branchId,
+        supplierId: selectedSupplier!.id,
+        note: notes || null,
+        shippingCost: shippingFee,
+        otherCost,
+        orderDiscount: 0,
+        paidAmount: 0,
+        markOrdered: true,
+        receiveNow: false,
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          discount: 0,
+          vatRate: item.vatRate,
+        })),
+      });
 
-      const { data: po, error: poErr } = await supabase
-        .from("purchase_orders")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: ctx.branchId,
-          code,
-          supplier_id: selectedSupplier!.id,
-          supplier_name: selectedSupplier!.name,
-          status: "ordered" as const,
-          subtotal,
-          discount_amount: 0,
-          tax_amount: taxAmount,
-          total,
-          paid: 0,
-          debt: total,
-          note: notes || null,
-          created_by: ctx.userId,
-        } satisfies PurchaseOrderInsert)
-        .select("id")
-        .single();
-
-      if (poErr) throw new Error(poErr.message);
-
-      if (po && items.length > 0) {
-        const { error: itemsErr } = await supabase
-          .from("purchase_order_items")
-          .insert(items.map((item) => {
-            const lineBeforeTax = lineSubtotal(item);
-            const vatAmt = lineTax(item);
-
-            return {
-              purchase_order_id: po.id,
-              product_id: item.id,
-              product_name: item.productName,
-              unit: item.unit || "Cái",
-              quantity: item.quantity,
-              received_quantity: 0,
-              unit_price: item.price,
-              discount: 0,
-              vat_rate: item.vatRate,
-              vat_amount: vatAmt,
-              total: lineBeforeTax,
-            } satisfies PurchaseOrderItemInsert;
-          }));
-        if (itemsErr) throw new Error(itemsErr.message);
-      }
-
+      setCode(saved.code);
       onOpenChange(false);
       toast({
         title: "Tạo đơn đặt hàng nhập thành công",
-        description: `Đã tạo đơn đặt hàng ${code}`,
+        description: `Đã tạo đơn đặt hàng ${saved.code}`,
         variant: "success",
       });
       onSuccess?.();

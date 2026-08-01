@@ -52,7 +52,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic") {
+      if (fn === "fnb_complete_payment_atomic_v2") {
         return {
           data: {
             invoice_id: "inv-1",
@@ -64,7 +64,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
-      if (fn === "fnb_send_to_kitchen_atomic") {
+      if (fn === "fnb_send_to_kitchen_atomic_v2") {
         const p = params as Record<string, unknown> | undefined;
         return {
           data: {
@@ -165,7 +165,7 @@ describe("sendToKitchen", () => {
     expect(result.kitchenOrderId).toBe("ko-1");
     expect(result.orderNumber).toBe("KB00001");
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic_v2");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_order_type).toBe("takeaway");
@@ -211,7 +211,7 @@ describe("sendToKitchen", () => {
       ],
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic_v2");
     expect(rpcCall).toBeDefined();
     expect((rpcCall!.params as Record<string, unknown>).p_table_id).toBe("table-5");
     expect(claimTableMock).not.toHaveBeenCalled();
@@ -249,7 +249,7 @@ describe("sendToKitchen", () => {
       ],
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_send_to_kitchen_atomic_v2");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     const items = params.p_items as Array<Record<string, unknown>>;
@@ -261,13 +261,13 @@ describe("sendToKitchen", () => {
 // fnbPayment — Atomic RPC tests
 // ============================================================
 //
-// fnbPayment() now delegates to `fnb_complete_payment_atomic` Postgres RPC.
+// fnbPayment() now delegates to `fnb_complete_payment_atomic_v2` Postgres RPC.
 // Business logic (flatten items + toppings, create invoice, decrement stock,
 // cash_transactions, release table) is tested at DB layer via integration.
 // Here we only verify the TS wrapper: correct param mapping + response handling.
 
 describe("fnbPayment (atomic RPC wrapper)", () => {
-  it("calls fnb_complete_payment_atomic RPC with correct params", async () => {
+  it("calls fnb_complete_payment_atomic_v2 RPC with correct params", async () => {
     const result = await fnbPayment({
       kitchenOrderId: "ko-1",
       ...CTX,
@@ -282,7 +282,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
     expect(result.invoiceId).toBe("inv-1");
     expect(result.invoiceCode).toBe("HD00001");
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_kitchen_order_id).toBe("ko-1");
@@ -292,7 +292,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
     expect(params.p_paid).toBe(50000);
     expect(params.p_discount_amount).toBe(5000);
     expect(params.p_note).toBe("ghi chú");
-    expect(params.p_created_by).toBe("u1");
+    expect(params.p_created_by).toBeNull();
   });
 
   it("passes payment_breakdown for mixed payment", async () => {
@@ -309,7 +309,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       paid: 50000,
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_payment_method).toBe("mixed");
     expect(params.p_payment_breakdown).toEqual(breakdown);
@@ -324,13 +324,13 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       paid: 50000,
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_customer_name).toBe("Khách lẻ");
   });
 
   it("throws khi RPC trả lỗi (already paid)", async () => {
-    rpcResponses["fnb_complete_payment_atomic"] = {
+    rpcResponses["fnb_complete_payment_atomic_v2"] = {
       data: null,
       error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
     };
@@ -347,7 +347,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
   });
 
   it("throws khi RPC trả response rỗng", async () => {
-    rpcResponses["fnb_complete_payment_atomic"] = { data: null, error: null };
+    rpcResponses["fnb_complete_payment_atomic_v2"] = { data: null, error: null };
 
     await expect(
       fnbPayment({
@@ -361,7 +361,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
   });
 
   it("throws khi RPC response thiếu invoice_id", async () => {
-    rpcResponses["fnb_complete_payment_atomic"] = {
+    rpcResponses["fnb_complete_payment_atomic_v2"] = {
       data: { invoice_code: "HD00001" }, // missing invoice_id
       error: null,
     };

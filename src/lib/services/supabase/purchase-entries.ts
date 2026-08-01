@@ -13,14 +13,12 @@ import type {
   QueryParams,
   QueryResult,
 } from "@/lib/types";
-import type { Database } from "@/lib/supabase/types";
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
 import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
-import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
-import { applyManualStockMovement, nextEntityCode } from "./stock-adjustments";
+import { getClient, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { recordAuditLog } from "./audit";
+import { updatePurchaseOrderStatus } from "./purchase-orders";
 
-type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 type SupplierReturnPaymentMethod = "cash" | "transfer" | "card";
 
 
@@ -97,29 +95,15 @@ export function getPurchaseEntryStatuses() {
  * Lưu `reason` vào note để có audit trail — sau này Sprint KHO-2
  * sẽ wire vào audit_log riêng thay vì ghi đè note.
  */
-export async function cancelPurchaseOrderEntry(id: string, reason?: string): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { data: row, error } = await supabase
-    .from("purchase_orders")
-    .update({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      status: "cancelled" as any,
-      note: reason ?? "Huỷ đơn đặt hàng nhập",
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    // D3 (CEO 07/07/2026): CHỈ cho huỷ-lật-cờ đơn CHƯA nhận hàng (draft/ordered).
-    // Đơn 'partial'/'completed' ĐÃ nhận (một phần/toàn bộ) → có TỒN THẬT + công
-    // nợ → phải "Hoàn nhập" (revert_received_purchase_order_atomic) để đảo tồn +
-    // công nợ. Lật cờ suông sẽ để lại TỒN MA + công nợ mồ côi.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .in("status", ["draft", "ordered"] as any)
-    .select("id")
-    .maybeSingle();
-
-  if (error) handleError(error, "cancelPurchaseOrderEntry");
-  if (!row) throw new Error("Không thể huỷ trực tiếp — đơn đã nhận hàng (một phần/toàn bộ) hoặc đã huỷ. Với đơn đã nhận, dùng \"Hoàn nhập\" để đảo tồn kho + công nợ.");
+export async function cancelPurchaseOrderEntry(
+  id: string,
+  reason?: string,
+): Promise<void> {
+  await updatePurchaseOrderStatus(
+    id,
+    "cancelled",
+    reason ?? "Hủy đơn đặt hàng nhập",
+  );
 }
 
 /**
@@ -548,18 +532,12 @@ export async function recordInputInvoice(id: string): Promise<void> {
 // ==================== Complete Supplier Return (Trả hàng nhập hoàn chỉnh) ====================
 
 interface SupplierReturnItem {
-  productId: string;
-  productName: string;
-  unit: string;
+  purchaseOrderItemId: string;
   quantity: number;
-  unitPrice: number;
 }
 
 interface CompleteSupplierReturnInput {
   purchaseOrderId: string;
-  purchaseOrderCode: string;
-  supplierId: string;
-  supplierName: string;
   items: SupplierReturnItem[];
   reason?: string;
   note?: string;
@@ -567,170 +545,53 @@ interface CompleteSupplierReturnInput {
 }
 
 /**
- * Hoàn thành phiếu trả hàng nhập:
- * 1. Insert `supplier_returns` + `supplier_return_items`
- * 2. Stock OUT (trả hàng cho NCC → trừ kho)
- * 3. Cash receipt (phiếu thu — NCC hoàn tiền cho mình)
+ * Complete a supplier return in one database transaction.
+ * The server derives branch, supplier, products, prices, totals, actor and codes.
  */
-export async function completeSupplierReturn(input: CompleteSupplierReturnInput): Promise<{ returnId: string; returnCode: string }> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any;
-
-  // ─── D2 (CEO 07/07/2026) — 3 chốt chặn hư-data + auto nợ/thu ───
-  // 0. Lấy phiếu nhập GỐC: chi nhánh + công nợ NCC. Trừ kho phải theo chi nhánh
-  //    của PHIẾU NHẬP (không phải ctx.branchId của user → trước đây trừ nhầm kho).
-  const { data: po, error: poErr } = await sb
-    .from("purchase_orders")
-    .select("id, branch_id, debt")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", input.purchaseOrderId)
-    .single();
-  if (poErr || !po) {
-    handleError(poErr ?? new Error("PO not found"), "completeSupplierReturn:po");
-    throw new Error("Không tìm thấy phiếu nhập gốc để trả hàng");
+export async function completeSupplierReturn(
+  input: CompleteSupplierReturnInput,
+): Promise<{ returnId: string; returnCode: string }> {
+  if (!input.purchaseOrderId) {
+    throw new Error("Kh\u00f4ng t\u00ecm th\u1ea5y phi\u1ebfu nh\u1eadp g\u1ed1c");
   }
-  const branchId: string = po.branch_id;
-
-  // 1. Số ĐÃ NHẬN thật per SP (received_quantity — không phải SL đặt).
-  const { data: poItems } = await sb
-    .from("purchase_order_items")
-    .select("product_id, received_quantity")
-    .eq("purchase_order_id", input.purchaseOrderId);
-  const receivedMap = new Map<string, number>();
-  for (const it of poItems ?? []) {
-    receivedMap.set(it.product_id, Number(it.received_quantity ?? 0));
+  if (!Array.isArray(input.items) || input.items.length === 0) {
+    throw new Error("Vui l\u00f2ng ch\u1ecdn \u00edt nh\u1ea5t m\u1ed9t s\u1ea3n ph\u1ea9m \u0111\u1ec3 tr\u1ea3");
   }
 
-  // 2. Số ĐÃ TRẢ trước đó per SP (các phiếu trả completed cùng phiếu nhập) —
-  //    chống trả LẶP nhiều phiếu cùng PO.
-  const { data: priorReturns } = await sb
-    .from("supplier_returns")
-    .select("id")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("purchase_order_id", input.purchaseOrderId)
-    .eq("status", "completed");
-  const priorIds = (priorReturns ?? []).map((r: { id: string }) => r.id);
-  const returnedMap = new Map<string, number>();
-  if (priorIds.length > 0) {
-    const { data: priorItems } = await sb
-      .from("supplier_return_items")
-      .select("product_id, quantity")
-      .in("return_id", priorIds);
-    for (const ri of priorItems ?? []) {
-      returnedMap.set(
-        ri.product_id,
-        (returnedMap.get(ri.product_id) ?? 0) + Number(ri.quantity ?? 0),
-      );
+  const seenItemIds = new Set<string>();
+  const items = input.items.map((item) => {
+    if (!item.purchaseOrderItemId || !Number.isFinite(item.quantity) || item.quantity <= 0) {
+      throw new Error("D\u00f2ng h\u00e0ng tr\u1ea3 kh\u00f4ng h\u1ee3p l\u1ec7");
     }
-  }
-
-  // 3. VALIDATE: mỗi SP trả ≤ (đã nhận − đã trả). Chặn trả VƯỢT + trả LẶP → âm kho.
-  for (const item of input.items) {
-    const received = receivedMap.get(item.productId) ?? 0;
-    const alreadyReturned = returnedMap.get(item.productId) ?? 0;
-    const returnable = received - alreadyReturned;
-    if (item.quantity > returnable + 1e-6) {
-      throw new Error(
-        `"${item.productName}": chỉ được trả tối đa ${returnable} ` +
-          `(đã nhận ${received}, đã trả ${alreadyReturned}). Bạn nhập ${item.quantity}.`,
-      );
+    if (seenItemIds.has(item.purchaseOrderItemId)) {
+      throw new Error("D\u00f2ng h\u00e0ng tr\u1ea3 b\u1ecb tr\u00f9ng");
     }
-  }
-
-  const returnCode = await nextEntityCode("purchase_return", { tenantId: ctx.tenantId });
-  const returnTotal = input.items.reduce((sum, i) => sum + i.quantity * i.unitPrice, 0);
-
-  // 4. Insert supplier_returns (branch_id = chi nhánh PHIẾU NHẬP gốc).
-  const { data: returnRow, error: returnErr } = await sb
-    .from("supplier_returns")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: branchId,
-      code: returnCode,
-      purchase_order_id: input.purchaseOrderId,
-      import_code: input.purchaseOrderCode,
-      supplier_id: input.supplierId,
-      supplier_name: input.supplierName,
-      status: "completed",
-      total: returnTotal,
-      note: [input.reason, input.note].filter(Boolean).join(" — ") || null,
-      created_by: ctx.userId,
-    })
-    .select("id")
-    .single();
-
-  if (returnErr) handleError(returnErr, "completeSupplierReturn:insert_return");
-  const returnId: string = returnRow.id;
-
-  // 5. Insert supplier_return_items
-  const { error: itemsErr } = await sb
-    .from("supplier_return_items")
-    .insert(
-      input.items.map((item) => ({
-        return_id: returnId,
-        product_id: item.productId,
-        product_name: item.productName,
-        unit: item.unit,
-        quantity: item.quantity,
-        unit_price: item.unitPrice,
-        total: item.quantity * item.unitPrice,
-      }))
-    );
-  if (itemsErr) handleError(itemsErr, "completeSupplierReturn:insert_items");
-
-  // 6. Stock OUT — trả hàng cho NCC → trừ kho tại CHI NHÁNH PHIẾU NHẬP gốc.
-  await applyManualStockMovement(
-    input.items.map((item) => ({
-      productId: item.productId,
+    seenItemIds.add(item.purchaseOrderItemId);
+    return {
+      purchaseOrderItemId: item.purchaseOrderItemId,
       quantity: item.quantity,
-      type: "out" as const,
-      referenceType: "supplier_return",
-      referenceId: returnId,
-      note: `${returnCode} - Trả hàng nhập ${input.purchaseOrderCode} - ${item.productName} (-${item.quantity})`,
-    })),
-    { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
-  );
+    };
+  });
 
-  // 7. Auto nợ/thu (CEO chốt 07/07): CÒN NỢ NCC → GIẢM công nợ phiếu nhập; phần
-  //    vượt (đã trả đủ NCC) → xuất PHIẾU THU (NCC hoàn tiền mặt).
-  if (returnTotal > 0) {
-    const debt = Number(po.debt ?? 0);
-    const debtReduce = Math.min(debt, returnTotal);
-    const cashRefund = returnTotal - debtReduce;
+  const supabase = getClient();
+  // The generated types lag behind this new migration until the schema is pulled.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc("create_supplier_return_atomic", {
+    p_purchase_order_id: input.purchaseOrderId,
+    p_items: items,
+    p_reason: input.reason ?? null,
+    p_note: input.note ?? null,
+    p_payment_method: input.paymentMethod ?? "cash",
+  });
 
-    if (debtReduce > 0) {
-      const { error: debtErr } = await sb
-        .from("purchase_orders")
-        .update({ debt: Math.max(0, debt - debtReduce) })
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", input.purchaseOrderId);
-      if (debtErr) handleError(debtErr, "completeSupplierReturn:reduce_debt");
-    }
+  if (error) handleError(error, "completeSupplierReturn.atomic");
 
-    if (cashRefund > 0) {
-      const cashCode = await nextEntityCode("cash_receipt", { tenantId: ctx.tenantId });
-      const cashData: CashTransactionInsert = {
-        tenant_id: ctx.tenantId,
-        branch_id: branchId,
-        code: cashCode,
-        type: "receipt",
-        category: "Trả hàng nhập",
-        amount: cashRefund,
-        counterparty: input.supplierName,
-        payment_method: input.paymentMethod ?? "cash",
-        reference_type: "supplier_return",
-        reference_id: returnId,
-        note: `Hoàn tiền trả hàng nhập ${returnCode} (ĐN gốc: ${input.purchaseOrderCode})`,
-        created_by: ctx.userId,
-      };
-      const { error: cashErr } = await supabase.from("cash_transactions").insert(cashData);
-      if (cashErr) handleError(cashErr, "completeSupplierReturn:cash_receipt");
-    }
+  const result = data as { return_id?: string; code?: string } | null;
+  if (!result?.return_id || !result.code) {
+    throw new Error("Kh\u00f4ng nh\u1eadn \u0111\u01b0\u1ee3c k\u1ebft qu\u1ea3 phi\u1ebfu tr\u1ea3 h\u00e0ng");
   }
 
-  return { returnId, returnCode };
+  return { returnId: result.return_id, returnCode: result.code };
 }
 
 // ==================== Mappers ====================

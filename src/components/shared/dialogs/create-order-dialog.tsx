@@ -26,11 +26,8 @@ import {
   type BranchSalesChannel,
 } from "@/lib/services/supabase/products";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
-import type { Database } from "@/lib/supabase/types";
+import { saveSalesOrderAtomic } from "@/lib/services/supabase/orders";
 import { Icon } from "@/components/ui/icon";
-
-type InvoiceInsert = Database["public"]["Tables"]["invoices"]["Insert"];
-type InvoiceItemInsert = Database["public"]["Tables"]["invoice_items"]["Insert"];
 
 /** Đơn cần SỬA — truyền vào → dialog chuyển chế độ sửa (giữ mã, prefill, cảnh báo diff). */
 export interface EditOrderInput {
@@ -386,112 +383,36 @@ export function CreateOrderDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
       const ctx = await getCurrentContext();
-
-      // Khách cần trả = tiền hàng − chiết khấu(0) + phí giao hàng (dùng lại memo).
-      // CEO 08/07 (verify DB thật): cột phí giao trên invoices là `delivery_fee`
-      // (migration 00018 — FnB RPC cũng ghi cột này, total đã gồm phí). KHÔNG có
-      // cột invoices.shipping_fee (đó là cột của shipping_orders/online_orders).
-      const invoiceData: InvoiceInsert = {
-        tenant_id: ctx.tenantId,
-        branch_id: ctx.branchId,
-        code,
-        customer_id: selectedCustomer?.id || null,
-        customer_name: selectedCustomer?.name ?? "Khách lẻ",
-        status: "draft" as const,
-        // CEO 08/07: marker "đơn đặt hàng" để trang Đặt hàng giữ đơn qua MỌI
-        // trạng thái (chờ xử lý → hoàn thành → hủy) như KiotViet. getOrders đọc
-        // theo source='order' (không lọc status nữa). Cột invoices.source là text
-        // tự do (không CHECK) — báo cáo chỉ lọc 'fnb'/'internal' nên thêm 'order'
-        // an toàn. Cast vì Supabase generated types chưa liệt kê 'order'.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        source: "order" as any,
-        subtotal: total,
-        discount_amount: 0,
-        delivery_fee: shippingFee,
-        total: grandTotal,
-        paid: 0,
-        debt: grandTotal,
-        payment_method: "cash" as const,
+      const wantShipment = Boolean(
+        receiverName.trim() && receiverPhone.trim() && receiverAddress.trim(),
+      );
+      const result = await saveSalesOrderAtomic({
+        requestedCode: code,
+        branchId: activeBranchId ?? ctx.branchId,
+        customerId: selectedCustomer?.id ?? null,
+        deliveryFee: shippingFee,
         note: notes || null,
-        created_by: ctx.userId,
-      };
-
-      const { data: invoice, error: invoiceErr } = await supabase
-        .from("invoices")
-        .insert(invoiceData)
-        .select("id")
-        .single();
-
-      if (invoiceErr) throw new Error(invoiceErr.message);
-
-      if (invoice && items.length > 0) {
-        const { error: itemsErr } = await supabase
-          .from("invoice_items")
-          .insert(items.map((item) => ({
-            invoice_id: invoice.id,
-            product_id: item.id,
-            product_name: item.productName,
-            unit: item.unit || "Cái",
-            quantity: item.quantity,
-            unit_price: item.price,
-            discount: 0,
-            total: item.quantity * item.price,
-            // Cast: generated types chưa có cột note (00208 thêm ở DB).
-            note: item.note?.trim() || null,
-          } as unknown as InvoiceItemInsert)));
-        if (itemsErr) throw new Error(itemsErr.message);
-      }
-
-      // CEO 08/07: đơn GIAO HÀNG → tạo VẬN ĐƠN gắn hóa đơn (như KiotViet).
-      // Điều kiện: đủ người nhận + SĐT + địa chỉ (cột NOT NULL của
-      // shipping_orders). Thiếu thông tin nhận → vẫn lưu phí giao trên đơn,
-      // chỉ bỏ qua vận đơn. COD = toàn bộ Khách cần trả (đơn nháp chưa thu).
-      let shipWarn: string | null = null;
-      const wantShipment =
-        receiverName.trim() && receiverPhone.trim() && receiverAddress.trim();
-      if (invoice && wantShipment) {
-        try {
-          const shipCode = await nextEntityCode("shipping_order");
-          const { error: shipErr } = await supabase
-            .from("shipping_orders")
-            .insert({
-              tenant_id: ctx.tenantId,
-              invoice_id: invoice.id,
-              partner_id: selectedPartner || null,
-              code: shipCode,
-              status: "pending" as const,
-              shipping_fee: shippingFee,
-              cod_amount: grandTotal,
-              receiver_name: receiverName.trim(),
-              receiver_phone: receiverPhone.trim(),
-              receiver_address: receiverAddress.trim(),
-              note: notes || null,
-            });
-          if (shipErr) throw new Error(shipErr.message);
-        } catch (err) {
-          // Đơn đã tạo OK — vận đơn lỗi thì báo rõ, không nuốt lặng.
-          shipWarn = err instanceof Error ? err.message : "Không tạo được vận đơn";
-        }
-      }
+        partnerId: selectedPartner || null,
+        receiverName: receiverName.trim() || null,
+        receiverPhone: receiverPhone.trim() || null,
+        receiverAddress: receiverAddress.trim() || null,
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          note: item.note?.trim() || null,
+        })),
+      });
 
       onOpenChange(false);
-      if (shipWarn) {
-        toast({
-          title: `Đã tạo đơn ${code} nhưng LỖI tạo vận đơn`,
-          description: `${shipWarn}. Vào Đơn hàng → Vận đơn tạo lại.`,
-          variant: "error",
-        });
-      } else {
-        toast({
-          title: "Tạo đơn đặt hàng thành công",
-          description: wantShipment
-            ? `Đã tạo đơn ${code} + vận đơn giao hàng`
-            : `Đã tạo đơn đặt hàng ${code}`,
-          variant: "success",
-        });
-      }
+      toast({
+        title: "Tạo đơn đặt hàng thành công",
+        description: wantShipment && result.shipmentCode
+          ? `Đã tạo đơn ${result.orderCode} và vận đơn ${result.shipmentCode}`
+          : `Đã tạo đơn đặt hàng ${result.orderCode}`,
+        variant: "success",
+      });
       onSuccess?.();
     } catch (err) {
       toast({
@@ -506,83 +427,34 @@ export function CreateOrderDialog({
 
   /** CEO đã DUYỆT bảng cảnh báo → ghi thay đổi vào đơn (chỉ khi vẫn là nháp). */
   async function handleUpdate() {
-    if (!editOrder) return;
+    if (!editOrder || !validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
       const ctx = await getCurrentContext();
-
-      // GUARD: chỉ sửa đơn CÒN LÀ nháp + đúng đơn đặt hàng (source='order').
-      // .eq (không .or) an toàn với PostgREST mới. Đơn đã thành hóa đơn
-      // (status='completed') sẽ khớp 0 dòng → báo lỗi, KHÔNG đụng sổ sách.
-      const { data: updated, error: updErr } = await supabase
-        .from("invoices")
-        .update({
-          customer_id: selectedCustomer?.id || null,
-          customer_name: selectedCustomer?.name ?? "Khách lẻ",
-          subtotal: total,
-          discount_amount: 0,
-          delivery_fee: shippingFee,
-          total: grandTotal,
-          debt: grandTotal,
-          note: notes || null,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", editOrder.id)
-        .eq("status", "draft")
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .eq("source", "order" as any)
-        .select("id")
-        .maybeSingle();
-      if (updErr) throw new Error(updErr.message);
-      if (!updated) {
-        throw new Error(
-          "Đơn đã chuyển thành hóa đơn (hoặc đã hủy) — không sửa được nữa. Tải lại danh sách.",
-        );
-      }
-
-      // Thay toàn bộ dòng hàng: xóa cũ + chèn mới (đơn nháp, chưa động kho).
-      const { error: delErr } = await supabase
-        .from("invoice_items")
-        .delete()
-        .eq("invoice_id", editOrder.id);
-      if (delErr) throw new Error(delErr.message);
-
-      if (items.length > 0) {
-        const { error: insErr } = await supabase.from("invoice_items").insert(
-          items.map((item) => ({
-            invoice_id: editOrder.id,
-            product_id: item.id,
-            product_name: item.productName,
-            unit: item.unit || "Cái",
-            quantity: item.quantity,
-            unit_price: item.price,
-            discount: 0,
-            total: item.quantity * item.price,
-            // Cast: generated types chưa có cột note (00208 thêm ở DB).
-            note: item.note?.trim() || null,
-          } as unknown as InvoiceItemInsert)),
-        );
-        if (insErr) throw new Error(insErr.message);
-      }
-
-      // Đồng bộ phí giao + COD sang VẬN ĐƠN đã gắn (nếu có) — no-op nếu không.
-      try {
-        await supabase
-          .from("shipping_orders")
-          .update({ shipping_fee: shippingFee, cod_amount: grandTotal })
-          .eq("tenant_id", ctx.tenantId)
-          .eq("invoice_id", editOrder.id);
-      } catch {
-        // Vận đơn lỗi không chặn lưu đơn — bỏ qua lặng (đơn đã lưu OK).
-      }
+      const result = await saveSalesOrderAtomic({
+        orderId: editOrder.id,
+        requestedCode: editOrder.code,
+        branchId: activeBranchId ?? ctx.branchId,
+        customerId: selectedCustomer?.id ?? null,
+        deliveryFee: shippingFee,
+        note: notes || null,
+        partnerId: selectedPartner || null,
+        receiverName: receiverName.trim() || null,
+        receiverPhone: receiverPhone.trim() || null,
+        receiverAddress: receiverAddress.trim() || null,
+        items: items.map((item) => ({
+          productId: item.id,
+          quantity: item.quantity,
+          unitPrice: item.price,
+          note: item.note?.trim() || null,
+        })),
+      });
 
       setPendingChanges(null);
       onOpenChange(false);
       toast({
         title: "Đã lưu thay đổi đơn đặt hàng",
-        description: `Đơn ${code} đã cập nhật.`,
+        description: `Đơn ${result.orderCode} đã cập nhật đầy đủ.`,
         variant: "success",
       });
       onSuccess?.();
@@ -780,6 +652,9 @@ export function CreateOrderDialog({
                     aria-label="Địa chỉ giao hàng"
                   />
                 </div>
+                {errors.receiver && (
+                  <p className="mt-1.5 text-xs text-destructive">{errors.receiver}</p>
+                )}
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
                   Điền đủ người nhận + SĐT + địa chỉ → hệ thống tự tạo vận đơn
                   kèm đơn này.

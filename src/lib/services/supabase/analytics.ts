@@ -340,75 +340,72 @@ export async function getOverviewKpis(
   orders: number; prevOrders: number;
   newCustomers: number; prevNewCustomers: number;
   profit: number; prevProfit: number;
+  expense: number; prevExpense: number;
+  profitMargin: number; prevProfitMargin: number;
 }> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const thisMonth = resolveRange(range, thisMonthRange());
-  const prev = range
-    ? previousRange(thisMonth)
+  const current = resolveRange(range, thisMonthRange());
+  const previous = range
+    ? previousRange(current)
     : (() => {
         const now = new Date();
-        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start: ps.toISOString(), end: pe.toISOString() };
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: start.toISOString(), end: end.toISOString() };
       })();
-  const prevStart = new Date(prev.start);
-  const prevEnd = new Date(prev.end);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
+  function withBranch<T>(query: T): T {
+    return branchId ? (query as any).eq("branch_id", branchId) : query;
+  }
 
-  // Lazy import getProfitAndLoss để tránh circular import (reports.ts cũng
-  // import từ analytics.ts qua barrel). Profit thật = Revenue - COGS - OpEx,
-  // KHÔNG phải `revenue * 0.25` bịa như trước. Trước đây CEO mở /phan-tich
-  // thấy "Lợi nhuận tháng" là số 25% doanh thu — số fake hoàn toàn.
-  const { getProfitAndLoss } = await import("./reports");
-
-  const [thisInvoices, prevInvoices, customerKpis, pnl] =
+  const [currentInvoices, previousInvoices, customerKpis, finance] =
     await Promise.all([
       fetchAllPostgrestRows(
-        () => bq(
-          supabase
-            .from("invoices")
-            .select("total, status")
-            .eq("tenant_id", tenantId)
-            .gte("created_at", thisMonth.start)
-            .lt("created_at", thisMonth.end),
-        ).order("created_at", { ascending: true }),
+        () =>
+          withBranch(
+            supabase
+              .from("invoices")
+              .select("status")
+              .eq("tenant_id", tenantId)
+              .gte("created_at", current.start)
+              .lt("created_at", current.end),
+          ).order("created_at", { ascending: true }),
         "[getOverviewKpis.currentInvoices]",
       ),
       fetchAllPostgrestRows(
-        () => bq(
-          supabase
-            .from("invoices")
-            .select("total, status")
-            .eq("tenant_id", tenantId)
-            .gte("created_at", prevStart.toISOString())
-            .lt("created_at", prevEnd.toISOString()),
-        ).order("created_at", { ascending: true }),
+        () =>
+          withBranch(
+            supabase
+              .from("invoices")
+              .select("status")
+              .eq("tenant_id", tenantId)
+              .gte("created_at", previous.start)
+              .lt("created_at", previous.end),
+          ).order("created_at", { ascending: true }),
         "[getOverviewKpis.previousInvoices]",
       ),
       getCustomerKpis(branchId, range),
-      getProfitAndLoss(branchId, range).catch(() => ({
-        current: { netProfit: 0 },
-        previous: { netProfit: 0 },
-      })),
+      getFinanceDashboardReport(branchId, range),
     ]);
 
-  const calcRev = (data: { total: number; status: string }[] | null) =>
-    (data ?? []).filter(i => i.status === "completed").reduce((s, i) => s + (i.total ?? 0), 0);
-  const calcOrders = (data: { status: string }[] | null) =>
-    (data ?? []).filter(i => i.status === "completed").length;
-
-  const rev = calcRev(thisInvoices);
-  const prevRev = calcRev(prevInvoices);
+  const countCompleted = (rows: Array<{ status: string }> | null) =>
+    (rows ?? []).filter((invoice) => invoice.status === "completed").length;
 
   return {
-    revenue: rev, prevRevenue: prevRev,
-    orders: calcOrders(thisInvoices), prevOrders: calcOrders(prevInvoices),
-    newCustomers: customerKpis.newThisMonth, prevNewCustomers: customerKpis.prevNewMonth,
-    profit: Math.round(pnl.current.netProfit ?? 0),
-    prevProfit: Math.round(pnl.previous.netProfit ?? 0),
+    revenue: finance.kpis.revenue,
+    prevRevenue: finance.kpis.prevRevenue,
+    orders: countCompleted(currentInvoices),
+    prevOrders: countCompleted(previousInvoices),
+    newCustomers: customerKpis.newThisMonth,
+    prevNewCustomers: customerKpis.prevNewMonth,
+    profit: Math.round(finance.kpis.profit),
+    prevProfit: Math.round(finance.kpis.prevProfit),
+    expense: finance.kpis.expense,
+    prevExpense: finance.kpis.prevExpense,
+    profitMargin: finance.kpis.profitMargin,
+    prevProfitMargin: finance.kpis.prevProfitMargin,
   };
 }
 
@@ -743,16 +740,11 @@ export async function getSalesReportSummary(
       topInvoices: payload.top_invoices ?? [],
     };
   } catch (error) {
-    console.warn("[getSalesReportSummary] RPC unavailable, using legacy fallback", error);
-    const [kpis, dailyRevenue, revenueByWeekday, revenueByHour, topInvoices] =
-      await Promise.all([
-        getSalesKpis(branchId, range),
-        getDailyRevenue(30, branchId, range),
-        getRevenueByWeekday(branchId, range),
-        getRevenueByHour(branchId, range),
-        getTopInvoices(10, branchId, range),
-      ]);
-    return { kpis, dailyRevenue, revenueByWeekday, revenueByHour, topInvoices };
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "Máy chủ không trả kết quả";
+    throw new Error(`Không thể tải báo cáo bán hàng: ${message}`);
   }
 }
 
@@ -794,33 +786,11 @@ export async function getSalesInvoiceExportRows(
       offset += page.length;
     }
   } catch (error) {
-    rows.length = 0;
-    console.warn("[getSalesInvoiceExportRows] RPC unavailable, using RLS fallback", error);
-  }
-
-  const tenantId = await getCurrentTenantId();
-  let offset = 0;
-  while (true) {
-    let query = supabase
-      .from("invoices")
-      .select(
-        "code, branch_id, customer_name, subtotal, discount_amount, delivery_fee, total, paid, debt, payment_method, created_at",
-      )
-      .eq("tenant_id", tenantId)
-      .eq("status", "completed")
-      .gte("created_at", resolved.start)
-      .lt("created_at", resolved.end)
-      .order("created_at", { ascending: false })
-      .range(offset, offset + pageSize - 1);
-    if (branchId) query = query.eq("branch_id", branchId);
-
-    const { data, error } = await query;
-    if (error) handleError(error, "getSalesInvoiceExportRows");
-
-    const page = (data ?? []) as Array<Record<string, unknown>>;
-    rows.push(...page.map(mapSalesInvoiceExportRow));
-    if (page.length < pageSize) return rows;
-    offset += page.length;
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "Máy chủ không trả kết quả";
+    throw new Error(`Không thể xuất chi tiết bán hàng: ${message}`);
   }
 }
 
@@ -2534,65 +2504,132 @@ export async function getSupplierSummary(
 // TÀI CHÍNH (Finance) - /phan-tich/tai-chinh
 // ========================================
 
+export interface FinanceDashboardReport {
+  kpis: {
+    revenue: number;
+    prevRevenue: number;
+    expense: number;
+    prevExpense: number;
+    profit: number;
+    prevProfit: number;
+    profitMargin: number;
+    prevProfitMargin: number;
+  };
+  trend: MultiSeriesPoint[];
+  expenseBreakdown: Array<{ name: string; value: number }>;
+  granularity: "day" | "month" | "year";
+}
+
+function formatFinanceBucketLabel(value: string, granularity: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  if (granularity === "day") {
+    return new Intl.DateTimeFormat("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+    }).format(date);
+  }
+  if (granularity === "year") return String(date.getFullYear());
+  return `T${date.getMonth() + 1}/${date.getFullYear()}`;
+}
+
+export async function getFinanceDashboardReport(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<FinanceDashboardReport> {
+  const supabase = getClient();
+  const current = resolveRange(range, thisMonthRange());
+  const previous = range
+    ? previousRange(current)
+    : (() => {
+        const now = new Date();
+        const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        const end = new Date(now.getFullYear(), now.getMonth(), 1);
+        return { start: start.toISOString(), end: end.toISOString() };
+      })();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "get_finance_dashboard_report",
+    {
+      p_current_from: current.start,
+      p_current_to: current.end,
+      p_previous_from: previous.start,
+      p_previous_to: previous.end,
+      p_branch_id: branchId ?? null,
+    },
+  );
+  if (error) handleError(error, "getFinanceDashboardReport");
+  if (!data || typeof data !== "object") {
+    throw new Error("Máy chủ không trả kết quả báo cáo tài chính.");
+  }
+
+  const raw = data as Record<string, unknown>;
+  const currentRow = (raw.current ?? {}) as Record<string, unknown>;
+  const previousRow = (raw.previous ?? {}) as Record<string, unknown>;
+  const number = (value: unknown): number => {
+    const parsed = Number(value ?? 0);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+  const buildPeriod = (row: Record<string, unknown>) => {
+    const revenue = number(row.revenue) - number(row.delivery_fee);
+    const expense = number(row.cogs) + number(row.operating_expense);
+    const profit = revenue - expense;
+    return {
+      revenue,
+      expense,
+      profit,
+      profitMargin:
+        revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
+    };
+  };
+  const currentPeriod = buildPeriod(currentRow);
+  const previousPeriod = buildPeriod(previousRow);
+  const granularity =
+    raw.granularity === "day" || raw.granularity === "year"
+      ? raw.granularity
+      : "month";
+
+  const trend = Array.isArray(raw.trend)
+    ? (raw.trend as Array<Record<string, unknown>>).map((row) => ({
+        label: formatFinanceBucketLabel(String(row.bucket_start ?? ""), granularity),
+        revenue: number(row.goods_revenue),
+        expense: number(row.total_expense),
+        cogs: number(row.cogs),
+        operatingExpense: number(row.operating_expense),
+        profit: number(row.profit),
+      }))
+    : [];
+  const expenseBreakdown = Array.isArray(raw.expense_breakdown)
+    ? (raw.expense_breakdown as Array<Record<string, unknown>>).map((row) => ({
+        name: String(row.name ?? "Khác"),
+        value: number(row.value),
+      }))
+    : [];
+
+  return {
+    kpis: {
+      revenue: currentPeriod.revenue,
+      prevRevenue: previousPeriod.revenue,
+      expense: currentPeriod.expense,
+      prevExpense: previousPeriod.expense,
+      profit: currentPeriod.profit,
+      prevProfit: previousPeriod.profit,
+      profitMargin: currentPeriod.profitMargin,
+      prevProfitMargin: previousPeriod.profitMargin,
+    },
+    trend,
+    expenseBreakdown,
+    granularity,
+  };
+}
+
 export async function getFinanceKpis(
   branchId?: string,
   range?: { from: string; to: string },
-): Promise<{
-  revenue: number; prevRevenue: number;
-  expense: number; prevExpense: number;
-  profit: number; prevProfit: number;
-  profitMargin: number; prevProfitMargin: number;
-}> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const thisMonth = resolveRange(range, thisMonthRange());
-  const prev = range
-    ? previousRange(thisMonth)
-    : (() => {
-        const now = new Date();
-        const ps = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-        const pe = new Date(now.getFullYear(), now.getMonth(), 1);
-        return { start: ps.toISOString(), end: pe.toISOString() };
-      })();
-  const prevStart = new Date(prev.start);
-  const prevEnd = new Date(prev.end);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
-
-  const [thisInv, prevInv, thisCash, prevCash] = await Promise.all([
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)).order("created_at", { ascending: true }),
-      "[getFinanceKpis.currentInvoices]",
-    ),
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())).order("created_at", { ascending: true }),
-      "[getFinanceKpis.previousInvoices]",
-    ),
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", thisMonth.start).lt("created_at", thisMonth.end)).order("created_at", { ascending: true }),
-      "[getFinanceKpis.currentCash]",
-    ),
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("cash_transactions").select("type, amount").eq("tenant_id", tenantId).gte("created_at", prevStart.toISOString()).lt("created_at", prevEnd.toISOString())).order("created_at", { ascending: true }),
-      "[getFinanceKpis.previousCash]",
-    ),
-  ]);
-
-  const revenue = thisInv.reduce((s, i) => s + (i.total ?? 0), 0);
-  const prevRevenue = prevInv.reduce((s, i) => s + (i.total ?? 0), 0);
-  const expense = thisCash.filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
-  const prevExpense = prevCash.filter(c => c.type === "payment").reduce((s, c) => s + (c.amount ?? 0), 0);
-  const profit = revenue - expense;
-  const prevProfit = prevRevenue - prevExpense;
-
-  return {
-    revenue, prevRevenue,
-    expense, prevExpense,
-    profit, prevProfit,
-    profitMargin: revenue > 0 ? Math.round((profit / revenue) * 1000) / 10 : 0,
-    prevProfitMargin: prevRevenue > 0 ? Math.round((prevProfit / prevRevenue) * 1000) / 10 : 0,
-  };
+): Promise<FinanceDashboardReport["kpis"]> {
+  const report = await getFinanceDashboardReport(branchId, range);
+  return report.kpis;
 }
 
 export async function getRevenueVsExpense(
@@ -2703,6 +2740,7 @@ export async function getCashFlow(
     .from("cash_transactions")
     .select("created_at, type, amount")
     .eq("tenant_id", tenantId)
+    .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -2721,7 +2759,7 @@ export async function getCashFlow(
     const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (c.type === "receipt") {
       thuMap.set(key, (thuMap.get(key) ?? 0) + (c.amount ?? 0));
-    } else {
+    } else if (c.type === "payment") {
       chiMap.set(key, (chiMap.get(key) ?? 0) + (c.amount ?? 0));
     }
   });
@@ -2766,6 +2804,7 @@ export async function getCashFlowDetailed(
     .from("cash_transactions")
     .select("created_at, type, amount, category")
     .eq("tenant_id", tenantId)
+    .eq("status", "completed")
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);

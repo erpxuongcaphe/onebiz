@@ -108,6 +108,7 @@ export function CreatePurchaseReturnDialog({
         .select("id, code, supplier_id, supplier_name")
         .ilike("code", `%${poSearch}%`)
         .eq("tenant_id", ctx.tenantId)
+        .eq("branch_id", ctx.branchId)
         .in("status", ["completed", "partial"])
         .limit(8);
 
@@ -198,15 +199,9 @@ export function CreatePurchaseReturnDialog({
     try {
       const { returnCode } = await completeSupplierReturn({
         purchaseOrderId: selectedPO!.id,
-        purchaseOrderCode: selectedPO!.code,
-        supplierId: selectedPO!.supplier_id,
-        supplierName: selectedPO!.supplier_name,
         items: selectedItems.map((item) => ({
-          productId: item.product_id,
-          productName: item.product_name,
-          unit: item.unit,
+          purchaseOrderItemId: item.id,
           quantity: item.returnQty,
-          unitPrice: item.unit_price,
         })),
         reason: reason || undefined,
         note: notes || undefined,

@@ -30,7 +30,6 @@ import {
   getDailyRevenue,
   getRevenueByCategory,
   getTopProductsByRevenue,
-  getFinanceKpis,
 } from "@/lib/services";
 import type {
   MonthlyRevenuePoint,
@@ -116,15 +115,6 @@ export default function TongQuanPage() {
 
   // CEO 13/05: helper resolve tên branch để in title row Excel
   const tenantName = useAuth().tenant?.name;
-
-  // Fetch finance KPI riêng (loading async, không block UI chính)
-  useEffect(() => {
-    getFinanceKpis(activeBranchId ?? undefined, range)
-      .then(setFinanceKpis)
-      .catch(() => {
-        // Silent — fallback empty
-      });
-  }, [activeBranchId, range]);
 
   // ── Export Excel — 2 mode ──
   const handleExportView = useCallback(() => {
@@ -352,6 +342,16 @@ export default function TongQuanPage() {
         ]);
         if (!isCurrentRequest) return;
         setKpis(kpiData);
+        setFinanceKpis({
+          revenue: kpiData.revenue,
+          prevRevenue: kpiData.prevRevenue,
+          expense: kpiData.expense,
+          prevExpense: kpiData.prevExpense,
+          profit: kpiData.profit,
+          prevProfit: kpiData.prevProfit,
+          profitMargin: kpiData.profitMargin,
+          prevProfitMargin: kpiData.prevProfitMargin,
+        });
         setDailyRevenue(daily);
         setCategoryRevenue(category);
         setTopProducts(products);

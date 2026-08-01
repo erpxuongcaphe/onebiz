@@ -467,12 +467,12 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/cong-no-aging",
-    title: "Tuổi nợ phải thu",
-    shortTitle: "Tuổi công nợ",
-    description: "Phân nhóm công nợ khách hàng theo thời gian quá hạn.",
+    title: "Tuổi nợ phải thu và phải trả",
+    shortTitle: "Tuổi nợ",
+    description: "Tách riêng công nợ khách hàng và nhà cung cấp theo thời gian phát sinh.",
     category: "finance",
     icon: "credit_card",
-    keywords: ["debt aging", "phải thu", "quá hạn", "công nợ khách"],
+    keywords: ["tuổi nợ", "phải thu", "phải trả", "quá hạn", "khách hàng", "nhà cung cấp"],
     permissions: ANALYTICS_PERMISSIONS,
   },
   {

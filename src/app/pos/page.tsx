@@ -30,18 +30,15 @@ import {
   completeDraftOrder,
   findDraftIdBySession,
   getCurrentContext,
-  recordDiscountAudit,
   type PosCheckoutInput,
   type PosCheckoutItem,
   type DraftOrderSummary,
   type DraftOrderDetail,
   getProducts,
   getOrCreateWalkInCustomer,
-  adjustCustomerDebt,
   getCustomerById,
   attachDeliveryToInvoice,
   getTenantBusinessInfo,
-  setInvoiceAmountTendered,
   getInvoiceById,
   getInvoiceItems,
   type TenantBusinessInfo,
@@ -115,19 +112,20 @@ const CreateCustomerDialog = dynamic(
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import { getCustomers } from "@/lib/services/supabase/customers";
-import { validateCoupon, applyCouponAtomic } from "@/lib/services/supabase/coupons";
+import { validateCoupon } from "@/lib/services/supabase/coupons";
 import { Icon } from "@/components/ui/icon";
 import { getVariantsByProduct } from "@/lib/services/supabase/variants";
-import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
+import {
+  resolveAppliedTier,
+  resolveTierPrice,
+  type TierPriceRule,
+} from "@/lib/services/supabase/pricing";
 import {
   resolveAppliedPromotion,
-  incrementPromotionUsage,
   type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
 import {
-  earnLoyaltyPoints,
   getLoyaltySettings,
-  redeemLoyaltyPoints,
   calculateRedeemDiscount,
 } from "@/lib/services/supabase/loyalty";
 import type { LoyaltySettings, Invoice, SalesOrder } from "@/lib/types";
@@ -879,6 +877,20 @@ function PosPageInner() {
     [state]
   );
 
+  const handleLineDiscountChange = useCallback(
+    (lineId: string, discount: DiscountInput) => {
+      if (discount.value === 0) {
+        state.updateLineDiscount(lineId, discount);
+        return;
+      }
+      pendingApprovalRef.current = () => {
+        state.updateLineDiscount(lineId, discount);
+      };
+      setDiscountOtpOpen(true);
+    },
+    [state],
+  );
+
   // ── Áp mã giảm giá (coupon/voucher) ──
   const handleApplyCoupon = useCallback(async () => {
     const code = couponCode.trim().toUpperCase();
@@ -1097,6 +1109,8 @@ function PosPageInner() {
     tierName: string;
     tierCode: string;
     priceMap: Map<string, number>;
+    rulesMap: Map<string, TierPriceRule[]>;
+    customerId: string;
   } | null>(null);
 
   // CEO 13/07: nạp cờ bật/tắt dòng in (invoiceFields) 1 lần khi mở POS → phiếu
@@ -1117,81 +1131,117 @@ function PosPageInner() {
       });
   }, []);
 
-  // Wrapper addLine — inject tier price nếu có. Mọi nơi gọi state.addLine
-  // trong page này phải qua addLineWithTier để giá tier được áp dụng cho
-  // SP mới thêm vào cart.
+  // Thêm hàng theo đúng bảng giá, biến thể và tổng số lượng của dòng.
   const addLineWithTier = useCallback(
     (
       product: Product,
-      options?: { variantId?: string; variantLabel?: string; unitPrice?: number; quantity?: number; availableStock?: number; stockKnown?: boolean },
+      options?: {
+        variantId?: string;
+        variantLabel?: string;
+        unitPrice?: number;
+        quantity?: number;
+        availableStock?: number;
+        stockKnown?: boolean;
+      },
     ) => {
-      const tierPrice = appliedTier?.priceMap.get(product.id);
-      // Nếu caller đã pass unitPrice (variant pricing) → giữ nguyên,
-      // không override bởi tier vì variant có giá riêng.
-      const effectiveOptions =
-        options?.unitPrice !== undefined
-          ? options
-          : tierPrice !== undefined
-            ? { ...options, unitPrice: tierPrice }
-            : options;
-      state.addLine(product, effectiveOptions);
+      const quantityToAdd = options?.quantity ?? 1;
+      const existingQuantity = state.lines
+        .filter(
+          (line) =>
+            line.productId === product.id &&
+            (line.variantId ?? null) === (options?.variantId ?? null) &&
+            line.discount.value === 0 &&
+            line.priceSource !== "manual",
+        )
+        .reduce((sum, line) => sum + line.quantity, 0);
+      const targetQuantity = existingQuantity + quantityToAdd;
+      const catalogUnitPrice = options?.unitPrice ?? product.sellPrice ?? 0;
+      const activeTier =
+        appliedTier?.customerId === state.customer?.id ? appliedTier : null;
+      const tierPrice = resolveTierPrice(
+        activeTier?.rulesMap.get(product.id),
+        targetQuantity,
+        options?.variantId,
+      );
+
+      state.addLine(product, {
+        ...options,
+        catalogUnitPrice,
+        unitPrice: tierPrice ?? catalogUnitPrice,
+        priceSource: tierPrice !== null ? "tier" : "catalog",
+      });
     },
     [appliedTier, state],
   );
 
+  const tierProductKey = Array.from(
+    new Set(state.lines.map((line) => line.productId)),
+  )
+    .sort()
+    .join(",");
+  const tierLineKey = state.lines
+    .map(
+      (line) =>
+        `${line.lineId}:${line.productId}:${line.variantId ?? ""}:${line.quantity}`,
+    )
+    .join("|");
+
+  // Nạp lại quy tắc khi đổi khách hoặc trong giỏ xuất hiện mã hàng mới.
   useEffect(() => {
     const customerId = state.customer?.id;
     if (!customerId) {
-      // Không có KH → clear tier (về giá niêm yết).
-      if (appliedTier) {
-        setAppliedTier(null);
-        // Re-price cart về sellPrice gốc — em không có cache sellPrice.
-        // Caller hiện chấp nhận: line đang hiện giá tier sẽ giữ giá đó cho
-        // đến khi user xoá line, vì sellPrice gốc cần re-fetch product.
-        // Acceptable cho V1 — V2 cache product trong line state.
-      }
+      setAppliedTier(null);
       return;
     }
+
     let cancelled = false;
-    const productIds = state.lines.map((l) => l.productId);
-    resolveAppliedTier({
-      channel: "retail",
-      customerId,
-      productIds,
-    })
+    const productIds = tierProductKey ? tierProductKey.split(",") : [];
+    resolveAppliedTier({ channel: "retail", customerId, productIds })
       .then((tier) => {
         if (cancelled) return;
         if (!tier) {
           setAppliedTier(null);
           return;
         }
-        setAppliedTier(tier);
-        // Re-price các line khớp với tier
-        let appliedCount = 0;
-        for (const line of state.lines) {
-          const tierPrice = tier.priceMap.get(line.productId);
-          if (tierPrice !== undefined && tierPrice !== line.unitPrice) {
-            state.updateLinePrice(line.lineId, tierPrice);
-            appliedCount++;
-          }
-        }
-        if (appliedCount > 0) {
+        const isNewTier = appliedTier?.tierId !== tier.tierId;
+        setAppliedTier({ ...tier, customerId });
+        if (isNewTier && tier.rulesMap.size > 0) {
           toast({
             title: `Áp dụng bảng giá: ${tier.tierName}`,
-            description: `${appliedCount} sản phẩm trong giỏ đã re-price.`,
+            description: `${tier.rulesMap.size} mã hàng có giá riêng.`,
             variant: "default",
           });
         }
       })
-      .catch(() => {
-        // fail silent — fallback giá niêm yết
-        setAppliedTier(null);
-      });
+      .catch(() => setAppliedTier(null));
+
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.customer?.id]);
+  }, [state.customer?.id, tierProductKey]);
+
+  // Tự đổi giá khi số lượng vượt hoặc giảm khỏi ngưỡng; đổi khách về đúng giá
+  // niêm yết. Dòng đã được duyệt sửa giá tay không bị ghi đè.
+  useEffect(() => {
+    const activeTier =
+      appliedTier?.customerId === state.customer?.id ? appliedTier : null;
+    for (const line of state.lines) {
+      if (line.priceSource === "manual") continue;
+      const catalogUnitPrice = line.catalogUnitPrice ?? line.unitPrice;
+      const tierPrice = resolveTierPrice(
+        activeTier?.rulesMap.get(line.productId),
+        line.quantity,
+        line.variantId,
+      );
+      const targetPrice = tierPrice ?? catalogUnitPrice;
+      const targetSource = tierPrice !== null ? "tier" : "catalog";
+      if (line.unitPrice !== targetPrice || line.priceSource !== targetSource) {
+        state.updateLinePrice(line.lineId, targetPrice, targetSource);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedTier, state.customer?.id, tierLineKey]);
 
   // ============================================================
   // Sprint KM-2: Apply promotion engine
@@ -1578,7 +1628,8 @@ function PosPageInner() {
           customerName: state.customer?.name ?? "Khách lẻ",
           items: state.lines.map((l) => ({
             productId: l.productId,
-            productName: l.productName,
+            variantId: l.variantId ?? null,
+            productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
             unit: l.unit,
             quantity: l.quantity,
             unitPrice: l.unitPrice,
@@ -1656,8 +1707,8 @@ function PosPageInner() {
    *     Nếu cashier chưa chọn customer → auto-link "Khách lẻ vãng lai" (KL-VL).
    *   - Khách đưa > total → mở ChangeDialog hỏi cashier:
    *       * "Trả tiền thừa": invoice paid=total, không adjust debt
-   *       * "Ghi công nợ":   invoice paid=total, sau đó adjustCustomerDebt(-excess)
-   *         → khách có credit, lần sau cấn trừ. Chỉ enable khi có customer thật.
+   *       * "Ghi số dư": invoice paid=total và server ghi tiền thừa vào sổ
+   *         phát sinh của khách trong cùng giao dịch. Chỉ dùng khi có khách thật.
    *   - Khách đưa = 0 (rỗng) → ghi nợ 100%, link customer (auto walk-in).
    *
    * intent param resolve khi user click button trong ChangeDialog:
@@ -1675,6 +1726,17 @@ function PosPageInner() {
         variant: "warning",
       });
       setOpenShiftDialogOpen(true);
+      return;
+    }
+    // Thanh toán làm thay đổi đồng thời hóa đơn, tồn kho, công nợ và sổ quỹ.
+    // Khi offline chỉ giữ giỏ/lưu nháp; không phát hành hóa đơn cục bộ chưa được máy chủ xác nhận.
+    if (!networkStatus.isOnline) {
+      toast({
+        title: "Chưa thể thanh toán khi mất kết nối",
+        description: "Giỏ hàng vẫn được giữ. Vui lòng chờ có mạng rồi thanh toán, hoặc lưu nháp để xử lý sau.",
+        variant: "warning",
+        duration: 0,
+      });
       return;
     }
     // CEO 29/05/2026: CHO PHÉP bán đơn 0đ (hàng mẫu, nội bộ, KM/giảm 100%)
@@ -1750,8 +1812,8 @@ function PosPageInner() {
     // ─── Compute paid logic (CEO 04/05) ───
     // paidEntered = số khách đưa thực (từ ô input). 0 nếu rỗng → ghi nợ 100%.
     // paidForInvoice = paid trong DB (capped tại total — invoice luôn balanced).
-    // creditExcess = phần thừa (chỉ khi intent='credit') để adjust customer.debt
-    // sau invoice complete.
+    // creditExcess = phần thừa (chỉ khi intent='credit'); server ghi cùng
+    // giao dịch với hóa đơn để công nợ không thể lệch hoặc bị ghi đè.
     const paidEntered = state.paid; // không default về total nữa
     const total = state.total;
 
@@ -1765,6 +1827,30 @@ function PosPageInner() {
     const creditExcess =
       intent === "credit" && paidEntered > total ? paidEntered - total : 0;
     const needsCustomerForDebt = paidForInvoice < total || creditExcess > 0;
+
+    if (creditExcess > 0 && !networkStatus.isOnline) {
+      toast({
+        title: "Không thể ghi số dư khi mất mạng",
+        description: "Chọn trả lại tiền thừa hoặc đợi có mạng để số dư được ghi an toàn cùng hóa đơn.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const needsDiscountApproval =
+      state.lineDiscountTotal > 0 ||
+      (state.orderDiscountAmount > 0 &&
+        (discountSource === "manual" || discountSource === null));
+    if (needsDiscountApproval && !state.discountAuditCtx?.otpId) {
+      toast({
+        title: "Cần duyệt chiết khấu",
+        description: "Nhập OTP quản lý, sau đó bấm Thanh toán lại.",
+        variant: "warning",
+      });
+      pendingApprovalRef.current = null;
+      setDiscountOtpOpen(true);
+      return;
+    }
 
     submitLockRef.current = true;
     setSubmitting("complete");
@@ -1866,6 +1952,56 @@ function PosPageInner() {
           ? state.paymentBreakdown.filter((b) => b.amount > 0)
           : undefined;
 
+      const checkoutItems: PosCheckoutItem[] = state.lines.map((line) => ({
+        productId: line.productId,
+        variantId: line.variantId ?? null,
+        productName: line.variantLabel
+          ? `${line.productName} · ${line.variantLabel}`
+          : line.productName,
+        unit: line.unit,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discount:
+          line.discount.mode === "percent"
+            ? Math.round((line.quantity * line.unitPrice * line.discount.value) / 100)
+            : line.discount.value,
+        vatRate: line.vatRate ?? 0,
+        note: line.note,
+      }));
+      const checkoutDiscountSource: PosCheckoutInput["discountSource"] =
+        couponApplied
+          ? "coupon"
+          : appliedPromotion && appliedRedeem
+            ? "promotion_redeem"
+            : appliedPromotion
+              ? "promotion"
+              : appliedRedeem
+                ? "redeem"
+                : state.orderDiscountAmount > 0
+                  ? discountSource === "auto"
+                    ? "customer_group"
+                    : "manual"
+                  : null;
+      const securedCheckout = {
+        customerId: resolvedCustomerId,
+        items: checkoutItems,
+        promotionId:
+          checkoutDiscountSource === "promotion" ||
+          checkoutDiscountSource === "promotion_redeem"
+            ? appliedPromotion?.promotion.id ?? null
+            : null,
+        couponCode: couponApplied,
+        loyaltyPoints: appliedRedeem?.points ?? 0,
+        discountSource: checkoutDiscountSource,
+        orderDiscountAmount: state.orderDiscountAmount,
+        discountOtpId: state.discountAuditCtx?.otpId ?? null,
+        discountReason: state.discountAuditCtx?.reason ?? null,
+        shippingFee: state.shippingFee,
+        orderVatRate: state.orderVatRate,
+        amountTendered: paidEntered,
+        customerCredit: creditExcess,
+      };
+
       // CEO 29/05/2026: chống KẸT ĐƠN NHÁP. loadedDraftId có thể chưa kịp set
       // (auto-save vừa tạo nháp trên server cho phiên này) → khi đó tra nháp
       // theo clientSessionId để hoàn tất ĐÚNG nháp đó, tránh đi nhánh posCheckout
@@ -1889,6 +2025,7 @@ function PosPageInner() {
           tenantId: ctx.tenantId,
           branchId: ctx.branchId,
           createdBy: ctx.userId,
+          ...securedCheckout,
           paymentBreakdown: breakdown,
           allowBomShortage: bomShortages.length > 0,
           // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
@@ -1903,21 +2040,8 @@ function PosPageInner() {
           tenantId: ctx.tenantId,
           branchId: ctx.branchId,
           createdBy: ctx.userId,
-          // CEO 04/05: dùng resolvedCustomerId — auto fallback walk-in nếu nợ
-          customerId: resolvedCustomerId,
+          ...securedCheckout,
           customerName: resolvedCustomerName,
-          items: state.lines.map((l) => ({
-            productId: l.productId,
-            productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
-            unit: l.unit,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            discount: l.discount.mode === "percent"
-              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
-              : l.discount.value,
-            vatRate: l.vatRate ?? 0,
-            note: l.note, // 00208 — RPC ghi vào invoice_items.note
-          })),
           paymentMethod: state.paymentMethod,
           paymentBreakdown: breakdown,
           allowBomShortage: bomShortages.length > 0,
@@ -1927,14 +2051,6 @@ function PosPageInner() {
           paid,
           note: state.note || "",
           shiftId: currentShift?.id ?? null,
-          // KM-4: track promotion áp dụng
-          promotionId: appliedPromotion?.promotion.id ?? null,
-          promotionDiscount: appliedPromotion?.discountAmount ?? 0,
-          promotionFreeValue:
-            appliedPromotion?.freeItems?.reduce(
-              (s, f) => s + f.quantity * f.unitPrice,
-              0,
-            ) ?? 0,
           // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
           clientSessionId,
         };
@@ -1957,6 +2073,7 @@ function PosPageInner() {
             tenantId: ctx.tenantId,
             branchId: ctx.branchId,
             createdBy: ctx.userId,
+            ...securedCheckout,
             paymentBreakdown: breakdown,
             allowBomShortage: bomShortages.length > 0,
             // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
@@ -1997,13 +2114,6 @@ function PosPageInner() {
             });
           }
         }
-      }
-
-      // 00179 (CEO 13/07): lưu "tiền khách đưa" khi có thối — để in lại hóa đơn
-      // tái hiện đúng "Khách đã thanh toán / Tiền thối lại" như phiếu POS.
-      // Best-effort: cột chưa có (00179 chưa chạy) → service tự nuốt lỗi.
-      if (invoiceId && !isOfflineCheckout && paidEntered > paid) {
-        void setInvoiceAmountTendered(invoiceId, paidEntered);
       }
 
       // CEO 08/07/2026: đơn "Bán giao hàng" → gắn phí ship + VẬN ĐƠN vào HĐ vừa
@@ -2056,54 +2166,7 @@ function PosPageInner() {
         }
       }
 
-      // Day 3 16/05/2026: audit log discount manual (sau OTP duyệt)
-      // Best-effort: nếu fail không block checkout. Skip offline (sync sau).
-      if (
-        !isOfflineCheckout &&
-        invoiceId &&
-        invoiceCode &&
-        state.discountAuditCtx &&
-        state.orderDiscountAmount > 0
-      ) {
-        const auditCtx = state.discountAuditCtx;
-        const subtotal = state.subtotal;
-        const percent =
-          subtotal > 0 ? (state.orderDiscountAmount / subtotal) * 100 : 0;
-        recordDiscountAudit({
-          invoiceId,
-          invoiceCode,
-          invoiceTotal: state.total,
-          discountAmount: state.orderDiscountAmount,
-          discountPercent: Math.round(percent * 100) / 100,
-          reason: auditCtx.reason,
-          otpId: auditCtx.otpId,
-        }).catch((err) => console.warn("[POS] recordDiscountAudit:", err));
-        // Reset context để discount tiếp theo cần xin OTP mới
-        state.setDiscountAuditCtx(null);
-      }
-
-      // ─── Credit excess (CEO 04/05) ───
-      // Nếu cashier chọn "Ghi công nợ" với tiền thừa → adjust customer.debt
-      // -= excess. Sau invoice complete để có invoiceCode log audit.
-      // Skip nếu offline (sync lại sau, dùng audit_log để track).
-      if (creditExcess > 0 && resolvedCustomerId && !isOfflineCheckout) {
-        try {
-          await adjustCustomerDebt(
-            resolvedCustomerId,
-            -creditExcess,
-            `Tiền thừa từ HĐ ${invoiceCode}`,
-          );
-        } catch (err) {
-          // Không block — invoice đã success. Toast warn để cashier biết.
-          console.error("[POS] adjustCustomerDebt for credit failed:", err);
-          toast({
-            title: "Đã lưu hoá đơn nhưng chưa ghi credit",
-            description: `Đơn ${invoiceCode} OK. Vui lòng ghi credit tay cho khách (${formatCurrency(creditExcess)}đ).`,
-            variant: "warning",
-            duration: 8000,
-          });
-        }
-      }
+      // Tiền thừa giữ lại đã được server ghi atomically cùng hóa đơn.
 
       if (autoPrint && invoiceCode) {
         const receipt: ReceiptData = {
@@ -2242,75 +2305,9 @@ function PosPageInner() {
         }
       }
 
-      // KM-2: Tăng usage_count atomic — chỉ khi online (offline để sync sau)
-      if (!isOfflineCheckout && appliedPromotion?.promotion.id) {
-        try {
-          await incrementPromotionUsage(appliedPromotion.promotion.id);
-        } catch (err) {
-          // Không block checkout — log warn để CEO biết
-          console.warn("incrementPromotionUsage failed:", err);
-        }
-      }
-
-      // L-3: Redeem points TRƯỚC khi earn — vì earn dựa trên total
-      // sau discount, redeem decrement điểm cũ. Order: redeem (trừ điểm
-      // dùng) → earn (cộng điểm mới của hoá đơn này).
-      if (!isOfflineCheckout && appliedRedeem && state.customer?.id && invoiceId) {
-        const customerId = state.customer.id;
-        const points = appliedRedeem.points;
-        try {
-          const newBalance = await redeemLoyaltyPoints(customerId, points, invoiceId);
-          toast({
-            title: `Đã trừ ${points} điểm`,
-            description: `Số dư: ${newBalance} điểm`,
-            variant: "info",
-          });
-        } catch (err) {
-          console.warn("redeemLoyaltyPoints failed:", err);
-        }
-      }
-
-      // S-5 13/06/2026: consume coupon atomic sau checkout success. Best-effort
-      // (try/catch trong applyCouponAtomic) — nếu RPC chưa apply migration
-      // 00143 hoặc race lost → log warn, KHÔNG rollback đơn đã thanh toán.
-      if (!isOfflineCheckout && couponApplied && invoiceId && state.orderDiscount.value > 0) {
-        applyCouponAtomic({
-          code: couponApplied,
-          invoiceId,
-          customerId: state.customer?.id ?? null,
-          discountAmount: state.orderDiscount.value,
-        }).then((r) => {
-          if (!r.ok) {
-            console.warn(`[POS] coupon ${couponApplied} consume failed:`, r.reason);
-          }
-        });
-      }
-
-      // L-2: Tích điểm cho KH có account — chỉ khi online + có customer.id +
-      // loyalty enabled. Background fire (không block checkout).
-      if (!isOfflineCheckout && state.customer?.id && invoiceId) {
-        const customerId = state.customer.id;
-        const total = state.total;
-        getLoyaltySettings()
-          .then((settings) => {
-            if (!settings?.isEnabled) return;
-            return earnLoyaltyPoints(customerId, invoiceId!, total).then((newPoints) => {
-              const earned = Math.floor(
-                (total / (settings.amountPerPoint || 1)) * (settings.pointsPerAmount || 0),
-              );
-              if (earned > 0) {
-                toast({
-                  title: `Đã tích ${earned} điểm cho ${state.customer?.name}`,
-                  description: `Tổng điểm: ${newPoints}`,
-                  variant: "info",
-                });
-              }
-            });
-          })
-          .catch((err) => {
-            console.warn("earnLoyaltyPoints failed:", err);
-          });
-      }
+      // Khuyến mãi, coupon và điểm thưởng được ghi trong cùng giao dịch
+      // với hóa đơn ở RPC 00253 để không còn trạng thái "hóa đơn đã xong
+      // nhưng quyền lợi khách hàng chưa cập nhật".
 
       // Toast variant theo case ghi nợ / credit / bình thường
       const debtAmount = total - paidForInvoice;
@@ -2355,6 +2352,51 @@ function PosPageInner() {
       // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +
       // rõ ràng. Giỏ KHÔNG bị xóa (clearCart chỉ chạy khi success).
       const msg = String(err?.message ?? "");
+      const separatorIndex = msg.indexOf("|");
+      const rpcCode = separatorIndex >= 0 ? msg.slice(0, separatorIndex) : msg;
+      let rpcDetails: Record<string, unknown> = {};
+      if (separatorIndex >= 0) {
+        try {
+          rpcDetails = JSON.parse(msg.slice(separatorIndex + 1));
+        } catch {
+          rpcDetails = {};
+        }
+      }
+      if (rpcCode === "POS_PRICE_CHANGED") {
+        const productId = String(rpcDetails.productId ?? "");
+        const variantId = rpcDetails.variantId ? String(rpcDetails.variantId) : null;
+        const expectedPrice = Number(rpcDetails.expectedPrice);
+        const changedLine = state.lines.find(
+          (line) =>
+            line.productId === productId &&
+            (line.variantId ?? null) === variantId,
+        );
+        if (changedLine && Number.isFinite(expectedPrice)) {
+          state.updateLinePrice(changedLine.lineId, expectedPrice, "server");
+        }
+        toast({
+          title: "Giá bán vừa thay đổi",
+          description:
+            "Giỏ hàng đã cập nhật theo giá hiện hành. Hóa đơn chưa được tạo; vui lòng kiểm tra và thanh toán lại.",
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
+      if (rpcCode === "POS_DISCOUNT_CHANGED") {
+        const expectedDiscount = Number(rpcDetails.expectedDiscount);
+        if (Number.isFinite(expectedDiscount)) {
+          state.setOrderDiscount({ mode: "amount", value: expectedDiscount });
+        }
+        toast({
+          title: "Mức giảm giá vừa thay đổi",
+          description:
+            "Giỏ hàng đã cập nhật mức giảm hợp lệ. Hóa đơn chưa được tạo; vui lòng kiểm tra và thanh toán lại.",
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
       const isAuthErr =
         /chưa đăng nhập|jwt|token|session|401|unauthorized|permission|refresh/i.test(msg);
       const isProcessed = /đã được xử lý|đã xử lý|already processed/i.test(msg);
@@ -2971,7 +3013,7 @@ function PosPageInner() {
                     lineTotal={state.computeLineTotal(line)}
                     onQtyChange={(qty) => state.updateLineQty(line.lineId, qty)}
                     onPriceChange={(price) => state.updateLinePrice(line.lineId, price)}
-                    onDiscountChange={(d) => state.updateLineDiscount(line.lineId, d)}
+                    onDiscountChange={(d) => handleLineDiscountChange(line.lineId, d)}
                     onNoteChange={(note) => state.updateLineNote(line.lineId, note)}
                     onRemove={() => state.removeLine(line.lineId)}
                   />
@@ -3756,7 +3798,7 @@ function PosPageInner() {
       <OtpApprovalDialog
         open={discountOtpOpen}
         onOpenChange={setDiscountOtpOpen}
-        actionCode={OTP_ACTION_CODES.FNB_DISCOUNT_OVERRIDE}
+        actionCode={OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE}
         requireReason
         contextLabel="Cashier yêu cầu giảm giá thủ công cho bill này"
         onApproved={(verified, reason) => {

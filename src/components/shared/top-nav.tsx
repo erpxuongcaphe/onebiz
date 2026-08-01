@@ -71,7 +71,7 @@ function branchTypeIcon(type?: string): string {
 }
 
 function BranchSelector() {
-  const { tenant: _tenant, branches, currentBranch, switchBranch, hasPermission } = useAuth();
+  const { tenant: _tenant, branches, currentBranch, switchBranch, hasPermission, isLoading } = useAuth();
   // CEO 13/07: nút "Tất cả chi nhánh" trước chỉ xem ô vai trò CŨ (profiles.role)
   // owner/admin → vai trò RBAC như "Chủ cửa hàng" bị bỏ sót dù được cấp quyền.
   // Giờ mở theo quyền RBAC `system.manage_branches` (chỉ Chủ cửa hàng + Admin có).
@@ -82,6 +82,9 @@ function BranchSelector() {
   const triggerIcon = currentBranch
     ? branchTypeIcon(currentBranch.branchType)
     : "apartment";
+  const branchLabel = isLoading
+    ? "Đang tải chi nhánh..."
+    : currentBranch?.name ?? "Tất cả chi nhánh";
 
   return (
     <DropdownMenu>
@@ -106,9 +109,9 @@ function BranchSelector() {
             → 2 quán đều giống nhau → CEO không biết đang ở quán nào. */}
         <span
           className="truncate max-w-[180px] sm:max-w-[220px] lg:max-w-[280px] font-semibold"
-          title={currentBranch?.name ?? "Tất cả chi nhánh"}
+          title={branchLabel}
         >
-          {currentBranch?.name ?? "Tất cả chi nhánh"}
+          {branchLabel}
         </span>
         <Icon
           name="expand_more"

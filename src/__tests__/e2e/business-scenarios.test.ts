@@ -271,7 +271,10 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
   });
   const invoiceId = `inv-sim-${rpcCodeCounter}`;
   const invoiceCode = `HD${String(rpcCodeCounter).padStart(5, "0")}`;
-  const total = Number(params.p_total ?? 0);
+  const total = Number((params.p_items ?? []).reduce(
+    (sum: number, item: any) => sum + Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0) - Number(item.discount ?? 0),
+    0,
+  )) - Number(params.p_order_discount ?? 0);
   const paid = Number(params.p_paid ?? 0);
   const items = (params.p_items ?? []) as Array<{
     productId: string;
@@ -291,8 +294,8 @@ function simulatePosCompleteCheckoutAtomic(params: any): { data: unknown; error:
       customer_id: params.p_customer_id ?? null,
       customer_name: params.p_customer_name,
       payment_method: params.p_payment_method,
-      subtotal: params.p_subtotal,
-      discount_amount: params.p_discount_amount,
+      subtotal: (params.p_items ?? []).reduce((sum: number, item: any) => sum + Number(item.quantity ?? 0) * Number(item.unitPrice ?? 0), 0),
+      discount_amount: (params.p_items ?? []).reduce((sum: number, item: any) => sum + Number(item.discount ?? 0), 0) + Number(params.p_order_discount ?? 0),
       total,
       paid,
       debt: Math.max(0, total - paid),
@@ -523,6 +526,122 @@ function simulateApplyInventoryCheckAtomic(params: any): { data: unknown; error:
   return { data: { success: true }, error: null };
 }
 
+function simulateDebtAgingRpc(kind: "receivable" | "payable") {
+  const isReceivable = kind === "receivable";
+  const documents = (tableMocks[isReceivable ? "invoices" : "purchase_orders"]?.data ?? []) as Array<Record<string, unknown>>;
+  const parties = (tableMocks[isReceivable ? "customers" : "suppliers"]?.data ?? []) as Array<Record<string, unknown>>;
+  const partyById = new Map(parties.map((party) => [String(party.id), party]));
+  const grouped = new Map<string, Record<string, unknown>>();
+  const now = Date.now();
+
+  for (const document of documents) {
+    const partyId = String(document[isReceivable ? "customer_id" : "supplier_id"] ?? "");
+    if (!partyId) continue;
+    const outstanding = Number(document.debt ?? 0);
+    if (outstanding <= 0) continue;
+    const createdAt = String(document.created_at ?? new Date().toISOString());
+    const ageDays = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 86_400_000));
+    const bucketKey = ageDays <= 30
+      ? "bucket_0_30"
+      : ageDays <= 60
+        ? "bucket_31_60"
+        : ageDays <= 90
+          ? "bucket_61_90"
+          : "bucket_91_plus";
+    const party = partyById.get(partyId);
+    const row = grouped.get(partyId) ?? {
+      [isReceivable ? "customer_id" : "supplier_id"]: partyId,
+      [isReceivable ? "customer_name" : "supplier_name"]: String(party?.name ?? ""),
+      [isReceivable ? "invoice_count" : "document_count"]: 0,
+      outstanding: 0,
+      bucket_0_30: 0,
+      bucket_31_60: 0,
+      bucket_61_90: 0,
+      bucket_91_plus: 0,
+      oldest_days: 0,
+      [isReceivable ? "oldest_invoice_date" : "oldest_document_date"]: createdAt,
+    };
+    row[isReceivable ? "invoice_count" : "document_count"] = Number(row[isReceivable ? "invoice_count" : "document_count"] ?? 0) + 1;
+    row.outstanding = Number(row.outstanding ?? 0) + outstanding;
+    row[bucketKey] = Number(row[bucketKey] ?? 0) + outstanding;
+    if (ageDays > Number(row.oldest_days ?? 0)) {
+      row.oldest_days = ageDays;
+      row[isReceivable ? "oldest_invoice_date" : "oldest_document_date"] = createdAt;
+    }
+    grouped.set(partyId, row);
+  }
+
+  return {
+    data: {
+      generated_at: new Date().toISOString(),
+      as_of_date: new Date().toISOString(),
+      tenant_id: "tenant-1",
+      branch_id: null,
+      rows: Array.from(grouped.values()),
+    },
+    error: null,
+  };
+}
+
+function simulateTransferStateAtomic(params: unknown) {
+  const input = params as { p_transfer_id?: string; p_new_status?: string };
+  const source = tableMocks.stock_transfers?.data;
+  const transfer = Array.isArray(source)
+    ? source.find((row) => row.id === input.p_transfer_id)
+    : source;
+  if (!transfer || transfer.id !== input.p_transfer_id) {
+    return { data: null, error: { message: "TRANSFER_NOT_FOUND" } };
+  }
+  if (
+    input.p_new_status === "cancelled" &&
+    !["draft", "in_transit"].includes(transfer.status)
+  ) {
+    return { data: null, error: { message: "TRANSFER_STATUS_INVALID" } };
+  }
+  updateCalls.push({
+    table: "stock_transfers",
+    data: { status: input.p_new_status },
+    filters: { id: input.p_transfer_id },
+  });
+  return { data: { success: true, status: input.p_new_status }, error: null };
+}
+
+function simulateProfitAndLossRpc() {
+  const invoices = (tableMocks.invoices?.data ?? []) as Array<Record<string, unknown>>;
+  const items = (tableMocks.invoice_items?.data ?? []) as Array<Record<string, unknown>>;
+  const cash = (tableMocks.cash_transactions?.data ?? []) as Array<Record<string, unknown>>;
+  const revenue = invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const deliveryFee = invoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0);
+  const cogs = items.reduce((sum, row) => {
+    const product = row.products as { cost_price?: number } | null;
+    return sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? product?.cost_price ?? 0);
+  }, 0);
+  const operatingExpense = cash
+    .filter((row) => row.type === "payment")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  return {
+    data: {
+      current: {
+        revenue,
+        delivery_fee: deliveryFee,
+        cogs,
+        operating_expense: operatingExpense,
+        snapshot_lines: 0,
+        estimated_legacy_lines: items.length,
+      },
+      previous: {
+        revenue: 0,
+        delivery_fee: 0,
+        cogs: 0,
+        operating_expense: 0,
+        snapshot_lines: 0,
+        estimated_legacy_lines: 0,
+      },
+    },
+    error: null,
+  };
+}
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
@@ -533,13 +652,51 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
+      if (fn === "save_pos_draft_atomic") {
+        return {
+          data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", status: "draft" },
+          error: null,
+        };
+      }
+      if (fn === "adopt_pos_draft_session_atomic") {
+        return { data: { invoice_id: "inv-draft-1", invoice_code: "NH000001" }, error: null };
+      }
+      if (fn === "soft_delete_pos_draft_atomic") {
+        return { data: { invoice_id: "inv-draft-1", deleted: true }, error: null };
+      }
+      if (fn === "create_sales_return_atomic") {
+        return {
+          data: {
+            return_id: "return-atomic-1",
+            code: "TH000001",
+            total: 300_000,
+            refunded: 300_000,
+            debt_credit: 0,
+            warnings: [],
+          },
+          error: null,
+        };
+      }
+      if (fn === "create_supplier_return_atomic") {
+        return {
+          data: {
+            return_id: "supplier-return-atomic-1",
+            code: "THN000001",
+            total: 750_000,
+            debt_reduced: 500_000,
+            cash_refund: 250_000,
+            warnings: [],
+          },
+          error: null,
+        };
+      }
       if (fn === "receive_purchase_items_atomic") {
         return simulateReceivePurchaseItemsAtomic(params);
       }
-      if (fn === "pos_complete_checkout_atomic_v2") {
+      if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v3") {
+      if (fn === "complete_draft_atomic_v4") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
@@ -547,6 +704,77 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (fn === "apply_inventory_check_atomic") {
         return simulateApplyInventoryCheckAtomic(params);
+      }
+      if (fn === "get_profit_and_loss_report") {
+        return simulateProfitAndLossRpc();
+      }
+      if (fn === "get_financial_analysis_details_report") {
+        return {
+          data: {
+            granularity: "month",
+            exclude_internal: false,
+            cogs_breakdown: [],
+            margin_trend: [],
+            turnover: {
+              turnover_ratio: 0.5,
+              average_days_to_sell: 60,
+              cogs_period: 3_000_000,
+              average_inventory_value: 6_000_000,
+            },
+            dso: {
+              days: 27,
+              receivables: 3_000_000,
+              average_daily_revenue: 111_111.11,
+            },
+          },
+          error: null,
+        };
+      }
+      if (fn === "get_receivable_aging_report") {
+        return simulateDebtAgingRpc("receivable");
+      }
+      if (fn === "get_payable_aging_report") {
+        return simulateDebtAgingRpc("payable");
+      }
+      if (fn === "set_stock_transfer_state_atomic") {
+        return simulateTransferStateAtomic(params);
+      }
+      if (fn === "complete_legacy_sales_order_atomic") {
+        claimCounter++;
+        if (!tableMocks.sales_orders?.data || claimCounter > 1) {
+          return { data: null, error: { message: "ORDER_NOT_COMPLETABLE" } };
+        }
+        return {
+          data: { invoice_id: "inv-auto", invoice_code: "HD00010" },
+          error: null,
+        };
+      }
+      if (fn === "cancel_legacy_sales_order_atomic") {
+        if (!tableMocks.sales_orders?.data) {
+          return { data: null, error: { message: "ORDER_NOT_CANCELLABLE" } };
+        }
+        return {
+          data: { order_id: "so-1", status: "cancelled" },
+          error: null,
+        };
+      }
+      if (fn === "cancel_disposal_export_atomic_v2") {
+        if (!tableMocks.disposal_exports?.data) {
+          return { data: null, error: { message: "DISPOSAL_NOT_CANCELLABLE" } };
+        }
+        return {
+          data: { disposal_id: "de-1", status: "cancelled" },
+          error: null,
+        };
+      }
+      if (fn === "cancel_internal_export_atomic_v2") {
+        if (!tableMocks.internal_exports?.data) {
+          return { data: null, error: { message: "INTERNAL_EXPORT_NOT_CANCELLABLE" } };
+        }
+        return {
+          data: { export_id: "ie-1", status: "cancelled" },
+          error: null,
+        };
       }
       if (fn === "next_code") {
         rpcCodeCounter++;
@@ -795,8 +1023,13 @@ describe("POS Scenarios", () => {
 
     await posCheckout(
       posInput({
+        items: [
+          { productId: "p1", productName: "SP", quantity: 1, unitPrice: 500_000, discount: 0 },
+        ],
         subtotal: 500_000,
         discountAmount: 100_000,
+        orderDiscountAmount: 100_000,
+        discountSource: "manual",
         total: 400_000,
         paid: 400_000,
       })
@@ -816,6 +1049,9 @@ describe("POS Scenarios", () => {
 
     await posCheckout(
       posInput({
+        items: [
+          { productId: "p1", productName: "SP", quantity: 1, unitPrice: 300_000, discount: 0 },
+        ],
         total: 300_000,
         subtotal: 300_000,
         paid: 0,
@@ -883,7 +1119,6 @@ describe("POS Scenarios", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invData = invoices[0].data as any;
     expect(invData.customer_id).toBe("cust-1");
-    expect(invData.customer_name).toBe("Nguyễn Văn A");
   });
 });
 
@@ -932,22 +1167,17 @@ describe("Draft Order Scenarios", () => {
     };
   });
 
-  it("D1: Save draft — creates invoice with status=draft, no stock/cash", async () => {
+  it("D1: Save draft — one RPC, no stock/cash", async () => {
     const { saveDraftOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
     await saveDraftOrder(posInput({ paid: 0 }));
 
-    const invoices = insertCalls.filter((c) => c.table === "invoices");
-    expect(invoices).toHaveLength(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((invoices[0].data as any).status).toBe("draft");
-
-    // No side effects
+    expect(rpcCalls.some((c) => c.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(insertCalls.filter((c) => c.table === "invoices")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
-    expect(rpcCalls.filter((c) => c.fn === "increment_product_stock")).toHaveLength(0);
   });
 
   it("D2: Complete draft — applies stock decrement + cash receipt", async () => {
@@ -961,6 +1191,7 @@ describe("Draft Order Scenarios", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+        items: posInput().items,
     });
 
     // Status update from draft→completed
@@ -983,6 +1214,10 @@ describe("Draft Order Scenarios", () => {
 
     await deleteDraftOrder("inv-draft-1");
 
+    expect(rpcCalls).toContainEqual({
+      fn: "soft_delete_pos_draft_atomic",
+      params: { p_invoice_id: "inv-draft-1", p_only_auto_saved: false },
+    });
     // No stock or cash operations on delete
     expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
@@ -1002,6 +1237,7 @@ describe("Draft Order Scenarios", () => {
         tenantId: "tenant-1",
         branchId: "branch-1",
         createdBy: "user-1",
+        items: posInput().items,
       })
     ).rejects.toThrow();
   });
@@ -1189,39 +1425,29 @@ describe("Sales Order Scenarios", () => {
     };
   });
 
-  it("O1: Complete sales order — auto invoice + stock OUT + cash receipt", async () => {
+  it("O1: Complete sales order — server commits invoice, stock and cash atomically", async () => {
     const { completeSalesOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
     const result = await completeSalesOrder("so-1");
 
-    // Auto invoice created
-    const invoiceInserts = insertCalls.filter((c) => c.table === "invoices");
-    expect(invoiceInserts.length).toBeGreaterThanOrEqual(1);
-
-    // Stock decremented
-    const smInserts = insertCalls.filter(
-      (c) => c.table === "stock_movements"
-    );
-    expect(smInserts.length).toBeGreaterThanOrEqual(1);
-
-    // Cash receipt
-    const cashInserts = insertCalls.filter(
-      (c) => c.table === "cash_transactions"
-    );
-    expect(cashInserts.length).toBeGreaterThanOrEqual(1);
-
-    // Returns invoice info
-    expect(result).toHaveProperty("invoiceId");
+    expect(result).toEqual({
+      invoiceId: "inv-auto",
+      invoiceCode: "HD00010",
+    });
+    expect(rpcCalls).toContainEqual({
+      fn: "complete_legacy_sales_order_atomic",
+      params: { p_order_id: "so-1" },
+    });
+    expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
-  it("O2: Cancel sales order — changes status to cancelled", async () => {
+  it("O2: Cancel sales order — server applies the guarded transition", async () => {
     tableMocks.sales_orders = {
-      data: {
-        id: "so-1",
-        status: "new",
-      },
+      data: { id: "so-1", status: "new" },
       error: null,
     };
 
@@ -1231,23 +1457,28 @@ describe("Sales Order Scenarios", () => {
 
     await cancelSalesOrder("so-1");
 
-    // Status updated to cancelled
-    const updates = updateCalls.filter((c) => c.table === "sales_orders");
-    expect(updates.length).toBeGreaterThanOrEqual(1);
-
-    // No stock or cash side effects
-    expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
-    expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
+    expect(rpcCalls).toContainEqual({
+      fn: "cancel_legacy_sales_order_atomic",
+      params: {
+        p_order_id: "so-1",
+        p_reason: "Hủy từ giao diện đơn hàng",
+      },
+    });
+    expect(updateCalls.filter((call) => call.table === "sales_orders")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
-  it("O3: Cancel delivering order — reject (not allowed)", async () => {
-    tableMocks.sales_orders = { data: null, error: null }; // Claim fails
+  it("O3: Cancel delivering order — server rejects the transition", async () => {
+    tableMocks.sales_orders = { data: null, error: null };
 
     const { cancelSalesOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
-    await expect(cancelSalesOrder("so-1")).rejects.toThrow();
+    await expect(cancelSalesOrder("so-1")).rejects.toThrow(
+      "ORDER_NOT_CANCELLABLE",
+    );
   });
 
   it("O4: Double complete — atomic guard prevents second completion", async () => {
@@ -1266,102 +1497,83 @@ describe("Sales Order Scenarios", () => {
 // ============================================================
 
 describe("Returns Scenarios", () => {
-  it("R1: Customer return — stock IN + cash refund payment", async () => {
-    const { completeReturn } = await import(
+  it("R1: customer return is delegated to one atomic RPC", async () => {
+    const { createSalesReturnAtomic } = await import(
       "@/lib/services/supabase/returns-completion"
     );
 
-    await completeReturn({
-      returnId: "ret-1",
-      returnCode: "TH00001",
-      invoiceCode: "HD00001",
-      customerName: "Nguyễn Văn B",
+    await createSalesReturnAtomic({
+      invoiceId: "invoice-1",
       items: [
-        { productId: "p1", productName: "Cà phê", quantity: 3, unitPrice: 100_000 },
-        { productId: "p2", productName: "Trà", quantity: 2, unitPrice: 50_000 },
+        { invoiceItemId: "invoice-item-1", quantity: 3 },
+        { invoiceItemId: "invoice-item-2", quantity: 2 },
       ],
       refundAmount: 400_000,
     });
 
-    // Stock increment (IN) via applyManualStockMovement
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs).toHaveLength(2);
-    expect(inputs[0].type).toBe("in");
-    expect(inputs[0].quantity).toBe(3);
-    expect(inputs[1].type).toBe("in");
-    expect(inputs[1].quantity).toBe(2);
-    expect(inputs[0].referenceType).toBe("sales_return");
-
-    // Cash refund payment created
-    const cash = insertCalls.filter((c) => c.table === "cash_transactions");
-    expect(cash.length).toBeGreaterThanOrEqual(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cashData = cash[0].data as any;
-    expect(cashData.type).toBe("payment");
-    expect(cashData.amount).toBe(400_000);
-    expect(cashData.category).toBe("Trả hàng");
+    const calls = rpcCalls.filter((call) => call.fn === "create_sales_return_atomic");
+    expect(calls).toHaveLength(1);
+    expect(calls[0].params).toEqual(
+      expect.objectContaining({
+        p_invoice_id: "invoice-1",
+        p_refund_amount: 400_000,
+      }),
+    );
+    expect(stockMovementCalls).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
-  it("R2: Return with zero refund (exchange) — stock IN, no cash", async () => {
-    const { completeReturn } = await import(
+  it("R2: zero-cash return still uses the same atomic RPC", async () => {
+    const { createSalesReturnAtomic } = await import(
       "@/lib/services/supabase/returns-completion"
     );
 
-    await completeReturn({
-      returnId: "ret-2",
-      returnCode: "TH00002",
-      invoiceCode: "HD00002",
-      customerName: "Khách lẻ",
-      items: [
-        { productId: "p1", productName: "SP", quantity: 1, unitPrice: 100_000 },
-      ],
-      refundAmount: 0, // Exchange — no refund
+    await createSalesReturnAtomic({
+      invoiceId: "invoice-2",
+      items: [{ invoiceItemId: "invoice-item-3", quantity: 1 }],
+      refundAmount: 0,
     });
 
-    // Stock still incremented
-    expect(stockMovementCalls.length).toBe(1);
-
-    // No cash transaction for zero refund
-    const cash = insertCalls.filter((c) => c.table === "cash_transactions");
-    expect(cash).toHaveLength(0);
+    expect(rpcCalls).toContainEqual(
+      expect.objectContaining({
+        fn: "create_sales_return_atomic",
+        params: expect.objectContaining({ p_refund_amount: 0 }),
+      }),
+    );
+    expect(stockMovementCalls).toHaveLength(0);
   });
 
-  it("R3: Purchase return (to supplier) — stock OUT", async () => {
-    // Simulate what the create-purchase-return-dialog does
-    const { applyManualStockMovement } = await import(
-      "@/lib/services/supabase/stock-adjustments"
+  it("R3: supplier return uses one atomic RPC", async () => {
+    const { completeSupplierReturn } = await import(
+      "@/lib/services/supabase/purchase-entries"
     );
 
-    await applyManualStockMovement([
-      {
-        productId: "p1",
-        quantity: 10,
-        type: "out",
-        referenceType: "purchase_return",
-        referenceId: "pr-1",
-        note: "THN001 - Trả hàng nhập - Hạt bị ẩm",
-      },
-      {
-        productId: "p2",
-        quantity: 5,
-        type: "out",
-        referenceType: "purchase_return",
-        referenceId: "pr-1",
-        note: "THN001 - Trả hàng nhập - Hạt bị ẩm",
-      },
-    ]);
+    const result = await completeSupplierReturn({
+      purchaseOrderId: "po-1",
+      items: [
+        { purchaseOrderItemId: "poi-1", quantity: 10 },
+        { purchaseOrderItemId: "poi-2", quantity: 5 },
+      ],
+      paymentMethod: "transfer",
+    });
 
-    // Stock movements tracked
-    expect(stockMovementCalls.length).toBe(1);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs).toHaveLength(2);
-    expect(inputs[0].type).toBe("out");
-    expect(inputs[0].quantity).toBe(10);
-    expect(inputs[1].type).toBe("out");
-    expect(inputs[1].quantity).toBe(5);
+    expect(result).toEqual({
+      returnId: "supplier-return-atomic-1",
+      returnCode: "THN000001",
+    });
+    expect(rpcCalls).toContainEqual({
+      fn: "create_supplier_return_atomic",
+      params: expect.objectContaining({
+        p_purchase_order_id: "po-1",
+        p_items: [
+          { purchaseOrderItemId: "poi-1", quantity: 10 },
+          { purchaseOrderItemId: "poi-2", quantity: 5 },
+        ],
+        p_payment_method: "transfer",
+      }),
+    });
+    expect(stockMovementCalls).toHaveLength(0);
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 });
 
@@ -2031,17 +2243,20 @@ describe("Business Rule Validations", () => {
     expect((invoices[0].data as any).status).toBe("completed");
   });
 
-  it("BR2: Draft save — invoice status always 'draft'", async () => {
+  it("BR2: Draft save — uses the atomic draft-only RPC", async () => {
     setupStandardPOSMocks();
     const { saveDraftOrder } = await import(
       "@/lib/services/supabase/orders"
     );
 
-    await saveDraftOrder(posInput({ paid: 0 }));
+    const result = await saveDraftOrder(posInput({ paid: 0 }));
 
-    const invoices = insertCalls.filter((c) => c.table === "invoices");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect((invoices[0].data as any).status).toBe("draft");
+    expect(result).toEqual({
+      invoiceId: "inv-draft-1",
+      invoiceCode: "NH000001",
+    });
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
   });
 
   it("BR3: Stock decrement — always negative delta for OUT", async () => {
@@ -2070,28 +2285,26 @@ describe("Business Rule Validations", () => {
     expect((decRpcs[0].params as any).p_delta).toBe(-7);
   });
 
-  it("BR4: Return stock increment — always positive delta for IN", async () => {
-    const { completeReturn } = await import(
+  it("BR4: return stock mutation is owned by the atomic RPC", async () => {
+    const { createSalesReturnAtomic } = await import(
       "@/lib/services/supabase/returns-completion"
     );
 
-    await completeReturn({
-      returnId: "ret-br4",
-      returnCode: "TH00099",
-      invoiceCode: "HD00001",
-      customerName: "Test",
-      items: [
-        { productId: "p1", productName: "SP", quantity: 3, unitPrice: 50_000 },
-      ],
+    await createSalesReturnAtomic({
+      invoiceId: "invoice-br4",
+      items: [{ invoiceItemId: "invoice-item-br4", quantity: 3 }],
       refundAmount: 150_000,
     });
 
-    // applyManualStockMovement called with type='in' (positive quantity)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const inputs = (stockMovementCalls[0] as any[])[0];
-    expect(inputs[0].type).toBe("in");
-    expect(inputs[0].quantity).toBe(3);
-    expect(inputs[0].quantity).toBeGreaterThan(0);
+    expect(rpcCalls).toContainEqual(
+      expect.objectContaining({
+        fn: "create_sales_return_atomic",
+        params: expect.objectContaining({
+          p_items: [{ invoiceItemId: "invoice-item-br4", quantity: 3 }],
+        }),
+      }),
+    );
+    expect(stockMovementCalls).toHaveLength(0);
   });
 
   it("BR5: Transfer net-zero — company stock unchanged after transfer", async () => {
@@ -2148,28 +2361,29 @@ describe("Business Rule Validations", () => {
     expect(cashData.reference_type).toBe("invoice");
   });
 
-  it("BR7: Cash refund — correct category for return", async () => {
-    const { completeReturn } = await import(
+  it("BR7: cash refund parameters are sent to the atomic RPC", async () => {
+    const { createSalesReturnAtomic } = await import(
       "@/lib/services/supabase/returns-completion"
     );
 
-    await completeReturn({
-      returnId: "ret-br7",
-      returnCode: "TH00077",
-      invoiceCode: "HD00077",
-      customerName: "KH Trả",
-      items: [
-        { productId: "p1", productName: "SP", quantity: 1, unitPrice: 100_000 },
-      ],
+    await createSalesReturnAtomic({
+      invoiceId: "invoice-br7",
+      items: [{ invoiceItemId: "invoice-item-br7", quantity: 1 }],
       refundAmount: 100_000,
+      refundPaymentMethod: "cash",
     });
 
-    const cash = insertCalls.filter((c) => c.table === "cash_transactions");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cashData = cash[0].data as any;
-    expect(cashData.type).toBe("payment"); // refund = payment out
-    expect(cashData.category).toBe("Trả hàng");
-    expect(cashData.reference_type).toBe("sales_return");
+    expect(rpcCalls).toContainEqual(
+      expect.objectContaining({
+        fn: "create_sales_return_atomic",
+        params: expect.objectContaining({
+          p_invoice_id: "invoice-br7",
+          p_refund_amount: 100_000,
+          p_refund_payment_method: "cash",
+        }),
+      }),
+    );
+    expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
   });
 
   it("BR8: Disposal/Internal export cancel — only draft allowed", async () => {

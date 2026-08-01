@@ -122,7 +122,7 @@ export interface TransactionRowActionsArgs<TRow = Record<string, unknown>> {
    * Custom extra actions — page-specific không nằm trong 9 standard.
    * Vd: "Gửi nhắc nợ" cho công nợ. Render trước Hủy.
    */
-  extraActions?: RowAction<TRow>[];
+  extraActions?: RowAction[];
 }
 
 // ─────────────────────────────────────────
@@ -130,7 +130,7 @@ export interface TransactionRowActionsArgs<TRow = Record<string, unknown>> {
 // ─────────────────────────────────────────
 export function buildTransactionRowActions<TRow>(
   args: TransactionRowActionsArgs<TRow>,
-): RowAction<TRow>[] {
+): RowAction[] {
   const {
     onView,
     onDuplicate,
@@ -150,7 +150,7 @@ export function buildTransactionRowActions<TRow>(
   const can = (key: keyof NonNullable<typeof permissions>) =>
     !permissions || permissions[key] !== false;
 
-  const actions: RowAction<TRow>[] = [];
+  const actions: RowAction[] = [];
 
   // 1. Xem chi tiết
   if (onView && can("canView")) {

@@ -8,16 +8,11 @@
  * Trước đây client chạy 4 step không atomic → fail giữa chừng → cash đã
  * ghi mà debt chưa giảm → công nợ ảo.
  *
- * Fallback: nếu RPC chưa migrate (404), tự động chạy code 4-step cũ.
+ * Fail closed: nếu RPC lỗi hoặc chưa migrate thì dừng, tuyệt đối không ghi
+ * nhiều bước ở client vì có thể tạo phiếu quỹ nhưng chưa cập nhật công nợ.
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
-import { nextEntityCode } from "./stock-adjustments";
-import { recordAuditLog } from "./audit";
-import { getOpenShift } from "./shifts";
-import type { Database } from "@/lib/supabase/types";
-
-type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
 export interface RecordPaymentInput {
   /** invoice or purchase_order ID */
@@ -46,341 +41,66 @@ export async function recordInvoicePayment(
   input: RecordPaymentInput
 ): Promise<RecordPaymentResult> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
+  await getCurrentContext();
 
-  // Try atomic RPC (migration 00046) trước. Nếu chưa migrate → fall back
-  // 4-step legacy (không atomic).
-  // RPC names cast as never vì supabase generated types chưa biết RPC mới.
-  try {
-    const { data, error } = await supabase.rpc(
-      "record_invoice_payment" as never,
-      {
-        p_invoice_id: input.referenceId,
-        p_amount: input.amount,
-        p_payment_method: input.paymentMethod,
-        p_note: input.note ?? null,
-        p_branch_id: ctx.branchId,
-        p_user_id: ctx.userId,
-      } as never,
-    );
-    if (!error && data) {
-      const r = data as unknown as Record<string, unknown>;
-      // Audit log: thanh toán hóa đơn là thao tác tài chính nhạy cảm.
-      // CEO cần trace ai thu nợ KH nào, bao nhiêu, khi nào.
-      await recordAuditLog({
-        entityType: "invoice",
-        entityId: input.referenceId,
-        action: "payment",
-        newData: {
-          cash_transaction_id: r.cash_transaction_id,
-          cash_code: r.cash_code,
-          amount: input.amount,
-          payment_method: input.paymentMethod,
-          new_paid: r.new_paid,
-          new_debt: r.new_debt,
-        },
-      });
-      return {
-        cashTransactionId: r.cash_transaction_id as string,
-        cashCode: r.cash_code as string,
-        newPaid: Number(r.new_paid ?? 0),
-        newDebt: Number(r.new_debt ?? 0),
-      };
-    }
-    // RPC chưa tồn tại (PGRST202 hoặc 404) — fall back legacy
-    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
-      handleError(error, "recordInvoicePayment.rpc");
-    }
-  } catch (err) {
-    console.warn(
-      "[recordInvoicePayment] RPC unavailable, falling back to 4-step:",
-      err,
-    );
+  const { data, error } = await supabase.rpc(
+    "record_invoice_payment" as never,
+    {
+      p_invoice_id: input.referenceId,
+      p_amount: input.amount,
+      p_payment_method: input.paymentMethod,
+      p_note: input.note ?? null,
+      // Người thực hiện, công ty và chi nhánh phải được RPC tự suy ra từ phiên đăng nhập.
+      p_branch_id: null,
+      p_user_id: null,
+    } as never,
+  );
+  if (error) handleError(error, "recordInvoicePayment.rpc");
+  if (!data) {
+    throw new Error("Không nhận được kết quả ghi nhận thanh toán hóa đơn");
   }
 
-  // 1. Fetch invoice current state (filter tenant defense)
-  const { data: inv, error: fetchErr } = await supabase
-    .from("invoices")
-    .select("id, code, customer_id, customer_name, total, paid, debt, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", input.referenceId)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "recordInvoicePayment.fetch");
-  if (!inv) throw new Error("Không tìm thấy hóa đơn");
-
-  const currentDebt = Number(inv.debt ?? 0);
-  const currentPaid = Number(inv.paid ?? 0);
-
-  // 20/07/2026 — HD001438 thu 2 lần: nháp mang debt=total nên thu nợ được cả
-  // ĐƠN NHÁP; checkout sau đó ghi đè paid → nợ hiện lại → thu lần 2.
-  // Chỉ hóa đơn đã hoàn tất mới có nợ thật để thu.
-  if (inv.status !== "completed") {
-    throw new Error(
-      `Hóa đơn ${inv.code} chưa hoàn tất — đơn nháp/đặt hàng thu tiền khi thanh toán trên POS, không thu nợ ở đây`,
-    );
-  }
-  if (currentDebt <= 0) {
-    throw new Error("Hóa đơn này không còn công nợ");
-  }
-  if (input.amount <= 0) {
-    throw new Error("Số tiền thanh toán phải lớn hơn 0");
-  }
-  if (input.amount > currentDebt) {
-    throw new Error(
-      `Số tiền thanh toán (${input.amount}) vượt quá công nợ còn lại (${currentDebt})`
-    );
-  }
-
-  const newPaid = currentPaid + input.amount;
-  const newDebt = currentDebt - input.amount;
-
-  // 2. Create cash receipt (phiếu thu)
-  const cashCode = await nextEntityCode("cash_receipt", { tenantId: ctx.tenantId });
-
-  // P1-3A 12/06/2026: legacy fallback path — vẫn gắn shift_id để cashier
-  // close-shift atomic match (cùng pattern với RPC path).
-  let legacyShiftId: string | null = null;
-  try {
-    const shift = await getOpenShift(ctx.branchId, ctx.userId);
-    legacyShiftId = shift?.id ?? null;
-  } catch (err) {
-    console.warn("[recordInvoicePayment.legacy] getOpenShift failed:", err);
-  }
-
-  const cashData: CashTransactionInsert = {
-    tenant_id: ctx.tenantId,
-    branch_id: ctx.branchId,
-    code: cashCode,
-    type: "receipt",
-    category: "Thu nợ khách hàng",
-    amount: input.amount,
-    counterparty: inv.customer_name,
-    // Cast vì DB types chưa biết "ewallet" (migration 00046 mở rộng enum).
-    // RPC path đã bypass type check; legacy path vẫn cần cast.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payment_method: input.paymentMethod as any,
-    reference_type: "invoice",
-    reference_id: inv.id,
-    note: input.note || `Thu nợ hóa đơn ${inv.code}`,
-    created_by: ctx.userId,
-    ...(legacyShiftId ? { shift_id: legacyShiftId } : {}),
-  };
-
-  const { data: cashRow, error: cashErr } = await supabase
-    .from("cash_transactions")
-    .insert(cashData)
-    .select("id")
-    .single();
-  if (cashErr) handleError(cashErr, "recordInvoicePayment.cash");
-
-  // 3. Update invoice paid/debt
-  const { error: invUpd } = await supabase
-    .from("invoices")
-    .update({ paid: newPaid, debt: newDebt } as Record<string, unknown>)
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", inv.id);
-  if (invUpd) handleError(invUpd, "recordInvoicePayment.invoice_update");
-
-  // 4. customers.debt — KHÔNG cần update tay nữa.
-  //    CEO 06/06/2026 Phase 5 research (Odoo + SAP B1 + PostgreSQL best
-  //    practice): trigger 00130 trên invoices đã tự recompute
-  //    customers.debt = SUM(invoices.debt) WHERE status='completed' rồi.
-  //    App-side write ở đây + trigger = race condition → KH Xưởng
-  //    Premium BL bị ghi nhầm 280k thay vì 140k.
-  //    Single Source of Truth = trigger. Đây là pattern Odoo 17 chọn.
-
-  // Audit log cho legacy path (RPC path đã audit ở trên).
-  await recordAuditLog({
-    entityType: "invoice",
-    entityId: inv.id,
-    action: "payment",
-    newData: {
-      cash_transaction_id: cashRow.id,
-      cash_code: cashCode,
-      amount: input.amount,
-      payment_method: input.paymentMethod,
-      new_paid: newPaid,
-      new_debt: newDebt,
-    },
-  });
-
+  const result = data as unknown as Record<string, unknown>;
   return {
-    cashTransactionId: cashRow.id,
-    cashCode,
-    newPaid,
-    newDebt,
+    cashTransactionId: result.cash_transaction_id as string,
+    cashCode: result.cash_code as string,
+    newPaid: Number(result.new_paid ?? 0),
+    newDebt: Number(result.new_debt ?? 0),
   };
 }
 
 /**
- * Ghi nhận thanh toán cho đơn nhập hàng (trả nợ NCC).
- *
- * 1. Validate amount ≤ remaining debt
- * 2. Create cash_transaction (type='payment')
- * 3. Update purchase_orders.paid += amount, purchase_orders.debt -= amount
- * 4. Update suppliers.debt -= amount (if supplier_id exists)
+ * Ghi nhận thanh toán cho đơn nhập hàng (trả nợ nhà cung cấp).
+ * Toàn bộ kiểm tra và cập nhật chạy trong một giao dịch Postgres.
  */
 export async function recordPurchasePayment(
   input: RecordPaymentInput
 ): Promise<RecordPaymentResult> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
+  await getCurrentContext();
 
-  // Try atomic RPC (migration 00046)
-  try {
-    const { data, error } = await supabase.rpc(
-      "record_purchase_payment" as never,
-      {
-        p_purchase_order_id: input.referenceId,
-        p_amount: input.amount,
-        p_payment_method: input.paymentMethod,
-        p_note: input.note ?? null,
-        p_branch_id: ctx.branchId,
-        p_user_id: ctx.userId,
-      } as never,
-    );
-    if (!error && data) {
-      const r = data as unknown as Record<string, unknown>;
-      await recordAuditLog({
-        entityType: "purchase_order",
-        entityId: input.referenceId,
-        action: "payment",
-        newData: {
-          cash_transaction_id: r.cash_transaction_id,
-          cash_code: r.cash_code,
-          amount: input.amount,
-          payment_method: input.paymentMethod,
-          new_paid: r.new_paid,
-          new_debt: r.new_debt,
-        },
-      });
-      return {
-        cashTransactionId: r.cash_transaction_id as string,
-        cashCode: r.cash_code as string,
-        newPaid: Number(r.new_paid ?? 0),
-        newDebt: Number(r.new_debt ?? 0),
-      };
-    }
-    if (error && !/(does not exist|404|PGRST202)/i.test(error.message)) {
-      handleError(error, "recordPurchasePayment.rpc");
-    }
-  } catch (err) {
-    console.warn(
-      "[recordPurchasePayment] RPC unavailable, falling back to 4-step:",
-      err,
-    );
+  const { data, error } = await supabase.rpc(
+    "record_purchase_payment" as never,
+    {
+      p_purchase_order_id: input.referenceId,
+      p_amount: input.amount,
+      p_payment_method: input.paymentMethod,
+      p_note: input.note ?? null,
+      p_branch_id: null,
+      p_user_id: null,
+    } as never,
+  );
+  if (error) handleError(error, "recordPurchasePayment.rpc");
+  if (!data) {
+    throw new Error("Không nhận được kết quả ghi nhận thanh toán phiếu nhập");
   }
 
-  // 1. Fetch PO current state (filter tenant defense)
-  const { data: po, error: fetchErr } = await supabase
-    .from("purchase_orders")
-    .select("id, code, supplier_id, supplier_name, total, paid, debt, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", input.referenceId)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "recordPurchasePayment.fetch");
-  if (!po) throw new Error("Không tìm thấy đơn nhập hàng");
-
-  const currentDebt = Number(po.debt ?? 0);
-  const currentPaid = Number(po.paid ?? 0);
-
-  // 20/07/2026 — cùng lý do HD001438: chỉ trả nợ phiếu nhập đã nhập kho
-  // (completed/partial); phiếu nháp chưa có nợ thật.
-  if (po.status !== "completed" && po.status !== "partial") {
-    throw new Error(
-      `Phiếu nhập ${po.code} chưa nhập kho hoàn tất — không trả nợ được`,
-    );
-  }
-  if (currentDebt <= 0) {
-    throw new Error("Đơn nhập hàng này không còn công nợ");
-  }
-  if (input.amount <= 0) {
-    throw new Error("Số tiền thanh toán phải lớn hơn 0");
-  }
-  if (input.amount > currentDebt) {
-    throw new Error(
-      `Số tiền thanh toán (${input.amount}) vượt quá công nợ còn lại (${currentDebt})`
-    );
-  }
-
-  const newPaid = currentPaid + input.amount;
-  const newDebt = currentDebt - input.amount;
-
-  // 2. Create cash payment (phiếu chi — trả nợ NCC)
-  const cashCode = await nextEntityCode("cash_payment", { tenantId: ctx.tenantId });
-
-  // P1-3A: legacy fallback PO payment — gắn shift_id (cùng pattern receipt path).
-  let legacyPoShiftId: string | null = null;
-  try {
-    const shift = await getOpenShift(ctx.branchId, ctx.userId);
-    legacyPoShiftId = shift?.id ?? null;
-  } catch (err) {
-    console.warn("[recordPurchasePayment.legacy] getOpenShift failed:", err);
-  }
-
-  const cashData: CashTransactionInsert = {
-    tenant_id: ctx.tenantId,
-    branch_id: ctx.branchId,
-    code: cashCode,
-    type: "payment",
-    category: "Trả nợ nhà cung cấp",
-    amount: input.amount,
-    counterparty: po.supplier_name,
-    // Cast vì DB types chưa biết "ewallet" (migration 00046 mở rộng enum).
-    // RPC path đã bypass type check; legacy path vẫn cần cast.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payment_method: input.paymentMethod as any,
-    reference_type: "purchase_order",
-    reference_id: po.id,
-    note: input.note || `Trả nợ đơn nhập hàng ${po.code}`,
-    created_by: ctx.userId,
-    ...(legacyPoShiftId ? { shift_id: legacyPoShiftId } : {}),
-  };
-
-  const { data: cashRow, error: cashErr } = await supabase
-    .from("cash_transactions")
-    .insert(cashData)
-    .select("id")
-    .single();
-  if (cashErr) handleError(cashErr, "recordPurchasePayment.cash");
-
-  // 3. Update PO paid/debt
-  const { error: poUpd } = await supabase
-    .from("purchase_orders")
-    .update({ paid: newPaid, debt: newDebt } as Record<string, unknown>)
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", po.id);
-  if (poUpd) handleError(poUpd, "recordPurchasePayment.po_update");
-
-  // 4. suppliers.debt — KHÔNG cần update tay nữa (CEO 10/06/2026, audit P1).
-  //    Trigger trg_purchase_orders_sync_supplier_debt (migration 00130) đã
-  //    AFTER UPDATE OF debt trên purchase_orders → tự recompute
-  //    suppliers.debt = SUM(PO completed/partial) rồi. Trừ tay ở đây = trừ
-  //    2 lần (giống bug RPC 00046 đã fix ở 00134). Đồng bộ với customer side
-  //    (đã gỡ trước đó). Giữ fallback path "tinh khiết" — chỉ update PO.debt.
-
-  // Audit log cho legacy path
-  await recordAuditLog({
-    entityType: "purchase_order",
-    entityId: po.id,
-    action: "payment",
-    newData: {
-      cash_transaction_id: cashRow.id,
-      cash_code: cashCode,
-      amount: input.amount,
-      payment_method: input.paymentMethod,
-      new_paid: newPaid,
-      new_debt: newDebt,
-    },
-  });
-
+  const result = data as unknown as Record<string, unknown>;
   return {
-    cashTransactionId: cashRow.id,
-    cashCode,
-    newPaid,
-    newDebt,
+    cashTransactionId: result.cash_transaction_id as string,
+    cashCode: result.cash_code as string,
+    newPaid: Number(result.new_paid ?? 0),
+    newDebt: Number(result.new_debt ?? 0),
   };
 }
 
@@ -515,100 +235,4 @@ export async function getPaymentHistory(
     date: row.created_at,
     cancelled: (row as { status?: string }).status === "cancelled",
   }));
-}
-
-// ============================================================
-// Bù chứng từ chi cho tiền trả NCC ghi thẳng trên phiếu nhập
-// (CEO 25/07/2026 — audit phát hiện 107/115 phiếu thiếu phiếu chi, 318 triệu)
-// ============================================================
-
-/**
- * Đảm bảo số tiền đã trả trên phiếu nhập có chứng từ chi tương ứng trong sổ quỹ.
- *
- * Vì sao cần: form phiếu nhập có ô "Đã thanh toán NCC" ghi thẳng vào
- * `purchase_orders.paid` mà không hề tạo `cash_transactions` — trong khi nút
- * "Trả nợ NCC" (recordPurchasePayment) thì luôn tạo. Hai đường đi lệch nhau nên
- * sổ quỹ thiếu đúng phần tiền trả qua form.
- *
- * Cách làm: so số đã trả trên phiếu với tổng phiếu chi đã có, chỉ bù phần
- * THIẾU. Nhờ vậy gọi lại bao nhiêu lần cũng không sinh chứng từ trùng — quan
- * trọng vì hàm này nằm trên đường nhận hàng, vốn có thể chạy lại khi lỗi mạng.
- *
- * KHÔNG đụng `paid`/`debt` của phiếu (form đã ghi đúng rồi) và không đụng công
- * nợ NCC — chỉ bổ sung chứng từ còn thiếu cho sổ quỹ.
- *
- * Best-effort: lỗi ở đây không được làm hỏng việc nhận hàng đã thành công.
- */
-export async function ensurePurchasePaymentRecorded(
-  orderId: string,
-  paymentMethod: "cash" | "transfer" | "card" | "ewallet" = "cash",
-): Promise<{ created: boolean; amount: number; cashCode?: string }> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-
-  const { data: po } = await supabase
-    .from("purchase_orders")
-    .select("id, code, paid, supplier_id, supplier_name, branch_id, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", orderId)
-    .maybeSingle();
-  if (!po) return { created: false, amount: 0 };
-
-  const paid = Number(po.paid ?? 0);
-  if (paid <= 0) return { created: false, amount: 0 };
-
-  // Đã ghi được bao nhiêu? (bỏ qua phiếu đã huỷ)
-  // Generated types chưa biết cột `status` của cash_transactions (có thật trên
-  // DB) → cast, cùng cách getPaymentHistory đang dùng.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: existing } = await (supabase as any)
-    .from("cash_transactions")
-    .select("amount, status")
-    .eq("tenant_id", ctx.tenantId)
-    .eq("type", "payment")
-    .eq("reference_type", "purchase_order")
-    .eq("reference_id", orderId);
-
-  const recorded = ((existing ?? []) as Array<{ amount: number | null; status?: string }>)
-    .filter((c) => c.status !== "cancelled")
-    .reduce((sum, c) => sum + Number(c.amount ?? 0), 0);
-
-  const missing = paid - recorded;
-  if (missing <= 1) return { created: false, amount: 0 }; // <=1đ coi như đủ (làm tròn)
-
-  const cashCode = await nextEntityCode("cash_payment", { tenantId: ctx.tenantId });
-
-  let shiftId: string | null = null;
-  try {
-    const shift = await getOpenShift(po.branch_id ?? ctx.branchId, ctx.userId);
-    shiftId = shift?.id ?? null;
-  } catch {
-    // không có ca mở → vẫn ghi phiếu, chỉ thiếu liên kết ca
-  }
-
-  const payload: CashTransactionInsert = {
-    tenant_id: ctx.tenantId,
-    branch_id: po.branch_id ?? ctx.branchId,
-    code: cashCode,
-    type: "payment",
-    category: "Trả nhà cung cấp",
-    amount: missing,
-    counterparty: po.supplier_name,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payment_method: paymentMethod as any,
-    reference_type: "purchase_order",
-    reference_id: orderId,
-    note: `Thanh toán khi nhập hàng — phiếu ${po.code}`,
-    created_by: ctx.userId,
-    ...(shiftId ? { shift_id: shiftId } : {}),
-  };
-
-  const { data: cash, error } = await supabase
-    .from("cash_transactions")
-    .insert(payload)
-    .select("id, code")
-    .single();
-  if (error) handleError(error, "ensurePurchasePaymentRecorded.insertCash");
-
-  return { created: true, amount: missing, cashCode: cash?.code ?? cashCode };
 }

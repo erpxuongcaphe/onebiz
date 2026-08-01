@@ -3,7 +3,6 @@
  */
 
 import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@/lib/types";
-import type { Database } from "@/lib/supabase/types";
 import { applyCreatedAtRangeFilter, toCreatedAtStartIso } from "@/lib/utils/list-date-preset-range";
 import {
   getClient,
@@ -12,10 +11,6 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
-import { recordAuditLog } from "./audit";
-import { getOpenShift } from "./shifts";
-
-type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
 export async function getCashBookEntries(params: QueryParams): Promise<QueryResult<CashBookEntry>> {
   const supabase = getClient();
@@ -190,58 +185,53 @@ export async function getCashBookSummaryAsync(params?: {
 /**
  * Tạo phiếu thu/chi mới.
  */
-export async function createCashTransaction(tx: Partial<CashTransaction>): Promise<CashBookEntry> {
+export interface CreateManualCashTransactionInput {
+  branchId: string;
+  code?: string | null;
+  type: "receipt" | "payment";
+  category: string;
+  amount: number;
+  counterparty?: string | null;
+  paymentMethod?: string | null;
+  note?: string | null;
+  transactionDate?: string | null;
+}
+
+export async function createManualCashTransactionAtomic(
+  input: CreateManualCashTransactionInput,
+): Promise<CashBookEntry> {
   const supabase = getClient();
-  const ctx = await getCurrentContext();
-
-  // P1-3A 12/06/2026: gắn shift_id nếu cashier đang mở ca → close_shift_atomic
-  // match được phiếu thu/chi vặt (tip, mua bánh shop). Trước đây null → expected_cash
-  // sai trong báo cáo X/Z.
-  let shiftId: string | null = null;
-  try {
-    const shift = await getOpenShift(ctx.branchId, ctx.userId);
-    shiftId = shift?.id ?? null;
-  } catch (err) {
-    console.warn("[createCashTransaction] getOpenShift failed:", err);
-  }
-
-  const { data, error } = await supabase
-    .from("cash_transactions")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
-      code: tx.code!,
-      type: tx.type!,
-      category: tx.category!,
-      amount: tx.amount!,
-      counterparty: tx.counterparty || null,
-      payment_method: (tx.paymentMethod as "cash" | "transfer" | "card") ?? "cash",
-      reference_type: tx.referenceType || null,
-      reference_id: tx.referenceId || null,
-      note: tx.note || null,
-      created_by: tx.createdBy || ctx.userId,
-      ...(shiftId ? { shift_id: shiftId } : {}),
-    } satisfies CashTransactionInsert)
-    .select()
-    .single();
-
-  if (error) handleError(error, "createCashTransaction");
-
-  await recordAuditLog({
-    entityType: "cash_transaction",
-    entityId: data.id,
-    action: "create",
-    newData: {
-      code: data.code,
-      type: data.type,
-      category: data.category,
-      amount: data.amount,
-      counterparty: data.counterparty,
-      payment_method: data.payment_method,
+  const { data, error } = await (supabase.rpc as any)(
+    "create_manual_cash_transaction_atomic",
+    {
+      p_requested_code: input.code?.trim() || null,
+      p_branch_id: input.branchId,
+      p_type: input.type,
+      p_category: input.category,
+      p_amount: Number(input.amount),
+      p_counterparty: input.counterparty || null,
+      p_payment_method: input.paymentMethod ?? "cash",
+      p_note: input.note || null,
+      p_transaction_date: input.transactionDate ?? null,
     },
-  });
-
+  );
+  if (error) handleError(error, "createManualCashTransactionAtomic");
+  if (!data) throw new Error("Máy chủ không trả về phiếu thu/chi hợp lệ.");
   return mapCashEntry(data);
+}
+
+export async function createCashTransaction(tx: Partial<CashTransaction>): Promise<CashBookEntry> {
+  const ctx = await getCurrentContext();
+  return createManualCashTransactionAtomic({
+    branchId: ctx.branchId,
+    code: tx.code,
+    type: tx.type ?? "receipt",
+    category: tx.category ?? "other",
+    amount: Number(tx.amount ?? 0),
+    counterparty: tx.counterparty,
+    paymentMethod: tx.paymentMethod,
+    note: tx.note,
+  });
 }
 
 /**
@@ -276,77 +266,11 @@ export async function cancelCashTransaction(
   reason: string,
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Snapshot
-  let oldRow: Record<string, unknown> | null = null;
-  let referenceType: string | null = null;
-  try {
-    const res = await supabase
-      .from("cash_transactions")
-      .select("code, type, category, amount, counterparty, reference_type, reference_id, status")
-      .eq("tenant_id", tenantId)
-      .eq("id", id)
-      .maybeSingle();
-    oldRow = (res?.data as Record<string, unknown> | null) ?? null;
-    referenceType = (oldRow?.reference_type as string | null) ?? null;
-  } catch {
-    /* snapshot optional */
-  }
-  if (!oldRow) throw new Error("Không tìm thấy phiếu thu/chi");
-
-  // Nếu phiếu gắn reference → cancel RPC (atomic reverse debt)
-  if (referenceType === "invoice" || referenceType === "purchase_order") {
-    try {
-      const { error: rpcErr } = await supabase.rpc(
-        "cancel_cash_transaction" as never,
-        {
-          p_cash_id: id,
-          p_reason: reason,
-        } as never,
-      );
-      if (!rpcErr) {
-        await recordAuditLog({
-          entityType: "cash_transaction",
-          entityId: id,
-          action: "cancel",
-          oldData: oldRow,
-          newData: { status: "cancelled", reason },
-        });
-        return;
-      }
-      if (!/(does not exist|404|PGRST202)/i.test(rpcErr.message)) {
-        handleError(rpcErr, "cancelCashTransaction.rpc");
-      }
-      throw new Error("Chưa có RPC cancel_cash_transaction. Không thể hủy phiếu có công nợ vì sẽ làm lệch sổ.");
-    } catch (err) {
-      if (err instanceof Error) throw err;
-      throw new Error("Không thể hủy phiếu thu/chi có công nợ.");
-    }
-  }
-
-  // Phiếu tự do: chỉ flip status = 'cancelled' + ghi note reason.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: updErr } = await (supabase as any)
-    .from("cash_transactions")
-    .update({
-      status: "cancelled",
-      note:
-        ((oldRow.note as string | null) ?? "") +
-        `\n[ĐÃ HỦY ${new Date().toISOString()}] ${reason}`.trim(),
-    })
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (updErr) handleError(updErr, "cancelCashTransaction.update");
-
-  await recordAuditLog({
-    entityType: "cash_transaction",
-    entityId: id,
-    action: "cancel",
-    oldData: oldRow,
-    newData: { status: "cancelled", reason },
+  const { error } = await (supabase.rpc as any)("cancel_cash_transaction", {
+    p_cash_id: id,
+    p_reason: reason,
   });
+  if (error) handleError(error, "cancelCashTransaction");
 }
 
 // --- Mapper ---

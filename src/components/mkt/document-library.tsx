@@ -16,6 +16,7 @@ import { parseDocumentLink, buildDocumentUrls } from "@/lib/mkt/document-links";
 import { mktDelete, mktPost } from "@/lib/mkt/client";
 import type { MktDocument } from "@/lib/mkt/read-models";
 import { useMktRefresh } from "@/lib/mkt/use-mkt-refresh";
+import { useToast } from "@/lib/contexts";
 
 type CampaignOption = { id: string; name: string };
 
@@ -72,6 +73,7 @@ export function DocumentLibrary({
   canManageAssets: boolean;
 }) {
   const { refresh, refreshing } = useMktRefresh();
+  const { toast } = useToast();
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "archived">("available");
   const [campaignFilter, setCampaignFilter] = useState("");
@@ -124,6 +126,16 @@ export function DocumentLibrary({
       refresh(() => setPreview(null));
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Không đổi được trạng thái");
+    }
+  }
+
+  async function copyLink(url: string) {
+    setActionError(null);
+    try {
+      await navigator.clipboard.writeText(url);
+      toast({ title: "Đã sao chép liên kết", variant: "success" });
+    } catch {
+      setActionError("Không thể sao chép liên kết. Hãy kiểm tra quyền clipboard của trình duyệt.");
     }
   }
 
@@ -293,11 +305,9 @@ export function DocumentLibrary({
                   <>
                     <Button
                       variant="outline"
-                      onClick={() =>
-                        navigator.clipboard.writeText(preview.externalUrl as string).catch(() => {})
-                      }
+                      onClick={() => copyLink(preview.externalUrl as string)}
                     >
-                      <Icon name="content_copy" size={16} /> Copy link
+                      <Icon name="content_copy" size={16} /> Sao chép liên kết
                     </Button>
                     <a
                       href={preview.externalUrl}

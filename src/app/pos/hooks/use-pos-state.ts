@@ -71,6 +71,9 @@ export interface OrderLine {
   stockKnown?: boolean;
   quantity: number;
   unitPrice: number;
+  /** Giá niêm yết/giá biến thể để khôi phục khi không còn áp bảng giá. */
+  catalogUnitPrice?: number;
+  priceSource?: "catalog" | "tier" | "manual" | "server";
   vatRate: number;
   discount: DiscountInput;
   /** Packaging variant (250g, 500g, …). If undefined, line uses base product. */
@@ -86,6 +89,8 @@ export interface AddLineOptions {
   variantLabel?: string;
   /** Overrides product.sellPrice (e.g., variant price or tier price). */
   unitPrice?: number;
+  catalogUnitPrice?: number;
+  priceSource?: OrderLine["priceSource"];
   /** Quantity to add (default 1). */
   quantity?: number;
   /** Khả dụng THẬT (BOM-aware) từ lưới — để giỏ tô đỏ ĐÚNG khi hết hàng. */
@@ -219,9 +224,15 @@ export function usePosState() {
           if ((l.variantId ?? null) !== (options?.variantId ?? null)) return false;
           // Có discount riêng → không merge (tách line mới)
           if (l.discount.value !== 0) return false;
-          // Khác giá (cashier có thể đã sửa unit price) → không merge
-          const targetPrice = options?.unitPrice ?? product.sellPrice ?? 0;
-          if (l.unitPrice !== targetPrice) return false;
+          // Dòng sửa giá tay phải đứng riêng. Giá bảng tự đổi theo tổng số lượng
+          // nên so theo giá niêm yết, không so giá đang hiển thị.
+          if (l.priceSource === "manual") return false;
+          const targetCatalogPrice =
+            options?.catalogUnitPrice ?? options?.unitPrice ?? product.sellPrice ?? 0;
+          if (
+            l.catalogUnitPrice !== undefined &&
+            l.catalogUnitPrice !== targetCatalogPrice
+          ) return false;
           return true;
         });
         if (existingIdx >= 0) {
@@ -237,6 +248,13 @@ export function usePosState() {
             ...next[existingIdx],
             ...freshStock,
             quantity: next[existingIdx].quantity + qtyDelta,
+            unitPrice: options?.unitPrice ?? next[existingIdx].unitPrice,
+            catalogUnitPrice:
+              options?.catalogUnitPrice ??
+              next[existingIdx].catalogUnitPrice ??
+              product.sellPrice ??
+              0,
+            priceSource: options?.priceSource ?? next[existingIdx].priceSource,
           };
           return next;
         }
@@ -257,6 +275,9 @@ export function usePosState() {
             stockKnown: options?.stockKnown ?? !(product.hasBom ?? false),
             quantity: qtyDelta,
             unitPrice: options?.unitPrice ?? product.sellPrice ?? 0,
+            catalogUnitPrice:
+              options?.catalogUnitPrice ?? options?.unitPrice ?? product.sellPrice ?? 0,
+            priceSource: options?.priceSource ?? "catalog",
             vatRate: product.vatRate ?? 0,
             discount: { mode: "amount", value: 0 },
             variantId: options?.variantId,
@@ -281,10 +302,16 @@ export function usePosState() {
     });
   }, []);
 
-  const updateLinePrice = useCallback((lineId: string, price: number): void => {
+  const updateLinePrice = useCallback((
+    lineId: string,
+    price: number,
+    source: OrderLine["priceSource"] = "manual",
+  ): void => {
     setLines((prev) =>
       prev.map((l) =>
-        l.lineId === lineId ? { ...l, unitPrice: Math.max(0, price) } : l
+        l.lineId === lineId
+          ? { ...l, unitPrice: Math.max(0, price), priceSource: source }
+          : l
       )
     );
   }, []);
@@ -322,6 +349,7 @@ export function usePosState() {
       { method: "card", amount: 0 },
     ]);
     setOrderDiscount({ mode: "amount", value: 0 });
+    setDiscountAuditCtx(null);
     setOrderVatRate(0);
     setNote("");
     setLoadedDraftId(null);
@@ -339,6 +367,7 @@ export function usePosState() {
   }, []);
 
   const loadDraft = useCallback((draft: DraftOrderDetail): void => {
+    setDiscountAuditCtx(null);
     setLoadedDraftId(draft.id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setLoadedDraftSource((draft as any).source ?? null);
@@ -353,6 +382,9 @@ export function usePosState() {
         quantity: it.quantity,
         stockKnown: false,
         unitPrice: it.unitPrice,
+        catalogUnitPrice: it.unitPrice,
+        priceSource: "server",
+        variantId: it.variantId,
         vatRate: (it as any).vatRate ?? 0,
         discount: { mode: "amount", value: it.discount },
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

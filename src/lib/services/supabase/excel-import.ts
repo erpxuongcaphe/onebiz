@@ -29,6 +29,9 @@ import { getClient, getCurrentContext, getCurrentTenantId } from "./base";
 import { applyManualStockMovement } from "./stock-adjustments";
 import { isInventoryLocked } from "./tenant-settings";
 import { createInternalSale } from "./internal-sales";
+import { savePurchaseOrderAtomic } from "./purchase-orders";
+import { createManualCashTransactionAtomic } from "./cash-book";
+import { formatDateInputValue } from "@/lib/format";
 
 type RowWithExcelIndex = { __excelRowIndex?: number };
 
@@ -341,9 +344,7 @@ export async function bulkImportSuppliers(
 // ---------------------------------------------------------------------------
 // Cash transactions
 //
-// NOTE: DB `cash_transactions` dùng `created_at` auto (không cho set ngày
-// tuỳ chọn). Ngày trong Excel được prepend vào `note` để user vẫn đọc được
-// timeline gốc. Nếu cần ghi đúng ngày, chạy migration thêm cột `date`.
+// Ngày phát sinh từ Excel được ghi đúng vào `transaction_date`; `created_at` vẫn là thời điểm nhập dữ liệu.
 // ---------------------------------------------------------------------------
 
 export async function bulkImportCashTransactions(
@@ -371,32 +372,20 @@ export async function bulkImportCashTransactions(
       branchId = found;
     }
 
-    // Prepend ngày vào note để không mất thông tin
-    const dateStr = formatDateShort(row.date);
-    const noteWithDate = row.note
-      ? `[${dateStr}] ${row.note}`
-      : `[${dateStr}] (import Excel)`;
-
-    const { error } = await supabase.from("cash_transactions").insert({
-      tenant_id: ctx.tenantId,
-      branch_id: branchId,
+    await createManualCashTransactionAtomic({
+      branchId,
       code: row.code,
       type: row.type,
       category: row.category,
       amount: row.amount,
       counterparty: row.counterparty ?? null,
-      payment_method: row.paymentMethod ?? "cash",
-      note: noteWithDate,
-      created_by: ctx.userId,
+      paymentMethod: row.paymentMethod ?? "cash",
+      note: row.note ?? "Nhập từ Excel",
+      transactionDate: formatDateInputValue(row.date),
     });
-    if (error) throw new Error(error.message);
   });
 }
 
-function formatDateShort(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
-}
 
 // ---------------------------------------------------------------------------
 // Debt opening balance
@@ -682,83 +671,31 @@ export async function bulkImportPurchaseOrders(
         branchId = bid;
       }
 
-      // Build items + tính totals
+      // Mỗi mã phiếu được lưu trong một transaction phía máy chủ. Nếu một dòng
+      // không hợp lệ, toàn bộ phiếu đó rollback; các phiếu khác vẫn tiếp tục.
       const items = groupRows.map((r) => {
-        const prod = prodMap.get(r.productCode);
-        if (!prod) {
+        const product = prodMap.get(r.productCode);
+        if (!product) {
           throw new Error(`Mã SP "${r.productCode}" chưa tồn tại (đơn "${code}")`);
         }
-        const quantity = r.quantity;
-        const unitPrice = r.unitPrice;
-        const discount = r.discount ?? 0;
-        const vatRate = r.vatRate ?? 0;
-        const gross = quantity * unitPrice - discount;
-        const vatAmount = Math.round((gross * vatRate) / 100);
-        const total = gross + vatAmount;
         return {
-          product_id: prod.id,
-          product_name: prod.name,
-          unit: prod.unit ?? "Cái",
-          quantity,
-          received_quantity: 0,
-          unit_price: unitPrice,
-          discount,
-          total: gross,
-          vat_rate: vatRate,
-          vat_amount: vatAmount,
-          _lineTotalWithVat: total,
+          productId: product.id,
+          quantity: r.quantity,
+          unitPrice: r.unitPrice,
+          discount: r.discount ?? 0,
+          vatRate: r.vatRate ?? 0,
         };
       });
 
-      const subtotal = items.reduce((s, it) => s + it.total, 0);
-      const taxAmount = items.reduce((s, it) => s + it.vat_amount, 0);
-      const total = subtotal + taxAmount;
-
-      // Insert header
-      const { data: poInserted, error: poErr } = await supabase
-        .from("purchase_orders")
-        .insert({
-          tenant_id: ctx.tenantId,
-          branch_id: branchId,
-          code,
-          supplier_id: supplier.id,
-          supplier_name: supplier.name,
-          status: "draft",
-          subtotal,
-          discount_amount: 0,
-          tax_amount: taxAmount,
-          total,
-          paid: 0,
-          debt: total,
-          note: first.note ?? null,
-          created_by: ctx.userId,
-        })
-        .select("id")
-        .single();
-      if (poErr) throw new Error(poErr.message);
-
-      // Insert items
-      const itemsInsert = items.map((it) => ({
-        purchase_order_id: poInserted.id,
-        product_id: it.product_id,
-        product_name: it.product_name,
-        unit: it.unit,
-        quantity: it.quantity,
-        received_quantity: 0,
-        unit_price: it.unit_price,
-        discount: it.discount,
-        total: it.total,
-        vat_rate: it.vat_rate,
-        vat_amount: it.vat_amount,
-      }));
-      const { error: itemsErr } = await supabase
-        .from("purchase_order_items")
-        .insert(itemsInsert);
-      if (itemsErr) {
-        // Rollback header nếu items fail
-        await supabase.from("purchase_orders").delete().eq("id", poInserted.id);
-        throw new Error(itemsErr.message);
-      }
+      await savePurchaseOrderAtomic({
+        requestedCode: code,
+        branchId,
+        supplierId: supplier.id,
+        note: first.note ?? null,
+        markOrdered: false,
+        receiveNow: false,
+        items,
+      });
 
       successCount++;
     } catch (e) {

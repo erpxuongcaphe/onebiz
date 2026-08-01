@@ -4,17 +4,12 @@
  * Atomically creates invoice + invoice_items + stock_movements + cash_transaction
  * for a completed POS sale.
  *
- * The stock-decrement logic is extracted into `applyStockDecrement` so that
- * it can be reused from `orders.ts` → `completeDraftOrder` (F10 on a saved draft).
+ * All invoice, stock and cash effects run inside hardened database RPCs.
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { getClient, handleError } from "./base";
-import type { Database } from "@/lib/supabase/types";
 import { isRpcUnavailable } from "./rpc-utils";
 
-type StockMovementInsert = Database["public"]["Tables"]["stock_movements"]["Insert"];
-type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["Insert"];
 
 // ============================================================
 // Types
@@ -23,6 +18,7 @@ type CashTransactionInsert = Database["public"]["Tables"]["cash_transactions"]["
 export interface PosCheckoutItem {
   productId: string;
   productName: string;
+  variantId?: string | null;
   unit?: string;
   quantity: number;
   unitPrice: number;
@@ -50,6 +46,25 @@ export interface PosCheckoutInput {
   paymentBreakdown?: PaymentBreakdownItem[];
   subtotal: number;
   discountAmount: number;
+  /** Chiết khấu cấp đơn, không gồm chiết khấu từng dòng. */
+  orderDiscountAmount?: number;
+  discountSource?:
+    | "manual"
+    | "customer_group"
+    | "promotion"
+    | "coupon"
+    | "redeem"
+    | "promotion_redeem"
+    | null;
+  couponCode?: string | null;
+  loyaltyPoints?: number;
+  discountOtpId?: string | null;
+  discountReason?: string | null;
+  shippingFee?: number;
+  orderVatRate?: number;
+  amountTendered?: number | null;
+  /** Tiền thừa khách chọn giữ lại làm số dư, ghi atomically cùng hóa đơn. */
+  customerCredit?: number;
   total: number;
   paid: number;
   note?: string;
@@ -119,239 +134,11 @@ export interface PosCheckoutResult {
   invoiceCode: string;
   /** Day 18/05/2026 (CEO): BOM consume break-down — dùng cho toast */
   bomConsumeResults?: BomConsumeResult[];
-}
-
-export interface StockDecrementContext {
-  tenantId: string;
-  branchId: string;
-  createdBy: string;
-  invoiceCode: string;
-}
-
-// ============================================================
-// Private: decrement stock + write stock_movements
-// ============================================================
-
-/**
- * Apply stock decrement for a given invoice.
- *
- * CEO 29/05/2026: tôn trọng quy tắc "SKU có BOM không giữ tồn".
- * - SP có `has_bom = true` (SKU ghép từ NVL) → KHÔNG trừ tồn SKU; gọi
- *   `consume_bom_for_sale` để trừ NVL theo công thức (RPC tự ghi
- *   stock_movements type='bom_consume' cho NVL).
- * - SP thường (`has_bom = false`) → ghi 1 stock_movement 'out' + trừ tồn
- *   chính nó (atomic SQL increment) như cũ.
- *
- * NOT atomic across items (a future RPC will harden this). For now we accept
- * the race-condition risk, which is acceptable for a single-cashier terminal.
- *
- * Exported (non-public API) so that `completeDraftOrder` in `orders.ts`
- * can call it when converting a draft → completed.
- */
-export async function applyStockDecrement(
-  supabase: SupabaseClient<Database>,
-  invoiceId: string,
-  items: PosCheckoutItem[],
-  ctx: StockDecrementContext
-): Promise<void> {
-  // CEO 29/05/2026: phân loại SP theo has_bom (1 query) để quyết định trừ NVL
-  // hay trừ tồn chính nó.
-  const productIds = [...new Set(items.map((i) => i.productId))];
-  const hasBomMap = new Map<string, boolean>();
-  if (productIds.length > 0) {
-    const { data: prodRows, error: prodErr } = await supabase
-      .from("products")
-      .select("id, has_bom")
-      .in("id", productIds);
-    if (prodErr) handleError(prodErr, "applyStockDecrement:has_bom");
-    for (const p of prodRows ?? []) {
-      hasBomMap.set(p.id as string, Boolean((p as { has_bom?: boolean }).has_bom));
-    }
-  }
-
-  // Convention: `quantity` is ALWAYS positive (magnitude). `type` carries the
-  // direction — 'in' adds, 'out' subtracts.
-  //
-  // Stock CAN go negative — represents "owe to warehouse" / oversold state.
-  // Frontend warns the cashier; backend records the truth so the ledger
-  // (stock_movements) and both snapshot tables stay in sync.
-  for (const item of items) {
-    // ─── SKU có BOM → chỉ trừ NVL theo công thức, KHÔNG trừ tồn SKU ───
-    if (hasBomMap.get(item.productId)) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: bomErr } = await (supabase.rpc as any)("consume_bom_for_sale", {
-        p_tenant_id: ctx.tenantId,
-        p_branch_id: ctx.branchId,
-        p_sku_id: item.productId,
-        p_qty: item.quantity,
-        p_invoice_id: invoiceId,
-        p_created_by: ctx.createdBy,
-        p_invoice_code: ctx.invoiceCode,
-      });
-      if (bomErr) handleError(bomErr, "applyStockDecrement:consume_bom");
-      continue;
-    }
-
-    // ─── SP thường → ghi stock_movement 'out' + trừ tồn chính nó ───
-    const { error: mvErr } = await supabase.from("stock_movements").insert({
-      tenant_id: ctx.tenantId,
-      branch_id: ctx.branchId,
-      product_id: item.productId,
-      type: "out" as const,
-      quantity: item.quantity,
-      reference_type: "invoice",
-      reference_id: invoiceId,
-      note: `POS bán hàng - ${ctx.invoiceCode}`,
-      created_by: ctx.createdBy,
-    } satisfies StockMovementInsert);
-    if (mvErr) handleError(mvErr, "applyStockDecrement:movements");
-
-    const delta = -item.quantity; // POS sale always decrements
-
-    // products.stock — atomic SQL increment
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updErr } = await (supabase.rpc as any)("increment_product_stock", {
-      p_product_id: item.productId,
-      p_delta: delta,
-    });
-    if (updErr) handleError(updErr, "applyStockDecrement:product_update");
-
-    // branch_stock — atomic upsert
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: bsErr } = await (supabase.rpc as any)("upsert_branch_stock", {
-      p_tenant_id: ctx.tenantId,
-      p_branch_id: ctx.branchId,
-      p_product_id: item.productId,
-      p_delta: delta,
-    });
-    if (bsErr) handleError(bsErr, "applyStockDecrement:branch_stock");
-
-    // FIFO lot allocation — consume from earliest-expiry lots first.
-    // Best-effort: if no lots exist for this product (non-lot-tracked item),
-    // the RPC returns shortage = full qty and we continue silently.
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.rpc as any)("allocate_lots_fifo", {
-        p_tenant_id: ctx.tenantId,
-        p_product_id: item.productId,
-        p_branch_id: ctx.branchId,
-        p_quantity: item.quantity,
-        p_source_type: "invoice",
-        p_source_id: invoiceId,
-      });
-    } catch {
-      // Silent — product may not have lots
-    }
-  }
-}
-
-// ============================================================
-// Private: auto-create cash_transaction (phiếu thu)
-// ============================================================
-
-/**
- * Create "phiếu thu" (income cash transaction) tied to the invoice.
- * Called whenever a sale actually receives money (paid > 0).
- *
- * Keeps sổ quỹ automatically in sync with doanh thu POS.
- *
- * **Thanh toán hỗn hợp:** Khi paymentMethod="mixed" VÀ có paymentBreakdown,
- * tạo N phiếu thu riêng biệt — mỗi phiếu ghi đúng phương thức và số tiền.
- * Nếu không có breakdown (legacy), fallback về 1 phiếu "cash" như cũ.
- */
-export async function createAutoCashReceipt(
-  supabase: SupabaseClient<Database>,
-  invoiceId: string,
-  invoiceCode: string,
-  amount: number,
-  paymentMethod: "cash" | "transfer" | "card" | "mixed",
-  ctx: {
-    tenantId: string;
-    branchId: string;
-    createdBy: string;
-    customerName: string;
-    shiftId?: string | null;
-  },
-  paymentBreakdown?: PaymentBreakdownItem[]
-): Promise<void> {
-  if (amount <= 0) return; // Nợ 100% — chưa thu tiền
-
-  const shiftId = ctx.shiftId ?? null;
-
-  // Mixed + có breakdown → tạo N phiếu thu riêng
-  if (paymentMethod === "mixed" && paymentBreakdown && paymentBreakdown.length > 0) {
-    const validItems = paymentBreakdown.filter((b) => b.amount > 0);
-    if (validItems.length === 0) return;
-
-    const METHOD_LABELS: Record<string, string> = {
-      cash: "tiền mặt",
-      transfer: "chuyển khoản",
-      card: "thẻ",
-    };
-
-    for (const item of validItems) {
-      const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-        p_tenant_id: ctx.tenantId,
-        p_entity_type: "cash_receipt",
-      });
-      if (codeErr) handleError(codeErr, "createAutoCashReceipt:next_code:mixed");
-      const cashCode = code ?? `PT${Date.now()}`;
-
-      const cashData: CashTransactionInsert = {
-        tenant_id: ctx.tenantId,
-        branch_id: ctx.branchId,
-        code: cashCode,
-        type: "receipt",
-        category: "Bán hàng",
-        amount: item.amount,
-        counterparty: ctx.customerName,
-        payment_method: item.method,
-        reference_type: "invoice",
-        reference_id: invoiceId,
-        note: `Thu tiền hoá đơn ${invoiceCode} (${METHOD_LABELS[item.method] ?? item.method})`,
-        created_by: ctx.createdBy,
-        shift_id: shiftId,
-      };
-
-      const { error: cashErr } = await supabase
-        .from("cash_transactions")
-        .insert(cashData);
-      if (cashErr) handleError(cashErr, "createAutoCashReceipt:insert:mixed");
-    }
-    return;
-  }
-
-  // Single method (cash / transfer / card) hoặc mixed legacy fallback
-  const { data: code, error: codeErr } = await supabase.rpc("next_code", {
-    p_tenant_id: ctx.tenantId,
-    p_entity_type: "cash_receipt",
-  });
-  if (codeErr) handleError(codeErr, "createAutoCashReceipt:next_code");
-  const cashCode = code ?? `PT${Date.now()}`;
-
-  const cashPaymentMethod: "cash" | "transfer" | "card" =
-    paymentMethod === "mixed" ? "cash" : paymentMethod;
-
-  const cashData: CashTransactionInsert = {
-    tenant_id: ctx.tenantId,
-    branch_id: ctx.branchId,
-    code: cashCode,
-    type: "receipt",
-    category: "Bán hàng",
-    amount,
-    counterparty: ctx.customerName,
-    payment_method: cashPaymentMethod,
-    reference_type: "invoice",
-    reference_id: invoiceId,
-    note: `Thu tiền hoá đơn ${invoiceCode}`,
-    created_by: ctx.createdBy,
-    shift_id: shiftId,
-  };
-
-  const { error: cashErr } = await supabase
-    .from("cash_transactions")
-    .insert(cashData);
-  if (cashErr) handleError(cashErr, "createAutoCashReceipt:insert");
+  total?: number;
+  paid?: number;
+  debt?: number;
+  taxAmount?: number;
+  discountAmount?: number;
 }
 
 // ============================================================
@@ -365,26 +152,30 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
   // missing; falling back to the legacy multi-step client flow can create drift.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-    "pos_complete_checkout_atomic_v2",
+    "pos_complete_checkout_atomic_v3",
     {
       p_branch_id: input.branchId,
       p_customer_id: input.customerId ?? null,
-      p_customer_name: input.customerName || "Khách lẻ",
       p_items: input.items,
       p_payment_method: input.paymentMethod,
       p_payment_breakdown: input.paymentBreakdown ?? null,
-      p_subtotal: input.subtotal,
-      p_discount_amount: input.discountAmount,
-      p_total: input.total,
       p_paid: input.paid,
       p_note: input.note ?? null,
       p_source: input.source ?? "pos",
       p_shift_id: input.shiftId ?? null,
       p_promotion_id: input.promotionId ?? null,
-      p_promotion_discount: input.promotionDiscount ?? 0,
-      p_promotion_free_value: input.promotionFreeValue ?? 0,
+      p_coupon_code: input.couponCode ?? null,
+      p_loyalty_points: input.loyaltyPoints ?? 0,
+      p_discount_source: input.discountSource ?? null,
+      p_order_discount: input.orderDiscountAmount ?? 0,
+      p_discount_otp_id: input.discountOtpId ?? null,
+      p_discount_reason: input.discountReason ?? null,
+      p_shipping_fee: input.shippingFee ?? 0,
+      p_order_vat_rate: input.orderVatRate ?? 0,
       p_client_session_id: input.clientSessionId ?? null,
       p_allow_bom_shortage: input.allowBomShortage ?? false,
+      p_amount_tendered: input.amountTendered ?? input.paid,
+      p_customer_credit: input.customerCredit ?? 0,
     },
   );
 
@@ -393,22 +184,41 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
       invoice_id?: string;
       invoice_code?: string;
       bom_consume_results?: BomConsumeResult[];
+      total?: number;
+      paid?: number;
+      debt?: number;
+      tax_amount?: number;
+      discount_amount?: number;
+      customer_credit?: number;
     };
     if (result.invoice_id && result.invoice_code) {
       return {
         invoiceId: result.invoice_id,
         invoiceCode: result.invoice_code,
         bomConsumeResults: result.bom_consume_results,
+        total: result.total,
+        paid: result.paid,
+        debt: result.debt,
+        taxAmount: result.tax_amount,
+        discountAmount: result.discount_amount,
       };
     }
     throw new Error("Phản hồi thanh toán thiếu thông tin hoá đơn.");
   }
 
   if (atomicError) {
-    if (isRpcUnavailable(atomicError)) {
-      throw new Error("Chưa có migration 00203. Không thể thanh toán an toàn.");
+    if (
+      atomicError.message === "POS_PRICE_CHANGED" ||
+      atomicError.message === "POS_DISCOUNT_CHANGED"
+    ) {
+      throw new Error(
+        `${atomicError.message}|${atomicError.details ?? "{}"}`,
+      );
     }
-    handleError(atomicError, "posCheckout:atomic_v2_rpc");
+    if (isRpcUnavailable(atomicError)) {
+      throw new Error("Chưa có migration 00253. Không thể thanh toán an toàn.");
+    }
+    handleError(atomicError, "posCheckout:atomic_v3_rpc");
   }
 
   throw new Error("Server không trả kết quả thanh toán POS hợp lệ.");

@@ -1,93 +1,13 @@
 /**
- * Xuất-Nhập-Tồn Report Service.
+ * Báo cáo Xuất - Nhập - Tồn.
  *
- * Format chuẩn KiotViet (CEO 06/05/2026 ảnh tham khảo):
- *
- * Tổng hợp (9 cột):
- *   Mã hàng | Tên hàng | Tồn đầu kỳ | GT đầu kỳ | SL Nhập | GT Nhập |
- *   SL Xuất | GT Xuất | Tồn cuối kỳ | GT cuối kỳ
- *
- * Chi tiết (13 cột breakdown):
- *   NHẬP: NCC / Kiểm(+) / Trả KH / Chuyển đến / SX nhập
- *   XUẤT: Bán / Hủy / Trả NCC / Kiểm(-) / Chuyển đi / SX xuất
- *
- * Mapping reference_type → bucket (best-effort):
- *   - in:  purchase_entry → ncc
- *          sales_return → return_in
- *          production → production_in
- *          transfer → transfer_in
- *          inventory_check → check_in (positive)
- *   - out: invoice → sale
- *          disposal → disposal
- *          supplier_return / purchase_return → ncc_return
- *          transfer → transfer_out
- *          inventory_check → check_out (negative)
- *          production → production_out
- *          internal_export / internal_sale → internal
- *
- * Tồn đầu kỳ = stock hiện tại - (nhập - xuất) trong kỳ.
- * Giá trị = SL × cost_price (FIFO/Average — tạm dùng cost_price snapshot).
+ * Dữ liệu được tổng hợp ở Postgres để không giới hạn 1.000 dòng và để tái dựng
+ * đúng tồn cuối của kỳ lịch sử. Hàm chỉ đọc, không cập nhật tồn kho.
  */
 
-import { getClient, getCurrentTenantId, handleError } from "./base";
 import type { DateRange } from "@/lib/types/report";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
-interface XntProductQueryRow {
-  id: string;
-  code: string;
-  name: string;
-  unit: string | null;
-  stock: number | null;
-  cost_price: number | null;
-  category_id: string | null;
-}
-interface XntMovementQueryRow {
-  product_id: string;
-  type: string;
-  quantity: number | null;
-  reference_type: string | null;
-  branch_id: string | null;
-  created_at: string;
-}
-interface XntBranchStockQueryRow {
-  product_id: string;
-  quantity: number | null;
-}
-interface XntPagedQuery<T> {
-  range(
-    from: number,
-    to: number,
-  ): PromiseLike<{
-    data: T[] | null;
-    error: { message: string } | null;
-  }>;
-}
-
-async function fetchAllXntRows<T>(
-  buildQuery: () => XntPagedQuery<T>,
-  context: string,
-): Promise<T[]> {
-  const pageSize = 1000;
-  const rows: T[] = [];
-  for (let offset = 0; ; offset += pageSize) {
-    const { data, error } = await buildQuery().range(
-      offset,
-      offset + pageSize - 1,
-    );
-    if (error) {
-      handleError(error, context);
-      return [];
-    }
-    const page = data ?? [];
-    rows.push(...page);
-    if (page.length < pageSize) break;
-  }
-  return rows;
-}
-
-// ============================================================
-// Types
-// ============================================================
+import { getClient, handleError } from "./base";
 
 export interface XntRow {
   productId: string;
@@ -95,40 +15,28 @@ export interface XntRow {
   name: string;
   unit: string;
   categoryName: string | null;
-
-  // Tồn đầu kỳ
   openingQty: number;
   openingValue: number;
-
-  // Nhập breakdown
-  inSupplier: number; // Nhập NCC
-  inCheck: number; // Kiểm (+)
-  inReturn: number; // Trả KH (nhập)
-  inTransfer: number; // Chuyển đến
-  inProduction: number; // SX nhập
-
-  // Xuất breakdown
-  outSale: number; // Bán
-  outDisposal: number; // Hủy
-  outSupplierReturn: number; // Trả NCC
-  outCheck: number; // Kiểm (-)
-  outTransfer: number; // Chuyển đi
-  outProduction: number; // SX xuất (nguyên liệu)
-  outInternal: number; // Xuất nội bộ (gộp vào "Xuất khác")
-  inOther: number; // A3: Nhập khác (initial_stock_import...) — để tổng Nhập không hụt
-  outOther: number; // A3: Xuất khác (bom_consume/modifier_topping...) — để tổng Xuất không hụt
-
-  // Tổng hợp
+  inSupplier: number;
+  inCheck: number;
+  inReturn: number;
+  inTransfer: number;
+  inProduction: number;
+  outSale: number;
+  outDisposal: number;
+  outSupplierReturn: number;
+  outCheck: number;
+  outTransfer: number;
+  outProduction: number;
+  outInternal: number;
+  inOther: number;
+  outOther: number;
   totalIn: number;
   totalOut: number;
   inValue: number;
   outValue: number;
-
-  // Tồn cuối kỳ
   closingQty: number;
   closingValue: number;
-
-  /** Sub-rows theo chi nhánh — chỉ có khi mode='by-branch' */
   byBranch?: XntBranchBreakdown[];
 }
 
@@ -147,7 +55,6 @@ export interface XntBranchBreakdown {
 
 export interface XntReportResult {
   rows: XntRow[];
-  /** Subtotal across all rows */
   subtotal: {
     productCount: number;
     openingQty: number;
@@ -165,352 +72,79 @@ export interface XntReportResult {
 interface XntOptions {
   range: DateRange;
   branchId?: string;
-  /** Filter theo product code/name search */
   search?: string;
 }
 
-// ============================================================
-// Mapping: reference_type → bucket
-// Đợt 2 (CEO 17/07): chuyển về NGUỒN SỰ THẬT chung stock-movement-refs.ts
-// (dùng chung với Lịch sử kho + thẻ kho) — không khai lại ở đây.
-// ============================================================
+function number(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
 
-import { mapInBucket, mapOutBucket } from "@/lib/constants/stock-movement-refs";
-
-// ============================================================
-// Main service
-// ============================================================
-
-/**
- * Get XNT report. Returns one row per product with full breakdown.
- *
- * Strategy:
- * - Fetch all stock_movements trong kỳ (filter by branch nếu có)
- * - Fetch all products active
- * - Aggregate movements client-side (vì split theo reference_type → khó SQL)
- * - Calculate openingQty = currentStock - (sumIn - sumOut)
- *
- * Performance: với 500 SP × 5000 movements/tháng → ~25k rows fetch + group.
- * Acceptable cho báo cáo (không phải hot path).
- */
 export async function getXntReport(
   options: XntOptions,
 ): Promise<XntReportResult> {
+  const rangeWindow = toCreatedAtRangeWindow(options.range);
+  if (!rangeWindow) throw new Error("Khoảng thời gian báo cáo không hợp lệ.");
+
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const { range, branchId, search } = options;
-
-  const rangeWindow = toCreatedAtRangeWindow(range);
-  if (!rangeWindow) throw new Error("Invalid report date range");
-
-  // 1. Fetch products (filter by search if provided)
-  // inventory_role (00164) chưa có trong generated types → cast any.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let productsQuery = (supabase as any)
-    .from("products")
-    .select("id, code, name, unit, stock, cost_price, category_id")
-    .eq("tenant_id", tenantId)
-    // A2 (07/07): XNT không liệt kê món menu F&B (không giữ tồn → dòng rỗng)
-    .neq("inventory_role", "fnb_menu_item")
-    .order("name");
-
-  if (search && search.trim()) {
-    const q = `%${search.trim()}%`;
-    productsQuery = productsQuery.or(`code.ilike.${q},name.ilike.${q}`);
+  const { data, error } = await (supabase.rpc as any)("get_xnt_report", {
+    p_date_from: rangeWindow.start,
+    p_date_to: rangeWindow.end,
+    p_branch_id: options.branchId ?? null,
+    p_search: options.search?.trim() || null,
+  });
+  if (error) handleError(error, "getXntReport");
+  if (!Array.isArray(data)) {
+    throw new Error("Máy chủ không trả kết quả Xuất - Nhập - Tồn.");
   }
 
-  const productsPromise = fetchAllXntRows<XntProductQueryRow>(
-    () => productsQuery.order("id", { ascending: true }),
-    "getXntReport.products",
-  );
-
-  // Movements and branch stock are independent from the product catalog.
-  // Start them together on the normal report path to avoid serial network waits.
-  let movementsQuery = supabase
-    .from("stock_movements")
-    .select("product_id, type, quantity, reference_type, branch_id, created_at")
-    .eq("tenant_id", tenantId)
-    .gte("created_at", rangeWindow.start)
-    .lt("created_at", rangeWindow.end);
-
-  if (branchId) movementsQuery = movementsQuery.eq("branch_id", branchId);
-
-  const branchStockPromise: Promise<XntBranchStockQueryRow[]> = branchId
-    ? fetchAllXntRows<XntBranchStockQueryRow>(
-        () =>
-          supabase
-            .from("branch_stock")
-            .select("product_id, quantity")
-            .eq("tenant_id", tenantId)
-            .eq("branch_id", branchId)
-            .order("product_id", { ascending: true }),
-        "getXntReport.branch_stock",
-      )
-    : Promise.resolve([]);
-
-  let products: XntProductQueryRow[];
-  let movements: XntMovementQueryRow[];
-  let branchStock: XntBranchStockQueryRow[];
-
-  if (search?.trim()) {
-    products = await productsPromise;
-    const productIds = products.map((product) => product.id);
-
-    // A precise search should not download every movement in the period.
-    // Keep the URL bounded for broad searches and fall back to the full query.
-    if (productIds.length > 0 && productIds.length <= 200) {
-      movementsQuery = movementsQuery.in("product_id", productIds);
-    }
-
-    const movementsPromise =
-      productIds.length === 0
-        ? Promise.resolve<XntMovementQueryRow[]>([])
-        : fetchAllXntRows<XntMovementQueryRow>(
-            () => movementsQuery.order("created_at", { ascending: true }),
-            "getXntReport.movements",
-          );
-
-    [movements, branchStock] = await Promise.all([
-      movementsPromise,
-      branchStockPromise,
-    ]);
-  } else {
-    [products, movements, branchStock] = await Promise.all([
-      productsPromise,
-      fetchAllXntRows<XntMovementQueryRow>(
-        () => movementsQuery.order("created_at", { ascending: true }),
-        "getXntReport.movements",
-      ),
-      branchStockPromise,
-    ]);
-  }
-
-  // 2. Fetch product_categories for category names
-  const categoryIds = Array.from(
-    new Set(
-      products
-        .map((product) => product.category_id)
-        .filter((categoryId): categoryId is string => Boolean(categoryId)),
-    ),
-  );
-  let categoryMap = new Map<string, string>();
-  if (categoryIds.length > 0) {
-    const categories: Array<{ id: string; name: string }> = [];
-    for (let offset = 0; offset < categoryIds.length; offset += 200) {
-      const chunkIds = categoryIds.slice(offset, offset + 200);
-      const chunk = await fetchAllXntRows(
-        () =>
-          supabase
-            .from("categories")
-            .select("id, name")
-            .in("id", chunkIds)
-            .order("id", { ascending: true }),
-        "getXntReport.categories",
-      );
-      categories.push(...chunk);
-    }
-    categoryMap = new Map(
-      categories.map((category) => [category.id, category.name]),
-    );
-  }
-
-  // Branch report must use branch snapshot as closing stock. Using
-  // products.stock here would mix company-wide closing stock with
-  // branch-filtered movements, making opening/closing balances drift.
-  const branchClosingStock = new Map<string, number>();
-  for (const row of branchStock) {
-    branchClosingStock.set(row.product_id, Number(row.quantity ?? 0));
-  }
-  // 4. Aggregate movements per product
-  const aggMap = new Map<
-    string,
-    {
-      inSupplier: number;
-      inCheck: number;
-      inReturn: number;
-      inTransfer: number;
-      inProduction: number;
-      inOther: number;
-      outSale: number;
-      outDisposal: number;
-      outSupplierReturn: number;
-      outCheck: number;
-      outTransfer: number;
-      outProduction: number;
-      outInternal: number;
-      outOther: number;
-    }
-  >();
-
-  for (const m of movements ?? []) {
-    const pid = m.product_id;
-    let agg = aggMap.get(pid);
-    if (!agg) {
-      agg = {
-        inSupplier: 0,
-        inCheck: 0,
-        inReturn: 0,
-        inTransfer: 0,
-        inProduction: 0,
-        inOther: 0,
-        outSale: 0,
-        outDisposal: 0,
-        outSupplierReturn: 0,
-        outCheck: 0,
-        outTransfer: 0,
-        outProduction: 0,
-        outInternal: 0,
-        outOther: 0,
-      };
-      aggMap.set(pid, agg);
-    }
-    const qty = Number(m.quantity ?? 0);
-    if (m.type === "in") {
-      const bucket = mapInBucket(m.reference_type);
-      switch (bucket) {
-        case "supplier":
-          agg.inSupplier += qty;
-          break;
-        case "check":
-          agg.inCheck += qty;
-          break;
-        case "return":
-          agg.inReturn += qty;
-          break;
-        case "transfer":
-          agg.inTransfer += qty;
-          break;
-        case "production":
-          agg.inProduction += qty;
-          break;
-        case "other":
-          agg.inOther += qty;
-          break;
-      }
-    } else if (m.type === "out") {
-      const bucket = mapOutBucket(m.reference_type);
-      switch (bucket) {
-        case "sale":
-          agg.outSale += qty;
-          break;
-        case "disposal":
-          agg.outDisposal += qty;
-          break;
-        case "supplier_return":
-          agg.outSupplierReturn += qty;
-          break;
-        case "check":
-          agg.outCheck += qty;
-          break;
-        case "transfer":
-          agg.outTransfer += qty;
-          break;
-        case "production":
-          agg.outProduction += qty;
-          break;
-        case "internal":
-          agg.outInternal += qty;
-          break;
-        case "other":
-          agg.outOther += qty;
-          break;
-      }
-    } else if (m.type === "adjust") {
-      // adjust without explicit direction — use reference_type to infer
-      const inBucket = mapInBucket(m.reference_type);
-      if (inBucket === "check") {
-        // Cannot tell sign từ schema — heuristic: nếu reference_type='inventory_check'
-        // thì gộp vào inCheck (best-effort, có thể tách 2 buckets sau)
-        agg.inCheck += qty;
-      }
-    } else if (m.type === "transfer") {
-      // transfer: cũng không có direction explicit — gộp vào in/out theo
-      // best-effort. Skip cho MVP (sẽ refine khi có metadata branch_to/from)
-      const inBucket = mapInBucket(m.reference_type);
-      if (inBucket === "transfer") {
-        agg.inTransfer += qty;
-      }
-    }
-  }
-
-  // 5. Build rows
-  const rows: XntRow[] = [];
-  const subtotal = {
-    productCount: 0,
-    openingQty: 0,
-    openingValue: 0,
-    totalIn: 0,
-    inValue: 0,
-    totalOut: 0,
-    outValue: 0,
-    closingQty: 0,
-    closingValue: 0,
-  };
-
-  for (const p of products ?? []) {
-    const agg = aggMap.get(p.id) ?? {
-      inSupplier: 0,
-      inCheck: 0,
-      inReturn: 0,
-      inTransfer: 0,
-      inProduction: 0,
-      inOther: 0,
-      outSale: 0,
-      outDisposal: 0,
-      outSupplierReturn: 0,
-      outCheck: 0,
-      outTransfer: 0,
-      outProduction: 0,
-      outInternal: 0,
-      outOther: 0,
-    };
+  const rows: XntRow[] = (data as Array<Record<string, unknown>>).map((raw) => {
+    const cost = number(raw.cost_price);
+    const inSupplier = number(raw.in_supplier);
+    const inCheck = number(raw.in_check);
+    const inReturn = number(raw.in_return);
+    const inTransfer = number(raw.in_transfer);
+    const inProduction = number(raw.in_production);
+    const inOther = number(raw.in_other);
+    const outSale = number(raw.out_sale);
+    const outDisposal = number(raw.out_disposal);
+    const outSupplierReturn = number(raw.out_supplier_return);
+    const outCheck = number(raw.out_check);
+    const outTransfer = number(raw.out_transfer);
+    const outProduction = number(raw.out_production);
+    const outInternal = number(raw.out_internal);
+    const outOther = number(raw.out_other);
     const totalIn =
-      agg.inSupplier +
-      agg.inCheck +
-      agg.inReturn +
-      agg.inTransfer +
-      agg.inProduction +
-      agg.inOther;
+      inSupplier + inCheck + inReturn + inTransfer + inProduction + inOther;
     const totalOut =
-      agg.outSale +
-      agg.outDisposal +
-      agg.outSupplierReturn +
-      agg.outCheck +
-      agg.outTransfer +
-      agg.outProduction +
-      agg.outInternal +
-      agg.outOther;
+      outSale + outDisposal + outSupplierReturn + outCheck + outTransfer
+      + outProduction + outInternal + outOther;
+    const openingQty = number(raw.opening_qty);
+    const closingQty = number(raw.closing_qty);
 
-    const closingQty = branchId
-      ? branchClosingStock.get(p.id) ?? 0
-      : Number(p.stock ?? 0);
-    const openingQty = closingQty - (totalIn - totalOut);
-    const cost = Number(p.cost_price ?? 0);
-
-    const row: XntRow = {
-      productId: p.id,
-      code: p.code,
-      name: p.name,
-      unit: p.unit ?? "",
-      categoryName: (p as { category_id?: string }).category_id
-        ? categoryMap.get((p as { category_id?: string }).category_id!) ?? null
-        : null,
+    return {
+      productId: String(raw.product_id ?? ""),
+      code: String(raw.code ?? ""),
+      name: String(raw.name ?? ""),
+      unit: String(raw.unit ?? ""),
+      categoryName: raw.category_name ? String(raw.category_name) : null,
       openingQty,
       openingValue: openingQty * cost,
-      inSupplier: agg.inSupplier,
-      inCheck: agg.inCheck,
-      inReturn: agg.inReturn,
-      inTransfer: agg.inTransfer,
-      inProduction: agg.inProduction,
-      outSale: agg.outSale,
-      outDisposal: agg.outDisposal,
-      outSupplierReturn: agg.outSupplierReturn,
-      outCheck: agg.outCheck,
-      outTransfer: agg.outTransfer,
-      outProduction: agg.outProduction,
-      outInternal: agg.outInternal,
-      inOther: agg.inOther,
-      outOther: agg.outOther,
+      inSupplier,
+      inCheck,
+      inReturn,
+      inTransfer,
+      inProduction,
+      inOther,
+      outSale,
+      outDisposal,
+      outSupplierReturn,
+      outCheck,
+      outTransfer,
+      outProduction,
+      outInternal,
+      outOther,
       totalIn,
       totalOut,
       inValue: totalIn * cost,
@@ -518,19 +152,32 @@ export async function getXntReport(
       closingQty,
       closingValue: closingQty * cost,
     };
+  });
 
-    rows.push(row);
+  const subtotal = rows.reduce<XntReportResult["subtotal"]>(
+    (sum, row) => ({
+      productCount: sum.productCount + 1,
+      openingQty: sum.openingQty + row.openingQty,
+      openingValue: sum.openingValue + row.openingValue,
+      totalIn: sum.totalIn + row.totalIn,
+      inValue: sum.inValue + row.inValue,
+      totalOut: sum.totalOut + row.totalOut,
+      outValue: sum.outValue + row.outValue,
+      closingQty: sum.closingQty + row.closingQty,
+      closingValue: sum.closingValue + row.closingValue,
+    }),
+    {
+      productCount: 0,
+      openingQty: 0,
+      openingValue: 0,
+      totalIn: 0,
+      inValue: 0,
+      totalOut: 0,
+      outValue: 0,
+      closingQty: 0,
+      closingValue: 0,
+    },
+  );
 
-    subtotal.productCount += 1;
-    subtotal.openingQty += row.openingQty;
-    subtotal.openingValue += row.openingValue;
-    subtotal.totalIn += row.totalIn;
-    subtotal.inValue += row.inValue;
-    subtotal.totalOut += row.totalOut;
-    subtotal.outValue += row.outValue;
-    subtotal.closingQty += row.closingQty;
-    subtotal.closingValue += row.closingValue;
-  }
-
-  return { rows, subtotal, range };
+  return { rows, subtotal, range: options.range };
 }

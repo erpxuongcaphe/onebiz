@@ -21,7 +21,6 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
-import { recordAuditLog } from "./audit";
 import { isInventoryLocked } from "./tenant-settings";
 import type { Database } from "@/lib/supabase/types";
 
@@ -79,42 +78,14 @@ export async function applyManualStockMovement(
   // stock_movements + products.stock + branch_stock.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: rpcErr } = await (supabase.rpc as any)("apply_manual_stock_movement_atomic", {
-    p_tenant_id: resolved.tenantId,
+    p_tenant_id: null,
     p_branch_id: resolved.branchId,
-    p_created_by: resolved.createdBy,
+    p_created_by: null,
     p_items: rpcItems,
   });
   if (rpcErr) handleError(rpcErr, "applyManualStockMovement:atomic_rpc");
 
-  // Audit log — gom theo referenceType/referenceId (1 event/đơn) để
-  // detail panel "Lịch sử" nhặt được. Nếu không có referenceId (ad-hoc),
-  // log từng item riêng.
-  const groups = new Map<string, ManualStockMovementInput[]>();
-  for (const i of inputs) {
-    const key = i.referenceId ? `${i.referenceType}:${i.referenceId}` : `__adhoc:${i.productId}:${Math.random()}`;
-    const arr = groups.get(key) ?? [];
-    arr.push(i);
-    groups.set(key, arr);
-  }
-  for (const [key, items] of groups) {
-    const [refType, refId] = key.startsWith("__adhoc")
-      ? [items[0].referenceType, ""]
-      : key.split(":");
-    void recordAuditLog({
-      entityType: refType,
-      entityId: refId || items[0].productId,
-      action: items[0].type === "in" ? "create" : "delete",
-      newData: {
-        items: items.map((i) => ({
-          productId: i.productId,
-          quantity: i.quantity,
-          type: i.type,
-          note: i.note,
-        })),
-        branchId: resolved.branchId,
-      },
-    });
-  }
+
 }
 
 /**

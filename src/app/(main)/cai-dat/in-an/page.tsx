@@ -280,7 +280,7 @@ export default function PrintSettingsPage() {
       setLogoUrl(url);
       setLogoSaving(true);
       try {
-        await updateTenantBusinessInfo({ logoUrl: url ?? undefined });
+        await updateTenantBusinessInfo({ logoUrl: url ?? "" });
         toast({
           variant: "success",
           title: url ? "Đã cập nhật logo" : "Đã xoá logo",

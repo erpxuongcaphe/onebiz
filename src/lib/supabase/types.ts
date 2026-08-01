@@ -632,6 +632,10 @@ export interface Database {
           vat_rate: number;
           vat_amount: number;
           total: number;
+          returned_qty: number;
+          unit_cost: number | null;
+          note: string | null;
+          variant_id: string | null;
         };
         Insert: {
           id?: string;
@@ -645,6 +649,10 @@ export interface Database {
           vat_rate?: number;
           vat_amount?: number;
           total: number;
+          returned_qty?: number;
+          unit_cost?: number | null;
+          note?: string | null;
+          variant_id?: string | null;
         };
         Update: {
           quantity?: number;
@@ -653,6 +661,10 @@ export interface Database {
           vat_rate?: number;
           vat_amount?: number;
           total?: number;
+          returned_qty?: number;
+          unit_cost?: number | null;
+          note?: string | null;
+          variant_id?: string | null;
         };
         Relationships: [
           {
@@ -665,6 +677,12 @@ export interface Database {
             foreignKeyName: "invoice_items_product_id_fkey";
             columns: ["product_id"];
             referencedRelation: "products";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "invoice_items_variant_id_fkey";
+            columns: ["variant_id"];
+            referencedRelation: "product_variants";
             referencedColumns: ["id"];
           },
         ];
@@ -825,9 +843,13 @@ export interface Database {
           category: string;
           amount: number;
           counterparty: string | null;
-          payment_method: "cash" | "transfer" | "card";
+          payment_method: "cash" | "transfer" | "card" | "ewallet";
           reference_type: string | null;
           reference_id: string | null;
+          customer_id: string | null;
+          supplier_id: string | null;
+          status: "draft" | "completed" | "cancelled";
+          transaction_date: string;
           note: string | null;
           created_by: string;
           created_at: string;
@@ -842,14 +864,22 @@ export interface Database {
           category: string;
           amount: number;
           counterparty?: string | null;
-          payment_method?: "cash" | "transfer" | "card";
+          payment_method?: "cash" | "transfer" | "card" | "ewallet";
           reference_type?: string | null;
           reference_id?: string | null;
+          customer_id?: string | null;
+          supplier_id?: string | null;
+          status?: "draft" | "completed" | "cancelled";
+          transaction_date?: string;
           note?: string | null;
           created_by: string;
           shift_id?: string | null;
         };
         Update: {
+          customer_id?: string | null;
+          supplier_id?: string | null;
+          status?: "draft" | "completed" | "cancelled";
+          transaction_date?: string;
           note?: string | null;
           shift_id?: string | null;
         };

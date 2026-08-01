@@ -21,6 +21,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const insertCalls: { table: string; data: unknown }[] = [];
 const updateCalls: { table: string; data: unknown; filters: Record<string, unknown> }[] = [];
 const deleteCalls: { table: string; filters: Record<string, unknown> }[] = [];
+const rpcCalls: { fn: string; args?: Record<string, unknown> }[] = [];
 let nextCodeCounter = 0;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
@@ -69,9 +70,11 @@ let rpcResponseOverrides: Record<string, { data: unknown; error: unknown }> = {}
 const atomicPaymentCalls: { kitchenOrderId: string; params: Record<string, unknown> }[] = [];
 
 vi.mock("@/lib/services/supabase/base", () => ({
+  getCurrentContext: async () => ({ tenantId: "tenant-1", branchId: "branch-1", userId: "user-1" }),
   getClient: () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
     rpc: vi.fn((fn: string, args?: Record<string, unknown>) => {
+      rpcCalls.push({ fn, args });
       if (rpcResponseOverrides[fn]) return rpcResponseOverrides[fn];
       if (fn === "next_code") {
         nextCodeCounter++;
@@ -82,7 +85,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_send_to_kitchen_atomic") {
+      if (fn === "fnb_send_to_kitchen_atomic_v2") {
         const orderId = "ko-1";
         if (args?.p_table_id) {
           claimTableMock(args.p_table_id, orderId);
@@ -125,7 +128,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         insertCalls.push({ table: "_rpc", data: { type: "payment", invoice_id: args?.p_invoice_id } });
         return { data: { success: true }, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic") {
+      if (fn === "fnb_complete_payment_atomic_v2") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         atomicPaymentCalls.push({ kitchenOrderId: koId, params: args ?? {} });
         return {
@@ -167,6 +170,7 @@ import {
   updateOrderItemQty,
   removeOrderItem,
   updateKitchenOrderStatus,
+  updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
 
 // === Helpers ===
@@ -244,6 +248,7 @@ beforeEach(() => {
   insertCalls.length = 0;
   updateCalls.length = 0;
   deleteCalls.length = 0;
+  rpcCalls.length = 0;
   atomicPaymentCalls.length = 0;
   rpcResponseOverrides = {};
   nextCodeCounter = 0;
@@ -348,10 +353,14 @@ describe("Scenario: Sửa đơn (modify order items)", () => {
     await addItemsToExistingOrder("ko-1", [
       { productId: "p3", productName: "Trà Đào", quantity: 1, unitPrice: 29000 },
     ]);
-    const traDaoInsert = insertCalls.find(
-      (c) => (c.data as Record<string, unknown>)?.product_name === "Trà Đào"
+    const rpcCall = rpcCalls.find(
+      (call) => call.fn === "fnb_send_to_kitchen_atomic_v2",
     );
-    expect(traDaoInsert).toBeDefined();
+    expect(rpcCall).toBeDefined();
+    expect(rpcCall?.args?.p_existing_order_id).toBe("ko-1");
+    expect(rpcCall?.args?.p_items).toEqual([
+      { productId: "p3", productName: "Trà Đào", quantity: 1, unitPrice: 29000 },
+    ]);
   });
 });
 
@@ -565,14 +574,15 @@ describe("Scenario: Đơn Shopee Food", () => {
     // Migration 00070: 4th param đổi từ "amount" → "percent". Shopee 25%.
     await setDeliveryPlatform("ko-1", "shopee_food", 15000, 25);
 
-    const platformUpdates = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.delivery_platform === "shopee_food"
+    const pricingRpc = rpcCalls.find(
+      (call) => call.fn === "fnb_set_delivery_pricing_v2",
     );
-    expect(platformUpdates.length).toBe(1);
-    expect((platformUpdates[0].data as Record<string, unknown>).delivery_fee).toBe(15000);
-    expect((platformUpdates[0].data as Record<string, unknown>).platform_commission_percent).toBe(25);
-    // Cột cũ platform_commission luôn = 0 sau migration 00070
-    expect((platformUpdates[0].data as Record<string, unknown>).platform_commission).toBe(0);
+    expect(pricingRpc?.args).toMatchObject({
+      p_kitchen_order_id: "ko-1",
+      p_platform: "shopee_food",
+      p_delivery_fee: 15000,
+      p_commission_percent: 25,
+    });
   });
 
   it("delivery fee included in total", async () => {
@@ -600,12 +610,15 @@ describe("Scenario: Đơn GrabFood", () => {
     // Migration 00070: param thứ 4 = % (không phải amount). Grab 25%.
     await setDeliveryPlatform("ko-1", "grab_food", 0, 25);
 
-    const updates = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.delivery_platform === "grab_food"
+    const pricingRpc = rpcCalls.find(
+      (call) => call.fn === "fnb_set_delivery_pricing_v2",
     );
-    expect(updates.length).toBe(1);
-    expect((updates[0].data as Record<string, unknown>).platform_commission_percent).toBe(25);
-    expect((updates[0].data as Record<string, unknown>).platform_commission).toBe(0);
+    expect(pricingRpc?.args).toMatchObject({
+      p_kitchen_order_id: "ko-1",
+      p_platform: "grab_food",
+      p_delivery_fee: 0,
+      p_commission_percent: 25,
+    });
   });
 });
 
@@ -753,7 +766,7 @@ describe("Scenario: Hoàn trả hoá đơn (void)", () => {
 describe("Scenario: Edge cases", () => {
   it("rejects payment on already completed order", async () => {
     // RPC raises when kitchen_order already paid
-    rpcResponseOverrides["fnb_complete_payment_atomic"] = {
+    rpcResponseOverrides["fnb_complete_payment_atomic_v2"] = {
       data: null,
       error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
     };
@@ -767,7 +780,7 @@ describe("Scenario: Edge cases", () => {
   });
 
   it("rejects payment on cancelled order", async () => {
-    rpcResponseOverrides["fnb_complete_payment_atomic"] = {
+    rpcResponseOverrides["fnb_complete_payment_atomic_v2"] = {
       data: null,
       error: { message: "Kitchen order ko-1 was cancelled — cannot pay" },
     };
@@ -826,8 +839,8 @@ describe("Scenario: Edge cases", () => {
   it("order status lifecycle: pending → preparing → ready → served → completed", async () => {
     mockFromHandler = () => createChain({ data: null, error: null });
 
-    await updateKitchenOrderStatus("ko-1", "preparing");
-    await updateKitchenOrderStatus("ko-1", "ready");
+    await updateKitchenItemStatus("koi-1", "preparing");
+    await updateKitchenItemStatus("koi-1", "ready");
     await updateKitchenOrderStatus("ko-1", "served");
     // completed happens via linkInvoiceToOrder during payment
   });

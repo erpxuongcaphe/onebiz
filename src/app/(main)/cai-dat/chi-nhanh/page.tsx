@@ -165,7 +165,7 @@ function BranchSettingsPageInner() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const rows = await getBranches();
+      const rows = await getBranches({ includeInactive: true });
       setBranches(rows);
     } catch (err) {
       toast({
@@ -249,6 +249,7 @@ function BranchSettingsPageInner() {
           branchType: form.branchType,
           address: form.address.trim(),
           phone: phoneCleaned,
+          isDefault: form.isDefault,
           // null nếu user xoá → clear tier (về giá niêm yết)
           priceTierId: form.priceTierId || null,
           // Day 20/05/2026 (CEO): pháp nhân
@@ -261,11 +262,6 @@ function BranchSettingsPageInner() {
           // CEO 05/06/2026: giờ chốt ca
           shiftCutoffHour: form.shiftCutoffHour,
         });
-        // Nếu bật isDefault (và chi nhánh chưa phải default) → set lại
-        const current = branches.find((b) => b.id === editingId);
-        if (form.isDefault && current && !current.isDefault) {
-          await setBranchDefault(editingId, tenantId);
-        }
         toast({
           title: "Đã cập nhật",
           description: `Chi nhánh "${form.name}" đã lưu.`,

@@ -84,11 +84,169 @@ function defaultTableData(): Record<string, unknown> {
   };
 }
 
+function buildProfitAndLossRpc() {
+  const invoices = ((tableDataMap.invoices as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const items = ((tableDataMap.invoice_items as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const cash = ((tableDataMap.cash_transactions as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const revenue = invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const deliveryFee = invoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0);
+  const cogs = items.reduce((sum, row) => {
+    const product = row.products as { cost_price?: number } | null;
+    return sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? product?.cost_price ?? 0);
+  }, 0);
+  const operatingExpense = cash
+    .filter((row) => row.type === "payment")
+    .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+  const current = {
+    revenue,
+    delivery_fee: deliveryFee,
+    cogs,
+    operating_expense: operatingExpense,
+    snapshot_lines: 0,
+    estimated_legacy_lines: items.length,
+  };
+  const previous = {
+    revenue: 0,
+    delivery_fee: 0,
+    cogs: 0,
+    operating_expense: 0,
+    snapshot_lines: 0,
+    estimated_legacy_lines: 0,
+  };
+  return { data: { current, previous }, error: null };
+}
+
+function buildFinancialAnalysisDetailsRpc() {
+  const items = ((tableDataMap.invoice_items as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const products = ((tableDataMap.products as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const invoices = ((tableDataMap.invoices as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const customers = ((tableDataMap.customers as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const productTotals = new Map<string, { quantity: number; totalCost: number }>();
+  for (const row of items) {
+    const name = String(row.product_name ?? "Sản phẩm");
+    const product = row.products as { cost_price?: number } | null;
+    const quantity = Number(row.quantity ?? 0);
+    const cost = Number(row.unit_cost ?? product?.cost_price ?? 0);
+    const current = productTotals.get(name) ?? { quantity: 0, totalCost: 0 };
+    current.quantity += quantity;
+    current.totalCost += quantity * cost;
+    productTotals.set(name, current);
+  }
+  const totalCogs = Array.from(productTotals.values()).reduce(
+    (sum, row) => sum + row.totalCost,
+    0,
+  );
+  const inventoryValue = products.reduce(
+    (sum, row) => sum + Number(row.stock ?? 0) * Number(row.cost_price ?? 0),
+    0,
+  );
+  const revenue = invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const receivables = customers.reduce((sum, row) => sum + Number(row.debt ?? 0), 0);
+  return {
+    data: {
+      granularity: "month",
+      exclude_internal: false,
+      cogs_total_count: productTotals.size,
+      cogs_breakdown: Array.from(productTotals.entries())
+        .map(([productName, row]) => ({
+          product_name: productName,
+          quantity: row.quantity,
+          average_unit_cost: row.quantity ? row.totalCost / row.quantity : 0,
+          total_cost: row.totalCost,
+          pct_of_cogs: totalCogs ? row.totalCost / totalCogs * 100 : 0,
+        }))
+        .sort((a, b) => b.total_cost - a.total_cost),
+      margin_trend: [],
+      turnover: {
+        turnover_ratio: inventoryValue ? Math.round(totalCogs / inventoryValue * 100) / 100 : 0,
+        average_days_to_sell: 0,
+        cogs_period: totalCogs,
+        average_inventory_value: inventoryValue,
+      },
+      dso: {
+        days: revenue ? Math.round(receivables / (revenue / 90)) : 0,
+        receivables,
+        average_daily_revenue: revenue / 90,
+      },
+    },
+    error: null,
+  };
+}
+
+function buildConsolidatedProfitAndLossRpc() {
+  return {
+    data: {
+      current: {
+        revenue: 13_000_000,
+        delivery_fee: 0,
+        cogs: 9_000_000,
+        operating_expense: 3_000_000,
+        internal_revenue: 2_000_000,
+      },
+      previous: {
+        revenue: 0,
+        delivery_fee: 0,
+        cogs: 0,
+        operating_expense: 0,
+        internal_revenue: 0,
+      },
+    },
+    error: null,
+  };
+}
+
+function buildBranchProfitAndLossRpc() {
+  const branches = ((tableDataMap.branches as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const invoices = ((tableDataMap.invoices as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const items = ((tableDataMap.invoice_items as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const cash = ((tableDataMap.cash_transactions as { data?: Array<Record<string, unknown>> })?.data ?? []);
+  const rows = branches.map((branch) => {
+    const branchInvoices = invoices.filter((row) => row.branch_id === branch.id);
+    const invoiceIds = new Set(branchInvoices.map((row) => row.id));
+    const totalRevenue = branchInvoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+    const deliveryFee = branchInvoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0);
+    const goodsRevenue = totalRevenue - deliveryFee;
+    const cogs = items
+      .filter((row) => invoiceIds.has(row.invoice_id))
+      .reduce((sum, row) => {
+        const product = row.products as { cost_price?: number } | null;
+        return sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? product?.cost_price ?? 0);
+      }, 0);
+    const operatingExpense = cash
+      .filter((row) => row.branch_id === branch.id && row.type === "payment")
+      .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+    const grossProfit = goodsRevenue - cogs;
+    const operatingResult = grossProfit - operatingExpense;
+    return {
+      branch_id: branch.id,
+      branch_name: branch.name,
+      branch_type: branch.branch_type,
+      total_revenue: totalRevenue,
+      delivery_fee: deliveryFee,
+      goods_revenue: goodsRevenue,
+      cogs,
+      gross_profit: grossProfit,
+      gross_margin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
+      operating_expense: operatingExpense,
+      operating_result: operatingResult,
+      operating_margin: goodsRevenue > 0 ? Math.round((operatingResult / goodsRevenue) * 1000) / 10 : 0,
+    };
+  });
+  return { data: { rows }, error: null };
+}
+
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
       const data = tableDataMap[table] ?? { data: [], error: null };
       return createChain(data);
+    }),
+    rpc: vi.fn((fn: string) => {
+      if (fn === "get_profit_and_loss_report") return buildProfitAndLossRpc();
+      if (fn === "get_consolidated_profit_and_loss_report") return buildConsolidatedProfitAndLossRpc();
+      if (fn === "get_financial_analysis_details_report") return buildFinancialAnalysisDetailsRpc();
+      if (fn === "get_branch_profit_and_loss_report") return buildBranchProfitAndLossRpc();
+      return { data: null, error: { message: "RPC_NOT_MOCKED" } };
     }),
   }),
   getCurrentTenantId: () => Promise.resolve("t1"),
@@ -99,6 +257,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 
 import {
   getProfitAndLoss,
+  getConsolidatedPnL,
   getBranchPnLComparison,
   getCOGSBreakdown,
   getInventoryTurnover,
@@ -200,6 +359,18 @@ describe("getProfitAndLoss", () => {
     expect(result.current.goodsRevenue).toBe(result.current.revenue);
     // grossProfit không đổi so với công thức cũ khi ship = 0.
     expect(result.current.grossProfit).toBe(5_000_000);
+  });
+});
+
+describe("getConsolidatedPnL", () => {
+  it("uses the server aggregate after eliminating internal sales", async () => {
+    const result = await getConsolidatedPnL();
+
+    expect(result.current.revenue).toBe(13_000_000);
+    expect(result.current.internalRevenue).toBe(2_000_000);
+    expect(result.current.cogs).toBe(9_000_000);
+    expect(result.current.operatingExpense).toBe(3_000_000);
+    expect(result.current.netProfit).toBe(1_000_000);
   });
 });
 describe("getBranchPnLComparison", () => {

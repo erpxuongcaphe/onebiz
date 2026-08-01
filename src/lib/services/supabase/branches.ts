@@ -4,7 +4,6 @@
 
 import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
-import { recordAuditLog } from "./audit";
 
 const supabase = getClient();
 
@@ -43,16 +42,22 @@ export interface BranchDetail {
   updatedAt: string;
 }
 
-export async function getBranches(): Promise<BranchDetail[]> {
+export async function getBranches(options?: {
+  includeInactive?: boolean;
+}): Promise<BranchDetail[]> {
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  let query = supabase
     .from("branches")
     .select("*")
     .eq("tenant_id", tenantId)
-    .eq("is_active", true)
     .order("is_default", { ascending: false })
     .order("name");
 
+  if (!options?.includeInactive) {
+    query = query.eq("is_active", true);
+  }
+
+  const { data, error } = await query;
   if (error) throw error;
   return (data ?? []).map(mapBranch);
 }
@@ -87,66 +92,39 @@ export async function createBranch(branch: {
   /** CEO 05/06/2026: giờ chốt ca 0-23, default 3 */
   shiftCutoffHour?: number;
 }): Promise<BranchDetail> {
-  if (!branch.tenantId) {
-    throw new Error("Thiếu tenantId khi tạo chi nhánh");
+  const tenantId = await getCurrentTenantId();
+  if (branch.tenantId && branch.tenantId !== tenantId) {
+    throw new Error("Tenant chi nhánh không khớp phiên đăng nhập.");
   }
-  // Nếu đánh dấu default thì clear default cũ trước để không vi phạm
-  // nguyên tắc "mỗi tenant 1 default".
-  if (branch.isDefault) {
-    await supabase
-      .from("branches")
-      .update({ is_default: false })
-      .eq("tenant_id", branch.tenantId)
-      .eq("is_default", true);
-  }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.from("branches").insert as any)({
-    tenant_id: branch.tenantId,
-    name: branch.name,
-    code: branch.code ?? null,
-    branch_type: branch.branchType ?? "store",
-    address: branch.address ?? null,
-    phone: branch.phone ?? null,
-    is_default: branch.isDefault ?? false,
-    // CEO 13/05: fix bug — trước đây bỏ qua tier user chọn lúc tạo mới
-    price_tier_id: branch.priceTierId ?? null,
-    // CEO 20/05/2026: pháp nhân
-    legal_entity_type: branch.legalEntityType ?? null,
-    legal_entity_name: branch.legalEntityName ?? null,
-    legal_tax_code: branch.legalTaxCode ?? null,
-    legal_registration_no: branch.legalRegistrationNo ?? null,
-    // CEO 03/06/2026: cascade_mode — nếu user không chọn, suy từ branchType.
-    // warehouse/factory → production, còn lại → outlet.
-    cascade_mode:
-      branch.cascadeMode ??
-      ((branch.branchType ?? "store") === "warehouse" ||
-      (branch.branchType ?? "store") === "factory"
-        ? "production"
-        : "outlet"),
-    // CEO 05/06/2026: giờ chốt ca (0-23), clamp ngoài range
-    shift_cutoff_hour:
-      typeof branch.shiftCutoffHour === "number"
-        ? Math.max(0, Math.min(23, Math.round(branch.shiftCutoffHour)))
-        : 3,
-  })
-    .select()
-    .single();
-
-  if (error) throw error;
-
-  await recordAuditLog({
-    entityType: "branch",
-    entityId: data.id,
-    action: "create",
-    newData: {
-      name: data.name,
-      code: data.code,
-      branch_type: data.branch_type,
-      is_default: data.is_default,
+  const { data, error } = await (supabase.rpc as any)("save_branch_atomic", {
+    p_branch_id: null,
+    p_payload: {
+      name: branch.name,
+      code: branch.code ?? null,
+      branch_type: branch.branchType ?? "store",
+      address: branch.address ?? null,
+      phone: branch.phone ?? null,
+      is_default: branch.isDefault ?? false,
+      price_tier_id: branch.priceTierId ?? null,
+      legal_entity_type: branch.legalEntityType ?? null,
+      legal_entity_name: branch.legalEntityName ?? null,
+      legal_tax_code: branch.legalTaxCode ?? null,
+      legal_registration_no: branch.legalRegistrationNo ?? null,
+      cascade_mode:
+        branch.cascadeMode ??
+        ((branch.branchType ?? "store") === "warehouse" ||
+        (branch.branchType ?? "store") === "factory"
+          ? "production"
+          : "outlet"),
+      shift_cutoff_hour:
+        typeof branch.shiftCutoffHour === "number"
+          ? Math.max(0, Math.min(23, Math.round(branch.shiftCutoffHour)))
+          : 3,
     },
   });
-
-  return mapBranch(data);
+  if (error) throw error;
+  if (!data) throw new Error("Máy chủ không trả về chi nhánh đã tạo.");
+  return mapBranch(data as Record<string, unknown>);
 }
 
 /**
@@ -156,20 +134,15 @@ export async function setBranchDefault(
   branchId: string,
   tenantId: string,
 ): Promise<void> {
-  // 1. Clear default cũ
-  const { error: clearErr } = await supabase
-    .from("branches")
-    .update({ is_default: false })
-    .eq("tenant_id", tenantId)
-    .eq("is_default", true);
-  if (clearErr) throw clearErr;
-
-  // 2. Set default mới
-  const { error: setErr } = await supabase
-    .from("branches")
-    .update({ is_default: true })
-    .eq("id", branchId);
-  if (setErr) throw setErr;
+  const currentTenantId = await getCurrentTenantId();
+  if (tenantId && tenantId !== currentTenantId) {
+    throw new Error("Tenant chi nhánh không khớp phiên đăng nhập.");
+  }
+  const { error } = await (supabase.rpc as any)("save_branch_atomic", {
+    p_branch_id: branchId,
+    p_payload: { is_default: true },
+  });
+  if (error) throw error;
 }
 
 export async function updateBranch(
@@ -181,6 +154,7 @@ export async function updateBranch(
     address: string;
     phone: string;
     isActive: boolean;
+    isDefault: boolean;
     /** null để clear tier (về giá niêm yết) */
     priceTierId: string | null;
     // Day 20/05/2026 (CEO): pháp nhân
@@ -194,57 +168,29 @@ export async function updateBranch(
     shiftCutoffHour: number;
   }>
 ) {
-  const tenantId = await getCurrentTenantId();
-
-  // Snapshot trước update cho audit log
-  const { data: prev } = await supabase
-    .from("branches")
-    .select("name, code, branch_type, address, phone, is_active, price_tier_id")
-    .eq("tenant_id", tenantId)
-    .eq("id", id)
-    .maybeSingle();
-
-  const updateObj: Record<string, unknown> = {};
-  if (updates.name !== undefined) updateObj.name = updates.name;
-  if (updates.code !== undefined) updateObj.code = updates.code;
-  if (updates.branchType !== undefined) updateObj.branch_type = updates.branchType;
-  if (updates.address !== undefined) updateObj.address = updates.address;
-  if (updates.phone !== undefined) updateObj.phone = updates.phone;
-  if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
-  if (updates.priceTierId !== undefined) updateObj.price_tier_id = updates.priceTierId;
-  // Day 20/05/2026 (CEO): pháp nhân
-  if (updates.legalEntityType !== undefined) updateObj.legal_entity_type = updates.legalEntityType;
-  if (updates.legalEntityName !== undefined) updateObj.legal_entity_name = updates.legalEntityName;
-  if (updates.legalTaxCode !== undefined) updateObj.legal_tax_code = updates.legalTaxCode;
-  if (updates.legalRegistrationNo !== undefined) updateObj.legal_registration_no = updates.legalRegistrationNo;
-  // CEO 03/06/2026 — Sprint 3: cascade mode
-  if (updates.cascadeMode !== undefined) updateObj.cascade_mode = updates.cascadeMode;
-  // CEO 05/06/2026: giờ chốt ca (0-23)
+  const payload: Record<string, unknown> = {};
+  if (updates.name !== undefined) payload.name = updates.name;
+  if (updates.code !== undefined) payload.code = updates.code;
+  if (updates.branchType !== undefined) payload.branch_type = updates.branchType;
+  if (updates.address !== undefined) payload.address = updates.address;
+  if (updates.phone !== undefined) payload.phone = updates.phone;
+  if (updates.isActive !== undefined) payload.is_active = updates.isActive;
+  if (updates.isDefault) payload.is_default = true;
+  if (updates.priceTierId !== undefined) payload.price_tier_id = updates.priceTierId;
+  if (updates.legalEntityType !== undefined) payload.legal_entity_type = updates.legalEntityType;
+  if (updates.legalEntityName !== undefined) payload.legal_entity_name = updates.legalEntityName;
+  if (updates.legalTaxCode !== undefined) payload.legal_tax_code = updates.legalTaxCode;
+  if (updates.legalRegistrationNo !== undefined) payload.legal_registration_no = updates.legalRegistrationNo;
+  if (updates.cascadeMode !== undefined) payload.cascade_mode = updates.cascadeMode;
   if (updates.shiftCutoffHour !== undefined) {
-    updateObj.shift_cutoff_hour = Math.max(0, Math.min(23, updates.shiftCutoffHour));
+    payload.shift_cutoff_hour = Math.max(0, Math.min(23, Math.round(updates.shiftCutoffHour)));
   }
 
-  const { error } = await supabase
-    .from("branches")
-    .update(updateObj)
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) throw error;
-
-  await recordAuditLog({
-    entityType: "branch",
-    entityId: id,
-    // Detect deactivate vs general update để label đúng trong audit timeline
-    action:
-      updates.isActive === false
-        ? "deactivate"
-        : updates.isActive === true
-          ? "activate"
-          : "update",
-    oldData: (prev as Record<string, unknown>) ?? null,
-    newData: updateObj,
+  const { error } = await (supabase.rpc as any)("save_branch_atomic", {
+    p_branch_id: id,
+    p_payload: payload,
   });
+  if (error) throw error;
 }
 
 // ============================================================
@@ -322,38 +268,17 @@ export async function updateBranchSettings(
   branchId: string,
   patch: BranchSettings,
 ): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const payload: Record<string, unknown> = {};
+  if (patch.posZoneOrder !== undefined) payload.pos_zone_order = patch.posZoneOrder;
+  if (patch.posLayoutMode !== undefined) payload.pos_layout_mode = patch.posLayoutMode;
+  if (patch.posCanvasWidth !== undefined) payload.pos_canvas_width = patch.posCanvasWidth;
+  if (patch.posCanvasHeight !== undefined) payload.pos_canvas_height = patch.posCanvasHeight;
+  if (patch.posCartPosition !== undefined) payload.pos_cart_position = patch.posCartPosition;
 
-  // Read current settings để merge — tránh ghi đè key cũ
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: row } = await (supabase as any)
-    .from("branches")
-    .select("settings")
-    .eq("tenant_id", tenantId)
-    .eq("id", branchId)
-    .maybeSingle();
-
-  const current = ((row?.settings as Record<string, unknown>) ?? {}) as Record<
-    string,
-    unknown
-  >;
-
-  // Map camelCase → snake_case cho DB
-  const next: Record<string, unknown> = { ...current };
-  if (patch.posZoneOrder !== undefined) next.pos_zone_order = patch.posZoneOrder;
-  if (patch.posLayoutMode !== undefined) next.pos_layout_mode = patch.posLayoutMode;
-  if (patch.posCanvasWidth !== undefined) next.pos_canvas_width = patch.posCanvasWidth;
-  if (patch.posCanvasHeight !== undefined) next.pos_canvas_height = patch.posCanvasHeight;
-  if (patch.posCartPosition !== undefined) next.pos_cart_position = patch.posCartPosition;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("branches")
-    .update({ settings: next })
-    .eq("tenant_id", tenantId)
-    .eq("id", branchId);
-
+  const { error } = await (supabase.rpc as any)("update_branch_settings_atomic", {
+    p_branch_id: branchId,
+    p_patch: payload,
+  });
   if (error) throw error;
 }
 
