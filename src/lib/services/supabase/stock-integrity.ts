@@ -1,7 +1,7 @@
 /**
  * Stock Integrity Service (CEO 13/05/2026).
  *
- * Wraps RPC `verify_stock_invariants` (migration 00073) để daily check
+ * Wraps RPC `verify_stock_invariants` (latest definition: migration 00286) để daily check
  * drift giữa 3 lớp lưu tồn:
  *   - products.stock (tổng công ty)
  *   - branch_stock.quantity (theo chi nhánh)
