@@ -380,10 +380,6 @@ export default function XuatDungNoiBoPage() {
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
-          {
-            label: "Xuất file",
-            icon: <Icon name="download" size={16} />,
-          },
         ]}
       />
 

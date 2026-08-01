@@ -696,10 +696,6 @@ export default function KiemKhoPage() {
             variant: "default",
             onClick: () => setCreateOpen(true),
           },
-          {
-            label: "Xuất file",
-            icon: <Icon name="download" size={16} />,
-          },
         ]}
       />
 
