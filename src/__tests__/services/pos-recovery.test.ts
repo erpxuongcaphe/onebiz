@@ -156,15 +156,15 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       const hit = mockRpcResponse.get(fn);
       if (hit) return hit;
-      if (fn === "adopt_pos_draft_session_atomic") {
-        return { data: { invoice_id: "inv-draft", invoice_code: "NH-00001" }, error: null };
+      if (fn === "adopt_pos_draft_session_atomic_v2") {
+        return { data: { invoice_id: "inv-draft", invoice_code: "NH-00001", revision: 3 }, error: null };
       }
       if (fn === "soft_delete_pos_draft_atomic") {
         return { data: { invoice_id: "inv-draft", deleted: true }, error: null };
       }
-      if (fn === "save_pos_draft_atomic_v2") {
+      if (fn === "save_pos_draft_atomic_v3") {
         return {
-          data: { invoice_id: "inv-draft", invoice_code: "NH-00001", status: "draft" },
+          data: { invoice_id: "inv-draft", invoice_code: "NH-00001", status: "draft", revision: 1 },
           error: null,
         };
       }
@@ -243,6 +243,10 @@ const draftTotalsMigration = readFileSync(
   "supabase/migrations/00291_harden_pos_draft_totals.sql",
   "utf8",
 );
+const draftRevisionMigration = readFileSync(
+  "supabase/migrations/00292_pos_draft_revision_guard.sql",
+  "utf8",
+);
 
 describe("saveDraftOrder — atomic by client_session_id", () => {
   it("sends the full draft to one server transaction", async () => {
@@ -251,8 +255,13 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
       autoSaved: true,
     });
 
-    expect(result).toEqual({ invoiceId: "inv-draft", invoiceCode: "NH-00001" });
-    const call = rpcCalls.find((entry) => entry.fn === "save_pos_draft_atomic_v2");
+    expect(result).toEqual({
+      invoiceId: "inv-draft",
+      invoiceCode: "NH-00001",
+      revision: 1,
+      status: "draft",
+    });
+    const call = rpcCalls.find((entry) => entry.fn === "save_pos_draft_atomic_v3");
     expect(call?.args).toMatchObject({
       p_branch_id: "branch-1",
       p_client_session_id: "31e9d753-0c76-45af-a509-d4dce67c042f",
@@ -261,6 +270,8 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
       p_order_discount: 0,
       p_shipping_fee: 0,
       p_order_vat_rate: 0,
+      p_invoice_id: null,
+      p_expected_revision: null,
     });
     expect(call?.args).not.toHaveProperty("p_tenant_id");
     expect(call?.args).not.toHaveProperty("p_created_by");
@@ -269,12 +280,12 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
   });
 
   it("fails closed when the draft transaction fails", async () => {
-    mockRpcResponse.set("save_pos_draft_atomic_v2", {
+    mockRpcResponse.set("save_pos_draft_atomic_v3", {
       data: null,
       error: { message: "POS_DRAFT_ITEM_INVALID" },
     });
 
-    await expect(saveDraftOrder(baseInput)).rejects.toThrow("POS_DRAFT_ITEM_INVALID");
+    await expect(saveDraftOrder(baseInput, { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" })).rejects.toThrow("POS_DRAFT_ITEM_INVALID");
   });
 
   it("derives draft header totals from the same item snapshot on the server", () => {
@@ -294,18 +305,24 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
 
   it("adopts and soft-deletes drafts only through guarded RPCs", async () => {
     const sessionId = "31e9d753-0c76-45af-a509-d4dce67c042f";
-    await adoptDraftSession("inv-draft", sessionId);
+    await expect(adoptDraftSession("inv-draft", sessionId, 2)).resolves.toBe(3);
     await deleteDraftOrder("inv-draft", { onlyAutoSaved: true });
 
     expect(rpcCalls).toContainEqual({
-      fn: "adopt_pos_draft_session_atomic",
-      args: { p_invoice_id: "inv-draft", p_client_session_id: sessionId },
+      fn: "adopt_pos_draft_session_atomic_v2",
+      args: {
+        p_invoice_id: "inv-draft",
+        p_client_session_id: sessionId,
+        p_expected_revision: 2,
+      },
     });
     expect(rpcCalls).toContainEqual({
       fn: "soft_delete_pos_draft_atomic",
       args: { p_invoice_id: "inv-draft", p_only_auto_saved: true },
     });
     expect(draftMigration).toContain("coalesce(v_invoice.source, 'pos') = 'order'");
+    expect(draftRevisionMigration).toContain("POS_DRAFT_CONFLICT");
+    expect(draftRevisionMigration).toContain("draft_revision = draft_revision + 1");
   });
 });
 
@@ -395,3 +412,4 @@ describe("posCheckout — idempotency by client_session_id", () => {
     expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 });
+
