@@ -3,6 +3,7 @@ import {
   canOpenStockDocument,
   getStockDocumentKind,
   getStockDocumentLabel,
+  getStockDocumentRoute,
 } from "@/lib/stock-document";
 
 describe("stock document links", () => {
@@ -37,4 +38,13 @@ describe("stock document links", () => {
     expect(getStockDocumentLabel("inventory_check")).toBe("Phiếu kiểm kho");
     expect(getStockDocumentLabel("unknown_reference")).toBe("Chứng từ kho");
   });
+  it("opens production and internal export records on their correct pages", () => {
+    expect(getStockDocumentRoute("production_order", "SX000123")).toBe(
+      "/hang-hoa/san-xuat?tim=SX000123",
+    );
+    expect(getStockDocumentRoute("internal_export", "IE000123")).toBe(
+      "/hang-hoa/xuat-dung-noi-bo?tim=IE000123",
+    );
+  });
+
 });
