@@ -569,7 +569,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "save_pos_draft_atomic") {
+      if (fn === "save_pos_draft_atomic_v2") {
         return {
           data: {
             invoice_id: "inv-pos",
@@ -1184,7 +1184,7 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
 
     // Draft is created by one atomic RPC; the browser does not insert invoices.
-    const draftRpc = rpcCalls.find((call) => call.fn === "save_pos_draft_atomic");
+    const draftRpc = rpcCalls.find((call) => call.fn === "save_pos_draft_atomic_v2");
     expect(draftRpc).toBeDefined();
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
 
