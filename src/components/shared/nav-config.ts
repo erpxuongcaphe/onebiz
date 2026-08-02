@@ -410,6 +410,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Ca chờ đối chiếu", href: "/he-thong/ca-cho-doi-soat", icon: "schedule", permission: "shifts.reconcile_own_branch" },
       { label: "Lịch sử thao tác", href: "/he-thong/audit", icon: "pending_actions", permission: "system.view_audit" },
       { label: "Toàn vẹn kho", href: "/he-thong/toan-ven-kho", icon: "fact_check", permission: "system.view_audit" },
+      { label: "Kiểm tra dữ liệu POS", href: "/he-thong/toan-ven-pos", icon: "point_of_sale", permission: "system.view_audit" },
     ],
   },
 ];
@@ -479,3 +480,4 @@ export function isGroupActive(pathname: string, group: SidebarGroup): boolean {
   }
   return false;
 }
+
