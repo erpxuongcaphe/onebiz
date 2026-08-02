@@ -373,6 +373,8 @@ export interface DraftOrderSummary {
   source?: string | null;
   /** Phí giao hàng (invoices.delivery_fee) — dùng khi mở sửa đơn. */
   deliveryFee?: number;
+  /** Server revision used to reject stale-device draft writes. */
+  revision: number;
 }
 
 export interface DraftOrderDetail extends DraftOrderSummary {
@@ -480,20 +482,21 @@ export async function saveSalesOrderAtomic(
  *   session_id này → UPDATE in-place. Nếu chưa → INSERT mới.
  * - `options.autoSaved=true` cho auto-save background (TTL 30 ngày qua
  *   cleanup_expired_auto_drafts). False = F9 manual (giữ vĩnh viễn).
- * - sessionId KHÔNG truyền → behavior cũ (INSERT mỗi lần — F9 cổ điển).
  */
 export async function saveDraftOrder(
   input: PosCheckoutInput,
-  options?: {
+  options: {
     /** UUID anchor — upsert by (tenant_id, client_session_id). */
-    sessionId?: string;
+    sessionId: string;
     /** TRUE = auto-save background (TTL 30d). FALSE = F9 manual sticky. */
     autoSaved?: boolean;
+    invoiceId?: string | null;
+    expectedRevision?: number | null;
   },
-): Promise<{ invoiceId: string; invoiceCode: string }> {
+): Promise<{ invoiceId: string; invoiceCode: string; revision: number; status: string }> {
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
-    "save_pos_draft_atomic_v2",
+    "save_pos_draft_atomic_v3",
     {
       p_branch_id: input.branchId,
       p_customer_id: input.customerId ?? null,
@@ -509,11 +512,18 @@ export async function saveDraftOrder(
       p_shipping_fee: input.shippingFee ?? 0,
       p_order_vat_rate: input.orderVatRate ?? 0,
       p_note: input.note ?? null,
-      p_client_session_id: options?.sessionId ?? null,
-      p_auto_saved: options?.autoSaved ?? false,
+      p_client_session_id: options.sessionId,
+      p_auto_saved: options.autoSaved ?? false,
+      p_invoice_id: options.invoiceId ?? null,
+      p_expected_revision: options.expectedRevision ?? null,
     },
   );
-  if (error) handleError(error, "saveDraftOrder.atomic");
+  if (error) {
+    if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/.test(error.message)) {
+      throw new Error(`${error.message}|${error.details ?? "{}"}`);
+    }
+    handleError(error, "saveDraftOrder.atomic_v3");
+  }
 
   const result = data as Record<string, unknown> | null;
   if (!result?.invoice_id || !result.invoice_code) {
@@ -522,6 +532,8 @@ export async function saveDraftOrder(
   return {
     invoiceId: String(result.invoice_id),
     invoiceCode: String(result.invoice_code),
+    revision: Number(result.revision ?? 0),
+    status: String(result.status ?? "draft"),
   };
 }
 
@@ -548,7 +560,7 @@ export async function listDraftOrders(
   let query = (supabase as any)
     .from("invoices")
     .select(
-      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items(product_name)",
+      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, draft_revision, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items(product_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "draft")
@@ -589,6 +601,7 @@ export async function listDraftOrders(
         .filter(Boolean),
       autoSaved: row.auto_saved ?? false,
       clientSessionId: row.client_session_id ?? null,
+      revision: Number(row.draft_revision ?? 0),
     };
   });
 }
@@ -607,7 +620,7 @@ export async function getDraftOrderById(
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, source, invoice_items(*)",
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, draft_revision, source, invoice_items(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -636,6 +649,7 @@ export async function getDraftOrderById(
     clientSessionId: raw.client_session_id ?? null,
     source: raw.source ?? null,
     deliveryFee: Number(raw.delivery_fee ?? 0),
+    revision: Number(raw.draft_revision ?? 0),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     items: (raw.invoice_items ?? []).map((it: any) => ({
       id: it.id,
@@ -669,18 +683,29 @@ export async function getDraftOrderById(
 export async function adoptDraftSession(
   invoiceId: string,
   sessionId: string,
-): Promise<void> {
-  if (!invoiceId || !sessionId) return;
+  expectedRevision: number,
+): Promise<number> {
+  if (!invoiceId || !sessionId) return expectedRevision;
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
-    "adopt_pos_draft_session_atomic",
-    { p_invoice_id: invoiceId, p_client_session_id: sessionId },
+    "adopt_pos_draft_session_atomic_v2",
+    {
+      p_invoice_id: invoiceId,
+      p_client_session_id: sessionId,
+      p_expected_revision: expectedRevision,
+    },
   );
-  if (error) handleError(error, "adoptDraftSession.atomic");
+  if (error) {
+    if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND)/.test(error.message)) {
+      throw new Error(`${error.message}|${error.details ?? "{}"}`);
+    }
+    handleError(error, "adoptDraftSession.atomic_v2");
+  }
   const result = data as Record<string, unknown> | null;
   if (!result?.invoice_id) {
     throw new Error("Máy chủ không xác nhận phiên của đơn nháp.");
   }
+  return Number(result.revision ?? expectedRevision);
 }
 
 // ============================================================
@@ -752,6 +777,9 @@ export async function completeDraftOrder(
     amountTendered?: number | null;
     customerCredit?: number;
     allowBomShortage?: boolean;
+    clientSessionId: string;
+    expectedRevision: number;
+    expectedTotal: number;
   },
 ): Promise<{
   invoiceCode: string;
@@ -764,7 +792,7 @@ export async function completeDraftOrder(
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "complete_draft_atomic_v4",
+    "complete_draft_atomic_v5",
     {
       p_invoice_id: invoiceId,
       p_customer_id: payment.customerId ?? null,
@@ -785,6 +813,9 @@ export async function completeDraftOrder(
       p_allow_bom_shortage: payment.allowBomShortage ?? false,
       p_amount_tendered: payment.amountTendered ?? payment.paid,
       p_customer_credit: payment.customerCredit ?? 0,
+      p_client_session_id: payment.clientSessionId,
+      p_expected_revision: payment.expectedRevision,
+      p_expected_total: payment.expectedTotal,
     },
   );
 
@@ -795,15 +826,18 @@ export async function completeDraftOrder(
     ) {
       throw new Error(`${error.message}|${error.details ?? "{}"}`);
     }
+    if (/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND)|POS_CART_TOTAL_CHANGED/.test(error.message)) {
+      throw new Error(`${error.message}|${error.details ?? "{}"}`);
+    }
     if (
       error.code === "PGRST202" ||
-      /complete_draft_atomic_v4|schema cache/i.test(error.message)
+      /complete_draft_atomic_v5|schema cache/i.test(error.message)
     ) {
       throw new Error(
-        "Chưa có migration 00253. Không thể thanh toán đơn nháp an toàn.",
+        "Chưa có migration 00292. Không thể thanh toán đơn nháp an toàn.",
       );
     }
-    handleError(error, "completeDraftOrder:atomic_v4");
+    handleError(error, "completeDraftOrder:atomic_v5");
   }
 
   const result = data as {
@@ -889,3 +923,4 @@ export async function duplicateInvoice(
     invoiceCode: String(result.invoice_code),
   };
 }
+
