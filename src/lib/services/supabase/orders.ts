@@ -923,4 +923,3 @@ export async function duplicateInvoice(
     invoiceCode: String(result.invoice_code),
   };
 }
-
