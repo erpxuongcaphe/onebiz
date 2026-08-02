@@ -398,4 +398,3 @@ function buildInput(
     note: s.note,
   };
 }
-
