@@ -16,7 +16,8 @@ import {
 } from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getAllStockMovements, getBranches } from "@/lib/services";
@@ -86,6 +87,7 @@ import { REFERENCE_TYPE_LABELS as referenceTypeLabels } from "@/lib/constants/st
 
 export default function LichSuKhoPage() {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const { hasPermission } = usePermissions();
   const canViewCost = hasPermission(PERMISSIONS.PRODUCTS_VIEW_COST);
   const [data, setData] = useState<AllStockMovementRow[]>([]);
@@ -104,7 +106,7 @@ export default function LichSuKhoPage() {
 
   // Filters
   const [typeFilter, setTypeFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [branchFilter, setBranchFilter] = useState<string>(activeBranchId ?? "all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
@@ -118,6 +120,10 @@ export default function LichSuKhoPage() {
         setBranches([]);
       });
   }, []);
+
+  useEffect(() => {
+    setBranchFilter(activeBranchId ?? "all");
+  }, [activeBranchId]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -158,6 +164,8 @@ export default function LichSuKhoPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useRevalidateOnFocus(fetchData);
 
   // Reset page when filters change
   useEffect(() => {

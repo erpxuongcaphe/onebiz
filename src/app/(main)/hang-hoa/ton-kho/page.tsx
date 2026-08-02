@@ -4,6 +4,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
+import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -777,7 +778,7 @@ export default function TonKhoPage() {
 
   // Sync khi user switch branch ở global selector (header).
   useEffect(() => {
-    if (activeBranchId) setBranchFilter(activeBranchId);
+    setBranchFilter(activeBranchId ?? "all");
   }, [activeBranchId]);
   const [typeFilter, setTypeFilter] = useState<ProductTypeFilter>("all");
   const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
@@ -880,6 +881,8 @@ export default function TonKhoPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useRevalidateOnFocus(fetchData);
 
   useEffect(() => {
     setPage(0);
@@ -1291,6 +1294,7 @@ export default function TonKhoPage() {
         onExpandedRowChange={setExpandedRow}
         renderDetail={(stockRow, onClose) => (
           <StockRowDetail
+            key={`${stockRow.id}:${stockRow.updatedAt}`}
             row={stockRow}
             onClose={onClose}
             onAdjusted={fetchData}

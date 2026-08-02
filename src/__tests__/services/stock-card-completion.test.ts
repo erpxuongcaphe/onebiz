@@ -23,6 +23,10 @@ const stockHistoryPage = readFileSync(
   join(process.cwd(), "src/app/(main)/hang-hoa/lich-su-kho/page.tsx"),
   "utf8",
 );
+const stockPage = readFileSync(
+  join(process.cwd(), "src/app/(main)/hang-hoa/ton-kho/page.tsx"),
+  "utf8",
+);
 
 describe("stock card completion", () => {
   it("uses negative quantities for outbound movements", () => {
@@ -71,6 +75,18 @@ describe("stock card completion", () => {
     );
     expect(stockCardTab).toContain("getStockCard(productId, branchId)");
     expect(stockCardTab).toContain("!branchId && <span>");
+  });
+
+  it("keeps inventory pages aligned with the global branch scope", () => {
+    expect(stockPage).toContain('setBranchFilter(activeBranchId ?? "all")');
+    expect(stockHistoryPage).toContain(
+      'const [branchFilter, setBranchFilter] = useState<string>(activeBranchId ?? "all")',
+    );
+    expect(stockHistoryPage).toContain('setBranchFilter(activeBranchId ?? "all")');
+    expect(stockPage).toContain('useRevalidateOnFocus(fetchData)');
+    expect(stockHistoryPage).toContain('useRevalidateOnFocus(fetchData)');
+    expect(stockPage).toContain('key={`${stockRow.id}:${stockRow.updatedAt}`}');
+    expect(productPage).toContain(':${product.stock}`}');
   });
 
   it("labels the two stock exports explicitly and keeps full filtered history export", () => {
