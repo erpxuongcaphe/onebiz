@@ -70,4 +70,3 @@ export async function getPosInvoiceIntegrityReport(
     issueCodes: (row.issue_codes ?? []) as PosIntegrityIssueCode[],
   }));
 }
-
