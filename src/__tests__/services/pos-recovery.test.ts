@@ -412,4 +412,3 @@ describe("posCheckout — idempotency by client_session_id", () => {
     expect(insertCalls.find((c) => c.table === "invoices")).toBeUndefined();
   });
 });
-
