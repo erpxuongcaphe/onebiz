@@ -486,7 +486,4217 @@ function PosPageInner() {
       duration: 6000,
     });
   }, [currentBranch, branches, switchBranch, toast, user?.branchId]);
-  const { settings,…46025 tokens truncated…t 440 = ~440 cart hiện
+  const { settings, updateSettings } = useSettings();
+  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
+  const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
+
+  // Phase 6 (CEO 12/05): Clear cart + đóng tab phụ khi đổi chi nhánh để
+  // tránh cashier vô tình thanh toán SP của chi nhánh cũ (stock sẽ trừ sai).
+  // Trước đây `switchBranch()` chỉ đổi context, cart giữ SP cũ → checkout fail
+  // hoặc tính stock sai.
+  const branchIdRef = useRef<string | null>(currentBranch?.id ?? null);
+  useEffect(() => {
+    const nextBranchId = currentBranch?.id ?? null;
+    if (branchIdRef.current && branchIdRef.current !== nextBranchId) {
+      // Branch thực sự đổi (không phải mount lần đầu)
+      const hadItems = state.itemCount > 0;
+      state.clearCart();
+      // Giữ tab hiện tại, drop snapshot các tab khác
+      setTabs((prev) => prev.map((t) => ({ ...t, snapshot: null, itemCount: 0 })));
+      if (hadItems) {
+        toast({
+          title: "Đã làm trống giỏ hàng",
+          description: "Bạn vừa đổi chi nhánh — giỏ hàng đã được làm trống để tránh sai tồn kho.",
+          variant: "warning",
+        });
+      }
+    }
+    branchIdRef.current = nextBranchId;
+  }, [currentBranch?.id, state, toast]);
+
+  // CEO 10/06/2026 — refresh badge số đếm nháp khi mount, đổi chi nhánh,
+  // sau khi lưu/xoá nháp (qua draftCountTrigger), hoặc khi mở/đóng dialog.
+  useEffect(() => {
+    if (!currentBranch?.id) {
+      setDraftCount(0);
+      return;
+    }
+    let cancelled = false;
+    listDraftOrders(currentBranch.id, 100)
+      .then((rows) => {
+        if (!cancelled) setDraftCount(rows.length);
+      })
+      .catch(() => {
+        if (!cancelled) setDraftCount(0);
+      });
+    return () => { cancelled = true; };
+  }, [currentBranch?.id, draftCountTrigger, draftModalOpen]);
+
+  // Load ca đang mở khi branch/user sẵn sàng
+  useEffect(() => {
+    if (!currentBranch?.id || !user?.id) return;
+    getOpenShift(currentBranch.id, user.id)
+      .then((shift) => {
+        setCurrentShift(shift);
+        // R3: Cảnh báo ca treo qua đêm — nếu ca mở > 14h trước, gần như
+        // chắc chắn cashier quên đóng. Nhắc đóng để Z report đúng ngày.
+        if (shift) {
+          const openedHoursAgo =
+            (Date.now() - new Date(shift.openedAt).getTime()) / 3_600_000;
+          if (openedHoursAgo > 14) {
+            toast({
+              title: `⚠️ Ca đang mở từ ${Math.round(openedHoursAgo)}h trước`,
+              description:
+                "Có vẻ ca chưa được đóng cuối hôm qua. Vui lòng đóng ca để Z report khớp ngày.",
+              variant: "warning",
+              duration: 8000,
+            });
+          }
+        }
+      })
+      .catch((err) => {
+        // Không toast — getOpenShift fail không cản người bán dùng POS
+        // (UI sẽ hiện "Chưa mở ca" cho phép user mở ca thủ công).
+        // Log để debug khi user báo "ca biến mất".
+        console.error("[POS] getOpenShift failed:", err);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentBranch?.id, user?.id]);
+
+  const handleShiftClick = useCallback(() => {
+    if (currentShift) setCloseShiftDialogOpen(true);
+    else setOpenShiftDialogOpen(true);
+  }, [currentShift]);
+
+  // ─── Recovery: load draft list khi POS mount + cleanup expired ───
+  // CEO 04/05/2026: nếu có nháp (manual F9 hoặc auto-save), mở dialog cho
+  // cashier chọn tiếp tục hoặc bỏ qua. Chỉ chạy 1 lần per session (không
+  // re-show khi user đã đóng dialog).
+  //
+  // Plus: nếu URL có ?draftId=xxx (vd "Sao chép" từ list hoá đơn redirect
+  // qua POS), auto-load draft đó luôn — skip recovery dialog.
+  // NOTE: dùng window.location.search trực tiếp (client-only) thay
+  // useSearchParams() để tránh phải wrap Suspense — POS đã là client component.
+  useEffect(() => {
+    if (!tenant?.id || !currentBranch?.id) return;
+    if (recoveryShownRef.current) return;
+    recoveryShownRef.current = true;
+
+    // Phase 6.2 (CEO 12/05): race protection. Nếu user switch chi nhánh giữa
+    // chừng khi listDraftOrders / getDraftOrderById đang in-flight, response
+    // cũ có thể về sau khi branch đã đổi → setRecoveryDrafts với drafts của
+    // chi nhánh sai → dialog hiển thị nhầm. Cancel token bảo vệ:
+    const branchSnapshot = currentBranch.id;
+    let cancelled = false;
+
+    const urlDraftId = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("draftId")
+      : null;
+
+    // Priority 1: nếu URL có ?draftId → load thẳng draft đó
+    if (urlDraftId) {
+      getDraftOrderById(urlDraftId)
+        .then(async (detail) => {
+          if (cancelled || branchSnapshot !== currentBranch?.id) return;
+          if (!detail) {
+            toast({
+              title: "Không tìm thấy đơn nháp",
+              description: "Có thể đã bị xoá hoặc đã hoàn tất từ trước.",
+              variant: "warning",
+            });
+            return;
+          }
+          // Session TRƯỚC loadDraft: dán session vào đơn TRƯỚC khi populate giỏ,
+          // để auto-save (debounce sau khi giỏ đổi) tìm ĐÚNG đơn đã dán, tránh
+          // race đẻ nháp mới. CEO 08/07 — vá bug trùng đơn + nợ ảo.
+          if (detail.clientSessionId) {
+            setClientSessionId(detail.clientSessionId);
+          } else {
+            // Đơn nháp KHÔNG có session (tạo từ dialog "Đặt hàng") → GẮN session
+            // POS hiện tại vào đơn → auto-save UPDATE đúng đơn, KHÔNG tạo nháp mới
+            // (mồ côi + nợ ảo + hoá đơn trùng). completeDraftOrder giữ nguyên mã.
+            detail.revision = await adoptDraftSession(
+              detail.id,
+              clientSessionId,
+              detail.revision,
+            );
+          }
+          state.loadDraft(detail);
+          toast({
+            title: `Đã mở đơn nháp ${detail.code}`,
+            description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ. Sửa lại rồi bấm Thanh toán.`,
+            variant: "success",
+            duration: 5000,
+          });
+          // Clear URL param tránh load lại khi reload
+          router.replace("/pos", { scroll: false });
+        })
+        .catch((err) => {
+          if (cancelled) return;
+          console.warn("[POS] auto-load draft from URL failed:", err);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // Priority 1.5: localStorage backup (CEO 01/06/2026 — F5/cúp điện cứu giỏ).
+    // Auto-save DB có debounce 400ms; nếu F5 trong khoảng đó thì DB chưa có.
+    // LS được ghi sync mỗi keystroke → mở lại web khôi phục NGAY, không cần
+    // popup hỏi (đỡ thao tác cashier — giỏ vẫn đó như anh chưa F5).
+    const localBackup = loadLocalCart(tenant.id, branchSnapshot);
+    if (localBackup) {
+      // 28/07: backup giờ có thể CHỈ CÓ KHÁCH (0 dòng) — thu ngân chọn khách
+      // trước khi thêm hàng rồi tablet reload. Khôi phục khách im lặng, không
+      // toast "0 sản phẩm".
+      const hasLines = localBackup.lines.length > 0;
+      state.restoreFromLocalBackup({
+        lines: localBackup.lines,
+        customer: localBackup.customer,
+        orderDiscount: localBackup.orderDiscount,
+        note: localBackup.note,
+        paymentMethod: localBackup.paymentMethod,
+      });
+      setClientSessionId(localBackup.sessionId);
+      if (hasLines) {
+        toast({
+          title: "Đã khôi phục giỏ tự lưu",
+          description: `${localBackup.lines.length} sản phẩm — tiếp tục bán hoặc bấm "Huỷ đơn" để bỏ.`,
+          variant: "info",
+          duration: 4000,
+        });
+      }
+      // P0-5 fix 12/06/2026: backup chỉ lưu slim {id,name} của KH → currentDebt=0
+      // sau restore là RÁC. Re-fetch full customer từ DB để cashier thấy nợ cũ
+      // và bị cảnh báo nếu KH đang nợ. Best-effort: lỗi/offline thì skip silent.
+      const restoredCustomerId = localBackup.customer?.id;
+      if (restoredCustomerId) {
+        getCustomerById(restoredCustomerId)
+          .then((fresh) => {
+            if (cancelled || !fresh) return;
+            state.setCustomer(fresh, "refetch-sau-f5");
+            if ((fresh.currentDebt ?? 0) > 0) {
+              toast({
+                title: `⚠️ ${fresh.name} đang nợ ${formatCurrency(fresh.currentDebt)} ₫`,
+                description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
+                variant: "warning",
+                duration: 6000,
+              });
+            }
+          })
+          .catch((err) => {
+            console.warn("[POS] re-fetch customer after F5 restore failed:", err);
+          });
+      }
+      // Có hàng trong giỏ → không mở recovery dialog (cart đã hồi phục).
+      // Backup chỉ-có-khách → vẫn rơi xuống Priority 2 để dialog nháp
+      // hoạt động như cũ.
+      if (hasLines) {
+        return () => {
+          cancelled = true;
+        };
+      }
+    }
+
+    // Priority 2: load all drafts → recovery dialog (race-safe)
+    listDraftOrders(branchSnapshot, 50)
+      .then((drafts) => {
+        if (cancelled || branchSnapshot !== currentBranch?.id) return;
+        if (drafts.length > 0) {
+          setRecoveryDrafts(drafts);
+          setRecoveryOpen(true);
+        }
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.warn("[POS] listDraftOrders failed:", err);
+      });
+
+    // Background cleanup auto-saved drafts > 30 ngày (1 lần per mount)
+    const supabase = getClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .rpc("cleanup_expired_auto_drafts", {
+        p_tenant_id: tenant.id,
+        p_days: 30,
+      })
+      .then((res: { data?: number }) => {
+        if (cancelled) return;
+        if (res.data && res.data > 0) {
+          console.info(`[POS] Cleaned up ${res.data} expired auto-saved drafts`);
+        }
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // RPC mới — có thể chưa apply migration → log nhưng không block
+        console.warn("[POS] cleanup_expired_auto_drafts failed:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tenant?.id, currentBranch?.id]);
+
+  // ─── Auto-save liên tục ───
+  // Hook tự debounce 1500ms + skip nếu state không đổi. Disabled khi:
+  // - Chưa có ctx (chưa load auth)
+  // - Đang submit (tránh save state nửa chừng giữa lúc đang gửi RPC)
+  // - Đang load draft từ recovery (avoid overwrite)
+  useAutoSaveDraft({
+    sessionId: clientSessionId,
+    snapshot: {
+      lines: state.lines,
+      customer: state.customer,
+      orderDiscount: state.orderDiscount,
+      paymentMethod: state.paymentMethod,
+      subtotal: state.subtotal,
+      total: state.total,
+      orderDiscountAmount: state.orderDiscountAmount,
+      lineDiscountTotal: state.lineDiscountTotal,
+      shippingFee: state.shippingFee,
+      orderVatRate: state.orderVatRate,
+      note: state.note,
+      computeLineTotal: state.computeLineTotal,
+    },
+    ctx:
+      tenant?.id && currentBranch?.id && user?.id
+        ? {
+            tenantId: tenant.id,
+            branchId: currentBranch.id,
+            userId: user.id,
+          }
+        : null,
+    enabled: submitting === null && !recoveryOpen && !draftConflict,
+    draftId: state.loadedDraftId,
+    draftRevision: state.loadedDraftRevision,
+    // CEO 04/05/2026 fix: khi auto-save tạo draft trên server → set
+    // loadedDraftId. Khi cashier bấm Thanh toán, handleComplete sẽ thấy
+    // có draftId → gọi completeDraftOrder (atomic flip status='completed')
+    // thay vì posCheckout (sẽ fail idempotency check vì đã có draft cùng
+    // session_id). Trước fix: cashier bị toast đỏ "Dùng Tiếp tục đơn".
+    onSaved: ({ invoiceId, revision }) => {
+      state.setLoadedDraftId(invoiceId);
+      state.setLoadedDraftRevision(revision);
+    },
+    onConflict: ({ invoiceId }) => {
+      setDraftConflict({ invoiceId });
+    },
+  });
+
+  // ─── Recovery handlers ───
+  const handleRecoverySelect = useCallback(
+    async (draft: DraftOrderSummary) => {
+      try {
+        const detail = await getDraftOrderById(draft.id);
+        if (!detail) {
+          toast({
+            title: "Không tìm được đơn nháp",
+            description: "Có thể đã bị xoá hoặc đã hoàn tất từ máy khác.",
+            variant: "warning",
+          });
+          setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+          return;
+        }
+        // Adopt session_id TRƯỚC loadDraft: nếu đổi sessionId, useAutoSaveDraft
+        // sẽ upsert đúng row server thay vì tạo row mới. Dán session trước khi
+        // populate giỏ để tránh race auto-save đẻ nháp mới. CEO 08/07.
+        if (detail.clientSessionId) {
+          setClientSessionId(detail.clientSessionId);
+        } else {
+          // Draft không có session_id (pre-migration / tạo từ dialog "Đặt hàng")
+          // → gán mới VÀ dán vào đơn (adoptDraftSession) để auto-save UPDATE đúng
+          // đơn này, KHÔNG tạo nháp mới (mồ côi + nợ ảo).
+          const newId =
+            typeof crypto !== "undefined" && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `sess-${Date.now()}`;
+          setClientSessionId(newId);
+          detail.revision = await adoptDraftSession(
+            detail.id,
+            newId,
+            detail.revision,
+          );
+        }
+        // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
+        state.loadDraft(detail);
+        setRecoveryOpen(false);
+        toast({
+          title: `Đã khôi phục đơn ${detail.code}`,
+          description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ`,
+          variant: "success",
+        });
+      } catch (err) {
+        console.error("[POS] handleRecoverySelect failed:", err);
+        toast({
+          title: "Khôi phục thất bại",
+          description: (err as Error).message,
+          variant: "error",
+        });
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.loadDraft, toast],
+  );
+
+  const handleRecoveryDelete = useCallback(
+    async (draftId: string) => {
+      try {
+        await deleteDraftOrder(draftId);
+        setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draftId));
+        toast({ title: "Đã xoá đơn nháp", variant: "success" });
+      } catch (err) {
+        console.error("[POS] handleRecoveryDelete failed:", err);
+        toast({
+          title: "Xoá thất bại",
+          description: (err as Error).message,
+          variant: "error",
+        });
+      }
+    },
+    [toast],
+  );
+
+  const handleRecoveryClose = useCallback(() => {
+    setRecoveryOpen(false);
+  }, []);
+
+  const handleReloadConflictedDraft = useCallback(async () => {
+    const invoiceId = draftConflict?.invoiceId ?? state.loadedDraftId;
+    if (!invoiceId) return;
+    try {
+      const detail = await getDraftOrderById(invoiceId);
+      if (!detail) throw new Error("POS_DRAFT_NOT_FOUND");
+
+      if (detail.clientSessionId !== clientSessionId) {
+        const takeoverSession =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : "sess-" + Date.now();
+        detail.revision = await adoptDraftSession(
+          detail.id,
+          takeoverSession,
+          detail.revision,
+        );
+        setClientSessionId(takeoverSession);
+      }
+
+      state.loadDraft(detail);
+      setDraftConflict(null);
+      toast({
+        title: "\u0110\u00e3 t\u1ea3i b\u1ea3n m\u1edbi nh\u1ea5t",
+        description: "Ki\u1ec3m tra l\u1ea1i s\u1ed1 l\u01b0\u1ee3ng v\u00e0 t\u1ed5ng ti\u1ec1n tr\u01b0\u1edbc khi thanh to\u00e1n.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Kh\u00f4ng t\u1ea3i l\u1ea1i \u0111\u01b0\u1ee3c \u0111\u01a1n",
+        description: error instanceof Error ? error.message : "L\u1ed7i kh\u00f4ng x\u00e1c \u0111\u1ecbnh",
+        variant: "error",
+      });
+    }
+  }, [clientSessionId, draftConflict, state, toast]);
+
+  const handleDetachConflictedCart = useCallback(() => {
+    state.setLoadedDraftId(null);
+    state.setLoadedDraftRevision(null);
+    setClientSessionId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : "sess-" + Date.now(),
+    );
+    setDraftConflict(null);
+    toast({
+      title: "\u0110\u00e3 t\u00e1ch th\u00e0nh \u0111\u01a1n m\u1edbi",
+      description: "Gi\u1ecf h\u00e0ng hi\u1ec7n t\u1ea1i \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean; \u0111\u01a1n c\u0169 kh\u00f4ng b\u1ecb ghi \u0111\u00e8.",
+      variant: "info",
+    });
+  }, [state, toast]);
+
+  // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → BẮT BUỘC OTP (không còn check
+  // ngưỡng nữa). Cashier không tự ý giảm giá khách quen / giảm vô tội vạ.
+  //
+  // Logic phân biệt MANUAL vs AUTO:
+  //   - Manual: cashier gõ trực tiếp vào ô "Chiết khấu đơn" → cần OTP
+  //   - Auto:
+  //     · Promotion engine match → state.applyPromotion() (không qua handler này)
+  //     · Coupon code valid → state.applyCoupon() (không qua handler này)
+  //     · Platform commission → tính riêng ở footer, không phải discount
+  //
+  // Hàm này CHỈ được gọi khi cashier gõ tay → mặc nhiên là manual → OTP.
+  // Trừ 1 case: d.value === 0 (xoá discount) → không cần OTP.
+  const handleOrderDiscountChange = useCallback(
+    (d: import("./hooks/use-pos-state").DiscountInput) => {
+      // Xoá discount (về 0) → không cần OTP. P4: cũng reset source để
+      // auto-promotion có thể chạy lại.
+      if (d.value === 0) {
+        state.setOrderDiscount(d);
+        setDiscountSource(null);
+        return;
+      }
+
+      // Bất kỳ giảm giá manual > 0 → mở OTP dialog
+      pendingApprovalRef.current = () => {
+        state.setOrderDiscount(d);
+        // P4: tag source='manual' để auto-promotion KHÔNG ghi đè.
+        setDiscountSource("manual");
+      };
+      setDiscountOtpOpen(true);
+    },
+    [state]
+  );
+
+  const handleLineDiscountChange = useCallback(
+    (lineId: string, discount: DiscountInput) => {
+      if (discount.value === 0) {
+        state.updateLineDiscount(lineId, discount);
+        return;
+      }
+      pendingApprovalRef.current = () => {
+        state.updateLineDiscount(lineId, discount);
+      };
+      setDiscountOtpOpen(true);
+    },
+    [state],
+  );
+
+  // ── Áp mã giảm giá (coupon/voucher) ──
+  const handleApplyCoupon = useCallback(async () => {
+    const code = couponCode.trim().toUpperCase();
+    if (!code) return;
+    if (state.subtotal <= 0) {
+      toast({ title: "Giỏ hàng trống", description: "Thêm sản phẩm trước khi áp mã.", variant: "warning" });
+      return;
+    }
+    setCouponApplying(true);
+    try {
+      const result = await validateCoupon(code, state.subtotal, state.customer?.id);
+      if (!result.valid) {
+        toast({
+          title: "Mã không hợp lệ",
+          description: result.error ?? "Mã giảm giá không dùng được cho đơn này.",
+          variant: "error",
+        });
+        return;
+      }
+      const amount = Number(result.discount_amount ?? 0);
+      if (amount <= 0) {
+        toast({ title: "Mã hợp lệ nhưng không giảm", description: "Kiểm tra điều kiện tối thiểu.", variant: "warning" });
+        return;
+      }
+      state.setOrderDiscount({ mode: "amount", value: amount });
+      // P4: coupon = source độc lập, KHÔNG cho auto-promotion ghi đè.
+      setDiscountSource("coupon");
+      setCouponApplied(code);
+      toast({
+        title: `Đã áp mã ${code}`,
+        description: `Giảm ${formatCurrency(amount)}đ`,
+        variant: "success",
+      });
+    } catch (err) {
+      toast({
+        title: "Không áp được mã",
+        description: err instanceof Error ? err.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    } finally {
+      setCouponApplying(false);
+    }
+  }, [couponCode, state, toast]);
+
+  const handleRemoveCoupon = useCallback(() => {
+    setCouponApplied(null);
+    setCouponCode("");
+    state.setOrderDiscount({ mode: "amount", value: 0 });
+    // P4: clear source → auto-promotion được phép chạy lại từ đầu.
+    setDiscountSource(null);
+  }, [state]);
+
+  const handleOpenShift = useCallback(
+    async (startingCash: number) => {
+      if (!tenant?.id || !currentBranch?.id || !user?.id) return;
+      try {
+        const shift = await openShift({
+          tenantId: tenant.id,
+          branchId: currentBranch.id,
+          cashierId: user.id,
+          startingCash,
+        });
+        setCurrentShift(shift);
+        setOpenShiftDialogOpen(false);
+        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${formatNumber(startingCash)} đ`, variant: "success" });
+      } catch (err: any) {
+        toast({ title: "Không mở được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
+      }
+    },
+    [tenant?.id, currentBranch?.id, user?.id, toast]
+  );
+
+  const handleCloseShift = useCallback(
+    async (actualCash: number, note?: string) => {
+      if (!currentShift) return;
+      try {
+        const report = await closeShift({ shiftId: currentShift.id, actualCash, note });
+
+        // Auto-print Z report
+        try {
+          printShiftReport({
+            type: "Z",
+            storeName: settings.print.showStoreName ? settings.store.name : undefined,
+            storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
+            storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+            branchName: currentBranch?.name,
+            cashierName: report.cashierName ?? user?.fullName,
+            openedAt: report.openedAt,
+            closedAt: report.closedAt,
+            startingCash: report.startingCash,
+            cashIn: report.cashIn,
+            cashOut: report.cashOut,
+            expectedCash: report.expectedCash ?? 0,
+            actualCash: report.actualCash ?? actualCash,
+            cashDifference: report.cashDifference ?? 0,
+            totalSales: report.totalSales,
+            totalOrders: report.totalOrders,
+            salesByMethod: report.salesByMethod,
+            note: report.note,
+            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+          });
+        } catch (err) {
+          console.error("printShiftReport(Z) error:", err);
+        }
+
+        setCurrentShift(null);
+        setCloseShiftDialogOpen(false);
+
+        const diff = report.cashDifference ?? 0;
+        toast({
+          title: "Đã đóng ca",
+          description: `Chênh lệch: ${
+            diff === 0 ? "KHỚP" : diff > 0 ? `THỪA ${formatNumber(diff)}` : `THIẾU ${formatNumber(Math.abs(diff))}`
+          }`,
+          variant: diff === 0 ? "success" : "warning",
+        });
+      } catch (err: any) {
+        toast({ title: "Không đóng được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
+      }
+    },
+    [currentShift, settings, currentBranch, user, toast]
+  );
+
+  // Handle product click — if variants exist, open picker; else add directly
+  const handleAddProduct = useCallback(
+    // CEO 08/07: availableStock = khả dụng BOM-aware lưới đã tính (truyền lên khi
+    // bấm ô SP) → giỏ tô đỏ ô số lượng ĐÚNG cho hàng hết (kể cả SKU có công thức
+    // mà NVL cũng hết). undefined (barcode/nơi khác) → dùng product.stock.
+    async (product: Product, availableStock?: number) => {
+      if (variantPickerLoading) return; // guard against double-tap
+      const stockOpt =
+        availableStock !== undefined
+          ? { availableStock, stockKnown: true as const }
+          : undefined;
+
+      setVariantPickerLoading(true);
+      try {
+        const variants = await getVariantsByProduct(product.id);
+        if (variants.length === 0) {
+          // No variants → add base product directly
+          addLineWithTier(product, stockOpt);
+          setTimeout(() => {
+            // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
+            cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+          }, 50);
+          // availableStock đã là tồn chi nhánh hoặc khả dụng theo BOM.
+          if ((availableStock ?? product.stock ?? 0) <= 0) {
+            toast({
+              title: "Hết hàng",
+              description: `"${product.name}" đã hết tại chi nhánh đang bán`,
+              variant: "warning",
+            });
+          }
+        } else {
+          // Open variant picker dialog
+          setVariantPickerProduct(product);
+          setVariantPickerList(variants);
+        }
+      } catch (err) {
+        // Fallback to base product on error (network issue etc.)
+        addLineWithTier(product, stockOpt);
+        toast({
+          title: "Không tải được biến thể",
+          description: err instanceof Error ? err.message : "Đã thêm sản phẩm gốc vào giỏ.",
+          variant: "warning",
+        });
+      } finally {
+        setVariantPickerLoading(false);
+      }
+    },
+    [state, toast, variantPickerLoading]
+  );
+
+  // Auto-fill delivery info from customer when customer changes in delivery mode
+  useEffect(() => {
+    if (state.sellingMode !== "delivery" || !state.customer) return;
+    const di = state.deliveryInfo;
+    // Only auto-fill if fields are empty (don't overwrite manual edits)
+    if (!di.recipientName && !di.recipientPhone) {
+      state.setDeliveryInfo({
+        ...di,
+        recipientName: state.customer.name || "",
+        recipientPhone: state.customer.phone || "",
+        address: state.customer.address || di.address,
+      });
+    }
+  }, [state.customer?.id, state.sellingMode]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-apply customer-group discount when customer is selected.
+  // Safety: only overwrites orderDiscount if it's currently 0 (user hasn't set one).
+  useEffect(() => {
+    const pct = state.customer?.groupDiscountPercent ?? 0;
+    if (pct <= 0) return;
+    if (state.orderDiscount.value > 0) return; // respect manual override
+    state.setOrderDiscount({ mode: "percent", value: pct });
+    // P4: tag 'auto' → vẫn bị overwrite bởi promotion engine (đúng UX), nhưng
+    // KHÔNG bị ghi đè bởi cashier nếu họ sửa tay (effect re-run skip nếu
+    // discountSource đã là 'manual' / 'coupon').
+    setDiscountSource("auto");
+    toast({
+      title: `Khách ${state.customer?.groupName ?? "VIP"}`,
+      description: `Áp dụng chiết khấu ${pct}% theo nhóm khách`,
+      variant: "default",
+    });
+  }, [state.customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ============================================================
+  // Sprint 2: Apply price tier theo KH đang chọn
+  // ============================================================
+  // Khi customer thay đổi → resolve tier (customer.priceTierId) → fetch
+  // priceMap cho mọi SP đang trong cart → re-price.
+  // appliedTier dùng để: (1) hiển thị badge "Áp: [tier]", (2) override
+  // unitPrice khi addLine SP mới.
+  const [appliedTier, setAppliedTier] = useState<{
+    tierId: string;
+    tierName: string;
+    tierCode: string;
+    priceMap: Map<string, number>;
+    rulesMap: Map<string, TierPriceRule[]>;
+    customerId: string;
+  } | null>(null);
+
+  // CEO 13/07: nạp cờ bật/tắt dòng in (invoiceFields) 1 lần khi mở POS → phiếu
+  // in lúc thanh toán dựng khối khách qua CÙNG helper với trang Hóa đơn (in theo
+  // mẫu, 2 phiếu khớp nhau). Best-effort: lỗi → undefined → helper hiện mặc định.
+  const invoiceFieldsRef = useRef<InvoiceFieldFlags | undefined>(undefined);
+  // CEO 14/07: giữ FULL businessInfo → in phiếu sau checkout dựng qua CHÍNH
+  // buildInvoicePrintData (như trang Hóa đơn) cần đủ tên/MST/địa chỉ/logo bên bán.
+  const businessInfoRef = useRef<TenantBusinessInfo | undefined>(undefined);
+  useEffect(() => {
+    getTenantBusinessInfo()
+      .then((info) => {
+        invoiceFieldsRef.current = info?.invoiceFields;
+        businessInfoRef.current = info ?? undefined;
+      })
+      .catch(() => {
+        /* giữ undefined → helper dùng mặc định (hiện đủ dòng có dữ liệu) */
+      });
+  }, []);
+
+  // Thêm hàng theo đúng bảng giá, biến thể và tổng số lượng của dòng.
+  const addLineWithTier = useCallback(
+    (
+      product: Product,
+      options?: {
+        variantId?: string;
+        variantLabel?: string;
+        unitPrice?: number;
+        quantity?: number;
+        availableStock?: number;
+        stockKnown?: boolean;
+      },
+    ) => {
+      const quantityToAdd = options?.quantity ?? 1;
+      const existingQuantity = state.lines
+        .filter(
+          (line) =>
+            line.productId === product.id &&
+            (line.variantId ?? null) === (options?.variantId ?? null) &&
+            line.discount.value === 0 &&
+            line.priceSource !== "manual",
+        )
+        .reduce((sum, line) => sum + line.quantity, 0);
+      const targetQuantity = existingQuantity + quantityToAdd;
+      const catalogUnitPrice = options?.unitPrice ?? product.sellPrice ?? 0;
+      const activeTier =
+        appliedTier?.customerId === state.customer?.id ? appliedTier : null;
+      const tierPrice = resolveTierPrice(
+        activeTier?.rulesMap.get(product.id),
+        targetQuantity,
+        options?.variantId,
+      );
+
+      state.addLine(product, {
+        ...options,
+        catalogUnitPrice,
+        unitPrice: tierPrice ?? catalogUnitPrice,
+        priceSource: tierPrice !== null ? "tier" : "catalog",
+      });
+    },
+    [appliedTier, state],
+  );
+
+  const tierProductKey = Array.from(
+    new Set(state.lines.map((line) => line.productId)),
+  )
+    .sort()
+    .join(",");
+  const tierLineKey = state.lines
+    .map(
+      (line) =>
+        `${line.lineId}:${line.productId}:${line.variantId ?? ""}:${line.quantity}`,
+    )
+    .join("|");
+
+  // Nạp lại quy tắc khi đổi khách hoặc trong giỏ xuất hiện mã hàng mới.
+  useEffect(() => {
+    const customerId = state.customer?.id;
+    if (!customerId) {
+      setAppliedTier(null);
+      return;
+    }
+
+    let cancelled = false;
+    const productIds = tierProductKey ? tierProductKey.split(",") : [];
+    resolveAppliedTier({ channel: "retail", customerId, productIds })
+      .then((tier) => {
+        if (cancelled) return;
+        if (!tier) {
+          setAppliedTier(null);
+          return;
+        }
+        const isNewTier = appliedTier?.tierId !== tier.tierId;
+        setAppliedTier({ ...tier, customerId });
+        if (isNewTier && tier.rulesMap.size > 0) {
+          toast({
+            title: `Áp dụng bảng giá: ${tier.tierName}`,
+            description: `${tier.rulesMap.size} mã hàng có giá riêng.`,
+            variant: "default",
+          });
+        }
+      })
+      .catch(() => setAppliedTier(null));
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.customer?.id, tierProductKey]);
+
+  // Tự đổi giá khi số lượng vượt hoặc giảm khỏi ngưỡng; đổi khách về đúng giá
+  // niêm yết. Dòng đã được duyệt sửa giá tay không bị ghi đè.
+  useEffect(() => {
+    const activeTier =
+      appliedTier?.customerId === state.customer?.id ? appliedTier : null;
+    for (const line of state.lines) {
+      if (line.priceSource === "manual") continue;
+      const catalogUnitPrice = line.catalogUnitPrice ?? line.unitPrice;
+      const tierPrice = resolveTierPrice(
+        activeTier?.rulesMap.get(line.productId),
+        line.quantity,
+        line.variantId,
+      );
+      const targetPrice = tierPrice ?? catalogUnitPrice;
+      const targetSource = tierPrice !== null ? "tier" : "catalog";
+      if (line.unitPrice !== targetPrice || line.priceSource !== targetSource) {
+        state.updateLinePrice(line.lineId, targetPrice, targetSource);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedTier, state.customer?.id, tierLineKey]);
+
+  // ============================================================
+  // Sprint KM-2: Apply promotion engine
+  // ============================================================
+  // Khi cart hoặc customer/branch đổi → resolve KM tốt nhất → set
+  // orderDiscount theo discountAmount. User có thể click X trên banner
+  // để clear thủ công (overrideClearedPromo = true → skip auto-resolve).
+  const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion | null>(null);
+  const [promotionCleared, setPromotionCleared] = useState(false);
+  // P4 13/06/2026: track nguồn discount để chống auto-promotion ghi đè giá trị
+  // cashier vừa nhập tay hoặc coupon vừa áp.
+  //   - 'manual': cashier gõ ô "Chiết khấu đơn" (đã qua OTP duyệt)
+  //   - 'coupon': mã giảm giá thủ công
+  //   - 'auto': customer-group % auto-apply
+  //   - 'promotion': KM engine auto match
+  //   - 'redeem': đổi điểm loyalty
+  //   - null: orderDiscount=0 (clean state)
+  // Auto-promotion effect SKIP overwrite khi source = 'manual' | 'coupon'.
+  const [discountSource, setDiscountSource] = useState<
+    "manual" | "coupon" | "auto" | "promotion" | "redeem" | null
+  >(null);
+
+  // Check tenant-wide setting "Tự động áp dụng KM tốt nhất" → cache trong state.
+  // Resolver tự đọc settings nên ở đây không cần lưu — engine respect setting.
+
+  useEffect(() => {
+    if (!currentBranch?.id) return;
+
+    // User clicked X to clear → respect, don't auto re-apply until cart changes
+    // significantly (a new "session"). Heuristic: clearCart resets promotionCleared.
+    if (promotionCleared) return;
+
+    // P4 GUARD 13/06/2026: KHÔNG đụng vào orderDiscount khi cashier đã đặt
+    // thủ công (manual qua OTP) hoặc đã áp coupon. Trước đây effect re-run
+    // mỗi khi thêm/sửa line → ghi đè giá trị cashier vừa nhập → sai tiền in
+    // hóa đơn mà cashier không hay biết.
+    if (discountSource === "manual" || discountSource === "coupon") {
+      // Skip auto-promotion entirely. Cashier vẫn có thể bấm X coupon /
+      // sửa lại discount để bật auto-resolve trở lại.
+      return;
+    }
+
+    // Cart rỗng → không apply KM
+    if (state.lines.length === 0) {
+      if (appliedPromotion) {
+        setAppliedPromotion(null);
+        // Clear orderDiscount nếu trước đó là do KM set
+        state.setOrderDiscount({ mode: "amount", value: 0 });
+      }
+      // P4: reset source unconditionally khi cart rỗng (vd cashier "Huỷ đơn"
+      // làm clearCart → discount cũ về 0 nhưng source bị stale → block sai
+      // auto-promotion ở đơn mới).
+      setDiscountSource(null);
+      return;
+    }
+
+    let cancelled = false;
+    resolveAppliedPromotion({
+      channel: "retail",
+      branchId: currentBranch.id,
+      customerId: state.customer?.id ?? null,
+      items: state.lines.map((l) => ({
+        productId: l.productId,
+        // OrderLine không có categoryId hiện tại → null (KM theo category sẽ
+        // không apply ở Retail V1; FnB có thể qua product.category_id nếu cần)
+        categoryId: null,
+        quantity: l.quantity,
+        unitPrice: l.unitPrice,
+      })),
+    })
+      .then(({ best }) => {
+        if (cancelled) return;
+        if (!best || best.discountAmount <= 0) {
+          if (appliedPromotion) {
+            setAppliedPromotion(null);
+            state.setOrderDiscount({ mode: "amount", value: 0 });
+            setDiscountSource(null);
+          }
+          return;
+        }
+        // Áp KM mới (hoặc đổi KM tốt hơn)
+        if (appliedPromotion?.promotion.id !== best.promotion.id) {
+          setAppliedPromotion(best);
+          state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+          setDiscountSource("promotion");
+          toast({
+            title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
+            description: `${best.reasonLabel} — Giảm ${formatCurrency(best.discountAmount)}đ`,
+            variant: "success",
+          });
+        } else if (appliedPromotion.discountAmount !== best.discountAmount) {
+          // Cùng promo, đổi discount (vd cart thay đổi qty)
+          setAppliedPromotion(best);
+          state.setOrderDiscount({ mode: "amount", value: best.discountAmount });
+          setDiscountSource("promotion");
+        }
+      })
+      .catch(() => {
+        // fail silent — không block POS
+        if (appliedPromotion) {
+          setAppliedPromotion(null);
+          state.setOrderDiscount({ mode: "amount", value: 0 });
+          setDiscountSource(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // P4-R1 13/06/2026 audit lần 2: KHÔNG đưa discountSource vào deps. Nếu đưa,
+    // setDiscountSource("promotion") ở line ~1190 → trigger effect re-run →
+    // có thể overwrite redeem stack (effect 1281 chỉ sync khi appliedRedeem
+    // hoặc appliedPromotion đổi). discountSource chỉ ĐỌC trong guard, không
+    // cần reactive.
+  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared]);
+
+  function clearAppliedPromotion() {
+    setAppliedPromotion(null);
+    setPromotionCleared(true);
+    // Khi clear promotion, giữ redeem nếu có. setOrderDiscount = redeem only.
+    state.setOrderDiscount({ mode: "amount", value: appliedRedeem?.discountAmount ?? 0 });
+    // P4: source = 'redeem' nếu còn redeem, null nếu không.
+    setDiscountSource(appliedRedeem ? "redeem" : null);
+  }
+
+  // ============================================================
+  // L-3: Redeem loyalty points
+  // ============================================================
+  const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
+  const [appliedRedeem, setAppliedRedeem] = useState<{
+    points: number;
+    discountAmount: number;
+  } | null>(null);
+  const [redeemDialogOpen, setRedeemDialogOpen] = useState(false);
+  const [redeemInput, setRedeemInput] = useState("");
+
+  // Lazy load loyalty settings 1 lần (cached)
+  useEffect(() => {
+    let cancelled = false;
+    getLoyaltySettings()
+      .then((s) => {
+        if (!cancelled) setLoyaltySettings(s);
+      })
+      .catch((err) => {
+        // Loyalty fail → fallback default settings, không cản POS dùng được.
+        console.error("[POS] getLoyaltySettings failed:", err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Khi customer thay đổi hoặc cart rỗng → reset redeem
+  useEffect(() => {
+    if (!state.customer?.id || state.lines.length === 0) {
+      if (appliedRedeem) {
+        setAppliedRedeem(null);
+        // Restore promotion-only discount nếu có
+        state.setOrderDiscount({
+          mode: "amount",
+          value: appliedPromotion?.discountAmount ?? 0,
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.customer?.id, state.lines.length]);
+
+  function clearAppliedRedeem() {
+    setAppliedRedeem(null);
+    state.setOrderDiscount({
+      mode: "amount",
+      value: appliedPromotion?.discountAmount ?? 0,
+    });
+  }
+
+  function handleApplyRedeem() {
+    if (!loyaltySettings || !state.customer?.id) return;
+    const requestedPoints = Number(redeemInput) || 0;
+    const customerPoints = state.customer.loyaltyPoints ?? 0;
+    if (requestedPoints <= 0) {
+      toast({ title: "Số điểm phải lớn hơn 0", variant: "error" });
+      return;
+    }
+    if (requestedPoints > customerPoints) {
+      toast({
+        title: "Khách không đủ điểm",
+        description: `KH chỉ có ${customerPoints} điểm`,
+        variant: "error",
+      });
+      return;
+    }
+    const { discountAmount, effectivePoints } = calculateRedeemDiscount(
+      requestedPoints,
+      loyaltySettings,
+      state.subtotal,
+    );
+    if (discountAmount === 0) {
+      toast({
+        title: "Không đủ điểm để đổi",
+        description: `Cần tối thiểu ${loyaltySettings.redemptionPoints} điểm để đổi`,
+        variant: "warning",
+      });
+      return;
+    }
+    setAppliedRedeem({ points: effectivePoints, discountAmount });
+    // Stack với promotion: tổng discount = promo + redeem
+    state.setOrderDiscount({
+      mode: "amount",
+      value: (appliedPromotion?.discountAmount ?? 0) + discountAmount,
+    });
+    setRedeemDialogOpen(false);
+    setRedeemInput("");
+    toast({
+      title: `Đã đổi ${effectivePoints} điểm`,
+      description: `Giảm ${formatCurrency(discountAmount)}đ`,
+      variant: "success",
+    });
+  }
+
+  // Khi promotion thay đổi → recalc combined discount
+  useEffect(() => {
+    if (!appliedRedeem) return;
+    const totalDiscount =
+      (appliedPromotion?.discountAmount ?? 0) + appliedRedeem.discountAmount;
+    state.setOrderDiscount({ mode: "amount", value: totalDiscount });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appliedPromotion?.discountAmount, appliedRedeem?.discountAmount]);
+
+  // ============================================================
+  // Handlers
+  // ============================================================
+
+  // R9: Pre-bill — in tạm tính trước khi khách quyết định trả tiền.
+  // Build receipt từ state cart hiện tại với invoiceCode "TT-<timestamp>"
+  // để rõ KHÔNG phải hoá đơn chính thức. KHÔNG commit gì.
+  const handlePrintPreBill = useCallback(async () => {
+    if (state.lines.length === 0) {
+      toast({
+        title: "Giỏ hàng trống",
+        description: "Thêm sản phẩm trước khi in tạm tính.",
+        variant: "warning",
+      });
+      return;
+    }
+    try {
+      // CEO 08/07: KHÔNG chế số. Tạm tính in MÃ ĐƠN THẬT nếu giỏ đã là đơn nháp
+      // (loadedDraftId) → truy xuất/quản lý/báo cáo được, và TRÙNG mã hóa đơn khi
+      // thanh toán (truy vết đầu-cuối). Giỏ CHƯA lưu → KHÔNG số (CEO chốt) — chỉ
+      // "PHIẾU TẠM TÍNH" + ngày. Bỏ hẳn TT-giờphútgiây tự sinh (không truy xuất).
+      let draftCode = "";
+      if (state.loadedDraftId) {
+        try {
+          const d = await getDraftOrderById(state.loadedDraftId);
+          draftCode = d?.code ?? "";
+        } catch {
+          draftCode = "";
+        }
+      }
+      const receipt: ReceiptData = {
+        invoiceCode: draftCode,
+        date: new Date().toISOString(),
+        customerName: state.customer?.name ?? "Khách lẻ",
+        items: state.lines.map((l) => ({
+          name: l.productName,
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          discount:
+            l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+          total: state.computeLineTotal(l),
+          note: l.note, // 00208
+        })),
+        subtotal: state.subtotal,
+        discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+        shippingFee: state.shippingFee,
+        total: state.total,
+        paid: 0,
+        change: 0,
+        paymentMethod: "cash",
+        isOffline: false,
+        isPreBill: true, // flag để print template hiện "TẠM TÍNH" header
+        // CEO 08/07: in ghi chú người bán trên phiếu (như phiếu nhập/xuất).
+        note: state.note || undefined,
+      };
+      // CEO 08/07: tạm tính in CÙNG MẪU hóa đơn chính thức (resolver retail ×
+      // sale_invoice × chi nhánh — giống hệt luồng auto-print sau thanh toán),
+      // CHỈ KHÁC tiêu đề "PHIẾU TẠM TÍNH". Mẫu có thể set title riêng
+      // (config.title đè documentType) → ép lại SAU applyTemplateToDocData.
+      // Offline / chưa có mẫu / lỗi resolve → rớt về bill nhiệt cũ (isPreBill).
+      let printedViaTemplate = false;
+      if (networkStatus.isOnline) {
+        try {
+          const resolved = await resolvePrintTemplate(
+            "retail",
+            "sale_invoice",
+            currentBranch?.id ?? null,
+          );
+          if (resolved) {
+            // CEO 14/07 (V3): tạm tính dựng qua CHÍNH buildInvoicePrintData như
+            // hóa đơn → cùng cột (Mã hàng/Tên/SL/Đơn giá/Thành tiền) + nhãn
+            // "Chiết khấu". CHỈ khác tiêu đề "PHIẾU TẠM TÍNH". Chưa thanh toán →
+            // paid=0. Mô hình số HĐ: due = total − discount → totalAmount ép
+            // = state.total + chiết khấu đơn (đã verify DB). Không khối công nợ
+            // (customerCurrentDebt undefined) vì phiếu tạm chưa ghi nợ.
+            const preInvoice: Invoice = {
+              id: "",
+              code: draftCode, // rỗng nếu giỏ chưa lưu → mẫu ẩn "Số:"
+              date: new Date().toISOString(),
+              customerId: state.customer?.id ?? "",
+              customerCode: state.customer?.code ?? "",
+              customerName: receipt.customerName,
+              customerPhone: state.customer?.phone,
+              customerAddress: state.customer?.address,
+              totalAmount: state.total + state.orderDiscountAmount,
+              discount: state.orderDiscountAmount,
+              shippingFee: state.shippingFee,
+              taxAmount: 0,
+              paid: 0,
+              debt: 0,
+              status: "processing",
+              branchName: currentBranch?.name,
+              branchId: currentBranch?.id,
+              deliveryType: state.shippingFee > 0 ? "delivery" : "no_delivery",
+              note: state.note || undefined,
+              createdBy: user?.fullName ?? "",
+            };
+            const preLines = toPrintLines(
+              state.lines.map((l) => ({
+                name: l.productName,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                total: state.computeLineTotal(l),
+                note: l.note, // 00208: ghi chú món trên phiếu tạm tính
+              })),
+            );
+            const base = buildInvoicePrintData(
+              preInvoice,
+              businessInfoRef.current ?? undefined,
+              preLines,
+            );
+            const doc = applyTemplateToDocData(base, resolved);
+            doc.documentType = "PHIẾU TẠM TÍNH"; // ép lại — không để mẫu đè thành tiêu đề hóa đơn
+            printDocument(doc, { paperSize: resolved.paperSize });
+            printedViaTemplate = true;
+          }
+        } catch (err) {
+          console.error("[POS] Pre-bill via template failed, fallback receipt:", err);
+        }
+      }
+      if (!printedViaTemplate) {
+        // P-4 13/06/2026: đọc paperSize từ settings (58mm tại quầy).
+        printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+      }
+      toast({
+        title: "Đã in tạm tính",
+        description: "Đây không phải hoá đơn chính thức.",
+        variant: "default",
+      });
+    } catch (err) {
+      console.error("[POS] Print pre-bill failed:", err);
+      toast({
+        title: "Không in được tạm tính",
+        description: (err as Error).message,
+        variant: "error",
+      });
+    }
+  }, [state.lines, state.customer, state.subtotal, state.orderDiscountAmount, state.lineDiscountTotal, state.total, state.shippingFee, state.computeLineTotal, toast, networkStatus.isOnline, currentBranch, user, settings.print.paperSize]);
+
+  const handleSaveDraft = useCallback(async () => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setSubmitting("draft");
+    try {
+      const ctx = await getCurrentContext();
+      if (!ctx) throw new Error("Không xác định được chi nhánh");
+
+      const saveResult = await saveDraftOrder(
+        {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId,
+          createdBy: ctx.userId,
+          customerId: state.customer?.id ?? null,
+          customerName: state.customer?.name ?? "Khách lẻ",
+          items: state.lines.map((l) => ({
+            productId: l.productId,
+            variantId: l.variantId ?? null,
+            productName: l.variantLabel ? `${l.productName} · ${l.variantLabel}` : l.productName,
+            unit: l.unit,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discount: l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+            vatRate: l.vatRate ?? 0,
+            note: l.note, // 00208
+          })),
+          paymentMethod: state.paymentMethod,
+          subtotal: state.subtotal,
+          discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          orderDiscountAmount: state.orderDiscountAmount,
+          shippingFee: state.shippingFee,
+          orderVatRate: state.orderVatRate,
+          total: state.total,
+          paid: 0,
+          note: state.note || "",
+        },
+        {
+          // F9 manual: dùng sessionId hiện tại để upsert (không tạo nháp dup
+          // nếu auto-save đã tạo row trước đó). autoSaved=false → sticky.
+          sessionId: clientSessionId,
+          autoSaved: false,
+          invoiceId: state.loadedDraftId,
+          expectedRevision: state.loadedDraftRevision,
+        },
+      );
+
+      // CEO 10/06/2026 — UX cải tiến: toast hiện rõ MÃ đơn vừa lưu + auto
+      // mở DraftListModal để cashier thấy ngay đơn vừa lưu trong list
+      // (verify trực quan, không phải tin mỗi toast). Trước đây cashier
+      // "không thấy lưu" vì toast tự tắt 4s + danh sách phải bấm F3 mới ra.
+      toast({
+        title: `✓ Đã lưu nháp ${saveResult.invoiceCode}`,
+        description: 'Mở mục "Nháp" (F3) để bán tiếp.',
+        variant: "success",
+        duration: 5000,
+      });
+      state.clearCart();
+      setMobileCartOpen(false);
+      // Auto bump draft count badge (lấy bên dưới qua useEffect refresh)
+      setDraftCountTrigger((t) => t + 1);
+      // Regen sessionId — đơn nháp đã lưu, cashier mở cart mới = session mới
+      setClientSessionId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+    } catch (err: any) {
+      // CEO 10/06/2026 — FIX mất đơn: lưu nháp thất bại (token lỗi/mạng rớt)
+      // trước đây chỉ toast thoáng 4s → cashier bỏ lỡ → tưởng đã lưu → mất đơn
+      // 10tr (Trang). Giờ:
+      //  1. KHÔNG xóa giỏ (giữ nguyên — đã đúng, clearCart chỉ chạy khi success).
+      //  2. Toast PERSISTENT (duration:0) — cashier PHẢI tự đóng, không thể bỏ lỡ.
+      //  3. Thông báo rõ: giỏ VẪN CÒN + cách xử lý.
+      //  4. Giỏ vẫn được backup localStorage mỗi keystroke → F5 không mất.
+      const msg = String(err?.message ?? "");
+      const isAuthErr =
+        /chưa đăng nhập|jwt|token|session|401|unauthorized|permission|refresh/i.test(msg);
+      toast({
+        title: "⚠️ CHƯA LƯU ĐƯỢC ĐƠN — GIỎ HÀNG VẪN CÒN",
+        description: isAuthErr
+          ? "Phiên đăng nhập có vấn đề. Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Hãy đăng nhập lại (mở tab mới), rồi quay lại bấm 'Lưu nháp' lần nữa. KHÔNG đóng/tải lại trang này."
+          : `Không lưu được (${msg}). Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Kiểm tra mạng rồi bấm 'Lưu nháp' lại. KHÔNG đóng trang.`,
+        variant: "error",
+        duration: 0, // PERSISTENT — cashier phải tự đóng, không tự biến mất
+      });
+    } finally {
+      setSubmitting(null);
+      submitLockRef.current = false;
+    }
+  }, [state, toast, clientSessionId]);
+
+  /**
+   * handleComplete — F10 thanh toán.
+   *
+   * Flow CEO 04/05/2026 (POS Retail):
+   *   - Khách đưa = total → bình thường, paid=total, không nợ
+   *   - Khách đưa < total → ghi nợ phần thiếu vào customer.
+   *     Nếu cashier chưa chọn customer → auto-link "Khách lẻ vãng lai" (KL-VL).
+   *   - Khách đưa > total → mở ChangeDialog hỏi cashier:
+   *       * "Trả tiền thừa": invoice paid=total, không adjust debt
+   *       * "Ghi số dư": invoice paid=total và server ghi tiền thừa vào sổ
+   *         phát sinh của khách trong cùng giao dịch. Chỉ dùng khi có khách thật.
+   *   - Khách đưa = 0 (rỗng) → ghi nợ 100%, link customer (auto walk-in).
+   *
+   * intent param resolve khi user click button trong ChangeDialog:
+   *   undefined → first call, decide path
+   *   'refund'  → cashier chọn trả tiền thừa
+   *   'credit'  → cashier chọn ghi công nợ
+   */
+  const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
+    if (submitLockRef.current) return;
+    // Bắt mở ca trước khi thanh toán — không có ca = không biết ghi nhận vào đâu.
+    if (!currentShift) {
+      toast({
+        title: "Chưa mở ca",
+        description: "Anh/chị cần mở ca trước khi bán hàng để báo cáo X/Z đúng.",
+        variant: "warning",
+      });
+      setOpenShiftDialogOpen(true);
+      return;
+    }
+    // Thanh toán làm thay đổi đồng thời hóa đơn, tồn kho, công nợ và sổ quỹ.
+    // Khi offline chỉ giữ giỏ/lưu nháp; không phát hành hóa đơn cục bộ chưa được máy chủ xác nhận.
+    if (!networkStatus.isOnline) {
+      toast({
+        title: "Chưa thể thanh toán khi mất kết nối",
+        description: "Giỏ hàng vẫn được giữ. Vui lòng chờ có mạng rồi thanh toán, hoặc lưu nháp để xử lý sau.",
+        variant: "warning",
+        duration: 0,
+      });
+      return;
+    }
+    // CEO 29/05/2026: CHO PHÉP bán đơn 0đ (hàng mẫu, nội bộ, KM/giảm 100%)
+    // nhưng bắt XÁC NHẬN để tránh xuất nhầm — thay cho việc chặn cứng trước
+    // đây. Tổng âm vẫn chặn (đó là lỗi dữ liệu, không phải đơn miễn phí).
+    if (state.total < 0) {
+      toast({
+        title: "Đơn không hợp lệ",
+        description: `Tổng đơn = ${formatCurrency(state.total)} ₫ (âm). Kiểm tra giảm giá hoặc khuyến mãi đang áp.`,
+        variant: "error",
+        duration: 5000,
+      });
+      return;
+    }
+    if (state.total === 0) {
+      // Defense-in-depth: đừng tạo hoá đơn rỗng (caller đã chặn nhưng vẫn
+      // guard ở đây vì guard total<=0 cũ vô tình bắt luôn case giỏ trống).
+      if (state.lines.length === 0) {
+        toast({
+          title: "Giỏ hàng trống",
+          description: "Thêm sản phẩm trước khi thanh toán.",
+          variant: "warning",
+        });
+        return;
+      }
+      if (!zeroConfirmed) {
+        setZeroConfirmOpen(true);
+        return;
+      }
+    }
+
+    // Mixed payment validation — chặn checkout khi tổng các phương thức <
+    // tổng đơn (tránh "ghi nợ ngầm" do cashier quên nhập đủ amount cho 1
+    // phương thức). Nếu khách chủ ý ghi nợ → phải dùng nút "Ghi nợ" riêng,
+    // không qua mixed payment.
+    if (state.paymentMethod === "mixed") {
+      const sumBreakdown = state.paymentBreakdown
+        .filter((b) => b.amount > 0)
+        .reduce((s, b) => s + b.amount, 0);
+      if (sumBreakdown < state.total) {
+        toast({
+          title: "Thiếu tiền thanh toán",
+          description: `Tổng các phương thức (${formatCurrency(sumBreakdown)} ₫) nhỏ hơn đơn (${formatCurrency(state.total)} ₫). Bổ sung số tiền hoặc dùng "Ghi nợ" nếu khách thiếu.`,
+          variant: "error",
+          duration: 6000,
+        });
+        return;
+      }
+    }
+
+    // CEO 11/06/2026 (P0-6 audit): chống "silent ghi nợ 100%" khi cashier quên
+    // gõ tiền. Trước đây paid=0 + total>0 + method khác mixed → handleComplete
+    // tiếp tục → tạo invoice ghi nợ TOÀN BỘ vào "Khách lẻ vãng lai" mà không
+    // có dialog xác nhận. Cashier quên gõ tiền = mất 1 đơn vào nợ ảo.
+    // Mixed payment đã có validation riêng (line 1465-1478) nên skip case đó.
+    if (
+      state.paid === 0 &&
+      state.total > 0 &&
+      state.paymentMethod !== "mixed" &&
+      intent !== "credit" &&
+      intent !== "refund"
+    ) {
+      const ok =
+        typeof window !== "undefined" &&
+        window.confirm(
+          `⚠️ ĐƠN NÀY KHÔNG CÓ TIỀN — GHI NỢ TOÀN BỘ ${formatCurrency(state.total)} ₫?\n\n` +
+            `Khách: ${state.customer?.name ?? "(Khách lẻ vãng lai)"}\n\n` +
+            `Bấm OK nếu thực sự ghi nợ. Hủy nếu anh/chị quên gõ tiền khách đưa.`,
+        );
+      if (!ok) return;
+    }
+
+    // ─── Compute paid logic (CEO 04/05) ───
+    // paidEntered = số khách đưa thực (từ ô input). 0 nếu rỗng → ghi nợ 100%.
+    // paidForInvoice = paid trong DB (capped tại total — invoice luôn balanced).
+    // creditExcess = phần thừa (chỉ khi intent='credit'); server ghi cùng
+    // giao dịch với hóa đơn để công nợ không thể lệch hoặc bị ghi đè.
+    const paidEntered = state.paid; // không default về total nữa
+    const total = state.total;
+
+    // Open ChangeDialog nếu paid > total và chưa có intent
+    if (paidEntered > total && !intent) {
+      setChangeDialog({ open: true, excess: paidEntered - total });
+      return;
+    }
+
+    const paidForInvoice = Math.min(paidEntered, total);
+    const creditExcess =
+      intent === "credit" && paidEntered > total ? paidEntered - total : 0;
+    const needsCustomerForDebt = paidForInvoice < total || creditExcess > 0;
+
+    if (creditExcess > 0 && !networkStatus.isOnline) {
+      toast({
+        title: "Không thể ghi số dư khi mất mạng",
+        description: "Chọn trả lại tiền thừa hoặc đợi có mạng để số dư được ghi an toàn cùng hóa đơn.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const needsDiscountApproval =
+      state.lineDiscountTotal > 0 ||
+      (state.orderDiscountAmount > 0 &&
+        (discountSource === "manual" || discountSource === null));
+    if (needsDiscountApproval && !state.discountAuditCtx?.otpId) {
+      toast({
+        title: "Cần duyệt chiết khấu",
+        description: "Nhập OTP quản lý, sau đó bấm Thanh toán lại.",
+        variant: "warning",
+      });
+      pendingApprovalRef.current = null;
+      setDiscountOtpOpen(true);
+      return;
+    }
+
+    submitLockRef.current = true;
+    setSubmitting("complete");
+    try {
+      const ctx = await getCurrentContext();
+      if (!ctx) throw new Error("Không xác định được chi nhánh");
+
+      // Read stock again immediately before checkout. The browser snapshot can be
+      // stale when another terminal has just sold or adjusted the same product.
+      let freshStockSnapshot = null as Awaited<
+        ReturnType<typeof getPosStockSnapshot>
+      > | null;
+      if (networkStatus.isOnline && state.lines.length > 0) {
+        try {
+          freshStockSnapshot = await getPosStockSnapshot(
+            state.lines.map((line) => ({
+              productId: line.productId,
+              hasBom: line.hasBom,
+            })),
+            ctx.branchId,
+          );
+          state.applyStockSnapshot(freshStockSnapshot);
+        } catch (error) {
+          console.warn("[POS] checkout stock refresh failed:", error);
+          throw new Error(
+            "Không xác minh được tồn kho mới nhất. Vui lòng kiểm tra mạng và thử thanh toán lại.",
+          );
+        }
+      }
+
+      const stockShortages = findPosStockShortages(
+        state.lines,
+        freshStockSnapshot ?? undefined,
+      );
+      const hardShortages = stockShortages.filter((item) =>
+        freshStockSnapshot
+          ? item.source !== "bom"
+          : !item.hasBom,
+      );
+      if (hardShortages.length > 0) {
+        const first = hardShortages[0];
+        toast({
+          title: `${first.productName}: cần ${formatNumber(first.required)}, còn ${formatNumber(Math.max(0, first.available))}`,
+          description:
+            hardShortages.length > 1
+              ? `Và ${hardShortages.length - 1} sản phẩm khác vượt tồn tại chi nhánh này. Vui lòng giảm số lượng hoặc kiểm kho.`
+              : "Tồn kho vừa được cập nhật. Vui lòng giảm số lượng hoặc kiểm kho.",
+          variant: "error",
+          duration: 7000,
+        });
+        return;
+      }
+
+      const bomShortages = stockShortages.filter(
+        (item) => item.source === "bom",
+      );
+      if (bomShortages.length > 0) {
+        const shortageLines = bomShortages.map(
+          (item) =>
+            `• ${item.productName}: cần ${formatNumber(item.required)}, khả dụng ~${formatNumber(Math.max(0, item.available))}` +
+            (item.bottleneckMaterialName
+              ? ` (thiếu ${item.bottleneckMaterialName})`
+              : ""),
+        );
+        const ok =
+          typeof window !== "undefined" &&
+          window.confirm(
+            `⚠️ BÁN VƯỢT TỒN — kho sẽ bị ghi ÂM:\n\n${shortageLines.join("\n")}\n\n` +
+              "Bấm OK nếu hàng thực tế đã có nhưng chưa kịp hoàn thành lệnh sản xuất/nhập kho.\n" +
+              "Bấm Hủy để kiểm lại trước khi xuất hóa đơn.",
+          );
+        if (!ok) return;
+      }
+      // Auto-link walk-in customer khi cần track debt/credit mà cashier
+      // chưa chọn customer thật. Lazy create — chỉ tạo lần đầu mỗi tenant.
+      let resolvedCustomerId: string | null = state.customer?.id ?? null;
+      let resolvedCustomerName: string = state.customer?.name ?? "Khách lẻ";
+      if (needsCustomerForDebt && !resolvedCustomerId) {
+        try {
+          const walkIn = await getOrCreateWalkInCustomer();
+          resolvedCustomerId = walkIn.id;
+          resolvedCustomerName = walkIn.name;
+        } catch (err) {
+          console.error("[POS] getOrCreateWalkInCustomer failed:", err);
+          throw new Error(
+            "Không tạo được khách lẻ vãng lai để ghi công nợ. Vui lòng thử lại.",
+          );
+        }
+      }
+
+      const paid = paidForInvoice; // alias để tận dụng code dưới (receipt, RPC, ...)
+      let invoiceCode: string;
+      let invoiceId: string | null = null; // L-2: track để earn loyalty
+      let isOfflineCheckout = false;
+
+      // Build breakdown for mixed payments
+      const breakdown =
+        state.paymentMethod === "mixed"
+          ? state.paymentBreakdown.filter((b) => b.amount > 0)
+          : undefined;
+
+      const checkoutItems: PosCheckoutItem[] = state.lines.map((line) => ({
+        productId: line.productId,
+        variantId: line.variantId ?? null,
+        productName: line.variantLabel
+          ? `${line.productName} · ${line.variantLabel}`
+          : line.productName,
+        unit: line.unit,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        discount:
+          line.discount.mode === "percent"
+            ? Math.round((line.quantity * line.unitPrice * line.discount.value) / 100)
+            : line.discount.value,
+        vatRate: line.vatRate ?? 0,
+        note: line.note,
+      }));
+      const checkoutDiscountSource: PosCheckoutInput["discountSource"] =
+        couponApplied
+          ? "coupon"
+          : appliedPromotion && appliedRedeem
+            ? "promotion_redeem"
+            : appliedPromotion
+              ? "promotion"
+              : appliedRedeem
+                ? "redeem"
+                : state.orderDiscountAmount > 0
+                  ? discountSource === "auto"
+                    ? "customer_group"
+                    : "manual"
+                  : null;
+      const securedCheckout = {
+        customerId: resolvedCustomerId,
+        items: checkoutItems,
+        promotionId:
+          checkoutDiscountSource === "promotion" ||
+          checkoutDiscountSource === "promotion_redeem"
+            ? appliedPromotion?.promotion.id ?? null
+            : null,
+        couponCode: couponApplied,
+        loyaltyPoints: appliedRedeem?.points ?? 0,
+        discountSource: checkoutDiscountSource,
+        orderDiscountAmount: state.orderDiscountAmount,
+        discountOtpId: state.discountAuditCtx?.otpId ?? null,
+        discountReason: state.discountAuditCtx?.reason ?? null,
+        shippingFee: state.shippingFee,
+        orderVatRate: state.orderVatRate,
+        amountTendered: paidEntered,
+        customerCredit: creditExcess,
+      };
+
+      // CEO 29/05/2026: chống KẸT ĐƠN NHÁP. loadedDraftId có thể chưa kịp set
+      // (auto-save vừa tạo nháp trên server cho phiên này) → khi đó tra nháp
+      // theo clientSessionId để hoàn tất ĐÚNG nháp đó, tránh đi nhánh posCheckout
+      // bị server từ chối "still draft" làm đơn kẹt ở nháp.
+      let effectiveDraftId = state.loadedDraftId;
+      let effectiveDraftRevision = state.loadedDraftRevision;
+      if (!effectiveDraftId && networkStatus.isOnline && clientSessionId) {
+        effectiveDraftId = await findDraftIdBySession(clientSessionId);
+      }
+      if (effectiveDraftId && effectiveDraftRevision === null) {
+        const latestDraft = await getDraftOrderById(effectiveDraftId);
+        if (!latestDraft) throw new Error("POS_DRAFT_NOT_FOUND|{}");
+        effectiveDraftRevision = latestDraft.revision;
+      }
+
+      if (effectiveDraftId) {
+        // Drafts live server-side already; block offline completion to avoid dupe.
+        if (!networkStatus.isOnline) {
+          throw new Error(
+            "Đang offline: không thể hoàn tất phiếu nháp đã lưu. Vui lòng đợi mạng hoặc tạo hoá đơn mới."
+          );
+        }
+        // ── Completing an existing draft → update in-place (no new invoice) ──
+        const result = await completeDraftOrder(effectiveDraftId, {
+          method: state.paymentMethod,
+          paid,
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId,
+          createdBy: ctx.userId,
+          ...securedCheckout,
+          paymentBreakdown: breakdown,
+          allowBomShortage: bomShortages.length > 0,
+          // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
+          // match được giao dịch của ca này.
+          shiftId: currentShift?.id ?? null,
+          clientSessionId,
+          expectedRevision: effectiveDraftRevision!,
+          expectedTotal: state.total,
+        });
+        invoiceCode = result.invoiceCode;
+        invoiceId = effectiveDraftId;
+      } else {
+        // ── Fresh checkout → create new completed invoice ──
+        const input: PosCheckoutInput = {
+          tenantId: ctx.tenantId,
+          branchId: ctx.branchId,
+          createdBy: ctx.userId,
+          ...securedCheckout,
+          customerName: resolvedCustomerName,
+          paymentMethod: state.paymentMethod,
+          paymentBreakdown: breakdown,
+          allowBomShortage: bomShortages.length > 0,
+          subtotal: state.subtotal,
+          discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          total: state.total,
+          paid,
+          note: state.note || "",
+          shiftId: currentShift?.id ?? null,
+          // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
+          clientSessionId,
+        };
+        let result: Awaited<ReturnType<typeof offlinePosCheckout>>;
+        try {
+          result = await offlinePosCheckout(input, networkStatus.isOnline);
+        } catch (checkoutErr) {
+          // CEO 29/05/2026 — lớp dự phòng bulletproof: nếu server từ chối vì đã
+          // có đơn nháp cùng phiên ("still draft / resume the draft"), tra đúng
+          // nháp đó và HOÀN TẤT nó thay vì để thanh toán trượt → đơn kẹt nháp.
+          const msg = checkoutErr instanceof Error ? checkoutErr.message : "";
+          const draftId =
+            networkStatus.isOnline && /still draft|resume the draft/i.test(msg)
+              ? await findDraftIdBySession(clientSessionId)
+              : null;
+          if (!draftId) throw checkoutErr;
+          const recoveredDraft = await getDraftOrderById(draftId);
+          if (!recoveredDraft) throw checkoutErr;
+          const r = await completeDraftOrder(draftId, {
+            method: state.paymentMethod,
+            paid,
+            tenantId: ctx.tenantId,
+            branchId: ctx.branchId,
+            createdBy: ctx.userId,
+            ...securedCheckout,
+            paymentBreakdown: breakdown,
+            allowBomShortage: bomShortages.length > 0,
+            // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
+            // (giống nhánh chính dòng ~1678) để close_shift_atomic không sót đơn → quỹ ca đúng.
+            shiftId: currentShift?.id ?? null,
+            clientSessionId,
+            expectedRevision: recoveredDraft.revision,
+            expectedTotal: state.total,
+          });
+          result = {
+            invoiceId: draftId,
+            invoiceCode: r.invoiceCode,
+          } as Awaited<ReturnType<typeof offlinePosCheckout>>;
+        }
+        invoiceCode = result.invoiceCode;
+        invoiceId = result.invoiceId;
+        isOfflineCheckout = !!(result as { isOffline?: boolean }).isOffline;
+
+        // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (chỉ online)
+        if (!isOfflineCheckout && result.bomConsumeResults && result.bomConsumeResults.length > 0) {
+          const lines: string[] = [];
+          let hasWarning = false;
+          for (const r of result.bomConsumeResults) {
+            for (const m of r.result.consumed) {
+              lines.push(
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${formatNumber(m.qty)}${m.unit ? ` ${m.unit}` : ""}`,
+              );
+            }
+            if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;
+          }
+          if (lines.length > 0) {
+            const head = lines.slice(0, 8).join("\n");
+            const tail = lines.length > 8 ? `\n…và ${lines.length - 8} NVL khác` : "";
+            toast({
+              variant: hasWarning ? "warning" : "success",
+              title: hasWarning
+                ? "Đã trừ NVL — có cảnh báo tồn kho âm"
+                : "Đã trừ NVL theo công thức",
+              description: head + tail,
+              duration: hasWarning ? 12000 : 6000,
+            });
+          }
+        }
+      }
+
+      // CEO 08/07/2026: đơn "Bán giao hàng" → gắn phí ship + VẬN ĐƠN vào HĐ vừa
+      // tạo. total đã gồm ship (page truyền state.total); hàm này set cột
+      // delivery_fee + reconcile total/debt (nhánh nháp có thể lưu thiếu ship do
+      // hash auto-save bỏ ship) + tạo shipping_order (cod = tổng − đã thu).
+      // Best-effort: lỗi → toast hướng dẫn tạo vận đơn tay, KHÔNG block (đã thu tiền).
+      if (
+        state.sellingMode === "delivery" &&
+        invoiceId &&
+        !isOfflineCheckout &&
+        networkStatus.isOnline
+      ) {
+        const di = state.deliveryInfo;
+        const hasReceiver =
+          !!di.recipientName.trim() &&
+          !!di.recipientPhone.trim() &&
+          !!di.address.trim();
+        if (state.shippingFee > 0 || hasReceiver) {
+          try {
+            const r = await attachDeliveryToInvoice({
+              invoiceId,
+              deliveryFee: state.shippingFee,
+              authoritativeTotal: state.total,
+              paid,
+              receiverName: di.recipientName,
+              receiverPhone: di.recipientPhone,
+              receiverAddress: [di.address, di.ward, di.district]
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .join(", "),
+              note: di.deliveryNote || null,
+            });
+            if (r.shipmentCode) {
+              toast({
+                title: `Đã tạo vận đơn ${r.shipmentCode}`,
+                description: `Phí giao ${formatCurrency(state.shippingFee)} · thu hộ ${formatCurrency(Math.max(0, state.total - paid))}`,
+                variant: "success",
+              });
+            }
+          } catch (err) {
+            console.error("[POS] attachDeliveryToInvoice:", err);
+            toast({
+              title: "Đã lưu hoá đơn nhưng chưa gắn được vận đơn",
+              description: `Đơn ${invoiceCode} OK. Vào Đơn hàng → Hóa đơn, mở đơn này bấm "Tạo vận đơn".`,
+              variant: "warning",
+              duration: 8000,
+            });
+          }
+        }
+      }
+
+      // Tiền thừa giữ lại đã được server ghi atomically cùng hóa đơn.
+
+      if (autoPrint && invoiceCode) {
+        const receipt: ReceiptData = {
+          invoiceCode,
+          date: new Date().toISOString(),
+          customerName: resolvedCustomerName,
+          items: state.lines.map((l) => ({
+            name: l.productName,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            discount: l.discount.mode === "percent"
+              ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
+              : l.discount.value,
+            total: state.computeLineTotal(l),
+            note: l.note, // 00208
+          })),
+          subtotal: state.subtotal,
+          discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          shippingFee: state.shippingFee,
+          total: state.total,
+          // Receipt hiển thị số khách đưa THỰC (paidEntered) — không phải
+          // paid clean trong invoice. Cashier check khớp tiền cầm tay.
+          paid: paidEntered,
+          change: Math.max(0, paidEntered - state.total),
+          paymentMethod: state.paymentMethod,
+          isOffline: isOfflineCheckout,
+          // CEO 08/07: in ghi chú người bán trên hóa đơn (như phiếu nhập/xuất).
+          note: state.note || undefined,
+        };
+        try {
+          // CEO 03/07: in THEO MẪU IN chi nhánh (retail × hóa đơn bán) — GIỐNG
+          // HỆT trang Hóa đơn admin. Offline hoặc chưa có mẫu → bill nhiệt cũ.
+          const resolved = isOfflineCheckout
+            ? null
+            : await resolvePrintTemplate(
+                "retail",
+                "sale_invoice",
+                currentBranch?.id ?? null,
+              );
+          if (resolved) {
+            // CEO 14/07 (V3): in CHÍNH hóa đơn vừa lưu qua buildInvoicePrintData
+            // → GIỐNG HỆT trang Hóa đơn in lại (cột "Mã hàng", nhãn "Chiết khấu",
+            // khối "Nợ cũ/Còn nợ" đọc công nợ KH thời gian thực). Fetch lỗi/null
+            // → RỚT VỀ phiếu dựng tay (không kẹt quầy).
+            let doc: DocumentPrintData | null = null;
+            if (invoiceId) {
+              try {
+                const [inv, itemRows] = await Promise.all([
+                  getInvoiceById(invoiceId),
+                  getInvoiceItems(invoiceId),
+                ]);
+                if (inv) {
+                  doc = buildInvoicePrintData(
+                    inv,
+                    businessInfoRef.current ?? undefined,
+                    toPrintLines(itemRows),
+                  );
+                }
+              } catch (fetchErr) {
+                console.warn(
+                  "[POS] fetch invoice for receipt print failed, fallback dựng tay:",
+                  fetchErr,
+                );
+              }
+            }
+            if (!doc) {
+              // Fallback dựng tay (offline / fetch lỗi) — giữ logic cũ.
+              const change = Math.max(0, paidEntered - state.total);
+              const money = (n: number) => `${formatCurrency(n)} đ`;
+              doc = {
+                documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
+                documentCode: invoiceCode,
+                date: new Date().toISOString(),
+                branchName: currentBranch?.name,
+                note: state.note || undefined,
+                headerFields: buildBuyerHeaderFields(
+                  {
+                    customerName: resolvedCustomerName,
+                    customerCode: state.customer?.code,
+                    customerPhone: state.customer?.phone,
+                    customerAddress: state.customer?.address,
+                    createdByName: user?.fullName,
+                  },
+                  invoiceFieldsRef.current,
+                ),
+                items: receipt.items,
+                itemColumns: ["Tên hàng", "SL", "Đơn giá", "Giảm giá", "Thành tiền"],
+                summaryRows: [
+                  { label: "Tổng tiền hàng", value: money(receipt.subtotal) },
+                  ...(receipt.discountAmount > 0
+                    ? [{ label: "Giảm giá", value: money(receipt.discountAmount) }]
+                    : []),
+                  ...(state.shippingFee > 0
+                    ? [{ label: "Phí giao hàng", value: money(state.shippingFee) }]
+                    : []),
+                  { label: "Tổng cộng", value: money(receipt.total), bold: true },
+                  { label: "Khách đã thanh toán", value: money(paidEntered) },
+                  ...(change > 0
+                    ? [{ label: "Tiền thối lại", value: money(change) }]
+                    : [
+                        {
+                          label: "Khách còn phải trả",
+                          value: money(receipt.total - paidEntered),
+                          tone: (receipt.total - paidEntered > 0
+                            ? "danger"
+                            : "success") as "danger" | "success",
+                        },
+                      ]),
+                ],
+                createdBy: user?.fullName,
+              };
+            }
+            printDocument(applyTemplateToDocData(doc, resolved), {
+              paperSize: resolved.paperSize,
+            });
+          } else {
+            // P-4 13/06/2026 audit lần 2: đọc paperSize từ settings.
+            printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+          }
+        } catch (err) {
+          // Lỗi resolve/áp mẫu → RỚT VỀ bill nhiệt cũ, không kẹt quầy.
+          console.error("[POS] Print via template failed, fallback receipt:", err);
+          try {
+            printReceiptDirect(receipt, settings.print.paperSize === "58mm" ? "58mm" : "80mm");
+          } catch (err2) {
+            // Print failure không nên block checkout — đơn đã thanh toán xong.
+            // Vẫn cần log để admin biết máy in lỗi (vd: hết giấy, mất kết nối).
+            console.error("[POS] Auto-print receipt failed:", err2);
+            toast({
+              title: "Không in được hoá đơn",
+              description: `Đơn ${invoiceCode} đã lưu thành công. Vui lòng in lại từ Lịch sử đơn.`,
+              variant: "warning",
+              duration: 6000,
+            });
+          }
+        }
+      }
+
+      // Khuyến mãi, coupon và điểm thưởng được ghi trong cùng giao dịch
+      // với hóa đơn ở RPC 00253 để không còn trạng thái "hóa đơn đã xong
+      // nhưng quyền lợi khách hàng chưa cập nhật".
+
+      // Toast variant theo case ghi nợ / credit / bình thường
+      const debtAmount = total - paidForInvoice;
+      const toastDescription = isOfflineCheckout
+        ? "Đơn sẽ tự đồng bộ lên server khi có mạng"
+        : debtAmount > 0
+          ? `Đã ghi nợ ${formatCurrency(debtAmount)}đ vào ${resolvedCustomerName}`
+          : creditExcess > 0
+            ? `Đã ghi credit ${formatCurrency(creditExcess)}đ cho ${resolvedCustomerName}`
+            : undefined;
+      toast({
+        title: isOfflineCheckout
+          ? `Hoá đơn ${invoiceCode} — đã lưu offline`
+          : `Hoá đơn ${invoiceCode} thành công!`,
+        description: toastDescription,
+        variant: isOfflineCheckout ? "info" : "success",
+      });
+      if (!isOfflineCheckout && typeof window !== "undefined") {
+        notifyPosStockChanged(ctx.branchId);
+      }
+      state.clearCart();
+      setAppliedPromotion(null);
+      setPromotionCleared(false);
+      setAppliedRedeem(null);
+      // P4-R2 13/06/2026 audit lần 2: reset discountSource cho idempotent.
+      // Trước đây dựa vào effect 1131 fallthrough (state.lines.length===0)
+      // để reset — nếu race với regen sessionId hoặc promotionCleared=true
+      // → đơn tiếp theo stuck source='manual' block auto-promo silent.
+      setDiscountSource(null);
+      setSearchQuery("");
+      setMobileCartOpen(false);
+      setChangeDialog({ open: false, excess: 0 });
+      // Regen sessionId cho đơn tiếp theo — đơn vừa xong đã có invoice
+      // với key này, đơn mới phải có key mới để không bị idempotent reject.
+      setClientSessionId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      );
+    } catch (err: any) {
+      // CEO 10/06/2026 — FIX mất đơn: thanh toán thất bại trước đây chỉ toast
+      // thoáng 4s → cashier bỏ lỡ → tưởng xong → mất đơn. Giờ persistent +
+      // rõ ràng. Giỏ KHÔNG bị xóa (clearCart chỉ chạy khi success).
+      const msg = String(err?.message ?? "");
+      const separatorIndex = msg.indexOf("|");
+      const rpcCode = separatorIndex >= 0 ? msg.slice(0, separatorIndex) : msg;
+      let rpcDetails: Record<string, unknown> = {};
+      if (separatorIndex >= 0) {
+        try {
+          rpcDetails = JSON.parse(msg.slice(separatorIndex + 1));
+        } catch {
+          rpcDetails = {};
+        }
+      }
+      if (
+        rpcCode === "POS_DRAFT_CONFLICT" ||
+        rpcCode === "POS_DRAFT_SESSION_CHANGED" ||
+        rpcCode === "POS_DRAFT_NOT_FOUND"
+      ) {
+        setDraftConflict({ invoiceId: state.loadedDraftId });
+        return;
+      }
+      if (rpcCode === "POS_CART_TOTAL_CHANGED") {
+        toast({
+          title: "Tổng tiền vừa thay đổi",
+          description: "Hóa đơn chưa được tạo. Vui lòng tải bản mới nhất và kiểm tra tổng tiền trước khi thanh toán.",
+          variant: "warning",
+          duration: 0,
+        });
+        setDraftConflict({ invoiceId: state.loadedDraftId });
+        return;
+      }
+      if (rpcCode === "POS_PRICE_CHANGED") {
+        const productId = String(rpcDetails.productId ?? "");
+        const variantId = rpcDetails.variantId ? String(rpcDetails.variantId) : null;
+        const expectedPrice = Number(rpcDetails.expectedPrice);
+        const changedLine = state.lines.find(
+          (line) =>
+            line.productId === productId &&
+            (line.variantId ?? null) === variantId,
+        );
+        if (changedLine && Number.isFinite(expectedPrice)) {
+          state.updateLinePrice(changedLine.lineId, expectedPrice, "server");
+        }
+        toast({
+          title: "Giá bán vừa thay đổi",
+          description:
+            "Giỏ hàng đã cập nhật theo giá hiện hành. Hóa đơn chưa được tạo; vui lòng kiểm tra và thanh toán lại.",
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
+      if (rpcCode === "POS_DISCOUNT_CHANGED") {
+        const expectedDiscount = Number(rpcDetails.expectedDiscount);
+        if (Number.isFinite(expectedDiscount)) {
+          state.setOrderDiscount({ mode: "amount", value: expectedDiscount });
+        }
+        toast({
+          title: "Mức giảm giá vừa thay đổi",
+          description:
+            "Giỏ hàng đã cập nhật mức giảm hợp lệ. Hóa đơn chưa được tạo; vui lòng kiểm tra và thanh toán lại.",
+          variant: "warning",
+          duration: 0,
+        });
+        return;
+      }
+      const isAuthErr =
+        /chưa đăng nhập|jwt|token|session|401|unauthorized|permission|refresh/i.test(msg);
+      const isProcessed = /đã được xử lý|đã xử lý|already processed/i.test(msg);
+      toast({
+        title: isProcessed
+          ? "⚠️ ĐƠN ĐÃ XỬ LÝ TRƯỚC ĐÓ"
+          : "⚠️ THANH TOÁN CHƯA XONG — GIỎ HÀNG VẪN CÒN",
+        description: isProcessed
+          ? `${msg} — Nếu đây là đơn mới chưa thanh toán, hãy F5 tải lại trang rồi thử lại; đơn vẫn an toàn trong mục 'Nháp' (F3).`
+          : isAuthErr
+            ? "Phiên đăng nhập có vấn đề. Giỏ hàng KHÔNG mất. Đăng nhập lại (tab mới) rồi quay lại bấm Thanh toán. KHÔNG đóng/tải lại trang."
+            : `Không hoàn tất được (${msg}). Giỏ hàng KHÔNG mất — vẫn còn trên màn hình. Kiểm tra mạng rồi thử lại. KHÔNG đóng trang.`,
+        variant: "error",
+        duration: 0, // PERSISTENT — cashier phải tự đóng
+      });
+    } finally {
+      setSubmitting(null);
+      submitLockRef.current = false;
+    }
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem, clientSessionId]);
+
+  // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
+  // logic auto trong handleComplete (paid < total → auto-link walk-in
+  // customer + ghi nợ phần thiếu).
+
+  // ============================================================
+  // Hotkeys
+  // ============================================================
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inInput = tag === "INPUT" || tag === "TEXTAREA";
+      // SAFE GUARD (POS-FIX-A3): F9/F10 strict không-input.
+      // Trước đây input "Khách đưa" set data-allow-hotkeys=true → cashier
+      // gõ tiền + lỡ tay F10 → checkout sai. Giờ phải Tab/click ra khỏi
+      // input trước khi muốn save-draft/checkout bằng phím tắt.
+
+      // Tab management hotkeys
+      if (e.key === "Tab" && e.ctrlKey) {
+        e.preventDefault();
+        const curIdx = tabs.findIndex((t) => t.id === activeTabId);
+        if (e.shiftKey) {
+          // Ctrl+Shift+Tab = prev tab
+          const prevIdx = (curIdx - 1 + tabs.length) % tabs.length;
+          switchTab(tabs[prevIdx].id);
+        } else {
+          // Ctrl+Tab = next tab
+          const nextIdx = (curIdx + 1) % tabs.length;
+          switchTab(tabs[nextIdx].id);
+        }
+        return;
+      }
+      if (e.key === "t" && e.ctrlKey) {
+        e.preventDefault();
+        addTab();
+        return;
+      }
+      if (e.key === "w" && e.ctrlKey && tabs.length > 1) {
+        e.preventDefault();
+        closeTab(activeTabId);
+        return;
+      }
+
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === "F3") {
+        e.preventDefault();
+        setDraftModalOpen(true);
+        return;
+      }
+      if (e.key === "F4") {
+        e.preventDefault();
+        setCustomerModalOpen(true);
+        return;
+      }
+      if (e.key === "F9" && !inInput) {
+        e.preventDefault();
+        // P1-3D-P6 12/06/2026: nếu đang submit, toast info thay vì silent —
+        // tránh cashier tưởng máy đơ, bấm F12/F5 → mất giỏ (LS cứu nhưng tốn time).
+        if (submitting !== null) {
+          toast({ title: "Đang xử lý, vui lòng đợi…", variant: "info", duration: 2000 });
+          return;
+        }
+        if (state.lines.length > 0) handleSaveDraft();
+        return;
+      }
+      if (e.key === "F10" && !inInput) {
+        e.preventDefault();
+        if (submitting !== null) {
+          toast({ title: "Đang xử lý, vui lòng đợi…", variant: "info", duration: 2000 });
+          return;
+        }
+        if (state.lines.length > 0) handleComplete();
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (showShortcuts) {
+          setShowShortcuts(false);
+        } else if (customerModalOpen) {
+          setCustomerModalOpen(false);
+        } else if (draftModalOpen) {
+          setDraftModalOpen(false);
+        } else if (mobileCartOpen) {
+          setMobileCartOpen(false);
+        } else if (state.lines.length > 0) {
+          // SAFE GUARD: Esc khi cart không trống → KHÔNG navigate.
+          // Trước đây Esc bỏ qua hết → router.push("/") khiến cashier
+          // gõ ghi chú lỡ tay Esc → mất sạch cart đang xử lý.
+          // Toast nhắc nhở thay vì hành động phá huỷ.
+          toast({
+            title: "Đang có hàng trong giỏ",
+            description: "Bấm 'Lưu nháp' hoặc 'Hoàn thành' trước khi rời trang.",
+            variant: "warning",
+            duration: 3000,
+          });
+        } else {
+          router.push("/");
+        }
+        return;
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [
+    customerModalOpen,
+    draftModalOpen,
+    showShortcuts,
+    mobileCartOpen,
+    state.lines.length,
+    handleSaveDraft,
+    handleComplete,
+    router,
+    tabs,
+    activeTabId,
+    switchTab,
+    addTab,
+    closeTab,
+    // P1-3D-P6: re-bind handler khi submitting đổi để toast info đúng state.
+    submitting,
+    toast,
+  ]);
+
+  // ============================================================
+  // Render
+  // ============================================================
+  return (
+    <>
+      {/* ═══════════ OFFLINE STATUS BAR ═══════════ */}
+      <ConnectionStatusBar
+        status={networkStatus}
+        onClick={() => setSyncDrawerOpen(true)}
+      />
+
+      {/* ═══════════ HEADER 48px — CEO 06/06/2026 audit UX/UI:
+            Tăng từ h-10 (40px) → h-12 (48px) đạt chuẩn touch Apple HIG
+            44px cho iPad 13".
+            CEO 06/06 chốt giữ bg-primary (xanh) — đẹp hơn slate-900. ═══════════ */}
+      <header className="h-12 bg-primary text-primary-foreground flex items-center px-3 shrink-0 gap-2">
+        {/* CEO 04/06/2026: từ POS quay về trang chủ mở tab mới. */}
+        <a
+          href="/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center justify-center min-w-[44px] min-h-[44px] p-2.5 rounded-md hover:bg-white/10 transition-colors shrink-0"
+          title="Trang chủ (tab mới)"
+        >
+          <Icon name="arrow_back" size={18} />
+        </a>
+
+        {/* Branch selector + Title — prominent style: badge nổi bật để CEO/staff
+            biết rõ chi nhánh đang ghi nhận đơn (CEO feedback 20/04).
+            CEO 13/05: POS Retail = bán sỉ qua Kho tổng. Filter chỉ "warehouse"
+            — FnB và Retail là 2 mảng riêng, Cửa hàng FnB không xuất hiện. */}
+        <PosBranchSelector variant="dark" filter={["warehouse"]} showCode prominent />
+        <div className="h-6 w-px bg-white/20 shrink-0" />
+        <span className="text-sm font-bold shrink-0">
+          POS Retail
+        </span>
+
+        {/* CLEAN HEADER: KM/Tier/Cart-count badges đã bị bỏ — info đã hiện ở
+            cart panel phải (summary breakdown + Khách cần trả). Tránh trùng
+            lặp gây rối thị giác. Đơn ca này chuyển vào hamburger menu. */}
+
+        {/* L-3: Button "Dùng điểm" — chỉ hiện khi KH có điểm CHƯA đổi.
+            Badge "đã đổi N điểm" passive → bỏ vì đã hiện ở cart summary phải. */}
+        {state.customer?.id &&
+          loyaltySettings?.isEnabled &&
+          (state.customer.loyaltyPoints ?? 0) > 0 &&
+          !appliedRedeem && (
+            <button
+              type="button"
+              onClick={() => {
+                setRedeemInput(String(state.customer?.loyaltyPoints ?? 0));
+                setRedeemDialogOpen(true);
+              }}
+              className="hidden md:flex items-center gap-1.5 shrink-0 px-3 min-h-[36px] rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium border border-white/20 transition-colors"
+              title={`KH có ${state.customer.loyaltyPoints} điểm`}
+            >
+              <Icon name="star" size={16} />
+              <span>Dùng điểm ({state.customer.loyaltyPoints})</span>
+            </button>
+          )}
+
+        {/* Search bar — touch ≥44px (chuẩn HIG/Material; là đường bán nhanh
+            nhất khi nhiều mã nên làm cao & rõ hơn — Đợt UI polish 15/06/2026). */}
+        <div className="flex-1 max-w-lg mx-auto">
+          <div className="relative">
+            <Icon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/60" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  handleSearchEnter();
+                }
+              }}
+              placeholder="Tìm sản phẩm theo tên, mã, barcode..."
+              data-allow-hotkeys="true"
+              className="w-full h-11 pl-10 pr-14 rounded-lg bg-white/15 border border-white/25 text-white placeholder-white/55 text-sm outline-none focus:bg-white/25 focus:border-white/45 transition-colors"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery("");
+                  searchInputRef.current?.focus();
+                }}
+                className="absolute right-10 top-1/2 -translate-y-1/2 min-w-[28px] min-h-[28px] p-1 rounded hover:bg-white/20 inline-flex items-center justify-center"
+              >
+                <Icon name="close" size={14} className="text-white/60" />
+              </button>
+            )}
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-white/60">
+              F2
+            </kbd>
+          </div>
+        </div>
+
+        {/* Shift button — status ca, min 36px touch */}
+        <button
+          type="button"
+          onClick={handleShiftClick}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium",
+            currentShift
+              ? "bg-status-success/90 text-white hover:bg-status-success"
+              : "bg-white/10 text-white/80 hover:bg-white/20"
+          )}
+          title={currentShift ? "Ca đang mở — click để đóng ca" : "Click để mở ca"}
+        >
+          <Icon name={currentShift ? "schedule" : "play_circle"} size={16} />
+          <span className="hidden sm:inline">{currentShift ? "Đang mở ca" : "Mở ca"}</span>
+        </button>
+
+        {/* CEO 14/07: Xử lý đặt hàng — nạp đơn đặt hàng (DH) vào POS */}
+        <button
+          type="button"
+          onClick={() => setProcessOrderOpen(true)}
+          className="relative inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium text-white/70 hover:bg-white/10 hover:text-white"
+          title="Chọn đơn đặt hàng đã tạo để xử lý"
+        >
+          <Icon name="receipt_long" size={16} />
+          <span className="hidden sm:inline">Xử lý đặt hàng</span>
+        </button>
+
+        {/* Draft button — badge số đếm nháp (CEO 10/06/2026) */}
+        <button
+          type="button"
+          onClick={() => setDraftModalOpen(true)}
+          className={`relative inline-flex items-center gap-1.5 px-3 min-h-[36px] rounded-md transition-colors shrink-0 text-xs font-medium ${
+            draftCount > 0
+              ? "bg-amber-500/20 text-amber-100 hover:bg-amber-500/30"
+              : "text-white/70 hover:bg-white/10 hover:text-white"
+          }`}
+          title={draftCount > 0 ? `${draftCount} đơn nháp đang chờ` : "Đơn nháp"}
+        >
+          <Icon name="save" size={16} />
+          <span className="hidden sm:inline">Nháp</span>
+          {draftCount > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold tabular-nums">
+              {draftCount > 99 ? "99+" : draftCount}
+            </span>
+          )}
+          <kbd className="hidden sm:inline font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/50">F3</kbd>
+        </button>
+
+        {/* Keyboard shortcuts — touch 36px */}
+        <div className="hidden md:block relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setShowShortcuts(!showShortcuts)}
+            className="inline-flex items-center justify-center min-w-[36px] min-h-[36px] p-2 rounded-md text-white/60 hover:bg-white/10 hover:text-white transition-colors"
+            title="Phím tắt"
+          >
+            <Icon name="keyboard" size={16} />
+          </button>
+          {showShortcuts && (
+            <>
+              <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
+              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-pos-chrome-bg text-pos-chrome-fg shadow-2xl p-3 w-56 text-[11px]">
+                <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-2">
+                  <Icon name="keyboard" size={14} />
+                  Phím tắt POS
+                </div>
+                <div className="space-y-2">
+                  {[
+                    ["F2", "Tìm sản phẩm"],
+                    ["Enter", "Thêm SP (trong ô tìm)"],
+                    ["F3", "Mở đơn nháp"],
+                    ["F4", "Chọn khách hàng"],
+                    ["F9", "Lưu nháp"],
+                    ["F10", "Thanh toán"],
+                    ["Ctrl+T", "Tạo hoá đơn mới"],
+                    ["Ctrl+Tab", "Chuyển hoá đơn"],
+                    ["Ctrl+W", "Đóng hoá đơn"],
+                    ["Esc", "Đóng popup / Thoát"],
+                  ].map(([key, desc]) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <span className="text-white/60">{desc}</span>
+                      <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-2 py-0.5">
+                        {key}
+                      </kbd>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* HAMBURGER MENU — Quay về trang chủ + Đơn ca này + Auto toggles + Đăng xuất.
+            CEO yêu cầu: bỏ badge KM/cart-count thừa ở header (đã có ở col 4),
+            gom các chức năng phụ vào dropdown 3 gạch tinh tế. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            className="p-2 rounded text-white/70 hover:bg-white/10 hover:text-white transition-colors shrink-0 outline-none"
+            title="Menu"
+          >
+            <Icon name="menu" size={16} />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={6} className="min-w-[260px]">
+            {/* User info — CEO 04/05: cashier cần biết đang đăng nhập tài
+                khoản nào để khoá ca/đối soát. Hiển thị fullName + email +
+                role · chi nhánh (nếu có). */}
+            <div className="px-3 py-3 border-b border-border">
+              <p className="text-sm font-semibold text-foreground truncate" title={user?.fullName}>
+                {user?.fullName ?? "—"}
+              </p>
+              {user?.email && (
+                <p className="text-[11px] text-muted-foreground truncate" title={user.email}>
+                  {user.email}
+                </p>
+              )}
+              <p className="text-[10.5px] text-muted-foreground mt-0.5 flex items-center gap-1 flex-wrap">
+                <span className="px-2 py-0.5 rounded bg-primary-fixed text-primary font-medium">
+                  {user?.role === "owner"
+                    ? "Chủ DN"
+                    : user?.role === "admin"
+                      ? "Quản trị"
+                      : user?.role === "manager"
+                        ? "Quản lý"
+                        : user?.role === "cashier"
+                          ? "Thu ngân"
+                          : user?.role === "staff"
+                            ? "Nhân viên"
+                            : "Người dùng"}
+                </span>
+                {currentBranch && (
+                  <span className="text-muted-foreground/80 truncate">
+                    · {currentBranch.name}
+                  </span>
+                )}
+              </p>
+            </div>
+            <DropdownMenuItem onSelect={() => window.open("/", "_blank", "noopener,noreferrer")}>
+              <Icon name="home" size={16} className="mr-2" />
+              Quay về trang chủ
+              <Icon name="open_in_new" size={12} className="ml-auto text-muted-foreground" />
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onSelect={() => setShiftDrawerOpen(true)}
+              disabled={!currentShift}
+            >
+              <Icon name="receipt_long" size={16} className="mr-2" />
+              Đơn ca này
+              {!currentShift && (
+                <span className="ml-auto text-[10px] text-muted-foreground">
+                  (Mở ca trước)
+                </span>
+              )}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Tự động hoá</DropdownMenuLabel>
+            <DropdownMenuCheckboxItem
+              checked={settings.sales.autoPrintInvoice}
+              onCheckedChange={(checked) =>
+                updateSettings("sales", { autoPrintInvoice: !!checked })
+              }
+            >
+              Tự động in hoá đơn khi thanh toán
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={settings.notification.soundEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings("notification", { soundEnabled: !!checked })
+              }
+            >
+              Âm thanh phản hồi (beep, haptic)
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onSelect={() => {
+                logout();
+              }}
+              variant="destructive"
+            >
+              <Icon name="logout" size={16} className="mr-2" />
+              Đăng xuất
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </header>
+
+      {/* ═══════════ BODY ═══════════ */}
+      <div className="flex-1 flex min-h-0 relative">
+        {/* Mobile cart backdrop */}
+        {mobileCartOpen && (
+          <div
+            className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+            onClick={() => setMobileCartOpen(false)}
+          />
+        )}
+
+        {/* ─── LEFT: Product Grid ─── */}
+        <div className="flex-1 min-w-0">
+          <ProductGrid
+            searchQuery={searchQuery}
+            onAddProduct={handleAddProduct}
+            onStockSnapshot={state.applyStockSnapshot}
+            trackedStockRequests={state.lines}
+          />
+        </div>
+
+        {/* ─── RIGHT: Cart + Payment Panel ─── */}
+        <aside
+          className={cn(
+            "pos-cart-grid pos-panel bg-white flex flex-col",
+            // Desktop adaptive: total cart aside width = items-zone + info-zone.
+            // 1366: 660px (items 300 + info 360), 1920: 840 (items 360 + info 480),
+            // 2560: cap 880. CSS @media trong globals.css chia tỉ lệ adaptive.
+            "lg:w-[clamp(660px,46vw,880px)] lg:shrink-0 lg:border-l lg:border-border lg:static lg:translate-x-0 lg:z-auto lg:shadow-none",
+            // Mobile/Tablet: slide-over from right
+            "fixed inset-y-0 right-0 z-40 w-full sm:w-[420px] shadow-2xl",
+            "transition-transform duration-300 ease-in-out",
+            mobileCartOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0",
+          )}
+        >
+          {/* === COL 3: CART ITEMS ZONE (Invoice tabs + items list) ===
+              Ở lg+ chia thành 2 cột qua CSS grid trong globals.css
+              .pos-cart-grid. Mobile/tablet vẫn flex-col tuần tự. */}
+          <div className="cart-items-zone flex flex-col flex-1 min-h-0 lg:border-r lg:border-border">
+          {/* ── Invoice tabs bar — KiotViet multi-tab ── */}
+          <div className="flex items-center bg-surface-container-low border-b border-border shrink-0 min-h-[32px]">
+            {/* Mobile back button */}
+            <button
+              type="button"
+              onClick={() => setMobileCartOpen(false)}
+              className="lg:hidden shrink-0 h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors border-r border-border"
+              title="Quay lại sản phẩm"
+            >
+              <Icon name="arrow_back" size={16} />
+            </button>
+            <div className="flex-1 flex items-center overflow-x-auto scrollbar-none">
+              {tabs.map((tab) => {
+                const isActive = tab.id === activeTabId;
+                const count = isActive ? state.itemCount : tab.itemCount;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => switchTab(tab.id)}
+                    className={cn(
+                      "relative group inline-flex items-center gap-1 px-3 h-8 text-[11px] font-medium whitespace-nowrap transition-all border-b-2 shrink-0",
+                      isActive
+                        ? "bg-white text-primary border-primary"
+                        : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
+                    )}
+                  >
+                    {tab.label}
+                    {count > 0 && (
+                      <span className={cn(
+                        "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold",
+                        isActive ? "bg-primary-fixed text-primary" : "bg-muted text-muted-foreground"
+                      )}>
+                        {count}
+                      </span>
+                    )}
+                    {/* Close tab button */}
+                    {tabs.length > 1 && (
+                      <span
+                        role="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          closeTab(tab.id);
+                        }}
+                        className="ml-0.5 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-status-error/10 hover:text-status-error text-muted-foreground transition-all"
+                      >
+                        <Icon name="close" size={14} />
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {/* Add new tab button */}
+            <button
+              type="button"
+              onClick={addTab}
+              className="shrink-0 h-8 w-8 flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors border-l border-border"
+              title="Tạo hoá đơn mới"
+            >
+              <Icon name="add" size={14} />
+            </button>
+          </div>
+
+          {/* ── Draft indicator (when loaded from F3) ── */}
+          {state.loadedDraftId && (
+            <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-[11px]">
+              <Icon name="save" size={14} className="text-status-warning" />
+              <span className="text-status-warning font-medium">
+                {state.loadedDraftSource === "order"
+                  ? "Đang sửa ĐƠN ĐẶT HÀNG — thay đổi tự lưu, chỉ bấm Thanh toán khi thu tiền"
+                  : "Đang sửa nháp"}
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  openConfirm(
+                    "Huỷ sửa nháp?",
+                    "Các thay đổi chưa lưu sẽ bị mất. Giỏ hàng sẽ trở về trạng thái trống.",
+                    () => {
+                      state.clearCart();
+                      toast({ title: "Đã huỷ sửa nháp", variant: "success" });
+                    }
+                  )
+                }
+                className="ml-auto text-status-warning hover:text-status-warning text-[10px] underline"
+              >
+                Huỷ
+              </button>
+            </div>
+          )}
+
+          {/* Customer + Delivery moved to right column (Phase 2 4-col split) */}
+
+          {/* ── Cart status strip — Plan A không cần table header (item self-describing).
+                  Strip nhỏ hiện count + clear all để cashier thấy quy mô đơn. ── */}
+          {state.lines.length > 0 && (
+            <div className="flex items-center justify-between px-3 py-1 border-b border-border bg-surface-container-low shrink-0">
+              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
+                {state.lines.length} sản phẩm · {state.itemCount} món
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  openConfirm(
+                    `Xoá toàn bộ ${state.lines.length} dòng khỏi giỏ hàng?`,
+                    "Các sản phẩm đang chọn sẽ bị xoá. Không thể hoàn tác.",
+                    () => {
+                      state.clearCart();
+                      toast({ title: "Đã xoá giỏ hàng", variant: "success" });
+                    }
+                  )
+                }
+                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                title="Xoá tất cả (cần xác nhận)"
+              >
+                <Icon name="delete" size={14} />
+                Xoá hết
+              </button>
+            </div>
+          )}
+
+          {/* ── Cart items list ── */}
+          <div ref={cartScrollRef} className="flex-1 overflow-y-auto min-h-0">
+            {state.lines.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-6">
+                <Icon name="shopping_cart" size={32} className="mb-2 text-muted-foreground/35" />
+                <p className="text-xs font-medium text-muted-foreground">Giỏ hàng trống</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-0.5 text-center">
+                  Chọn sản phẩm bên trái hoặc nhấn F2 để tìm
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {/* CEO 04/07: dòng MỚI hiện TRÊN CÙNG — chỉ đảo hiển thị, data
+                    giữ cũ→mới (lưu/in/nháp không đổi). STT giữ theo thứ tự
+                    thêm để khớp phiếu in; dòng đã có +SL đứng yên tại chỗ. */}
+                {state.lines
+                  .map((line, idx) => ({ line, stt: idx + 1 }))
+                  .reverse()
+                  .map(({ line, stt }) => (
+                  <CartItem
+                    key={line.lineId}
+                    index={stt}
+                    line={line}
+                    lineTotal={state.computeLineTotal(line)}
+                    onQtyChange={(qty) => state.updateLineQty(line.lineId, qty)}
+                    onPriceChange={(price) => state.updateLinePrice(line.lineId, price)}
+                    onDiscountChange={(d) => handleLineDiscountChange(line.lineId, d)}
+                    onNoteChange={(note) => state.updateLineNote(line.lineId, note)}
+                    onRemove={() => state.removeLine(line.lineId)}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          </div>{/* /cart-items-zone */}
+
+          {/* === COL 4: RIGHT INFO ZONE (Customer + Delivery + Totals + Payment + Actions) === */}
+          <div className="cart-info-zone flex flex-col">
+
+          {/* ── Customer picker row — Stitch pill (moved from items zone) ── */}
+          <div className="px-3 py-2 border-b border-outline-variant/20">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCustomerModalOpen(true)}
+                title={state.customer?.name ?? "Khách lẻ"}
+                className={cn(
+                  "flex-1 flex items-center gap-2 px-3 h-8 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
+                  state.customer
+                    ? "bg-primary-fixed text-primary font-semibold"
+                    : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
+                )}
+              >
+                {state.customer ? (
+                  <Icon name="person_check" size={14} className="text-primary shrink-0" />
+                ) : (
+                  <Icon name="person" size={14} className="shrink-0" />
+                )}
+                <span className="flex-1 text-left truncate font-medium">
+                  {state.customer?.name ?? "Khách lẻ"}
+                </span>
+                <kbd className="font-mono text-[9px] bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
+                  F4
+                </kbd>
+              </button>
+              {state.customer && (
+                <button
+                  type="button"
+                  onClick={() => state.setCustomer(null, "user-clear")}
+                  className="p-2 rounded-lg text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                  title="Gỡ khách"
+                >
+                  <Icon name="close" size={14} />
+                </button>
+              )}
+            </div>
+            {state.customer && (
+              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
+                {state.customer.phone && (
+                  <span className="flex items-center gap-0.5">
+                    <Icon name="call" size={14} />
+                    {state.customer.phone}
+                  </span>
+                )}
+                {(state.customer.currentDebt ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 text-status-error font-semibold">
+                    Nợ cũ: {formatCurrency(state.customer.currentDebt ?? 0)}
+                  </span>
+                )}
+                {state.customer.code && (
+                  <span className="text-muted-foreground font-mono">{state.customer.code}</span>
+                )}
+                {(state.customer.groupDiscountPercent ?? 0) > 0 && (
+                  <span className="flex items-center gap-0.5 px-2 py-0.5 rounded-full bg-status-success/10 text-status-success font-semibold">
+                    <Icon name="loyalty" size={14} />
+                    {state.customer.groupName ?? "Nhóm"} −{state.customer.groupDiscountPercent}%
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Delivery form (Bán giao hàng mode, moved from items zone) ── */}
+          {state.sellingMode === "delivery" && (
+            <DeliveryForm
+              value={state.deliveryInfo}
+              onChange={state.setDeliveryInfo}
+            />
+          )}
+
+          {/* KM-3: Free items section — hiển thị quà tặng kèm (BOGO + gift) */}
+          {appliedPromotion?.freeItems && appliedPromotion.freeItems.length > 0 && (
+            <div className="border-t border-status-warning/30 px-3 py-2 bg-status-warning/5">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="redeem" size={14} className="text-status-warning" />
+                <span className="text-xs font-semibold text-status-warning">
+                  Tặng kèm ({appliedPromotion.freeItems.length} món)
+                </span>
+              </div>
+              <div className="space-y-0.5 pl-5">
+                {appliedPromotion.freeItems.map((free) => {
+                  // Lookup product name từ cart line trước; nếu không có
+                  // (gift product không có trong cart) → fallback empty.
+                  const lineMatch = state.lines.find((l) => l.productId === free.productId);
+                  const name = lineMatch?.productName ?? free.productName ?? "Sản phẩm";
+                  return (
+                    <div
+                      key={free.productId}
+                      className="flex items-center justify-between text-[11px]"
+                    >
+                      <span className="truncate text-foreground">
+                        {name} <span className="text-muted-foreground">× {formatNumber(free.quantity)}</span>
+                      </span>
+                      {free.unitPrice > 0 && (
+                        <span className="text-muted-foreground tabular-nums shrink-0 ml-2">
+                          {formatCurrency(free.quantity * free.unitPrice)}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* ── Totals section ── */}
+          <div className="border-t border-border px-3 py-2 space-y-1 bg-surface-container-low/50">
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Tổng tiền hàng ({state.itemCount} SP)</span>
+              <span className="font-medium text-foreground tabular-nums">
+                {formatCurrency(state.subtotal)}
+              </span>
+            </div>
+
+            {/* Giảm giá — always visible like KiotViet */}
+            <div className="flex justify-between text-xs text-muted-foreground">
+              <span>Giảm giá</span>
+              <span className={cn("tabular-nums", (state.lineDiscountTotal + state.orderDiscountAmount) > 0 && "text-status-warning")}>
+                {(state.lineDiscountTotal + state.orderDiscountAmount) > 0
+                  ? `−${formatCurrency(state.lineDiscountTotal + state.orderDiscountAmount)}`
+                  : "0"
+                }
+              </span>
+            </div>
+
+            {/* Order discount — hidden in fast mode */}
+            {state.sellingMode !== "fast" && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  Chiết khấu đơn
+                  {/* Sprint B.6: indicator OTP guard (thay PIN cũ) */}
+                  <Icon
+                    name="vpn_key"
+                    size={14}
+                    className="inline ml-1 text-status-warning align-text-top"
+                    title="Giảm giá vượt ngưỡng cần OTP duyệt từ quản lý (/cap-otp)"
+                  />
+                </span>
+                <OrderDiscountInput
+                  value={state.orderDiscount}
+                  onChange={handleOrderDiscountChange}
+                  subtotal={state.subtotal}
+                />
+              </div>
+            )}
+
+            {/* Coupon / voucher — hidden in fast mode */}
+            {state.sellingMode !== "fast" && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs text-muted-foreground shrink-0">Mã KM</span>
+                {couponApplied ? (
+                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-status-success/10 text-status-success text-[11px] font-bold">
+                    <Icon name="check_circle" size={14} />
+                    {couponApplied}
+                    <button
+                      type="button"
+                      onClick={handleRemoveCoupon}
+                      className="ml-1 hover:text-status-error"
+                      title="Huỷ mã"
+                    >
+                      <Icon name="close" size={14} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-stretch h-6 rounded border border-border overflow-hidden bg-white">
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleApplyCoupon();
+                        }
+                      }}
+                      data-allow-hotkeys="true"
+                      placeholder="Nhập mã"
+                      className="w-20 px-2 text-[10px] outline-none uppercase"
+                      maxLength={20}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyCoupon}
+                      disabled={couponApplying || !couponCode.trim()}
+                      className="px-2 text-[10px] font-bold border-l border-border bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {couponApplying ? "..." : "Áp"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Shipping fee */}
+            {state.sellingMode === "delivery" && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Phí giao hàng</span>
+                <span className="tabular-nums">
+                  {state.shippingFee > 0 ? `+${formatCurrency(state.shippingFee)}` : "0"}
+                </span>
+              </div>
+            )}
+
+            {/* CEO 05/06/2026: VAT đơn — dropdown 0/5/8/10% áp cấp đơn */}
+            {state.sellingMode !== "fast" && (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">VAT đơn</span>
+                <div className="inline-flex items-center gap-1.5">
+                  <select
+                    value={state.orderVatRate}
+                    onChange={(e) => state.setOrderVatRate(Number(e.target.value))}
+                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-white outline-none cursor-pointer"
+                  >
+                    <option value={0}>0%</option>
+                    <option value={5}>5%</option>
+                    <option value={8}>8%</option>
+                    <option value={10}>10%</option>
+                  </select>
+                  {state.orderVatRate > 0 && (
+                    <span className="text-[11px] text-status-warning font-medium tabular-nums min-w-[64px] text-right">
+                      +{formatCurrency(state.orderVatAmount)}
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* VAT */}
+            {state.taxAmount > 0 && (
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Thuế GTGT</span>
+                <span className="tabular-nums">
+                  +{formatCurrency(state.taxAmount)}
+                </span>
+              </div>
+            )}
+
+            {/* Total — Stitch font-heading extrabold primary
+                P0-1 fix 12/06/2026: state.total đã fold orderVatAmount → hết duplicate render. */}
+            <div className="flex justify-between items-baseline pt-2 border-t border-outline-variant/20">
+              <span className="text-sm font-semibold text-foreground">Khách cần trả</span>
+              <span className="font-heading text-2xl font-extrabold text-primary tabular-nums leading-none">
+                {formatCurrency(state.total)} ₫
+              </span>
+            </div>
+          </div>
+
+          {/* ── Payment section (hidden in fast mode) ── */}
+          {state.sellingMode !== "fast" && (
+            <div className="border-t border-border px-3 py-2 space-y-2">
+              {/* Payment method */}
+              <div className="grid grid-cols-4 gap-2">
+                <PaymentBtn
+                  icon={<Icon name="payments" size={14} />}
+                  label="Tiền mặt"
+                  active={state.paymentMethod === "cash"}
+                  onClick={() => state.setPaymentMethod("cash")}
+                />
+                <PaymentBtn
+                  icon={<Icon name="apartment" size={14} />}
+                  label="CK"
+                  active={state.paymentMethod === "transfer"}
+                  onClick={() => state.setPaymentMethod("transfer")}
+                />
+                <PaymentBtn
+                  icon={<Icon name="credit_card" size={14} />}
+                  label="Thẻ"
+                  active={state.paymentMethod === "card"}
+                  onClick={() => state.setPaymentMethod("card")}
+                />
+                <PaymentBtn
+                  icon={<Icon name="layers" size={14} />}
+                  label="Hỗn hợp"
+                  active={state.paymentMethod === "mixed"}
+                  onClick={() => state.setPaymentMethod("mixed")}
+                />
+              </div>
+
+              {/* Mixed payment breakdown */}
+              {state.paymentMethod === "mixed" ? (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                    Chi tiết thanh toán
+                  </label>
+                  {([
+                    { method: "cash" as const, label: "Tiền mặt", icon: <Icon name="payments" size={14} className="text-status-success" /> },
+                    { method: "transfer" as const, label: "Chuyển khoản", icon: <Icon name="apartment" size={14} className="text-primary" /> },
+                    { method: "card" as const, label: "Thẻ", icon: <Icon name="credit_card" size={14} className="text-status-info" /> },
+                  ]).map((pm) => {
+                    const item = state.paymentBreakdown.find((b) => b.method === pm.method);
+                    return (
+                      <div key={pm.method} className="flex items-center gap-2">
+                        <div className="flex items-center gap-1 w-20 shrink-0">
+                          {pm.icon}
+                          <span className="text-[10px] text-foreground">{pm.label}</span>
+                        </div>
+                        <input
+                          type="number"
+                          inputMode="numeric"
+                          value={item?.amount || ""}
+                          onChange={(e) =>
+                            state.updateBreakdownAmount(
+                              pm.method,
+                              Math.max(0, parseInt(e.target.value) || 0)
+                            )
+                          }
+                          placeholder="0"
+                          data-allow-hotkeys="true"
+                          className="flex-1 h-7 px-2 rounded border border-border text-right text-xs font-bold outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary tabular-nums"
+                        />
+                      </div>
+                    );
+                  })}
+                  {/* Breakdown summary */}
+                  <div className="flex items-center justify-between pt-1 border-t border-dashed border-border">
+                    <span className="text-[10px] text-muted-foreground">Tổng đã nhập</span>
+                    <span
+                      className={cn(
+                        "text-xs font-bold tabular-nums",
+                        state.breakdownTotal >= state.total
+                          ? "text-status-success"
+                          : "text-status-warning"
+                      )}
+                    >
+                      {formatCurrency(state.breakdownTotal)} / {formatCurrency(state.total)} ₫
+                    </span>
+                  </div>
+                  {state.breakdownTotal > 0 && state.breakdownTotal < state.total && (
+                    <p className="text-[10px] text-status-warning">
+                      Còn thiếu {formatCurrency(state.total - state.breakdownTotal)} ₫
+                    </p>
+                  )}
+                  {state.breakdownTotal > state.total && (
+                    <p className="text-[10px] text-status-success">
+                      Thừa {formatCurrency(state.breakdownTotal - state.total)} ₫
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <>
+                  {/* Single-method: Paid amount */}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                        Khách đưa
+                      </label>
+                      {state.paid > 0 && state.change > 0 && (
+                        <span className="text-[11px] font-bold text-status-success bg-status-success/10 px-2 py-0.5 rounded">
+                          Thừa: {formatCurrency(state.change)} ₫
+                        </span>
+                      )}
+                      {state.paid > 0 && state.debt > 0 && (
+                        <span className="text-[11px] font-bold text-status-warning bg-status-warning/10 px-2 py-0.5 rounded">
+                          Nợ: {formatCurrency(state.debt)} ₫
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      value={state.paid || ""}
+                      onChange={(e) =>
+                        state.setPaid(Math.max(0, parseInt(e.target.value) || 0))
+                      }
+                      placeholder={formatCurrency(state.total)}
+                      data-allow-hotkeys="true"
+                      className={cn(
+                        "w-full h-10 px-3 rounded-lg border text-right text-base font-bold outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary tabular-nums transition-colors",
+                        state.paid > 0 && state.paid >= state.total
+                          ? "border-status-success/25 bg-status-success/10"
+                          : state.paid > 0 && state.paid < state.total
+                          ? "border-status-warning/25 bg-status-warning/10"
+                          : "border-border"
+                      )}
+                    />
+                  </div>
+
+                  {/* Denomination buttons — Stitch pill group */}
+                  <div className="flex gap-1">
+                    {DENOMINATIONS.map((d) => (
+                      <button
+                        key={d.value}
+                        type="button"
+                        onClick={() => state.setPaid(d.value)}
+                        className="flex-1 h-10 rounded-lg bg-surface-container-low text-xs font-semibold text-on-surface-variant hover:bg-primary-fixed hover:text-primary transition-colors press-scale-sm"
+                      >
+                        {d.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => state.setPaid(state.total)}
+                      className="flex-1 h-10 rounded-lg bg-primary-fixed text-xs font-bold text-primary hover:bg-primary-fixed/70 transition-colors press-scale-sm"
+                    >
+                      Đủ
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Note toggle + auto print — inline */}
+              <div className="flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setNoteOpen(!noteOpen)}
+                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <Icon name="expand_more"
+                    className={cn(
+                                                                                              "h-2.5 w-2.5 transition-transform",
+                                                                                              noteOpen && "rotate-180"
+                                                                                            )}
+                  />
+                  Ghi chú
+                </button>
+                <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoPrint}
+                    onChange={() => {
+                      const next = !autoPrint;
+                      setAutoPrint(next);
+                      localStorage.setItem("pos.autoPrint", String(next));
+                    }}
+                    className="h-3 w-3 rounded border-border text-primary focus:ring-primary"
+                  />
+                  In bill
+                </label>
+              </div>
+              {noteOpen && (
+                <textarea
+                  value={state.note}
+                  onChange={(e) => state.setNote(e.target.value)}
+                  rows={2}
+                  data-allow-hotkeys="true"
+                  className="w-full px-3 py-2 rounded border border-border text-xs resize-none outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+                  placeholder="Ghi chú cho đơn hàng..."
+                />
+              )}
+            </div>
+          )}
+
+          {/* R9: Pre-bill row — secondary action above checkout. Tách riêng để
+              không lẫn với "ghi nợ"/checkout, cashier dễ tìm khi khách hỏi
+              "tổng bao nhiêu" trước khi quyết. */}
+          {state.lines.length > 0 && (
+            <div className="px-3 pt-2 shrink-0">
+              <button
+                type="button"
+                onClick={handlePrintPreBill}
+                className="w-full h-8 rounded-lg border border-dashed border-primary/40 bg-primary/5 text-primary text-xs font-medium hover:bg-primary/10 inline-flex items-center justify-center gap-2 press-scale-sm"
+                title="In tạm tính cho khách kiểm tra trước khi trả tiền"
+              >
+                <Icon name="receipt_long" size={14} />
+                In tạm tính
+              </button>
+            </div>
+          )}
+
+          {/* ── Action buttons — Stitch primary style ──
+              CEO 04/05: từ ngày bỏ nút "Ghi nợ", grid cũ [1fr_1fr_2fr]
+              chừa slot trống → Thanh toán bị nén xuống 2 hàng. Đổi sang
+              [1fr_2fr]: Nháp ~33% + Thanh toán ~66% — đủ 1 hàng. */}
+          <div className={cn(
+            "px-3 py-3 border-t border-outline-variant/20 shrink-0 bg-surface-container-lowest",
+            state.sellingMode === "fast"
+              ? "flex flex-col gap-2"
+              : "grid grid-cols-[1fr_2fr] gap-2"
+          )}>
+            {/* Draft button */}
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              disabled={state.lines.length === 0 || submitting !== null}
+              className={cn(
+                "rounded-lg bg-surface-container-low text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-1 transition-all press-scale-sm",
+                state.sellingMode === "fast" ? "h-8" : "h-10"
+              )}
+            >
+              {submitting === "draft" ? (
+                <Icon name="progress_activity" size={14} className="animate-spin" />
+              ) : (
+                <Icon name="save" size={14} />
+              )}
+              Nháp
+              <kbd className="font-mono text-[8px] bg-surface-container-lowest border border-outline-variant/30 rounded px-0.5 text-muted-foreground">
+                F9
+              </kbd>
+            </button>
+            {/* CEO 04/05: Bỏ nút "Ghi nợ" riêng. Logic ghi nợ tự động:
+                khách đưa < total → auto link walk-in (nếu chưa chọn KH) +
+                ghi nợ phần thiếu. Khách đưa > total → mở ChangeDialog hỏi
+                "Trả khách" hay "Ghi credit". */}
+            {/* Checkout button — primary Stitch. whitespace-nowrap để chữ
+                "Thanh toán" không xuống dòng dù column hẹp. */}
+            <button
+              type="button"
+              onClick={() => handleComplete()}
+              disabled={state.lines.length === 0 || submitting !== null}
+              className={cn(
+                "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
+                state.sellingMode === "fast"
+                  ? "h-12 text-base"
+                  : "h-10 text-[13px]"
+              )}
+            >
+              {submitting === "complete" ? (
+                <Icon name="progress_activity" size={16} className="animate-spin" />
+              ) : (
+                <Icon name="check_circle" size={16} />
+              )}
+              Thanh toán
+              <kbd className={cn(
+                "font-mono bg-on-primary/15 border border-on-primary/25 rounded px-1 py-0.5 text-on-primary/90",
+                state.sellingMode === "fast" ? "text-[10px]" : "text-[9px]"
+              )}>
+                F10
+              </kbd>
+            </button>
+          </div>
+          </div>{/* /cart-info-zone */}
+        </aside>
+      </div>
+
+      {/* ═══════════ FLOATING CART BUTTON — mobile/tablet only ═══════════ */}
+      {!mobileCartOpen && (
+        <button
+          type="button"
+          onClick={() => setMobileCartOpen(true)}
+          className={cn(
+            "lg:hidden fixed z-30 left-4 right-4 rounded-xl shadow-lg",
+            "flex items-center justify-between px-4 active:scale-[0.98] transition-all",
+            state.lines.length > 0
+              ? "bottom-12 h-12 bg-primary text-primary-foreground"
+              : "bottom-12 h-10 bg-white/95 backdrop-blur border border-border text-foreground"
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Icon name="shopping_cart" />
+              {state.itemCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-status-error text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                  {state.itemCount}
+                </span>
+              )}
+            </div>
+            <span className="font-semibold text-sm">
+              {state.lines.length > 0 ? `${state.itemCount} sản phẩm` : "Xem giỏ hàng"}
+            </span>
+          </div>
+          {state.lines.length > 0 && (
+            <span className="font-bold text-sm tabular-nums">{formatCurrency(state.total)} ₫</span>
+          )}
+        </button>
+      )}
+
+      {/* ═══════════ SELLING MODE TABS (bottom bar) ═══════════ */}
+      <div className="h-8 bg-white border-t border-border flex items-stretch px-3 gap-0 shrink-0">
+        <SellingModeTab
+          icon={<Icon name="bolt" size={14} />}
+          label="Bán nhanh"
+          active={state.sellingMode === "fast"}
+          onClick={() => state.setSellingMode("fast")}
+        />
+        <SellingModeTab
+          icon={<Icon name="schedule" size={14} />}
+          label="Bán thường"
+          active={state.sellingMode === "normal"}
+          onClick={() => state.setSellingMode("normal")}
+        />
+        <SellingModeTab
+          icon={<Icon name="local_shipping" size={14} />}
+          label="Bán giao hàng"
+          active={state.sellingMode === "delivery"}
+          onClick={() => state.setSellingMode("delivery")}
+        />
+      </div>
+
+      {/* ═══════════ MODALS ═══════════ */}
+      <CustomerPicker
+        open={customerModalOpen}
+        onClose={() => setCustomerModalOpen(false)}
+        onSelect={(customer) => {
+          state.setCustomer(customer, "user-pick");
+          // R2: Cảnh báo nợ cũ — KH có currentDebt > 0 → toast warning
+          // ngay khi chọn để cashier biết trước khi cộng thêm đơn mới.
+          if (customer && customer.currentDebt > 0) {
+            toast({
+              title: `⚠️ ${customer.name} đang nợ ${formatCurrency(customer.currentDebt)} ₫`,
+              description: "Vui lòng đối chiếu công nợ cũ trước khi cho ghi nợ tiếp.",
+              variant: "warning",
+              duration: 6000,
+            });
+          }
+        }}
+        onRequestCreate={(initialName) => {
+          setCreateCustomerInitial(initialName);
+          setCreateCustomerOpen(true);
+        }}
+      />
+      {/* Quick-create customer — khi user click "+ Thêm KH mới" trong CustomerPicker.
+          Sau khi tạo xong, tự động tìm lại khách vừa tạo rồi gán vào hoá đơn. */}
+      <CreateCustomerDialog
+        open={createCustomerOpen}
+        onOpenChange={setCreateCustomerOpen}
+        onSuccess={() => {
+          // Refetch customer vừa tạo bằng search theo tên để auto-select
+          // (createCustomer không return customer object, nên phải query lại).
+          if (!createCustomerInitial) return;
+          getCustomers({
+            page: 0,
+            pageSize: 1,
+            search: createCustomerInitial,
+            filters: {},
+            sortBy: "name",
+            sortOrder: "asc",
+          })
+            .then((res) => {
+              if (res.data.length > 0) {
+                state.setCustomer(res.data[0], "user-pick-scan");
+                toast({
+                  title: "Đã chọn khách hàng",
+                  description: res.data[0].name,
+                  variant: "success",
+                });
+              }
+            })
+            .catch((err) => {
+              console.error("[POS] customer search failed:", err);
+              toast({
+                title: "Không tìm được khách hàng",
+                description: "Vui lòng thử lại hoặc chọn từ danh sách.",
+                variant: "error",
+              });
+            });
+        }}
+      />
+      <DraftListModal
+        open={draftModalOpen}
+        onClose={() => setDraftModalOpen(false)}
+        onLoad={(draft) => {
+          state.loadDraft(draft);
+          setDraftModalOpen(false);
+          toast({ title: `Đã tải nháp ${draft.code || ""}`, variant: "success" });
+        }}
+      />
+      {/* CEO 14/07: Xử lý đặt hàng — chọn đơn DH → nạp vào giỏ qua CÙNG đường
+          state.loadDraft (như mở nháp / ?draftId= — đã kiểm, không lệch số). */}
+      <ProcessOrderModal
+        open={processOrderOpen}
+        onClose={() => setProcessOrderOpen(false)}
+        branchId={currentBranch?.id ?? null}
+        onPick={async (orderId) => {
+          try {
+            const detail = await getDraftOrderById(orderId);
+            if (!detail) {
+              toast({
+                title: "Không mở được đơn",
+                description: "Đơn có thể đã bị xóa hoặc đổi trạng thái.",
+                variant: "error",
+              });
+              return;
+            }
+            // CEO 14/07/2026 FIX MỒ CÔI ĐƠN: adopt session_id TRƯỚC loadDraft
+            // (y hệt handleRecoverySelect / ?draftId=). Nếu bỏ bước này,
+            // useAutoSaveDraft chạy theo clientSessionId hiện tại → ĐẺ NHÁP MỚI,
+            // rồi setLoadedDraftId ghi đè sang nháp mồ côi đó → khi Thanh toán,
+            // completeDraftOrder hoàn tất NHÁP MỚI, còn ĐƠN ĐẶT HÀNG gốc (DH)
+            // KHÔNG bao giờ flip 'completed' → đơn cứ hiện "chưa hoàn thành".
+            if (detail.clientSessionId) {
+              setClientSessionId(detail.clientSessionId);
+            } else {
+              const newId =
+                typeof crypto !== "undefined" && crypto.randomUUID
+                  ? crypto.randomUUID()
+                  : `sess-${Date.now()}`;
+              setClientSessionId(newId);
+              detail.revision = await adoptDraftSession(
+                detail.id,
+                newId,
+                detail.revision,
+              );
+            }
+            state.loadDraft(detail);
+            setProcessOrderOpen(false);
+            toast({
+              title: `Đã nạp đơn ${detail.code || ""}`,
+              description: "Kiểm tra giỏ hàng rồi thanh toán.",
+              variant: "success",
+            });
+          } catch (err) {
+            toast({
+              title: "Không mở được đơn",
+              description: err instanceof Error ? err.message : "Lỗi",
+              variant: "error",
+            });
+          }
+        }}
+      />
+
+      {/* Xác nhận hành động huỷ (xoá giỏ / huỷ nháp) — dùng chung */}
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={confirmConfig?.title ?? ""}
+        description={confirmConfig?.description ?? ""}
+        variant="destructive"
+        confirmLabel="Xác nhận"
+        cancelLabel="Giữ lại"
+        onConfirm={() => {
+          confirmConfig?.action();
+          setConfirmOpen(false);
+        }}
+      />
+
+      {/* Variant picker — opens when clicking a product that has packaging variants */}
+      <VariantPickerDialog
+        open={!!variantPickerProduct}
+        onOpenChange={(open) => {
+          if (!open) {
+            setVariantPickerProduct(null);
+            setVariantPickerList([]);
+          }
+        }}
+        product={variantPickerProduct}
+        variants={variantPickerList}
+        onConfirm={(payload) => {
+          if (!variantPickerProduct) return;
+          // Variant đã có giá riêng → addLineWithTier không override
+          // (chỉ inject tier price khi options.unitPrice undefined).
+          addLineWithTier(variantPickerProduct, {
+            variantId: payload.variantId,
+            variantLabel: payload.variantLabel,
+            unitPrice: payload.unitPrice,
+            quantity: payload.quantity,
+            availableStock: Number(variantPickerProduct.stock ?? 0),
+            stockKnown: true,
+          });
+          setTimeout(() => {
+            // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
+            cartScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+          }, 50);
+          toast({
+            title: `Đã thêm ${variantPickerProduct.name}`,
+            description: `${payload.variantLabel} × ${formatNumber(payload.quantity)}`,
+            variant: "success",
+          });
+        }}
+      />
+
+      {/* Sync queue drawer — opens when ConnectionStatusBar is clicked */}
+      {syncDrawerOpen && (
+        <Suspense fallback={null}>
+          <ShiftInvoiceDrawer
+            open={shiftDrawerOpen}
+            onOpenChange={setShiftDrawerOpen}
+            branchId={currentBranch?.id}
+            shiftOpenedAt={currentShift?.openedAt ?? null}
+          />
+          <SyncQueueDrawer
+            open={syncDrawerOpen}
+            onOpenChange={setSyncDrawerOpen}
+            status={networkStatus}
+          />
+        </Suspense>
+      )}
+
+      {/* Supervisor PIN — gate giảm giá vượt ngưỡng */}
+      {/* Sprint B.6 (CEO 12/05): bỏ SupervisorPinDialog (1 PIN chung) →
+          OtpApprovalDialog per-user. Manager cấp OTP từ /cap-otp → cashier
+          nhập 6 số → server verify OTP issuer có quyền pos_fnb.discount →
+          audit log đầy đủ cashier + manager đã duyệt. */}
+      <OtpApprovalDialog
+        open={discountOtpOpen}
+        onOpenChange={setDiscountOtpOpen}
+        actionCode={OTP_ACTION_CODES.POS_RETAIL_DISCOUNT_OVERRIDE}
+        requireReason
+        contextLabel="Cashier yêu cầu giảm giá thủ công cho bill này"
+        onApproved={(verified, reason) => {
+          pendingApprovalRef.current?.();
+          pendingApprovalRef.current = null;
+          // Day 3 16/05: lưu OTP context để recordDiscountAudit gắn vào audit log
+          state.setDiscountAuditCtx({ otpId: verified.otpId, reason });
+          toast({
+            title: "Đã duyệt qua OTP",
+            description: "Giảm giá đã được áp dụng (audit log lưu manager duyệt).",
+            variant: "success",
+          });
+        }}
+      />
+
+      {/* Shift dialogs — mở/đóng ca */}
+      {openShiftDialogOpen && (
+        <OpenShiftDialog
+          open={openShiftDialogOpen}
+          onOpenChange={setOpenShiftDialogOpen}
+          onConfirm={handleOpenShift}
+        />
+      )}
+      {closeShiftDialogOpen && (
+        <CloseShiftDialog
+          open={closeShiftDialogOpen}
+          onOpenChange={setCloseShiftDialogOpen}
+          currentShift={currentShift}
+          onConfirm={handleCloseShift}
+        />
+      )}
+
+      {/* CEO 05/06/2026: cảnh báo ca pending (auto-mark khi quá cutoff) */}
+      <PendingShiftAlertSection branchId={currentBranch?.id ?? null} />
+
+
+      {/* ── ChangeDialog (CEO 04/05): hỏi cashier khi tiền thừa > 0 ── */}
+      <Dialog
+        open={changeDialog.open}
+        onOpenChange={(open) =>
+          setChangeDialog((prev) => ({ ...prev, open }))
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="payments" size={20} className="text-primary" />
+              Tiền thừa {formatCurrency(changeDialog.excess)}đ
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="bg-surface-container-low rounded-lg p-3 space-y-2 tabular-nums">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách hàng:</span>
+                <span className="font-medium text-foreground">
+                  {state.customer?.name ?? "Khách lẻ (sẽ tự link)"}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Tổng đơn:</span>
+                <span className="font-medium text-foreground">
+                  {formatCurrency(state.total)}đ
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách đưa:</span>
+                <span className="font-medium text-foreground">
+                  {formatCurrency(state.paid)}đ
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold text-status-success border-t border-border pt-2 mt-1">
+                <span>Tiền thừa:</span>
+                <span>+{formatCurrency(changeDialog.excess)}đ</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cashier xử lý tiền thừa thế nào?
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                setChangeDialog({ open: false, excess: 0 });
+                handleComplete("refund");
+              }}
+            >
+              <Icon name="payments" size={16} className="mr-1" />
+              Trả tiền thừa cho khách
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={
+                !state.customer ||
+                state.customer.code === "KL-VL"
+              }
+              title={
+                !state.customer
+                  ? "Cần chọn khách hàng cụ thể để ghi credit"
+                  : state.customer.code === "KL-VL"
+                    ? "Không ghi credit cho khách lẻ"
+                    : "Ghi credit vào tài khoản khách, lần sau cấn trừ"
+              }
+              onClick={() => {
+                setChangeDialog({ open: false, excess: 0 });
+                handleComplete("credit");
+              }}
+            >
+              <Icon name="account_balance_wallet" size={16} className="mr-1" />
+              Ghi công nợ {formatCurrency(changeDialog.excess)}đ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CEO 29/05/2026 — Xác nhận bán đơn 0đ (miễn phí / hàng mẫu / nội bộ) */}
+      <Dialog open={zeroConfirmOpen} onOpenChange={setZeroConfirmOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="redeem" size={20} className="text-status-warning" />
+              Đơn 0đ — xác nhận bán miễn phí?
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="bg-surface-container-low rounded-lg p-3 space-y-2 tabular-nums">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Khách hàng:</span>
+                <span className="font-medium text-foreground">
+                  {state.customer?.name ?? "Khách lẻ"}
+                </span>
+              </div>
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Số sản phẩm:</span>
+                <span className="font-medium text-foreground">
+                  {state.itemCount}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm font-bold border-t border-border pt-2 mt-1">
+                <span>Tổng cộng:</span>
+                <span className="text-status-warning">0đ</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Hoá đơn này <span className="font-medium text-foreground">không thu tiền</span> nhưng
+              <span className="font-medium text-foreground"> vẫn trừ tồn kho</span> như bán thường.
+              Dùng cho hàng mẫu, khuyến mãi 100% hoặc xuất nội bộ.
+            </p>
+          </div>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full sm:w-auto"
+              onClick={() => setZeroConfirmOpen(false)}
+            >
+              Huỷ
+            </Button>
+            <Button
+              type="button"
+              className="w-full sm:flex-1"
+              onClick={() => {
+                setZeroConfirmOpen(false);
+                handleComplete(undefined, true);
+              }}
+            >
+              <Icon name="check" size={16} className="mr-1" />
+              Xác nhận bán 0đ
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* CEO 04/05/2026 — Recovery dialog: list draft chưa hoàn tất */}
+      <Dialog open={draftConflict !== null} onOpenChange={() => undefined}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="sync_problem" size={20} className="text-status-warning" />
+              {"\u0110\u01a1n \u0111\u00e3 thay \u0111\u1ed5i \u1edf thi\u1ebft b\u1ecb kh\u00e1c"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {"OneBiz \u0111\u00e3 d\u1eebng l\u01b0u \u0111\u1ec3 kh\u00f4ng ghi \u0111\u00e8 d\u1eef li\u1ec7u m\u1edbi h\u01a1n. H\u00f3a \u0111\u01a1n ch\u01b0a b\u1ecb thanh to\u00e1n."}
+          </p>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleDetachConflictedCart}
+            >
+              <Icon name="add_shopping_cart" size={16} className="mr-1" />
+              {"T\u00e1ch th\u00e0nh \u0111\u01a1n m\u1edbi"}
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => void handleReloadConflictedDraft()}
+            >
+              <Icon name="refresh" size={16} className="mr-1" />
+              {"T\u1ea3i b\u1ea3n m\u1edbi nh\u1ea5t"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <RecoveryDialog
+        open={recoveryOpen}
+        drafts={recoveryDrafts}
+        onSelect={handleRecoverySelect}
+        onDelete={handleRecoveryDelete}
+        onCreateNew={handleRecoveryClose}
+      />
+
+      {/* L-3: Dialog đổi điểm tích lũy */}
+      <Dialog open={redeemDialogOpen} onOpenChange={setRedeemDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Đổi điểm tích lũy</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            {state.customer && loyaltySettings && (
+              <div className="rounded-lg bg-status-info/10 p-3 space-y-1 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Khách: </span>
+                  <strong>{state.customer.name}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Số điểm hiện có: </span>
+                  <strong className="text-status-info">
+                    {formatNumber(state.customer.loyaltyPoints ?? 0)} điểm
+                  </strong>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Quy đổi: {loyaltySettings.redemptionPoints} điểm ={" "}
+                  {formatCurrency(loyaltySettings.redemptionValue)}đ — tối đa{" "}
+                  {loyaltySettings.maxRedemptionPercent}% giá trị đơn
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Số điểm muốn đổi</label>
+              <input
+                type="number"
+                value={redeemInput}
+                onChange={(e) => setRedeemInput(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                placeholder="Nhập số điểm"
+                min={0}
+                max={state.customer?.loyaltyPoints ?? 0}
+              />
+            </div>
+
+            {/* Preview discount */}
+            {(() => {
+              if (!loyaltySettings || !redeemInput) return null;
+              const inputPoints = Number(redeemInput) || 0;
+              const preview = calculateRedeemDiscount(
+                inputPoints,
+                loyaltySettings,
+                state.subtotal,
+              );
+              if (preview.discountAmount === 0) {
+                return (
+                  <div className="text-xs text-status-warning">
+                    Không đủ điểm để đổi (cần tối thiểu {loyaltySettings.redemptionPoints} điểm)
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-lg bg-status-success/10 p-3 space-y-0.5 text-sm">
+                  <div>
+                    <span className="text-muted-foreground">Sẽ trừ: </span>
+                    <strong>{formatNumber(preview.effectivePoints)} điểm</strong>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Giảm: </span>
+                    <strong className="text-status-success">
+                      {formatCurrency(preview.discountAmount)}đ
+                    </strong>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRedeemDialogOpen(false)}>
+              Hủy
+            </Button>
+            <Button onClick={handleApplyRedeem}>
+              <Icon name="check" size={16} className="mr-1" />
+              Áp dụng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+// ============================================================
+// Sub-components
+// ============================================================
+
+/** Cart item row — KiotViet table style with line #, unit, editable price + discount */
+/**
+ * CartItem — Stack 2-line layout (Phương án A, CEO chốt 04/05/2026).
+ *
+ * Trước đây dùng table 6 cột [#|Tên|ĐG|SL|GG|TT|X] → cart-items-zone
+ * width 340px chỉ chừa ~10px cho tên SP → truncate "Cà p..." mất context.
+ *
+ * Layout mới:
+ *   ┌──────────────────────────────────────┐
+ *   │ 1  Cà phê Phin Truyền Thống Pha Máy× │  ← Line 1: # + tên (full width) + xoá
+ *   │    SKU-CF001 (kg)                    │  ← code + unit (line 2 sub)
+ *   │    [-2+] × 145,000  -1,000đ  280,000 │  ← Line 2: stepper × giá · GG · tổng
+ *   └──────────────────────────────────────┘
+ *
+ * Lợi: tên SP đầy đủ (line-clamp-1, hover tooltip nếu quá dài), số liệu
+ * format en-US đầy đủ, qty +/- nhanh, GG chỉ hiện khi > 0.
+ */
+function CartItem({
+  index,
+  line,
+  lineTotal,
+  onQtyChange,
+  onPriceChange,
+  onDiscountChange,
+  onNoteChange,
+  onRemove,
+}: {
+  index: number;
+  line: OrderLine;
+  lineTotal: number;
+  onQtyChange: (qty: number) => void;
+  onPriceChange: (price: number) => void;
+  onDiscountChange: (d: DiscountInput) => void;
+  onNoteChange: (note: string) => void;
+  onRemove: () => void;
+}) {
+  const oversold = line.availableStock > 0 && line.quantity > line.availableStock;
+  // CEO 08/07 (như KiotViet): HẾT HÀNG → tô đỏ ô số lượng. Tô khi BIẾT CHẮC khả
+  // dụng (stockKnown): availableStock là số lưới đã tính BOM-aware — nên SKU có
+  // công thức mà NVL cũng hết (vd "Bao tay cao su" khả dụng 0) VẪN đỏ đúng, còn
+  // món khả dụng-từ-NVL (>0) không đỏ oan. Dòng nháp (stockKnown=false) không tô.
+  const outOfStock = line.stockKnown === true && line.availableStock <= 0;
+  const stockIssue = outOfStock || oversold;
+  // CEO 08/07 (lần 2): SẮP HẾT (còn ≤5, khớp ngưỡng chip vàng ở lưới) → ô SL
+  // VÀNG nhẹ + "Tồn: X" vàng. Không tính khi đã đỏ (hết/vượt).
+  const lowStock =
+    !stockIssue &&
+    line.stockKnown === true &&
+    line.availableStock > 0 &&
+    line.availableStock <= 5;
+  const [editingPrice, setEditingPrice] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState(false);
+  // 00208: ô ghi chú món — mở khi bấm nút, Enter/blur để lưu.
+  const [editingNote, setEditingNote] = useState(false);
+  // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
+  // Cashier không có quyền → button disable, không edit được.
+  // Owner/Manager có quyền → click sửa như cũ.
+  const { hasPermission } = useAuth();
+  const canEditPrice = hasPermission("pos_retail.edit_price");
+
+  return (
+    <div
+      className={cn(
+        "border-b border-border hover:bg-primary-fixed/20 transition-colors group",
+        oversold && "bg-status-warning/10",
+      )}
+    >
+      {/* ── Line 1: # + tên SP (full width) + xoá ── */}
+      <div className="flex items-start gap-2 px-3 pt-2">
+        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-3 mt-0.5 text-right">
+          {index}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p
+            className="text-[12px] font-medium text-foreground line-clamp-1 leading-snug"
+            title={line.productName}
+          >
+            {line.productName}
+            {line.variantLabel && (
+              <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/60 text-primary text-[9px] font-semibold">
+                {line.variantLabel}
+              </span>
+            )}
+          </p>
+          {(line.productCode || line.unit || stockIssue || lowStock) && (
+            <p className="text-[9.5px] text-muted-foreground/80 font-mono leading-tight truncate">
+              {line.productCode && <span>{line.productCode}</span>}
+              {line.unit && <span className="ml-1">({line.unit})</span>}
+              {(stockIssue || lowStock) && (
+                <span
+                  className={cn(
+                    "ml-1 font-sans font-semibold",
+                    outOfStock ? "text-status-error" : "text-status-warning",
+                  )}
+                >
+                  · Tồn: {formatNumber(Math.max(0, line.availableStock))}
+                </span>
+              )}
+            </p>
+          )}
+        </div>
+        {/* 00208: nút ghi chú món — xanh khi đã có note. */}
+        <button
+          type="button"
+          onClick={() => setEditingNote((v) => !v)}
+          className={cn(
+            "shrink-0 -mt-0.5 p-1 rounded transition-all",
+            line.note
+              ? "text-primary opacity-100"
+              : "text-muted-foreground opacity-50 hover:opacity-100 hover:text-primary hover:bg-primary-fixed/40",
+          )}
+          title={line.note ? `Ghi chú: ${line.note}` : "Thêm ghi chú món"}
+        >
+          <Icon name="edit_note" size={15} />
+        </button>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="shrink-0 -mt-0.5 p-1 rounded text-muted-foreground hover:text-status-error hover:bg-status-error/10 opacity-50 hover:opacity-100 transition-all"
+          title="Xoá"
+        >
+          <Icon name="close" size={14} />
+        </button>
+      </div>
+
+      {/* 00208: ô nhập / dòng hiển thị ghi chú món */}
+      {editingNote ? (
+        <div className="px-3 pl-[26px] mt-1">
+          <input
+            type="text"
+            autoFocus
+            defaultValue={line.note ?? ""}
+            placeholder="Ghi chú món (Enter để lưu)…"
+            maxLength={200}
+            onBlur={(e) => {
+              onNoteChange(e.target.value);
+              setEditingNote(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                onNoteChange((e.target as HTMLInputElement).value);
+                setEditingNote(false);
+              } else if (e.key === "Escape") {
+                setEditingNote(false);
+              }
+              e.stopPropagation();
+            }}
+            className="w-full h-7 px-2 rounded-md border border-primary/40 bg-surface-container-low text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
+      ) : line.note ? (
+        <button
+          type="button"
+          onClick={() => setEditingNote(true)}
+          className="block w-full text-left px-3 pl-[26px] mt-0.5"
+          title="Bấm để sửa ghi chú"
+        >
+          <span className="text-[10.5px] italic text-primary/90 line-clamp-2">
+            ↳ {line.note}
+          </span>
+        </button>
+      ) : null}
+
+      {/* ── Line 2: qty stepper · × · price · −GG · = total ── */}
+      <div className="flex items-center gap-2 px-3 pb-2 pl-[26px] mt-1">
+        {/* Qty stepper +/− — CEO 08/07: hết tồn/bán vượt → ô SL viền+chữ ĐỎ
+            (như KiotViet), tooltip báo tồn. Vẫn thao tác bình thường. */}
+        <div
+          className={cn(
+            "inline-flex items-center rounded-md h-8 border overflow-hidden",
+            stockIssue
+              ? "bg-status-error/10 border-status-error/60"
+              : lowStock
+                ? "bg-status-warning/10 border-status-warning/50"
+                : "bg-surface-container-low border-border/40",
+          )}
+          title={
+            stockIssue || lowStock
+              ? `Tồn: ${formatNumber(Math.max(0, line.availableStock))}`
+              : undefined
+          }
+        >
+          <button
+            type="button"
+            onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
+            className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          >
+            <Icon name="remove" size={14} />
+          </button>
+          <input
+            type="number"
+            step="any"
+            value={line.quantity}
+            onChange={(e) => {
+              // Cho phép số thập phân (vd 0.5 kg). parseInt cũ cắt phần lẻ.
+              // Chỉ fallback khi parse fail (chuỗi rỗng/không phải số) để tránh
+              // NaN phá math giá tiền. KHÔNG ép min hay clamp khác — cashier
+              // tự chịu trách nhiệm gõ đúng (theo dặn của CEO).
+              const n = parseFloat(e.target.value);
+              onQtyChange(Number.isFinite(n) ? n : 1);
+            }}
+            data-allow-hotkeys="true"
+            className={cn(
+              "w-12 h-8 text-center text-xs font-semibold tabular-nums outline-none bg-transparent",
+              stockIssue && "text-status-error",
+              lowStock && "text-status-warning",
+            )}
+          />
+          <button
+            type="button"
+            onClick={() => onQtyChange(line.quantity + 1)}
+            className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
+          >
+            <Icon name="add" size={14} />
+          </button>
+        </div>
+
+        <span className="text-[10px] text-muted-foreground/60 shrink-0">×</span>
+
+        {/* Price (click to edit) — CEO 22/05/2026: gate by permission */}
+        {editingPrice && canEditPrice ? (
+          <input
+            type="text"
+            inputMode="decimal"
+            autoFocus
+            defaultValue={String(line.unitPrice)}
+            onBlur={(e) => {
+              const n = parseNumberInput(e.target.value) ?? 0;
+              onPriceChange(Math.max(0, n));
+              setEditingPrice(false);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+              if (e.key === "Escape") setEditingPrice(false);
+            }}
+            data-allow-hotkeys="true"
+            className="w-20 h-6 px-1 text-right text-[11px] font-medium tabular-nums outline-none border border-primary rounded bg-white"
+          />
+        ) : canEditPrice ? (
+          <button
+            type="button"
+            onClick={() => setEditingPrice(true)}
+            className="text-[11px] tabular-nums font-medium hover:text-primary hover:underline decoration-dotted underline-offset-2 transition-colors"
+            title="Bấm để sửa đơn giá"
+          >
+            {formatNumber(line.unitPrice)}
+          </button>
+        ) : (
+          // Cashier không có quyền sửa giá → hiện static text, cursor not-allowed
+          <span
+            className="text-[11px] tabular-nums font-medium text-foreground cursor-not-allowed"
+            title="Bạn không có quyền sửa đơn giá. Liên hệ quản lý."
+          >
+            {formatNumber(line.unitPrice)}
+          </span>
+        )}
+
+        {/* Discount badge — hiện inline khi > 0, click để sửa */}
+        {editingDiscount ? (
+          <div className="inline-flex items-stretch h-6 rounded border border-primary overflow-hidden bg-white">
+            <input
+              type="text"
+              inputMode="decimal"
+              autoFocus
+              defaultValue={line.discount.value > 0 ? String(line.discount.value) : ""}
+              onBlur={(e) => {
+                const n = parseNumberInput(e.target.value) ?? 0;
+                onDiscountChange({ ...line.discount, value: Math.max(0, n) });
+                setEditingDiscount(false);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+                if (e.key === "Escape") setEditingDiscount(false);
+              }}
+              data-allow-hotkeys="true"
+              placeholder="0"
+              className="w-14 px-1 text-right text-[10px] tabular-nums outline-none"
+            />
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()} // tránh blur input
+              onClick={() =>
+                onDiscountChange({
+                  ...line.discount,
+                  mode: line.discount.mode === "amount" ? "percent" : "amount",
+                })
+              }
+              className="px-2 flex items-center justify-center text-[10px] border-l border-primary/50 font-bold bg-primary-fixed text-primary"
+            >
+              {line.discount.mode === "percent" ? "%" : "đ"}
+            </button>
+          </div>
+        ) : line.discount.value > 0 ? (
+          // Có GG → text bold warning + bg soft. Không icon (tránh FOIT
+          // leak "DISCOUNT" + giữ chip gọn ~40-50px).
+          <button
+            type="button"
+            onClick={() => setEditingDiscount(true)}
+            className="text-[10px] font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-2 py-0.5 rounded transition-colors"
+            title="Bấm để sửa giảm giá dòng"
+          >
+            −
+            {line.discount.mode === "percent"
+              ? `${formatNumber(line.discount.value)}%`
+              : `${formatNumber(line.discount.value)}đ`}
+          </button>
+        ) : (
+          // Chưa có GG → chip text "+ Giảm" mờ, dashed border thin.
+          // Width ~38-42px — chỉ rộng hơn "+GG" cũ ~10px, không "ghê".
+          <button
+            type="button"
+            onClick={() => setEditingDiscount(true)}
+            className="text-[10px] font-medium text-primary/60 hover:text-primary border border-dashed border-primary/30 hover:border-primary hover:bg-primary-fixed/40 px-1 py-0.5 rounded transition-all"
+            title="Thêm giảm giá cho dòng này"
+          >
+            + Giảm
+          </button>
+        )}
+
+        {/* Total — pushed right */}
+        <span className="ml-auto text-[12.5px] font-bold tabular-nums text-primary">
+          {formatNumber(lineTotal)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Order-level discount input — compact */
+/**
+ * OrderDiscountInput — chiết khấu đơn, toggle %/₫ + live format mask.
+ *
+ * Sprint 04/05/2026 redesign (CEO feedback):
+ * - Rộng hơn: input 112px (w-28) thay 48px (w-12) → đủ chỗ "1,000,000"
+ *   không bị nhốt trong ô.
+ * - Live format en-US (1,234,567 với phẩy ngàn) qua formatNumber +
+ *   parseNumberInput (handle paste/typing đa format).
+ * - Toggle %/₫ giữ NGUYÊN giá trị thực (auto convert: 10% × 100k = 10000₫
+ *   khi switch). Trước đây toggle giữ raw number → "10%" → "10₫" sai.
+ * - Conversion line hiển thị bên dưới: vd "10%" → "≈ 12,500₫" để cashier
+ *   nhìn rõ tiền thực giảm.
+ * - Auto clamp: max 100 nếu mode %; max subtotal nếu mode ₫.
+ */
+function OrderDiscountInput({
+  value,
+  onChange,
+  subtotal,
+}: {
+  value: DiscountInput;
+  onChange: (d: DiscountInput) => void;
+  subtotal: number;
+}) {
+  const [text, setText] = useState<string>(() =>
+    value.value > 0 ? formatNumber(value.value) : "",
+  );
+  const focusedRef = useRef(false);
+
+  // Sync external value → text khi không focus (vd promo set chiết khấu auto).
+  useEffect(() => {
+    if (focusedRef.current) return;
+    setText(value.value > 0 ? formatNumber(value.value) : "");
+  }, [value.value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    setText(raw); // Cho phép gõ tự do; format trên blur
+
+    let n = parseNumberInput(raw) ?? 0;
+    if (n < 0) n = 0;
+    // Clamp theo mode
+    if (value.mode === "percent") {
+      if (n > 100) n = 100;
+    } else if (subtotal > 0 && n > subtotal) {
+      n = subtotal;
+    }
+    // Round 2 decimals (convention toàn web)
+    n = Math.round(n * 100) / 100;
+    onChange({ ...value, value: n });
+  };
+
+  const handleFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    focusedRef.current = true;
+    // Convert formatted "1,234,567" → raw "1234567" để dễ edit
+    if (value.value > 0) setText(String(value.value));
+    // Select all để cashier dễ replace
+    e.target.select();
+  };
+
+  const handleBlur = () => {
+    focusedRef.current = false;
+    setText(value.value > 0 ? formatNumber(value.value) : "");
+  };
+
+  const handleToggleMode = () => {
+    const newMode = value.mode === "amount" ? "percent" : "amount";
+    let newValue = value.value;
+    // Auto convert sang đơn vị mới để giữ "amount giảm thực sự"
+    if (subtotal > 0 && value.value > 0) {
+      if (newMode === "amount") {
+        // % → ₫
+        newValue = Math.round(((value.value / 100) * subtotal) * 100) / 100;
+      } else {
+        // ₫ → %
+        newValue = Math.round((value.value / subtotal) * 100 * 100) / 100;
+        if (newValue > 100) newValue = 100;
+      }
+    }
+    onChange({ mode: newMode, value: newValue });
+  };
+
+  // Conversion display: % → ≈ N₫, ₫ → ≈ N%
+  let conversionText: string | null = null;
+  if (value.value > 0 && subtotal > 0) {
+    if (value.mode === "percent") {
+      const amount = (subtotal * value.value) / 100;
+      conversionText = `≈ ${formatCurrency(amount)}đ`;
+    } else {
+      const pct = (value.value / subtotal) * 100;
+      conversionText = `≈ ${formatDecimal(pct, 1)}%`;
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-0.5">
+      <div className="inline-flex items-stretch h-7 rounded-lg border border-border overflow-hidden bg-white focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/30 transition-colors">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={text}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          data-allow-hotkeys="true"
+          placeholder="0"
+          className="w-28 px-2 text-right text-xs outline-none tabular-nums font-medium"
+        />
+        <button
+          type="button"
+          onClick={handleToggleMode}
+          className="px-3 flex items-center justify-center text-xs border-l border-border font-bold transition-colors bg-primary-fixed text-primary hover:bg-primary/15"
+          title="Đổi chế độ % hoặc ₫"
+        >
+          {value.mode === "percent" ? "%" : "đ"}
+        </button>
+      </div>
+      {conversionText && (
+        <span className="text-[10px] text-muted-foreground tabular-nums leading-none">
+          {conversionText}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Payment method button — Stitch pill with primary-fixed inactive */
+function PaymentBtn({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "h-10 rounded-lg text-[11px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
+        active
+          ? "bg-primary text-on-primary ambient-shadow"
+          : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
+      )}
+    >
+      {/* Icon ẩn ở cart hẹp <440 (sidebar 192 + cart 440 = ~440 cart hiện
           chiều cao chia 4 buttons → mỗi button ~95px, đủ icon + label.
           Nhưng safe defensive: hide icon ở @sm queries không có nên dùng
           ml-0 + label always nowrap. */}
@@ -1007,4 +5217,3 @@ export default function PosPage() {
     </PermissionPage>
   );
 }
-
