@@ -480,4 +480,3 @@ export function isGroupActive(pathname: string, group: SidebarGroup): boolean {
   }
   return false;
 }
-
