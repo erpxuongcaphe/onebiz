@@ -29,6 +29,33 @@ export interface PosIntegrityReportInput {
   limit?: number;
 }
 
+export type PosIntegrityScope = "actionable" | "cancelled" | "all";
+
+export function isActionablePosIntegrityRow(row: PosInvoiceIntegrityRow): boolean {
+  return row.status !== "cancelled";
+}
+
+export function getPosIntegrityCounts(rows: PosInvoiceIntegrityRow[]) {
+  const actionable = rows.filter(isActionablePosIntegrityRow).length;
+  return {
+    actionable,
+    cancelled: rows.length - actionable,
+    all: rows.length,
+  };
+}
+
+export function filterPosIntegrityRows(
+  rows: PosInvoiceIntegrityRow[],
+  scope: PosIntegrityScope,
+): PosInvoiceIntegrityRow[] {
+  if (scope === "cancelled") {
+    return rows.filter((row) => row.status === "cancelled");
+  }
+  if (scope === "actionable") {
+    return rows.filter(isActionablePosIntegrityRow);
+  }
+  return rows;
+}
 /** Read-only check. This RPC never repairs or changes an invoice. */
 export async function getPosInvoiceIntegrityReport(
   input: PosIntegrityReportInput,
