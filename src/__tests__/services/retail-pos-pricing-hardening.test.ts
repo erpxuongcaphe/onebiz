@@ -85,4 +85,3 @@ describe("Retail POS pricing hardening", () => {
   });
 
 });
-
