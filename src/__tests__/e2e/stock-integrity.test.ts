@@ -569,17 +569,19 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "save_pos_draft_atomic_v2") {
+      if (fn === "save_pos_draft_atomic_v3") {
         return {
           data: {
             invoice_id: "inv-pos",
             invoice_code: "HD00001",
             created: true,
+            revision: 1,
+            status: "draft",
           },
           error: null,
         };
       }
-      if (fn === "complete_draft_atomic_v4") {
+      if (fn === "complete_draft_atomic_v5") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
@@ -1173,7 +1175,7 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
       discountAmount: 0,
       total: 800_000,
       paid: 0,
-    });
+    }, { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" });
 
     // Draft: NO stock RPCs, NO stock movements
     const stockRpcsAfterDraft = rpcCalls.filter(
@@ -1184,7 +1186,7 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
 
     // Draft is created by one atomic RPC; the browser does not insert invoices.
-    const draftRpc = rpcCalls.find((call) => call.fn === "save_pos_draft_atomic_v2");
+    const draftRpc = rpcCalls.find((call) => call.fn === "save_pos_draft_atomic_v3");
     expect(draftRpc).toBeDefined();
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
 
@@ -1207,6 +1209,9 @@ describe("POS BÁN HÀNG — Stock Decrement Precision", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+      clientSessionId: "31e9d753-0c76-45af-a509-d4dce67c042f",
+      expectedRevision: 1,
+      expectedTotal: 800_000,
       items: [
         { productId: "sku-1", productName: "SP", quantity: 8, unitPrice: 100_000, discount: 0 },
       ],

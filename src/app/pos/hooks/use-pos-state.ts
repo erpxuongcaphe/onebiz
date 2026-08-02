@@ -39,6 +39,7 @@ export interface PosSnapshot {
   orderDiscount: DiscountInput;
   note: string;
   loadedDraftId: string | null;
+  loadedDraftRevision?: number | null;
   sellingMode: SellingMode;
   deliveryInfo: DeliveryInfo;
   /** P0-1 fix 12/06/2026: VAT đơn cấp đơn (0/5/8/10). Multi-tab save/restore. */
@@ -190,6 +191,7 @@ export function usePosState() {
   ]);
   const [note, setNote] = useState<string>("");
   const [loadedDraftId, setLoadedDraftId] = useState<string | null>(null);
+  const [loadedDraftRevision, setLoadedDraftRevision] = useState<number | null>(null);
   // source của draft đang mở ('order' = đơn đặt hàng) — đổi chữ banner POS.
   const [loadedDraftSource, setLoadedDraftSource] = useState<string | null>(null);
   const [sellingMode, setSellingMode] = useState<SellingMode>("normal");
@@ -353,6 +355,7 @@ export function usePosState() {
     setOrderVatRate(0);
     setNote("");
     setLoadedDraftId(null);
+    setLoadedDraftRevision(null);
     setLoadedDraftSource(null);
     setDeliveryInfo({
       recipientName: "",
@@ -369,6 +372,7 @@ export function usePosState() {
   const loadDraft = useCallback((draft: DraftOrderDetail): void => {
     setDiscountAuditCtx(null);
     setLoadedDraftId(draft.id);
+    setLoadedDraftRevision(draft.revision);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     setLoadedDraftSource((draft as any).source ?? null);
     setLines(
@@ -505,10 +509,11 @@ export function usePosState() {
     orderDiscount,
     note,
     loadedDraftId,
+    loadedDraftRevision,
     sellingMode,
     deliveryInfo,
     orderVatRate,
-  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, sellingMode, deliveryInfo, orderVatRate]);
+  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, loadedDraftRevision, sellingMode, deliveryInfo, orderVatRate]);
 
   /**
    * Phase F5-Recovery (CEO 01/06/2026): khôi phục giỏ từ localStorage backup
@@ -561,6 +566,7 @@ export function usePosState() {
     setOrderDiscount(snap.orderDiscount);
     setNote(snap.note);
     setLoadedDraftId(snap.loadedDraftId);
+    setLoadedDraftRevision(snap.loadedDraftRevision ?? null);
     setSellingMode(snap.sellingMode);
     setDeliveryInfo(snap.deliveryInfo);
     setOrderVatRate(snap.orderVatRate ?? 0);
@@ -576,6 +582,7 @@ export function usePosState() {
     orderDiscount,
     note,
     loadedDraftId,
+    loadedDraftRevision,
     loadedDraftSource,
     sellingMode,
     deliveryInfo,
@@ -609,6 +616,7 @@ export function usePosState() {
     // CEO 04/05 — auto-save callback set khi draft lên server thành công.
     // handleComplete dùng để biết → đi nhánh completeDraftOrder.
     setLoadedDraftId,
+    setLoadedDraftRevision,
 
     // Mixed payment helpers
     updateBreakdownAmount,

@@ -48,6 +48,7 @@ describe("usePosState stock refresh", () => {
       result.current.loadDraft({
         id: "draft-1",
         code: "NH001",
+        revision: 0,
         branchId: "branch-1",
         customerId: null,
         customerName: "Walk-in",

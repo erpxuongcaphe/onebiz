@@ -56,7 +56,7 @@ describe("Retail POS pricing hardening", () => {
       orderService.indexOf("export async function completeDraftOrder"),
       orderService.indexOf("// Delete draft"),
     );
-    expect(completeDraftSection).toContain('"complete_draft_atomic_v4"');
+    expect(completeDraftSection).toContain('"complete_draft_atomic_v5"');
     expect(completeDraftSection).toContain("p_items: payment.items");
     expect(completeDraftSection).toContain("p_customer_id: payment.customerId");
   });

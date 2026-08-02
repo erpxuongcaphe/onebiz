@@ -652,14 +652,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
-      if (fn === "save_pos_draft_atomic_v2") {
+      if (fn === "save_pos_draft_atomic_v3") {
         return {
-          data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", status: "draft" },
+          data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", status: "draft", revision: 1 },
           error: null,
         };
       }
-      if (fn === "adopt_pos_draft_session_atomic") {
-        return { data: { invoice_id: "inv-draft-1", invoice_code: "NH000001" }, error: null };
+      if (fn === "adopt_pos_draft_session_atomic_v2") {
+        return { data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", revision: 2 }, error: null };
       }
       if (fn === "soft_delete_pos_draft_atomic") {
         return { data: { invoice_id: "inv-draft-1", deleted: true }, error: null };
@@ -696,7 +696,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v4") {
+      if (fn === "complete_draft_atomic_v5") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
@@ -1172,9 +1172,9 @@ describe("Draft Order Scenarios", () => {
       "@/lib/services/supabase/orders"
     );
 
-    await saveDraftOrder(posInput({ paid: 0 }));
+    await saveDraftOrder(posInput({ paid: 0 }), { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" });
 
-    expect(rpcCalls.some((c) => c.fn === "save_pos_draft_atomic_v2")).toBe(true);
+    expect(rpcCalls.some((c) => c.fn === "save_pos_draft_atomic_v3")).toBe(true);
     expect(insertCalls.filter((c) => c.table === "invoices")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
@@ -1191,6 +1191,9 @@ describe("Draft Order Scenarios", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+      clientSessionId: "31e9d753-0c76-45af-a509-d4dce67c042f",
+      expectedRevision: 1,
+      expectedTotal: 500_000,
         items: posInput().items,
     });
 
@@ -1237,6 +1240,9 @@ describe("Draft Order Scenarios", () => {
         tenantId: "tenant-1",
         branchId: "branch-1",
         createdBy: "user-1",
+        clientSessionId: "31e9d753-0c76-45af-a509-d4dce67c042f",
+        expectedRevision: 1,
+        expectedTotal: 500_000,
         items: posInput().items,
       })
     ).rejects.toThrow();
@@ -2249,13 +2255,15 @@ describe("Business Rule Validations", () => {
       "@/lib/services/supabase/orders"
     );
 
-    const result = await saveDraftOrder(posInput({ paid: 0 }));
+    const result = await saveDraftOrder(posInput({ paid: 0 }), { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" });
 
     expect(result).toEqual({
       invoiceId: "inv-draft-1",
       invoiceCode: "NH000001",
+      revision: 1,
+      status: "draft",
     });
-    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v2")).toBe(true);
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v3")).toBe(true);
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
   });
 

@@ -609,3 +609,7 @@ export type {
   AgentWorkload,
   AgentKpiSummary,
 } from "./agent-sla";
+
+// POS invoice integrity (read-only, migration 00292)
+export { getPosInvoiceIntegrityReport } from "./pos-integrity";
+export type { PosIntegrityReportInput, PosInvoiceIntegrityRow, PosIntegrityIssueCode } from "./pos-integrity";

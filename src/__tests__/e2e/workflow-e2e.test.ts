@@ -524,12 +524,13 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
-      if (fn === "save_pos_draft_atomic_v2") {
+      if (fn === "save_pos_draft_atomic_v3") {
         return {
           data: {
             invoice_id: "inv-draft",
             invoice_code: "NH00001",
             status: "draft",
+            revision: 1,
           },
           error: null,
         };
@@ -558,7 +559,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "pos_complete_checkout_atomic_v3") {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v4") {
+      if (fn === "complete_draft_atomic_v5") {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {
@@ -820,13 +821,15 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       discountAmount: 0,
       total: 600_000,
       paid: 0,
-    });
+    }, { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" });
 
     expect(result).toEqual({
       invoiceId: "inv-draft",
       invoiceCode: "NH00001",
+      revision: 1,
+      status: "draft",
     });
-    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v2")).toBe(true);
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v3")).toBe(true);
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
     expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);
@@ -843,6 +846,9 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       tenantId: "tenant-1",
       branchId: "branch-1",
       createdBy: "user-1",
+      clientSessionId: "31e9d753-0c76-45af-a509-d4dce67c042f",
+      expectedRevision: 1,
+      expectedTotal: 1_000_000,
       items: [
         { productId: "p1", productName: "SP A", quantity: 2, unitPrice: 300_000, discount: 0 },
         { productId: "p2", productName: "SP B", quantity: 4, unitPrice: 100_000, discount: 0 },

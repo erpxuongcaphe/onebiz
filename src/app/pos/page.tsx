@@ -417,6 +417,7 @@ function PosPageInner() {
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryDrafts, setRecoveryDrafts] = useState<DraftOrderSummary[]>([]);
   const recoveryShownRef = useRef(false);
+  const [draftConflict, setDraftConflict] = useState<{ invoiceId: string | null } | null>(null);
 
   // Offline/online status — for opportunistic checkout while network is down
   const networkStatus = useNetworkStatus();
@@ -615,7 +616,11 @@ function PosPageInner() {
             // Đơn nháp KHÔNG có session (tạo từ dialog "Đặt hàng") → GẮN session
             // POS hiện tại vào đơn → auto-save UPDATE đúng đơn, KHÔNG tạo nháp mới
             // (mồ côi + nợ ảo + hoá đơn trùng). completeDraftOrder giữ nguyên mã.
-            await adoptDraftSession(detail.id, clientSessionId);
+            detail.revision = await adoptDraftSession(
+              detail.id,
+              clientSessionId,
+              detail.revision,
+            );
           }
           state.loadDraft(detail);
           toast({
@@ -762,14 +767,20 @@ function PosPageInner() {
             userId: user.id,
           }
         : null,
-    enabled: submitting === null && !recoveryOpen,
+    enabled: submitting === null && !recoveryOpen && !draftConflict,
+    draftId: state.loadedDraftId,
+    draftRevision: state.loadedDraftRevision,
     // CEO 04/05/2026 fix: khi auto-save tạo draft trên server → set
     // loadedDraftId. Khi cashier bấm Thanh toán, handleComplete sẽ thấy
     // có draftId → gọi completeDraftOrder (atomic flip status='completed')
     // thay vì posCheckout (sẽ fail idempotency check vì đã có draft cùng
     // session_id). Trước fix: cashier bị toast đỏ "Dùng Tiếp tục đơn".
-    onSaved: (invoiceId) => {
+    onSaved: ({ invoiceId, revision }) => {
       state.setLoadedDraftId(invoiceId);
+      state.setLoadedDraftRevision(revision);
+    },
+    onConflict: ({ invoiceId }) => {
+      setDraftConflict({ invoiceId });
     },
   });
 
@@ -801,7 +812,11 @@ function PosPageInner() {
               ? crypto.randomUUID()
               : `sess-${Date.now()}`;
           setClientSessionId(newId);
-          await adoptDraftSession(detail.id, newId);
+          detail.revision = await adoptDraftSession(
+            detail.id,
+            newId,
+            detail.revision,
+          );
         }
         // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
         state.loadDraft(detail);
@@ -845,6 +860,58 @@ function PosPageInner() {
   const handleRecoveryClose = useCallback(() => {
     setRecoveryOpen(false);
   }, []);
+
+  const handleReloadConflictedDraft = useCallback(async () => {
+    const invoiceId = draftConflict?.invoiceId ?? state.loadedDraftId;
+    if (!invoiceId) return;
+    try {
+      const detail = await getDraftOrderById(invoiceId);
+      if (!detail) throw new Error("POS_DRAFT_NOT_FOUND");
+
+      if (detail.clientSessionId !== clientSessionId) {
+        const takeoverSession =
+          typeof crypto !== "undefined" && crypto.randomUUID
+            ? crypto.randomUUID()
+            : "sess-" + Date.now();
+        detail.revision = await adoptDraftSession(
+          detail.id,
+          takeoverSession,
+          detail.revision,
+        );
+        setClientSessionId(takeoverSession);
+      }
+
+      state.loadDraft(detail);
+      setDraftConflict(null);
+      toast({
+        title: "\u0110\u00e3 t\u1ea3i b\u1ea3n m\u1edbi nh\u1ea5t",
+        description: "Ki\u1ec3m tra l\u1ea1i s\u1ed1 l\u01b0\u1ee3ng v\u00e0 t\u1ed5ng ti\u1ec1n tr\u01b0\u1edbc khi thanh to\u00e1n.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Kh\u00f4ng t\u1ea3i l\u1ea1i \u0111\u01b0\u1ee3c \u0111\u01a1n",
+        description: error instanceof Error ? error.message : "L\u1ed7i kh\u00f4ng x\u00e1c \u0111\u1ecbnh",
+        variant: "error",
+      });
+    }
+  }, [clientSessionId, draftConflict, state, toast]);
+
+  const handleDetachConflictedCart = useCallback(() => {
+    state.setLoadedDraftId(null);
+    state.setLoadedDraftRevision(null);
+    setClientSessionId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : "sess-" + Date.now(),
+    );
+    setDraftConflict(null);
+    toast({
+      title: "\u0110\u00e3 t\u00e1ch th\u00e0nh \u0111\u01a1n m\u1edbi",
+      description: "Gi\u1ecf h\u00e0ng hi\u1ec7n t\u1ea1i \u0111\u01b0\u1ee3c gi\u1eef nguy\u00ean; \u0111\u01a1n c\u0169 kh\u00f4ng b\u1ecb ghi \u0111\u00e8.",
+      variant: "info",
+    });
+  }, [state, toast]);
 
   // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → BẮT BUỘC OTP (không còn check
   // ngưỡng nữa). Cashier không tự ý giảm giá khách quen / giảm vô tội vạ.
@@ -1656,6 +1723,8 @@ function PosPageInner() {
           // nếu auto-save đã tạo row trước đó). autoSaved=false → sticky.
           sessionId: clientSessionId,
           autoSaved: false,
+          invoiceId: state.loadedDraftId,
+          expectedRevision: state.loadedDraftRevision,
         },
       );
 
@@ -2013,8 +2082,14 @@ function PosPageInner() {
       // theo clientSessionId để hoàn tất ĐÚNG nháp đó, tránh đi nhánh posCheckout
       // bị server từ chối "still draft" làm đơn kẹt ở nháp.
       let effectiveDraftId = state.loadedDraftId;
+      let effectiveDraftRevision = state.loadedDraftRevision;
       if (!effectiveDraftId && networkStatus.isOnline && clientSessionId) {
         effectiveDraftId = await findDraftIdBySession(clientSessionId);
+      }
+      if (effectiveDraftId && effectiveDraftRevision === null) {
+        const latestDraft = await getDraftOrderById(effectiveDraftId);
+        if (!latestDraft) throw new Error("POS_DRAFT_NOT_FOUND|{}");
+        effectiveDraftRevision = latestDraft.revision;
       }
 
       if (effectiveDraftId) {
@@ -2037,6 +2112,9 @@ function PosPageInner() {
           // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
           // match được giao dịch của ca này.
           shiftId: currentShift?.id ?? null,
+          clientSessionId,
+          expectedRevision: effectiveDraftRevision!,
+          expectedTotal: state.total,
         });
         invoiceCode = result.invoiceCode;
         invoiceId = effectiveDraftId;
@@ -2073,6 +2151,8 @@ function PosPageInner() {
               ? await findDraftIdBySession(clientSessionId)
               : null;
           if (!draftId) throw checkoutErr;
+          const recoveredDraft = await getDraftOrderById(draftId);
+          if (!recoveredDraft) throw checkoutErr;
           const r = await completeDraftOrder(draftId, {
             method: state.paymentMethod,
             paid,
@@ -2085,6 +2165,9 @@ function PosPageInner() {
             // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
             // (giống nhánh chính dòng ~1678) để close_shift_atomic không sót đơn → quỹ ca đúng.
             shiftId: currentShift?.id ?? null,
+            clientSessionId,
+            expectedRevision: recoveredDraft.revision,
+            expectedTotal: state.total,
           });
           result = {
             invoiceId: draftId,
@@ -2367,6 +2450,24 @@ function PosPageInner() {
         } catch {
           rpcDetails = {};
         }
+      }
+      if (
+        rpcCode === "POS_DRAFT_CONFLICT" ||
+        rpcCode === "POS_DRAFT_SESSION_CHANGED" ||
+        rpcCode === "POS_DRAFT_NOT_FOUND"
+      ) {
+        setDraftConflict({ invoiceId: state.loadedDraftId });
+        return;
+      }
+      if (rpcCode === "POS_CART_TOTAL_CHANGED") {
+        toast({
+          title: "Tổng tiền vừa thay đổi",
+          description: "Hóa đơn chưa được tạo. Vui lòng tải bản mới nhất và kiểm tra tổng tiền trước khi thanh toán.",
+          variant: "warning",
+          duration: 0,
+        });
+        setDraftConflict({ invoiceId: state.loadedDraftId });
+        return;
       }
       if (rpcCode === "POS_PRICE_CHANGED") {
         const productId = String(rpcDetails.productId ?? "");
@@ -3710,7 +3811,11 @@ function PosPageInner() {
                   ? crypto.randomUUID()
                   : `sess-${Date.now()}`;
               setClientSessionId(newId);
-              await adoptDraftSession(detail.id, newId);
+              detail.revision = await adoptDraftSession(
+                detail.id,
+                newId,
+                detail.revision,
+              );
             }
             state.loadDraft(detail);
             setProcessOrderOpen(false);
@@ -3982,6 +4087,39 @@ function PosPageInner() {
       </Dialog>
 
       {/* CEO 04/05/2026 — Recovery dialog: list draft chưa hoàn tất */}
+      <Dialog open={draftConflict !== null} onOpenChange={() => undefined}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="sync_problem" size={20} className="text-status-warning" />
+              {"\u0110\u01a1n \u0111\u00e3 thay \u0111\u1ed5i \u1edf thi\u1ebft b\u1ecb kh\u00e1c"}
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            {"OneBiz \u0111\u00e3 d\u1eebng l\u01b0u \u0111\u1ec3 kh\u00f4ng ghi \u0111\u00e8 d\u1eef li\u1ec7u m\u1edbi h\u01a1n. H\u00f3a \u0111\u01a1n ch\u01b0a b\u1ecb thanh to\u00e1n."}
+          </p>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={handleDetachConflictedCart}
+            >
+              <Icon name="add_shopping_cart" size={16} className="mr-1" />
+              {"T\u00e1ch th\u00e0nh \u0111\u01a1n m\u1edbi"}
+            </Button>
+            <Button
+              type="button"
+              className="w-full"
+              onClick={() => void handleReloadConflictedDraft()}
+            >
+              <Icon name="refresh" size={16} className="mr-1" />
+              {"T\u1ea3i b\u1ea3n m\u1edbi nh\u1ea5t"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <RecoveryDialog
         open={recoveryOpen}
         drafts={recoveryDrafts}
