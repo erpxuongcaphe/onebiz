@@ -54,4 +54,3 @@ select
     'public.complete_draft_atomic_v4(uuid,uuid,jsonb,text,numeric,jsonb,uuid,uuid,text,integer,text,numeric,uuid,text,numeric,numeric,boolean,numeric,numeric)',
     'EXECUTE'
   ) as legacy_checkout_blocked;
-
