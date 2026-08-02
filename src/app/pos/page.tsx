@@ -749,6 +749,8 @@ function PosPageInner() {
       total: state.total,
       orderDiscountAmount: state.orderDiscountAmount,
       lineDiscountTotal: state.lineDiscountTotal,
+      shippingFee: state.shippingFee,
+      orderVatRate: state.orderVatRate,
       note: state.note,
       computeLineTotal: state.computeLineTotal,
     },
@@ -1636,11 +1638,15 @@ function PosPageInner() {
             discount: l.discount.mode === "percent"
               ? Math.round((l.quantity * l.unitPrice * l.discount.value) / 100)
               : l.discount.value,
+            vatRate: l.vatRate ?? 0,
             note: l.note, // 00208
           })),
           paymentMethod: state.paymentMethod,
           subtotal: state.subtotal,
           discountAmount: state.orderDiscountAmount + state.lineDiscountTotal,
+          orderDiscountAmount: state.orderDiscountAmount,
+          shippingFee: state.shippingFee,
+          orderVatRate: state.orderVatRate,
           total: state.total,
           paid: 0,
           note: state.note || "",
