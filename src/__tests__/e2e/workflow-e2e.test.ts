@@ -597,7 +597,230 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: vi.fn(() => Promise.resolve("tenant-1")),
   getPaginationRange: vi.fn(() => ({ from: 0, to: 49 })),
   handleError: (error: { message: string }, ctx: string) => {
-    throw new Error(`[${ctx}…1497 tokens truncated… paid: 0,
+    throw new Error(`[${ctx}] ${error.message}`);
+  },
+}));
+
+vi.mock("@/lib/services/supabase/stock-adjustments", () => ({
+  applyManualStockMovement: vi.fn((...args: unknown[]) => {
+    stockMovementCalls.push(args);
+    return Promise.resolve();
+  }),
+  nextEntityCode: vi.fn(() => Promise.resolve(`WH${Date.now()}`)),
+}));
+
+beforeEach(() => {
+  insertCalls.length = 0;
+  updateCalls.length = 0;
+  rpcCalls.length = 0;
+  stockMovementCalls.length = 0;
+  rpcCodeCounter = 0;
+  claimCounter = 0;
+  tableMocks = {};
+});
+
+// ============================================================
+//  Flow A: POS Direct Sale (F10)
+// ============================================================
+
+describe("Flow A: POS Direct Sale", () => {
+  beforeEach(() => {
+    tableMocks = {
+      invoices: {
+        data: { id: "inv-1", code: "HD00001", total: 500_000 },
+        error: null,
+      },
+      invoice_items: { data: null, error: null },
+      stock_movements: { data: null, error: null },
+      cash_transactions: { data: null, error: null },
+    };
+  });
+
+  it("creates invoice + stock movements + cash receipt in correct order", async () => {
+    const { posCheckout } = await import(
+      "@/lib/services/supabase/pos-checkout"
+    );
+
+    await posCheckout({
+      tenantId: "tenant-1",
+      branchId: "branch-1",
+      createdBy: "user-1",
+      customerName: "Khách lẻ",
+      items: [
+        {
+          productId: "p1",
+          productName: "Cà phê sữa",
+          quantity: 2,
+          unitPrice: 150_000,
+          discount: 0,
+        },
+        {
+          productId: "p2",
+          productName: "Bánh mì",
+          quantity: 3,
+          unitPrice: 50_000,
+          discount: 0,
+        },
+      ],
+      paymentMethod: "cash",
+      subtotal: 450_000,
+      discountAmount: 0,
+      total: 450_000,
+      paid: 450_000,
+    });
+
+    // 1. Invoice created
+    const invoiceInserts = insertCalls.filter(
+      (c) => c.table === "invoices"
+    );
+    expect(invoiceInserts.length).toBe(1);
+
+    // 2. Invoice items created
+    const itemInserts = insertCalls.filter(
+      (c) => c.table === "invoice_items"
+    );
+    expect(itemInserts.length).toBe(1);
+
+    // 3. Stock movements created in one batched ledger insert
+    const smInserts = insertCalls.filter(
+      (c) => c.table === "stock_movements"
+    );
+    expect(smInserts.length).toBe(1);
+
+    // 4. Stock RPCs called (increment_product_stock + upsert_branch_stock per item)
+    const stockRpcs = rpcCalls.filter(
+      (c) =>
+        c.fn === "increment_product_stock" || c.fn === "upsert_branch_stock"
+    );
+    // 2 items × 2 RPCs each = 4
+    expect(stockRpcs.length).toBe(4);
+
+    // 5. Cash receipt created
+    const cashInserts = insertCalls.filter(
+      (c) => c.table === "cash_transactions"
+    );
+    expect(cashInserts.length).toBe(1);
+
+    // 6. Code generation RPC called
+    const codeRpcs = rpcCalls.filter((c) => c.fn === "next_code");
+    expect(codeRpcs.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("decrements stock with negative delta", async () => {
+    const { posCheckout } = await import(
+      "@/lib/services/supabase/pos-checkout"
+    );
+
+    await posCheckout({
+      tenantId: "tenant-1",
+      branchId: "branch-1",
+      createdBy: "user-1",
+      customerName: "Khách lẻ",
+      items: [
+        {
+          productId: "p1",
+          productName: "SP",
+          quantity: 5,
+          unitPrice: 100_000,
+          discount: 0,
+        },
+      ],
+      paymentMethod: "cash",
+      subtotal: 500_000,
+      discountAmount: 0,
+      total: 500_000,
+      paid: 500_000,
+    });
+
+    // increment_product_stock should use negative delta for OUT
+    const decrementRpcs = rpcCalls.filter(
+      (c) => c.fn === "increment_product_stock"
+    );
+    expect(decrementRpcs.length).toBe(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params = decrementRpcs[0].params as any;
+    expect(params.p_delta).toBe(-5);
+  });
+});
+
+// ============================================================
+//  Flow B: Draft (F9) → Complete (F10) with Mixed Payment
+// ============================================================
+
+describe("Flow B: Draft → Complete with Mixed Payment", () => {
+  beforeEach(() => {
+    tableMocks = {
+      invoices: {
+        data: {
+          id: "inv-draft",
+          code: "HD00001",
+          tenant_id: "tenant-1",
+          branch_id: "branch-1",
+          customer_id: null,
+          customer_name: "Khách lẻ",
+          subtotal: 1_000_000,
+          discount_amount: 0,
+          total: 1_000_000,
+          paid: 0,
+          debt: 0,
+          payment_method: "cash",
+          note: null,
+          status: "draft",
+        },
+        error: null,
+      },
+      invoice_items: {
+        data: [
+          {
+            id: "ii1",
+            product_id: "p1",
+            product_name: "SP A",
+            quantity: 2,
+            unit_price: 300_000,
+            discount: 0,
+            total: 600_000,
+          },
+          {
+            id: "ii2",
+            product_id: "p2",
+            product_name: "SP B",
+            quantity: 4,
+            unit_price: 100_000,
+            discount: 0,
+            total: 400_000,
+          },
+        ],
+        error: null,
+      },
+      stock_movements: { data: null, error: null },
+      cash_transactions: { data: null, error: null },
+    };
+  });
+
+  it("F9 draft uses the atomic draft RPC without stock or cash writes", async () => {
+    const { saveDraftOrder } = await import(
+      "@/lib/services/supabase/orders"
+    );
+
+    const result = await saveDraftOrder({
+      tenantId: "tenant-1",
+      branchId: "branch-1",
+      createdBy: "user-1",
+      customerName: "Khách lẻ",
+      items: [
+        {
+          productId: "p1",
+          productName: "SP A",
+          quantity: 2,
+          unitPrice: 300_000,
+          discount: 0,
+        },
+      ],
+      paymentMethod: "cash",
+      subtotal: 600_000,
+      discountAmount: 0,
+      total: 600_000,
+      paid: 0,
     }, { sessionId: "31e9d753-0c76-45af-a509-d4dce67c042f" });
 
     expect(result).toEqual({
@@ -1224,4 +1447,3 @@ describe("Flow J: Sequential Code Generation", () => {
     expect(secondCodes).toBeGreaterThan(firstCodes);
   });
 });
-
