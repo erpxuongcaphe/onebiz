@@ -74,4 +74,3 @@ describe("POS draft revision guard", () => {
     );
   });
 });
-
