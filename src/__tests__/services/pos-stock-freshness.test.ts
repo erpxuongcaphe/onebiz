@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { PosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import {
+  buildTrackedStockRefreshKey,
   findPosStockShortages,
   mergePosStockSnapshot,
 } from "@/app/pos/lib/stock-freshness";
@@ -15,6 +16,19 @@ const baseLine = {
 };
 
 describe("POS stock freshness", () => {
+  it("refreshes when a draft is reopened with the same products", () => {
+    const firstDraft = buildTrackedStockRefreshKey([
+      { productId: "product-1", lineId: "line-1" },
+      { productId: "product-2", lineId: "line-2" },
+    ]);
+    const reopenedDraft = buildTrackedStockRefreshKey([
+      { productId: "product-1", lineId: "line-3" },
+      { productId: "product-2", lineId: "line-4" },
+    ]);
+
+    expect(reopenedDraft).not.toBe(firstDraft);
+  });
+
   it("updates an existing cart line when fresh branch stock reaches zero", () => {
     const snapshot: PosStockSnapshot = new Map([
       [

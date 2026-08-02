@@ -12,6 +12,25 @@ interface StockAwareLine {
   hasBom?: boolean;
 }
 
+interface TrackedStockRequest {
+  productId: string;
+  lineId?: string;
+}
+
+/**
+ * Include the cart line identity so reopening a draft with the same products
+ * still triggers an immediate stock refresh. Quantity is intentionally omitted
+ * to avoid a database request for every quantity edit.
+ */
+export function buildTrackedStockRefreshKey(
+  requests: TrackedStockRequest[],
+): string {
+  return requests
+    .map((request) => `${request.productId}:${request.lineId ?? "catalog"}`)
+    .sort()
+    .join("|");
+}
+
 export interface PosStockShortage {
   productId: string;
   productName: string;

@@ -28,6 +28,9 @@ import {
   POS_STOCK_EVENT,
   type PosStockChangedMessage,
 } from "../lib/stock-events";
+import { buildTrackedStockRefreshKey } from "../lib/stock-freshness";
+
+type TrackedPosStockRequest = PosStockRequest & { lineId?: string };
 
 interface ProductGridProps {
   searchQuery: string;
@@ -35,7 +38,7 @@ interface ProductGridProps {
    *  đỏ ô số lượng đúng cho hàng hết (kể cả SKU công thức mà NVL cũng hết). */
   onAddProduct: (product: Product, availableStock?: number) => void;
   onStockSnapshot?: (snapshot: PosStockSnapshot) => void;
-  trackedStockRequests?: PosStockRequest[];
+  trackedStockRequests?: TrackedPosStockRequest[];
 }
 
 const STOCK_REFRESH_INTERVAL_MS = 10_000;
@@ -69,13 +72,10 @@ export function ProductGrid({
   const productsRef = useRef<Product[]>([]);
   const fetchIdRef = useRef(0);
   const stockRefreshInFlightRef = useRef(false);
-  const trackedStockRequestsRef = useRef<PosStockRequest[]>([]);
+  const stockRefreshPendingRef = useRef(false);
+  const trackedStockRequestsRef = useRef<TrackedPosStockRequest[]>([]);
   const trackedStockKey = useMemo(
-    () =>
-      trackedStockRequests
-        .map((request) => request.productId)
-        .sort()
-        .join("|"),
+    () => buildTrackedStockRefreshKey(trackedStockRequests),
     [trackedStockRequests],
   );
 
@@ -191,7 +191,11 @@ export function ProductGrid({
   }, [selectedCategory, searchQuery, fetchProducts]);
 
   const refreshStocks = useCallback(async () => {
-    if (!branchId || stockRefreshInFlightRef.current) return;
+    if (!branchId) return;
+    if (stockRefreshInFlightRef.current) {
+      stockRefreshPendingRef.current = true;
+      return;
+    }
     const currentProducts = productsRef.current;
     if (
       currentProducts.length === 0 &&
@@ -239,6 +243,10 @@ export function ProductGrid({
       setStockRefreshFailed(true);
     } finally {
       stockRefreshInFlightRef.current = false;
+      if (stockRefreshPendingRef.current) {
+        stockRefreshPendingRef.current = false;
+        queueMicrotask(() => void refreshStocks());
+      }
     }
   }, [branchId, onStockSnapshot]);
 
