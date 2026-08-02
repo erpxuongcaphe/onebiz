@@ -95,4 +95,3 @@ describe("usePosState stock refresh", () => {
     expect(result.current.lines[0].availableStock).toBe(0);
   });
 });
-
