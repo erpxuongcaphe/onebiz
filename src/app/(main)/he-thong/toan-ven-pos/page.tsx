@@ -190,4 +190,3 @@ function PosIntegrityPage() {
     </div>
   );
 }
-
