@@ -532,4 +532,3 @@ select
   to_regprocedure('public.adopt_pos_draft_session_atomic_v2(uuid,text,bigint)') is not null as adopt_v2_ok,
   to_regprocedure('public.complete_draft_atomic_v5(uuid,uuid,jsonb,text,numeric,jsonb,uuid,uuid,text,integer,text,numeric,uuid,text,numeric,numeric,boolean,numeric,numeric,text,bigint,numeric)') is not null as checkout_v5_ok,
   to_regprocedure('public.get_pos_invoice_integrity_report(timestamptz,timestamptz,uuid,integer)') is not null as integrity_report_ok;
-
