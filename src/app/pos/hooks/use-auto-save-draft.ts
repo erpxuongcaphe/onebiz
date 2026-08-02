@@ -28,6 +28,7 @@ import {
   type PosCheckoutItem,
 } from "@/lib/services/supabase";
 import type { OrderLine, DiscountInput, DeliveryInfo } from "./use-pos-state";
+import { LatestOnlyAsyncQueue } from "../lib/latest-only-async-queue";
 
 // ════════════════════════════════════════════════════════════════════════════
 // Phase F5-Recovery (CEO 01/06/2026): localStorage backup
@@ -116,6 +117,8 @@ interface AutoSaveSnapshot {
   total: number;
   orderDiscountAmount: number;
   lineDiscountTotal: number;
+  shippingFee: number;
+  orderVatRate: number;
   note?: string;
   deliveryInfo?: DeliveryInfo;
   computeLineTotal: (l: OrderLine) => number;
@@ -144,6 +147,13 @@ interface UseAutoSaveDraftArgs {
   onSaved?: (invoiceId: string) => void;
 }
 
+interface PendingDraftSave {
+  sessionId: string;
+  snapshot: AutoSaveSnapshot;
+  ctx: NonNullable<UseAutoSaveDraftArgs["ctx"]>;
+  stateKey: string;
+}
+
 /**
  * Hook — chỉ side-effects, không return gì.
  *
@@ -158,11 +168,60 @@ export function useAutoSaveDraft({
   onSaved,
 }: UseAutoSaveDraftArgs): void {
   const debouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedHashRef = useRef<string>("");
-  const inFlightRef = useRef<boolean>(false);
-  // Track invoice ID đã save (từ saveDraftOrder result) để có thể delete khi
-  // cart trống. Lần đầu save chưa có id.
+  const lastSavedKeyRef = useRef<string>("");
+  const currentSessionRef = useRef<string | null>(sessionId);
+  const hasDraftContentRef = useRef(snapshot.lines.length > 0);
+  const onSavedRef = useRef(onSaved);
+  const mountedRef = useRef(true);
   const savedInvoiceIdRef = useRef<string | null>(null);
+  const saveQueueRef = useRef<LatestOnlyAsyncQueue<PendingDraftSave> | null>(null);
+
+  currentSessionRef.current = sessionId;
+  hasDraftContentRef.current = snapshot.lines.length > 0;
+  onSavedRef.current = onSaved;
+
+  if (!saveQueueRef.current) {
+    saveQueueRef.current = new LatestOnlyAsyncQueue<PendingDraftSave>(
+      async (request) => {
+        try {
+          const input = buildInput(request.snapshot, request.ctx);
+          const result = await saveDraftOrder(input, {
+            sessionId: request.sessionId,
+            autoSaved: true,
+          });
+          savedInvoiceIdRef.current = result.invoiceId;
+          lastSavedKeyRef.current = request.stateKey;
+
+          // Clean up a save that finished after the user cleared this cart.
+          if (
+            currentSessionRef.current === request.sessionId &&
+            !hasDraftContentRef.current
+          ) {
+            await deleteDraftOrder(result.invoiceId, { onlyAutoSaved: true });
+            savedInvoiceIdRef.current = null;
+            return;
+          }
+
+          if (
+            mountedRef.current &&
+            currentSessionRef.current === request.sessionId
+          ) {
+            onSavedRef.current?.(result.invoiceId);
+          }
+        } catch (err) {
+          console.warn("[useAutoSaveDraft] save failed:", err);
+        }
+      },
+    );
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      saveQueueRef.current?.clearPending();
+    };
+  }, []);
 
   useEffect(() => {
     if (!enabled || !sessionId || !ctx) return;
@@ -188,13 +247,16 @@ export function useAutoSaveDraft({
 
     // Hash state để skip save khi không thay đổi
     const stateHash = computeStateHash(snapshot);
+    const stateKey = `${ctx.tenantId}:${ctx.branchId}:${sessionId}:${stateHash}`;
 
     // Cart rỗng → cleanup draft trên server (nếu đã có)
     if (snapshot.lines.length === 0) {
-      if (savedInvoiceIdRef.current && stateHash !== lastSavedHashRef.current) {
+      if (debouncedRef.current) clearTimeout(debouncedRef.current);
+      saveQueueRef.current?.clearPending();
+      if (savedInvoiceIdRef.current && stateKey !== lastSavedKeyRef.current) {
         const idToDelete = savedInvoiceIdRef.current;
         savedInvoiceIdRef.current = null;
-        lastSavedHashRef.current = stateHash;
+        lastSavedKeyRef.current = stateKey;
         // Best-effort cleanup — không block UI.
         // CEO 16/06/2026 — onlyAutoSaved: CHỈ xoá nháp kỹ thuật (auto_saved=true).
         // Nếu user vừa bấm "Nháp" tay (promote auto_saved=false) rồi clearCart →
@@ -206,36 +268,18 @@ export function useAutoSaveDraft({
       return;
     }
 
-    if (stateHash === lastSavedHashRef.current) return;
-    if (inFlightRef.current) return; // đang save → skip, lần kế sẽ catch up
+    if (stateKey === lastSavedKeyRef.current) return;
 
     if (debouncedRef.current) clearTimeout(debouncedRef.current);
-    debouncedRef.current = setTimeout(async () => {
-      if (!ctx) return;
-      inFlightRef.current = true;
-      try {
-        const input = buildInput(snapshot, ctx);
-        const result = await saveDraftOrder(input, {
-          sessionId,
-          autoSaved: true,
-        });
-        savedInvoiceIdRef.current = result.invoiceId;
-        lastSavedHashRef.current = stateHash;
-        // Notify parent → set state.loadedDraftId để handleComplete đi
-        // nhánh completeDraftOrder thay vì posCheckout (tránh dup conflict).
-        onSaved?.(result.invoiceId);
-      } catch (err) {
-        console.warn("[useAutoSaveDraft] save failed:", err);
-      } finally {
-        inFlightRef.current = false;
-      }
+    debouncedRef.current = setTimeout(() => {
+      saveQueueRef.current?.enqueue({ sessionId, snapshot, ctx, stateKey });
     }, 400); // CEO 01/06/2026: giảm từ 1500ms → 400ms để F5 sau ~0.4s đã có draft DB.
 
     return () => {
       if (debouncedRef.current) clearTimeout(debouncedRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.note, ctx?.tenantId, ctx?.branchId]);
+  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId]);
 }
 
 /**
@@ -291,6 +335,9 @@ function buildInput(
     paymentMethod: s.paymentMethod,
     subtotal: s.subtotal,
     discountAmount: s.orderDiscountAmount + s.lineDiscountTotal,
+    orderDiscountAmount: s.orderDiscountAmount,
+    shippingFee: s.shippingFee,
+    orderVatRate: s.orderVatRate,
     total: s.total,
     paid: 0, // draft luôn paid=0
     note: s.note,

@@ -524,7 +524,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
-      if (fn === "save_pos_draft_atomic") {
+      if (fn === "save_pos_draft_atomic_v2") {
         return {
           data: {
             invoice_id: "inv-draft",
@@ -826,7 +826,7 @@ describe("Flow B: Draft → Complete with Mixed Payment", () => {
       invoiceId: "inv-draft",
       invoiceCode: "NH00001",
     });
-    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v2")).toBe(true);
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
     expect(insertCalls.filter((call) => call.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((call) => call.table === "cash_transactions")).toHaveLength(0);

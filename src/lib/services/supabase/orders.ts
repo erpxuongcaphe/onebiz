@@ -493,16 +493,21 @@ export async function saveDraftOrder(
 ): Promise<{ invoiceId: string; invoiceCode: string }> {
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
-    "save_pos_draft_atomic",
+    "save_pos_draft_atomic_v2",
     {
       p_branch_id: input.branchId,
       p_customer_id: input.customerId ?? null,
       p_items: input.items,
       p_payment_method: input.paymentMethod,
-      p_subtotal: input.subtotal,
-      p_discount_amount: input.discountAmount,
-      p_total: input.total,
+      p_order_discount:
+        input.orderDiscountAmount ??
+        Math.max(
+          0,
+          input.discountAmount -
+            input.items.reduce((sum, item) => sum + item.discount, 0),
+        ),
       p_shipping_fee: input.shippingFee ?? 0,
+      p_order_vat_rate: input.orderVatRate ?? 0,
       p_note: input.note ?? null,
       p_client_session_id: options?.sessionId ?? null,
       p_auto_saved: options?.autoSaved ?? false,

@@ -652,7 +652,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
     }),
     rpc: vi.fn((fn: string, params: unknown) => {
       rpcCalls.push({ fn, params });
-      if (fn === "save_pos_draft_atomic") {
+      if (fn === "save_pos_draft_atomic_v2") {
         return {
           data: { invoice_id: "inv-draft-1", invoice_code: "NH000001", status: "draft" },
           error: null,
@@ -1174,7 +1174,7 @@ describe("Draft Order Scenarios", () => {
 
     await saveDraftOrder(posInput({ paid: 0 }));
 
-    expect(rpcCalls.some((c) => c.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(rpcCalls.some((c) => c.fn === "save_pos_draft_atomic_v2")).toBe(true);
     expect(insertCalls.filter((c) => c.table === "invoices")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "stock_movements")).toHaveLength(0);
     expect(insertCalls.filter((c) => c.table === "cash_transactions")).toHaveLength(0);
@@ -2255,7 +2255,7 @@ describe("Business Rule Validations", () => {
       invoiceId: "inv-draft-1",
       invoiceCode: "NH000001",
     });
-    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic")).toBe(true);
+    expect(rpcCalls.some((call) => call.fn === "save_pos_draft_atomic_v2")).toBe(true);
     expect(insertCalls.filter((call) => call.table === "invoices")).toHaveLength(0);
   });
 

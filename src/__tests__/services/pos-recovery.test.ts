@@ -162,7 +162,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "soft_delete_pos_draft_atomic") {
         return { data: { invoice_id: "inv-draft", deleted: true }, error: null };
       }
-      if (fn === "save_pos_draft_atomic") {
+      if (fn === "save_pos_draft_atomic_v2") {
         return {
           data: { invoice_id: "inv-draft", invoice_code: "NH-00001", status: "draft" },
           error: null,
@@ -224,6 +224,9 @@ const baseInput = {
   paymentMethod: "cash" as const,
   subtotal: 290000,
   discountAmount: 0,
+  orderDiscountAmount: 0,
+  shippingFee: 0,
+  orderVatRate: 0,
   total: 290000,
   paid: 0,
 };
@@ -236,6 +239,10 @@ const draftMigration = readFileSync(
   "supabase/migrations/00264_atomic_pos_draft_save.sql",
   "utf8",
 );
+const draftTotalsMigration = readFileSync(
+  "supabase/migrations/00291_harden_pos_draft_totals.sql",
+  "utf8",
+);
 
 describe("saveDraftOrder — atomic by client_session_id", () => {
   it("sends the full draft to one server transaction", async () => {
@@ -245,12 +252,15 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
     });
 
     expect(result).toEqual({ invoiceId: "inv-draft", invoiceCode: "NH-00001" });
-    const call = rpcCalls.find((entry) => entry.fn === "save_pos_draft_atomic");
+    const call = rpcCalls.find((entry) => entry.fn === "save_pos_draft_atomic_v2");
     expect(call?.args).toMatchObject({
       p_branch_id: "branch-1",
       p_client_session_id: "31e9d753-0c76-45af-a509-d4dce67c042f",
       p_auto_saved: true,
       p_items: baseInput.items,
+      p_order_discount: 0,
+      p_shipping_fee: 0,
+      p_order_vat_rate: 0,
     });
     expect(call?.args).not.toHaveProperty("p_tenant_id");
     expect(call?.args).not.toHaveProperty("p_created_by");
@@ -259,12 +269,19 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
   });
 
   it("fails closed when the draft transaction fails", async () => {
-    mockRpcResponse.set("save_pos_draft_atomic", {
+    mockRpcResponse.set("save_pos_draft_atomic_v2", {
       data: null,
       error: { message: "POS_DRAFT_ITEM_INVALID" },
     });
 
     await expect(saveDraftOrder(baseInput)).rejects.toThrow("POS_DRAFT_ITEM_INVALID");
+  });
+
+  it("derives draft header totals from the same item snapshot on the server", () => {
+    expect(draftTotalsMigration).toContain("v_subtotal := v_subtotal + v_quantity * v_unit_price");
+    expect(draftTotalsMigration).toContain("v_line_discount_total + v_order_discount");
+    expect(draftTotalsMigration).toContain("v_total := greatest");
+    expect(draftTotalsMigration).toContain("return public.save_pos_draft_atomic");
   });
 
   it("locks the session and validates permission, branch and products in SQL", () => {
