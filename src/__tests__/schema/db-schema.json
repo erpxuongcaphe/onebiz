@@ -1259,7 +1259,35 @@
    "end_date",
    "id",
    "is_active",
-   "max_discount_amou…105 tokens truncated…iews": [
+   "max_discount_amount",
+   "max_uses",
+   "max_uses_per_customer",
+   "min_order_amount",
+   "name",
+   "start_date",
+   "tenant_id",
+   "type",
+   "updated_at",
+   "used_count",
+   "value"
+  ],
+  "mkt_audit_actors": [
+   "actor_key",
+   "created_at",
+   "id",
+   "sandbox_id",
+   "user_id"
+  ],
+  "sales_channels": [
+   "api_key",
+   "created_at",
+   "id",
+   "is_active",
+   "name",
+   "platform",
+   "tenant_id"
+  ],
+  "mkt_content_reviews": [
    "action",
    "comment",
    "content_item_id",
@@ -2217,4 +2245,3 @@
  "soCot": 1672,
  "soRpc": 296
 }
-
