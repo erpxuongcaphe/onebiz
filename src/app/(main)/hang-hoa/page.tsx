@@ -262,7 +262,7 @@ function ProductDetail({
             label: "Thẻ kho",
             content: (
               <ProductStockMovementsTab
-                key={`${product.id}:${stockCardBranchId ?? "all"}`}
+                key={`${product.id}:${stockCardBranchId ?? "all"}:${product.stock}`}
                 productId={product.id}
                 productCode={product.code}
                 productName={product.name}
