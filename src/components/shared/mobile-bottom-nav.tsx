@@ -90,7 +90,8 @@ function flattenGroup(
 ): FlatLeaf[] {
   const out: FlatLeaf[] = [];
   group.items?.forEach((leaf) => {
-    if (leaf.permission && !hasPermission(leaf.permission)) return;
+    const permissions = leaf.permissions ?? (leaf.permission ? [leaf.permission] : []);
+    if (permissions.length > 0 && !permissions.some(hasPermission)) return;
     out.push({
       label: leaf.label,
       href: leaf.href,
@@ -104,7 +105,8 @@ function flattenGroup(
   });
   group.subGroups?.forEach((sg) => {
     sg.items.forEach((leaf) => {
-      if (leaf.permission && !hasPermission(leaf.permission)) return;
+      const permissions = leaf.permissions ?? (leaf.permission ? [leaf.permission] : []);
+      if (permissions.length > 0 && !permissions.some(hasPermission)) return;
       out.push({
         label: leaf.label,
         href: leaf.href,
