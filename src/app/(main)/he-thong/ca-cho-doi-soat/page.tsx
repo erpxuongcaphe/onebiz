@@ -30,10 +30,15 @@ import {
 import { ReconcileShiftDialog } from "@/components/shared/shift/pending-shift-alert";
 import { PermissionPage } from "@/components/shared/permission-page";
 
-// S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (shifts.reconcile_own_branch).
+// Cho phép quyền toàn hệ thống hoặc quyền đối chiếu trong chi nhánh được giao.
 export default function CaChoDoiSoatPageGuarded() {
   return (
-    <PermissionPage requires={PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH}>
+    <PermissionPage
+      requires={[
+        PERMISSIONS.SHIFTS_RECONCILE_ANY,
+        PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH,
+      ]}
+    >
       <CaChoDoiSoatPage />
     </PermissionPage>
   );
