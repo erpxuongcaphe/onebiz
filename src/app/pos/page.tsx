@@ -165,11 +165,19 @@ interface InvoiceTab {
   /** null = this is the ACTIVE tab (state lives in usePosState) */
   snapshot: PosSnapshot | null;
   itemCount: number;
+  /** Each invoice tab owns its own auto-save/idempotency session. */
+  sessionId: string;
 }
 
 let tabCounter = 0;
 function nextTabId() {
-  return `tab-${++tabCounter}-${Date.now()}`;
+  return "tab-" + ++tabCounter + "-" + Date.now();
+}
+
+function nextClientSessionId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : "sess-" + Date.now() + "-" + Math.random().toString(36).slice(2);
 }
 
 // ============================================================
@@ -188,72 +196,160 @@ function PosPageInner() {
     logout,
   } = useAuth();
 
-  // Multi-tab invoice management (KiotViet parity)
+  // Multi-tab invoice management (KiotViet parity).
+  // Cart/customer/payment and server auto-save session must move together.
   const [tabs, setTabs] = useState<InvoiceTab[]>(() => [
-    { id: nextTabId(), label: "Hoá đơn 1", snapshot: null, itemCount: 0 },
+    {
+      id: nextTabId(),
+      label: "Hoá đơn 1",
+      snapshot: null,
+      itemCount: 0,
+      sessionId: nextClientSessionId(),
+    },
   ]);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0]?.id ?? "");
+  const tabsRef = useRef(tabs);
+  const activeTabIdRef = useRef(activeTabId);
+  const cartLoadRequestRef = useRef(0);
+
+  const commitTabs = useCallback((next: InvoiceTab[]) => {
+    tabsRef.current = next;
+    setTabs(next);
+  }, []);
+
+  const clientSessionId =
+    tabs.find((tab) => tab.id === activeTabId)?.sessionId ??
+    tabs[0]?.sessionId ??
+    "";
+
+  const setClientSessionId = useCallback((sessionId: string) => {
+    const currentId = activeTabIdRef.current;
+    const next = tabsRef.current.map((tab) =>
+      tab.id === currentId ? { ...tab, sessionId } : tab,
+    );
+    commitTabs(next);
+  }, [commitTabs]);
+
+  const beginCartLoad = useCallback(() => ({
+    requestId: ++cartLoadRequestRef.current,
+    tabId: activeTabIdRef.current,
+  }), []);
+
+  const isCartLoadCurrent = useCallback(
+    (token: { requestId: number; tabId: string }) =>
+      cartLoadRequestRef.current === token.requestId &&
+      activeTabIdRef.current === token.tabId,
+    [],
+  );
+
+  const applyDraftToActiveTab = useCallback(async (
+    detail: DraftOrderDetail,
+    token: { requestId: number; tabId: string },
+  ): Promise<boolean> => {
+    if (!isCartLoadCurrent(token)) return false;
+
+    let sessionId = detail.clientSessionId;
+    if (!sessionId) {
+      sessionId = nextClientSessionId();
+      detail.revision = await adoptDraftSession(
+        detail.id,
+        sessionId,
+        detail.revision,
+      );
+    }
+
+    if (!isCartLoadCurrent(token)) return false;
+    setClientSessionId(sessionId);
+    state.loadDraft(detail);
+    return true;
+  }, [isCartLoadCurrent, setClientSessionId, state]);
 
   const switchTab = useCallback((tabId: string) => {
-    if (tabId === activeTabId) return;
-    // Save current state to outgoing tab
-    const snapshot = state.getSnapshot();
-    setTabs((prev) =>
-      prev.map((t) =>
-        t.id === activeTabId
-          ? { ...t, snapshot, itemCount: state.itemCount }
-          : t
-      )
-    );
-    // Load incoming tab
-    setTabs((prev) => {
-      const target = prev.find((t) => t.id === tabId);
-      if (target?.snapshot) {
-        state.restoreSnapshot(target.snapshot);
-        return prev.map((t) =>
-          t.id === tabId ? { ...t, snapshot: null } : t
-        );
+    const currentId = activeTabIdRef.current;
+    if (tabId === currentId) return;
+
+    const currentTabs = tabsRef.current;
+    const target = currentTabs.find((tab) => tab.id === tabId);
+    if (!target) return;
+
+    const outgoingSnapshot = state.getSnapshot();
+    const next = currentTabs.map((tab) => {
+      if (tab.id === currentId) {
+        return { ...tab, snapshot: outgoingSnapshot, itemCount: state.itemCount };
       }
-      return prev;
+      if (tab.id === tabId) {
+        return { ...tab, snapshot: null };
+      }
+      return tab;
     });
+
+    cartLoadRequestRef.current += 1;
+    activeTabIdRef.current = tabId;
+    commitTabs(next);
     setActiveTabId(tabId);
-  }, [activeTabId, state]);
+
+    if (target.snapshot) {
+      state.restoreSnapshot(target.snapshot);
+    } else {
+      state.clearCart();
+    }
+  }, [commitTabs, state]);
 
   const addTab = useCallback(() => {
-    // Save current state to old tab
-    const snapshot = state.getSnapshot();
+    const currentId = activeTabIdRef.current;
+    const currentTabs = tabsRef.current;
+    const outgoingSnapshot = state.getSnapshot();
     const newId = nextTabId();
-    const tabNum = tabs.length + 1;
-    setTabs((prev) => [
-      ...prev.map((t) =>
-        t.id === activeTabId
-          ? { ...t, snapshot, itemCount: state.itemCount }
-          : t
+    const tabNum = currentTabs.length + 1;
+    const next = [
+      ...currentTabs.map((tab) =>
+        tab.id === currentId
+          ? { ...tab, snapshot: outgoingSnapshot, itemCount: state.itemCount }
+          : tab
       ),
-      { id: newId, label: `Hoá đơn ${tabNum}`, snapshot: null, itemCount: 0 },
-    ]);
-    state.clearCart();
+      {
+        id: newId,
+        label: "Hoá đơn " + tabNum,
+        snapshot: null,
+        itemCount: 0,
+        sessionId: nextClientSessionId(),
+      },
+    ];
+
+    cartLoadRequestRef.current += 1;
+    activeTabIdRef.current = newId;
+    commitTabs(next);
     setActiveTabId(newId);
-  }, [activeTabId, state, tabs.length]);
+    state.clearCart();
+  }, [commitTabs, state]);
 
   const closeTab = useCallback((tabId: string) => {
-    if (tabs.length <= 1) return; // always keep at least 1 tab
-    const remaining = tabs.filter((t) => t.id !== tabId);
-    if (tabId === activeTabId) {
-      // Switch to adjacent tab
-      const closedIdx = tabs.findIndex((t) => t.id === tabId);
-      const nextTab = remaining[Math.min(closedIdx, remaining.length - 1)];
-      if (nextTab.snapshot) {
-        state.restoreSnapshot(nextTab.snapshot);
-        nextTab.snapshot = null;
-      } else {
-        state.clearCart();
-      }
-      setActiveTabId(nextTab.id);
-    }
-    setTabs(remaining);
-  }, [activeTabId, tabs, state]);
+    const currentTabs = tabsRef.current;
+    if (currentTabs.length <= 1) return;
 
+    const remaining = currentTabs.filter((tab) => tab.id !== tabId);
+    if (tabId !== activeTabIdRef.current) {
+      commitTabs(remaining);
+      return;
+    }
+
+    const closedIdx = currentTabs.findIndex((tab) => tab.id === tabId);
+    const nextTab = remaining[Math.min(closedIdx, remaining.length - 1)];
+    const next = remaining.map((tab) =>
+      tab.id === nextTab.id ? { ...tab, snapshot: null } : tab,
+    );
+
+    cartLoadRequestRef.current += 1;
+    activeTabIdRef.current = nextTab.id;
+    commitTabs(next);
+    setActiveTabId(nextTab.id);
+
+    if (nextTab.snapshot) {
+      state.restoreSnapshot(nextTab.snapshot);
+    } else {
+      state.clearCart();
+    }
+  }, [commitTabs, state]);
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
@@ -409,15 +505,8 @@ function PosPageInner() {
   const [zeroConfirmOpen, setZeroConfirmOpen] = useState(false);
 
   // ── Auto-save & recovery (Sprint POS-RECOVERY-1, CEO 04/05/2026) ──
-  // clientSessionId: UUID idempotency key, regen mỗi khi clear cart.
-  // - Auto-save background dùng key này để upsert draft trên server
-  // - posCheckout dùng key này để chống duplicate khi cashier ấn 2 lần
-  const [clientSessionId, setClientSessionId] = useState<string>(() =>
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `sess-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-
+  // clientSessionId belongs to the active invoice tab above. This prevents
+  // cart A from being auto-saved into order B after switching tabs.
   // Recovery dialog: list draft đang dở, hiện khi mount POS Retail.
   const [recoveryOpen, setRecoveryOpen] = useState(false);
   const [recoveryDrafts, setRecoveryDrafts] = useState<DraftOrderSummary[]>([]);
@@ -507,8 +596,16 @@ function PosPageInner() {
       // Branch thực sự đổi (không phải mount lần đầu)
       const hadItems = state.itemCount > 0;
       state.clearCart();
-      // Giữ tab hiện tại, drop snapshot các tab khác
-      setTabs((prev) => prev.map((t) => ({ ...t, snapshot: null, itemCount: 0 })));
+      cartLoadRequestRef.current += 1;
+      // Giữ tab hiện tại, xóa snapshot cũ và cấp session mới theo chi nhánh.
+      commitTabs(
+        tabsRef.current.map((tab) => ({
+          ...tab,
+          snapshot: null,
+          itemCount: 0,
+          sessionId: nextClientSessionId(),
+        })),
+      );
       if (hadItems) {
         toast({
           title: "Đã làm trống giỏ hàng",
@@ -518,7 +615,7 @@ function PosPageInner() {
       }
     }
     branchIdRef.current = nextBranchId;
-  }, [currentBranch?.id, state, toast]);
+  }, [commitTabs, currentBranch?.id, state, toast]);
 
   // CEO 10/06/2026 — refresh badge số đếm nháp khi mount, đổi chi nhánh,
   // sau khi lưu/xoá nháp (qua draftCountTrigger), hoặc khi mở/đóng dialog.
@@ -608,9 +705,14 @@ function PosPageInner() {
 
     // Priority 1: nếu URL có ?draftId → load thẳng draft đó
     if (urlDraftId) {
+      const token = beginCartLoad();
       getDraftOrderById(urlDraftId)
         .then(async (detail) => {
-          if (cancelled || branchSnapshot !== currentBranch?.id) return;
+          if (
+            cancelled ||
+            branchSnapshot !== currentBranch?.id ||
+            !isCartLoadCurrent(token)
+          ) return;
           if (!detail) {
             toast({
               title: "Không tìm thấy đơn nháp",
@@ -619,22 +721,8 @@ function PosPageInner() {
             });
             return;
           }
-          // Session TRƯỚC loadDraft: dán session vào đơn TRƯỚC khi populate giỏ,
-          // để auto-save (debounce sau khi giỏ đổi) tìm ĐÚNG đơn đã dán, tránh
-          // race đẻ nháp mới. CEO 08/07 — vá bug trùng đơn + nợ ảo.
-          if (detail.clientSessionId) {
-            setClientSessionId(detail.clientSessionId);
-          } else {
-            // Đơn nháp KHÔNG có session (tạo từ dialog "Đặt hàng") → GẮN session
-            // POS hiện tại vào đơn → auto-save UPDATE đúng đơn, KHÔNG tạo nháp mới
-            // (mồ côi + nợ ảo + hoá đơn trùng). completeDraftOrder giữ nguyên mã.
-            detail.revision = await adoptDraftSession(
-              detail.id,
-              clientSessionId,
-              detail.revision,
-            );
-          }
-          state.loadDraft(detail);
+          const applied = await applyDraftToActiveTab(detail, token);
+          if (!applied) return;
           toast({
             title: `Đã mở đơn nháp ${detail.code}`,
             description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ. Sửa lại rồi bấm Thanh toán.`,
@@ -645,7 +733,7 @@ function PosPageInner() {
           router.replace("/pos", { scroll: false });
         })
         .catch((err) => {
-          if (cancelled) return;
+          if (cancelled || !isCartLoadCurrent(token)) return;
           console.warn("[POS] auto-load draft from URL failed:", err);
         });
       return () => {
@@ -799,8 +887,10 @@ function PosPageInner() {
   // ─── Recovery handlers ───
   const handleRecoverySelect = useCallback(
     async (draft: DraftOrderSummary) => {
+      const token = beginCartLoad();
       try {
         const detail = await getDraftOrderById(draft.id);
+        if (!isCartLoadCurrent(token)) return;
         if (!detail) {
           toast({
             title: "Không tìm được đơn nháp",
@@ -810,35 +900,22 @@ function PosPageInner() {
           setRecoveryDrafts((prev) => prev.filter((d) => d.id !== draft.id));
           return;
         }
-        // Adopt session_id TRƯỚC loadDraft: nếu đổi sessionId, useAutoSaveDraft
-        // sẽ upsert đúng row server thay vì tạo row mới. Dán session trước khi
-        // populate giỏ để tránh race auto-save đẻ nháp mới. CEO 08/07.
-        if (detail.clientSessionId) {
-          setClientSessionId(detail.clientSessionId);
-        } else {
-          // Draft không có session_id (pre-migration / tạo từ dialog "Đặt hàng")
-          // → gán mới VÀ dán vào đơn (adoptDraftSession) để auto-save UPDATE đúng
-          // đơn này, KHÔNG tạo nháp mới (mồ côi + nợ ảo).
-          const newId =
-            typeof crypto !== "undefined" && crypto.randomUUID
-              ? crypto.randomUUID()
-              : `sess-${Date.now()}`;
-          setClientSessionId(newId);
-          detail.revision = await adoptDraftSession(
-            detail.id,
-            newId,
-            detail.revision,
-          );
-        }
-        // Load state từ detail (loadDraft sẵn có nhận DraftOrderDetail)
-        state.loadDraft(detail);
+
+        const applied = await applyDraftToActiveTab(detail, token);
+        if (!applied) return;
+
         setRecoveryOpen(false);
         toast({
-          title: `Đã khôi phục đơn ${detail.code}`,
-          description: `${detail.itemCount} sản phẩm · Tổng: ${formatNumber(detail.total)}đ`,
+          title: "Đã khôi phục đơn " + detail.code,
+          description:
+            detail.itemCount +
+            " sản phẩm · Tổng: " +
+            formatNumber(detail.total) +
+            "đ",
           variant: "success",
         });
       } catch (err) {
+        if (!isCartLoadCurrent(token)) return;
         console.error("[POS] handleRecoverySelect failed:", err);
         toast({
           title: "Khôi phục thất bại",
@@ -847,10 +924,8 @@ function PosPageInner() {
         });
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.loadDraft, toast],
+    [applyDraftToActiveTab, beginCartLoad, isCartLoadCurrent, toast],
   );
-
   const handleRecoveryDelete = useCallback(
     async (draftId: string) => {
       try {
@@ -3792,10 +3867,24 @@ function PosPageInner() {
       <DraftListModal
         open={draftModalOpen}
         onClose={() => setDraftModalOpen(false)}
-        onLoad={(draft) => {
-          state.loadDraft(draft);
-          setDraftModalOpen(false);
-          toast({ title: `Đã tải nháp ${draft.code || ""}`, variant: "success" });
+        onLoad={async (draft) => {
+          const token = beginCartLoad();
+          try {
+            const applied = await applyDraftToActiveTab(draft, token);
+            if (!applied) return;
+            setDraftModalOpen(false);
+            toast({
+              title: "Đã tải nháp " + (draft.code || ""),
+              variant: "success",
+            });
+          } catch (err) {
+            if (!isCartLoadCurrent(token)) return;
+            toast({
+              title: "Tải nháp thất bại",
+              description: err instanceof Error ? err.message : "Lỗi",
+              variant: "error",
+            });
+          }
         }}
       />
       {/* CEO 14/07: Xử lý đặt hàng — chọn đơn DH → nạp vào giỏ qua CÙNG đường
@@ -3805,8 +3894,10 @@ function PosPageInner() {
         onClose={() => setProcessOrderOpen(false)}
         branchId={currentBranch?.id ?? null}
         onPick={async (orderId) => {
+          const token = beginCartLoad();
           try {
             const detail = await getDraftOrderById(orderId);
+            if (!isCartLoadCurrent(token)) return;
             if (!detail) {
               toast({
                 title: "Không mở được đơn",
@@ -3815,34 +3906,18 @@ function PosPageInner() {
               });
               return;
             }
-            // CEO 14/07/2026 FIX MỒ CÔI ĐƠN: adopt session_id TRƯỚC loadDraft
-            // (y hệt handleRecoverySelect / ?draftId=). Nếu bỏ bước này,
-            // useAutoSaveDraft chạy theo clientSessionId hiện tại → ĐẺ NHÁP MỚI,
-            // rồi setLoadedDraftId ghi đè sang nháp mồ côi đó → khi Thanh toán,
-            // completeDraftOrder hoàn tất NHÁP MỚI, còn ĐƠN ĐẶT HÀNG gốc (DH)
-            // KHÔNG bao giờ flip 'completed' → đơn cứ hiện "chưa hoàn thành".
-            if (detail.clientSessionId) {
-              setClientSessionId(detail.clientSessionId);
-            } else {
-              const newId =
-                typeof crypto !== "undefined" && crypto.randomUUID
-                  ? crypto.randomUUID()
-                  : `sess-${Date.now()}`;
-              setClientSessionId(newId);
-              detail.revision = await adoptDraftSession(
-                detail.id,
-                newId,
-                detail.revision,
-              );
-            }
-            state.loadDraft(detail);
+
+            const applied = await applyDraftToActiveTab(detail, token);
+            if (!applied) return;
+
             setProcessOrderOpen(false);
             toast({
-              title: `Đã nạp đơn ${detail.code || ""}`,
+              title: "Đã nạp đơn " + (detail.code || ""),
               description: "Kiểm tra giỏ hàng rồi thanh toán.",
               variant: "success",
             });
           } catch (err) {
+            if (!isCartLoadCurrent(token)) return;
             toast({
               title: "Không mở được đơn",
               description: err instanceof Error ? err.message : "Lỗi",
@@ -5057,7 +5132,7 @@ function DraftListModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onLoad: (draft: DraftOrderDetail) => void;
+  onLoad: (draft: DraftOrderDetail) => Promise<void>;
 }) {
   const [drafts, setDrafts] = useState<DraftOrderSummary[]>([]);
   const [loading, setLoading] = useState(false);
@@ -5095,7 +5170,7 @@ function DraftListModal({
     async (id: string) => {
       try {
         const detail = await getDraftOrderById(id);
-        if (detail) onLoad(detail);
+        if (detail) await onLoad(detail);
       } catch (err: any) {
         toast({ title: "Tải nháp thất bại", description: err.message, variant: "error" });
       }

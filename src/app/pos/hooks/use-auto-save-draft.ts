@@ -168,6 +168,11 @@ interface PendingDraftSave {
   stateKey: string;
 }
 
+interface DraftServerState {
+  invoiceId: string | null;
+  revision: number | null;
+}
+
 /**
  * Hook — chỉ side-effects, không return gì.
  *
@@ -191,10 +196,8 @@ export function useAutoSaveDraft({
   const onSavedRef = useRef(onSaved);
   const onConflictRef = useRef(onConflict);
   const mountedRef = useRef(true);
-  const savedInvoiceIdRef = useRef<string | null>(draftId);
-  const savedRevisionRef = useRef<number | null>(draftRevision);
-  const serverSessionRef = useRef<string | null>(sessionId);
-  const conflictedSessionRef = useRef<string | null>(null);
+  const serverStateBySessionRef = useRef<Map<string, DraftServerState>>(new Map());
+  const conflictedSessionsRef = useRef<Set<string>>(new Set());
   const saveQueueRef = useRef<LatestOnlyAsyncQueue<PendingDraftSave> | null>(null);
 
   currentSessionRef.current = sessionId;
@@ -202,33 +205,49 @@ export function useAutoSaveDraft({
   onSavedRef.current = onSaved;
   onConflictRef.current = onConflict;
 
-  if (serverSessionRef.current !== sessionId) {
-    serverSessionRef.current = sessionId;
-    savedInvoiceIdRef.current = draftId;
-    savedRevisionRef.current = draftRevision;
-    conflictedSessionRef.current = null;
-  } else if (draftId && (
-    savedInvoiceIdRef.current !== draftId ||
-    (draftRevision ?? -1) > (savedRevisionRef.current ?? -1)
-  )) {
-    savedInvoiceIdRef.current = draftId;
-    savedRevisionRef.current = draftRevision;
+  if (sessionId) {
+    const known = serverStateBySessionRef.current.get(sessionId);
+    if (!known) {
+      serverStateBySessionRef.current.set(sessionId, {
+        invoiceId: draftId,
+        revision: draftRevision,
+      });
+    } else if (
+      draftId &&
+      (
+        known.invoiceId !== draftId ||
+        (draftRevision ?? -1) > (known.revision ?? -1)
+      )
+    ) {
+      serverStateBySessionRef.current.set(sessionId, {
+        invoiceId: draftId,
+        revision: draftRevision,
+      });
+      conflictedSessionsRef.current.delete(sessionId);
+    }
   }
 
   if (!saveQueueRef.current) {
     saveQueueRef.current = new LatestOnlyAsyncQueue<PendingDraftSave>(
       async (request) => {
-        if (conflictedSessionRef.current === request.sessionId) return;
+        if (conflictedSessionsRef.current.has(request.sessionId)) return;
         try {
           const input = buildInput(request.snapshot, request.ctx);
+          const serverState =
+            serverStateBySessionRef.current.get(request.sessionId) ?? {
+              invoiceId: null,
+              revision: null,
+            };
           const result = await saveDraftOrder(input, {
             sessionId: request.sessionId,
             autoSaved: true,
-            invoiceId: savedInvoiceIdRef.current,
-            expectedRevision: savedRevisionRef.current,
+            invoiceId: serverState.invoiceId,
+            expectedRevision: serverState.revision,
           });
-          savedInvoiceIdRef.current = result.invoiceId;
-          savedRevisionRef.current = result.revision;
+          serverStateBySessionRef.current.set(request.sessionId, {
+            invoiceId: result.invoiceId,
+            revision: result.revision,
+          });
           lastSavedKeyRef.current = request.stateKey;
 
           // Clean up a save that finished after the user cleared this cart.
@@ -237,8 +256,10 @@ export function useAutoSaveDraft({
             !hasDraftContentRef.current
           ) {
             await deleteDraftOrder(result.invoiceId, { onlyAutoSaved: true });
-            savedInvoiceIdRef.current = null;
-            savedRevisionRef.current = null;
+            serverStateBySessionRef.current.set(request.sessionId, {
+              invoiceId: null,
+              revision: null,
+            });
             return;
           }
 
@@ -255,11 +276,12 @@ export function useAutoSaveDraft({
           const message = err instanceof Error ? err.message : "";
           const match = message.match(/POS_DRAFT_(CONFLICT|SESSION_CHANGED|NOT_FOUND|CHANGED_DURING_SAVE)/);
           if (match) {
-            conflictedSessionRef.current = request.sessionId;
-            saveQueueRef.current?.clearPending();
+            conflictedSessionsRef.current.add(request.sessionId);
             onConflictRef.current?.({
               code: `POS_DRAFT_${match[1]}` as DraftSaveConflict["code"],
-              invoiceId: savedInvoiceIdRef.current,
+              invoiceId:
+                serverStateBySessionRef.current.get(request.sessionId)?.invoiceId ??
+                null,
             });
             return;
           }
@@ -307,10 +329,13 @@ export function useAutoSaveDraft({
     if (snapshot.lines.length === 0) {
       if (debouncedRef.current) clearTimeout(debouncedRef.current);
       saveQueueRef.current?.clearPending();
-      if (savedInvoiceIdRef.current && stateKey !== lastSavedKeyRef.current) {
-        const idToDelete = savedInvoiceIdRef.current;
-        savedInvoiceIdRef.current = null;
-        savedRevisionRef.current = null;
+      const serverState = serverStateBySessionRef.current.get(sessionId);
+      if (serverState?.invoiceId && stateKey !== lastSavedKeyRef.current) {
+        const idToDelete = serverState.invoiceId;
+        serverStateBySessionRef.current.set(sessionId, {
+          invoiceId: null,
+          revision: null,
+        });
         lastSavedKeyRef.current = stateKey;
         // Best-effort cleanup — không block UI.
         // CEO 16/06/2026 — onlyAutoSaved: CHỈ xoá nháp kỹ thuật (auto_saved=true).

@@ -40,6 +40,7 @@ export interface PosSnapshot {
   note: string;
   loadedDraftId: string | null;
   loadedDraftRevision?: number | null;
+  loadedDraftSource?: string | null;
   sellingMode: SellingMode;
   deliveryInfo: DeliveryInfo;
   /** P0-1 fix 12/06/2026: VAT đơn cấp đơn (0/5/8/10). Multi-tab save/restore. */
@@ -344,6 +345,7 @@ export function usePosState() {
   const clearCart = useCallback((): void => {
     setLines([]);
     setCustomer(null, "clear-cart");
+    setPaymentMethod("cash");
     setPaid(0);
     setPaymentBreakdown([
       { method: "cash", amount: 0 },
@@ -357,6 +359,7 @@ export function usePosState() {
     setLoadedDraftId(null);
     setLoadedDraftRevision(null);
     setLoadedDraftSource(null);
+    setSellingMode("normal");
     setDeliveryInfo({
       recipientName: "",
       recipientPhone: "",
@@ -373,8 +376,7 @@ export function usePosState() {
     setDiscountAuditCtx(null);
     setLoadedDraftId(draft.id);
     setLoadedDraftRevision(draft.revision);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    setLoadedDraftSource((draft as any).source ?? null);
+    setLoadedDraftSource(draft.source ?? null);
     setLines(
       draft.items.map((it) => ({
         lineId: nextLineId(),
@@ -430,7 +432,26 @@ export function usePosState() {
       value: Math.max(0, (draft.discountAmount ?? 0) - lineDiscountSum),
     });
     setNote(draft.note ?? "");
+    setPaymentMethod("cash");
     setPaid(0);
+    setPaymentBreakdown([
+      { method: "cash", amount: 0 },
+      { method: "transfer", amount: 0 },
+      { method: "card", amount: 0 },
+    ]);
+    setOrderVatRate(0);
+    const deliveryFee = Math.max(0, Number(draft.deliveryFee ?? 0));
+    setSellingMode(deliveryFee > 0 ? "delivery" : "normal");
+    setDeliveryInfo({
+      recipientName: "",
+      recipientPhone: "",
+      address: "",
+      ward: "",
+      district: "",
+      shippingFee: deliveryFee,
+      deliveryNote: "",
+      codEnabled: true,
+    });
   }, []);
 
   // --- Computed totals ---
@@ -510,10 +531,11 @@ export function usePosState() {
     note,
     loadedDraftId,
     loadedDraftRevision,
+    loadedDraftSource,
     sellingMode,
     deliveryInfo,
     orderVatRate,
-  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, loadedDraftRevision, sellingMode, deliveryInfo, orderVatRate]);
+  }), [lines, customer, paymentMethod, paid, paymentBreakdown, orderDiscount, note, loadedDraftId, loadedDraftRevision, loadedDraftSource, sellingMode, deliveryInfo, orderVatRate]);
 
   /**
    * Phase F5-Recovery (CEO 01/06/2026): khôi phục giỏ từ localStorage backup
@@ -567,6 +589,7 @@ export function usePosState() {
     setNote(snap.note);
     setLoadedDraftId(snap.loadedDraftId);
     setLoadedDraftRevision(snap.loadedDraftRevision ?? null);
+    setLoadedDraftSource(snap.loadedDraftSource ?? null);
     setSellingMode(snap.sellingMode);
     setDeliveryInfo(snap.deliveryInfo);
     setOrderVatRate(snap.orderVatRate ?? 0);
