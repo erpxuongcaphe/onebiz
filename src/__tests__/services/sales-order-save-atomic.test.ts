@@ -10,6 +10,10 @@ const migration = readFileSync(
   "supabase/migrations/00265_atomic_sales_order_save.sql",
   "utf8",
 );
+const receiverValidationFix = readFileSync(
+  "supabase/migrations/00294_fix_sales_order_receiver_validation.sql",
+  "utf8",
+);
 
 describe("atomic sales-order draft save", () => {
   it("keeps actor and tenant derivation on the server", () => {
@@ -38,5 +42,18 @@ describe("atomic sales-order draft save", () => {
     expect(dialog).not.toMatch(/\.from\("invoice_items"\)[\s\S]{0,160}\.(insert|delete)\(/);
     expect(dialog).not.toMatch(/\.from\("shipping_orders"\)[\s\S]{0,160}\.(insert|update)\(/);
     expect(dialog).toContain("errors.receiver");
+  });
+
+  it("uses PostgreSQL num_nonnulls for receiver validation", () => {
+    expect(migration).toContain("num_nonnull(v_name, v_phone, v_address)");
+    expect(receiverValidationFix).toContain(
+      "num_nonnulls(v_name, v_phone, v_address)",
+    );
+    expect(receiverValidationFix).not.toContain("if num_nonnull(");
+    expect(receiverValidationFix).toContain(
+      "create or replace function public.save_sales_order_atomic(",
+    );
+    expect(receiverValidationFix).toContain("receiver_validation_ok");
+    expect(receiverValidationFix).toContain("legacy_typo_removed");
   });
 });
