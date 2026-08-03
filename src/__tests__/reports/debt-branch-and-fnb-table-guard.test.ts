@@ -19,7 +19,33 @@ describe("branch-aware debt aging and F&B table permissions", () => {
     expect(debtService.split("getPayableAgingReport({ branchId: branchId ?? null })")).toHaveLength(4);
     expect(debtPage).toContain("getDebtAging(activeBranchId)");
     expect(debtPage).toContain("getTopDebtors(20, activeBranchId)");
+    expect(debtPage).toContain("getDebtTotals(activeBranchId)");
+    expect(debtPage).not.toContain('mode === "aging" ? activeBranchId : null');
     expect(debtPage).toContain("Phạm vi số liệu:");
+  });
+
+  it("never restores or selects all branches without the effective permission", () => {
+    const authContext = readFileSync(
+      "src/lib/contexts/auth-context.tsx",
+      "utf8",
+    );
+    expect(authContext).toContain("function canViewAllBranches(");
+    expect(authContext).toContain("PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES");
+    expect(authContext).toContain("PERMISSIONS.SYSTEM_MANAGE_BRANCHES");
+    expect(authContext).toContain('storedBranchId === "__all__" &&');
+    expect(authContext).toContain('branchId === null &&');
+    expect(authContext).toContain("!canViewAllBranches(user?.role, permissions)");
+  });
+
+  it("turns report scope denials into an actionable Vietnamese message", () => {
+    const reportService = readFileSync(
+      "src/lib/services/supabase/finance-marketing-reports.ts",
+      "utf8",
+    );
+    expect(reportService).toContain("REPORT_ALL_BRANCHES_DENIED");
+    expect(reportService).toContain(
+      "Tài khoản không có quyền xem toàn công ty. Hãy chọn chi nhánh được phân quyền.",
+    );
   });
 
   it("changes a cleaned table through an authorized server lock", () => {

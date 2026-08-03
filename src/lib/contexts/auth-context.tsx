@@ -19,6 +19,7 @@ import { getUserEffectivePermissions } from "@/lib/services/supabase/permission-
 import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 
 // --- Types ---
 
@@ -58,6 +59,18 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 // Đặt ngoài component để useEffect dependency stable (React hook lint).
 const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_AT_KEY = "auth_login_at";
+
+function canViewAllBranches(
+  role: UserProfile["role"] | undefined,
+  permissionCodes: Set<string>,
+): boolean {
+  return (
+    role === "owner" ||
+    permissionCodes.has("*") ||
+    permissionCodes.has(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
+    permissionCodes.has(PERMISSIONS.SYSTEM_MANAGE_BRANCHES)
+  );
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -191,7 +204,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             let storedBranchId: string | null = null;
             try { storedBranchId = localStorage.getItem("active_branch_id"); } catch {}
 
-            if (storedBranchId === "__all__") {
+            if (
+              storedBranchId === "__all__" &&
+              canViewAllBranches(userProfile.role, perms)
+            ) {
               // CEO previously selected "Tất cả chi nhánh"
               setCurrentBranch(null);
             } else {
@@ -527,6 +543,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // không cho đổi. Staff bấm dropdown cũng silent no-op (UI đã lock).
         if (readDeviceBinding()) return;
 
+        if (
+          branchId === null &&
+          !canViewAllBranches(user?.role, permissions)
+        ) {
+          const fallbackBranch =
+            branches.find((branch) => branch.id === user?.branchId) ??
+            branches.find((branch) => branch.isDefault) ??
+            branches[0];
+
+          if (fallbackBranch) {
+            setCurrentBranch(fallbackBranch);
+            try {
+              localStorage.setItem("active_branch_id", fallbackBranch.id);
+              localStorage.setItem("last_specific_branch_id", fallbackBranch.id);
+            } catch {
+              /* localStorage có thể bị block (private mode) */
+            }
+          }
+          return;
+        }
+
         if (branchId === null) {
           // "Tất cả chi nhánh" — CEO view
           setCurrentBranch(null);
@@ -558,7 +595,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("[switchBranch] error:", err);
       }
     },
-    [branches],
+    [branches, permissions, user],
   );
 
   // Derived: branchId for data queries (undefined = no filter = all branches)

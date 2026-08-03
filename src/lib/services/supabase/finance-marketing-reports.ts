@@ -11,6 +11,21 @@
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 
+function handleReportError(
+  error: { message: string; code?: string },
+  context: string,
+): never {
+  if (error.message.includes("REPORT_ALL_BRANCHES_DENIED")) {
+    throw new Error(
+      "Tài khoản không có quyền xem toàn công ty. Hãy chọn chi nhánh được phân quyền.",
+    );
+  }
+  if (error.message.includes("REPORT_BRANCH_DENIED")) {
+    throw new Error("Tài khoản không có quyền xem chi nhánh đã chọn.");
+  }
+  handleError(error, context);
+}
+
 // ============================================================
 // 1. Receivable Aging
 // ============================================================
@@ -55,7 +70,7 @@ export async function getReceivableAgingReport(params?: {
         "Chưa có RPC get_receivable_aging_report. Vui lòng chạy migration 00081 trước.",
       );
     }
-    handleError(error, "getReceivableAgingReport");
+    handleReportError(error, "getReceivableAgingReport");
   }
   if (!data) throw new Error("Server không trả kết quả aging report.");
 
@@ -126,7 +141,7 @@ export async function getPayableAgingReport(params?: {
         "Chưa có migration 00257. Không thể tải tuổi nợ phải trả.",
       );
     }
-    handleError(error, "getPayableAgingReport");
+    handleReportError(error, "getPayableAgingReport");
   }
   if (!data) throw new Error("Máy chủ không trả kết quả tuổi nợ phải trả.");
 

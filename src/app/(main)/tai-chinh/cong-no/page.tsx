@@ -123,8 +123,7 @@ export default function CongNoPage() {
     setLoading(true);
     try {
       // Luôn fetch tổng KPI (cả KH + NCC) song song với data tab.
-      const reportBranchId = mode === "aging" ? activeBranchId : null;
-      const totalsPromise = getDebtTotals(reportBranchId);
+      const totalsPromise = getDebtTotals(activeBranchId);
 
       if (mode === "customer") {
         const [result, totals] = await withReportTimeout(Promise.all([
@@ -537,6 +536,14 @@ export default function CongNoPage() {
         } : undefined}
       />
 
+      <div className="mx-4 mt-3 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        <Icon name="location_on" size={15} />
+        <span>
+          Phạm vi số liệu:{" "}
+          <strong className="text-foreground">{branchLabel}</strong>
+        </span>
+      </div>
+
       {/* Summary — luôn show tổng cả KH + NCC bất kể tab nào */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
         <SummaryCard
@@ -634,10 +641,6 @@ export default function CongNoPage() {
         </TabsContent>
 
         <TabsContent value="aging" className="flex-1 min-h-0 overflow-auto pb-4">
-          <div className="mb-3 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            <Icon name="location_on" size={15} />
-            <span>Phạm vi số liệu: <strong className="text-foreground">{branchLabel}</strong></span>
-          </div>
           {agingLoading ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               Đang tải phân tích...
