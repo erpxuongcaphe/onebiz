@@ -51,6 +51,7 @@ export {
   adoptDraftSession,
   completeDraftOrder,
   findDraftIdBySession,
+  findDraftBySession,
   deleteDraftOrder,
   completeSalesOrder,
   cancelSalesOrder,

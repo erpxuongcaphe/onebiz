@@ -41,7 +41,14 @@ interface ProductGridProps {
   trackedStockRequests?: TrackedPosStockRequest[];
 }
 
-const STOCK_REFRESH_INTERVAL_MS = 10_000;
+// 04/08/2026 — chống quá tải DB: 10s → 60s. Poll chỉ là lưới an toàn;
+// thay đổi tồn THẬT đã có realtime branch_stock (bên dưới) đẩy ngay.
+// Poll 10s × mỗi máy POS mở cả ngày × get_bom_availability_batch là
+// nguồn CPU database số 1 (pg_stat 03/08: ~31MB đọc/lần gọi).
+const STOCK_REFRESH_INTERVAL_MS = 60_000;
+// Các sự kiện focus/online/visibilitychange thường bắn chùm 2-3 cái một
+// lúc → tối thiểu 5s giữa 2 lần refresh do sự kiện.
+const EVENT_REFRESH_MIN_GAP_MS = 5_000;
 
 /** CEO 03/06/2026 — Sprint 3 (G3): SKU has_bom tại branch production tính
  *  khả dụng = min(NVL stock / qty BOM). Lưu Map để map sang tile. */
@@ -255,8 +262,14 @@ export function ProductGrid({
   }, [trackedStockKey, refreshStocks]);
 
   useEffect(() => {
+    let lastEventRefreshAt = 0;
     const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") void refreshStocks();
+      if (document.visibilityState !== "visible") return;
+      // 04/08 — focus + visibilitychange + online hay bắn chùm → throttle 5s
+      const now = Date.now();
+      if (now - lastEventRefreshAt < EVENT_REFRESH_MIN_GAP_MS) return;
+      lastEventRefreshAt = now;
+      void refreshStocks();
     };
     const interval = window.setInterval(
       refreshWhenVisible,

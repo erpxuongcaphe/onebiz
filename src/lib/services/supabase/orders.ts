@@ -753,6 +753,42 @@ export async function findDraftIdBySession(sessionId: string): Promise<string | 
   }
 }
 
+/**
+ * 04/08/2026 — Như findDraftIdBySession nhưng trả kèm draft_revision.
+ * Dùng khi F5/tablet reload khôi phục giỏ từ localStorage với session CŨ:
+ * seed đúng {invoiceId, revision} cho auto-save để lần lưu đầu tiên không
+ * dính POS_DRAFT_CONFLICT chắc chắn (00292: đã có nháp cho session mà gửi
+ * expected_revision null là conflict → tab đêm nào cũng kẹt dialog).
+ * Chỉ ĐỌC, best-effort — lỗi trả null, luồng cũ giữ nguyên.
+ */
+export async function findDraftBySession(
+  sessionId: string,
+): Promise<{ invoiceId: string; revision: number } | null> {
+  if (!sessionId) return null;
+  try {
+    const supabase = getClient();
+    const tenantId = await getCurrentTenantId();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoices")
+      .select("id, draft_revision")
+      .eq("tenant_id", tenantId)
+      .eq("client_session_id", sessionId)
+      .eq("status", "draft")
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error || !data?.id) return null;
+    return {
+      invoiceId: String(data.id),
+      revision: Number(data.draft_revision ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function completeDraftOrder(
   invoiceId: string,
   payment: {

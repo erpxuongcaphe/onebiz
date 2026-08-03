@@ -29,6 +29,7 @@ import {
   deleteDraftOrder,
   completeDraftOrder,
   findDraftIdBySession,
+  findDraftBySession,
   getCurrentContext,
   type PosCheckoutInput,
   type PosCheckoutItem,
@@ -759,6 +760,18 @@ function PosPageInner() {
         paymentMethod: localBackup.paymentMethod,
       });
       setClientSessionId(localBackup.sessionId);
+      // 04/08/2026 — session cũ có thể ĐÃ có nháp trên server: seed đúng
+      // {invoiceId, revision} để lần auto-save đầu tiên KHÔNG dính
+      // POS_DRAFT_CONFLICT chắc chắn (00292 coi expected_revision null là
+      // conflict khi nháp đã tồn tại → trước đây tablet idle-reload đêm nào
+      // cũng kẹt dialog + bắn save hỏng). Best-effort — lỗi thì như cũ.
+      findDraftBySession(localBackup.sessionId)
+        .then((serverDraft) => {
+          if (cancelled || !serverDraft) return;
+          state.setLoadedDraftId(serverDraft.invoiceId);
+          state.setLoadedDraftRevision(serverDraft.revision);
+        })
+        .catch(() => undefined);
       if (hasLines) {
         toast({
           title: "Đã khôi phục giỏ tự lưu",
@@ -949,8 +962,25 @@ function PosPageInner() {
   }, []);
 
   const handleReloadConflictedDraft = useCallback(async () => {
-    const invoiceId = draftConflict?.invoiceId ?? state.loadedDraftId;
-    if (!invoiceId) return;
+    let invoiceId = draftConflict?.invoiceId ?? state.loadedDraftId;
+    // 04/08 — conflict sau F5 có thể mang invoiceId null → tra theo session.
+    if (!invoiceId && clientSessionId) {
+      invoiceId = await findDraftIdBySession(clientSessionId);
+    }
+    if (!invoiceId) {
+      // Không còn nháp trên server (đã bị dọn): thoát kẹt bằng cách tách
+      // sang session mới, GIỮ NGUYÊN giỏ — trước đây nút im lặng không
+      // phản ứng và dialog không đóng được (thu ngân kẹt).
+      state.setLoadedDraftId(null);
+      state.setLoadedDraftRevision(null);
+      setClientSessionId(
+        typeof crypto !== "undefined" && crypto.randomUUID
+          ? crypto.randomUUID()
+          : "sess-" + Date.now(),
+      );
+      setDraftConflict(null);
+      return;
+    }
     try {
       const detail = await getDraftOrderById(invoiceId);
       if (!detail) throw new Error("POS_DRAFT_NOT_FOUND");
