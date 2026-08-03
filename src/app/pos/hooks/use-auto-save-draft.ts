@@ -20,7 +20,7 @@
  * - F9 manual: `autoSaved=false`, sticky vĩnh viễn, mục đích nghiệp vụ
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   saveDraftOrder,
   deleteDraftOrder,
@@ -199,6 +199,15 @@ export function useAutoSaveDraft({
   const serverStateBySessionRef = useRef<Map<string, DraftServerState>>(new Map());
   const conflictedSessionsRef = useRef<Set<string>>(new Set());
   const saveQueueRef = useRef<LatestOnlyAsyncQueue<PendingDraftSave> | null>(null);
+  // 04/08/2026 — chống bão retry (pg_stat 03/08: tab POS để qua đêm bắn
+  // save lặp vì lastSavedKeyRef chỉ ghi khi THÀNH CÔNG, còn poll tồn 10-60s
+  // làm lines đổi → effect chạy lại → bắn tiếp không giới hạn).
+  // Lỗi liên tiếp → lùi dần 2s→4s→…→60s. KHÔNG đổi logic lưu/nghiệp vụ.
+  const consecutiveFailuresRef = useRef(0);
+  const nextRetryAtRef = useRef(0);
+  // Tab đang ẩn thì hoãn ghi DB (localStorage vẫn ghi ngay bên dưới);
+  // khi hiện lại → tick để effect chạy và lưu bù nếu còn thay đổi.
+  const [visibilityTick, setVisibilityTick] = useState(0);
 
   currentSessionRef.current = sessionId;
   hasDraftContentRef.current = snapshot.lines.length > 0;
@@ -249,6 +258,8 @@ export function useAutoSaveDraft({
             revision: result.revision,
           });
           lastSavedKeyRef.current = request.stateKey;
+          consecutiveFailuresRef.current = 0;
+          nextRetryAtRef.current = 0;
 
           // Clean up a save that finished after the user cleared this cart.
           if (
@@ -285,6 +296,14 @@ export function useAutoSaveDraft({
             });
             return;
           }
+          // Lỗi không phải conflict (mạng/5xx/timeout) → lùi dần, tối đa 60s.
+          consecutiveFailuresRef.current += 1;
+          nextRetryAtRef.current =
+            Date.now() +
+            Math.min(
+              60_000,
+              2_000 * 2 ** Math.min(consecutiveFailuresRef.current - 1, 5),
+            );
           console.warn("[useAutoSaveDraft] save failed:", err);
         }
       },
@@ -297,6 +316,16 @@ export function useAutoSaveDraft({
       mountedRef.current = false;
       saveQueueRef.current?.clearPending();
     };
+  }, []);
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        setVisibilityTick((tick) => tick + 1);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
   }, []);
 
   useEffect(() => {
@@ -350,16 +379,29 @@ export function useAutoSaveDraft({
 
     if (stateKey === lastSavedKeyRef.current) return;
 
+    // 04/08 — tab ẩn: không ghi DB (localStorage đã có ở trên); khi tab hiện
+    // lại, visibilityTick đổi → effect chạy lại → lưu bù nếu còn thay đổi.
+    if (
+      typeof document !== "undefined" &&
+      document.visibilityState === "hidden"
+    ) {
+      if (debouncedRef.current) clearTimeout(debouncedRef.current);
+      return;
+    }
+
     if (debouncedRef.current) clearTimeout(debouncedRef.current);
+    // 400ms bình thường (CEO 01/06: F5 sau ~0.4s đã có draft DB);
+    // sau lỗi save → chờ tới hạn backoff (tối đa 60s) mới bắn lại.
+    const delayMs = Math.max(400, nextRetryAtRef.current - Date.now());
     debouncedRef.current = setTimeout(() => {
       saveQueueRef.current?.enqueue({ sessionId, snapshot, ctx, stateKey });
-    }, 400); // CEO 01/06/2026: giảm từ 1500ms → 400ms để F5 sau ~0.4s đã có draft DB.
+    }, delayMs);
 
     return () => {
       if (debouncedRef.current) clearTimeout(debouncedRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId]);
+  }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId, visibilityTick]);
 }
 
 /**
