@@ -28,6 +28,11 @@ import {
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { saveSalesOrderAtomic } from "@/lib/services/supabase/orders";
 import { Icon } from "@/components/ui/icon";
+import {
+  getSalesOrderSaveErrorMessage,
+  normalizeSalesOrderReceiver,
+  validateSalesOrderDraft,
+} from "@/lib/sales-order-form";
 
 /** Đơn cần SỬA — truyền vào → dialog chuyển chế độ sửa (giữ mã, prefill, cảnh báo diff). */
 export interface EditOrderInput {
@@ -59,7 +64,7 @@ interface CreateOrderDialogProps {
 
 /** 1 dòng thay đổi hiện trên bảng cảnh báo trước khi lưu. */
 interface ChangeRow {
-  type: "add" | "remove" | "qty" | "price";
+  type: "add" | "remove" | "qty" | "price" | "info";
   name: string;
   detail: string;
 }
@@ -87,6 +92,7 @@ interface SearchCustomer {
   id: string;
   name: string;
   phone: string;
+  address: string;
 }
 
 interface DeliveryPartner {
@@ -107,7 +113,13 @@ export function CreateOrderDialog({
   const { toast } = useToast();
   const isEdit = !!editOrder;
   // Ảnh chụp trạng thái GỐC (lúc mở sửa) để so ra danh sách thay đổi.
-  const originalRef = useRef<{ items: OrderLineItem[]; deliveryFee: number; note: string } | null>(null);
+  const originalRef = useRef<{
+    items: OrderLineItem[];
+    customerId: string | null;
+    customerName: string;
+    deliveryFee: number;
+    note: string;
+  } | null>(null);
   // Danh sách thay đổi đang chờ CEO duyệt (null = chưa bấm Lưu).
   const [pendingChanges, setPendingChanges] = useState<ChangeRow[] | null>(null);
   const [code, setCode] = useState("");
@@ -172,6 +184,8 @@ export function CreateOrderDialog({
       // Chụp gốc để diff khi lưu (deep copy items).
       originalRef.current = {
         items: prefillItems.map((it) => ({ ...it })),
+        customerId: editOrder.customerId,
+        customerName: editOrder.customerName,
         deliveryFee: editOrder.deliveryFee ?? 0,
         note: editOrder.note ?? "",
       };
@@ -216,7 +230,7 @@ export function CreateOrderDialog({
       const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("customers")
-        .select("id, name, phone")
+        .select("id, name, phone, address")
         .or(`name.ilike.%${customerSearch}%,phone.ilike.%${customerSearch}%`)
         .eq("tenant_id", ctx.tenantId)
         .limit(8);
@@ -225,6 +239,7 @@ export function CreateOrderDialog({
         id: c.id,
         name: c.name,
         phone: c.phone ?? "",
+        address: c.address ?? "",
       })));
     }, 300);
 
@@ -303,10 +318,12 @@ export function CreateOrderDialog({
     }
     setProductSearch("");
     setShowProductDropdown(false);
+    setErrors((current) => ({ ...current, items: "" }));
   }
 
   function updateItem(id: string, field: keyof OrderLineItem, value: string | number) {
     setItems(items.map((item) => (item.id === id ? { ...item, [field]: value } : item)));
+    setErrors((current) => ({ ...current, items: "" }));
   }
 
   function removeItem(id: string) {
@@ -327,8 +344,11 @@ export function CreateOrderDialog({
   );
 
   function validate(): boolean {
-    const newErrors: Record<string, string> = {};
-    if (items.length === 0) newErrors.items = "Chưa có sản phẩm nào";
+    const newErrors = validateSalesOrderDraft({
+      items,
+      deliveryFee: shippingFee,
+      receiver: normalizeSalesOrderReceiver(receiverName, receiverPhone, receiverAddress),
+    });
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -353,11 +373,25 @@ export function CreateOrderDialog({
       if (before.price !== it.price) {
         changes.push({ type: "price", name: it.productName, detail: `đơn giá ${formatCurrency(before.price)} → ${formatCurrency(it.price)}` });
       }
+      if ((before.note ?? "").trim() !== (it.note ?? "").trim()) {
+        changes.push({ type: "info", name: it.productName, detail: "đã thay đổi ghi chú" });
+      }
     }
     for (const it of orig.items) {
       if (!nowById.has(it.id)) {
         changes.push({ type: "remove", name: it.productName, detail: `bỏ khỏi đơn (đang có SL ${formatNumber(it.quantity)})` });
       }
+    }
+    const currentCustomerId = selectedCustomer?.id ?? null;
+    if (orig.customerId !== currentCustomerId) {
+      changes.push({
+        type: "info",
+        name: "Khách hàng",
+        detail:
+          (orig.customerName || "Khách lẻ") +
+          " → " +
+          (selectedCustomer?.name || "Khách lẻ"),
+      });
     }
     if (orig.deliveryFee !== shippingFee) {
       changes.push({ type: "price", name: "Phí giao hàng", detail: `${formatCurrency(orig.deliveryFee)} → ${formatCurrency(shippingFee)}` });
@@ -384,19 +418,22 @@ export function CreateOrderDialog({
     setSaving(true);
     try {
       const ctx = await getCurrentContext();
-      const wantShipment = Boolean(
-        receiverName.trim() && receiverPhone.trim() && receiverAddress.trim(),
+      const receiver = normalizeSalesOrderReceiver(
+        receiverName,
+        receiverPhone,
+        receiverAddress,
       );
+      const wantShipment = receiver.isComplete;
       const result = await saveSalesOrderAtomic({
         requestedCode: code,
         branchId: activeBranchId ?? ctx.branchId,
         customerId: selectedCustomer?.id ?? null,
         deliveryFee: shippingFee,
         note: notes || null,
-        partnerId: selectedPartner || null,
-        receiverName: receiverName.trim() || null,
-        receiverPhone: receiverPhone.trim() || null,
-        receiverAddress: receiverAddress.trim() || null,
+        partnerId: wantShipment ? selectedPartner || null : null,
+        receiverName: wantShipment ? receiver.name : null,
+        receiverPhone: wantShipment ? receiver.phone : null,
+        receiverAddress: wantShipment ? receiver.address : null,
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -417,7 +454,7 @@ export function CreateOrderDialog({
     } catch (err) {
       toast({
         title: "Lỗi tạo đơn đặt hàng",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        description: getSalesOrderSaveErrorMessage(err),
         variant: "error",
       });
     } finally {
@@ -431,6 +468,11 @@ export function CreateOrderDialog({
     setSaving(true);
     try {
       const ctx = await getCurrentContext();
+      const receiver = normalizeSalesOrderReceiver(
+        receiverName,
+        receiverPhone,
+        receiverAddress,
+      );
       const result = await saveSalesOrderAtomic({
         orderId: editOrder.id,
         requestedCode: editOrder.code,
@@ -438,10 +480,10 @@ export function CreateOrderDialog({
         customerId: selectedCustomer?.id ?? null,
         deliveryFee: shippingFee,
         note: notes || null,
-        partnerId: selectedPartner || null,
-        receiverName: receiverName.trim() || null,
-        receiverPhone: receiverPhone.trim() || null,
-        receiverAddress: receiverAddress.trim() || null,
+        partnerId: receiver.isComplete ? selectedPartner || null : null,
+        receiverName: receiver.isComplete ? receiver.name : null,
+        receiverPhone: receiver.isComplete ? receiver.phone : null,
+        receiverAddress: receiver.isComplete ? receiver.address : null,
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -461,7 +503,7 @@ export function CreateOrderDialog({
     } catch (err) {
       toast({
         title: "Lỗi lưu thay đổi",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        description: getSalesOrderSaveErrorMessage(err),
         variant: "error",
       });
     } finally {
@@ -506,7 +548,11 @@ export function CreateOrderDialog({
                   <Input
                     value={customerSearch}
                     onChange={(e) => {
-                      setCustomerSearch(e.target.value);
+                      const nextSearch = e.target.value;
+                      setCustomerSearch(nextSearch);
+                      if (selectedCustomer && nextSearch !== selectedCustomer.name) {
+                        setSelectedCustomer(null);
+                      }
                       setShowCustomerDropdown(true);
                     }}
                     onFocus={() => setShowCustomerDropdown(true)}
@@ -531,9 +577,13 @@ export function CreateOrderDialog({
                               setSelectedCustomer({ id: c.id, name: c.name });
                               setCustomerSearch(c.name);
                               setShowCustomerDropdown(false);
-                              // Prefill người nhận từ khách (chỉ khi ô còn trống)
-                              setReceiverName((v) => v || c.name);
-                              setReceiverPhone((v) => v || c.phone || "");
+                              // Chỉ tự điền khi hồ sơ khách có đủ thông tin giao hàng.
+                              if (c.phone.trim() && c.address.trim()) {
+                                setReceiverName((v) => v || c.name);
+                                setReceiverPhone((v) => v || c.phone);
+                                setReceiverAddress((v) => v || c.address);
+                                setErrors((current) => ({ ...current, receiver: "" }));
+                              }
                             }}
                           >
                             <span className="truncate font-medium">{c.name}</span>
@@ -621,25 +671,37 @@ export function CreateOrderDialog({
                   </label>
                   <NumericInput
                     value={shippingFee}
-                    onChange={(v) => setShippingFee(Math.max(0, v ?? 0))}
+                    onChange={(v) => {
+                      setShippingFee(Math.max(0, v ?? 0));
+                      setErrors((current) => ({ ...current, shippingFee: "" }));
+                    }}
                     min={0}
                     decimals={0}
                     className="text-right"
                     placeholder="0"
                     aria-label="Phí giao hàng"
                   />
+                  {errors.shippingFee && (
+                    <p className="mt-1 text-xs text-destructive">{errors.shippingFee}</p>
+                  )}
                 </div>
                 {/* CEO 08/07: đủ 3 ô dưới → tự tạo VẬN ĐƠN gắn đơn khi lưu */}
                 <div className="mt-3 grid grid-cols-2 gap-2">
                   <Input
                     value={receiverName}
-                    onChange={(e) => setReceiverName(e.target.value)}
+                    onChange={(e) => {
+                      setReceiverName(e.target.value);
+                      setErrors((current) => ({ ...current, receiver: "" }));
+                    }}
                     placeholder="Người nhận"
                     aria-label="Người nhận"
                   />
                   <Input
                     value={receiverPhone}
-                    onChange={(e) => setReceiverPhone(e.target.value)}
+                    onChange={(e) => {
+                      setReceiverPhone(e.target.value);
+                      setErrors((current) => ({ ...current, receiver: "" }));
+                    }}
                     placeholder="SĐT người nhận"
                     aria-label="SĐT người nhận"
                   />
@@ -647,7 +709,10 @@ export function CreateOrderDialog({
                 <div className="mt-2">
                   <Input
                     value={receiverAddress}
-                    onChange={(e) => setReceiverAddress(e.target.value)}
+                    onChange={(e) => {
+                      setReceiverAddress(e.target.value);
+                      setErrors((current) => ({ ...current, receiver: "" }));
+                    }}
                     placeholder="Địa chỉ giao hàng"
                     aria-label="Địa chỉ giao hàng"
                   />
