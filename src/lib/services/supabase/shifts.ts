@@ -70,27 +70,34 @@ export async function getAnyOpenShift(branchId: string): Promise<Shift | null> {
 }
 
 /** Open a new shift */
-export async function openShift(input: OpenShiftInput): Promise<Shift> {
+export async function openShift(
+  input: OpenShiftInput,
+): Promise<Shift & { alreadyOpen?: boolean }> {
   const supabase = getClient();
-  const { data, error } = await supabase
-    .from("shifts")
-    .insert({
-      tenant_id: input.tenantId,
-      branch_id: input.branchId,
-      cashier_id: input.cashierId,
-      starting_cash: input.startingCash,
-      status: "open",
-    })
-    .select("*, profiles(full_name)")
-    .single();
+  // Actor and tenant are derived by the RPC. If another tab already opened
+  // the shift, it returns that row instead of raising idx_shifts_open.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("open_shift_atomic", {
+    p_branch_id: input.branchId,
+    p_starting_cash: input.startingCash,
+  });
 
   if (error) {
-    if (error.code === "23505") {
-      throw new Error("Bạn đã có ca đang mở tại chi nhánh này");
+    if (
+      error.code === "PGRST202" ||
+      /open_shift_atomic|schema cache/i.test(error.message)
+    ) {
+      throw new Error("Chưa cập nhật SQL 00298 cho luồng mở/đóng ca.");
     }
     handleError(error, "openShift");
   }
-  return mapShift(data as unknown as Record<string, unknown>);
+  if (!data) throw new Error("Không mở được ca");
+
+  const row = data as Record<string, unknown>;
+  return {
+    ...mapShift(row),
+    alreadyOpen: Boolean(row.already_open),
+  };
 }
 
 /**
