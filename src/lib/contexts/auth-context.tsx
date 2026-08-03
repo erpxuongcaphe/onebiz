@@ -1,3 +1,4 @@
+
 "use client";
 
 import {
@@ -19,6 +20,7 @@ import { getUserEffectivePermissions } from "@/lib/services/supabase/permission-
 import { _seedProfileCache as seedProfileCache, _clearProfileCache as clearProfileCache } from "@/lib/services/supabase/base";
 import { readDeviceBinding } from "@/lib/hooks/use-device-binding";
 import { isInternalAuthEmail } from "@/lib/auth/user-identifiers";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 
 // --- Types ---
 
@@ -37,13 +39,13 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  /** Switch to a specific branch, or null = "Tất cả chi nhánh" (CEO view) */
+  /** Switch to a specific branch, or null = "Táº¥t cáº£ chi nhÃ¡nh" (CEO view) */
   switchBranch: (branchId: string | null) => void;
-  /** Branch ID to filter data queries — undefined means show all branches */
+  /** Branch ID to filter data queries â€” undefined means show all branches */
   activeBranchId: string | undefined;
   /** Check if current user has a specific permission */
   hasPermission: (code: string) => boolean;
-  /** Re-fetch profile + tenant + branches. Dùng sau khi user update /ho-so. */
+  /** Re-fetch profile + tenant + branches. DÃ¹ng sau khi user update /ho-so. */
   refreshProfile: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -53,11 +55,23 @@ interface AuthContextValue extends AuthState {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 // Sprint LT-6 (CEO 27/05/2026): 30-day HARD session timeout.
-// CEO yêu cầu user không bị đá khi đang dùng (giữ session) nhưng định
-// kỳ 30 ngày từ lần sign-in cuối cùng phải buộc đăng nhập lại để bảo mật.
-// Đặt ngoài component để useEffect dependency stable (React hook lint).
+// CEO yÃªu cáº§u user khÃ´ng bá»‹ Ä‘Ã¡ khi Ä‘ang dÃ¹ng (giá»¯ session) nhÆ°ng Ä‘á»‹nh
+// ká»³ 30 ngÃ y tá»« láº§n sign-in cuá»‘i cÃ¹ng pháº£i buá»™c Ä‘Äƒng nháº­p láº¡i Ä‘á»ƒ báº£o máº­t.
+// Äáº·t ngoÃ i component Ä‘á»ƒ useEffect dependency stable (React hook lint).
 const MAX_SESSION_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const LOGIN_AT_KEY = "auth_login_at";
+
+function canViewAllBranches(
+  role: UserProfile["role"] | undefined,
+  permissionCodes: Set<string>,
+): boolean {
+  return (
+    role === "owner" ||
+    permissionCodes.has("*") ||
+    permissionCodes.has(PERMISSIONS.REPORTS_VIEW_ALL_BRANCHES) ||
+    permissionCodes.has(PERMISSIONS.SYSTEM_MANAGE_BRANCHES)
+  );
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -75,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadUserData = useCallback(
     async (authUser: User) => {
       try {
-        // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
+        // 1. Profile TRÆ¯á»šC â€” cÃ¡c query khÃ¡c cáº§n profile.tenant_id + profile.id.
         const { data: profile } = await supabase
           .from("profiles")
           .select("*")
@@ -102,30 +116,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
         setUser(userProfile);
 
-        // PERF F11: Seed profile cache trong base.ts để service layer KHÔNG
-        // refetch profile lần nữa. Trước đây AuthContext fetch profile (1) rồi
-        // service đầu tiên gọi getCurrentTenantId() → fetch profile (2).
-        // Giờ chia sẻ ngay → giảm 1 RTT/page nav.
+        // PERF F11: Seed profile cache trong base.ts Ä‘á»ƒ service layer KHÃ”NG
+        // refetch profile láº§n ná»¯a. TrÆ°á»›c Ä‘Ã¢y AuthContext fetch profile (1) rá»“i
+        // service Ä‘áº§u tiÃªn gá»i getCurrentTenantId() â†’ fetch profile (2).
+        // Giá» chia sáº» ngay â†’ giáº£m 1 RTT/page nav.
         seedProfileCache({
           tenantId: profile.tenant_id,
           branchId: profile.branch_id ?? null,
           userId: profile.id,
         });
 
-        // 2-4. Song song hoá tenant + branches + permissions — trước đây 3 call
-        // tuần tự làm cold start 1.5-2s, blocking toàn bộ AuthProvider render.
-        // Owner skip permission load (có wildcard "*").
+        // 2-4. Song song hoÃ¡ tenant + branches + permissions â€” trÆ°á»›c Ä‘Ã¢y 3 call
+        // tuáº§n tá»± lÃ m cold start 1.5-2s, blocking toÃ n bá»™ AuthProvider render.
+        // Owner skip permission load (cÃ³ wildcard "*").
         //
-        // CEO 22/05/2026 (Phase 2): dùng getUserEffectivePermissions thay
-        // getUserPermissions để bao gồm per-user overrides (grants/revokes).
-        // RPC fallback về role permissions nếu user chưa có override.
+        // CEO 22/05/2026 (Phase 2): dÃ¹ng getUserEffectivePermissions thay
+        // getUserPermissions Ä‘á»ƒ bao gá»“m per-user overrides (grants/revokes).
+        // RPC fallback vá» role permissions náº¿u user chÆ°a cÃ³ override.
         const permsPromise: Promise<Set<string>> =
           profile.role === "owner"
             ? Promise.resolve(new Set(["*"]))
             : getUserEffectivePermissions(profile.id)
                 .then((codes) => new Set(codes))
                 .catch(async () => {
-                  // Fallback: RPC fail → dùng role permissions thuần
+                  // Fallback: RPC fail â†’ dÃ¹ng role permissions thuáº§n
                   return getUserPermissions(profile.id).catch(
                     () => new Set<string>(),
                   );
@@ -165,7 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: b.id,
             tenantId: b.tenant_id,
             name: b.name,
-            // Fallback "store" cho chi nhánh cũ chưa set branch_type (backward compat).
+            // Fallback "store" cho chi nhÃ¡nh cÅ© chÆ°a set branch_type (backward compat).
             branchType: (b.branch_type ?? "store") as Branch["branchType"],
             code: b.code ?? undefined,
             address: b.address ?? undefined,
@@ -175,10 +189,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }));
           setBranches(mappedBranches);
 
-          // Device binding: nếu admin đã bind tablet này vào 1 chi nhánh cố
-          // định → force currentBranch về branch đó, bỏ qua localStorage +
-          // profile.branch_id. Chỉ nếu branch đã bind vẫn tồn tại trong tenant
-          // (tránh tablet zombie trỏ tới branch đã xoá).
+          // Device binding: náº¿u admin Ä‘Ã£ bind tablet nÃ y vÃ o 1 chi nhÃ¡nh cá»‘
+          // Ä‘á»‹nh â†’ force currentBranch vá» branch Ä‘Ã³, bá» qua localStorage +
+          // profile.branch_id. Chá»‰ náº¿u branch Ä‘Ã£ bind váº«n tá»“n táº¡i trong tenant
+          // (trÃ¡nh tablet zombie trá» tá»›i branch Ä‘Ã£ xoÃ¡).
           const binding = readDeviceBinding();
           const boundBranch = binding
             ? mappedBranches.find((b) => b.id === binding.branchId)
@@ -191,8 +205,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             let storedBranchId: string | null = null;
             try { storedBranchId = localStorage.getItem("active_branch_id"); } catch {}
 
-            if (storedBranchId === "__all__") {
-              // CEO previously selected "Tất cả chi nhánh"
+            if (
+              storedBranchId === "__all__" &&
+              canViewAllBranches(userProfile.role, perms)
+            ) {
+              // CEO previously selected "Táº¥t cáº£ chi nhÃ¡nh"
               setCurrentBranch(null);
             } else {
               const currentBr =
@@ -201,7 +218,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 mappedBranches.find((b) => b.isDefault) ??
                 mappedBranches[0];
               setCurrentBranch(currentBr);
-              // Lưu init chi nhánh cụ thể để POS fallback (xem note 10/06/2026)
+              // LÆ°u init chi nhÃ¡nh cá»¥ thá»ƒ Ä‘á»ƒ POS fallback (xem note 10/06/2026)
               if (currentBr) {
                 try { localStorage.setItem("last_specific_branch_id", currentBr.id); } catch {}
               }
@@ -219,40 +236,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Track previous auth state to detect forced sign-outs (token expired)
   // vs initial unauthenticated state.
   const wasAuthenticatedRef = useRef(false);
-  // Flag set by explicit logout() to suppress "session expired" toast —
+  // Flag set by explicit logout() to suppress "session expired" toast â€”
   // user-initiated logout shouldn't show a warning.
   const userLogoutRef = useRef(false);
-  // Track which user.id đã loadUserData rồi để dedup. onAuthStateChange fire
-  // mỗi 50 phút (TOKEN_REFRESHED) + INITIAL_SESSION + USER_UPDATED — nếu
-  // mỗi event đều fire loadUserData() → 5-17 lần fetch profile/tenant/branches
-  // → cross-tab lock contention → "Lock broken by another request with the
-  // 'steal' option" → toàn bộ services downstream throw.
-  // Fix: chỉ load lại khi user.id THỰC SỰ đổi (signin/switch account).
+  // Track which user.id Ä‘Ã£ loadUserData rá»“i Ä‘á»ƒ dedup. onAuthStateChange fire
+  // má»—i 50 phÃºt (TOKEN_REFRESHED) + INITIAL_SESSION + USER_UPDATED â€” náº¿u
+  // má»—i event Ä‘á»u fire loadUserData() â†’ 5-17 láº§n fetch profile/tenant/branches
+  // â†’ cross-tab lock contention â†’ "Lock broken by another request with the
+  // 'steal' option" â†’ toÃ n bá»™ services downstream throw.
+  // Fix: chá»‰ load láº¡i khi user.id THá»°C Sá»° Ä‘á»•i (signin/switch account).
   const loadedUserIdRef = useRef<string | null>(null);
 
   // Listen to Supabase auth state changes
   useEffect(() => {
-    // Safety net: nếu getUser() hang 10s (network dropped, DNS fail, CORS),
-    // force release spinner để user không thấy màn hình trắng vô hạn. Trước
-    // đây getUser() thiếu .catch() → isLoading stuck forever → cả app render
-    // null qua PermissionPage → CEO báo "web quay vòng".
+    // Safety net: náº¿u getUser() hang 10s (network dropped, DNS fail, CORS),
+    // force release spinner Ä‘á»ƒ user khÃ´ng tháº¥y mÃ n hÃ¬nh tráº¯ng vÃ´ háº¡n. TrÆ°á»›c
+    // Ä‘Ã¢y getUser() thiáº¿u .catch() â†’ isLoading stuck forever â†’ cáº£ app render
+    // null qua PermissionPage â†’ CEO bÃ¡o "web quay vÃ²ng".
     const initTimeoutId = setTimeout(() => {
       setIsLoading((current) => {
         if (current) {
-          console.warn("[AuthProvider] Init timeout 10s — force release spinner");
+          console.warn("[AuthProvider] Init timeout 10s â€” force release spinner");
         }
         return false;
       });
     }, 10_000);
 
-    // Sprint LT-6 27/05: Check 30-day HARD timeout TRƯỚC khi getSession.
-    // Nếu user đã sign-in trên 30 ngày → force signOut + redirect, không
-    // load profile/tenant/branches để tránh waste RTT.
+    // Sprint LT-6 27/05: Check 30-day HARD timeout TRÆ¯á»šC khi getSession.
+    // Náº¿u user Ä‘Ã£ sign-in trÃªn 30 ngÃ y â†’ force signOut + redirect, khÃ´ng
+    // load profile/tenant/branches Ä‘á»ƒ trÃ¡nh waste RTT.
     try {
       const loginAtRaw = localStorage.getItem(LOGIN_AT_KEY);
       const loginAt = loginAtRaw ? Number(loginAtRaw) : 0;
       if (loginAt > 0 && Date.now() - loginAt > MAX_SESSION_AGE_MS) {
-        // Hết hạn 30 ngày → clear flag + signOut + redirect.
+        // Háº¿t háº¡n 30 ngÃ y â†’ clear flag + signOut + redirect.
         localStorage.removeItem(LOGIN_AT_KEY);
         userLogoutRef.current = true; // suppress toast "session expired"
         supabase.auth.signOut().finally(() => {
@@ -265,18 +282,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         };
       }
     } catch {
-      // localStorage có thể bị block (private mode) — bỏ qua, fall through.
+      // localStorage cÃ³ thá»ƒ bá»‹ block (private mode) â€” bá» qua, fall through.
     }
 
-    // PERF F2: Dùng getSession() thay vì getUser() trên mount.
-    // - getSession() đọc session từ cookie/localStorage → INSTANT (0 RTT).
-    // - getUser() luôn revalidate qua HTTP với Supabase server (200-400ms VN
-    //   mobile). Cold start mỗi page nav phải chờ 1 RTT chỉ để biết "đã login".
-    // - onAuthStateChange phía dưới sẽ fire SIGNED_IN nếu session refresh →
-    //   loadUserData re-run (nhưng chỉ khi user.id thực sự đổi qua dedup).
-    // - Edge case: session expired/tampered → loadUserData query với invalid
-    //   token sẽ fail, RLS block → user bị redirect login. Chấp nhận risk
-    //   này vì lợi ích 200-400ms perf cho 99% case happy path.
+    // PERF F2: DÃ¹ng getSession() thay vÃ¬ getUser() trÃªn mount.
+    // - getSession() Ä‘á»c session tá»« cookie/localStorage â†’ INSTANT (0 RTT).
+    // - getUser() luÃ´n revalidate qua HTTP vá»›i Supabase server (200-400ms VN
+    //   mobile). Cold start má»—i page nav pháº£i chá» 1 RTT chá»‰ Ä‘á»ƒ biáº¿t "Ä‘Ã£ login".
+    // - onAuthStateChange phÃ­a dÆ°á»›i sáº½ fire SIGNED_IN náº¿u session refresh â†’
+    //   loadUserData re-run (nhÆ°ng chá»‰ khi user.id thá»±c sá»± Ä‘á»•i qua dedup).
+    // - Edge case: session expired/tampered â†’ loadUserData query vá»›i invalid
+    //   token sáº½ fail, RLS block â†’ user bá»‹ redirect login. Cháº¥p nháº­n risk
+    //   nÃ y vÃ¬ lá»£i Ã­ch 200-400ms perf cho 99% case happy path.
     supabase.auth
       .getSession()
       .then(({ data: { session } }) => {
@@ -284,23 +301,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (initialUser) {
           setAuthUser(initialUser);
           wasAuthenticatedRef.current = true;
-          // Sprint LT-6 27/05: Seed auth_login_at cho user đã login từ
-          // TRƯỚC khi feature 30-day deploy. Không có timestamp → không
-          // bao giờ bị check 30 ngày → bypass feature. Fix: seed với
-          // Date.now() (existing users có 30 ngày tính từ lần mount đầu
-          // sau deploy). Acceptable trade-off vs. force re-login toàn bộ.
+          // Sprint LT-6 27/05: Seed auth_login_at cho user Ä‘Ã£ login tá»«
+          // TRÆ¯á»šC khi feature 30-day deploy. KhÃ´ng cÃ³ timestamp â†’ khÃ´ng
+          // bao giá» bá»‹ check 30 ngÃ y â†’ bypass feature. Fix: seed vá»›i
+          // Date.now() (existing users cÃ³ 30 ngÃ y tÃ­nh tá»« láº§n mount Ä‘áº§u
+          // sau deploy). Acceptable trade-off vs. force re-login toÃ n bá»™.
           try {
             if (!localStorage.getItem(LOGIN_AT_KEY)) {
               localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
             }
           } catch {}
-          // PERF F13: Race condition fix — onAuthStateChange INITIAL_SESSION
-          // có thể fire TRƯỚC getSession.then resolve (Supabase bắn event
-          // ngay khi listener register nếu cookie hợp lệ). Trường hợp đó
-          // listener đã loadUserData rồi → ở đây skip để tránh fetch profile
-          // lần 2.
+          // PERF F13: Race condition fix â€” onAuthStateChange INITIAL_SESSION
+          // cÃ³ thá»ƒ fire TRÆ¯á»šC getSession.then resolve (Supabase báº¯n event
+          // ngay khi listener register náº¿u cookie há»£p lá»‡). TrÆ°á»ng há»£p Ä‘Ã³
+          // listener Ä‘Ã£ loadUserData rá»“i â†’ á»Ÿ Ä‘Ã¢y skip Ä‘á»ƒ trÃ¡nh fetch profile
+          // láº§n 2.
           if (loadedUserIdRef.current === initialUser.id) {
-            // Đã load qua listener — chỉ release spinner.
+            // ÄÃ£ load qua listener â€” chá»‰ release spinner.
             clearTimeout(initTimeoutId);
             setIsLoading(false);
             return;
@@ -316,24 +333,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch((err) => {
-        // Network fail, token invalid, CORS, DNS — treat như unauthenticated
-        // thay vì để isLoading stuck true.
+        // Network fail, token invalid, CORS, DNS â€” treat nhÆ° unauthenticated
+        // thay vÃ¬ Ä‘á»ƒ isLoading stuck true.
         console.error("[AuthProvider] getSession failed:", err);
         clearTimeout(initTimeoutId);
         setIsLoading(false);
       });
 
-    // CEO 06/06/2026: bắt "Invalid Refresh Token: Already Used" global.
+    // CEO 06/06/2026: báº¯t "Invalid Refresh Token: Already Used" global.
     //
-    // Bug Chrome: refresh_token cũ trong localStorage đã consumed bởi
-    // SDK retry trước đó. Supabase SDK loop refresh → 400 "Already Used"
-    // → lock contention 5s → init timeout 10s → RPC throw "Chưa đăng nhập"
-    // → user thấy trang loading mãi → bấm sidebar không vào được trang.
+    // Bug Chrome: refresh_token cÅ© trong localStorage Ä‘Ã£ consumed bá»Ÿi
+    // SDK retry trÆ°á»›c Ä‘Ã³. Supabase SDK loop refresh â†’ 400 "Already Used"
+    // â†’ lock contention 5s â†’ init timeout 10s â†’ RPC throw "ChÆ°a Ä‘Äƒng nháº­p"
+    // â†’ user tháº¥y trang loading mÃ£i â†’ báº¥m sidebar khÃ´ng vÃ o Ä‘Æ°á»£c trang.
     //
-    // Fix: listen onerror toàn cục, nếu thấy AuthApiError "Already Used"
-    // → force clear localStorage sb-* + signOut local + reload /dang-nhap.
-    // useEffect ở /dang-nhap (commit 0c67cd9) sẽ xoá localStorage tiếp →
-    // SDK init fresh → user login lại OK.
+    // Fix: listen onerror toÃ n cá»¥c, náº¿u tháº¥y AuthApiError "Already Used"
+    // â†’ force clear localStorage sb-* + signOut local + reload /dang-nhap.
+    // useEffect á»Ÿ /dang-nhap (commit 0c67cd9) sáº½ xoÃ¡ localStorage tiáº¿p â†’
+    // SDK init fresh â†’ user login láº¡i OK.
     const handleAlreadyUsedError = (event: ErrorEvent | PromiseRejectionEvent) => {
       const message =
         ("reason" in event && event.reason instanceof Error
@@ -346,7 +363,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         message.includes("Already Used")
       ) {
         try {
-          // Clear toàn bộ sb-* trong localStorage + sessionStorage
+          // Clear toÃ n bá»™ sb-* trong localStorage + sessionStorage
           const lsKeys: string[] = [];
           for (let i = 0; i < localStorage.length; i++) {
             const key = localStorage.key(i);
@@ -362,7 +379,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           // ignore
         }
-        // Force navigate /dang-nhap để useEffect ở trang đó tiếp tục clean
+        // Force navigate /dang-nhap Ä‘á»ƒ useEffect á»Ÿ trang Ä‘Ã³ tiáº¿p tá»¥c clean
         if (typeof window !== "undefined" && !window.location.pathname.startsWith("/dang-nhap")) {
           window.location.replace("/dang-nhap?redirect=" + encodeURIComponent(window.location.pathname));
         }
@@ -373,15 +390,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.addEventListener("unhandledrejection", handleAlreadyUsedError);
     }
 
-    // CEO 06/06/2026 — monkey-patch fetch bắt POST 400 tới /auth/v1/token.
+    // CEO 06/06/2026 â€” monkey-patch fetch báº¯t POST 400 tá»›i /auth/v1/token.
     //
-    // Reason: SDK Supabase nuốt error response 400 trong internal retry,
-    // KHÔNG throw lên Promise rejection → window listener trên không bắt
-    // được. F12 CEO mở thấy POST 400 liên tục mà error listener im lặng.
+    // Reason: SDK Supabase nuá»‘t error response 400 trong internal retry,
+    // KHÃ”NG throw lÃªn Promise rejection â†’ window listener trÃªn khÃ´ng báº¯t
+    // Ä‘Æ°á»£c. F12 CEO má»Ÿ tháº¥y POST 400 liÃªn tá»¥c mÃ  error listener im láº·ng.
     //
-    // Fix: wrap window.fetch, detect URL chứa "/auth/v1/token" + status 400
-    // + body có "refresh_token_already_used" hoặc "Invalid Refresh Token"
-    // → trigger same cleanup flow.
+    // Fix: wrap window.fetch, detect URL chá»©a "/auth/v1/token" + status 400
+    // + body cÃ³ "refresh_token_already_used" hoáº·c "Invalid Refresh Token"
+    // â†’ trigger same cleanup flow.
     let consecutiveAuthFails = 0;
     const FAIL_THRESHOLD = 3;
     const originalFetch = window.fetch;
@@ -405,7 +422,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             );
           }
         } else if (response.ok && url.includes("/auth/v1/token")) {
-          consecutiveAuthFails = 0; // reset khi refresh thành công
+          consecutiveAuthFails = 0; // reset khi refresh thÃ nh cÃ´ng
         }
       } catch {
         // ignore
@@ -424,26 +441,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAuthUser(sessionUser);
 
       // Sprint LT-6 27/05: Set/refresh auth_login_at khi SIGNED_IN.
-      // KHÔNG set ở TOKEN_REFRESHED / USER_UPDATED vì sẽ reset đồng hồ 30
-      // ngày → đồng hồ trượt vô hạn, user không bao giờ bị logout. Chỉ
-      // SIGNED_IN (login mới) mới refresh đồng hồ.
+      // KHÃ”NG set á»Ÿ TOKEN_REFRESHED / USER_UPDATED vÃ¬ sáº½ reset Ä‘á»“ng há»“ 30
+      // ngÃ y â†’ Ä‘á»“ng há»“ trÆ°á»£t vÃ´ háº¡n, user khÃ´ng bao giá» bá»‹ logout. Chá»‰
+      // SIGNED_IN (login má»›i) má»›i refresh Ä‘á»“ng há»“.
       if (event === "SIGNED_IN" && sessionUser) {
         try {
           localStorage.setItem(LOGIN_AT_KEY, String(Date.now()));
         } catch {
-          // localStorage block (private mode) — bỏ qua, không block flow.
+          // localStorage block (private mode) â€” bá» qua, khÃ´ng block flow.
         }
       }
 
       if (sessionUser) {
         wasAuthenticatedRef.current = true;
-        // DEDUP: chỉ loadUserData khi user.id THỰC SỰ đổi (signin/switch
-        // account) hoặc lần đầu (loadedUserIdRef chưa set). TOKEN_REFRESHED
-        // / USER_UPDATED không cần re-fetch profile/tenant/branches vì data
-        // không đổi — chỉ token đổi.
+        // DEDUP: chá»‰ loadUserData khi user.id THá»°C Sá»° Ä‘á»•i (signin/switch
+        // account) hoáº·c láº§n Ä‘áº§u (loadedUserIdRef chÆ°a set). TOKEN_REFRESHED
+        // / USER_UPDATED khÃ´ng cáº§n re-fetch profile/tenant/branches vÃ¬ data
+        // khÃ´ng Ä‘á»•i â€” chá»‰ token Ä‘á»•i.
         if (loadedUserIdRef.current !== sessionUser.id) {
           loadedUserIdRef.current = sessionUser.id;
-          // loadUserData có try/catch trong body — không throw lên đây.
+          // loadUserData cÃ³ try/catch trong body â€” khÃ´ng throw lÃªn Ä‘Ã¢y.
           loadUserData(sessionUser);
         }
       } else {
@@ -452,39 +469,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBranches([]);
         setCurrentBranch(null);
         setPermissions(new Set());
-        // Reset dedup ref để lần sign-in tiếp theo sẽ load lại
+        // Reset dedup ref Ä‘á»ƒ láº§n sign-in tiáº¿p theo sáº½ load láº¡i
         loadedUserIdRef.current = null;
-        // PERF F11: Clear profile cache trong base.ts để service không trả
-        // tenant cũ cho user mới (nếu admin switch account).
+        // PERF F11: Clear profile cache trong base.ts Ä‘á»ƒ service khÃ´ng tráº£
+        // tenant cÅ© cho user má»›i (náº¿u admin switch account).
         clearProfileCache();
 
-        // Nếu trước đó đã đăng nhập và bây giờ session mất (token hết hạn,
-        // refresh fail, logout từ device khác) → notify + redirect. Bỏ qua
-        // case logout chủ động (đã redirect từ logout() rồi).
+        // Náº¿u trÆ°á»›c Ä‘Ã³ Ä‘Ã£ Ä‘Äƒng nháº­p vÃ  bÃ¢y giá» session máº¥t (token háº¿t háº¡n,
+        // refresh fail, logout tá»« device khÃ¡c) â†’ notify + redirect. Bá» qua
+        // case logout chá»§ Ä‘á»™ng (Ä‘Ã£ redirect tá»« logout() rá»“i).
         const wasAuthenticated = wasAuthenticatedRef.current;
         const userInitiated = userLogoutRef.current;
         wasAuthenticatedRef.current = false;
         userLogoutRef.current = false;
 
         if (wasAuthenticated && !userInitiated && event === "SIGNED_OUT") {
-          // Sprint LT-6 27/05: TRY REFRESH TRƯỚC khi đá login.
-          // Supabase fire SIGNED_OUT trong nhiều case transient:
-          //   - Refresh token tạm fail (network blip, DNS hiccup)
+          // Sprint LT-6 27/05: TRY REFRESH TRÆ¯á»šC khi Ä‘Ã¡ login.
+          // Supabase fire SIGNED_OUT trong nhiá»u case transient:
+          //   - Refresh token táº¡m fail (network blip, DNS hiccup)
           //   - processLock contention multi-tab
           //   - Token rotation race condition
-          // Trước đây mọi SIGNED_OUT đều redirect → user bị đá oan.
-          // Giờ thử refreshSession() 1 lần — nếu OK → giữ session, không
-          // redirect. Nếu refresh thật sự fail → mới đá ra.
+          // TrÆ°á»›c Ä‘Ã¢y má»i SIGNED_OUT Ä‘á»u redirect â†’ user bá»‹ Ä‘Ã¡ oan.
+          // Giá» thá»­ refreshSession() 1 láº§n â€” náº¿u OK â†’ giá»¯ session, khÃ´ng
+          // redirect. Náº¿u refresh tháº­t sá»± fail â†’ má»›i Ä‘Ã¡ ra.
           supabase.auth
             .refreshSession()
             .then(({ data, error }) => {
               if (!error && data?.session?.user) {
-                // Refresh thành công — Supabase sẽ fire SIGNED_IN event
-                // lần nữa → flow trên sẽ restore session. Không redirect.
+                // Refresh thÃ nh cÃ´ng â€” Supabase sáº½ fire SIGNED_IN event
+                // láº§n ná»¯a â†’ flow trÃªn sáº½ restore session. KhÃ´ng redirect.
                 wasAuthenticatedRef.current = true;
                 return;
               }
-              // Refresh thật sự fail → đá ra như cũ.
+              // Refresh tháº­t sá»± fail â†’ Ä‘Ã¡ ra nhÆ° cÅ©.
               if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("auth:session-expired"));
               }
@@ -492,7 +509,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               router.replace("/dang-nhap");
             })
             .catch(() => {
-              // refreshSession throw (rất hiếm) → treat như fail.
+              // refreshSession throw (ráº¥t hiáº¿m) â†’ treat nhÆ° fail.
               if (typeof window !== "undefined") {
                 window.dispatchEvent(new CustomEvent("auth:session-expired"));
               }
@@ -509,7 +526,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (typeof window !== "undefined") {
         window.removeEventListener("error", handleAlreadyUsedError);
         window.removeEventListener("unhandledrejection", handleAlreadyUsedError);
-        // Restore fetch nếu là instance của ta
+        // Restore fetch náº¿u lÃ  instance cá»§a ta
         if (window.fetch === patchedFetch) {
           window.fetch = originalFetch;
         }
@@ -519,21 +536,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const switchBranch = useCallback(
     (branchId: string | null) => {
-      // Defensive try/catch — switchBranch fire trong sync click handler.
-      // Nếu throw đồng bộ (vd: localStorage.setItem fail vì quota), error
-      // bubble lên error.tsx → root crash. Log + swallow để UI tiếp tục.
+      // Defensive try/catch â€” switchBranch fire trong sync click handler.
+      // Náº¿u throw Ä‘á»“ng bá»™ (vd: localStorage.setItem fail vÃ¬ quota), error
+      // bubble lÃªn error.tsx â†’ root crash. Log + swallow Ä‘á»ƒ UI tiáº¿p tá»¥c.
       try {
-        // Device binding hard-stop — tablet đã khoá vào chi nhánh cụ thể,
-        // không cho đổi. Staff bấm dropdown cũng silent no-op (UI đã lock).
+        // Device binding hard-stop â€” tablet Ä‘Ã£ khoÃ¡ vÃ o chi nhÃ¡nh cá»¥ thá»ƒ,
+        // khÃ´ng cho Ä‘á»•i. Staff báº¥m dropdown cÅ©ng silent no-op (UI Ä‘Ã£ lock).
         if (readDeviceBinding()) return;
 
+        if (
+          branchId === null &&
+          !canViewAllBranches(user?.role, permissions)
+        ) {
+          const fallbackBranch =
+            branches.find((branch) => branch.id === user?.branchId) ??
+            branches.find((branch) => branch.isDefault) ??
+            branches[0];
+
+          if (fallbackBranch) {
+            setCurrentBranch(fallbackBranch);
+            try {
+              localStorage.setItem("active_branch_id", fallbackBranch.id);
+              localStorage.setItem("last_specific_branch_id", fallbackBranch.id);
+            } catch {
+              /* localStorage cÃ³ thá»ƒ bá»‹ block (private mode) */
+            }
+          }
+          return;
+        }
+
         if (branchId === null) {
-          // "Tất cả chi nhánh" — CEO view
+          // "Táº¥t cáº£ chi nhÃ¡nh" â€” CEO view
           setCurrentBranch(null);
           try {
             localStorage.setItem("active_branch_id", "__all__");
           } catch {
-            /* localStorage có thể bị block (private mode) */
+            /* localStorage cÃ³ thá»ƒ bá»‹ block (private mode) */
           }
         } else {
           const branch = branches.find((b) => b.id === branchId);
@@ -541,16 +579,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setCurrentBranch(branch);
             try {
               localStorage.setItem("active_branch_id", branchId);
-              // CEO 10/06/2026 — POS không thể "Tất cả chi nhánh". Lưu thêm
-              // chi nhánh CỤ THỂ gần nhất để POS fallback về đó khi user
-              // vừa rời trang admin chọn "Tất cả".
+              // CEO 10/06/2026 â€” POS khÃ´ng thá»ƒ "Táº¥t cáº£ chi nhÃ¡nh". LÆ°u thÃªm
+              // chi nhÃ¡nh Cá»¤ THá»‚ gáº§n nháº¥t Ä‘á»ƒ POS fallback vá» Ä‘Ã³ khi user
+              // vá»«a rá»i trang admin chá»n "Táº¥t cáº£".
               localStorage.setItem("last_specific_branch_id", branchId);
             } catch {
               /* idem */
             }
           } else {
             console.warn(
-              `[switchBranch] Không tìm thấy branch id="${branchId}" trong list ${branches.length} branches.`,
+              `[switchBranch] KhÃ´ng tÃ¬m tháº¥y branch id="${branchId}" trong list ${branches.length} branches.`,
             );
           }
         }
@@ -558,7 +596,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.error("[switchBranch] error:", err);
       }
     },
-    [branches],
+    [branches, permissions, user],
   );
 
   // Derived: branchId for data queries (undefined = no filter = all branches)
@@ -575,20 +613,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
-    // Flag để SIGNED_OUT handler biết đây là user-initiated, không show
+    // Flag Ä‘á»ƒ SIGNED_OUT handler biáº¿t Ä‘Ã¢y lÃ  user-initiated, khÃ´ng show
     // toast "session expired".
     userLogoutRef.current = true;
-    // Sprint LT-6 27/05: Clear 30-day session timestamp khi user chủ động
-    // logout — tránh case user logout rồi login lại trong 30 ngày bị tính
-    // tiếp đồng hồ cũ.
+    // Sprint LT-6 27/05: Clear 30-day session timestamp khi user chá»§ Ä‘á»™ng
+    // logout â€” trÃ¡nh case user logout rá»“i login láº¡i trong 30 ngÃ y bá»‹ tÃ­nh
+    // tiáº¿p Ä‘á»“ng há»“ cÅ©.
     try { localStorage.removeItem(LOGIN_AT_KEY); } catch {}
     await supabase.auth.signOut();
     router.push("/dang-nhap");
   }, [supabase, router]);
 
-  // Re-fetch profile/tenant/branches. Dùng khi user update /ho-so hoặc khi
-  // admin thay đổi role/branch từ trang khác — để UI (header, sidebar, permission)
-  // sync ngay không cần reload.
+  // Re-fetch profile/tenant/branches. DÃ¹ng khi user update /ho-so hoáº·c khi
+  // admin thay Ä‘á»•i role/branch tá»« trang khÃ¡c â€” Ä‘á»ƒ UI (header, sidebar, permission)
+  // sync ngay khÃ´ng cáº§n reload.
   const refreshProfile = useCallback(async () => {
     if (!authUser) return;
     await loadUserData(authUser);
@@ -628,14 +666,14 @@ export function useAuth() {
 // --- Fallback profile (when DB not ready) ---
 
 /**
- * Sprint A.4 (CEO 12/05): fallback khi DB query fail / chưa có profile row.
- * Trước đây gán `role: "owner" + isActive: true` → DB fail = user thoáng
- * có quyền owner → bypass permission gate. Privilege escalation risk.
+ * Sprint A.4 (CEO 12/05): fallback khi DB query fail / chÆ°a cÃ³ profile row.
+ * TrÆ°á»›c Ä‘Ã¢y gÃ¡n `role: "owner" + isActive: true` â†’ DB fail = user thoÃ¡ng
+ * cÃ³ quyá»n owner â†’ bypass permission gate. Privilege escalation risk.
  *
- * Sửa: role thấp nhất ("staff") + isActive=false. UI thấy isActive=false
- * → block thao tác cho tới khi profile load thật. usePermissions() trả
- * permissions=empty → mọi hasPermission() return false (trừ chính owner
- * thật được verified qua DB query).
+ * Sá»­a: role tháº¥p nháº¥t ("staff") + isActive=false. UI tháº¥y isActive=false
+ * â†’ block thao tÃ¡c cho tá»›i khi profile load tháº­t. usePermissions() tráº£
+ * permissions=empty â†’ má»i hasPermission() return false (trá»« chÃ­nh owner
+ * tháº­t Ä‘Æ°á»£c verified qua DB query).
  */
 function buildFallbackProfile(authUser: User): UserProfile {
   const meta = authUser.user_metadata ?? {};
@@ -651,3 +689,4 @@ function buildFallbackProfile(authUser: User): UserProfile {
     createdAt: authUser.created_at,
   };
 }
+
