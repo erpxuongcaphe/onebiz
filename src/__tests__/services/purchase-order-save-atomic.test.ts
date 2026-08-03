@@ -19,6 +19,10 @@ const migration = readFileSync(
   "supabase/migrations/00261_atomic_purchase_order_save.sql",
   "utf8",
 );
+const roundingMigration = readFileSync(
+  "supabase/migrations/00299_align_purchase_order_vnd_rounding.sql",
+  "utf8",
+);
 const stateMigration = readFileSync(
   "supabase/migrations/00262_atomic_purchase_order_state.sql",
   "utf8",
@@ -190,4 +194,28 @@ describe("atomic purchase-order save", () => {
     );
   });
 
+
+  it("keeps whole-VND line rounding identical in the form and atomic RPC", () => {
+    const items = [
+      { quantity: 24, unitPrice: 5_125 },
+      { quantity: 48, unitPrice: 7_708.33 },
+      { quantity: 72, unitPrice: 12_166.67 },
+    ];
+    const subtotal = items.reduce(
+      (sum, item) => sum + Math.ceil(item.quantity * item.unitPrice),
+      0,
+    );
+
+    expect(subtotal).toBe(1_369_001);
+    expect(subtotal - 1).toBe(1_369_000);
+    expect(dialog).toContain(
+      "return Math.ceil(lineEffectivePrice(item) * item.quantity)",
+    );
+    expect(
+      roundingMigration.match(/ceil\(v_quantity \* v_unit_price\)/g),
+    ).toHaveLength(2);
+    expect(roundingMigration).not.toContain(
+      "round(v_quantity * v_unit_price, 2)",
+    );
+  });
 });
