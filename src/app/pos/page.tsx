@@ -79,7 +79,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu";
-import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
+import {
+  getOpenShift,
+  openShift,
+  closeShift,
+  markOverdueShiftsForBranch,
+} from "@/lib/services/supabase/shifts";
 import type { Shift } from "@/lib/types/shift";
 import { OpenShiftDialog, CloseShiftDialog } from "./fnb/components/shift-dialog";
 import { PendingShiftAlertSection } from "@/components/shared/shift/pending-shift-alert";
@@ -536,7 +541,14 @@ function PosPageInner() {
   // Load ca đang mở khi branch/user sẵn sàng
   useEffect(() => {
     if (!currentBranch?.id || !user?.id) return;
-    getOpenShift(currentBranch.id, user.id)
+    // Resolve overdue shifts first. Running both operations concurrently can
+    // leave the UI holding a row that the database has moved to pending.
+    markOverdueShiftsForBranch(currentBranch.id)
+      .catch((err) => {
+        console.warn("[POS] mark overdue shifts failed:", err);
+        return 0;
+      })
+      .then(() => getOpenShift(currentBranch.id, user.id))
       .then((shift) => {
         setCurrentShift(shift);
         // R3: Cảnh báo ca treo qua đêm — nếu ca mở > 14h trước, gần như
@@ -1024,7 +1036,13 @@ function PosPageInner() {
         });
         setCurrentShift(shift);
         setOpenShiftDialogOpen(false);
-        toast({ title: "Đã mở ca", description: `Số dư đầu ca: ${formatNumber(startingCash)} đ`, variant: "success" });
+        toast({
+          title: shift.alreadyOpen ? "Đã khôi phục ca đang mở" : "Đã mở ca",
+          description: shift.alreadyOpen
+            ? "Giao diện đã đồng bộ lại với ca hiện có trên hệ thống."
+            : `Số dư đầu ca: ${formatNumber(startingCash)} đ`,
+          variant: "success",
+        });
       } catch (err: any) {
         toast({ title: "Không mở được ca", description: err?.message ?? "Vui lòng thử lại.", variant: "error" });
       }

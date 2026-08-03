@@ -34,7 +34,6 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions";
 import {
   getPendingShifts,
-  markOverdueShiftsForBranch,
   previewShiftClose,
   reconcilePendingShift,
   type PendingShift,
@@ -106,9 +105,6 @@ export function usePendingShiftAlert(branchId: string | null | undefined) {
     if (!branchId) return;
     setLoading(true);
     try {
-      await markOverdueShiftsForBranch(branchId).catch((err) => {
-        console.warn("[usePendingShiftAlert] mark_overdue lỗi:", err);
-      });
       const rows = await getPendingShifts(branchId);
       setPendings(rows);
     } catch (err) {
