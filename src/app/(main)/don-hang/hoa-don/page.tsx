@@ -658,6 +658,13 @@ export default function HoaDonPage() {
       header: "Còn nợ (đơn)",
       cell: ({ row }) => {
         const debt = row.original.debt;
+        if (row.original.status !== "completed") {
+          return (
+            <span className="text-status-warning text-right block">
+              {row.original.status === "cancelled" ? "Đã hủy" : "Chưa hoàn tất"}
+            </span>
+          );
+        }
         return debt > 0 ? (
           <span className="text-destructive font-medium text-right block">
             {formatCurrency(debt)}
