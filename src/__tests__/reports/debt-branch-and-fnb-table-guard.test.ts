@@ -1,4 +1,3 @@
-
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -22,7 +21,7 @@ describe("branch-aware debt aging and F&B table permissions", () => {
     expect(debtPage).toContain("getTopDebtors(20, activeBranchId)");
     expect(debtPage).toContain("getDebtTotals(activeBranchId)");
     expect(debtPage).not.toContain('mode === "aging" ? activeBranchId : null');
-    expect(debtPage).toContain("Pháº¡m vi sá»‘ liá»‡u:");
+    expect(debtPage).toContain("Phạm vi số liệu:");
   });
 
   it("never restores or selects all branches without the effective permission", () => {
@@ -45,7 +44,7 @@ describe("branch-aware debt aging and F&B table permissions", () => {
     );
     expect(reportService).toContain("REPORT_ALL_BRANCHES_DENIED");
     expect(reportService).toContain(
-      "TÃ i khoáº£n khÃ´ng cÃ³ quyá»n xem toÃ n cÃ´ng ty. HÃ£y chá»n chi nhÃ¡nh Ä‘Æ°á»£c phÃ¢n quyá»n.",
+      "Tài khoản không có quyền xem toàn công ty. Hãy chọn chi nhánh được phân quyền.",
     );
   });
 
@@ -57,7 +56,6 @@ describe("branch-aware debt aging and F&B table permissions", () => {
     expect(tableMigration).toContain("TABLE_NOT_CLEANING");
     expect(tableMigration).toContain("TABLE_STILL_HAS_ORDER");
     expect(fnbPage).toContain("canManageTables");
-    expect(fnbPage).toContain("KhÃ´ng cÃ³ quyá»n quáº£n lÃ½ bÃ n");
+    expect(fnbPage).toContain("Không có quyền quản lý bàn");
   });
 });
-
