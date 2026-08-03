@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const debtService = readFileSync("src/lib/services/supabase/debt.ts", "utf8");
 const debtPage = readFileSync("src/app/(main)/tai-chinh/cong-no/page.tsx", "utf8");
+const debtWorkspace = readFileSync("src/lib/services/supabase/debt-workspace.ts", "utf8");
 const tableService = readFileSync("src/lib/services/supabase/fnb-tables.ts", "utf8");
 const fnbPage = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
 const tableMigration = readFileSync(
@@ -11,15 +12,21 @@ const tableMigration = readFileSync(
 );
 
 describe("branch-aware debt aging and F&B table permissions", () => {
-  it("passes the selected branch to both debt sides", () => {
+  it("passes the selected branch to one consistent debt workspace", () => {
     expect(debtService).toContain("getDebtAging(branchId?: string | null)");
-    expect(debtService).toContain("getTopDebtors(");
-    expect(debtService).toContain("branchId?: string | null");
-    expect(debtService.split("getReceivableAgingReport({ branchId: branchId ?? null })")).toHaveLength(4);
-    expect(debtService.split("getPayableAgingReport({ branchId: branchId ?? null })")).toHaveLength(4);
-    expect(debtPage).toContain("getDebtAging(activeBranchId)");
-    expect(debtPage).toContain("getTopDebtors(20, activeBranchId)");
-    expect(debtPage).toContain("getDebtTotals(activeBranchId)");
+    expect(debtWorkspace).toContain("getDebtWorkspace(");
+    expect(
+      debtWorkspace.split(
+        "getReceivableAgingReport({ branchId: branchId ?? null })",
+      ),
+    ).toHaveLength(2);
+    expect(
+      debtWorkspace.split(
+        "getPayableAgingReport({ branchId: branchId ?? null })",
+      ),
+    ).toHaveLength(2);
+    expect(debtPage).toContain("getDebtWorkspace(activeBranchId)");
+    expect(debtPage).not.toContain("getDebtTotals(activeBranchId)");
     expect(debtPage).not.toContain('mode === "aging" ? activeBranchId : null');
     expect(debtPage).toContain("Phạm vi số liệu:");
   });

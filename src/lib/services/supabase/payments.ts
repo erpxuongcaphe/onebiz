@@ -121,11 +121,12 @@ export interface OpenInvoiceLine {
 
 export async function getOpenInvoicesByCustomer(
   customerId: string,
+  branchId?: string | null,
 ): Promise<OpenInvoiceLine[]> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("invoices")
     .select("id, code, created_at, total, paid, debt, status")
     .eq("tenant_id", ctx.tenantId)
@@ -133,8 +134,10 @@ export async function getOpenInvoicesByCustomer(
     .gt("debt", 0)
     // 20/07/2026 — chỉ HĐ hoàn tất (nháp/đặt hàng mang debt=total hiển thị,
     // không phải nợ thật; HD001438 bị thu 2 lần vì lọt nháp vào đây)
-    .eq("status", "completed")
-    .order("created_at", { ascending: true });
+    .eq("status", "completed");
+
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query.order("created_at", { ascending: true });
 
   if (error) handleError(error, "getOpenInvoicesByCustomer");
 
@@ -169,19 +172,22 @@ export interface OpenPurchaseLine {
 
 export async function getOpenPurchasesBySupplier(
   supplierId: string,
+  branchId?: string | null,
 ): Promise<OpenPurchaseLine[]> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("purchase_orders")
     .select("id, code, created_at, total, paid, debt, status")
     .eq("tenant_id", ctx.tenantId)
     .eq("supplier_id", supplierId)
     .gt("debt", 0)
     // 20/07/2026 — chỉ phiếu đã nhập kho (completed/partial) mới có nợ thật
-    .in("status", ["completed", "partial"])
-    .order("created_at", { ascending: true });
+    .in("status", ["completed", "partial"]);
+
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, error } = await query.order("created_at", { ascending: true });
 
   if (error) handleError(error, "getOpenPurchasesBySupplier");
 
