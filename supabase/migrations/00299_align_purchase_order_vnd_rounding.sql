@@ -350,6 +350,21 @@ comment on function public.save_purchase_order_atomic(
   uuid, text, uuid, uuid, text, numeric, numeric, numeric, numeric, text, boolean, boolean, jsonb
 ) is 'Atomically saves a PO and optionally receives stock and records supplier payment.';
 
-select to_regprocedure(
-  'public.save_purchase_order_atomic(uuid,text,uuid,uuid,text,numeric,numeric,numeric,numeric,text,boolean,boolean,jsonb)'
-) is not null as save_purchase_order_atomic_vnd_rounding_ok;
+select
+  to_regprocedure(
+    'public.save_purchase_order_atomic(uuid,text,uuid,uuid,text,numeric,numeric,numeric,numeric,text,boolean,boolean,jsonb)'
+  ) is not null as save_purchase_order_atomic_ok,
+  position(
+    'ceil(v_quantity * v_unit_price)'
+    in pg_get_functiondef(
+      to_regprocedure(
+        'public.save_purchase_order_atomic(uuid,text,uuid,uuid,text,numeric,numeric,numeric,numeric,text,boolean,boolean,jsonb)'
+      )
+    )
+  ) > 0 as vnd_rounding_rule_ok,
+  (
+    ceil(24 * 5125::numeric)
+    + ceil(48 * 7708.33::numeric)
+    + ceil(72 * 12166.67::numeric)
+    - 1
+  ) = 1369000 as po000173_example_ok;
