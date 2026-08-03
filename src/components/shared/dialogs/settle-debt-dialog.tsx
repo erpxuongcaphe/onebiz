@@ -53,6 +53,7 @@ interface SettleDebtDialogProps {
   mode: "customer" | "supplier";
   /** ID của KH hoặc NCC. */
   partyId: string;
+  branchId?: string | null;
   /** Tên hiển thị header (vd tên KH). */
   partyName: string;
   /** Tổng nợ ước tính (hiển thị, FE refetch khi mở). */
@@ -78,6 +79,7 @@ export function SettleDebtDialog({
   onOpenChange,
   mode,
   partyId,
+  branchId,
   partyName,
   estimatedDebt,
   onSuccess,
@@ -105,8 +107,8 @@ export function SettleDebtDialog({
     setLoading(true);
     const fetcher =
       mode === "customer"
-        ? getOpenInvoicesByCustomer(partyId)
-        : getOpenPurchasesBySupplier(partyId);
+        ? getOpenInvoicesByCustomer(partyId, branchId)
+        : getOpenPurchasesBySupplier(partyId, branchId);
     fetcher
       .then((rows) => {
         if (cancelled) return;
@@ -126,7 +128,7 @@ export function SettleDebtDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, mode, partyId, toast]);
+  }, [open, mode, partyId, branchId, toast]);
 
   // Auto-allocate FIFO mỗi khi totalAmount thay đổi
   const allocatedDocs = useMemo<DocLine[]>(() => {

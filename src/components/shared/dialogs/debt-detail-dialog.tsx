@@ -39,6 +39,7 @@ interface DebtDetailDialogProps {
   onOpenChange: (open: boolean) => void;
   mode: "customer" | "supplier";
   partyId: string;
+  branchId?: string | null;
   partyName: string;
   partyCode?: string;
   /** Tổng nợ ước tính từ aggregate — hiển thị nhanh trước khi load list */
@@ -52,6 +53,7 @@ export function DebtDetailDialog({
   onOpenChange,
   mode,
   partyId,
+  branchId,
   partyName,
   partyCode,
   estimatedDebt = 0,
@@ -69,8 +71,8 @@ export function DebtDetailDialog({
     setLoading(true);
     const fetcher =
       mode === "customer"
-        ? getOpenInvoicesByCustomer(partyId)
-        : getOpenPurchasesBySupplier(partyId);
+        ? getOpenInvoicesByCustomer(partyId, branchId)
+        : getOpenPurchasesBySupplier(partyId, branchId);
     fetcher
       .then((rows) => {
         if (cancelled) return;
@@ -87,7 +89,7 @@ export function DebtDetailDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, mode, partyId, toast]);
+  }, [open, mode, partyId, branchId, toast]);
 
   const totalDebt = docs.reduce((s, d) => s + d.debt, 0);
   const totalAmount = docs.reduce((s, d) => s + d.total, 0);

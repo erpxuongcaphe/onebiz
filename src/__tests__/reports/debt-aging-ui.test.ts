@@ -30,12 +30,13 @@ describe("debt aging report UI", () => {
   });
 
   it("does not leave the aging tab stuck after a load failure", () => {
-    expect(page).toContain("setAgingError(");
+    // 03/08 — trang gộp về 1 nguồn getDebtWorkspace: lỗi dùng loadError chung
+    expect(page).toContain("setLoadError(");
     expect(page).toContain("Không tải được phân tích tuổi nợ");
     expect(page).toContain("Chưa có dữ liệu tuổi nợ");
     expect(page).not.toContain("agingLoading || !aging");
     expect(page).toContain("REPORT_LOAD_TIMEOUT_MS = 15_000");
-    expect(page).toContain("withReportTimeout(Promise.all(");
+    expect(page).toContain("withReportTimeout(");
   });
 
   it("does not duplicate the DataTable action column", () => {

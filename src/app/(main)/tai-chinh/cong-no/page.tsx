@@ -7,7 +7,7 @@
  *   - Phân tích tuổi nợ (Aging Report) — Sprint 7
  */
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -22,10 +22,11 @@ import { formatCurrency } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { DebtOpeningImportRow } from "@/lib/excel/schemas";
-import { getCustomers, getSuppliers } from "@/lib/services";
-import { getDebtAging, getTopDebtors, getDebtTotals } from "@/lib/services/supabase/debt";
-import type { Customer, Supplier } from "@/lib/types";
-import type { DebtAgingReport, DebtorDetail } from "@/lib/services/supabase/debt";
+import {
+  getDebtWorkspace,
+  type DebtPartyRow,
+  type DebtWorkspace,
+} from "@/lib/services/supabase/debt-workspace";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
@@ -70,25 +71,10 @@ export default function CongNoPage() {
   const [mode, setMode] = useState<Mode>("customer");
   const [search, setSearch] = useState("");
 
-  const [customers, setCustomers] = useState<Customer[]>([]);
-  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [workspace, setWorkspace] = useState<DebtWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
-
-  // KPI summary — fetch tổng cả 2 (KH + NCC) bất kể đang ở tab nào.
-  // Trước đây tổng tính từ customers/suppliers state — nhưng state chỉ
-  // có data của tab hiện tại → KPI tab không phải hiển thị 0 (sai).
-  const [debtTotals, setDebtTotals] = useState({
-    customerDebtTotal: 0,
-    customerCount: 0,
-    supplierDebtTotal: 0,
-    supplierCount: 0,
-  });
-
-  // Aging data
-  const [aging, setAging] = useState<DebtAgingReport | null>(null);
-  const [topDebtors, setTopDebtors] = useState<DebtorDetail[]>([]);
-  const [agingLoading, setAgingLoading] = useState(false);
-  const [agingError, setAgingError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
 
   // Import opening debt
   const [importOpen, setImportOpen] = useState(false);
@@ -120,93 +106,56 @@ export default function CongNoPage() {
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
+    setWorkspace(null);
     try {
-      // Luôn fetch tổng KPI (cả KH + NCC) song song với data tab.
-      const totalsPromise = getDebtTotals(activeBranchId);
-
-      if (mode === "customer") {
-        const [result, totals] = await withReportTimeout(Promise.all([
-          getCustomers({
-            page: 0,
-            pageSize: 200,
-            search,
-            filters: { debt: "has_debt" },
-          }),
-          totalsPromise,
-        ]));
-        setCustomers(result.data);
-        setDebtTotals(totals);
-      } else if (mode === "supplier") {
-        const [result, totals] = await withReportTimeout(Promise.all([
-          getSuppliers({
-            page: 0,
-            pageSize: 200,
-            search,
-            filters: { debt: "has_debt" },
-          }),
-          totalsPromise,
-        ]));
-        setSuppliers(result.data);
-        setDebtTotals(totals);
-      } else if (mode === "aging") {
-        setAgingLoading(true);
-        setAgingError(null);
-        const [agingRes, debtorsRes, totals] = await withReportTimeout(Promise.all([
-          getDebtAging(activeBranchId),
-          getTopDebtors(20, activeBranchId),
-          totalsPromise,
-        ]));
-        setAging(agingRes);
-        setTopDebtors(debtorsRes);
-        setDebtTotals(totals);
-      }
+      const nextWorkspace = await withReportTimeout(
+        getDebtWorkspace(activeBranchId),
+      );
+      if (requestId !== requestIdRef.current) return;
+      setWorkspace(nextWorkspace);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      const message =
+        err instanceof Error ? err.message : "Không thể tải dữ liệu công nợ";
+      setLoadError(message);
       toast({
         title: "Lỗi tải công nợ",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        description: message,
         variant: "error",
       });
-      if (mode === "aging") {
-        setAgingError(
-          err instanceof Error ? err.message : "Không thể tải phân tích tuổi nợ",
-        );
-      }
     } finally {
-      setAgingLoading(false);
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, isReady, mode, search, toast]);
+  }, [activeBranchId, isReady, toast]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // KPI dùng totals từ DB (chính xác mọi mode) thay vì reduce client state.
-  const totalCustomerDebt = debtTotals.customerDebtTotal;
-  const totalSupplierDebt = debtTotals.supplierDebtTotal;
-  const customerDebtCount = debtTotals.customerCount;
-  const supplierDebtCount = debtTotals.supplierCount;
+  const aging = workspace?.aging ?? null;
+  const totalCustomerDebt = workspace?.totals.customerDebtTotal ?? 0;
+  const totalSupplierDebt = workspace?.totals.supplierDebtTotal ?? 0;
+  const customerDebtCount = workspace?.totals.customerCount ?? 0;
+  const supplierDebtCount = workspace?.totals.supplierCount ?? 0;
 
   const { receivableDebtors, payableDebtors } = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
-    const matches = (row: DebtorDetail) =>
+    const matches = (row: DebtPartyRow) =>
       !keyword ||
       row.code.toLocaleLowerCase("vi").includes(keyword) ||
       row.name.toLocaleLowerCase("vi").includes(keyword) ||
       (row.phone ?? "").includes(keyword);
 
     return {
-      receivableDebtors: topDebtors.filter(
-        (row) => row.type === "customer" && matches(row),
-      ),
-      payableDebtors: topDebtors.filter(
-        (row) => row.type === "supplier" && matches(row),
-      ),
+      receivableDebtors: (workspace?.receivables ?? []).filter(matches),
+      payableDebtors: (workspace?.payables ?? []).filter(matches),
     };
-  }, [search, topDebtors]);
+  }, [search, workspace]);
 
-  const customerColumns: ColumnDef<Customer, unknown>[] = [
+  const customerColumns: ColumnDef<DebtPartyRow, unknown>[] = [
     {
       accessorKey: "code",
       header: "Mã KH",
@@ -231,26 +180,26 @@ export default function CongNoPage() {
       ),
     },
     {
-      accessorKey: "currentDebt",
+      accessorKey: "debt",
       header: "Công nợ hiện tại",
       size: 160,
       cell: ({ row }) => (
         <span className="font-semibold text-destructive">
-          {formatCurrency(row.original.currentDebt ?? 0)}
+          {formatCurrency(row.original.debt)}
         </span>
       ),
     },
     {
-      accessorKey: "totalSales",
-      header: "Tổng đã mua",
+      accessorKey: "documentCount",
+      header: "Hóa đơn còn nợ",
       size: 160,
-      cell: ({ row }) => formatCurrency(row.original.totalSales ?? 0),
+      cell: ({ row }) => `${row.original.documentCount} hóa đơn`,
     },
     {
-      accessorKey: "groupName",
-      header: "Nhóm",
+      accessorKey: "ageDays",
+      header: "Nợ lâu nhất",
       size: 140,
-      cell: ({ row }) => row.original.groupName ?? "—",
+      cell: ({ row }) => `${row.original.ageDays} ngày`,
     },
     // CEO 03/06 — Công nợ C1: nút "Thanh toán". CEO 06/06 — thêm "Xem chi tiết"
     // (anh báo: "chưa xem được chi tiết công nợ là khách đó đang nợ đơn gì").
@@ -260,7 +209,16 @@ export default function CongNoPage() {
       size: 220,
       enableSorting: false,
       cell: ({ row }) => {
-        const debt = row.original.currentDebt ?? 0;
+        const debt = row.original.debt;
+        // Khách lẻ (walk-in:*) không có hồ sơ KH thật — không cho mở
+        // chi tiết/thu nợ (partyId không phải UUID, query sẽ lỗi 22P02).
+        if (row.original.id.startsWith("walk-in:")) {
+          return (
+            <span className="text-[11px] text-muted-foreground italic">
+              khách lẻ — không có hồ sơ
+            </span>
+          );
+        }
         return (
           <div className="flex items-center gap-1.5">
             <Button
@@ -307,7 +265,7 @@ export default function CongNoPage() {
     },
   ];
 
-  const supplierColumns: ColumnDef<Supplier, unknown>[] = [
+  const supplierColumns: ColumnDef<DebtPartyRow, unknown>[] = [
     {
       accessorKey: "code",
       header: "Mã NCC",
@@ -332,20 +290,20 @@ export default function CongNoPage() {
       ),
     },
     {
-      accessorKey: "currentDebt",
+      accessorKey: "debt",
       header: "Cần trả NCC",
       size: 160,
       cell: ({ row }) => (
         <span className="font-semibold text-status-warning">
-          {formatCurrency(row.original.currentDebt ?? 0)}
+          {formatCurrency(row.original.debt)}
         </span>
       ),
     },
     {
-      accessorKey: "totalPurchases",
-      header: "Tổng đã nhập",
+      accessorKey: "documentCount",
+      header: "Phiếu còn nợ",
       size: 160,
-      cell: ({ row }) => formatCurrency(row.original.totalPurchases ?? 0),
+      cell: ({ row }) => `${row.original.documentCount} phiếu`,
     },
     // CEO 03/06 — Trả nợ NCC. CEO 06/06 — thêm "Xem chi tiết PO đang nợ".
     {
@@ -354,7 +312,7 @@ export default function CongNoPage() {
       size: 220,
       enableSorting: false,
       cell: ({ row }) => {
-        const debt = row.original.currentDebt ?? 0;
+        const debt = row.original.debt;
         return (
           <div className="flex items-center gap-1.5">
             <Button
@@ -401,7 +359,7 @@ export default function CongNoPage() {
     },
   ];
 
-  const debtorColumns: ColumnDef<DebtorDetail, unknown>[] = [
+  const debtorColumns: ColumnDef<DebtPartyRow, unknown>[] = [
     {
       accessorKey: "code",
       header: "Mã",
@@ -451,7 +409,7 @@ export default function CongNoPage() {
     },
     {
       accessorKey: "bucket",
-      header: "Nhóm",
+      header: "Nợ lâu nhất",
       size: 110,
       cell: ({ row }) => (
         <span className="text-xs text-muted-foreground">
@@ -493,22 +451,22 @@ export default function CongNoPage() {
             const today = new Date();
             const rows: DebtOpeningImportRow[] =
               mode === "customer"
-                ? customers
-                    .filter((c) => c.currentDebt !== 0)
+                ? receivableDebtors
+                    .filter((c) => c.debt !== 0)
                     .map((c) => ({
                       partyType: "customer",
                       partyCode: c.code,
                       partyName: c.name,
-                      openingDebt: c.currentDebt,
+                      openingDebt: c.debt,
                       openingDate: today,
                     }))
-                : suppliers
-                    .filter((s) => s.currentDebt !== 0)
+                : payableDebtors
+                    .filter((s) => s.debt !== 0)
                     .map((s) => ({
                       partyType: "supplier",
                       partyCode: s.code,
                       partyName: s.name,
-                      openingDebt: s.currentDebt,
+                      openingDebt: s.debt,
                       openingDate: today,
                     }));
             exportToExcelFromSchema(rows, debtOpeningExcelSchema);
@@ -519,18 +477,18 @@ export default function CongNoPage() {
                 { header: "Mã KH", key: "code", width: 15 },
                 { header: "Tên KH", key: "name", width: 25 },
                 { header: "SĐT", key: "phone", width: 15 },
-                { header: "Công nợ", key: "currentDebt", width: 18, format: (v: number) => v },
-                { header: "Tổng mua", key: "totalSales", width: 18, format: (v: number) => v },
+                { header: "Công nợ", key: "debt", width: 18, format: (v: number) => v },
+                { header: "Hóa đơn còn nợ", key: "documentCount", width: 18, format: (v: number) => v },
               ];
-              exportToCsv(customers, cols, "cong-no-khach-hang");
+              exportToCsv(receivableDebtors, cols, "cong-no-khach-hang");
             } else {
               const cols = [
                 { header: "Mã NCC", key: "code", width: 15 },
                 { header: "Tên NCC", key: "name", width: 25 },
-                { header: "Cần trả NCC", key: "currentDebt", width: 18, format: (v: number) => v },
-                { header: "Tổng nhập", key: "totalPurchases", width: 18, format: (v: number) => v },
+                { header: "Cần trả NCC", key: "debt", width: 18, format: (v: number) => v },
+                { header: "Phiếu còn nợ", key: "documentCount", width: 18, format: (v: number) => v },
               ];
-              exportToCsv(suppliers, cols, "cong-no-nha-cung-cap");
+              exportToCsv(payableDebtors, cols, "cong-no-nha-cung-cap");
             }
           },
         } : undefined}
@@ -543,6 +501,16 @@ export default function CongNoPage() {
           <strong className="text-foreground">{branchLabel}</strong>
         </span>
       </div>
+
+      {loadError && mode !== "aging" && (
+        <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <span className="text-sm text-destructive">{loadError}</span>
+          <Button size="sm" variant="outline" onClick={fetchData}>
+            <Icon name="refresh" size={15} />
+            Thử lại
+          </Button>
+        </div>
+      )}
 
       {/* Summary — luôn show tổng cả KH + NCC bất kể tab nào */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
@@ -588,9 +556,9 @@ export default function CongNoPage() {
         <TabsContent value="customer" className="flex-1 min-h-0">
           <DataTable
             columns={customerColumns}
-            data={customers}
+            data={receivableDebtors}
             loading={loading}
-            total={customers.length}
+            total={receivableDebtors.length}
             pageIndex={0}
             pageSize={50}
             pageCount={1}
@@ -616,9 +584,9 @@ export default function CongNoPage() {
         <TabsContent value="supplier" className="flex-1 min-h-0">
           <DataTable
             columns={supplierColumns}
-            data={suppliers}
+            data={payableDebtors}
             loading={loading}
-            total={suppliers.length}
+            total={payableDebtors.length}
             pageIndex={0}
             pageSize={50}
             pageCount={1}
@@ -641,15 +609,15 @@ export default function CongNoPage() {
         </TabsContent>
 
         <TabsContent value="aging" className="flex-1 min-h-0 overflow-auto pb-4">
-          {agingLoading ? (
+          {loading ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               Đang tải phân tích...
             </div>
-          ) : agingError ? (
+          ) : loadError ? (
             <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-center">
               <div>
                 <p className="text-sm font-medium">Không tải được phân tích tuổi nợ</p>
-                <p className="mt-1 text-xs text-muted-foreground">{agingError}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
               </div>
               <Button size="sm" variant="outline" onClick={fetchData}>
                 <Icon name="refresh" size={15} />
@@ -855,6 +823,7 @@ export default function CongNoPage() {
           onOpenChange={(o) => !o && setSettleTarget(null)}
           mode={settleTarget.mode}
           partyId={settleTarget.partyId}
+          branchId={activeBranchId}
           partyName={settleTarget.partyName}
           estimatedDebt={settleTarget.estimatedDebt}
           onSuccess={() => {
@@ -871,6 +840,7 @@ export default function CongNoPage() {
           onOpenChange={(o) => !o && setDetailTarget(null)}
           mode={detailTarget.mode}
           partyId={detailTarget.partyId}
+          branchId={activeBranchId}
           partyName={detailTarget.partyName}
           partyCode={detailTarget.partyCode}
           estimatedDebt={detailTarget.estimatedDebt}
