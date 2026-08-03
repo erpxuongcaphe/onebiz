@@ -1,15 +1,31 @@
+
 /**
- * Finance + Marketing Reports Service — Phase C (CEO 16/05/2026).
+ * Finance + Marketing Reports Service â€” Phase C (CEO 16/05/2026).
  *
  * Wrap 4 RPC migration 00081:
- *   - getReceivableAgingReport: công nợ aging buckets
- *   - getVatReport: VAT in/out theo kỳ
- *   - getRfmReport: RFM khách hàng
+ *   - getReceivableAgingReport: cÃ´ng ná»£ aging buckets
+ *   - getVatReport: VAT in/out theo ká»³
+ *   - getRfmReport: RFM khÃ¡ch hÃ ng
  *   - getFnbServeTimeReport: time-to-serve FnB
  */
 
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+
+function handleReportError(
+  error: { message: string; code?: string },
+  context: string,
+): never {
+  if (error.message.includes("REPORT_ALL_BRANCHES_DENIED")) {
+    throw new Error(
+      "TÃ i khoáº£n khÃ´ng cÃ³ quyá»n xem toÃ n cÃ´ng ty. HÃ£y chá»n chi nhÃ¡nh Ä‘Æ°á»£c phÃ¢n quyá»n.",
+    );
+  }
+  if (error.message.includes("REPORT_BRANCH_DENIED")) {
+    throw new Error("TÃ i khoáº£n khÃ´ng cÃ³ quyá»n xem chi nhÃ¡nh Ä‘Ã£ chá»n.");
+  }
+  handleError(error, context);
+}
 
 // ============================================================
 // 1. Receivable Aging
@@ -52,12 +68,12 @@ export async function getReceivableAgingReport(params?: {
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có RPC get_receivable_aging_report. Vui lòng chạy migration 00081 trước.",
+        "ChÆ°a cÃ³ RPC get_receivable_aging_report. Vui lÃ²ng cháº¡y migration 00081 trÆ°á»›c.",
       );
     }
-    handleError(error, "getReceivableAgingReport");
+    handleReportError(error, "getReceivableAgingReport");
   }
-  if (!data) throw new Error("Server không trả kết quả aging report.");
+  if (!data) throw new Error("Server khÃ´ng tráº£ káº¿t quáº£ aging report.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
@@ -68,8 +84,8 @@ export async function getReceivableAgingReport(params?: {
     branchId: raw.branch_id,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rows: (raw.rows ?? []).map((r: any) => ({
-      customerId: r.customer_id ?? `walk-in:${r.customer_name ?? "Khách lẻ"}`,
-      customerName: r.customer_name ?? "Khách lẻ",
+      customerId: r.customer_id ?? `walk-in:${r.customer_name ?? "KhÃ¡ch láº»"}`,
+      customerName: r.customer_name ?? "KhÃ¡ch láº»",
       invoiceCount: Number(r.invoice_count ?? 0),
       outstanding: Number(r.outstanding ?? 0),
       bucket0_30: Number(r.bucket_0_30 ?? 0),
@@ -123,12 +139,12 @@ export async function getPayableAgingReport(params?: {
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có migration 00257. Không thể tải tuổi nợ phải trả.",
+        "ChÆ°a cÃ³ migration 00257. KhÃ´ng thá»ƒ táº£i tuá»•i ná»£ pháº£i tráº£.",
       );
     }
-    handleError(error, "getPayableAgingReport");
+    handleReportError(error, "getPayableAgingReport");
   }
-  if (!data) throw new Error("Máy chủ không trả kết quả tuổi nợ phải trả.");
+  if (!data) throw new Error("MÃ¡y chá»§ khÃ´ng tráº£ káº¿t quáº£ tuá»•i ná»£ pháº£i tráº£.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
@@ -140,7 +156,7 @@ export async function getPayableAgingReport(params?: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rows: (raw.rows ?? []).map((r: any) => ({
       supplierId: r.supplier_id,
-      supplierName: r.supplier_name ?? "Nhà cung cấp",
+      supplierName: r.supplier_name ?? "NhÃ  cung cáº¥p",
       documentCount: Number(r.document_count ?? 0),
       outstanding: Number(r.outstanding ?? 0),
       bucket0_30: Number(r.bucket_0_30 ?? 0),
@@ -218,11 +234,11 @@ export async function getVatReport(params?: {
   });
   if (error) {
     if (isRpcUnavailable(error)) {
-      throw new Error("Chưa có RPC get_vat_report. Vui lòng chạy migration 00081.");
+      throw new Error("ChÆ°a cÃ³ RPC get_vat_report. Vui lÃ²ng cháº¡y migration 00081.");
     }
     handleError(error, "getVatReport");
   }
-  if (!data) throw new Error("Server không trả kết quả VAT report.");
+  if (!data) throw new Error("Server khÃ´ng tráº£ káº¿t quáº£ VAT report.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
@@ -260,7 +276,7 @@ export async function getVatReport(params?: {
       id: r.id,
       code: r.code,
       createdAt: r.created_at,
-      customerName: r.customer_name ?? "Khách lẻ",
+      customerName: r.customer_name ?? "KhÃ¡ch láº»",
       subtotal: Number(r.subtotal ?? 0),
       taxAmount: Number(r.tax_amount ?? 0),
       total: Number(r.total ?? 0),
@@ -327,11 +343,11 @@ export async function getRfmReport(params?: {
   });
   if (error) {
     if (isRpcUnavailable(error)) {
-      throw new Error("Chưa có RPC get_rfm_report. Vui lòng chạy migration 00081.");
+      throw new Error("ChÆ°a cÃ³ RPC get_rfm_report. Vui lÃ²ng cháº¡y migration 00081.");
     }
     handleError(error, "getRfmReport");
   }
-  if (!data) throw new Error("Server không trả kết quả RFM.");
+  if (!data) throw new Error("Server khÃ´ng tráº£ káº¿t quáº£ RFM.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
@@ -426,12 +442,12 @@ export async function getFnbServeTimeReport(params?: {
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có RPC get_fnb_serve_time_report. Vui lòng chạy migration 00081.",
+        "ChÆ°a cÃ³ RPC get_fnb_serve_time_report. Vui lÃ²ng cháº¡y migration 00081.",
       );
     }
     handleError(error, "getFnbServeTimeReport");
   }
-  if (!data) throw new Error("Server không trả kết quả serve time.");
+  if (!data) throw new Error("Server khÃ´ng tráº£ káº¿t quáº£ serve time.");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const raw = data as any;
@@ -476,3 +492,4 @@ export async function getFnbServeTimeReport(params?: {
     })),
   };
 }
+
