@@ -47,7 +47,12 @@ import {
 } from "@/lib/services/supabase/kitchen-orders";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
-import { getOpenShift, openShift, closeShift } from "@/lib/services/supabase/shifts";
+import {
+  getOpenShift,
+  openShift,
+  closeShift,
+  markOverdueShiftsForBranch,
+} from "@/lib/services/supabase/shifts";
 import {
   getDeliveryPlatformSettings,
   getDiscountPresets,
@@ -373,7 +378,13 @@ function FnbPosPageInner() {
             : Promise.resolve([] as RestaurantTable[]);
 
           const shiftPromise = branchId && userId
-            ? getOpenShift(branchId, userId).catch(() => null)
+            ? markOverdueShiftsForBranch(branchId)
+                .catch((err) => {
+                  console.warn("[FnB] mark overdue shifts failed:", err);
+                  return 0;
+                })
+                .then(() => getOpenShift(branchId, userId))
+                .catch(() => null)
             : Promise.resolve(null);
 
           const [catalogResult, tbls, shift] = await Promise.all([
@@ -2007,8 +2018,15 @@ function FnbPosPageInner() {
       });
       setCurrentShift(shift);
       setOpenShiftDialogOpen(false);
+      toast({
+        title: shift.alreadyOpen ? "Đã khôi phục ca đang mở" : "Đã mở ca",
+        description: shift.alreadyOpen
+          ? "Giao diện đã đồng bộ lại với ca hiện có trên hệ thống."
+          : `Số dư đầu ca: ${formatNumber(startingCash)} đ`,
+        variant: "success",
+      });
     },
-    [tenantId, branchId, userId]
+    [tenantId, branchId, userId, toast]
   );
 
   const handleCloseShift = useCallback(
