@@ -212,7 +212,7 @@ describe("atomic purchase-order save", () => {
       "return Math.ceil(lineEffectivePrice(item) * item.quantity)",
     );
     expect(
-      roundingMigration.match(/ceil\(v_quantity \* v_unit_price\)/g),
+      roundingMigration.match(/:= ceil\(v_quantity \* v_unit_price\)/g),
     ).toHaveLength(2);
     expect(roundingMigration).not.toContain(
       "round(v_quantity * v_unit_price, 2)",
