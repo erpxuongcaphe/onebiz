@@ -14,13 +14,17 @@ import { usePermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 interface PermissionPageProps {
-  requires: string;
+  requires: string | readonly string[];
   children: ReactNode;
 }
 
 export function PermissionPage({ requires, children }: PermissionPageProps) {
   const { hasPermission, isLoading } = usePermissions();
   const [slowLoading, setSlowLoading] = useState(false);
+  const requiredPermissions = Array.isArray(requires) ? requires : [requires];
+  const isAllowed = requiredPermissions.some((permission) =>
+    hasPermission(permission),
+  );
 
   // PERF F1: KHÔNG block render khi đang load auth.
   // Trước đây isLoading=true → spinner full page → user click chức năng
@@ -44,7 +48,7 @@ export function PermissionPage({ requires, children }: PermissionPageProps) {
 
   // Chỉ deny khi auth đã hoàn tất + không có quyền.
   // isLoading → cứ render children, để user thấy app phản hồi.
-  if (!isLoading && !hasPermission(requires)) {
+  if (!isLoading && !isAllowed) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
         <Icon name="gpp_bad" size={40} className="text-muted-foreground" />
