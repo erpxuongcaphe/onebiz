@@ -17,7 +17,7 @@ import {
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
 import {
   STANDARD_LIST_PRESETS,
-  STANDARD_LIST_PRESETS_WITH_ALL,
+  computeListPresetRange,
 } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
@@ -37,10 +37,12 @@ import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getShippingOrders,
   getShippingStatuses,
+  getShippingStatusCounts,
   getPartnerOptionsAsync,
   updateShippingOrderStatus,
   getNextShippingStatuses,
   SHIPPING_STATUS_LABEL,
+  type ShippingStatusCounts,
 } from "@/lib/services";
 import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services/supabase/audit";
 import { CreateShippingOrderDialog } from "@/components/shared/dialogs";
@@ -66,12 +68,9 @@ const statusMap: Record<
 };
 
 const statusOptions = getShippingStatuses();
-
-const deliveryRegionOptions = [
-  { label: "Miền Bắc", value: "north" },
-  { label: "Miền Trung", value: "central" },
-  { label: "Miền Nam", value: "south" },
-];
+// 04/08: bỏ bộ lọc "Khu vực" (3 miền gắn cứng — DB không có cột) và
+// "Thời gian hoàn thành" (không có cột delivered_at riêng). Chỉ giữ các bộ
+// lọc chạy thật: trạng thái, đối tác, thời gian tạo.
 
 /* ------------------------------------------------------------------ */
 /*  Starred set                                                        */
@@ -262,7 +261,6 @@ function ShippingOrderDetail({
                   { label: "Người nhận", value: order.customerName },
                   { label: "Điện thoại", value: order.customerPhone },
                   { label: "Địa chỉ", value: order.address, fullWidth: true },
-                  { label: "Khu vực", value: "—" },
                 ]}
               />
             ),
@@ -376,8 +374,19 @@ export default function VanDonPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [partnerFilter, setPartnerFilter] = useState("all");
   const [createdDatePreset, setCreatedDatePreset] = useState<DatePresetValue>("all");
-  const [completedDatePreset, setCompletedDatePreset] = useState<DatePresetValue>("all");
-  const [regionFilter, setRegionFilter] = useState("all");
+
+  // 04/08: KPI đếm trên TOÀN BỘ vận đơn (thẻ cũ đếm 15 dòng của trang hiện tại)
+  const [statusCounts, setStatusCounts] = useState<ShippingStatusCounts | null>(null);
+
+  const buildFilters = useCallback(() => {
+    const range = computeListPresetRange(createdDatePreset);
+    return {
+      ...(statusFilter !== "all" && { status: statusFilter }),
+      ...(partnerFilter !== "all" && { partner: partnerFilter }),
+      ...(range.from && { dateFrom: range.from }),
+      ...(range.to && { dateTo: range.to }),
+    };
+  }, [statusFilter, partnerFilter, createdDatePreset]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -386,18 +395,18 @@ export default function VanDonPage() {
     try {
     // CEO 08/07 (verify DB): shipping_orders KHÔNG có branch_id — vận đơn xem
     // toàn tenant, KHÔNG lọc theo chi nhánh (filter cũ làm query lỗi).
-    const result = await getShippingOrders({
-      page,
-      pageSize,
-      search,
-      filters: {
-        ...(statusFilter !== "all" && { status: statusFilter }),
-        ...(partnerFilter !== "all" && { partner: partnerFilter }),
-        ...(regionFilter !== "all" && { region: regionFilter }),
-      },
-    });
+    const [result, counts] = await Promise.all([
+      getShippingOrders({
+        page,
+        pageSize,
+        search,
+        filters: buildFilters(),
+      }),
+      getShippingStatusCounts(),
+    ]);
     setData(result.data);
     setTotal(result.total);
+    setStatusCounts(counts);
     } catch (e) {
       toast({
         variant: "error",
@@ -407,7 +416,7 @@ export default function VanDonPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, partnerFilter, regionFilter, toast]);
+  }, [page, pageSize, search, buildFilters, toast]);
 
   useEffect(() => {
     fetchData();
@@ -425,16 +434,23 @@ export default function VanDonPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, partnerFilter, createdDatePreset, completedDatePreset, regionFilter]);
+  }, [search, statusFilter, partnerFilter, createdDatePreset]);
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
+  // 04/08: tải TOÀN BỘ theo bộ lọc hiện tại (trước chỉ xuất 15 dòng đang hiện)
+  // + thêm các cột tiền (phí giao, COD) và liên lạc — trước xuất 6 cột không
+  // có đồng nào.
+  const handleExport = async (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã vận đơn", key: "code", width: 15 },
       { header: "Thời gian tạo", key: "createdAt", width: 18, format: (v: string) => formatDate(v) },
       { header: "Mã hóa đơn", key: "invoiceCode", width: 15 },
       { header: "Khách hàng", key: "customerName", width: 25 },
+      { header: "SĐT người nhận", key: "customerPhone", width: 15 },
+      { header: "Địa chỉ giao", key: "address", width: 35 },
       { header: "Đối tác giao hàng", key: "deliveryPartner", width: 20 },
+      { header: "Phí giao", key: "fee", width: 12 },
+      { header: "Thu hộ (COD)", key: "cod", width: 15 },
       {
         header: "Trạng thái",
         key: "status",
@@ -442,8 +458,25 @@ export default function VanDonPage() {
         format: (v: ShippingOrder["status"]) => statusMap[v]?.label ?? v,
       },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "danh-sach-van-don");
-    else exportToCsv(data, exportColumns, "danh-sach-van-don");
+    let rows = data;
+    try {
+      const all = await getShippingOrders({
+        page: 0,
+        pageSize: Math.max(total, pageSize),
+        search,
+        filters: buildFilters(),
+      });
+      rows = all.data;
+    } catch {
+      // Tải toàn bộ lỗi thì vẫn xuất trang hiện tại, còn hơn câm lặng.
+      toast({
+        variant: "error",
+        title: "Chỉ xuất được trang hiện tại",
+        description: "Tải toàn bộ vận đơn bị lỗi, thử lại sau.",
+      });
+    }
+    if (type === "excel") exportToExcel(rows, exportColumns, "danh-sach-van-don");
+    else exportToCsv(rows, exportColumns, "danh-sach-van-don");
   };
 
   /* ---- Columns ---- */
@@ -481,20 +514,46 @@ export default function VanDonPage() {
       size: 120,
     },
     {
-      id: "customerCode",
-      header: "Mã KH",
-      size: 100,
-      cell: () => "—",
-    },
-    {
       accessorKey: "customerName",
       header: "Khách hàng",
-      size: 180,
+      size: 170,
+    },
+    {
+      accessorKey: "address",
+      header: "Địa chỉ giao",
+      size: 200,
+      cell: ({ row }) => (
+        <span className="block max-w-[200px] truncate" title={row.original.address}>
+          {row.original.address || "—"}
+        </span>
+      ),
     },
     {
       accessorKey: "deliveryPartner",
       header: "Đối tác giao hàng",
-      size: 160,
+      size: 150,
+    },
+    {
+      accessorKey: "fee",
+      header: "Phí giao",
+      size: 110,
+      cell: ({ row }) =>
+        row.original.fee > 0 ? (
+          <span className="tabular-nums">{formatCurrency(row.original.fee)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      accessorKey: "cod",
+      header: "Thu hộ (COD)",
+      size: 130,
+      cell: ({ row }) =>
+        row.original.cod > 0 ? (
+          <span className="tabular-nums font-medium">{formatCurrency(row.original.cod)}</span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
     },
     {
       accessorKey: "status",
@@ -545,23 +604,6 @@ export default function VanDonPage() {
               presets={STANDARD_LIST_PRESETS}
             />
           </FilterGroup>
-
-          <FilterGroup label="Thời gian hoàn thành">
-            <DatePresetFilter
-              value={completedDatePreset}
-              onChange={setCompletedDatePreset}
-              presets={STANDARD_LIST_PRESETS_WITH_ALL}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Khu vực giao hàng">
-            <SelectFilter
-              options={deliveryRegionOptions}
-              value={regionFilter}
-              onChange={setRegionFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
         </FilterSidebar>
       }
     >
@@ -590,29 +632,29 @@ export default function VanDonPage() {
         onSuccess={fetchData}
       />
 
-      {/* KPI row — tình trạng nhanh vận đơn */}
+      {/* KPI row — đếm trên TOÀN BỘ vận đơn (04/08: thẻ cũ chỉ đếm trang hiện tại) */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
         <SummaryCard
-          icon={<Icon name="local_shipping" size={16} />}
-          label="Tổng vận đơn"
-          value={total.toString()}
+          icon={<Icon name="schedule" size={16} />}
+          label="Chờ lấy hàng"
+          value={(statusCounts?.pending ?? 0).toString()}
+          highlight={(statusCounts?.pending ?? 0) > 0}
         />
         <SummaryCard
-          icon={<Icon name="pending" size={16} />}
+          icon={<Icon name="local_shipping" size={16} />}
           label="Đang giao"
-          value={data.filter((r) => r.status === "in_transit" || r.status === "picked_up").length.toString()}
-          highlight={data.filter((r) => r.status === "in_transit" || r.status === "picked_up").length > 0}
+          value={((statusCounts?.picked_up ?? 0) + (statusCounts?.in_transit ?? 0)).toString()}
         />
         <SummaryCard
           icon={<Icon name="check_circle" size={16} />}
           label="Đã giao"
-          value={data.filter((r) => r.status === "delivered").length.toString()}
+          value={(statusCounts?.delivered ?? 0).toString()}
         />
         <SummaryCard
           icon={<Icon name="warning" size={16} className="text-destructive" />}
           label="Hoàn / Hủy"
-          value={data.filter((r) => r.status === "returned" || r.status === "cancelled").length.toString()}
-          danger={data.filter((r) => r.status === "returned" || r.status === "cancelled").length > 0}
+          value={((statusCounts?.returned ?? 0) + (statusCounts?.cancelled ?? 0)).toString()}
+          danger={((statusCounts?.returned ?? 0) + (statusCounts?.cancelled ?? 0)) > 0}
         />
       </div>
 

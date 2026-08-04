@@ -15,6 +15,7 @@ import type {
   ShippingStatus,
 } from "@/lib/types";
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 // --- Shipping Orders ---
 
@@ -49,6 +50,10 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
     query = query.eq("partner_id", params.filters.partner as any);
   }
 
+  // Filter: thời gian tạo (dateFrom/dateTo) — 04/08: trước đây sidebar có ô
+  // lọc nhưng không truyền vào truy vấn (UI giả). Dùng khuôn chung như hóa đơn.
+  query = applyCreatedAtRangeFilter(query, params.filters);
+
   // CEO 08/07 (verify DB): bảng shipping_orders KHÔNG có cột branch_id —
   // filter .eq("branch_id") cũ làm query LỖI khi chọn 1 chi nhánh (bug ẩn vì
   // 0 vận đơn). Vận đơn xem toàn tenant; chi nhánh suy từ hóa đơn gắn kèm.
@@ -63,6 +68,39 @@ export async function getShippingOrders(params: QueryParams): Promise<QueryResul
 
   const orders: ShippingOrder[] = (data ?? []).map(mapShippingOrder);
   return { data: orders, total: count ?? 0 };
+}
+
+/**
+ * Đếm vận đơn theo trạng thái trên TOÀN BỘ tenant — cho 4 thẻ KPI đầu trang.
+ * 04/08: thẻ cũ đếm `data.filter(...)` = chỉ 15 dòng của trang hiện tại nên
+ * số sai ngay khi có phân trang. 1 truy vấn chỉ lấy cột status, không phân
+ * trang (vài chục–vài nghìn dòng, nhẹ).
+ */
+export type ShippingStatusCounts = Record<ShippingStatus, number>;
+
+export async function getShippingStatusCounts(): Promise<ShippingStatusCounts> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const { data, error } = await supabase
+    .from("shipping_orders")
+    .select("status")
+    .eq("tenant_id", tenantId);
+  if (error) handleError(error, "getShippingStatusCounts");
+
+  const counts: ShippingStatusCounts = {
+    pending: 0,
+    picked_up: 0,
+    in_transit: 0,
+    delivered: 0,
+    returned: 0,
+    cancelled: 0,
+  };
+  for (const row of data ?? []) {
+    const s = row.status as ShippingStatus;
+    if (s in counts) counts[s] += 1;
+  }
+  return counts;
 }
 
 /**

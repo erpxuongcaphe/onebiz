@@ -1,5 +1,18 @@
 "use client";
 
+/**
+ * Tạo vận đơn từ trang danh sách vận đơn (chọn hóa đơn trước).
+ *
+ * 04/08/2026 — trước đây dialog này GHI THẲNG bảng shipping_orders: không cập
+ * nhật tiền hóa đơn, COD gõ tay (lệch hóa đơn), không chặn 1 hóa đơn 2 vận
+ * đơn, và lấy mã từ bộ đếm 'shipping' trùng tiền tố VD với bộ đếm
+ * 'shipping_order' của RPC. Giờ đi chung 1 cửa createShipmentForInvoice
+ * (RPC attach_invoice_shipment_atomic) như nút "Tạo vận đơn" ở trang hóa đơn:
+ *   - phí giao cộng vào tổng + công nợ hóa đơn (nếu đã hoàn tất)
+ *   - COD máy chủ tự tính = tổng mới − đã thanh toán
+ *   - chặn hóa đơn hủy / đã có vận đơn còn hiệu lực
+ */
+
 import { useState, useEffect } from "react";
 import {
   Dialog,
@@ -13,11 +26,9 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
-import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
-import type { Database } from "@/lib/supabase/types";
+import { createShipmentForInvoice } from "@/lib/services/supabase/shipping";
+import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
-
-type ShippingOrderInsert = Database["public"]["Tables"]["shipping_orders"]["Insert"];
 
 interface CreateShippingOrderDialogProps {
   open: boolean;
@@ -29,6 +40,11 @@ interface SearchInvoice {
   id: string;
   code: string;
   customerName: string;
+  /** Tổng hiện tại (đã gồm phí giao cũ nếu có) */
+  total: number;
+  paid: number;
+  /** Phí giao đã gắn trước đó (sửa phí → RPC chỉ cộng phần chênh) */
+  deliveryFee: number;
 }
 
 interface SearchPartner {
@@ -42,7 +58,6 @@ export function CreateShippingOrderDialog({
   onSuccess,
 }: CreateShippingOrderDialogProps) {
   const { toast } = useToast();
-  const [code, setCode] = useState("");
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [selectedInvoice, setSelectedInvoice] = useState<SearchInvoice | null>(null);
   const [showInvoiceDropdown, setShowInvoiceDropdown] = useState(false);
@@ -53,14 +68,12 @@ export function CreateShippingOrderDialog({
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [shippingFee, setShippingFee] = useState(0);
-  const [codAmount, setCodAmount] = useState(0);
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (open) {
-      nextEntityCode("shipping").then((c) => setCode(c)).catch(() => setCode(`VD${Date.now()}`));
       setInvoiceSearch("");
       setSelectedInvoice(null);
       setShowInvoiceDropdown(false);
@@ -70,7 +83,6 @@ export function CreateShippingOrderDialog({
       setReceiverPhone("");
       setReceiverAddress("");
       setShippingFee(0);
-      setCodAmount(0);
       setNotes("");
       setErrors({});
       setSaving(false);
@@ -91,7 +103,7 @@ export function CreateShippingOrderDialog({
     }
   }, [open]);
 
-  // Live search invoices
+  // Live search invoices — bỏ hóa đơn hủy (RPC cũng chặn, lọc sớm đỡ bực)
   useEffect(() => {
     if (!invoiceSearch || invoiceSearch.length < 1) {
       setFilteredInvoices([]);
@@ -102,20 +114,35 @@ export function CreateShippingOrderDialog({
       const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("invoices")
-        .select("id, code, customer_name")
+        .select("id, code, customer_name, total, paid, delivery_fee")
         .ilike("code", `%${invoiceSearch}%`)
         .eq("tenant_id", ctx.tenantId)
+        .neq("status", "cancelled")
         .limit(8);
       setFilteredInvoices(
         (data ?? []).map((inv) => ({
           id: inv.id,
           code: inv.code,
           customerName: inv.customer_name,
+          total: Number(inv.total ?? 0),
+          paid: Number(inv.paid ?? 0),
+          deliveryFee: Number(inv.delivery_fee ?? 0),
         }))
       );
     }, 300);
     return () => clearTimeout(timer);
   }, [invoiceSearch]);
+
+  // COD xem trước, đúng công thức RPC: tổng mới = tổng cũ + (phí mới − phí cũ);
+  // COD = tổng mới − đã thanh toán. Số chốt vẫn do máy chủ tính.
+  const codPreview = selectedInvoice
+    ? Math.max(
+        0,
+        selectedInvoice.total +
+          (shippingFee - selectedInvoice.deliveryFee) -
+          selectedInvoice.paid,
+      )
+    : 0;
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
@@ -131,31 +158,20 @@ export function CreateShippingOrderDialog({
     if (!validate()) return;
     setSaving(true);
     try {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-
-      const { error: insertErr } = await supabase
-        .from("shipping_orders")
-        .insert({
-          tenant_id: ctx.tenantId,
-          invoice_id: selectedInvoice!.id,
-          partner_id: selectedPartnerId || null,
-          code,
-          status: "pending" as const,
-          shipping_fee: shippingFee,
-          cod_amount: codAmount,
-          receiver_name: receiverName.trim(),
-          receiver_phone: receiverPhone.trim(),
-          receiver_address: receiverAddress.trim(),
-          note: notes || null,
-        } satisfies ShippingOrderInsert);
-
-      if (insertErr) throw new Error(insertErr.message);
+      const shipment = await createShipmentForInvoice({
+        invoiceId: selectedInvoice!.id,
+        fee: shippingFee,
+        receiverName: receiverName.trim(),
+        receiverPhone: receiverPhone.trim(),
+        receiverAddress: receiverAddress.trim(),
+        partnerId: selectedPartnerId || null,
+        note: notes || null,
+      });
 
       onOpenChange(false);
       toast({
         title: "Tạo vận đơn thành công",
-        description: `Đã tạo vận đơn ${code}`,
+        description: `Đã tạo vận đơn ${shipment.code} cho hóa đơn ${selectedInvoice!.code}`,
         variant: "success",
       });
       onSuccess?.();
@@ -176,7 +192,8 @@ export function CreateShippingOrderDialog({
         <DialogHeader>
           <DialogTitle>Tạo vận đơn</DialogTitle>
           <DialogDescription>
-            Mã vận đơn: {code}
+            Chọn hóa đơn cần giao — mã vận đơn do hệ thống cấp khi lưu, tiền thu
+            hộ (COD) tự tính theo hóa đơn.
           </DialogDescription>
         </DialogHeader>
 
@@ -192,6 +209,7 @@ export function CreateShippingOrderDialog({
                 value={invoiceSearch}
                 onChange={(e) => {
                   setInvoiceSearch(e.target.value);
+                  setSelectedInvoice(null);
                   setShowInvoiceDropdown(true);
                 }}
                 onFocus={() => setShowInvoiceDropdown(true)}
@@ -211,17 +229,23 @@ export function CreateShippingOrderDialog({
                       <button
                         key={inv.id}
                         type="button"
-                        className="flex w-full items-center justify-between px-3 py-2 text-sm hover:bg-accent cursor-pointer"
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-sm hover:bg-accent cursor-pointer"
                         onMouseDown={(e) => e.preventDefault()}
                         onClick={() => {
                           setSelectedInvoice(inv);
                           setInvoiceSearch(inv.code);
                           setShowInvoiceDropdown(false);
+                          if (inv.deliveryFee > 0) setShippingFee(inv.deliveryFee);
                           if (!receiverName) setReceiverName(inv.customerName);
                         }}
                       >
                         <span className="font-medium">{inv.code}</span>
-                        <span className="text-muted-foreground">{inv.customerName}</span>
+                        <span className="min-w-0 flex-1 truncate text-right text-muted-foreground">
+                          {inv.customerName}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-muted-foreground">
+                          {formatCurrency(inv.total)}
+                        </span>
                       </button>
                     ))
                   )}
@@ -248,6 +272,12 @@ export function CreateShippingOrderDialog({
                 </option>
               ))}
             </select>
+            {partners.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Chưa có đối tác nào — khai báo ở Danh mục → Đối tác giao hàng để
+                đối chiếu được tiền thu hộ.
+              </p>
+            )}
           </div>
 
           {/* Receiver info */}
@@ -298,25 +328,32 @@ export function CreateShippingOrderDialog({
             )}
           </div>
 
-          {/* Fees */}
+          {/* Phí giao + COD tự tính */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Phí vận chuyển</label>
+              <label className="text-sm font-medium">Phí giao thu khách</label>
               <Input
                 type="number"
+                min={0}
                 value={shippingFee}
-                onChange={(e) => setShippingFee(Number(e.target.value) || 0)}
+                onChange={(e) => setShippingFee(Math.max(0, Number(e.target.value) || 0))}
                 placeholder="0"
               />
+              <p className="text-xs text-muted-foreground">
+                Cộng vào tổng hóa đơn và công nợ (nếu đã hoàn tất).
+              </p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Thu hộ (COD)</label>
-              <Input
-                type="number"
-                value={codAmount}
-                onChange={(e) => setCodAmount(Number(e.target.value) || 0)}
-                placeholder="0"
-              />
+              <label className="text-sm font-medium">Thu hộ (COD) — tự tính</label>
+              <div className="flex h-8 w-full items-center rounded-lg border border-input bg-muted/50 px-3 text-sm tabular-nums">
+                {selectedInvoice ? formatCurrency(codPreview) : "Chọn hóa đơn trước"}
+              </div>
+              {selectedInvoice && (
+                <p className="text-xs text-muted-foreground">
+                  = tổng {formatCurrency(selectedInvoice.total + (shippingFee - selectedInvoice.deliveryFee))} − đã thu{" "}
+                  {formatCurrency(selectedInvoice.paid)}
+                </p>
+              )}
             </div>
           </div>
 
@@ -337,7 +374,7 @@ export function CreateShippingOrderDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || !selectedInvoice}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Tạo vận đơn
           </Button>
