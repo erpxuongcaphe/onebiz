@@ -26,6 +26,25 @@ function canViewLeaf(
   return permissions.length === 0 || !filterPerm || permissions.some(filterPerm);
 }
 
+/**
+ * Số mục con người này thực sự thấy trong một nhóm (tính cả nhóm con).
+ *
+ * 04/08/2026 — trước đây tiêu đề nhóm luôn được vẽ dù không còn mục nào,
+ * nên thu ngân / kho vận / kế toán thấy 4 nhóm (Mua hàng, Sản xuất, Báo cáo,
+ * Hệ thống) mở ra khoảng trắng. MobileBottomNav đã ẩn đúng từ trước.
+ */
+function countViewableLeaves(
+  group: SidebarGroup,
+  filterPerm?: (code: string) => boolean,
+): number {
+  const direct = (group.items ?? []).filter((l) => canViewLeaf(l, filterPerm)).length;
+  const nested = (group.subGroups ?? []).reduce(
+    (sum, sg) => sum + sg.items.filter((l) => canViewLeaf(l, filterPerm)).length,
+    0,
+  );
+  return direct + nested;
+}
+
 // ============================================================
 // Hooks
 // ============================================================
@@ -271,6 +290,9 @@ function GroupExpanded({
 }) {
   const active = isGroupActive(pathname, group);
 
+  // Nhóm không còn mục nào người này được xem → ẩn cả tiêu đề nhóm
+  if (countViewableLeaves(group, filterPerm) === 0) return null;
+
   return (
     <div className="select-none">
       <button
@@ -446,6 +468,9 @@ function GroupCollapsed({
       return { ...prev, top: newTop };
     });
   }, [open]);
+
+  // Nhóm không còn mục nào người này được xem → ẩn cả nút icon
+  if (countViewableLeaves(group, filterPerm) === 0) return null;
 
   return (
     <div

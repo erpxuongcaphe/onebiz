@@ -42,7 +42,7 @@ function parseSplitResult(data: unknown): {
     discountAmount: Number(child.discount_amount ?? 0),
   }));
   if (children.length === 0 || children.some((child) => !child.orderId)) {
-    throw new Error("May chu khong tra ve ket qua tach bill hop le.");
+    throw new Error("Máy chủ không trả về kết quả tách bill hợp lệ.");
   }
   return {
     parentItemsLeft: Number(raw.parent_items_left ?? 0),
@@ -55,7 +55,7 @@ export async function splitByItems(
   orderId: string,
   itemIds: string[],
 ): Promise<SplitResult> {
-  if (itemIds.length === 0) throw new Error("Chon it nhat 1 mon de tach");
+  if (itemIds.length === 0) throw new Error("Chọn ít nhất 1 món để tách.");
 
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
@@ -88,7 +88,7 @@ export async function splitEqually(
   parentDiscountAmount: number;
 }> {
   if (numberOfWays < 2 || numberOfWays > 10) {
-    throw new Error("So phan tach phai tu 2 den 10");
+    throw new Error("Số phần tách phải từ 2 đến 10.");
   }
 
   const supabase = getClient();

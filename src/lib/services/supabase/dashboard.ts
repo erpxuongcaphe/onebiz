@@ -302,13 +302,27 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
 
   if (error) handleError(error, "getRevenueByHour");
 
-  // Group by hour (7h-21h)
+  // 04/08/2026 (CEO): bỏ khung cứng 7h–21h. Mỗi quán một giờ bán khác nhau,
+  // bán sau 21h hay trước 7h thì doanh thu đó biến mất khỏi biểu đồ.
+  // Giờ lấy đúng khoảng giờ CÓ phát sinh doanh thu trong ngày.
+  const byHour = new Array<number>(24).fill(0);
+  for (const inv of data ?? []) {
+    const h = new Date(inv.created_at).getHours();
+    if (h >= 0 && h <= 23) byHour[h] += inv.total ?? 0;
+  }
+
+  const soldHours = byHour.reduce<number[]>((acc, value, hour) => {
+    if (value > 0) acc.push(hour);
+    return acc;
+  }, []);
+
+  // Chưa bán gì hôm nay → giữ khung mặc định để biểu đồ không trống trơn.
+  const from = soldHours.length > 0 ? soldHours[0] : 7;
+  const to = soldHours.length > 0 ? soldHours[soldHours.length - 1] : 21;
+
   const hours: ChartPoint[] = [];
-  for (let h = 7; h <= 21; h++) {
-    const hourRevenue = (data ?? [])
-      .filter((inv) => new Date(inv.created_at).getHours() === h)
-      .reduce((sum, inv) => sum + (inv.total ?? 0), 0);
-    hours.push({ label: `${h}h`, value: hourRevenue });
+  for (let h = from; h <= to; h++) {
+    hours.push({ label: `${h}h`, value: byHour[h] });
   }
   return hours;
 }

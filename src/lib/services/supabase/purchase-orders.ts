@@ -100,7 +100,7 @@ export async function updateReceivedPurchaseOrderAtomic(
 
   const result = data as Record<string, unknown> | null;
   if (!result?.purchase_order_id || !result.code || !result.status) {
-    throw new Error("May chu khong tra ve ket qua cap nhat phieu nhap.");
+    throw new Error("Máy chủ không trả về kết quả cập nhật phiếu nhập.");
   }
 
   return {
