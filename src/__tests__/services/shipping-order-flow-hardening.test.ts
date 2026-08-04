@@ -97,6 +97,60 @@ describe("Delivery partner codes come from the shared sequence", () => {
   });
 });
 
+describe("COD settlement (00301) links every ledger", () => {
+  const migration = readFileSync(
+    "supabase/migrations/00301_cod_settlement.sql",
+    "utf8",
+  );
+  const settleDialog = readFileSync(
+    "src/components/shared/dialogs/settle-cod-dialog.tsx",
+    "utf8",
+  );
+  const partnerPage = readFileSync(
+    "src/app/(main)/doi-tac/giao-hang/page.tsx",
+    "utf8",
+  );
+
+  it("migration wires all 6 links CEO asked for", () => {
+    // đối tác ↔ phiếu đối soát ↔ vận đơn ↔ hóa đơn ↔ nợ khách ↔ sổ quỹ
+    expect(migration).toContain("references public.delivery_partners(id)");
+    expect(migration).toContain("add column if not exists settlement_id");
+    expect(migration).toContain("add column if not exists cod_collected_at");
+    expect(migration).toContain("add column if not exists partner_fee");
+    expect(migration).toContain("'shipping_settlement', v_settlement_id");
+    expect(migration).toContain("fee_cash_tx_id");
+  });
+
+  it("migration reuses the live thu-no machinery, not a new invention", () => {
+    expect(migration).toContain("next_cash_code(v_actor_tenant, 'receipt')");
+    expect(migration).toContain("next_cash_code(v_actor_tenant, 'payment')");
+    expect(migration).toContain("'customer_payment'");
+    expect(migration).toContain("'finance.create_transaction'");
+    // kỷ luật 00213: không thu tiền trên chứng từ chưa hoàn tất
+    expect(migration).toContain("INVOICE_NOT_COMPLETED");
+    // chống đối soát trùng + khóa dòng
+    expect(migration).toContain("SHIPMENT_ALREADY_SETTLED");
+    expect(migration).toMatch(/for update/);
+    // bộ đếm DS khai tường minh, không rơi vào tiền tố tự sinh
+    expect(migration).toContain("'shipping_settlement', 'DS'");
+  });
+
+  it("service gates cleanly when the migration has not run yet", () => {
+    expect(shippingService).toContain("MIGRATION_00301_HINT");
+    expect(shippingService).toContain('"42703"');
+    expect(shippingService).toContain('"PGRST202"');
+    expect(shippingService).toContain('"settle_cod_atomic"');
+  });
+
+  it("dialog settles through the atomic RPC only", () => {
+    expect(settleDialog).toContain("settleCod({");
+    expect(settleDialog).not.toMatch(/\.from\(/);
+    expect(partnerPage).toContain("SettleCodDialog");
+    // COD đang giữ chỉ tính đơn CHƯA đối soát
+    expect(shippingService).toContain("if (!settled)");
+  });
+});
+
 describe("POS delivery hands the partner to the shipment", () => {
   const posPage = readFileSync("src/app/pos/page.tsx", "utf8");
   const posState = readFileSync("src/app/pos/hooks/use-pos-state.ts", "utf8");

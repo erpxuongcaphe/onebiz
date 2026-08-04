@@ -38,7 +38,11 @@ import {
   type DeliveryPartnerWithStats,
   type DeliveryPartnerStats,
 } from "@/lib/services/supabase/shipping";
-import { CreateDeliveryPartnerDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import {
+  CreateDeliveryPartnerDialog,
+  ConfirmDialog,
+  SettleCodDialog,
+} from "@/components/shared/dialogs";
 import { useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import type { DeliveryPartner } from "@/lib/types";
@@ -63,6 +67,7 @@ export default function DoiTacGiaoHangPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<DeliveryPartner | null>(null);
   const [deactivating, setDeactivating] = useState<DeliveryPartnerWithStats | null>(null);
+  const [settling, setSettling] = useState<DeliveryPartnerWithStats | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -193,6 +198,17 @@ export default function DoiTacGiaoHangPage() {
       enableSorting: false,
       cell: ({ row }) => (
         <div className="flex items-center gap-1.5">
+          {/* Đối tác đang giữ COD → nút đối soát ngay tại chỗ nhìn thấy tiền */}
+          {row.original.stats.codHolding > 0 && (
+            <Button
+              size="sm"
+              className="h-7 gap-1 px-2 text-xs"
+              onClick={() => setSettling(row.original)}
+            >
+              <Icon name="account_balance_wallet" size={14} />
+              Đối soát
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -353,6 +369,19 @@ export default function DoiTacGiaoHangPage() {
           fetchData();
         }}
       />
+
+      {settling && (
+        <SettleCodDialog
+          open
+          onOpenChange={(open) => !open && setSettling(null)}
+          partnerId={settling.id}
+          partnerName={settling.name}
+          onSuccess={() => {
+            setSettling(null);
+            fetchData();
+          }}
+        />
+      )}
 
       {deactivating && (
         <ConfirmDialog
