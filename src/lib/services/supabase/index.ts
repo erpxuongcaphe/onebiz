@@ -75,6 +75,7 @@ export {
   createShipmentForInvoice,
   attachDeliveryToInvoice,
   getShippingStatuses,
+  getShippingStatusCounts,
   getDeliveryPartners,
   getPartnerOptions,
   getPartnerOptionsAsync,
@@ -85,7 +86,7 @@ export {
   getNextShippingStatuses,
   SHIPPING_STATUS_LABEL,
 } from "./shipping";
-export type { CreateShipmentInput, AttachDeliveryInput } from "./shipping";
+export type { CreateShipmentInput, AttachDeliveryInput, ShippingStatusCounts } from "./shipping";
 export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createManualCashTransactionAtomic, createCashTransaction, deleteCashTransaction, cancelCashTransaction } from "./cash-book";
 export type { CreateManualCashTransactionInput } from "./cash-book";
 export {
