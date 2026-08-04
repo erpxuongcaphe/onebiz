@@ -11,6 +11,7 @@ export { CreateReturnDialog } from "./create-return-dialog";
 export { CreateInventoryCheckDialog } from "./create-inventory-check-dialog";
 export { CreateShippingOrderDialog } from "./create-shipping-order-dialog";
 export { CreateDeliveryPartnerDialog } from "./create-delivery-partner-dialog";
+export { SettleCodDialog } from "./settle-cod-dialog";
 export { CreatePurchaseEntryDialog } from "./create-purchase-entry-dialog";
 export { CreateInputInvoiceDialog } from "./create-input-invoice-dialog";
 export { CreatePurchaseReturnDialog } from "./create-purchase-return-dialog";

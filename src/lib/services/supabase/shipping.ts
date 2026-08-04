@@ -375,13 +375,31 @@ export async function getDeliveryPartnersWithStats(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  const [partnersResult, ordersResult] = await Promise.all([
-    getDeliveryPartners(params),
-    supabase
+  // 00301 thêm cột settlement_id — đơn đã đối soát thì đối tác hết giữ COD.
+  // Chưa chạy migration (42703 cột chưa có) → rơi về câu cũ, trang vẫn chạy.
+  // Type sinh máy chưa biết cột mới → ép kiểu dòng cục bộ.
+  type StatsRow = {
+    partner_id: string | null;
+    status: string | null;
+    shipping_fee: number | null;
+    cod_amount: number | null;
+    settlement_id?: string | null;
+  };
+  type StatsResult = {
+    data: StatsRow[] | null;
+    error: { code?: string; message: string } | null;
+  };
+  let ordersResult = (await supabase
+    .from("shipping_orders")
+    .select("partner_id, status, shipping_fee, cod_amount, settlement_id")
+    .eq("tenant_id", tenantId)) as unknown as StatsResult;
+  if (ordersResult.error?.code === "42703") {
+    ordersResult = (await supabase
       .from("shipping_orders")
       .select("partner_id, status, shipping_fee, cod_amount")
-      .eq("tenant_id", tenantId),
-  ]);
+      .eq("tenant_id", tenantId)) as unknown as StatsResult;
+  }
+  const partnersResult = await getDeliveryPartners(params);
 
   if (ordersResult.error) {
     handleError(ordersResult.error, "getDeliveryPartnersWithStats.orders");
@@ -397,13 +415,17 @@ export async function getDeliveryPartnersWithStats(
       : unassigned;
 
     const status = String(row.status ?? "");
+    const settled =
+      (row as { settlement_id?: string | null }).settlement_id != null;
     if (ACTIVE_SHIPPING_STATUSES.includes(status)) {
       bucket.activeOrders += 1;
     } else if (status === "delivered") {
       bucket.deliveredOrders += 1;
-      // Chỉ đơn đã giao mới sinh nghĩa vụ tiền hai chiều.
-      bucket.codHolding += Number(row.cod_amount ?? 0);
-      bucket.feeCollected += Number(row.shipping_fee ?? 0);
+      // Chỉ đơn đã giao mà CHƯA đối soát mới là tiền đối tác đang giữ.
+      if (!settled) {
+        bucket.codHolding += Number(row.cod_amount ?? 0);
+        bucket.feeCollected += Number(row.shipping_fee ?? 0);
+      }
     } else if (FAILED_SHIPPING_STATUSES.includes(status)) {
       bucket.failedOrders += 1;
     }
@@ -418,6 +440,126 @@ export async function getDeliveryPartnersWithStats(
     })),
     total: partnersResult.total,
     unassigned,
+  };
+}
+
+// --- Đối soát COD (00301, kiểu KiotViet) ---
+
+const MIGRATION_00301_HINT =
+  "Chức năng đối soát COD cần chạy migration 00301_cod_settlement.sql trước.";
+
+export interface UnsettledShipment {
+  id: string;
+  code: string;
+  invoiceCode: string;
+  customerName: string;
+  codAmount: number;
+  /** Thời điểm chuyển sang "đã giao" (updated_at — bảng không có cột riêng). */
+  deliveredAt: string;
+}
+
+/**
+ * Vận đơn ĐÃ GIAO chưa đối soát của một đối tác (null = nhóm chưa gán đối
+ * tác). Danh sách tick trong dialog đối soát.
+ */
+export async function getUnsettledShipments(
+  partnerId: string | null,
+): Promise<UnsettledShipment[]> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  let query = supabase
+    .from("shipping_orders")
+    .select(
+      "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey(code, customer_name)",
+    )
+    .eq("tenant_id", tenantId)
+    .eq("status", "delivered")
+    .is("settlement_id", null)
+    .order("updated_at", { ascending: true });
+  query = partnerId
+    ? query.eq("partner_id", partnerId)
+    : query.is("partner_id", null);
+
+  // Type sinh máy chưa biết settlement_id (cột của 00301) → ép kiểu dòng.
+  type UnsettledRow = {
+    id: string;
+    code: string;
+    cod_amount: number | null;
+    updated_at: string;
+    invoices: { code: string; customer_name: string } | null;
+  };
+  const { data, error } = (await query) as unknown as {
+    data: UnsettledRow[] | null;
+    error: { code?: string; message: string } | null;
+  };
+  if (error) {
+    if (error.code === "42703") throw new Error(MIGRATION_00301_HINT);
+    handleError(error, "getUnsettledShipments");
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    code: row.code,
+    invoiceCode: row.invoices?.code ?? "—",
+    customerName: row.invoices?.customer_name ?? "—",
+    codAmount: Number(row.cod_amount ?? 0),
+    deliveredAt: row.updated_at,
+  }));
+}
+
+export interface SettleCodInput {
+  partnerId: string | null;
+  items: Array<{ shipmentId: string; partnerFee: number }>;
+  paymentMethod: "cash" | "transfer";
+  note?: string | null;
+}
+
+export interface SettleCodResult {
+  settlementId: string;
+  code: string;
+  totalCod: number;
+  totalPartnerFee: number;
+  netAmount: number;
+  receipts: number;
+}
+
+/**
+ * Xác nhận đối soát — 1 RPC nguyên tử (00301): phiếu đối soát DS + phiếu thu
+ * từng hóa đơn (trừ nợ khách) + 1 phiếu chi phí trả đối tác + đóng dấu vận
+ * đơn. Được ăn cả ngã về không.
+ */
+export async function settleCod(input: SettleCodInput): Promise<SettleCodResult> {
+  if (input.items.length === 0) {
+    throw new Error("Chọn ít nhất 1 vận đơn để đối soát.");
+  }
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)("settle_cod_atomic", {
+    p_partner_id: input.partnerId,
+    p_items: input.items.map((i) => ({
+      shipment_id: i.shipmentId,
+      partner_fee: Math.max(0, Number(i.partnerFee) || 0),
+    })),
+    p_payment_method: input.paymentMethod,
+    p_note: input.note ?? null,
+  });
+  if (error) {
+    // PGRST202 = RPC chưa tồn tại → migration chưa chạy (KHÔNG phải lỗi quyền)
+    if (error.code === "PGRST202") throw new Error(MIGRATION_00301_HINT);
+    handleError(error, "settleCod");
+  }
+  const raw = (data ?? {}) as Record<string, unknown>;
+  if (!raw.settlement_id) {
+    throw new Error("Máy chủ không trả kết quả đối soát hợp lệ.");
+  }
+  return {
+    settlementId: String(raw.settlement_id),
+    code: String(raw.code ?? ""),
+    totalCod: Number(raw.total_cod ?? 0),
+    totalPartnerFee: Number(raw.total_partner_fee ?? 0),
+    netAmount: Number(raw.net_amount ?? 0),
+    receipts: Number(raw.receipts ?? 0),
   };
 }
 
