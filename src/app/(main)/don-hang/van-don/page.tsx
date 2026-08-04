@@ -15,8 +15,10 @@ import {
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
+// 04/08: dùng bản CÓ "Tất cả" — trang này mặc định xem toàn bộ (danh sách
+// nhỏ), radio không tự bỏ chọn nên thiếu "Tất cả" là lọc xong kẹt luôn.
 import {
-  STANDARD_LIST_PRESETS,
+  STANDARD_LIST_PRESETS_WITH_ALL,
   computeListPresetRange,
 } from "@/lib/utils/list-date-preset-range";
 import {
@@ -601,7 +603,7 @@ export default function VanDonPage() {
             <DatePresetFilter
               value={createdDatePreset}
               onChange={setCreatedDatePreset}
-              presets={STANDARD_LIST_PRESETS}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
             />
           </FilterGroup>
         </FilterSidebar>
