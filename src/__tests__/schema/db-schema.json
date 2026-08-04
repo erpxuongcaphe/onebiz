@@ -990,6 +990,21 @@
    "sort_order",
    "tenant_id"
   ],
+  "shipping_settlements": [
+   "branch_id",
+   "code",
+   "created_at",
+   "created_by",
+   "fee_cash_tx_id",
+   "id",
+   "net_amount",
+   "note",
+   "partner_id",
+   "payment_method",
+   "tenant_id",
+   "total_cod",
+   "total_partner_fee"
+  ],
   "branches": [
    "address",
    "branch_type",
@@ -1145,15 +1160,18 @@
   ],
   "shipping_orders": [
    "cod_amount",
+   "cod_collected_at",
    "code",
    "created_at",
    "id",
    "invoice_id",
    "note",
+   "partner_fee",
    "partner_id",
    "receiver_address",
    "receiver_name",
    "receiver_phone",
+   "settlement_id",
    "shipping_fee",
    "status",
    "tenant_id",
@@ -2285,6 +2303,7 @@
   "set_stock_transfer_state_atomic",
   "set_tenant_setting",
   "set_user_pos_pin",
+  "settle_cod_atomic",
   "should_cascade_bom_at_branch",
   "show_limit",
   "show_trgm",
@@ -2313,7 +2332,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 136,
- "soCot": 1721,
- "soRpc": 317
+ "soBang": 137,
+ "soCot": 1737,
+ "soRpc": 318
 }
