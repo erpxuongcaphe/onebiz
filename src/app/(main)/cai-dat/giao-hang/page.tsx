@@ -10,7 +10,7 @@
  * Fix: load `getDeliveryPartners()` thật từ DB. Delivery zones (phí
  * giao theo khu vực) chưa có schema — gắn nhãn "Đang phát triển".
  *
- * Đối tác giao hàng có CRUD đầy đủ ở `/don-hang/doi-tac-giao-hang`.
+ * Đối tác giao hàng có CRUD đầy đủ ở `/doi-tac/giao-hang`.
  */
 
 import { useEffect, useState } from "react";
@@ -52,7 +52,7 @@ export default function DeliverySettingsPage() {
           </p>
         </div>
         <Link
-          href="/don-hang/doi-tac-giao-hang"
+          href="/doi-tac/giao-hang"
           className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           <Icon name="add" size={16} />
@@ -86,7 +86,7 @@ export default function DeliverySettingsPage() {
               />
               <p>Chưa có đối tác giao hàng nào.</p>
               <Link
-                href="/don-hang/doi-tac-giao-hang"
+                href="/doi-tac/giao-hang"
                 className="inline-flex items-center mt-4 px-3 py-2 text-xs font-medium border border-border rounded-lg hover:bg-muted transition-colors"
               >
                 Thêm đối tác đầu tiên

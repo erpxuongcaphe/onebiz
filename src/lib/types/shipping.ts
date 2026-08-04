@@ -26,6 +26,8 @@ export type ShippingStatus =
 // Đối tác vận chuyển
 export interface DeliveryPartner {
   id: string;
+  /** Mã đối tác do máy chủ cấp (next_code) — dùng để gọi tên trong đối soát. */
+  code: string;
   name: string;
   phone: string;
   email?: string;
