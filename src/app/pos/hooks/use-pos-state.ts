@@ -112,7 +112,18 @@ export interface DeliveryInfo {
   district: string;
   shippingFee: number;
   deliveryNote: string;
+  /**
+   * 04/08 (CEO): từ ô tick trang trí thành lựa chọn THẬT.
+   *   true  = "Thu COD khi giao" — khách trả khi nhận hàng; ô tiền khách đưa
+   *           để 0 (hoặc tiền cọc) là chủ đích, KHÔNG hiện cảnh báo quên gõ
+   *           tiền; phần chưa thu thành thu hộ trên vận đơn.
+   *   false = "Khách đã thanh toán trước" — thu đủ tại quầy như bán thường.
+   * Số tiền chốt vẫn do máy chủ tính (COD = tổng − đã thu) nên chọn nhầm
+   * không làm sai sổ. Nháp cũ mặc định true — khớp mặc định giao hàng.
+   */
   codEnabled: boolean;
+  /** Đối tác giao hàng gán vào vận đơn (04/08). Nháp cũ không có → "". */
+  partnerId?: string;
 }
 
 // ============================================================
@@ -210,6 +221,7 @@ export function usePosState() {
     shippingFee: 0,
     deliveryNote: "",
     codEnabled: true,
+    partnerId: "",
   });
 
   // --- Actions ---

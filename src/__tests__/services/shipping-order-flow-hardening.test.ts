@@ -96,3 +96,30 @@ describe("Delivery partner codes come from the shared sequence", () => {
     expect(partnerDialog).not.toContain("Math.random()");
   });
 });
+
+describe("POS delivery hands the partner to the shipment", () => {
+  const posPage = readFileSync("src/app/pos/page.tsx", "utf8");
+  const posState = readFileSync("src/app/pos/hooks/use-pos-state.ts", "utf8");
+
+  it("checkout passes partnerId (was always null before 04/08)", () => {
+    expect(posPage).toContain("partnerId: di.partnerId || null");
+    expect(posState).toMatch(/partnerId\?: string/);
+  });
+
+  it("COD option is real: Thu COD khi giao vs Khách đã thanh toán trước", () => {
+    // CEO 04/08: từ ô tick trang trí → lựa chọn thật, phải có đủ 2 trạng thái
+    expect(posPage).toContain("Thu COD khi giao");
+    expect(posPage).toContain("Khách đã thanh toán trước");
+    expect(posPage).toContain('update("codEnabled"');
+  });
+
+  it("chosen COD-on-delivery suppresses the forgot-to-type-money warning", () => {
+    // Đã chọn thu COD → tiền khách đưa 0 là chủ đích, không dọa ghi nợ nữa;
+    // chọn "đã thanh toán trước" mà để 0 thì cảnh báo vẫn phải nổ.
+    expect(posPage).toContain(
+      'state.sellingMode === "delivery" && state.deliveryInfo.codEnabled',
+    );
+    expect(posPage).toContain("!intentionalCod");
+    expect(posPage).toContain("ĐƠN NÀY KHÔNG CÓ TIỀN");
+  });
+});

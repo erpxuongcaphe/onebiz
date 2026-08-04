@@ -39,6 +39,7 @@ import {
   getOrCreateWalkInCustomer,
   getCustomerById,
   attachDeliveryToInvoice,
+  getPartnerOptionsAsync,
   getTenantBusinessInfo,
   getInvoiceById,
   getInvoiceItems,
@@ -1990,12 +1991,19 @@ function PosPageInner() {
     // tiếp tục → tạo invoice ghi nợ TOÀN BỘ vào "Khách lẻ vãng lai" mà không
     // có dialog xác nhận. Cashier quên gõ tiền = mất 1 đơn vào nợ ảo.
     // Mixed payment đã có validation riêng (line 1465-1478) nên skip case đó.
+    // 04/08 (CEO): đơn giao hàng đã chọn "Thu COD khi giao" → tiền khách đưa
+    // 0 là CHỦ ĐÍCH (khách trả lúc nhận), không dọa "quên gõ tiền" nữa; phần
+    // chưa thu thành thu hộ trên vận đơn. Chọn "Khách đã thanh toán trước" mà
+    // để 0 thì vẫn cảnh báo như thường (mâu thuẫn ⇒ khả năng cao là quên).
+    const intentionalCod =
+      state.sellingMode === "delivery" && state.deliveryInfo.codEnabled;
     if (
       state.paid === 0 &&
       state.total > 0 &&
       state.paymentMethod !== "mixed" &&
       intent !== "credit" &&
-      intent !== "refund"
+      intent !== "refund" &&
+      !intentionalCod
     ) {
       const ok =
         typeof window !== "undefined" &&
@@ -2357,6 +2365,8 @@ function PosPageInner() {
                 .map((s) => s.trim())
                 .filter(Boolean)
                 .join(", "),
+              // 04/08: gán đối tác giao hàng vào vận đơn (trước luôn rỗng)
+              partnerId: di.partnerId || null,
               note: di.deliveryNote || null,
             });
             if (r.shipmentCode) {
@@ -4873,6 +4883,24 @@ function DeliveryForm({
   const update = (field: keyof DeliveryInfo, val: string | number | boolean) =>
     onChange({ ...value, [field]: val });
 
+  // 04/08: ô chọn đối tác giao hàng — trước đây POS không truyền partnerId nên
+  // MỌI vận đơn từ POS đều không biết ai giao. Chỉ tải khi form mở (bán giao
+  // hàng), 1 truy vấn nhẹ, không đụng nhịp POS thường.
+  const [partners, setPartners] = useState<Array<{ value: string; label: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getPartnerOptionsAsync()
+      .then((opts) => {
+        if (!cancelled) setPartners(opts.filter((o) => o.value !== "all"));
+      })
+      .catch(() => {
+        /* không có danh sách thì ô chọn trống — vẫn tạo được vận đơn */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-2">
       <div className="flex items-center gap-2 text-[11px] font-semibold text-status-warning">
@@ -4932,27 +4960,44 @@ function DeliveryForm({
           className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
         />
       </div>
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          type="number"
+          min={0}
+          value={value.shippingFee || ""}
+          onChange={(e) => update("shippingFee", Math.max(0, parseInt(e.target.value) || 0))}
+          placeholder="Phí giao hàng"
+          data-allow-hotkeys="true"
+          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white tabular-nums"
+        />
+        <select
+          value={value.partnerId ?? ""}
+          onChange={(e) => update("partnerId", e.target.value)}
+          className="w-full h-7 px-1.5 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+        >
+          <option value="">Đối tác giao hàng...</option>
+          {partners.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      {/* 04/08 (CEO): từ ô tick trang trí → lựa chọn thật. "Thu COD khi giao"
+          = tiền khách đưa để 0/cọc là chủ đích (không cảnh báo quên gõ tiền),
+          phần chưa thu thành thu hộ. Số chốt luôn do máy chủ tính. */}
       <div className="flex items-center gap-2">
-        <div className="flex-1">
-          <input
-            type="number"
-            min={0}
-            value={value.shippingFee || ""}
-            onChange={(e) => update("shippingFee", Math.max(0, parseInt(e.target.value) || 0))}
-            placeholder="Phí giao hàng"
-            data-allow-hotkeys="true"
-            className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white tabular-nums"
-          />
-        </div>
-        <label className="flex items-center gap-1 text-[10px] text-foreground whitespace-nowrap cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={value.codEnabled}
-            onChange={(e) => update("codEnabled", e.target.checked)}
-            className="h-3 w-3 rounded border-border text-primary"
-          />
-          COD
-        </label>
+        <select
+          value={value.codEnabled ? "cod" : "prepaid"}
+          onChange={(e) => update("codEnabled", e.target.value === "cod")}
+          className="h-7 flex-1 rounded border border-border px-1.5 text-[11px] outline-none focus:border-primary bg-white"
+        >
+          <option value="cod">Thu COD khi giao (khách trả lúc nhận hàng)</option>
+          <option value="prepaid">Khách đã thanh toán trước</option>
+        </select>
+        <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+          {value.codEnabled ? "thu hộ = tổng − tiền đưa trước" : "thu đủ tại quầy"}
+        </span>
       </div>
       <input
         type="text"
