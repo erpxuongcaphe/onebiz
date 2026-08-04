@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { updateDeliveryPartner } from "@/lib/services";
+import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import type { Database } from "@/lib/supabase/types";
 import type { DeliveryPartner } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -25,11 +26,6 @@ interface CreateDeliveryPartnerDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   initialData?: DeliveryPartner;
-}
-
-function generatePartnerCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `DTGH${String(num).padStart(5, "0")}`;
 }
 
 export function CreateDeliveryPartnerDialog({
@@ -49,11 +45,13 @@ export function CreateDeliveryPartnerDialog({
   useEffect(() => {
     if (open) {
       if (initialData) {
-        setCode(initialData.id);
+        setCode(initialData.code);
         setName(initialData.name);
         setPhone(initialData.phone || "");
       } else {
-        setCode(generatePartnerCode());
+        // Mã thật do máy chủ cấp lúc lưu (next_code) — không bịa số trước để
+        // tránh hiện một đằng lưu một nẻo.
+        setCode("");
         setName("");
         setPhone("");
       }
@@ -88,12 +86,19 @@ export function CreateDeliveryPartnerDialog({
         const supabase = getClient();
         const ctx = await getCurrentContext();
 
+        // 04/08/2026 — mã lấy từ bộ đếm chung của hệ thống (next_code) thay vì
+        // sinh ngẫu nhiên DTGH#####: bảng có ràng buộc duy nhất (tenant, code)
+        // nên số ngẫu nhiên có thể đụng nhau và chặn không tạo được đối tác.
+        const partnerCode = await nextEntityCode("delivery_partner", {
+          tenantId: ctx.tenantId,
+        });
+
         const { error: insertErr } = await supabase
           .from("delivery_partners")
           .insert({
             tenant_id: ctx.tenantId,
             name: name.trim(),
-            code,
+            code: partnerCode,
             phone: phone.trim() || null,
           } satisfies DeliveryPartnerInsert);
 
@@ -124,18 +129,22 @@ export function CreateDeliveryPartnerDialog({
         <DialogHeader>
           <DialogTitle>{isEditing ? "Sửa đối tác giao hàng" : "Tạo đối tác giao hàng"}</DialogTitle>
           <DialogDescription>
-            {isEditing ? `Chỉnh sửa thông tin đối tác. Mã đối tác: ${code}` : `Thêm đối tác giao hàng mới. Mã đối tác: ${code}`}
+            {isEditing
+              ? "Chỉnh sửa thông tin đơn vị vận chuyển."
+              : "Khai báo đơn vị vận chuyển (Grab, Ahamove, shipper riêng…) để gán vào vận đơn và đối chiếu tiền thu hộ."}
           </DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
-          {/* Code */}
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Mã đối tác</label>
-            <div className="flex h-8 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
-              {code}
+          {/* Mã đối tác — chỉ hiện khi sửa; khi tạo mới máy chủ tự cấp lúc lưu */}
+          {isEditing && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Mã đối tác</label>
+              <div className="flex h-8 w-full rounded-lg border border-input bg-muted/50 px-3 py-2 text-sm">
+                {code}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Name */}
           <div className="space-y-2">

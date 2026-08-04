@@ -277,6 +277,113 @@ export async function getDeliveryPartners(params: QueryParams): Promise<QueryRes
 }
 
 /**
+ * Đối tác giao hàng KÈM SỐ LIỆU THẬT gộp từ vận đơn.
+ *
+ * 04/08/2026 — trang cũ hiển thị "Tổng đơn hàng", "Nợ cần trả", "Tổng phí"
+ * đều là số 0 hardcode nên vô dụng. Bản này đọc thật từ `shipping_orders`.
+ *
+ * Câu hỏi trang phải trả lời được (chuẩn quản lý bán lẻ):
+ *   · Đối tác đang giữ bao nhiêu đơn của mình?
+ *   · Đang giữ bao nhiêu TIỀN THU HỘ (COD) chưa nộp lại?  ← quan trọng nhất
+ *   · Mình phải trả họ bao nhiêu phí giao?
+ *   · Tỷ lệ giao hỏng (hoàn/huỷ) bao nhiêu?
+ *
+ * Dữ liệu nhỏ (vài chục–vài nghìn vận đơn) nên gộp phía ứng dụng bằng 2 truy
+ * vấn, không cần thêm hàm phía máy chủ. Nếu sau này nhiều lên thì chuyển RPC.
+ */
+export interface DeliveryPartnerStats {
+  /** Đơn đối tác đang cầm: pending + picked_up + in_transit */
+  activeOrders: number;
+  deliveredOrders: number;
+  /** Giao hỏng: returned + cancelled */
+  failedOrders: number;
+  /**
+   * COD của các đơn ĐÃ GIAO. Hiện cộng dồn TẤT CẢ đơn đã giao vì bảng chưa có
+   * cột đánh dấu đã đối soát (`cod_collected_at`). Khi làm màn đối soát thì
+   * trừ phần đã nộp ra.
+   */
+  codHolding: number;
+  /**
+   * Tổng phí giao của các đơn đã giao. ⚠️ Đây là phí THU CỦA KHÁCH — bảng chỉ
+   * có một cột `shipping_fee`, chưa tách phí TRẢ ĐỐI TÁC. Không được gọi đây
+   * là công nợ phải trả cho tới khi có cột riêng.
+   */
+  feeCollected: number;
+}
+
+export interface DeliveryPartnerWithStats extends DeliveryPartner {
+  stats: DeliveryPartnerStats;
+}
+
+const EMPTY_STATS: DeliveryPartnerStats = {
+  activeOrders: 0,
+  deliveredOrders: 0,
+  failedOrders: 0,
+  codHolding: 0,
+  feeCollected: 0,
+};
+
+const ACTIVE_SHIPPING_STATUSES = ["pending", "picked_up", "in_transit"];
+const FAILED_SHIPPING_STATUSES = ["returned", "cancelled"];
+
+export async function getDeliveryPartnersWithStats(
+  params: QueryParams,
+): Promise<
+  QueryResult<DeliveryPartnerWithStats> & {
+    /** Vận đơn CHƯA gán đối tác — hiện đang là toàn bộ, cần cho CEO biết. */
+    unassigned: DeliveryPartnerStats;
+  }
+> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const [partnersResult, ordersResult] = await Promise.all([
+    getDeliveryPartners(params),
+    supabase
+      .from("shipping_orders")
+      .select("partner_id, status, shipping_fee, cod_amount")
+      .eq("tenant_id", tenantId),
+  ]);
+
+  if (ordersResult.error) {
+    handleError(ordersResult.error, "getDeliveryPartnersWithStats.orders");
+  }
+
+  const byPartner = new Map<string, DeliveryPartnerStats>();
+  const unassigned: DeliveryPartnerStats = { ...EMPTY_STATS };
+
+  for (const row of ordersResult.data ?? []) {
+    const key = (row.partner_id as string | null) ?? "";
+    const bucket = key
+      ? byPartner.get(key) ?? { ...EMPTY_STATS }
+      : unassigned;
+
+    const status = String(row.status ?? "");
+    if (ACTIVE_SHIPPING_STATUSES.includes(status)) {
+      bucket.activeOrders += 1;
+    } else if (status === "delivered") {
+      bucket.deliveredOrders += 1;
+      // Chỉ đơn đã giao mới sinh nghĩa vụ tiền hai chiều.
+      bucket.codHolding += Number(row.cod_amount ?? 0);
+      bucket.feeCollected += Number(row.shipping_fee ?? 0);
+    } else if (FAILED_SHIPPING_STATUSES.includes(status)) {
+      bucket.failedOrders += 1;
+    }
+
+    if (key) byPartner.set(key, bucket);
+  }
+
+  return {
+    data: partnersResult.data.map((partner) => ({
+      ...partner,
+      stats: byPartner.get(partner.id) ?? { ...EMPTY_STATS },
+    })),
+    total: partnersResult.total,
+    unassigned,
+  };
+}
+
+/**
  * Get partner options synchronously (static list).
  * For dynamic list, use getPartnerOptionsAsync().
  */
@@ -453,9 +560,12 @@ function mapShippingOrder(row: any): ShippingOrder {
 function mapDeliveryPartner(row: any): DeliveryPartner {
   return {
     id: row.id,
+    code: row.code ?? "",
     name: row.name,
     phone: row.phone ?? "",
-    activeOrders: 0, // Would need aggregation
+    // Số đơn thật lấy ở getDeliveryPartnersWithStats (gộp từ shipping_orders);
+    // hai trường này giữ lại cho các nơi gọi cũ, luôn bằng 0.
+    activeOrders: 0,
     completedOrders: 0,
     status: row.is_active ? "active" : "inactive",
     statusName: row.is_active ? "Đang hoạt động" : "Ngừng hoạt động",
