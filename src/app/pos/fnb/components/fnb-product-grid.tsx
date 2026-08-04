@@ -203,8 +203,13 @@ function ProductCard({
         outOfStock && "opacity-50 pointer-events-none",
       )}
     >
-      {/* Image area — aspect-square với padding Stitch style */}
-      <div className="aspect-square overflow-hidden relative p-2 flex-shrink-0">
+      {/* Ảnh — 04/08: BỎ aspect-square + flex-shrink-0.
+          Ô cao cứng 220px (CARD_HEIGHT) nhưng ảnh vuông lấy chiều cao = chiều
+          rộng ô; ô rộng hơn ~170px là ảnh ăn hết 220px, khối tên bị đẩy ra
+          ngoài rồi overflow-hidden cắt mất. Đo trên máy thật: ô kết thúc
+          y=324 mà tên món nằm y=323–340 → thu ngân chỉ thấy cái cốc.
+          Giờ ảnh co được (min-h-0), khối tên giữ chỗ cố định. */}
+      <div className="relative min-h-0 flex-1 overflow-hidden p-2">
         {product.image_url && !imageError ? (
           <>
             {!imageLoaded && (
@@ -259,8 +264,8 @@ function ProductCard({
         )}
       </div>
 
-      {/* Name + status */}
-      <div className="px-3 pb-3 pt-1 flex-1 min-h-0">
+      {/* Tên món — flex-shrink-0 để LUÔN có chỗ, không bị ảnh đẩy ra ngoài */}
+      <div className="flex-shrink-0 px-3 pb-3 pt-1">
         <h3 className="font-heading font-semibold text-sm text-foreground line-clamp-2 leading-tight mb-0.5">
           {product.name}
         </h3>

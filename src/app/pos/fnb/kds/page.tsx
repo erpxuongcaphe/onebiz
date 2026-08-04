@@ -192,6 +192,12 @@ function KdsPageInner() {
   const storeBranches = branches.filter((branch) => branch.branchType === "store");
 
   const [orders, setOrders] = useState<KdsOrder[]>([]);
+  // Id các đơn đang hiện — để lọc sự kiện món của quán khác (xem realtime bên
+  // dưới). Dùng ref vì hàm nghe realtime giữ bản chụp cũ của state.
+  const visibleOrderIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    visibleOrderIdsRef.current = new Set(orders.map((o) => o.id));
+  }, [orders]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
   // Sprint KITCHEN-1 (CEO 07/05): filter theo trạm chế biến.
@@ -323,10 +329,24 @@ function KdsPageInner() {
     }
   }, [branchId, isStoreBranch, soundOn, toast]);
 
+  // 04/08: bỏ nhịp gọi khi màn bếp bị che (khoá máy, chuyển tab). Trước đây
+  // cứ 30 giây là gọi máy chủ dù không ai nhìn — nhiều màn bếp cộng lại thành
+  // tải vô ích cho Supabase. Khi hiện lại thì gọi ngay một lần cho tươi.
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, POLL_INTERVAL);
-    return () => clearInterval(interval);
+    const tick = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+      fetchOrders();
+    };
+    tick();
+    const interval = setInterval(tick, POLL_INTERVAL);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") fetchOrders();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [fetchOrders]);
 
   // ── Supabase Realtime subscription ──
@@ -348,6 +368,12 @@ function KdsPageInner() {
           fetchOrders();
         }
       )
+      // 04/08: lọc chéo-chi-nhánh cho món. Trước đây MỌI thay đổi món của mọi
+      // quán/mọi doanh nghiệp đều làm màn bếp này gọi lại toàn bộ đơn.
+      // ⚠️ kitchen_order_items KHÔNG có cột branch_id (verify db-schema.json)
+      // nên KHÔNG lọc được phía máy chủ → lọc phía máy khách: chỉ gọi lại khi
+      // món thuộc đơn đang hiển thị. Đơn MỚI vẫn về qua kênh kitchen_orders
+      // (đã lọc branch_id) nên không bỏ sót.
       .on(
         "postgres_changes",
         {
@@ -355,7 +381,12 @@ function KdsPageInner() {
           schema: "public",
           table: "kitchen_order_items",
         },
-        () => {
+        (payload) => {
+          const row = (payload.new ?? payload.old) as
+            | { kitchen_order_id?: string }
+            | null;
+          const orderId = row?.kitchen_order_id;
+          if (orderId && !visibleOrderIdsRef.current.has(orderId)) return;
           fetchOrders();
         }
       )
