@@ -379,7 +379,7 @@ export async function updateShippingOrderStatus(
     },
   );
   if (error) handleError(error, "updateShippingOrderStatus.rpc");
-  if (!data) throw new Error("May chu khong tra ve van don da cap nhat.");
+  if (!data) throw new Error("Máy chủ không trả về vận đơn đã cập nhật.");
   return mapShippingOrder(data);
 }
 

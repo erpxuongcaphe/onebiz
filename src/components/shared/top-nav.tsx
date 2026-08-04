@@ -32,6 +32,7 @@ import {
   sidebarNavGroups,
   isHrefActive,
   isGroupActive,
+  canSeeNavLeaf,
   type SidebarLeaf,
   type SidebarGroup,
   type SidebarSubGroup,
@@ -340,18 +341,24 @@ function MobileSubGroupAccordion({
   subGroup,
   pathname,
   onClose,
+  hasPermission,
 }: {
   subGroup: SidebarSubGroup;
   pathname: string;
   onClose: () => void;
+  hasPermission: (code: string) => boolean;
 }) {
-  const hasActive = subGroup.items.some((l) =>
+  const items = subGroup.items.filter((l) => canSeeNavLeaf(l, hasPermission));
+  const hasActive = items.some((l) =>
     isHrefActive(pathname, l.href, l.exact),
   );
   const [open, setOpen] = useState<boolean>(hasActive);
   useEffect(() => {
     if (hasActive) setOpen(true);
   }, [hasActive]);
+
+  // Không còn mục nào người này được xem → ẩn cả nhóm con
+  if (items.length === 0) return null;
 
   return (
     <div className="mt-0.5">
@@ -370,7 +377,7 @@ function MobileSubGroupAccordion({
         <span className="flex-1 text-left">{subGroup.label}</span>
         {!open && (
           <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
-            {subGroup.items.length}
+            {items.length}
           </span>
         )}
         <Icon
@@ -384,7 +391,7 @@ function MobileSubGroupAccordion({
       </button>
       {open && (
         <div className="mt-0.5 space-y-0.5 pl-2 stitch-fade-in">
-          {subGroup.items.map((leaf) => (
+          {items.map((leaf) => (
             <MobileLeafLink
               key={leaf.href}
               leaf={leaf}
@@ -402,16 +409,28 @@ function MobileGroupAccordion({
   group,
   pathname,
   onClose,
+  hasPermission,
 }: {
   group: SidebarGroup;
   pathname: string;
   onClose: () => void;
+  hasPermission: (code: string) => boolean;
 }) {
   const active = isGroupActive(pathname, group);
   const [open, setOpen] = useState<boolean>(active);
   useEffect(() => {
     if (active) setOpen(true);
   }, [active]);
+
+  // 04/08/2026 — lọc theo quyền như AppSidebar/MobileBottomNav vẫn làm.
+  // Trước đây menu hamburger render thẳng group.items → thu ngân thấy đủ
+  // 60 mục kể cả Hệ thống, bấm vào là màn "không có quyền".
+  const items = (group.items ?? []).filter((l) => canSeeNavLeaf(l, hasPermission));
+  const subGroups = (group.subGroups ?? []).filter((sg) =>
+    sg.items.some((l) => canSeeNavLeaf(l, hasPermission)),
+  );
+  // Nhóm không còn mục nào → ẩn hẳn tiêu đề nhóm (không để bấm vào trống)
+  if (items.length === 0 && subGroups.length === 0) return null;
 
   return (
     <div>
@@ -444,7 +463,7 @@ function MobileGroupAccordion({
       </button>
       {open && (
         <div className="ml-1 mt-1 space-y-0.5 stitch-fade-in">
-          {group.items?.map((leaf) => (
+          {items.map((leaf) => (
             <MobileLeafLink
               key={leaf.href}
               leaf={leaf}
@@ -452,12 +471,13 @@ function MobileGroupAccordion({
               onClose={onClose}
             />
           ))}
-          {group.subGroups?.map((sg) => (
+          {subGroups.map((sg) => (
             <MobileSubGroupAccordion
               key={sg.label}
               subGroup={sg}
               pathname={pathname}
               onClose={onClose}
+              hasPermission={hasPermission}
             />
           ))}
         </div>
@@ -533,6 +553,7 @@ function MobileNav() {
               group={group}
               pathname={pathname}
               onClose={() => setOpen(false)}
+              hasPermission={hasPermission}
             />
           ))}
 

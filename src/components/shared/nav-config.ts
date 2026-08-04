@@ -160,6 +160,24 @@ export interface SidebarGroup {
   pinBottom?: boolean;
 }
 
+/**
+ * Một mục menu có được hiện cho người đang đăng nhập không.
+ *
+ * Luật (giữ nguyên cách `flattenGroup` của mobile-bottom-nav đang chạy):
+ * mục không khai quyền thì ai cũng thấy; có khai thì chỉ cần khớp MỘT mã.
+ *
+ * 04/08/2026 — tách ra dùng chung vì trước đây luật này chỉ nằm trong
+ * mobile-bottom-nav, còn menu hamburger (top-nav) render thẳng không lọc →
+ * thu ngân mở menu thấy cả Hệ thống/Sản xuất, bấm vào báo "không có quyền".
+ */
+export function canSeeNavLeaf(
+  leaf: Pick<SidebarLeaf, "permission" | "permissions">,
+  hasPermission: (code: string) => boolean,
+): boolean {
+  const codes = leaf.permissions ?? (leaf.permission ? [leaf.permission] : []);
+  return codes.length === 0 || codes.some(hasPermission);
+}
+
 export const sidebarNavGroups: SidebarGroup[] = [
   // ============================================================
   // 1. TỔNG QUAN — chỉ Dashboard + Cảnh báo (Phân tích + Báo cáo TC tách

@@ -130,6 +130,14 @@ export const PERMISSIONS = {
   SHIFTS_RECONCILE_ANY: "shifts.reconcile_any",
   SHIFTS_RECONCILE_OWN_BRANCH: "shifts.reconcile_own_branch",
 
+  // Sơ đồ bàn — 04/08/2026: 3 mã này ĐÃ có sẵn trong database từ migration
+  // 00125 (seed cho 5 vai trò gốc) nhưng thiếu ở đây, nên lưới phân quyền
+  // không vẽ ô để tick ⇒ vai trò tự tạo vĩnh viễn không thấy menu Sơ đồ bàn.
+  // Tên mã lấy đúng theo 00125_floor_plan.sql:136-138.
+  FLOOR_PLAN_VIEW: "floor_plan.view",
+  FLOOR_PLAN_EDIT_BRANCH: "floor_plan.edit_branch",
+  FLOOR_PLAN_EDIT_GLOBAL: "floor_plan.edit_global",
+
   // MKT Hub
   MKT_VIEW: "mkt.view",
   MKT_MANAGE_CAMPAIGNS: "mkt.manage_campaigns",
@@ -329,6 +337,14 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { code: PERMISSIONS.SHIFTS_RECONCILE_ANY, label: "Đối chiếu ca mọi chi nhánh (Admin)" },
       { code: PERMISSIONS.SHIFTS_RECONCILE_OWN_BRANCH, label: "Đối chiếu ca chi nhánh mình (Quản lý quán)" },
+    ],
+  },
+  {
+    group: "Sơ đồ bàn",
+    permissions: [
+      { code: PERMISSIONS.FLOOR_PLAN_VIEW, label: "Xem sơ đồ bàn" },
+      { code: PERMISSIONS.FLOOR_PLAN_EDIT_BRANCH, label: "Sửa sơ đồ bàn chi nhánh mình" },
+      { code: PERMISSIONS.FLOOR_PLAN_EDIT_GLOBAL, label: "Sửa sơ đồ bàn mọi chi nhánh" },
     ],
   },
 ];
