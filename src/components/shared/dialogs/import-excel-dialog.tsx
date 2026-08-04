@@ -254,6 +254,17 @@ export function ImportExcelDialog<TRow>({
                   Dữ liệu sẽ được kiểm tra từng dòng, bạn xem trước và xác nhận
                   mới ghi vào hệ thống.
                 </li>
+                {/* 05/08 (CEO): nói rõ nhập lại là SỬA, không nhân đôi — để
+                    người dùng dám dùng vòng xuất → sửa Excel → nhập lại. */}
+                <li>
+                  <b className="text-foreground">Mã đã có sẽ được cập nhật</b>,
+                  mã mới mới thêm dòng — nên có thể xuất file ra, sửa trong
+                  Excel rồi nhập lại mà không sợ trùng.
+                </li>
+                <li>
+                  Tồn kho <b className="text-foreground">không</b> đổi qua đường
+                  này; muốn đổi tồn thì dùng phiếu nhập hoặc tồn đầu kỳ.
+                </li>
               </ul>
             </div>
           </div>

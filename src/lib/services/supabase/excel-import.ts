@@ -114,6 +114,20 @@ export async function bulkImportProducts(
     (bomRows ?? []).map((b) => (b as { code: string }).code),
   );
 
+  // 05/08/2026 (CEO): nhập Excel phải SỬA ĐƯỢC hàng đã có, không chỉ thêm mới.
+  // Nút xuất "Sửa & nhập lại" từ trước đã hứa vòng tròn xuất → sửa → nhập,
+  // nhưng đường nhập chỉ `.insert` nên nhập lại là trùng mã, hỏng cả file.
+  // Giờ: mã đã có → CẬP NHẬT, mã mới → THÊM. Tồn kho tuyệt đối không đụng
+  // (đã chặn ở trên: file hàng hóa không được ghi tồn).
+  const { data: existingProducts } = await supabase
+    .from("products")
+    .select("id, code")
+    .eq("tenant_id", tenantId);
+  const codeToId = new Map<string, string>();
+  for (const p of existingProducts ?? []) {
+    if (p.code) codeToId.set(String(p.code).trim(), p.id);
+  }
+
   return runBulk(rows, async (row) => {
     if ((row.stock ?? 0) > 0) {
       throw new Error("File hàng hóa không ghi tồn kho; dùng mẫu Tồn kho đầu kỳ hoặc phiếu nhập");
@@ -148,12 +162,9 @@ export async function bulkImportProducts(
       bomHasFlag = true;
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: inserted, error } = await (
-      supabase.from("products").insert as any
-    )({
-      tenant_id: tenantId,
-      code: row.code,
+    // Các cột Excel mang theo — dùng chung cho cả thêm mới lẫn cập nhật.
+    // KHÔNG có `stock`: tồn kho chỉ đi qua phiếu nhập / tồn đầu kỳ.
+    const fields = {
       name: row.name,
       product_type: row.productType,
       channel: row.productType === "sku" ? (row.channel ?? null) : null,
@@ -161,7 +172,6 @@ export async function bulkImportProducts(
       unit: finalUnit,
       sell_price: row.sellPrice,
       cost_price: row.costPrice,
-      stock: 0,
       min_stock: row.minStock ?? 0,
       max_stock: row.maxStock ?? 1000,
       vat_rate: row.vatRate ?? 0,
@@ -176,29 +186,65 @@ export async function bulkImportProducts(
       // Day 20/05/2026 (CEO BOM): link SKU với BOM qua code
       bom_code: bomCode,
       has_bom: bomHasFlag,
-    })
-      .select("id")
-      .single();
-    if (error) throw new Error(error.message);
+    };
+
+    const existingId = codeToId.get(row.code.trim());
+    let productId: string | undefined;
+
+    if (existingId) {
+      const { error } = await (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("products").update as any
+      )({ ...fields, updated_at: new Date().toISOString() })
+        .eq("id", existingId)
+        .eq("tenant_id", tenantId);
+      if (error) throw new Error(error.message);
+      productId = existingId;
+    } else {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: inserted, error } = await (
+        supabase.from("products").insert as any
+      )({ tenant_id: tenantId, code: row.code, stock: 0, ...fields })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      productId = inserted?.id;
+      // mã vừa tạo — file có 2 dòng cùng mã thì dòng sau sẽ là cập nhật
+      if (productId) codeToId.set(row.code.trim(), productId);
+    }
 
     // Day 19/05/2026 (CEO UOM Smart Hybrid): khai báo quy đổi đơn vị
     // nếu Excel có "Đóng gói" + "Hệ số quy đổi". Validate đã đảm bảo cặp.
+    // 05/08: dùng upsert theo (product, from_unit) để nhập lại không đẻ
+    // bản ghi quy đổi trùng.
     if (
-      inserted?.id &&
+      productId &&
       row.bulkUnit?.trim() &&
       typeof row.bulkFactor === "number" &&
       row.bulkFactor > 0
     ) {
-      const { error: convError } = await supabase
+      const { data: existingConv } = await supabase
         .from("uom_conversions")
-        .insert({
-          tenant_id: tenantId,
-          product_id: inserted.id,
-          from_unit: row.bulkUnit.trim(),
-          to_unit: finalUnit,
-          factor: row.bulkFactor,
-          is_active: true,
-        });
+        .select("id")
+        .eq("tenant_id", tenantId)
+        .eq("product_id", productId)
+        .eq("from_unit", row.bulkUnit.trim())
+        .maybeSingle();
+
+      const { error: convError } = existingConv?.id
+        ? await (
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            supabase.from("uom_conversions").update as any
+          )({ to_unit: finalUnit, factor: row.bulkFactor, is_active: true })
+            .eq("id", existingConv.id)
+        : await supabase.from("uom_conversions").insert({
+            tenant_id: tenantId,
+            product_id: productId,
+            from_unit: row.bulkUnit.trim(),
+            to_unit: finalUnit,
+            factor: row.bulkFactor,
+            is_active: true,
+          });
       if (convError) {
         // Không rollback product — chỉ log warning. UOM conversion là optional
         // metadata. User có thể thêm sau qua tab "ĐVT quy đổi".
@@ -230,6 +276,16 @@ export async function bulkImportCustomers(
     groupMap.set(g.name, g.id);
   }
 
+  // 05/08: giống hàng hóa — mã KH đã có thì CẬP NHẬT, không báo trùng.
+  const { data: existingCustomers } = await supabase
+    .from("customers")
+    .select("id, code")
+    .eq("tenant_id", tenantId);
+  const custCodeToId = new Map<string, string>();
+  for (const c of existingCustomers ?? []) {
+    if (c.code) custCodeToId.set(String(c.code).trim(), c.id);
+  }
+
   return runBulk(rows, async (row) => {
     let groupId: string | null = null;
     if (row.groupCode) {
@@ -256,9 +312,7 @@ export async function bulkImportCustomers(
       .filter((s) => s && s.trim().length > 0)
       .join(", ");
 
-    const { error } = await supabase.from("customers").insert({
-      tenant_id: tenantId,
-      code: row.code,
+    const custFields = {
       name: row.name,
       phone: row.phone ?? null,
       email: row.email ?? null,
@@ -282,9 +336,26 @@ export async function bulkImportCustomers(
       gender: row.gender ?? null,
       group_id: groupId,
       is_active: row.isActive ?? true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    if (error) throw new Error(error.message);
+    };
+
+    // ⚠️ KHÔNG đụng công nợ (debt) — nợ chỉ đổi qua hóa đơn/phiếu thu.
+    const existingCustId = custCodeToId.get(row.code.trim());
+    if (existingCustId) {
+      const { error } = await (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("customers").update as any
+      )(custFields).eq("id", existingCustId).eq("tenant_id", tenantId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: ins, error } = await (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("customers").insert as any
+      )({ tenant_id: tenantId, code: row.code, ...custFields })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      if (ins?.id) custCodeToId.set(row.code.trim(), ins.id);
+    }
   });
 }
 
@@ -297,6 +368,16 @@ export async function bulkImportSuppliers(
 ): Promise<ImportBatchResult> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+
+  // 05/08: mã NCC đã có thì CẬP NHẬT (xuất → sửa Excel → nhập lại).
+  const { data: existingSuppliers } = await supabase
+    .from("suppliers")
+    .select("id, code")
+    .eq("tenant_id", tenantId);
+  const supCodeToId = new Map<string, string>();
+  for (const s of existingSuppliers ?? []) {
+    if (s.code) supCodeToId.set(String(s.code).trim(), s.id);
+  }
 
   return runBulk(rows, async (row) => {
     // Day 17/05 + 18/05: auto-compose address từ 6 fields (số nhà + đường tách)
@@ -313,9 +394,7 @@ export async function bulkImportSuppliers(
       .filter((s) => s && s.trim().length > 0)
       .join(", ");
 
-    const { error } = await supabase.from("suppliers").insert({
-      tenant_id: tenantId,
-      code: row.code,
+    const supFields = {
       name: row.name,
       phone: row.phone ?? null,
       email: row.email ?? null,
@@ -335,9 +414,26 @@ export async function bulkImportSuppliers(
       tax_code: row.taxCode ?? null,
       note: row.note ?? null,
       is_active: row.isActive ?? true,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
-    if (error) throw new Error(error.message);
+    };
+
+    // ⚠️ KHÔNG đụng công nợ NCC — nợ chỉ đổi qua phiếu nhập/phiếu chi.
+    const existingSupId = supCodeToId.get(row.code.trim());
+    if (existingSupId) {
+      const { error } = await (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("suppliers").update as any
+      )(supFields).eq("id", existingSupId).eq("tenant_id", tenantId);
+      if (error) throw new Error(error.message);
+    } else {
+      const { data: ins, error } = await (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        supabase.from("suppliers").insert as any
+      )({ tenant_id: tenantId, code: row.code, ...supFields })
+        .select("id")
+        .single();
+      if (error) throw new Error(error.message);
+      if (ins?.id) supCodeToId.set(row.code.trim(), ins.id);
+    }
   });
 }
 
