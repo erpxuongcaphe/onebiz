@@ -4585,7 +4585,12 @@ function CartItem({
               setQuantityInput(formatPosQuantityInput(line.quantity));
               event.currentTarget.select();
             }}
-            onChange={(event) => setQuantityInput(event.target.value)}
+            onChange={(event) => {
+              const raw = event.target.value;
+              setQuantityInput(raw);
+              const parsed = parsePosQuantityInput(raw);
+              if (parsed !== null) onQtyChange(parsed);
+            }}
             onBlur={commitQuantity}
             onKeyDown={(event) => {
               if (event.key === "Enter") event.currentTarget.blur();

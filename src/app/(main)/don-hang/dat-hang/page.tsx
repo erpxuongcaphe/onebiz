@@ -34,7 +34,7 @@ import {
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { computeListPresetRange } from "@/lib/utils/list-date-preset-range";
 import {
@@ -286,7 +286,8 @@ function OrderDetail({
                       { header: "Đơn vị", accessor: "unit" as never },
                       {
                         header: "SL",
-                        accessor: "quantity" as never,
+                        accessor: (item: Record<string, unknown>) =>
+                          formatNumber(Number(item.quantity ?? 0)),
                         align: "right",
                       },
                       {
