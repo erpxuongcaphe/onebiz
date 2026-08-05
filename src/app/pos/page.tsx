@@ -51,6 +51,11 @@ import { getClient } from "@/lib/services/supabase/base";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { findPosStockShortages } from "./lib/stock-freshness";
 import { notifyPosStockChanged } from "./lib/stock-events";
+import {
+  formatPosQuantityInput,
+  parsePosQuantityInput,
+  stepPosQuantity,
+} from "./lib/quantity-input";
 import { useToast } from "@/lib/contexts";
 import { formatCurrency, formatNumber, formatDecimal, parseNumberInput, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -1917,8 +1922,25 @@ function PosPageInner() {
    */
   const handleComplete = useCallback(async (intent?: "refund" | "credit", zeroConfirmed?: boolean) => {
     if (submitLockRef.current) return;
-    // Bắt mở ca trước khi thanh toán — không có ca = không biết ghi nhận vào đâu.
-    if (!currentShift) {
+
+    // State trên màn hình có thể đến chậm sau khi đổi mạng/tab. Trước khi bắt
+    // mở ca lại, hỏi máy chủ một lần để khôi phục đúng ca đang mở.
+    let checkoutShift = currentShift;
+    if (
+      !checkoutShift &&
+      networkStatus.isOnline &&
+      currentBranch?.id &&
+      user?.id
+    ) {
+      try {
+        checkoutShift = await getOpenShift(currentBranch.id, user.id);
+        if (checkoutShift) setCurrentShift(checkoutShift);
+      } catch (err) {
+        console.error("[POS] refresh open shift before checkout failed:", err);
+      }
+    }
+
+    if (!checkoutShift) {
       toast({
         title: "Chưa mở ca",
         description: "Anh/chị cần mở ca trước khi bán hàng để báo cáo X/Z đúng.",
@@ -2242,7 +2264,7 @@ function PosPageInner() {
           allowBomShortage: bomShortages.length > 0,
           // CEO 05/06/2026 FIX KẾT CA 0Đ: link shift_id để close_shift_atomic
           // match được giao dịch của ca này.
-          shiftId: currentShift?.id ?? null,
+          shiftId: checkoutShift.id,
           clientSessionId,
           expectedRevision: effectiveDraftRevision!,
           expectedTotal: state.total,
@@ -2265,7 +2287,7 @@ function PosPageInner() {
           total: state.total,
           paid,
           note: state.note || "",
-          shiftId: currentShift?.id ?? null,
+          shiftId: checkoutShift.id,
           // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
           clientSessionId,
         };
@@ -2295,7 +2317,7 @@ function PosPageInner() {
             allowBomShortage: bomShortages.length > 0,
             // FIX 16/06/2026: nhánh phục hồi "still draft" cũng phải link shift_id
             // (giống nhánh chính dòng ~1678) để close_shift_atomic không sót đơn → quỹ ca đúng.
-            shiftId: currentShift?.id ?? null,
+            shiftId: checkoutShift.id,
             clientSessionId,
             expectedRevision: recoveredDraft.revision,
             expectedTotal: state.total,
@@ -2656,7 +2678,7 @@ function PosPageInner() {
       setSubmitting(null);
       submitLockRef.current = false;
     }
-  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, appliedPromotion, appliedRedeem, clientSessionId]);
+  }, [state, toast, autoPrint, networkStatus.isOnline, currentShift, currentBranch?.id, user?.id, appliedPromotion, appliedRedeem, clientSessionId]);
 
   // CEO 04/05/2026: Bỏ handleDebtCheckout — nút "Ghi nợ" cũ thay bằng
   // logic auto trong handleComplete (paid < total → auto-link walk-in
@@ -4404,7 +4426,21 @@ function CartItem({
     line.availableStock <= 5;
   const [editingPrice, setEditingPrice] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(false);
-  // 00208: ô ghi chú món — mở khi bấm nút, Enter/blur để lưu.
+  const [quantityInput, setQuantityInput] = useState<string | null>(null);
+
+  const commitQuantity = useCallback(() => {
+    const parsed = parsePosQuantityInput(
+      quantityInput ?? formatPosQuantityInput(line.quantity),
+    );
+    if (parsed !== null) onQtyChange(parsed);
+    setQuantityInput(null);
+  }, [line.quantity, onQtyChange, quantityInput]);
+
+  const changeQuantityBy = useCallback((direction: -1 | 1) => {
+    const next = stepPosQuantity(line.quantity, direction);
+    setQuantityInput(null);
+    onQtyChange(next);
+  }, [line.quantity, onQtyChange]);  // 00208: ô ghi chú món — mở khi bấm nút, Enter/blur để lưu.
   const [editingNote, setEditingNote] = useState(false);
   // CEO 22/05/2026 (Phase 1): permission gate cho sửa đơn giá.
   // Cashier không có quyền → button disable, không edit được.
@@ -4536,22 +4572,23 @@ function CartItem({
         >
           <button
             type="button"
-            onClick={() => onQtyChange(Math.max(1, line.quantity - 1))}
+            onClick={() => changeQuantityBy(-1)}
             className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
             <Icon name="remove" size={14} />
           </button>
           <input
-            type="number"
-            step="any"
-            value={line.quantity}
-            onChange={(e) => {
-              // Cho phép số thập phân (vd 0.5 kg). parseInt cũ cắt phần lẻ.
-              // Chỉ fallback khi parse fail (chuỗi rỗng/không phải số) để tránh
-              // NaN phá math giá tiền. KHÔNG ép min hay clamp khác — cashier
-              // tự chịu trách nhiệm gõ đúng (theo dặn của CEO).
-              const n = parseFloat(e.target.value);
-              onQtyChange(Number.isFinite(n) ? n : 1);
+            type="text"
+            inputMode="decimal"
+            value={quantityInput ?? formatPosQuantityInput(line.quantity)}
+            onFocus={(event) => {
+              setQuantityInput(formatPosQuantityInput(line.quantity));
+              event.currentTarget.select();
+            }}
+            onChange={(event) => setQuantityInput(event.target.value)}
+            onBlur={commitQuantity}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") event.currentTarget.blur();
             }}
             data-allow-hotkeys="true"
             className={cn(
@@ -4562,7 +4599,7 @@ function CartItem({
           />
           <button
             type="button"
-            onClick={() => onQtyChange(line.quantity + 1)}
+            onClick={() => changeQuantityBy(1)}
             className="w-7 h-8 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted active:bg-muted/80 transition-colors"
           >
             <Icon name="add" size={14} />
