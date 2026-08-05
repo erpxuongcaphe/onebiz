@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   formatPosQuantityInput,
@@ -24,5 +25,24 @@ describe("POS decimal quantity input", () => {
     expect(stepPosQuantity(0.5, -1)).toBe(0.01);
     expect(stepPosQuantity(5.17, 1)).toBe(6.17);
     expect(formatPosQuantityInput(5.17)).toBe("5.17");
+  });
+
+  it("syncs a valid typed decimal before blur or the F10 shortcut", () => {
+    const posPage = readFileSync("src/app/pos/page.tsx", "utf8");
+    const variantPicker = readFileSync(
+      "src/app/pos/components/variant-picker-dialog.tsx",
+      "utf8",
+    );
+
+    expect(posPage).toContain("if (parsed !== null) onQtyChange(parsed)");
+    expect(variantPicker).toContain("if (parsed !== null) setQuantity(parsed)");
+  });
+
+  it("formats invoice and order quantities without dropping decimals", () => {
+    const invoicePage = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
+    const orderPage = readFileSync("src/app/(main)/don-hang/dat-hang/page.tsx", "utf8");
+
+    expect(invoicePage).toContain("formatNumber(Number(item.quantity ?? 0))");
+    expect(orderPage).toContain("formatNumber(Number(item.quantity ?? 0))");
   });
 });

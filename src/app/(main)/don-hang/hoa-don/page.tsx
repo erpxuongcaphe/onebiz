@@ -52,7 +52,7 @@ const RecordPaymentDialog = dynamic(
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getInvoices,
@@ -276,7 +276,8 @@ function InvoiceDetail({
                       },
                       {
                         header: "SL",
-                        accessor: "quantity" as never,
+                        accessor: (item: Record<string, unknown>) =>
+                          formatNumber(Number(item.quantity ?? 0)),
                         align: "right",
                       },
                       {
