@@ -36,12 +36,13 @@ const nextConfig: NextConfig = {
   // PERF F7: Tree-shake các barrel re-export nặng để initial bundle gọn.
   // Next.js sẽ rewrite `import { X } from "pkg"` thành deep-import
   // `import X from "pkg/X"` ở build time → chỉ bundle module thật sự dùng,
-  // không kéo cả gói. Áp dụng cho recharts (chia 10+ chunk), lucide-react,
-  // @base-ui/react. Tự handle ở @next/eslint-plugin-next.
+  // không kéo cả gói. Áp dụng cho recharts (chia 10+ chunk) và @base-ui/react.
+  // 05/08/2026: bỏ "lucide-react" khỏi danh sách — gói đã gỡ (0 file dùng,
+  // web dùng Material Symbols qua <Icon>). Để lại tên gói không tồn tại ở đây
+  // là rác cấu hình, dễ gây hiểu nhầm cho người sau.
   experimental: {
     optimizePackageImports: [
       "recharts",
-      "lucide-react",
       "@base-ui/react",
       "@tanstack/react-table",
       "@tanstack/react-virtual",
