@@ -504,3 +504,31 @@
     letter-spacing: 0;
   }
 }
+
+/* ============================================================
+   05/08/2026 (CEO hỏi "chuyển động tốt nhất chưa?") — TÔN TRỌNG
+   NGƯỜI DÙNG TẮT HIỆU ỨNG.
+
+   Web có 440 hiệu ứng chuyển + 305 hoạt ảnh. Ai bị say chuyển động
+   (motion sickness) hoặc chỉ muốn máy chạy nhẹ đều bật "Giảm chuyển
+   động" ở cài đặt Windows/iPad — trước đây web KHÔNG nghe theo.
+
+   Giữ lại vòng xoay "đang tải" (nếu tắt hẳn thì người dùng tưởng
+   treo máy), chỉ rút gọn phần trang trí.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Ngoại lệ: vòng xoay chờ vẫn phải quay để báo "hệ thống đang làm việc" */
+  .animate-spin {
+    animation-duration: 0.8s !important;
+    animation-iteration-count: infinite !important;
+  }
+}

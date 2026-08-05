@@ -528,44 +528,65 @@ export default function HangHoaPage() {
     }
     setLoading(false);
 
-    // Day 18/05/2026 (CEO): query BOM status cho SKU có has_bom=true
-    // → set state để badge "Chưa có BOM" hiển thị warning.
-    if (scope === "sku") {
-      const skuIdsWithBomFlag = result.data
-        .filter((p) => p.hasBom)
-        .map((p) => p.id);
-      if (skuIdsWithBomFlag.length > 0) {
+    // 05/08/2026 (CEO "web không mượt"): 3 việc phụ dưới đây đều CHỈ cần
+    // danh sách id vừa lấy được, KHÔNG cần kết quả của nhau — nhưng trước
+    // đây xếp hàng chờ nhau bằng 3 `await` nối tiếp. Đo trên máy thật: dữ
+    // liệu trang xong ở giây 6,4 qua 6 đợt nối đuôi.
+    //
+    // Giờ cho chạy CÙNG LÚC. Câu hỏi gửi lên máy chủ y hệt (cùng bộ lọc,
+    // cùng tham số) nên số liệu bất biến — chỉ đổi thứ tự bắn đi.
+    // ⚠️ KHÔNG gộp chúng thành một câu hỏi: mỗi cái lọc một kiểu, gộp là sai số.
+    const productIds = Array.from(new Set(result.data.map((p) => p.id)));
+
+    await Promise.all([
+      // Day 18/05/2026 (CEO): query BOM status cho SKU có has_bom=true
+      // → set state để badge "Chưa có BOM" hiển thị warning.
+      (async () => {
+        if (scope !== "sku") {
+          setProductsWithActiveBom(new Set());
+          return;
+        }
+        const skuIdsWithBomFlag = result.data
+          .filter((p) => p.hasBom)
+          .map((p) => p.id);
+        if (skuIdsWithBomFlag.length === 0) {
+          setProductsWithActiveBom(new Set());
+          return;
+        }
         try {
           const idsWithActiveBom = await getProductIdsWithActiveBom(skuIdsWithBomFlag);
           setProductsWithActiveBom(idsWithActiveBom);
         } catch {
           // silent — không block list nếu query BOM fail
         }
-      } else {
-        setProductsWithActiveBom(new Set());
-      }
-    } else {
-      setProductsWithActiveBom(new Set());
-    }
+      })(),
 
-    // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch UOM conversions cho
-    // các SP hiện ra. Cell "Tồn kho" sẽ show "24 hộp · 2 thùng".
-    const productIds = Array.from(new Set(result.data.map((p) => p.id)));
-    if (productIds.length > 0) {
-      try {
-        const map = await getUOMConversionsByProductIds(productIds);
-        setConversionsMap(map);
-      } catch {
-        setConversionsMap(new Map());
-      }
-    } else {
-      setConversionsMap(new Map());
-    }
+      // Day 19/05/2026 (CEO Smart Hybrid Phase 2): batch UOM conversions cho
+      // các SP hiện ra. Cell "Tồn kho" sẽ show "24 hộp · 2 thùng".
+      (async () => {
+        if (productIds.length === 0) {
+          setConversionsMap(new Map());
+          return;
+        }
+        try {
+          const map = await getUOMConversionsByProductIds(productIds);
+          setConversionsMap(map);
+        } catch {
+          setConversionsMap(new Map());
+        }
+      })(),
 
-    // Phương án B: khả dụng BOM cho SKU trong trang (chỉ chế độ chi nhánh).
-    if (!viewAllBranches && activeBranchId) {
-      const bomRows = result.data.filter((p) => p.hasBom);
-      if (bomRows.length > 0) {
+      // Phương án B: khả dụng BOM cho SKU trong trang (chỉ chế độ chi nhánh).
+      (async () => {
+        if (viewAllBranches || !activeBranchId) {
+          setBomAvailability(new Map());
+          return;
+        }
+        const bomRows = result.data.filter((p) => p.hasBom);
+        if (bomRows.length === 0) {
+          setBomAvailability(new Map());
+          return;
+        }
         try {
           const snap = await getPosStockSnapshot(
             bomRows.map((p) => ({ productId: p.id, hasBom: true })),
@@ -580,12 +601,8 @@ export default function HangHoaPage() {
         } catch {
           setBomAvailability(new Map());
         }
-      } else {
-        setBomAvailability(new Map());
-      }
-    } else {
-      setBomAvailability(new Map());
-    }
+      })(),
+    ]);
   }, [page, pageSize, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches]);
 
   // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
