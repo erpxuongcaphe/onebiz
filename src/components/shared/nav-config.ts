@@ -96,7 +96,18 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "dashboard",
     items: [
       { label: "Trang chủ", href: "/", icon: "home" },
-      { label: "Cảnh báo", href: "/phan-tich/canh-bao", icon: "warning" },
+      // 05/08/2026: BỔ SUNG `permission`. Trước đây mục này không khai báo
+      // quyền → `canViewLeaf` (app-sidebar.tsx:25) trả true cho MỌI người,
+      // nên thu ngân / kho vận thấy lối tắt này và mở được trang cảnh báo
+      // (top 20 khách đang nợ kèm tên + số tiền). Cùng trang đó ở nhóm
+      // "Báo cáo" (:317) lại có khoá → một cửa khoá, một cửa mở.
+      // Nay đồng bộ 2 cửa cùng `reports.dashboard`.
+      {
+        label: "Cảnh báo",
+        href: "/phan-tich/canh-bao",
+        icon: "warning",
+        permission: "reports.dashboard",
+      },
     ],
   },
 
