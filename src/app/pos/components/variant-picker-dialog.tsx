@@ -24,6 +24,12 @@ import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
+import {
+  POS_QUANTITY_STEP,
+  formatPosQuantityInput,
+  parsePosQuantityInput,
+  stepPosQuantity,
+} from "../lib/quantity-input";
 import type { Product, ProductVariant } from "@/lib/types";
 
 export interface VariantPickerConfirmPayload {
@@ -64,11 +70,13 @@ export function VariantPickerDialog({
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState<number>(1);
+  const [quantityInput, setQuantityInput] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setSelectedId(defaultVariant?.id ?? null);
       setQuantity(1);
+      setQuantityInput(null);
     }
   }, [open, defaultVariant]);
 
@@ -79,6 +87,19 @@ export function VariantPickerDialog({
 
   const lineTotal = (selected?.sellPrice ?? 0) * quantity;
 
+  const commitQuantity = () => {
+    const parsed = parsePosQuantityInput(
+      quantityInput ?? formatPosQuantityInput(quantity),
+    );
+    if (parsed !== null) setQuantity(parsed);
+    setQuantityInput(null);
+  };
+
+  const changeQuantityBy = (direction: -1 | 1) => {
+    const next = stepPosQuantity(quantity, direction);
+    setQuantity(next);
+    setQuantityInput(null);
+  };
   const handleConfirm = () => {
     if (!selected || quantity <= 0) return;
     onConfirm({
@@ -173,28 +194,29 @@ export function VariantPickerDialog({
                 size="icon"
                 variant="outline"
                 className="h-8 w-8 rounded-lg"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}
-                disabled={quantity <= 1}
+                onClick={() => changeQuantityBy(-1)}
+                disabled={quantity <= POS_QUANTITY_STEP}
               >
                 <Icon name="remove" size={14} />
               </Button>
               <Input
-                type="number"
-                step="any"
-                value={quantity}
-                onChange={(e) => {
-                  // Cho phép số thập phân. Chỉ fallback NaN, không ép min
-                  // hay clamp — cashier tự chịu trách nhiệm gõ đúng.
-                  const v = parseFloat(e.target.value);
-                  setQuantity(Number.isFinite(v) ? v : 1);
-                }}
-                className="h-8 w-16 text-center tabular-nums"
+                type="text"
+                inputMode="decimal"
+                value={quantityInput ?? formatPosQuantityInput(quantity)}
+                onFocus={(event) => {
+                  setQuantityInput(formatPosQuantityInput(quantity));
+                  event.currentTarget.select();
+                }}                onChange={(event) => setQuantityInput(event.target.value)}
+                onBlur={commitQuantity}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}                className="h-8 w-16 text-center tabular-nums"
               />
               <Button
                 size="icon"
                 variant="outline"
                 className="h-8 w-8 rounded-lg"
-                onClick={() => setQuantity((q) => q + 1)}
+                onClick={() => changeQuantityBy(1)}
               >
                 <Icon name="add" size={14} />
               </Button>
