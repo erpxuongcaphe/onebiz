@@ -17,104 +17,12 @@ export interface NavGroup {
   }[];
 }
 
-export const mainNavItems: NavGroup[] = [
-  {
-    label: "Tổng quan",
-    href: "/",
-  },
-  {
-    label: "Hàng hóa",
-    items: [
-      {
-        groupLabel: "Hàng hóa",
-        items: [
-          { label: "Danh sách hàng hóa", href: "/hang-hoa" },
-          { label: "Thiết lập giá", href: "/hang-hoa/thiet-lap-gia" },
-        ],
-      },
-      {
-        groupLabel: "Sản xuất",
-        items: [
-          { label: "Lệnh sản xuất", href: "/hang-hoa/san-xuat" },
-          { label: "Công thức sản xuất (BOM)", href: "/hang-hoa/cong-thuc" },
-          { label: "Hạn sử dụng (HSD)", href: "/hang-hoa/hsd" },
-        ],
-      },
-      {
-        groupLabel: "Kho hàng",
-        items: [
-          { label: "Tồn kho", href: "/hang-hoa/ton-kho" },
-          { label: "Kiểm kho", href: "/hang-hoa/kiem-kho" },
-          { label: "Bán nội bộ", href: "/hang-hoa/ban-noi-bo" },
-          { label: "Xuất dùng nội bộ", href: "/hang-hoa/xuat-dung-noi-bo" },
-          { label: "Xuất hủy", href: "/hang-hoa/xuat-huy" },
-        ],
-      },
-      {
-        groupLabel: "Nhập hàng",
-        items: [
-          { label: "Hóa đơn đầu vào", href: "/hang-hoa/hoa-don-dau-vao" },
-          { label: "Nhà cung cấp", href: "/hang-hoa/nha-cung-cap" },
-          { label: "Đặt hàng nhập", href: "/hang-hoa/dat-hang-nhap" },
-          { label: "Nhập hàng", href: "/hang-hoa/nhap-hang" },
-          { label: "Trả hàng nhập", href: "/hang-hoa/tra-hang-nhap" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Đơn hàng",
-    items: [
-      {
-        items: [
-          { label: "Đặt hàng", href: "/don-hang/dat-hang" },
-          { label: "Hóa đơn", href: "/don-hang/hoa-don" },
-          { label: "Trả hàng", href: "/don-hang/tra-hang" },
-          // CEO 03/06/2026 — Sprint 3 (audit menu P0): hợp nhất route trùng,
-          // dùng /doi-tac/giao-hang (sidebar V2 canonical) thay vì legacy URL.
-          { label: "Đối tác giao hàng", href: "/doi-tac/giao-hang" },
-          { label: "Vận đơn", href: "/don-hang/van-don" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Khách hàng",
-    items: [
-      {
-        items: [
-          { label: "Danh sách khách hàng", href: "/khach-hang" },
-          { label: "Nhóm khách hàng", href: "/khach-hang/nhom" },
-        ],
-      },
-    ],
-  },
-  {
-    label: "Tài chính",
-    items: [
-      {
-        items: [
-          { label: "Sổ quỹ", href: "/so-quy" },
-          { label: "Công nợ", href: "/tai-chinh/cong-no" },
-        ],
-      },
-    ],
-  },
-  {
-    // CEO 22/05/2026 (UX P1 #3): chốt tên "Báo cáo" cho menu top-nav để
-    // đồng nhất với sidebar drawer (line 305) + app-switcher + mobile nav.
-    // Trước đây top-nav nói "Phân tích" còn các nơi khác nói "Báo cáo" →
-    // user confuse.
-    label: "Báo cáo",
-    href: "/phan-tich/trung-tam",
-  },
-  // Day 4 16/05/2026: ẩn "Bán online" — chưa có data thật, đang là mock 15 đơn.
-  // Bật lại khi đã wire vào shopee/lazada/tiki API hoặc có nguồn đơn online thật.
-  // {
-  //   label: "Bán online",
-  //   href: "/ban-online",
-  // },
-];
+// 05/08/2026: ĐÃ XOÁ mảng `mainNavItems` (98 dòng, 0 nơi import).
+// Đây là bộ menu đời đầu, bị SIDEBAR V2 bên dưới thay thế từ M2 nhưng
+// không ai dọn. Nó là nguồn của "4 cặp menu trùng tên" trong kế hoạch cũ:
+// 3 nhãn ở đây (Danh sách hàng hóa / Thiết lập giá / Bán nội bộ) trỏ cùng
+// đường dẫn với nhãn thật bên dưới — nhưng KHÔNG ai thấy vì mảng chết.
+// ⇒ Không phải lỗi giao diện, chỉ là rác. Xoá là hết trùng.
 
 // ============================================================
 // SIDEBAR V2 — for app-sidebar.tsx (M2 onwards)
