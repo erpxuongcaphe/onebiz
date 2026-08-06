@@ -389,13 +389,18 @@ export function FnbItemDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-lg">{product.name}</DialogTitle>
+      {/* 06/08 (CEO duyệt plan vòng 4): cấu trúc 3 PHẦN — đầu cố định, THÂN
+          là vùng cuộn duy nhất, chân (nút) cố định ngoài vùng cuộn. Trước đây
+          dialog cao 1.103px trên màn 574px, không cuộn được, nút "Thêm vào
+          đơn" nằm ở y=791 NGOÀI màn — thu ngân không bấm được.
+          (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
+      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="text-lg line-clamp-2">{product.name}</DialogTitle>
           <DialogDescription>Giá: {formatCurrency(product.sell_price)}đ</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2">
           {/* Size / Variant selector. POS-FIX-C3: skeleton khi đang fetch
               variants (cache miss) — tránh user thấy "không có size" rồi
               tưởng món không có biến thể, click thêm với giá gốc. */}
@@ -463,7 +468,7 @@ export function FnbItemDialog({
                       )}
                     >
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-foreground">{t.name}</div>
+                        <div className="font-medium text-foreground break-words">{t.name}</div>
                         <Badge variant="secondary" className="mt-0.5">
                           +{formatCurrency(t.price)}đ
                         </Badge>
@@ -519,7 +524,7 @@ export function FnbItemDialog({
                       {g.name}
                       <span
                         className={cn(
-                          "text-[10px] px-1.5 py-0.5 rounded-full font-normal",
+                          "text-[11px] px-1.5 py-0.5 rounded-full font-normal",
                           g.rule === "single_required"
                             ? "bg-status-error/10 text-status-error"
                             : g.rule === "multi"
@@ -618,7 +623,8 @@ export function FnbItemDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        {/* Chân cố định — NGOÀI vùng cuộn (không sticky). */}
+        <DialogFooter className="shrink-0">
           <Button
             className="w-full"
             onClick={handleConfirm}

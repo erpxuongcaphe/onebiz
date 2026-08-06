@@ -95,7 +95,9 @@ describe("Giá trị ghi vào CSDL phải nằm trong ràng buộc CHECK", () =>
     }
 
     expect(viPham, `Ghi giá trị không có trong ràng buộc:\n${viPham.join("\n")}`).toEqual([]);
-  });
+    // 06/08: quét 300+ file migration — chạy CHUNG suite bị nghẽn CPU vượt trần
+    // 5s mặc định (chạy riêng chỉ ~2s). Nới trần cho hết flake.
+  }, 30_000);
 
   it("mã nguồn: không chỗ nào ghi giá trị lạ qua .from(bảng).update/insert", () => {
     const viPham: string[] = [];

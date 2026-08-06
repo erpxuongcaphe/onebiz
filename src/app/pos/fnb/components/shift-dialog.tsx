@@ -241,7 +241,7 @@ export function CloseShiftDialog({
                 ) : (
                   <div className="space-y-1 pt-1 border-t border-dashed border-border">
                     {Object.entries(preview.salesByMethod).map(([m, amt]) => (
-                      <div key={m} className="flex justify-between text-sm">
+                      <div key={m} className="flex flex-wrap justify-between gap-x-2 text-sm">
                         <span className="text-muted-foreground">
                           • {formatPaymentMethod(m)}
                         </span>
@@ -257,23 +257,23 @@ export function CloseShiftDialog({
                 <div className="text-xs font-semibold uppercase text-primary tracking-wide mb-1">
                   Quỹ tiền mặt
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-2">
                   <span className="text-muted-foreground">Số dư đầu ca</span>
                   <span className="font-medium tabular-nums">{formatCurrency(preview.startingCash)}đ</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-2">
                   <span className="text-muted-foreground">+ Thu tiền mặt trong ca</span>
                   <span className="font-medium tabular-nums text-status-success">
                     +{formatCurrency(preview.cashIn)}đ
                   </span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-wrap justify-between gap-x-2">
                   <span className="text-muted-foreground">− Chi tiền mặt trong ca</span>
                   <span className="font-medium tabular-nums text-status-error">
                     −{formatCurrency(preview.cashOut)}đ
                   </span>
                 </div>
-                <div className="flex justify-between pt-1.5 border-t border-primary/30">
+                <div className="flex flex-wrap justify-between gap-x-2 pt-1.5 border-t border-primary/30">
                   <span className="font-semibold">Tiền mặt dự kiến</span>
                   <span className="font-bold text-base tabular-nums text-primary">
                     {formatCurrency(preview.expectedCash)}đ
@@ -371,19 +371,19 @@ export function CloseShiftDialog({
             </DialogDescription>
           </DialogHeader>
           <div className="py-3 space-y-2 text-sm">
-            <div className="flex justify-between">
+            <div className="flex flex-wrap justify-between gap-x-2">
               <span className="text-muted-foreground">Doanh thu ca:</span>
               <span className="font-bold tabular-nums">{formatCurrency(preview?.totalSales ?? 0)}đ</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex flex-wrap justify-between gap-x-2">
               <span className="text-muted-foreground">Số đơn:</span>
               <span className="font-bold">{preview?.totalOrders ?? 0}</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex flex-wrap justify-between gap-x-2">
               <span className="text-muted-foreground">Tiền mặt dự kiến:</span>
               <span className="font-medium tabular-nums">{formatCurrency(preview?.expectedCash ?? 0)}đ</span>
             </div>
-            <div className="flex justify-between">
+            <div className="flex flex-wrap justify-between gap-x-2">
               <span className="text-muted-foreground">Tiền mặt thực tế:</span>
               <span className="font-medium tabular-nums">{formatCurrency(actualCashNum)}đ</span>
             </div>
