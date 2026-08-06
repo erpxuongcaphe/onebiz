@@ -27,6 +27,7 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildReturnPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
@@ -197,12 +198,9 @@ function ReturnDetail({
                   />
                 )}
 
-                <div className="border rounded-lg p-3">
-                  <textarea
-                    placeholder="Ghi chú..."
-                    className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
-                  />
-                </div>
+                {/* 06/08: trước là <textarea> trần không hiện note đã lưu.
+                    Phiếu trả không có luồng sửa trường mềm → chỉ hiển thị. */}
+                <DocumentNoteBox note={returnOrder.note} />
               </div>
             ),
           },

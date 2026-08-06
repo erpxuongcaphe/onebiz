@@ -515,6 +515,7 @@ function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
     expectedDate: row.expected_date ?? "",
     createdBy: row.created_by ?? "---",
     createdByName: profile?.full_name ?? undefined,
+    note: row.note ?? undefined,
   };
 }
 
@@ -540,6 +541,7 @@ function mapPurchaseReturn(row: any): PurchaseReturn {
     createdByName: profile?.full_name ?? undefined,
     branchId: row.branch_id ?? branch?.id ?? undefined,
     branchName: branch?.name ?? undefined,
+    note: row.note ?? undefined,
   };
 }
 

@@ -108,6 +108,8 @@ export interface PurchaseOrder {
   importedBy?: string;
   /** Chi nhánh của phiếu — dùng resolve mẫu in theo chi nhánh (CEO 05/07). */
   branchId?: string;
+  /** 06/08: ghi chú phiếu nhập — panel chi tiết từng đặt textarea trần nên không hiện. */
+  note?: string;
 }
 
 // Dòng sản phẩm trong đơn nhập hàng
@@ -234,6 +236,8 @@ export interface ReturnOrder {
   /** Chi nhánh ghi nhận phiếu trả (resolved từ branches.name). */
   branchId?: string;
   branchName?: string;
+  /** 06/08: ghi chú phiếu trả — panel chi tiết từng đặt textarea trần nên không hiện. */
+  note?: string;
 }
 
 // Dòng sản phẩm trả hàng
