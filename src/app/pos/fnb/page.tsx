@@ -833,13 +833,14 @@ function FnbPosPageInner() {
         modifierCacheRef.set(productId, data);
         return data;
       } catch (err) {
+        // 06/08: KHÔNG cache khi lỗi. Bản cũ cache `groups: []` → mạng chớp
+        // 1 lần là món đó vĩnh viễn không hỏi Đường/Đá/Topping cả phiên.
         console.warn("loadModifierForProduct error:", err);
-        const empty: DynamicModifierData = {
+        return {
           groups: [],
           optionsByGroup: new Map(),
-        };
-        modifierCacheRef.set(productId, empty);
-        return empty;
+          failed: true,
+        } satisfies DynamicModifierData;
       }
     },
     [modifierCacheRef],
@@ -1094,7 +1095,12 @@ function FnbPosPageInner() {
             product.id,
             product.category_id,
           );
-          if (modData.groups.length === 0) {
+          setItemModifierData(modData);
+          // 06/08 — CHỖ NGUY HIỂM NHẤT của lỗi cũ: khi tải tuỳ chọn LỖI,
+          // modData.groups rỗng → code cũ quick-add THẲNG vào giỏ, bỏ qua
+          // hỏi Đường/Đá/Topping. Nay chỉ quick-add khi biết CHẮC là món
+          // không có tuỳ chọn; tải lỗi thì GIỮ dialog để hiện lỗi + Thử lại.
+          if (modData.groups.length === 0 && !modData.failed) {
             setItemDialogOpen(false);
             quickAdd();
             return;
@@ -1146,6 +1152,18 @@ function FnbPosPageInner() {
   );
 
   // Phase 1A.2: mở lại item dialog ở chế độ Sửa cho 1 line cụ thể.
+  // 06/08 — nút "Thử lại" trong dialog khi tải tuỳ chọn hỏng. Lỗi KHÔNG
+  // được cache nên gọi lại là fetch mới thật sự (không trả lại rác cũ).
+  const handleRetryModifiers = useCallback(async () => {
+    if (!selectedProduct) return;
+    setItemModifierData(undefined);
+    const data = await loadModifierForProduct(
+      selectedProduct.id,
+      selectedProduct.category_id,
+    );
+    setItemModifierData(data);
+  }, [selectedProduct, loadModifierForProduct]);
+
   // Tải variants từ cache (cùng cơ chế handleSelectProduct), set
   // editingLineId để confirm rơi vào nhánh updateLine.
   const handleEditLine = useCallback(
@@ -2863,6 +2881,8 @@ function FnbPosPageInner() {
             confirmLabel={editingLineId ? "Cập nhật" : undefined}
             // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options
             dynamicModifiers={itemModifierData}
+            // 06/08: tải tuỳ chọn hỏng → dialog hiện lỗi + nút này
+            onRetryModifiers={handleRetryModifiers}
           />
         </Suspense>
       )}

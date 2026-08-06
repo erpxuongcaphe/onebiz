@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -31,6 +31,18 @@ export interface DynamicModifierData {
   groups: ModifierGroup[];
   /** Map<groupId, options[]> — preload toàn bộ options của các groups */
   optionsByGroup: Map<string, ModifierOption[]>;
+  /**
+   * 06/08/2026 — PHÂN BIỆT "món không có tuỳ chọn" với "tải KHÔNG được".
+   *
+   * Trước đây lỗi mạng bị nuốt thành `groups: []` rồi CÒN ĐƯỢC CACHE
+   * (page.tsx:837-841 cũ) → món đó vĩnh viễn không hỏi Đường/Đá/Topping
+   * trong cả phiên: bếp pha sai + không thu tiền topping. Tệ hơn nữa, khi
+   * món không có size thì code còn `quickAdd()` thẳng vào giỏ.
+   *
+   * `failed: true` ⇒ dialog hiện lỗi + nút Thử lại, KHÔNG cho xác nhận,
+   * và tầng gọi KHÔNG được cache.
+   */
+  failed?: boolean;
 }
 
 export interface FnbItemConfirmPayload {
@@ -85,6 +97,11 @@ interface FnbItemDialogProps {
    * Nếu không → giữ hardcoded fallback.
    */
   dynamicModifiers?: DynamicModifierData;
+  /**
+   * 06/08/2026: gọi khi cashier bấm "Thử lại" lúc tải tuỳ chọn hỏng.
+   * Bắt buộc có để nút Thử lại hiện — không có thì chỉ báo lỗi.
+   */
+  onRetryModifiers?: () => void | Promise<void>;
 }
 
 // ── Component ──
@@ -133,7 +150,7 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
 
 export function FnbItemDialog({
   open, onOpenChange, product, variants, variantsLoading, toppings, onConfirm,
-  initialSelection, confirmLabel, dynamicModifiers,
+  initialSelection, confirmLabel, dynamicModifiers, onRetryModifiers,
 }: FnbItemDialogProps) {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -154,6 +171,19 @@ export function FnbItemDialog({
 
   const hasDynamicModifiers =
     dynamicModifiers && dynamicModifiers.groups.length > 0;
+
+  // 06/08 — 3 trạng thái tải tuỳ chọn. `undefined` = đang tải (tầng cha
+  // chưa set); `failed` = tải hỏng. Cả hai đều KHÔNG cho xác nhận: lúc đó
+  // chưa biết món có phải hỏi Đường/Đá/Topping hay không, thêm vào giỏ là
+  // liều (bếp pha sai + không thu tiền topping).
+  const modifiersLoading = dynamicModifiers === undefined;
+  const modifiersFailed = dynamicModifiers?.failed === true;
+
+  // Khoá bấm đúp HAI LỚP (CEO chốt): ref khoá TỨC THÌ trong cùng nhịp bấm,
+  // state chỉ để hiện trạng thái. `setState` không đổi giá trị ngay nên chỉ
+  // dựa vào state thì 2 cú bấm liền vẫn lọt cả hai.
+  const submitLockRef = useRef(false);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -298,11 +328,18 @@ export function FnbItemDialog({
     return missing;
   }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
 
-  const canConfirm = missingRequiredGroupIds.size === 0;
+  // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
+  // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
+  const canConfirm =
+    missingRequiredGroupIds.size === 0 && !modifiersLoading && !modifiersFailed;
 
   const handleConfirm = () => {
+    // Lớp 1 — khoá tức thì: chặn cú bấm thứ 2 trong CÙNG nhịp render.
+    if (submitLockRef.current) return;
     if (!product) return;
-    if (!canConfirm) return; // P0-9 guard
+    if (!canConfirm) return; // P0-9 guard + chưa sẵn sàng tuỳ chọn
+    submitLockRef.current = true;
+    setSubmitting(true); // Lớp 2 — chỉ để hiện trạng thái cho người dùng
     const cartToppings: FnbCartTopping[] = (toppings ?? [])
       .filter((t) => (toppingQtys.get(t.id) ?? 0) > 0)
       .map((t) => ({
@@ -383,7 +420,20 @@ export function FnbItemDialog({
       note: composedNote || undefined,
     });
     onOpenChange(false);
+    // ⚠️ TUYỆT ĐỐI KHÔNG nhả khoá ở đây. Bản đầu em nhả ngay sau
+    // onOpenChange và test bắt được: cú bấm thứ 2 trong cùng nhịp vẫn lọt
+    // (React chưa kịp unmount/đóng dialog). Khoá chỉ được nhả khi dialog
+    // MỞ LẠI — xem effect bên dưới.
   };
+
+  // Nhả khoá khi dialog mở (lần sau, hoặc đổi sang món khác). Bao gồm cả
+  // trường hợp đóng bằng Esc/X mà không confirm.
+  useEffect(() => {
+    if (open) {
+      submitLockRef.current = false;
+      setSubmitting(false);
+    }
+  }, [open, product?.id]);
 
   if (!product) return null;
 
@@ -401,6 +451,36 @@ export function FnbItemDialog({
         </DialogHeader>
 
         <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2">
+          {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
+              "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
+              được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
+          {modifiersFailed && (
+            <div className="rounded-lg border border-status-error/30 bg-status-error/10 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <Icon name="error" size={16} className="mt-0.5 shrink-0 text-status-error" />
+                <div className="text-sm">
+                  <div className="font-medium text-status-error">
+                    Không tải được tuỳ chọn của món
+                  </div>
+                  <div className="text-muted-foreground">
+                    Chưa biết món này có Đường/Đá/Topping hay không nên tạm khoá
+                    nút thêm. Kiểm tra mạng rồi bấm Thử lại.
+                  </div>
+                </div>
+              </div>
+              {onRetryModifiers && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => void onRetryModifiers()}
+                >
+                  <Icon name="refresh" size={14} /> Thử lại
+                </Button>
+              )}
+            </div>
+          )}
           {/* Size / Variant selector. POS-FIX-C3: skeleton khi đang fetch
               variants (cache miss) — tránh user thấy "không có size" rồi
               tưởng món không có biến thể, click thêm với giá gốc. */}
@@ -625,15 +705,29 @@ export function FnbItemDialog({
 
         {/* Chân cố định — NGOÀI vùng cuộn (không sticky). */}
         <DialogFooter className="shrink-0">
+          {/* 06/08: nhãn nói ĐÚNG lý do đang khoá — đang tải / tải hỏng /
+              thiếu mục bắt buộc — thay vì luôn báo "thiếu mục bắt buộc". */}
           <Button
             className="w-full"
             onClick={handleConfirm}
-            disabled={!canConfirm}
-            title={!canConfirm ? "Vui lòng chọn các mục bắt buộc trước khi thêm" : undefined}
+            disabled={!canConfirm || submitting}
+            title={
+              modifiersFailed
+                ? "Chưa tải được tuỳ chọn — bấm Thử lại ở trên"
+                : modifiersLoading
+                  ? "Đang tải tuỳ chọn của món"
+                  : !canConfirm
+                    ? "Vui lòng chọn các mục bắt buộc trước khi thêm"
+                    : undefined
+            }
           >
-            {!canConfirm
-              ? `⚠️ Còn ${missingRequiredGroupIds.size} mục BẮT BUỘC chưa chọn`
-              : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
+            {modifiersFailed
+              ? "Chưa tải được tuỳ chọn"
+              : modifiersLoading
+                ? "Đang tải tuỳ chọn…"
+                : missingRequiredGroupIds.size > 0
+                  ? `⚠️ Còn ${missingRequiredGroupIds.size} mục BẮT BUỘC chưa chọn`
+                  : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
           </Button>
         </DialogFooter>
       </DialogContent>
