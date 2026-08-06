@@ -32,6 +32,7 @@ import {
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildSalesOrderPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
@@ -337,12 +338,10 @@ function OrderDetail({
                   />
                 )}
 
-                <div className="border rounded-lg p-3">
-                  <textarea
-                    placeholder="Ghi chú..."
-                    className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
-                  />
-                </div>
+                {/* 06/08: trước là <textarea> trần không hiện note đã lưu.
+                    Chỉ hiển thị — muốn sửa ghi chú dùng nút "Sửa đơn"
+                    (CreateOrderDialog chế độ editOrder đã có ô ghi chú). */}
+                <DocumentNoteBox note={order.note} />
               </div>
             ),
           },

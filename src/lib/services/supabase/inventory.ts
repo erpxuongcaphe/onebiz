@@ -57,6 +57,7 @@ function mapDisposalExport(row: any): DisposalExport {
     totalProducts: 0, // Cần aggregate từ disposal_export_items — bỏ qua ở list view
     totalAmount: Number(row.total_amount ?? 0),
     reason: row.reason ?? "",
+    note: row.note ?? undefined,
     status: row.status === "completed" ? "completed" : "draft",
     statusName: disposalStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "",

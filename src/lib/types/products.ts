@@ -217,6 +217,8 @@ export interface DisposalExport {
   totalProducts: number;
   totalAmount: number;
   reason: string;
+  /** 06/08: ghi chú (khác Lý do) — form tạo có ô này nhưng chi tiết không hiện. */
+  note?: string;
   status: "completed" | "draft";
   statusName: string;
   createdBy: string;

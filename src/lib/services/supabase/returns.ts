@@ -83,6 +83,9 @@ function mapReturn(row: any): ReturnOrder {
     createdBy: profile?.full_name ?? row.created_by,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
+    // 06/08: select("*") đã kéo note từ trước nhưng mapper bỏ rơi → panel
+    // chi tiết không có gì để hiện.
+    note: row.note ?? undefined,
   };
 }
 

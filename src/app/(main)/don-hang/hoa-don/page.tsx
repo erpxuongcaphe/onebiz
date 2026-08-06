@@ -63,9 +63,11 @@ import {
   getShippingOrderByInvoice,
   getTenantBusinessInfo,
   duplicateInvoice,
+  updateInvoice,
   type InvoiceItemRow,
   type TenantBusinessInfo,
 } from "@/lib/services";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { buildInvoicePrintData, toPrintLines } from "@/lib/print-templates";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
@@ -349,13 +351,28 @@ function InvoiceDetail({
                   />
                 )}
 
-                {/* Notes area */}
-                <div className="border rounded-lg p-3">
-                  <textarea
-                    placeholder="Ghi chú..."
-                    className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
-                  />
-                </div>
+                {/* 06/08 (CEO phát hiện trên HD001512): trước đây là <textarea>
+                    trần — không hiện note đã lưu, gõ vào cũng không lưu.
+                    Sửa được CHỈ khi hóa đơn còn nháp + chưa thu tiền — đúng
+                    guard của RPC update_draft_invoice_atomic (00271:52);
+                    hóa đơn hoàn thành: chỉ xem (như bản in). */}
+                <DocumentNoteBox
+                  note={invoice.note}
+                  editable={invoice.status === "processing" && Number(invoice.paid) === 0}
+                  onSave={async (note) => {
+                    try {
+                      await updateInvoice(invoice.id, { note });
+                      toast({ title: "Đã lưu ghi chú", variant: "success" });
+                      onDataChanged?.();
+                    } catch (error) {
+                      toast({
+                        title: "Không lưu được ghi chú",
+                        description: error instanceof Error ? error.message : "Vui lòng thử lại.",
+                        variant: "error",
+                      });
+                    }
+                  }}
+                />
               </div>
             ),
           },

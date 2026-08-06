@@ -34,6 +34,7 @@ import { getDisposalExports, getDisposalStatuses, cancelDisposalExport } from "@
 import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
@@ -135,6 +136,9 @@ function DisposalExportDetail({
                 : []),
             ]}
           />
+
+          {/* 06/08: form tạo có ô Ghi chú (khác Lý do) nhưng chi tiết không hiện. */}
+          <DocumentNoteBox note={item.note} />
         </div>
       ),
     },

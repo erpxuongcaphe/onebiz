@@ -54,6 +54,7 @@ import { useTxRowPermissions } from "@/lib/permissions";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
 import { useToast } from "@/lib/contexts";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import type { PurchaseOrderEntry } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -114,6 +115,9 @@ function PurchaseOrderEntryDetail({
               { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
             ]}
           />
+
+          {/* 06/08: ghi chú phiếu đặt NCC — trước đây không hiện trong chi tiết. */}
+          <DocumentNoteBox note={item.note} />
         </div>
       ),
     },

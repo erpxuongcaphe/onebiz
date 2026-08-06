@@ -78,6 +78,8 @@ export interface PurchaseOrderEntry {
   expectedDate: string;
   createdBy: string;
   createdByName?: string;
+  /** 06/08: ghi chú — panel chi tiết trước đây không hiện. */
+  note?: string;
 }
 
 // Trả hàng nhập
@@ -94,6 +96,8 @@ export interface PurchaseReturn {
   createdByName?: string;
   branchId?: string;
   branchName?: string;
+  /** 06/08: ghi chú phiếu trả NCC — panel chi tiết trước đây không hiện. */
+  note?: string;
 }
 
 // Hoá đơn đầu vào

@@ -845,5 +845,8 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
     branchId: row.branch_id ?? undefined,
+    // 06/08: select("*") đã kéo note từ trước nhưng mapper bỏ rơi → panel
+    // chi tiết không có gì để hiện.
+    note: row.note ?? undefined,
   };
 }

@@ -30,6 +30,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildGoodsReceiptPrintData, toPrintLines } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
@@ -426,12 +427,10 @@ function PurchaseOrderDetail({
             </>
           )}
 
-          <div className="border rounded-lg p-3">
-            <textarea
-              placeholder="Ghi chú..."
-              className="w-full text-sm resize-none bg-transparent outline-none min-h-[60px]"
-            />
-          </div>
+          {/* 06/08: trước là <textarea> trần không hiện note đã lưu.
+              Muốn sửa ghi chú dùng nút Sửa phiếu (Phase 1.5 đã cho sửa
+              paid + note) → ở đây chỉ hiển thị. */}
+          <DocumentNoteBox note={order.note} />
         </div>
       ),
     },

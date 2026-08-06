@@ -34,6 +34,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildPurchaseReturnPrintData, toPrintLines } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
@@ -92,6 +93,9 @@ function PurchaseReturnDetail({
               { label: "Người tạo", value: formatUser(item.createdByName, item.createdBy) },
             ]}
           />
+
+          {/* 06/08: form tạo có ô Ghi chú nhưng chi tiết không hiện. */}
+          <DocumentNoteBox note={item.note} />
         </div>
       ),
     },
