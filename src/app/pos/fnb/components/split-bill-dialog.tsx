@@ -147,8 +147,9 @@ export function SplitBillDialog({
                       onChange={() => toggleItem(item.id)}
                       className="rounded"
                     />
-                    <span className="flex-1 text-sm font-medium">{formatNumber(item.quantity)}x {item.name}</span>
-                    <span className="text-sm text-muted-foreground">
+                    {/* 06/08: tên món cắt được — TIỀN thì không (shrink-0 + tabular-nums). */}
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium">{formatNumber(item.quantity)}x {item.name}</span>
+                    <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
                       {formatCurrency(item.unitPrice * item.quantity)}
                     </span>
                   </label>

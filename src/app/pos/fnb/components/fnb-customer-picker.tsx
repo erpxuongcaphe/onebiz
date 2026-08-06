@@ -149,7 +149,8 @@ export function FnbCustomerPicker({
             </kbd>
           </div>
 
-          <ul ref={listRef} className="max-h-96 overflow-y-auto">
+          {/* 06/08: 384px cứng → theo dvh, bàn phím ảo mở vẫn chạm được đáy danh sách. */}
+          <ul ref={listRef} className="max-h-[calc(100dvh-14rem)] sm:max-h-96 overflow-y-auto">
             {/* Walk-in guest option */}
             <li
               data-idx={0}
@@ -207,7 +208,7 @@ export function FnbCustomerPicker({
             })}
           </ul>
 
-          <div className="flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
                 <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">

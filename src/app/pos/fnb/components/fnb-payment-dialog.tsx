@@ -132,13 +132,16 @@ export function FnbPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md">
-        <DialogHeader>
+      {/* 06/08 (CEO duyệt plan vòng 4): 3 phần — đầu cố định / thân cuộn /
+          chân cố định. Trước đây dialog 720px trên màn 703px đã tràn 2 đầu;
+          bàn phím ảo (autoFocus tiền mặt) còn che mất nút Hoàn tất. */}
+      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+        <DialogHeader className="shrink-0">
           <DialogTitle>Thanh toán{orderNumber ? ` — ${orderNumber}` : ""}</DialogTitle>
           <DialogDescription>{lineCount} món</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2">
           {/* Order summary */}
           <div className="rounded-lg bg-muted px-3 py-2 space-y-1 text-sm">
             <div className="flex justify-between">
@@ -193,7 +196,7 @@ export function FnbPaymentDialog({
                 >
                   {btn.label}
                   {btn.value > 0 && (
-                    <span className="ml-1 text-[10px] opacity-80">
+                    <span className="ml-1 text-[11px] opacity-90">
                       ({formatDenom(btn.value)})
                     </span>
                   )}
@@ -276,7 +279,9 @@ export function FnbPaymentDialog({
               </div>
               {/* Mixed breakdown running total */}
               <div className="rounded-lg border bg-surface-container px-3 py-2 space-y-1">
-                <div className="flex items-center justify-between text-xs">
+                {/* 06/08: TIỀN KHÔNG ĐƯỢC CẮT (CEO) — màn hẹp thì xuống dòng
+                    (flex-wrap), không truncate/ellipsis số. */}
+                <div className="flex flex-wrap items-center justify-between gap-x-2 text-xs">
                   <span className="font-medium text-muted-foreground">Tổng đã nhập</span>
                   <span
                     className={cn(
@@ -355,7 +360,8 @@ export function FnbPaymentDialog({
           </div>
         </div>
 
-        <DialogFooter>
+        {/* Chân cố định — NGOÀI vùng cuộn, bàn phím ảo không che được. */}
+        <DialogFooter className="shrink-0">
           <Button className="w-full" disabled={!canConfirm} onClick={handleConfirm}>
             {isFreeOrder ? "Xác nhận bán 0đ (miễn phí)" : `Hoàn tất thanh toán — ${formatCurrency(total)}đ`}
           </Button>
