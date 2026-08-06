@@ -73,6 +73,12 @@ import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print
 // giống POS Retail; chưa có mẫu/lỗi → rớt về printFnbReceipt bill nhiệt cũ.
 import { printFnbBillWithTemplate } from "@/lib/print-fnb-template";
 import { printKitchenTicketsByStation } from "./print-stations";
+import {
+  quyetDinhThanhToan,
+  locNhomRong,
+  giuDuocCaDaBiet,
+  type CatalogStatus,
+} from "./shift-catalog-guards";
 import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
@@ -123,6 +129,23 @@ const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").
 const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
 const FnbOrderHistoryDialog = lazy(() => import("./components/fnb-order-history-dialog").then(m => ({ default: m.FnbOrderHistoryDialog })));
 
+/**
+ * 06/08/2026 — Trạng thái ca, MỘT nguồn duy nhất (CEO chốt).
+ *
+ * Bản cũ chỉ có `currentShift: Shift | null` nên gộp 3 tình huống khác hẳn
+ * nhau vào cùng một giá trị `null`, và `.catch(() => null)` khi tải ca
+ * (page.tsx:387 cũ) biến LỖI MẠNG thành "chưa mở ca" → nếu thêm guard
+ * ngây thơ thì nhân viên bị bắt mở ca oan trong khi ca đang mở thật.
+ *
+ * `open` mang luôn object ca để không bao giờ lệch giữa "có ca" và "ca nào".
+ * Quy tắc quyết định nằm ở `shift-catalog-guards.ts` để test được.
+ */
+type ShiftState =
+  | { status: "loading" }
+  | { status: "open"; shift: Shift }
+  | { status: "none" }
+  | { status: "error" };
+
 function FnbPosPageInner() {
   const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
   const { toast } = useToast();
@@ -164,7 +187,16 @@ function FnbPosPageInner() {
   const [showFloorPlan, setShowFloorPlan] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
   const [splitItems, setSplitItems] = useState<SplitItem[]>([]);
-  const [currentShift, setCurrentShift] = useState<Shift | null>(null);
+  // 06/08 — MỘT nguồn duy nhất cho trạng thái ca (CEO chốt). Trước đây chỉ
+  // có `currentShift: Shift | null` nên không phân biệt được 3 tình huống
+  // KHÁC HẲN nhau: đang kiểm tra / chắc chắn chưa mở ca / KHÔNG kiểm tra
+  // được. Code cũ `.catch(() => null)` nuốt lỗi mạng thành "chưa mở ca".
+  const [shiftState, setShiftState] = useState<ShiftState>({ status: "loading" });
+  // Dẫn xuất — mọi nơi đang dùng `currentShift` không phải sửa logic.
+  const currentShift = shiftState.status === "open" ? shiftState.shift : null;
+  const [catalogStatus, setCatalogStatus] = useState<CatalogStatus>("loading");
+  // Tăng 1 để bắt effect tải ca chạy lại (nút "Thử lại" khi trạng thái error).
+  const [shiftReloadToken, setShiftReloadToken] = useState(0);
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -326,6 +358,10 @@ function FnbPosPageInner() {
             setProducts(cached.products);
             setToppingProducts(cached.toppings);
             setLoading(false); // Show cached data immediately
+            // 06/08: cache đã đủ để DÙNG, nhưng chưa chắc là mới nhất.
+            // `loading` tắt ở đây chính là lý do KHÔNG được dùng
+            // `loading === false` làm điều kiện lọc nhóm rỗng.
+            setCatalogStatus("cache_ready");
           }
           if (branchId) {
             const cachedTables = await getTablesFromCache(tenantId, branchId);
@@ -377,20 +413,13 @@ function FnbPosPageInner() {
             ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])
             : Promise.resolve([] as RestaurantTable[]);
 
-          const shiftPromise = branchId && userId
-            ? markOverdueShiftsForBranch(branchId)
-                .catch((err) => {
-                  console.warn("[FnB] mark overdue shifts failed:", err);
-                  return 0;
-                })
-                .then(() => getOpenShift(branchId, userId))
-                .catch(() => null)
-            : Promise.resolve(null);
-
-          const [catalogResult, tbls, shift] = await Promise.all([
+          // 06/08: TẢI CA ĐÃ TÁCH RA EFFECT RIÊNG (xem bên dưới). Trước đây
+          // nằm chung Promise.all này nên lỗi mạng bị `.catch(() => null)`
+          // nuốt thành "chưa mở ca", và ca phải chờ cả catalog + bàn xong
+          // mới biết kết quả.
+          const [catalogResult, tbls] = await Promise.all([
             catalogPromise,
             tablesPromise,
-            shiftPromise,
           ]);
 
           if (catalogResult) {
@@ -445,10 +474,16 @@ function FnbPosPageInner() {
             prefetchTableData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchTableData failed:", err),
             );
-            if (userId) setCurrentShift(shift);
           }
+          // Mạng đã trả về đủ → danh sách món là bản MỚI NHẤT.
+          setCatalogStatus("fresh_ready");
         }
       } catch (err) {
+        // 06/08: chỉ báo LỖI khi không có gì để hiển thị. Nếu cache đã đổ
+        // được thì giữ `cache_ready` — danh sách vẫn dùng được, chỉ là cũ.
+        setCatalogStatus((truoc) =>
+          truoc === "cache_ready" ? "cache_ready" : "error",
+        );
         // Nếu đã có cached data → chỉ cảnh báo nhẹ, không block UI.
         // Nếu chưa có gì → toast lỗi để nhân viên biết menu có thể cũ.
         console.error("FnB data load error:", err);
@@ -469,6 +504,65 @@ function FnbPosPageInner() {
     // toast chỉ dùng trong catch path, ref vẫn đúng tại thời điểm fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, branchId, networkStatus.isOnline]);
+
+  // 06/08 — TẢI CA: effect RIÊNG (CEO chốt). Bốn điểm khác bản cũ:
+  //  1. Không nằm chung Promise.all với catalog nữa → trạng thái ca không
+  //     phải đợi 5000 SP + danh sách bàn tải xong mới biết.
+  //  2. GIỮ NGUYÊN chuỗi markOverdueShiftsForBranch() → getOpenShift().
+  //     Bước đánh dấu ca quá hạn phải chạy TRƯỚC; bỏ nó thì ca hôm trước
+  //     còn treo. Lỗi riêng bước này vẫn không được chặn việc đọc ca.
+  //  3. Cờ `cancelled` chống kết quả cũ: đổi chi nhánh/đăng nhập tài khoản
+  //     khác giữa chừng thì kết quả của lần trước KHÔNG đè lên lần sau.
+  //  4. BỎ `.catch(() => null)` — lỗi mạng là `error`, KHÔNG phải "chưa mở
+  //     ca". Đây chính là lỗi đang tồn tại hôm nay.
+  useEffect(() => {
+    // Giữ lại ca ĐÃ BIẾT của đúng chi nhánh + đúng người trong lúc kiểm tra
+    // lại. Nếu xoá về loading/error thì `currentShift` thành null giữa
+    // chừng — mà thanh toán ghi `shiftId: currentShift?.id`, tức một cú chớp
+    // mạng có thể làm phiếu thu KHÔNG gắn vào ca. Bản cũ không xoá.
+    const datNeuChuaBiet = (trangThai: ShiftState) =>
+      setShiftState((truoc) =>
+        truoc.status === "open" &&
+        giuDuocCaDaBiet(truoc.shift, branchId ?? "", userId)
+          ? truoc
+          : trangThai,
+      );
+
+    if (!branchId || !userId) {
+      // Chưa biết chi nhánh/người dùng thì cũng chưa biết ca — không được
+      // kết luận "chưa mở ca".
+      datNeuChuaBiet({ status: "loading" });
+      return;
+    }
+    if (!networkStatus.isOnline) {
+      // Offline: không hỏi được máy chủ. Nói thật là "không kiểm tra được",
+      // không đoán bừa. (Bản cũ cũng chỉ tải ca khi online.)
+      datNeuChuaBiet({ status: "error" });
+      return;
+    }
+    let cancelled = false;
+    datNeuChuaBiet({ status: "loading" });
+    (async () => {
+      try {
+        await markOverdueShiftsForBranch(branchId).catch((err) => {
+          console.warn("[FnB] mark overdue shifts failed:", err);
+          return 0;
+        });
+        const shift = await getOpenShift(branchId, userId);
+        if (cancelled) return;
+        // Máy chủ trả lời DỨT KHOÁT → ghi đè, kể cả xoá ca đang giữ (đúng:
+        // ca đã bị đóng ở máy khác).
+        setShiftState(shift ? { status: "open", shift } : { status: "none" });
+      } catch (err) {
+        if (cancelled) return;
+        console.error("[FnB] getOpenShift error:", err);
+        datNeuChuaBiet({ status: "error" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, userId, networkStatus.isOnline, shiftReloadToken]);
 
   // Sprint POS-FNB-EXT-1 (CEO 08/05): Load delivery platform settings +
   // discount presets on mount. Cached suốt session — F5 reload.
@@ -781,6 +875,18 @@ function FnbPosPageInner() {
 
   // Sprint A: categories kèm count cho sidebar. Đếm trực tiếp từ products
   // hiện tại (không từ DB) — phản ánh đúng số SP user đang thấy.
+  //
+  // 06/08 — LỌC NHÓM RỖNG tại ĐÚNG MỘT chỗ (CEO chốt): cả 3 nơi tiêu thụ
+  // (cột danh mục desktop, thanh danh mục tablet, ngăn kéo mobile) đều đọc
+  // biến này nên không phải lọc lặp lại và không thể lệch nhau.
+  //
+  // Hai điều kiện an toàn, thiếu một trong hai là ẩn nhầm nhóm có món:
+  //  • CHỈ lọc khi `catalogStatus` là cache_ready/fresh_ready. Lúc `loading`
+  //    thì products còn rỗng → lọc sẽ xoá sạch danh mục; lúc `error` thì
+  //    danh sách không đáng tin → giữ nguyên, thà hiện nhóm rỗng còn hơn
+  //    giấu mất nhóm thật.
+  //  • LUÔN giữ nhóm đang chọn, kể cả count 0 — nếu không thì nhóm đang mở
+  //    biến mất khỏi cột trong khi khu món vẫn đang lọc theo nhóm đó.
   const categoriesWithCount = useMemo<FnbCategoryWithCount[]>(() => {
     const counts = new Map<string, number>();
     for (const p of productsWithTier) {
@@ -788,11 +894,12 @@ function FnbPosPageInner() {
         counts.set(p.category_id, (counts.get(p.category_id) ?? 0) + 1);
       }
     }
-    return categories.map((c) => ({
+    const withCount = categories.map((c) => ({
       ...c,
       count: counts.get(c.id) ?? 0,
     }));
-  }, [categories, productsWithTier]);
+    return locNhomRong(withCount, catalogStatus, activeCategoryId);
+  }, [categories, productsWithTier, catalogStatus, activeCategoryId]);
 
   // ── Variant cache (in-memory, per session) — tránh refetch khi user mở lại dialog cùng SP.
   //    Warm từ IndexedDB on mount (effect bên dưới) → dialog mở instant NGAY CẢ
@@ -2025,6 +2132,55 @@ function FnbPosPageInner() {
     }
   }, [currentShift]);
 
+  /**
+   * 06/08 — MỘT cửa duy nhất để mở màn thanh toán (CEO chốt).
+   *
+   * Trước đây 3 lối vào (nút desktop, nút giỏ mobile, phím F9) đều gọi thẳng
+   * `setPaymentOpen(true)` nên muốn thêm bất kỳ điều kiện nào cũng phải sửa
+   * 3 nơi và chắc chắn sẽ sót. Nay cả 3 cùng đi qua đây.
+   *
+   * Ranh giới CỐ Ý: hàm này chỉ quyết định CÓ MỞ màn thanh toán hay không.
+   * Không đụng cách tính tiền, không đụng `handleSendToKitchen` (F10 gửi bếp
+   * vẫn KHÔNG bị chặn — bếp phải pha được kể cả khi chưa mở ca).
+   */
+  const requestPayment = useCallback((): boolean => {
+    const quyetDinh = quyetDinhThanhToan({
+      lineCount: pos.lineCount,
+      isOnline: networkStatus.isOnline,
+      shiftStatus: shiftState.status,
+    });
+    switch (quyetDinh) {
+      case "mo_thanh_toan":
+        setPaymentOpen(true);
+        return true;
+      case "cho_kiem_tra_ca":
+        toast({
+          title: "Đang kiểm tra ca bán…",
+          description: "Chờ một nhịp rồi bấm Thanh toán lại.",
+          variant: "info",
+        });
+        return false;
+      case "yeu_cau_mo_ca":
+        toast({
+          title: "Chưa mở ca",
+          description: "Mở ca trước khi thu tiền để khoản này vào đúng sổ quỹ.",
+          variant: "warning",
+        });
+        setOpenShiftDialogOpen(true);
+        return false;
+      case "thu_lai_kiem_ca":
+        toast({
+          title: "Không kiểm tra được ca bán",
+          description: "Đang thử lại. Bấm Thanh toán lần nữa sau vài giây.",
+          variant: "error",
+        });
+        setShiftReloadToken((n) => n + 1);
+        return false;
+      case "khong_lam_gi":
+        return false;
+    }
+  }, [pos.lineCount, networkStatus.isOnline, shiftState.status, toast]);
+
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
       if (!branchId || !userId || !tenantId) return;
@@ -2034,7 +2190,9 @@ function FnbPosPageInner() {
         cashierId: userId,
         startingCash,
       });
-      setCurrentShift(shift);
+      // 06/08: đồng bộ về MỘT nguồn. Cả 2 nhánh (mở mới và `alreadyOpen` —
+      // ca đã mở ở tab/máy khác) đều là `open` với đúng object ca vừa nhận.
+      setShiftState({ status: "open", shift });
       setOpenShiftDialogOpen(false);
       toast({
         title: shift.alreadyOpen ? "Đã khôi phục ca đang mở" : "Đã mở ca",
@@ -2084,7 +2242,10 @@ function FnbPosPageInner() {
         });
       }
 
-      setCurrentShift(null);
+      // 06/08: chỉ về `none` khi closeShift() đã THÀNH CÔNG. Nếu closeShift
+      // ném lỗi thì hàm này dừng ở trên, state vẫn `open` — không được để
+      // giao diện báo "hết ca" trong khi máy chủ vẫn còn ca mở.
+      setShiftState({ status: "none" });
       setCloseShiftDialogOpen(false);
 
       toast({
@@ -2530,7 +2691,7 @@ function FnbPosPageInner() {
       // FnB không có input nhập tiền-dưa risky như Retail nên cho phép luôn.
       if (e.key === "F9") {
         e.preventDefault();
-        if (pos.lineCount > 0) setPaymentOpen(true);
+        requestPayment();
         return;
       }
       if (e.key === "F10") {
@@ -2560,7 +2721,7 @@ function FnbPosPageInner() {
   }, [
     pos, searchModalOpen, customerPickerOpen, paymentOpen,
     splitBillOpen, showFloorPlan, mobileCartOpen, keyboardHelpOpen,
-    handleSendToKitchen,
+    handleSendToKitchen, requestPayment,
   ]);
 
   // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
@@ -2833,7 +2994,7 @@ function FnbPosPageInner() {
           removeLine={pos.removeLine}
           onEditLine={handleEditLine}
           onSendToKitchen={handleSendToKitchen}
-          onPayment={() => setPaymentOpen(true)}
+          onPayment={requestPayment}
           onSplitBill={handleOpenSplitBill}
           onChangeOrderType={pos.setActiveTabOrderType}
           onCustomerClick={() => setCustomerPickerOpen(true)}
@@ -3008,7 +3169,7 @@ function FnbPosPageInner() {
               removeLine={pos.removeLine}
               onEditLine={handleEditLine}
               onSendToKitchen={() => { handleSendToKitchen(); setMobileCartOpen(false); }}
-              onPayment={() => { setPaymentOpen(true); setMobileCartOpen(false); }}
+              onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
               onSplitBill={handleOpenSplitBill}
               onChangeOrderType={pos.setActiveTabOrderType}
               onCustomerClick={() => setCustomerPickerOpen(true)}
