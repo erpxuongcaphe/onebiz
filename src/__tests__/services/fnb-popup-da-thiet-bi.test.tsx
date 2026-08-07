@@ -204,6 +204,42 @@ describe("PR-B · thứ tự nhóm ĐỨNG YÊN khi đang chọn", () => {
   });
 });
 
+describe("PR-B · tự vệ khi dữ liệu nhóm 'Chọn 1' có nhiều mặc định", () => {
+  /** Nhóm "Chọn 1" nhưng dữ liệu lỡ đặt HAI mặc định, cả hai đều có phụ thu. */
+  function duLieuHaiMacDinh(): DynamicModifierData {
+    const g = nhom("g-duong", "Mức đường", "single");
+    const a = { ...opt("o-0", "g-duong", "Không đường", 3000), isDefault: true };
+    const b = { ...opt("o-100", "g-duong", "100%", 5000), isDefault: true };
+    return { groups: [g], optionsByGroup: new Map([["g-duong", [a, b]]]) };
+  }
+
+  it("chỉ giữ MỘT lựa chọn, không cộng phụ thu hai lần", () => {
+    moPopup({ dynamicModifiers: duLieuHaiMacDinh() });
+    // Thấy tận mắt trên bản xem trước: cả "Không đường" và "100%" cùng sáng.
+    // 35.000 + 3.000 + 5.000 = 43.000 là con số SAI phải chặn.
+    expect(screen.queryByText(/43.000đ/)).toBeNull();
+    expect(screen.getByText(/Thêm vào đơn — 38.000đ/)).toBeTruthy();
+  });
+
+  it("giữ cái đứng TRƯỚC trong danh sách để đoán được", () => {
+    moPopup({ dynamicModifiers: duLieuHaiMacDinh() });
+    const dangSang = [...document.body.querySelectorAll("button[aria-pressed='true']")]
+      .map((b) => (b.textContent || "").trim());
+    expect(dangSang).toHaveLength(1);
+    expect(dangSang[0]).toContain("Không đường");
+  });
+
+  it("nhóm CHỌN NHIỀU thì KHÔNG bị cắt bớt", () => {
+    const g = nhom("g-top", "Topping", "multi");
+    const a = { ...opt("t1", "g-top", "Trân châu", 5000), isDefault: true };
+    const b = { ...opt("t2", "g-top", "Phô mai", 7000), isDefault: true };
+    moPopup({
+      dynamicModifiers: { groups: [g], optionsByGroup: new Map([["g-top", [a, b]]]) },
+    });
+    expect(screen.getByText(/Thêm vào đơn — 47.000đ/)).toBeTruthy();
+  });
+});
+
 describe("PR-B · KHÔNG đụng tiền", () => {
   it("chọn Size Lớn (+5.000) → tổng đúng 40.000, y như trước", () => {
     moPopup();

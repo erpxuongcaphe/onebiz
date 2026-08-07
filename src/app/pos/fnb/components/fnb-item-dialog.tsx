@@ -343,10 +343,29 @@ export function FnbItemDialog({
             );
           }
         }
+        /**
+         * 07/08 — TỰ VỆ khi dữ liệu nhóm "Chọn 1" có NHIỀU mặc định.
+         *
+         * Thấy tận mắt trên bản xem trước: nhóm "Mức đường — Chọn 1" sáng
+         * cùng lúc "Không đường" VÀ "100%". Đây là lỗi cấu hình dữ liệu (CEO
+         * đã biết), nhưng KHÔNG được để nó thành lỗi tiền: mỗi lựa chọn có
+         * phụ thu riêng, giữ cả hai là cộng phụ thu HAI LẦN cho một nhóm chỉ
+         * được chọn một.
+         *
+         * `toggleDynamicChoice` đã ép chọn-một khi NGƯỜI DÙNG bấm; chỗ này
+         * ép nốt lúc NẠP. Giữ theo thứ tự hiển thị để đoán được: cái đứng
+         * trước thắng. Nhóm chọn-nhiều giữ nguyên.
+         */
+        const epChonMot = (g: ModifierGroup, ids: Set<string>) => {
+          if (g.rule === "multi" || ids.size <= 1) return ids;
+          const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+          const dau = opts.find((o) => ids.has(o.id));
+          return new Set(dau ? [dau.id] : []);
+        };
         for (const g of dynamicModifiers.groups) {
           const saved = savedByGroup.get(g.id);
           if (saved && saved.size > 0) {
-            initChoices.set(g.id, saved);
+            initChoices.set(g.id, epChonMot(g, saved));
             continue;
           }
           // No saved → use defaults (only for "add new" mode)
@@ -354,7 +373,7 @@ export function FnbItemDialog({
             const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
             const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
             if (defaults.length > 0) {
-              initChoices.set(g.id, new Set(defaults));
+              initChoices.set(g.id, epChonMot(g, new Set(defaults)));
             }
           }
         }
