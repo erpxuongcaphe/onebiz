@@ -208,6 +208,18 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
     expect(lop).not.toContain("sm:w-8");
   });
 
+  it("Button size=icon phải ghi đè CẢ md: — nếu không vẫn ra 32px", () => {
+    // Biến thể `icon` của Button là `size-9 md:size-8`. Gộp class chỉ thay
+    // được `size-9`; `md:size-8` khác tiền tố nên vẫn thắng từ 768px.
+    // Đo trên bản xem trước đã bắt được đúng lỗi này (nút ra 32px).
+    const nutIcon = nguon.match(/size="icon"[^>]*/g) ?? [];
+    expect(nutIcon.length).toBeGreaterThan(0);
+    for (const n of nutIcon) {
+      expect(n).toContain("size-11");
+      expect(n, "thiếu md:size-11 thì desktop vẫn 32px").toContain("md:size-11");
+    }
+  });
+
   it("KHÔNG cắt chữ bằng '…' ở tiền, và không có cỡ chữ dưới 11px", () => {
     expect(lop).not.toContain("truncate");
     expect(lop).not.toContain("text-[10px]");

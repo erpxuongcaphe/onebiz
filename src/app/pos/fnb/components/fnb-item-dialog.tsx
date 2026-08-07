@@ -620,12 +620,17 @@ export function FnbItemDialog({
           <section className="min-w-0 space-y-2">
             <Label className="text-sm font-medium">Số lượng</Label>
             <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="size-11"
+              {/* ⚠️ PHẢI có cả `md:size-11`. Biến thể `size="icon"` của Button là
+                  `size-9 md:size-8`; tailwind-merge chỉ thay được `size-9` (cùng
+                  hạng, không tiền tố), còn `md:size-8` khác tiền tố nên VẪN THẮNG
+                  từ 768px trở lên. Đo trên bản xem trước: nút ra đúng 32px thay vì
+                  44px — bằng chứng là không được tin vào việc gộp class. */}
+              <Button variant="outline" size="icon" className="size-11 md:size-11"
                 onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
                 <Icon name="remove" size={18} />
               </Button>
               <span className="w-10 text-center text-lg font-semibold tabular-nums">{formatNumber(quantity)}</span>
-              <Button variant="outline" size="icon" className="size-11"
+              <Button variant="outline" size="icon" className="size-11 md:size-11"
                 onClick={() => setQuantity((q) => q + 1)}>
                 <Icon name="add" size={18} />
               </Button>
