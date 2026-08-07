@@ -1,16 +1,24 @@
 -- ============================================================
 -- PREFLIGHT F&B TOPPING — CHỈ ĐỌC. KHÔNG sửa dữ liệu, KHÔNG tạo đơn.
--- Bản 2 (07/08/2026) — sửa theo góp ý CEO:
---   • đếm khoá JSON bằng regexp_count (bản 1 chia độ dài → đếm sai)
---   • dòng có topping chỉ tính khi mảng CÓ PHẦN TỬ, không tính []
---   • khảo sát đủ 3 nhóm mã NVL-TOP% / SKU-TOP% / SKU-TPP%
+-- Bản 3 (07/08/2026) — sửa lỗi 42809 khi CEO chạy bản 2.
+--
+-- LỖI BẢN 2: `pg_get_functiondef()` NÉM LỖI khi gặp hàm tổng hợp
+--   (ERROR 42809: "array_agg" is an aggregate function).
+--   Phần 6 và 10 quét toàn bộ schema public nên đụng phải → cả lô dừng.
+--   → SỬA: thêm `p.prokind = 'f'` (chỉ hàm thường) vào MỌI truy vấn.
+--
+-- SỬA THÊM: bỏ `regexp_count` (chỉ có từ PostgreSQL 15) → dùng
+--   `(select count(*) from regexp_matches(d, '...', 'g'))` chạy mọi phiên bản.
 --
 -- Cách chạy: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
--- Gửi lại kết quả từng phần.
---
--- Ghi chú: regexp_count cần PostgreSQL 15+. Nếu báo lỗi "function does not
--- exist", thay bằng:  (select count(*) from regexp_matches(d, '...', 'g'))
+-- Nếu vẫn lỗi ở một phần nào đó, chạy từng PHẦN riêng — các phần độc lập.
 -- ============================================================
+
+
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 0 — PHIÊN BẢN POSTGRESQL (để biết còn bẫy tương thích nào)
+-- ══════════════════════════════════════════════════════════════
+select version() as phien_ban_postgres, current_database() as csdl;
 
 
 -- ══════════════════════════════════════════════════════════════
@@ -25,6 +33,7 @@ select
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
+  and p.prokind = 'f'                       -- ★ chỉ hàm thường
   and p.proname in (
     'fnb_send_to_kitchen_atomic',
     'fnb_send_to_kitchen_atomic_v2',
@@ -40,16 +49,17 @@ order by p.proname, tham_so;
 -- PHẦN 2 — HỢP ĐỒNG KHOÁ JSON TOPPING  ★ ĐIỂM NGHI NGỜ CHÍNH ★
 -- ══════════════════════════════════════════════════════════════
 select
-  p.proname                                          as ten_ham,
-  regexp_count(d, '''productId''')                   as ghi_productId,
-  regexp_count(d, '''product_id''')                  as ghi_product_id,
-  regexp_count(d, '->>\s*''productId''')             as doc_productId,
-  regexp_count(d, '->>\s*''product_id''')            as doc_product_id,
-  regexp_count(d, 'topping')                         as so_lan_nhac_topping
+  p.proname as ten_ham,
+  (select count(*) from regexp_matches(d, '''productId''',        'g')) as ghi_productId,
+  (select count(*) from regexp_matches(d, '''product_id''',       'g')) as ghi_product_id,
+  (select count(*) from regexp_matches(d, '->>\s*''productId''',  'g')) as doc_productId,
+  (select count(*) from regexp_matches(d, '->>\s*''product_id''', 'g')) as doc_product_id,
+  (select count(*) from regexp_matches(d, 'topping',              'g')) as so_lan_nhac_topping
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
+  and p.prokind = 'f'
   and p.proname in (
     'fnb_send_to_kitchen_atomic','fnb_send_to_kitchen_atomic_v2',
     'fnb_complete_payment_atomic','_fnb_complete_payment_impl_00230',
@@ -71,7 +81,7 @@ select
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 cross join lateral (select pg_get_functiondef(p.oid) as d) x
-where n.nspname = 'public'
+where n.nspname = 'public' and p.prokind = 'f'
   and p.proname in ('fnb_complete_payment_atomic','_fnb_complete_payment_impl_00230');
 
 
@@ -85,7 +95,7 @@ select
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 cross join lateral (select pg_get_functiondef(p.oid) as d) x
-where n.nspname = 'public'
+where n.nspname = 'public' and p.prokind = 'f'
   and p.proname like 'fnb_send_to_kitchen_atomic%';
 
 
@@ -93,28 +103,33 @@ where n.nspname = 'public'
 -- PHẦN 5 — consume_bom_for_sale: NHẬN GÌ, XỬ LÝ GÌ
 -- ══════════════════════════════════════════════════════════════
 select
-  pg_get_function_identity_arguments(p.oid)        as tham_so_day_du,
-  regexp_count(d, 'linkedProductId') > 0           as co_xu_ly_linkedProductId,
-  regexp_count(d, 'p_modifier_selections') > 0     as co_nhan_modifier_selections,
-  regexp_count(d, 'scale_factor|scaleFactor') > 0  as co_xu_ly_he_so_scale,
-  regexp_count(d, 'upsert_branch_stock')           as so_lan_tru_ton_chi_nhanh,
-  regexp_count(d, 'increment_product_stock')       as so_lan_tru_ton_tong,
-  regexp_count(d, 'allocate_lots_fifo')            as so_lan_tru_lo_fifo
+  pg_get_function_identity_arguments(p.oid) as tham_so_day_du,
+  (d like '%linkedProductId%')              as co_xu_ly_linkedProductId,
+  (d like '%p_modifier_selections%')        as co_nhan_modifier_selections,
+  (d like '%scale_factor%' or d like '%scaleFactor%') as co_xu_ly_he_so_scale,
+  (select count(*) from regexp_matches(d, 'upsert_branch_stock',     'g')) as so_lan_tru_ton_chi_nhanh,
+  (select count(*) from regexp_matches(d, 'increment_product_stock', 'g')) as so_lan_tru_ton_tong,
+  (select count(*) from regexp_matches(d, 'allocate_lots_fifo',      'g')) as so_lan_tru_lo_fifo
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 cross join lateral (select pg_get_functiondef(p.oid) as d) x
-where n.nspname = 'public' and p.proname = 'consume_bom_for_sale';
+where n.nspname = 'public' and p.prokind = 'f'
+  and p.proname = 'consume_bom_for_sale';
 
 
 -- ══════════════════════════════════════════════════════════════
 -- PHẦN 6 — HÀM NÀO ĐANG KHOÁ CỨNG 'NVL-TOP%'
+--          (quét toàn schema — CHÍNH LÀ CHỖ BẢN 2 CHẾT)
 -- ══════════════════════════════════════════════════════════════
-select p.proname,
-       regexp_count(pg_get_functiondef(p.oid), 'NVL-TOP') as so_lan_khoa_cung
+select
+  p.proname,
+  (select count(*) from regexp_matches(d, 'NVL-TOP', 'g')) as so_lan_khoa_cung
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
-  and pg_get_functiondef(p.oid) like '%NVL-TOP%'
+  and p.prokind = 'f'                       -- ★ bắt buộc, nếu không sẽ lỗi 42809
+  and d like '%NVL-TOP%'
 order by p.proname;
 
 
@@ -124,7 +139,6 @@ order by p.proname;
 select
   (select count(*) from public.kitchen_orders)                                   as tong_don_bep,
   (select count(*) from public.kitchen_order_items)                              as tong_dong_don_bep,
-  -- CHỈ tính dòng có topping THẬT (mảng có phần tử), KHÔNG tính []
   (select count(*) from public.kitchen_order_items
      where jsonb_array_length(coalesce(toppings, '[]'::jsonb)) > 0)              as dong_co_topping_that,
   (select count(*) from public.kitchen_order_items
@@ -153,18 +167,11 @@ select
     when p.code like 'SKU-TPP%' then '3-TOPPING THEO PHAN'
   end                                       as nhom,
   p.code, p.name,
-  p.product_type                            as loai,
-  p.channel                                 as kenh,
-  p.unit                                    as dvt_chinh,
-  p.purchase_unit                           as dvt_mua,
-  p.stock_unit                              as dvt_kho,
-  p.sell_unit                               as dvt_ban,
-  p.sell_price                              as gia_ban,
-  p.cost_price                              as gia_von,
-  p.stock                                   as ton_tong,
-  p.has_bom                                 as co_bom,
-  p.bom_code                                as ma_bom,
-  p.is_active                               as dang_bat,
+  p.product_type as loai, p.channel as kenh,
+  p.unit as dvt_chinh, p.purchase_unit as dvt_mua,
+  p.stock_unit as dvt_kho, p.sell_unit as dvt_ban,
+  p.sell_price as gia_ban, p.cost_price as gia_von, p.stock as ton_tong,
+  p.has_bom as co_bom, p.bom_code as ma_bom, p.is_active as dang_bat,
   (select count(*) from public.purchase_order_items poi where poi.product_id = p.id) as so_dong_phieu_nhap,
   (select count(*) from public.invoice_items ii      where ii.product_id  = p.id)    as so_dong_hoa_don,
   (select count(*) from public.stock_movements sm    where sm.product_id  = p.id)    as so_dong_so_kho,
@@ -175,7 +182,7 @@ from public.products p
 where p.code like 'NVL-TOP%' or p.code like 'SKU-TOP%' or p.code like 'SKU-TPP%'
 order by nhom, p.code;
 
--- 8c. Công thức của 3 nhóm này đang ghi định lượng theo đơn vị nào
+-- 8c. Công thức của 3 nhóm này ghi định lượng theo đơn vị nào
 select
   po.code as ma_san_pham_dau_ra, po.name as ten_san_pham, po.unit as dvt_dau_ra,
   b.code  as ma_cong_thuc, b.output_quantity as san_luong,
@@ -195,17 +202,17 @@ order by po.code nulls last, pm.code;
 -- ══════════════════════════════════════════════════════════════
 select
   g.sort_order as thu_tu, g.name as ten_nhom, g.rule as luat, g.is_active as dang_bat,
-  (select count(*) from public.modifier_options o where o.group_id = g.id)                     as so_lua_chon,
-  (select count(*) from public.modifier_options o where o.group_id = g.id and o.is_default)    as so_mac_dinh,
+  (select count(*) from public.modifier_options o where o.group_id = g.id)                  as so_lua_chon,
+  (select count(*) from public.modifier_options o where o.group_id = g.id and o.is_default) as so_mac_dinh,
   (select count(*) from public.modifier_options o where o.group_id = g.id and o.linked_product_id is not null) as so_lua_chon_co_noi_sku,
-  (select count(*) from public.category_modifier_groups l where l.modifier_group_id = g.id)    as so_nhom_hang_gan,
-  (select count(*) from public.product_modifier_groups l where l.modifier_group_id = g.id)     as so_mon_gan_rieng
+  (select count(*) from public.category_modifier_groups l where l.modifier_group_id = g.id) as so_nhom_hang_gan,
+  (select count(*) from public.product_modifier_groups l where l.modifier_group_id = g.id)  as so_mon_gan_rieng
 from public.modifier_groups g
 order by g.sort_order, g.name;
--- ĐỌC: nhóm luật single/single_required mà so_mac_dinh > 1 ⇒ CẤU HÌNH SAI.
--- Nếu MỌI nhóm đều sort_order = 0 ⇒ thứ tự hiện trên popup là ngẫu nhiên.
+-- ĐỌC: nhóm single/single_required mà so_mac_dinh > 1 ⇒ CẤU HÌNH SAI.
+-- Nếu MỌI nhóm đều sort_order = 0 ⇒ thứ tự trên popup là ngẫu nhiên.
 
--- 9b. Chi tiết lựa chọn của nhóm chọn-một có nhiều mặc định
+-- 9b. Chi tiết lựa chọn của các nhóm "chọn một"
 select g.name as ten_nhom, g.rule as luat,
        o.sort_order, o.label, o.price_delta, o.scale_factor, o.is_default,
        lp.code as sku_duoc_noi, lp.unit as dvt_sku, lp.sell_price as gia_sku
@@ -228,11 +235,13 @@ order by so_san_pham desc;
 select p.proname
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
-  and pg_get_functiondef(p.oid) like '%uom_conversions%'
+  and p.prokind = 'f'                       -- ★ bắt buộc
+  and d like '%uom_conversions%'
 order by p.proname;
 -- Kết quả RỖNG ⇒ bảng quy đổi chỉ dùng để HIỂN THỊ, kho vẫn chạy theo products.unit.
 
 -- ============================================================
--- HẾT — toàn bộ 10 phần chỉ SELECT, không ghi bất kỳ dòng nào.
+-- HẾT — toàn bộ chỉ SELECT, không ghi bất kỳ dòng nào.
 -- ============================================================
