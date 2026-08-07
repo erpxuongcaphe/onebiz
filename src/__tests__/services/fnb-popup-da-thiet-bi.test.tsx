@@ -144,6 +144,66 @@ describe("PR-B · thu gọn nhóm mà KHÔNG mất lựa chọn", () => {
   });
 });
 
+describe("PR-B · thứ tự nhóm ĐỨNG YÊN khi đang chọn", () => {
+  /**
+   * Đọc nhãn các nhóm theo đúng thứ tự đang hiện trên màn.
+   * Dialog render qua portal ra `document.body`, KHÔNG nằm trong `container`
+   * mà render() trả về — soi nhầm chỗ là ra mảng rỗng và test xanh giả.
+   */
+  function thuTuNhom(): string[] {
+    return [...document.body.querySelectorAll("section")]
+      .map((s) => s.querySelector("span.text-sm.font-medium")?.textContent ?? "")
+      .filter(Boolean);
+  }
+
+  it("nhóm bắt buộc đứng trước nhóm thường, kể cả khi sort_order đều = 0", () => {
+    moPopup();
+    const thuTu = thuTuNhom();
+    expect(thuTu).toContain("Size");
+    expect(thuTu).toContain("Mức đá");
+    expect(thuTu.indexOf("Size")).toBeLessThan(thuTu.indexOf("Mức đá"));
+  });
+
+  it("chọn xong mục bắt buộc → thứ tự KHÔNG đổi (chip không nhảy dưới ngón tay)", () => {
+    moPopup();
+    const truoc = thuTuNhom();
+    expect(truoc.length).toBeGreaterThan(1);
+    fireEvent.click(screen.getByText("Vừa"));
+    expect(thuTuNhom()).toEqual(truoc);
+    fireEvent.click(screen.getByText("Ít đá"));
+    expect(thuTuNhom()).toEqual(truoc);
+  });
+
+  it("HAI nhóm bắt buộc: chọn nhóm đầu KHÔNG đẩy nhóm còn thiếu lên trên", () => {
+    // Đây mới là ca nhảy THẬT. Với một nhóm bắt buộc thì dù xếp kiểu nào thứ
+    // tự cũng không đổi — test ở trên xanh cả khi mã sai. Bản nháp của em
+    // xếp "còn thiếu" lên đầu: bấm Size xong là Mức đường nhảy lên trước
+    // Size, đúng lúc ngón tay đang ở đó.
+    const gSize = nhom("g-size", "Size", "single_required");
+    const gDuong = nhom("g-duong", "Mức đường", "single_required");
+    moPopup({
+      dynamicModifiers: {
+        groups: [gSize, gDuong],
+        optionsByGroup: new Map<string, ModifierOption[]>([
+          ["g-size", [opt("o-m", "g-size", "Vừa"), opt("o-l", "g-size", "Lớn", 5000)]],
+          [
+            "g-duong",
+            [opt("o-0", "g-duong", "Không đường"), opt("o-100", "g-duong", "100%")],
+          ],
+        ]),
+      },
+    });
+    // Cùng mức ưu tiên · cùng sort_order · cùng số lựa chọn → tiêu chí cuối
+    // là tên A→Z tiếng Việt, nên "Mức đường" đứng trước "Size".
+    const truoc = thuTuNhom();
+    expect(truoc).toEqual(["Mức đường", "Size"]);
+    fireEvent.click(screen.getByText("Vừa"));
+    expect(thuTuNhom()).toEqual(truoc);
+    fireEvent.click(screen.getByText("100%"));
+    expect(thuTuNhom()).toEqual(truoc);
+  });
+});
+
 describe("PR-B · KHÔNG đụng tiền", () => {
   it("chọn Size Lớn (+5.000) → tổng đúng 40.000, y như trước", () => {
     moPopup();
@@ -190,10 +250,12 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
     expect(nguon).toContain("xl:max-w-[68rem]");
   });
 
-  it("thân là LƯỚI 1 → 2 → 3 cột, cấm cuộn ngang", () => {
-    expect(nguon).toContain("md:grid-cols-2");
-    expect(nguon).toContain("xl:grid-cols-3");
-    expect(nguon).toContain("overflow-x-hidden");
+  it("thân xếp theo NỘI DUNG, không chia đều mỗi nhóm một cột", () => {
+    // CEO bác bản trước vì mọi nhóm bị nhét vào cùng một lưới 3 cột bằng
+    // nhau. Nay thân là CỘT DỌC: khu lựa chọn ngắn mới là lưới, còn khu dài
+    // (Topping) chiếm toàn chiều ngang.
+    expect(nguon).toContain("flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4");
+    expect(nguon).toContain("grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3");
   });
 
   it("giữ nguyên khung 3 phần của PR trước (đầu / thân cuộn / chân)", () => {
@@ -208,16 +270,44 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
     expect(lop).not.toContain("sm:w-8");
   });
 
-  it("Button size=icon phải ghi đè CẢ md: — nếu không vẫn ra 32px", () => {
-    // Biến thể `icon` của Button là `size-9 md:size-8`. Gộp class chỉ thay
-    // được `size-9`; `md:size-8` khác tiền tố nên vẫn thắng từ 768px.
-    // Đo trên bản xem trước đã bắt được đúng lỗi này (nút ra 32px).
-    const nutIcon = nguon.match(/size="icon"[^>]*/g) ?? [];
-    expect(nutIcon.length).toBeGreaterThan(0);
-    for (const n of nutIcon) {
-      expect(n).toContain("size-11");
-      expect(n, "thiếu md:size-11 thì desktop vẫn 32px").toContain("md:size-11");
+  it("vùng chạm nở 44px theo NGÓN TAY, không theo bề rộng màn", () => {
+    // Bẫy đã dính: biến thể `icon` của Button là `size-9 md:size-8`; gộp
+    // class chỉ thay được `size-9` nên desktop vẫn ra 32px. Nay popup không
+    // dùng `size="icon"` nữa mà tự khai lớp, và nở theo `pointer-coarse`.
+    expect(nguon).not.toContain('size="icon"');
+    for (const hang of nguon.split("\n")) {
+      if (!/\bsize-9\b/.test(hang)) continue;
+      expect(hang, "size-9 phải đi kèm pointer-coarse:size-11").toContain(
+        "pointer-coarse:size-11",
+      );
     }
+    expect(nguon).toContain("min-h-9 pointer-coarse:min-h-11");
+  });
+
+  it("SỐ LƯỢNG nằm cùng hàng với tên/giá ở đầu popup, không chiếm riêng một cột", () => {
+    const dauPopup = nguon.slice(
+      nguon.indexOf("<DialogHeader"),
+      nguon.indexOf("</DialogHeader>"),
+    );
+    expect(dauPopup).toContain('aria-label="Bớt số lượng"');
+    expect(dauPopup).toContain('aria-label="Thêm số lượng"');
+    expect(dauPopup).toContain("Tạm tính");
+  });
+
+  it("Size đứng TRƯỚC mọi nhóm tuỳ chọn khác trong khu lựa chọn chính", () => {
+    const viTriSize = nguon.indexOf("Kích cỡ");
+    const viTriNhomNgan = nguon.indexOf("nhomNgan.map(veNhom)");
+    expect(viTriSize).toBeGreaterThan(0);
+    expect(viTriNhomNgan).toBeGreaterThan(viTriSize);
+  });
+
+  it("nhóm chọn-nhiều (Topping) nằm DƯỚI khu lựa chọn ngắn và trải 2 cột ở desktop", () => {
+    expect(nguon).toContain('nhomDai = nhomDaSapXep.filter((g) => g.rule === "multi")');
+    expect(nguon).toContain('nhomNgan = nhomDaSapXep.filter((g) => g.rule !== "multi")');
+    expect(nguon.indexOf("nhomDai.map(veNhom)")).toBeGreaterThan(
+      nguon.indexOf("nhomNgan.map(veNhom)"),
+    );
+    expect(nguon).toContain("grid gap-2 xl:grid-cols-2");
   });
 
   it("KHÔNG cắt chữ bằng '…' ở tiền, và không có cỡ chữ dưới 11px", () => {

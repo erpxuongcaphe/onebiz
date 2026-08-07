@@ -112,6 +112,24 @@ const SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as c
 const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
 /**
+ * 07/08 (CEO chốt) — VÙNG CHẠM CĂN THEO LOẠI CON TRỎ, KHÔNG THEO BỀ RỘNG.
+ *
+ * Bề rộng màn KHÔNG cho biết có phải thiết bị chạm hay không. Máy tính bảng
+ * nằm ngang là 1024px — căn theo bề rộng thì nó bị xếp vào "desktop" và nhận
+ * nút 36px, đúng cái thiết bị cần 44px nhất. Mà quán mình máy tính bảng là
+ * thiết bị chính.
+ *
+ * `pointer-coarse` = trình duyệt tự khai báo đang dùng NGÓN TAY → 44px.
+ * Còn lại (chuột) → 36px cho gọn. Thuần CSS, không đo bằng JS nên xoay máy
+ * không remount, lựa chọn không mất.
+ */
+const CHIP = "min-h-9 pointer-coarse:min-h-11 px-3.5 py-1.5 rounded-full border " +
+  "text-[13px] font-medium transition-colors";
+const NUT_TRON = "size-9 pointer-coarse:size-11 shrink-0 rounded-full border border-border " +
+  "flex items-center justify-center text-muted-foreground " +
+  "hover:bg-surface-container-high hover:text-foreground transition-colors";
+
+/**
  * Phase 1A.2: parse composed note ngược lại sweetness/ice/free.
  * Format khi confirm: `${ice}, ${sweet} đường — ${free}` (mỗi phần optional).
  * Nếu không match modifier nào → trả nguyên note làm free-text.
@@ -415,6 +433,47 @@ export function FnbItemDialog({
     return missing;
   }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
 
+  /**
+   * 07/08 (CEO chốt) — THỨ TỰ NHÓM TRONG POPUP.
+   *
+   * Nguồn thứ tự CHÍNH là `sort_order` do CEO đặt trong màn Nhóm tuỳ chọn.
+   * Nhưng hôm nay CẢ 4 nhóm trong dữ liệu đều `sort_order = 0` → không có
+   * thứ tự nào, máy chủ trả về sao thì hiện vậy, nhóm bắt buộc rơi xuống
+   * cuối. Nên xếp theo 3 mức, giảm dần độ ưu tiên:
+   *  0. Nhóm BẮT BUỘC (Size…) — luôn trong tầm mắt, không phải cuộn
+   *  1. Nhóm chọn-một ngắn (Đường, Đá)
+   *  2. Nhóm chọn-nhiều (Topping…) — xuống cuối vì dài nhất
+   * Cùng mức thì theo `sort_order`, rồi ít lựa chọn trước, rồi tên A→Z.
+   *
+   * HAI ĐIỀU CỐ Ý KHÔNG LÀM:
+   *  • KHÔNG dò theo TÊN nhóm ("Size", "Đường"…) — mai CEO đổi tên là hỏng.
+   *  • KHÔNG đẩy nhóm "còn thiếu" lên đầu. Bản nháp của em có làm vậy và
+   *    nó SAI: thứ tự phụ thuộc cái đang chọn, nên vừa bấm Size xong là cả
+   *    danh sách nhảy chỗ ngay dưới ngón tay, dễ bấm nhầm nhóm khác. Việc
+   *    "còn thiếu" đã được viền đỏ + nhãn + nút dưới cùng nói rõ rồi —
+   *    thứ tự phải ĐỨNG YÊN.
+   */
+  const nhomDaSapXep = useMemo(() => {
+    if (!dynamicModifiers) return [] as ModifierGroup[];
+    const soLuaChon = (g: ModifierGroup) =>
+      dynamicModifiers.optionsByGroup.get(g.id)?.length ?? 0;
+    const uuTien = (g: ModifierGroup) =>
+      g.rule === "single_required" ? 0 : g.rule === "single" ? 1 : 2;
+    return [...dynamicModifiers.groups]
+      .filter((g) => soLuaChon(g) > 0)
+      .sort(
+        (a, b) =>
+          uuTien(a) - uuTien(b) ||
+          (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
+          soLuaChon(a) - soLuaChon(b) ||
+          a.name.localeCompare(b.name, "vi"),
+      );
+  }, [dynamicModifiers]);
+
+  /** Nhóm NGẮN xếp lưới cùng Size ở khu trên; nhóm DÀI xuống dưới. */
+  const nhomNgan = nhomDaSapXep.filter((g) => g.rule !== "multi");
+  const nhomDai = nhomDaSapXep.filter((g) => g.rule === "multi");
+
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
   const canConfirm =
@@ -522,6 +581,84 @@ export function FnbItemDialog({
     }
   }, [open, product?.id]);
 
+  /**
+   * Vẽ MỘT nhóm tuỳ chọn. Tách ra hàm để nhóm ngắn (khu trên) và nhóm dài
+   * (khu dưới) dùng CHUNG một cách vẽ — không có bản sao thứ hai để lệch.
+   */
+  function veNhom(g: ModifierGroup) {
+    const opts = dynamicModifiers?.optionsByGroup.get(g.id) ?? [];
+    if (opts.length === 0) return null;
+    const choices = dynamicChoices.get(g.id) ?? new Set<string>();
+    const ruleLabel =
+      g.rule === "single_required"
+        ? "Bắt buộc chọn 1"
+        : g.rule === "single"
+          ? "Chọn 1"
+          : "Chọn nhiều";
+    // BA trạng thái (CEO chốt): còn thiếu · đã chọn · chưa chọn.
+    const conThieu = missingRequiredGroupIds.has(g.id);
+    const daChonNhan = opts
+      .filter((o) => choices.has(o.id))
+      .map((o) => o.label)
+      .join(", ");
+    // Nhóm bắt buộc mà chưa chọn thì KHÔNG cho thu gọn — giấu đúng cái đang
+    // thiếu là cách chắc chắn nhất để bỏ sót.
+    const dangThuGon = nhomThuGon.has(g.id) && !conThieu;
+    return (
+      <section
+        key={g.id}
+        className={cn(
+          "min-w-0 space-y-1.5",
+          conThieu &&
+            "rounded-lg border border-status-error/40 bg-status-error/5 p-2.5",
+        )}
+      >
+        <NhanNhomTuyChon
+          ten={g.name}
+          nhanQuyTac={ruleLabel}
+          conThieu={conThieu}
+          daChonNhan={daChonNhan}
+          thuGonDuoc={!conThieu}
+          dangThuGon={dangThuGon}
+          onToggleThuGon={() => toggleThuGon(g.id)}
+        />
+        {/* Ẩn bằng CSS, KHÔNG gỡ khỏi cây React — thu gọn rồi bung lại vẫn
+            còn nguyên lựa chọn. */}
+        <div className={cn("flex flex-wrap gap-2", dangThuGon && "hidden")}>
+          {opts.map((o) => {
+            const active = choices.has(o.id);
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => toggleDynamicChoice(g, o.id)}
+                aria-pressed={active}
+                className={cn(
+                  CHIP,
+                  active
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:border-primary/40",
+                )}
+              >
+                <span className="break-words">{o.label}</span>
+                {o.priceDelta > 0 && (
+                  <span
+                    className={cn(
+                      "ml-1 whitespace-nowrap tabular-nums",
+                      active ? "" : "text-status-success",
+                    )}
+                  >
+                    +{formatCurrency(o.priceDelta)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
   if (!product) return null;
 
   return (
@@ -536,22 +673,69 @@ export function FnbItemDialog({
           68rem (1.088px, nằm trong khoảng 900–1.100 CEO chốt). Trần
           `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
       <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="text-lg line-clamp-2">{product.name}</DialogTitle>
-          <DialogDescription>Giá: {formatCurrency(product.sell_price)}đ</DialogDescription>
+        {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
+            tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
+            một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
+            tổng tiền thì chỉ thấy ở nút dưới cùng. */}
+        <DialogHeader className="shrink-0 gap-1.5">
+          <DialogTitle className="text-[19px] leading-tight line-clamp-2">
+            {product.name}
+          </DialogTitle>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <DialogDescription className="text-[13px]">
+              Giá gốc{" "}
+              <span className="whitespace-nowrap tabular-nums text-foreground">
+                {formatCurrency(product.sell_price)}đ
+              </span>
+            </DialogDescription>
+
+            <div className="flex items-center gap-3">
+              {/* Bộ số lượng — cùng hàng với tên + giá, không đứng riêng cột */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Bớt số lượng"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className={NUT_TRON}
+                >
+                  <Icon name="remove" size={18} />
+                </button>
+                <span className="w-8 text-center text-base font-semibold tabular-nums">
+                  {formatNumber(quantity)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Thêm số lượng"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className={NUT_TRON}
+                >
+                  <Icon name="add" size={18} />
+                </button>
+              </div>
+
+              <div className="text-right leading-tight">
+                <div className="text-[11px] text-muted-foreground">Tạm tính</div>
+                <div className="text-base font-semibold whitespace-nowrap tabular-nums">
+                  {formatCurrency(lineTotal)}đ
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
-        {/* Thân cuộn — bên trong là LƯỚI: 1 cột điện thoại · 2 cột từ tablet
-            · 3 cột desktop. Đổi bố cục hoàn toàn bằng CSS nên xoay máy /
-            bật bàn phím KHÔNG remount, lựa chọn còn nguyên.
-            `items-start` để nhóm ngắn không bị kéo cao bằng nhóm dài;
-            `min-w-0` ở từng khối để tên dài xuống dòng chứ không đẩy ngang. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 items-start gap-x-5 gap-y-4">
+        {/* 07/08 (CEO chốt) — THÂN CUỘN xếp theo NỘI DUNG, không chia đều cột.
+            Trước đây mọi nhóm bị nhét vào lưới 3 cột bằng nhau: nhóm 2 lựa
+            chọn và nhóm 5 dòng dài chiếm ô như nhau → chỗ thừa chỗ chật.
+            Nay: khu lựa chọn NGẮN (Size/Đường/Đá) xếp lưới gọn ở trên, khu
+            DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
+            Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
+            còn nguyên. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
           {modifiersFailed && (
-            <div className="col-span-full rounded-lg border border-status-error/30 bg-status-error/10 p-3 space-y-2">
+            <div className="rounded-lg border border-status-error/30 bg-status-error/10 p-3 space-y-2">
               <div className="flex items-start gap-2">
                 <Icon name="error" size={16} className="mt-0.5 shrink-0 text-status-error" />
                 <div className="text-sm">
@@ -576,72 +760,109 @@ export function FnbItemDialog({
               )}
             </div>
           )}
-          {/* Size / Variant selector. POS-FIX-C3: skeleton khi đang fetch
-              variants (cache miss) — tránh user thấy "không có size" rồi
-              tưởng món không có biến thể, click thêm với giá gốc. */}
-          {variantsLoading && (!variants || variants.length === 0) ? (
-            <section className="min-w-0 space-y-2">
-              <Label className="text-sm font-medium">Kích cỡ</Label>
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-11 w-20 rounded-lg bg-muted animate-pulse"
-                  />
-                ))}
-              </div>
-            </section>
-          ) : variants && variants.length > 0 ? (
-            <section className="min-w-0 space-y-2">
-              <Label className="text-sm font-medium">Kích cỡ</Label>
-              <div className="flex flex-wrap gap-2">
-                {variants.map((v) => (
-                  // min-h-11: vùng chạm ≥44px ở MỌI cỡ màn (trước đây desktop
-                  // co xuống 32px — ngón tay trên máy tính bảng bấm trượt).
-                  <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
-                    className={cn(
-                      "min-h-11 rounded-lg border px-4 py-2 text-sm transition-colors active:scale-95",
-                      selectedVariant?.id === v.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:border-primary/50",
-                    )}>
-                    <span className="break-words">{v.label}</span>{" "}
-                    {/* Tiền KHÔNG bao giờ được cắt bằng "…" */}
-                    <span className="whitespace-nowrap tabular-nums">
-                      {formatCurrency(v.sell_price)}đ
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </section>
-          ) : null}
+          {/* ══ KHU LỰA CHỌN CHÍNH — Size đầu tiên, rồi Đường/Đá ══
+              Toàn nhóm NGẮN nên xếp lưới gọn: 1 cột điện thoại · 2 cột tablet
+              · 3 cột desktop. Size luôn ở ô đầu, nhìn thấy ngay khi mở popup,
+              KHÔNG phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem
+              khối `nhomNgan` bên dưới.) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 items-start gap-x-5 gap-y-3.5">
+            {/* Size / Quy cách — POS-FIX-C3 giữ skeleton khi đang tải variants
+                để không ai tưởng món không có size rồi thêm với giá gốc. */}
+            {variantsLoading && (!variants || variants.length === 0) ? (
+              <section className="min-w-0 space-y-1.5">
+                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-9 w-20 rounded-full bg-muted animate-pulse" />
+                  ))}
+                </div>
+              </section>
+            ) : variants && variants.length > 0 ? (
+              <section className="min-w-0 space-y-1.5">
+                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <div className="flex flex-wrap gap-2">
+                  {variants.map((v) => (
+                    <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
+                      className={cn(
+                        CHIP, "active:scale-95",
+                        selectedVariant?.id === v.id
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-primary/50",
+                      )}>
+                      <span className="break-words">{v.label}</span>{" "}
+                      {/* Tiền KHÔNG bao giờ được cắt bằng "…" */}
+                      <span className="whitespace-nowrap tabular-nums">
+                        {formatCurrency(v.sell_price)}đ
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-          {/* Quantity */}
-          <section className="min-w-0 space-y-2">
-            <Label className="text-sm font-medium">Số lượng</Label>
-            <div className="flex items-center gap-3">
-              {/* ⚠️ PHẢI có cả `md:size-11`. Biến thể `size="icon"` của Button là
-                  `size-9 md:size-8`; tailwind-merge chỉ thay được `size-9` (cùng
-                  hạng, không tiền tố), còn `md:size-8` khác tiền tố nên VẪN THẮNG
-                  từ 768px trở lên. Đo trên bản xem trước: nút ra đúng 32px thay vì
-                  44px — bằng chứng là không được tin vào việc gộp class. */}
-              <Button variant="outline" size="icon" className="size-11 md:size-11"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
-                <Icon name="remove" size={18} />
-              </Button>
-              <span className="w-10 text-center text-lg font-semibold tabular-nums">{formatNumber(quantity)}</span>
-              <Button variant="outline" size="icon" className="size-11 md:size-11"
-                onClick={() => setQuantity((q) => q + 1)}>
-                <Icon name="add" size={18} />
-              </Button>
-            </div>
-          </section>
+            {/* Nhóm tuỳ chọn NGẮN (Size/Đường/Đá…) chèn vào cùng lưới này.
+                Nhóm bắt buộc chưa chọn xong luôn đứng trước — xem nhomDaSapXep. */}
+            {hasDynamicModifiers && nhomNgan.map(veNhom)}
 
-          {/* Toppings */}
+            {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
+                thu ngân không mất thao tác quen. */}
+            {!hasDynamicModifiers && (
+              <>
+                <section className="min-w-0 space-y-1.5">
+                  <Label className="text-[13px] font-medium">Mức đường</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SWEETNESS_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSweetness(sweetness === s ? "" : s)}
+                        aria-pressed={sweetness === s}
+                        className={cn(
+                          CHIP,
+                          sweetness === s
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="min-w-0 space-y-1.5">
+                  <Label className="text-[13px] font-medium">Mức đá</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {ICE_OPTIONS.map((i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setIceLevel(iceLevel === i ? "" : i)}
+                        aria-pressed={iceLevel === i}
+                        className={cn(
+                          CHIP,
+                          iceLevel === i
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        {i}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+          </div>
+
+          {/* ══ TOPPING — nhóm DÀI, chiếm TOÀN chiều ngang ══
+              Mỗi dòng: tên + giá bên trái, bộ tăng/giảm bên phải.
+              Từ 1280px chia 2 cột (ở 1024px mỗi cột chỉ ~400px, tên topping
+              thật dài 30+ ký tự sẽ xuống 3 dòng → rối hơn 1 cột). */}
           {toppings && toppings.length > 0 && (
-            <section className="min-w-0 space-y-2">
-              <Label className="text-sm font-medium">Topping</Label>
-              <div className="grid gap-2">
+            <section className="min-w-0 space-y-1.5">
+              <Label className="text-[13px] font-medium">Topping</Label>
+              <div className="grid gap-2 xl:grid-cols-2 xl:gap-x-4">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
                   const active = qty > 0;
@@ -665,7 +886,7 @@ export function FnbItemDialog({
                           type="button"
                           onClick={() => setToppingQty(t.id, qty - 1)}
                           disabled={qty === 0}
-                          className="size-11 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                          className="size-9 pointer-coarse:size-11 shrink-0 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
                           aria-label="Bớt topping"
                         >
                           <Icon name="remove" size={18} />
@@ -676,7 +897,7 @@ export function FnbItemDialog({
                         <button
                           type="button"
                           onClick={() => setToppingQty(t.id, qty + 1)}
-                          className="size-11 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed"
+                          className="size-9 pointer-coarse:size-11 shrink-0 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed"
                           aria-label="Thêm topping"
                         >
                           <Icon name="add" size={18} />
@@ -689,144 +910,20 @@ export function FnbItemDialog({
             </section>
           )}
 
-          {/* CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier groups từ DB.
-              Nếu SP có gán nhóm tuỳ chọn (qua category hoặc override) → render
-              ở đây. KHÔNG hiển thị hardcoded R7 nữa khi có dynamic. */}
-          {hasDynamicModifiers && dynamicModifiers && (
-            <>
-              {dynamicModifiers.groups.map((g) => {
-                const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
-                if (opts.length === 0) return null;
-                const choices = dynamicChoices.get(g.id) ?? new Set();
-                const ruleLabel =
-                  g.rule === "single_required"
-                    ? "Bắt buộc chọn 1"
-                    : g.rule === "single"
-                      ? "Chọn 1"
-                      : "Chọn nhiều";
-                // BA trạng thái (CEO chốt): còn thiếu · đã chọn · chưa chọn.
-                const conThieu = missingRequiredGroupIds.has(g.id);
-                const daChonNhan = opts
-                  .filter((o) => choices.has(o.id))
-                  .map((o) => o.label)
-                  .join(", ");
-                // Nhóm bắt buộc mà chưa chọn thì KHÔNG cho thu gọn — thu gọn
-                // đúng cái đang thiếu là cách chắc chắn nhất để bỏ sót.
-                const dangThuGon = nhomThuGon.has(g.id) && !conThieu;
-                return (
-                  <section
-                    key={g.id}
-                    className={cn(
-                      "min-w-0 space-y-2",
-                      conThieu &&
-                        "rounded-lg border border-status-error/40 bg-status-error/5 p-3",
-                    )}
-                  >
-                    <NhanNhomTuyChon
-                      ten={g.name}
-                      nhanQuyTac={ruleLabel}
-                      conThieu={conThieu}
-                      daChonNhan={daChonNhan}
-                      thuGonDuoc={!conThieu}
-                      dangThuGon={dangThuGon}
-                      onToggleThuGon={() => toggleThuGon(g.id)}
-                    />
-                    {/* Ẩn bằng CSS, KHÔNG gỡ khỏi cây React — thu gọn rồi bung
-                        lại vẫn còn nguyên lựa chọn. */}
-                    <div className={cn("flex flex-wrap gap-2", dangThuGon && "hidden")}>
-                      {opts.map((o) => {
-                        const active = choices.has(o.id);
-                        return (
-                          <button
-                            key={o.id}
-                            type="button"
-                            onClick={() => toggleDynamicChoice(g, o.id)}
-                            aria-pressed={active}
-                            className={cn(
-                              "min-h-11 px-4 py-2 rounded-full border text-sm font-medium transition-colors",
-                              active
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border hover:border-primary/40",
-                            )}
-                          >
-                            <span className="break-words">{o.label}</span>
-                            {o.priceDelta > 0 && (
-                              <span
-                                className={cn(
-                                  "ml-1 whitespace-nowrap tabular-nums",
-                                  active ? "" : "text-status-success",
-                                )}
-                              >
-                                +{formatCurrency(o.priceDelta)}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </section>
-                );
-              })}
-            </>
-          )}
+          {/* ══ NHÓM CHỌN-NHIỀU từ DB (Sprint 2.2e) — TOÀN chiều ngang ══
+              Loại này nhãn dài nhất và nhiều lựa chọn nhất, nên để riêng dưới
+              cùng thay vì nhét vào ô lưới bằng nhau ở trên. */}
+          {hasDynamicModifiers && nhomDai.map(veNhom)}
 
-          {/* R7: Modifier preset (FALLBACK khi chưa setup dynamic modifier) */}
-          {!hasDynamicModifiers && (
-            <>
-              <section className="min-w-0 space-y-2">
-                <Label className="text-sm font-medium">Mức đường</Label>
-                <div className="flex flex-wrap gap-2">
-                  {SWEETNESS_OPTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSweetness(sweetness === s ? "" : s)}
-                      aria-pressed={sweetness === s}
-                      className={cn(
-                        "min-h-11 px-4 py-2 rounded-full border text-sm font-medium transition-colors",
-                        sweetness === s
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <section className="min-w-0 space-y-2">
-                <Label className="text-sm font-medium">Mức đá</Label>
-                <div className="flex flex-wrap gap-2">
-                  {ICE_OPTIONS.map((i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setIceLevel(iceLevel === i ? "" : i)}
-                      aria-pressed={iceLevel === i}
-                      className={cn(
-                        "min-h-11 px-4 py-2 rounded-full border text-sm font-medium transition-colors",
-                        iceLevel === i
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      {i}
-                    </button>
-                  ))}
-                </div>
-              </section>
-            </>
-          )}
-
-          {/* Note tự do — chỉ dùng khi modifier preset không cover.
-              Trải hết bề ngang: chia cột cho ô nhập chữ chỉ làm khó gõ. */}
-          <section className="col-span-full min-w-0 space-y-2">
-            <Label className="text-sm font-medium flex items-center gap-2">
+          {/* Ghi chú tự do — trải hết bề ngang: chia cột cho ô nhập chữ chỉ
+              làm khó gõ. */}
+          <section className="min-w-0 space-y-1.5">
+            <Label className="text-[13px] font-medium flex items-center gap-2">
               <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2} className="resize-none text-sm" />
+              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2}
+              className="resize-none text-[13px]" />
           </section>
         </div>
 

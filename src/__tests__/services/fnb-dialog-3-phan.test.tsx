@@ -39,8 +39,10 @@ describe.each([
   });
 
   it("đầu + chân cố định (shrink-0), KHÔNG dùng sticky", () => {
-    expect(src).toMatch(/<DialogHeader className="shrink-0"/);
-    expect(src).toMatch(/<DialogFooter className="shrink-0"/);
+    // `shrink-0` phải là lớp ĐẦU, còn lớp phía sau (vd `gap-1.5`) thì tuỳ —
+    // khoá cứng dấu nháy đóng chỉ khiến thêm một lớp trang trí là gãy test.
+    expect(src).toMatch(/<DialogHeader className="shrink-0[ "]/);
+    expect(src).toMatch(/<DialogFooter className="shrink-0[ "]/);
     expect(src).not.toContain("sticky bottom-0");
   });
 
