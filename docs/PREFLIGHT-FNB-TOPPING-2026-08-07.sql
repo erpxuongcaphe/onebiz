@@ -1,19 +1,27 @@
 -- ============================================================
--- PREFLIGHT — CHỈ ĐỌC. KHÔNG sửa dữ liệu, KHÔNG tạo đơn.
--- Mục đích: xác nhận ĐỊNH NGHĨA ĐANG CÀI TRÊN PROD của 5 hàm F&B,
---           và hợp đồng khoá JSON topping (productId vs product_id).
+-- PREFLIGHT F&B TOPPING — CHỈ ĐỌC. KHÔNG sửa dữ liệu, KHÔNG tạo đơn.
+-- Bản 2 (07/08/2026) — sửa theo góp ý CEO:
+--   • đếm khoá JSON bằng regexp_count (bản 1 chia độ dài → đếm sai)
+--   • dòng có topping chỉ tính khi mảng CÓ PHẦN TỬ, không tính []
+--   • khảo sát đủ 3 nhóm mã NVL-TOP% / SKU-TOP% / SKU-TPP%
 --
 -- Cách chạy: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
--- Gửi lại kết quả từng phần cho Claude.
+-- Gửi lại kết quả từng phần.
+--
+-- Ghi chú: regexp_count cần PostgreSQL 15+. Nếu báo lỗi "function does not
+-- exist", thay bằng:  (select count(*) from regexp_matches(d, '...', 'g'))
 -- ============================================================
 
--- ── 1) 5 HÀM CÓ TỒN TẠI KHÔNG, BAO NHIÊU BẢN QUÁ TẢI? ──────────
+
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 1 — 5 HÀM: CÓ TỒN TẠI KHÔNG, BAO NHIÊU BẢN QUÁ TẢI?
+-- ══════════════════════════════════════════════════════════════
 select
-  p.proname                                   as ten_ham,
-  pg_get_function_identity_arguments(p.oid)   as tham_so,
-  p.prosecdef                                 as security_definer,
-  md5(pg_get_functiondef(p.oid))              as van_tay_dinh_nghia,
-  length(pg_get_functiondef(p.oid))           as do_dai
+  p.proname                                 as ten_ham,
+  pg_get_function_identity_arguments(p.oid) as tham_so,
+  p.prosecdef                               as security_definer,
+  md5(pg_get_functiondef(p.oid))            as van_tay,
+  length(pg_get_functiondef(p.oid))         as do_dai
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
@@ -25,68 +33,84 @@ where n.nspname = 'public'
     'consume_bom_for_sale'
   )
 order by p.proname, tham_so;
--- ĐỌC KẾT QUẢ: nếu một tên có >1 dòng ⇒ có bản quá tải cũ còn sót,
--- PostgREST có thể gọi nhầm bản cũ.
+-- ĐỌC: một tên có >1 dòng ⇒ còn bản quá tải cũ, PostgREST có thể gọi nhầm.
 
 
--- ── 2) HỢP ĐỒNG KHOÁ JSON TOPPING — ĐIỂM NGHI NGỜ CHÍNH ────────
--- Đếm số lần mỗi hàm GHI 'productId' / 'product_id' và ĐỌC ->>'productId' / ->>'product_id'
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 2 — HỢP ĐỒNG KHOÁ JSON TOPPING  ★ ĐIỂM NGHI NGỜ CHÍNH ★
+-- ══════════════════════════════════════════════════════════════
 select
-  p.proname as ten_ham,
-  (length(d) - length(replace(d, '''productId''',  ''))) / 12 as ghi_productId,
-  (length(d) - length(replace(d, '''product_id''', ''))) / 13 as ghi_product_id,
-  (length(d) - length(replace(d, '>>''productId''',  ''))) / 14 as doc_productId,
-  (length(d) - length(replace(d, '>>''product_id''', ''))) / 15 as doc_product_id
+  p.proname                                          as ten_ham,
+  regexp_count(d, '''productId''')                   as ghi_productId,
+  regexp_count(d, '''product_id''')                  as ghi_product_id,
+  regexp_count(d, '->>\s*''productId''')             as doc_productId,
+  regexp_count(d, '->>\s*''product_id''')            as doc_product_id,
+  regexp_count(d, 'topping')                         as so_lan_nhac_topping
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
   and p.proname in (
     'fnb_send_to_kitchen_atomic','fnb_send_to_kitchen_atomic_v2',
-    'fnb_complete_payment_atomic','_fnb_complete_payment_impl_00230','consume_bom_for_sale'
+    'fnb_complete_payment_atomic','_fnb_complete_payment_impl_00230',
+    'consume_bom_for_sale'
   )
 order by p.proname;
--- KỲ VỌNG NẾU HỆ THỐNG ĐÚNG: hàm gửi bếp GHI khoá nào thì hàm thanh toán ĐỌC khoá đó.
--- NGHI NGỜ TỪ REPO: gửi bếp ghi 'productId', thanh toán đọc ->>'product_id' ⇒ LỆCH.
+-- HỆ THỐNG ĐÚNG khi: hàm gửi bếp GHI khoá nào thì hàm thanh toán ĐỌC khoá đó.
+-- NGHI NGỜ TỪ REPO: gửi bếp ghi 'productId', thanh toán đọc ->>'product_id'.
+-- Nếu lệch ⇒ thanh toán KHÔNG trừ kho topping (mà tiền vẫn cộng).
 
 
--- ── 3) TRÍCH ĐÚNG ĐOẠN XỬ LÝ TOPPING TRONG HÀM THANH TOÁN ──────
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 3 — TRÍCH ĐOẠN XỬ LÝ TOPPING TRONG HÀM THANH TOÁN
+-- ══════════════════════════════════════════════════════════════
 select
   p.proname,
-  substring(pg_get_functiondef(p.oid)
-            from position('toppings' in pg_get_functiondef(p.oid)) - 200
-            for 1800) as doan_xu_ly_topping
+  substring(d from greatest(position('toppings' in d) - 200, 1) for 2000)
+    as doan_xu_ly_topping
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
   and p.proname in ('fnb_complete_payment_atomic','_fnb_complete_payment_impl_00230');
 
 
--- ── 4) TRÍCH ĐOẠN GHI SNAPSHOT TOPPING TRONG HÀM GỬI BẾP ───────
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 4 — TRÍCH ĐOẠN GHI SNAPSHOT TOPPING TRONG HÀM GỬI BẾP
+-- ══════════════════════════════════════════════════════════════
 select
   p.proname,
-  substring(pg_get_functiondef(p.oid)
-            from position('toppings_snapshot' in pg_get_functiondef(p.oid)) - 100
-            for 1500) as doan_ghi_snapshot
+  substring(d from greatest(position('topping' in d) - 150, 1) for 2000)
+    as doan_ghi_snapshot
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public'
   and p.proname like 'fnb_send_to_kitchen_atomic%';
 
 
--- ── 5) consume_bom_for_sale — CÓ NHẬN modifier_selections KHÔNG? ──
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 5 — consume_bom_for_sale: NHẬN GÌ, XỬ LÝ GÌ
+-- ══════════════════════════════════════════════════════════════
 select
-  pg_get_function_identity_arguments(p.oid) as tham_so_day_du,
-  position('linkedProductId' in pg_get_functiondef(p.oid)) > 0 as co_xu_ly_linkedProductId,
-  position('p_modifier_selections' in pg_get_functiondef(p.oid)) > 0 as co_nhan_modifier
+  pg_get_function_identity_arguments(p.oid)        as tham_so_day_du,
+  regexp_count(d, 'linkedProductId') > 0           as co_xu_ly_linkedProductId,
+  regexp_count(d, 'p_modifier_selections') > 0     as co_nhan_modifier_selections,
+  regexp_count(d, 'scale_factor|scaleFactor') > 0  as co_xu_ly_he_so_scale,
+  regexp_count(d, 'upsert_branch_stock')           as so_lan_tru_ton_chi_nhanh,
+  regexp_count(d, 'increment_product_stock')       as so_lan_tru_ton_tong,
+  regexp_count(d, 'allocate_lots_fifo')            as so_lan_tru_lo_fifo
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+cross join lateral (select pg_get_functiondef(p.oid) as d) x
 where n.nspname = 'public' and p.proname = 'consume_bom_for_sale';
 
 
--- ── 6) HÀM NÀO ĐANG KHOÁ CỨNG 'NVL-TOP%'? ─────────────────────
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 6 — HÀM NÀO ĐANG KHOÁ CỨNG 'NVL-TOP%'
+-- ══════════════════════════════════════════════════════════════
 select p.proname,
-       position('NVL-TOP' in pg_get_functiondef(p.oid)) > 0 as khoa_cung_NVL_TOP
+       regexp_count(pg_get_functiondef(p.oid), 'NVL-TOP') as so_lan_khoa_cung
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
 where n.nspname = 'public'
@@ -94,41 +118,121 @@ where n.nspname = 'public'
 order by p.proname;
 
 
--- ── 7) DỮ LIỆU ĐÃ PHÁT SINH CHƯA (để biết mức thiệt hại) ──────
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 7 — DỮ LIỆU ĐÃ PHÁT SINH THẬT SỰ (mức thiệt hại)
+-- ══════════════════════════════════════════════════════════════
 select
-  (select count(*) from public.kitchen_orders)                                as tong_don_bep,
-  (select count(*) from public.kitchen_order_items where toppings is not null) as dong_co_topping,
-  (select count(*) from public.stock_movements where reference_type = 'modifier_topping') as so_kho_modifier_topping,
-  (select count(*) from public.stock_movements where note ilike 'Topping %')   as so_kho_topping_cu;
+  (select count(*) from public.kitchen_orders)                                   as tong_don_bep,
+  (select count(*) from public.kitchen_order_items)                              as tong_dong_don_bep,
+  -- CHỈ tính dòng có topping THẬT (mảng có phần tử), KHÔNG tính []
+  (select count(*) from public.kitchen_order_items
+     where jsonb_array_length(coalesce(toppings, '[]'::jsonb)) > 0)              as dong_co_topping_that,
+  (select count(*) from public.kitchen_order_items
+     where jsonb_array_length(coalesce(modifier_selections, '[]'::jsonb)) > 0)   as dong_co_modifier_that,
+  (select count(*) from public.stock_movements
+     where reference_type = 'modifier_topping')                                  as so_kho_tu_modifier,
+  (select count(*) from public.stock_movements
+     where note ilike 'Topping %')                                               as so_kho_tu_topping_cu,
+  (select count(*) from public.invoices where channel = 'fnb')                   as hoa_don_fnb;
 
 
--- ── 8) ĐƠN VỊ TÍNH — CƠ CHẾ SẴN CÓ CỦA ONEBIZ ─────────────────
-select table_name
-from information_schema.tables
-where table_schema = 'public'
-  and (table_name ilike '%uom%' or table_name ilike '%unit%' or table_name ilike '%conversion%');
-
-select column_name, data_type, column_default, is_nullable
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 8 — KHẢO SÁT ĐỦ 3 NHÓM MÃ  (NVL-TOP / SKU-TOP / SKU-TPP)
+-- ══════════════════════════════════════════════════════════════
+-- 8a. Cột vai trò tồn kho có tồn tại không?
+select column_name, data_type
 from information_schema.columns
 where table_schema = 'public' and table_name = 'products'
-  and (column_name ilike '%unit%' or column_name ilike '%uom%' or column_name ilike '%conversion%' or column_name ilike '%pack%')
-order by column_name;
+  and column_name in ('inventory_role','product_type','channel','has_bom','bom_code');
 
--- Giá trị thật đang dùng ở 5 mã nguyên liệu topping
-select code, name, unit, purchase_unit, stock_unit, sell_unit, stock, cost_price, sell_price
-from public.products
-where code like 'NVL-TOP%'
-order by code;
+-- 8b. Bảng chính — 3 nhóm mã, kèm số dòng lịch sử từng mã
+select
+  case
+    when p.code like 'NVL-TOP%' then '1-NGUYEN LIEU'
+    when p.code like 'SKU-TOP%' then '2-BAN NGUYEN TUI'
+    when p.code like 'SKU-TPP%' then '3-TOPPING THEO PHAN'
+  end                                       as nhom,
+  p.code, p.name,
+  p.product_type                            as loai,
+  p.channel                                 as kenh,
+  p.unit                                    as dvt_chinh,
+  p.purchase_unit                           as dvt_mua,
+  p.stock_unit                              as dvt_kho,
+  p.sell_unit                               as dvt_ban,
+  p.sell_price                              as gia_ban,
+  p.cost_price                              as gia_von,
+  p.stock                                   as ton_tong,
+  p.has_bom                                 as co_bom,
+  p.bom_code                                as ma_bom,
+  p.is_active                               as dang_bat,
+  (select count(*) from public.purchase_order_items poi where poi.product_id = p.id) as so_dong_phieu_nhap,
+  (select count(*) from public.invoice_items ii      where ii.product_id  = p.id)    as so_dong_hoa_don,
+  (select count(*) from public.stock_movements sm    where sm.product_id  = p.id)    as so_dong_so_kho,
+  (select count(*) from public.bom_items bi          where bi.material_id = p.id)    as so_lan_lam_nguyen_lieu,
+  (select count(*) from public.branch_stock bs       where bs.product_id  = p.id)    as so_dong_ton_chi_nhanh,
+  (select count(*) from public.modifier_options mo   where mo.linked_product_id = p.id) as so_lua_chon_noi_toi
+from public.products p
+where p.code like 'NVL-TOP%' or p.code like 'SKU-TOP%' or p.code like 'SKU-TPP%'
+order by nhom, p.code;
 
--- BOM đang ghi định lượng theo đơn vị nào (mẫu 20 dòng)
-select b.code as ma_cong_thuc, p.code as ma_nvl, p.name as ten_nvl,
-       p.unit as dvt_nvl, bi.quantity as dinh_luong
+-- 8c. Công thức của 3 nhóm này đang ghi định lượng theo đơn vị nào
+select
+  po.code as ma_san_pham_dau_ra, po.name as ten_san_pham, po.unit as dvt_dau_ra,
+  b.code  as ma_cong_thuc, b.output_quantity as san_luong,
+  pm.code as ma_nguyen_lieu, pm.name as ten_nguyen_lieu,
+  pm.unit as dvt_nguyen_lieu, bi.quantity as dinh_luong, bi.unit as dvt_ghi_trong_ct
 from public.bom_items bi
-join public.bom b on b.id = bi.bom_id
-join public.products p on p.id = bi.material_id
-order by b.code
-limit 20;
+join public.bom b        on b.id = bi.bom_id
+join public.products pm  on pm.id = bi.material_id
+left join public.products po on po.id = b.product_id
+where pm.code like 'NVL-TOP%' or pm.code like 'SKU-TOP%' or pm.code like 'SKU-TPP%'
+   or po.code like 'NVL-TOP%' or po.code like 'SKU-TOP%' or po.code like 'SKU-TPP%'
+order by po.code nulls last, pm.code;
+
+
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 9 — NHÓM TUỲ CHỌN: THỨ TỰ, LUẬT, MẶC ĐỊNH, LIÊN KẾT
+-- ══════════════════════════════════════════════════════════════
+select
+  g.sort_order as thu_tu, g.name as ten_nhom, g.rule as luat, g.is_active as dang_bat,
+  (select count(*) from public.modifier_options o where o.group_id = g.id)                     as so_lua_chon,
+  (select count(*) from public.modifier_options o where o.group_id = g.id and o.is_default)    as so_mac_dinh,
+  (select count(*) from public.modifier_options o where o.group_id = g.id and o.linked_product_id is not null) as so_lua_chon_co_noi_sku,
+  (select count(*) from public.category_modifier_groups l where l.modifier_group_id = g.id)    as so_nhom_hang_gan,
+  (select count(*) from public.product_modifier_groups l where l.modifier_group_id = g.id)     as so_mon_gan_rieng
+from public.modifier_groups g
+order by g.sort_order, g.name;
+-- ĐỌC: nhóm luật single/single_required mà so_mac_dinh > 1 ⇒ CẤU HÌNH SAI.
+-- Nếu MỌI nhóm đều sort_order = 0 ⇒ thứ tự hiện trên popup là ngẫu nhiên.
+
+-- 9b. Chi tiết lựa chọn của nhóm chọn-một có nhiều mặc định
+select g.name as ten_nhom, g.rule as luat,
+       o.sort_order, o.label, o.price_delta, o.scale_factor, o.is_default,
+       lp.code as sku_duoc_noi, lp.unit as dvt_sku, lp.sell_price as gia_sku
+from public.modifier_groups g
+join public.modifier_options o on o.group_id = g.id
+left join public.products lp on lp.id = o.linked_product_id
+where g.rule in ('single','single_required')
+order by g.name, o.sort_order;
+
+
+-- ══════════════════════════════════════════════════════════════
+-- PHẦN 10 — CƠ CHẾ ĐƠN VỊ TÍNH
+-- ══════════════════════════════════════════════════════════════
+select from_unit, to_unit, factor, is_active, count(*) as so_san_pham
+from public.uom_conversions
+group by from_unit, to_unit, factor, is_active
+order by so_san_pham desc;
+
+-- Có hàm nào của DB đọc uom_conversions khi trừ kho không?
+select p.proname
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public'
+  and pg_get_functiondef(p.oid) like '%uom_conversions%'
+order by p.proname;
+-- Kết quả RỖNG ⇒ bảng quy đổi chỉ dùng để HIỂN THỊ, kho vẫn chạy theo products.unit.
 
 -- ============================================================
--- HẾT — toàn bộ câu lệnh trên chỉ SELECT.
+-- HẾT — toàn bộ 10 phần chỉ SELECT, không ghi bất kỳ dòng nào.
 -- ============================================================
