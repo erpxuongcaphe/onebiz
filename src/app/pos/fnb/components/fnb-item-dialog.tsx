@@ -125,6 +125,20 @@ const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as
  */
 const CHIP = "min-h-9 pointer-coarse:min-h-11 px-3.5 py-1.5 rounded-full border " +
   "text-[13px] font-medium transition-colors";
+
+/**
+ * 07/08 — Ô của MỘT nhóm ngắn trong khu lựa chọn chính.
+ *
+ * Vì sao KHÔNG dùng lưới chia đều: đo trên bản xem trước thấy "Mức đường"
+ * (5 lựa chọn) bị ép trong ô 318px nên "100%" rớt xuống dòng hai, trong khi
+ * ô thứ ba bên phải bỏ trống. Chia đều 3 cột chỉ là bản khác của đúng lỗi
+ * "chỗ thừa chỗ chật".
+ *
+ * `flex-auto` = bề rộng khởi điểm bằng ĐÚNG nội dung, rồi mới chia phần dư.
+ * Nhóm 5 lựa chọn tự rộng hơn nhóm 4 lựa chọn; hết chỗ thì tự xuống dòng.
+ * Điện thoại (dưới sm) thì mỗi nhóm một dòng.
+ */
+const O_NHOM = "min-w-0 w-full sm:w-auto sm:flex-auto sm:min-w-[15rem] space-y-1.5";
 const NUT_TRON = "size-9 pointer-coarse:size-11 shrink-0 rounded-full border border-border " +
   "flex items-center justify-center text-muted-foreground " +
   "hover:bg-surface-container-high hover:text-foreground transition-colors";
@@ -608,7 +622,7 @@ export function FnbItemDialog({
       <section
         key={g.id}
         className={cn(
-          "min-w-0 space-y-1.5",
+          O_NHOM,
           conThieu &&
             "rounded-lg border border-status-error/40 bg-status-error/5 p-2.5",
         )}
@@ -761,15 +775,15 @@ export function FnbItemDialog({
             </div>
           )}
           {/* ══ KHU LỰA CHỌN CHÍNH — Size đầu tiên, rồi Đường/Đá ══
-              Toàn nhóm NGẮN nên xếp lưới gọn: 1 cột điện thoại · 2 cột tablet
-              · 3 cột desktop. Size luôn ở ô đầu, nhìn thấy ngay khi mở popup,
-              KHÔNG phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem
-              khối `nhomNgan` bên dưới.) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 items-start gap-x-5 gap-y-3.5">
+              Xếp hàng ngang tự xuống dòng, MỖI Ô RỘNG THEO NỘI DUNG (xem
+              O_NHOM). Size luôn ở ô đầu, nhìn thấy ngay khi mở popup, KHÔNG
+              phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem khối
+              `nhomNgan`.) */}
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-3.5">
             {/* Size / Quy cách — POS-FIX-C3 giữ skeleton khi đang tải variants
                 để không ai tưởng món không có size rồi thêm với giá gốc. */}
             {variantsLoading && (!variants || variants.length === 0) ? (
-              <section className="min-w-0 space-y-1.5">
+              <section className={O_NHOM}>
                 <Label className="text-[13px] font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {[1, 2, 3].map((i) => (
@@ -778,7 +792,7 @@ export function FnbItemDialog({
                 </div>
               </section>
             ) : variants && variants.length > 0 ? (
-              <section className="min-w-0 space-y-1.5">
+              <section className={O_NHOM}>
                 <Label className="text-[13px] font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {variants.map((v) => (
@@ -808,7 +822,7 @@ export function FnbItemDialog({
                 thu ngân không mất thao tác quen. */}
             {!hasDynamicModifiers && (
               <>
-                <section className="min-w-0 space-y-1.5">
+                <section className={O_NHOM}>
                   <Label className="text-[13px] font-medium">Mức đường</Label>
                   <div className="flex flex-wrap gap-2">
                     {SWEETNESS_OPTIONS.map((s) => (
@@ -830,7 +844,7 @@ export function FnbItemDialog({
                   </div>
                 </section>
 
-                <section className="min-w-0 space-y-1.5">
+                <section className={O_NHOM}>
                   <Label className="text-[13px] font-medium">Mức đá</Label>
                   <div className="flex flex-wrap gap-2">
                     {ICE_OPTIONS.map((i) => (

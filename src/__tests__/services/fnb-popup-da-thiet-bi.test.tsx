@@ -251,11 +251,15 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
   });
 
   it("thân xếp theo NỘI DUNG, không chia đều mỗi nhóm một cột", () => {
-    // CEO bác bản trước vì mọi nhóm bị nhét vào cùng một lưới 3 cột bằng
-    // nhau. Nay thân là CỘT DỌC: khu lựa chọn ngắn mới là lưới, còn khu dài
-    // (Topping) chiếm toàn chiều ngang.
+    // CEO bác bản trước vì mọi nhóm bị nhét vào cùng một lưới cột bằng nhau.
+    // Nay thân là CỘT DỌC, và khu lựa chọn ngắn là hàng ngang tự xuống dòng
+    // với mỗi ô RỘNG THEO NỘI DUNG (`flex-auto` = khởi điểm bằng nội dung).
     expect(nguon).toContain("flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4");
-    expect(nguon).toContain("grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3");
+    expect(nguon).toContain("flex flex-wrap items-start gap-x-6 gap-y-3.5");
+    expect(nguon).toContain("sm:flex-auto");
+    // Đo trên bản xem trước: lưới chia đều ép "Mức đường" (5 lựa chọn) xuống
+    // 2 dòng trong khi ô thứ ba bỏ trống. KHÔNG được quay lại kiểu đó.
+    expect(nguon).not.toContain("sm:grid-cols-2 xl:grid-cols-3");
   });
 
   it("giữ nguyên khung 3 phần của PR trước (đầu / thân cuộn / chân)", () => {
