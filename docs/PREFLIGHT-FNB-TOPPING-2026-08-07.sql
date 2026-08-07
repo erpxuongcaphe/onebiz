@@ -20,6 +20,16 @@
 -- ══════════════════════════════════════════════════════════════
 select version() as phien_ban_postgres, current_database() as csdl;
 
+-- 0b. IN RA CỘT THẬT của các bảng dùng bên dưới — để KHÔNG BAO GIỜ đoán nữa.
+--     (Bản 2 chết vì đoán `invoices.channel`; bản 3 đoán sai `bom.output_quantity`.)
+select table_name, string_agg(column_name, ', ' order by ordinal_position) as cac_cot
+from information_schema.columns
+where table_schema = 'public'
+  and table_name in ('invoices','bom','bom_items','kitchen_orders','kitchen_order_items',
+                     'stock_movements','modifier_groups','modifier_options','uom_conversions')
+group by table_name
+order by table_name;
+
 
 -- ══════════════════════════════════════════════════════════════
 -- PHẦN 1 — 5 HÀM: CÓ TỒN TẠI KHÔNG, BAO NHIÊU BẢN QUÁ TẢI?
@@ -147,7 +157,15 @@ select
      where reference_type = 'modifier_topping')                                  as so_kho_tu_modifier,
   (select count(*) from public.stock_movements
      where note ilike 'Topping %')                                               as so_kho_tu_topping_cu,
-  (select count(*) from public.invoices where channel = 'fnb')                   as hoa_don_fnb;
+  -- `invoices` KHÔNG có cột channel (bản 2 chết ở đây). Hoá đơn F&B nhận diện
+  -- qua đơn bếp đã nối sang hoá đơn.
+  (select count(*) from public.kitchen_orders where invoice_id is not null)       as don_bep_da_ra_hoa_don;
+
+-- 7b. Hoá đơn phân theo cột `source` thật sự có
+select coalesce(source,'(rỗng)') as nguon, status, count(*) as so_hoa_don
+from public.invoices
+group by coalesce(source,'(rỗng)'), status
+order by so_hoa_don desc;
 
 
 -- ══════════════════════════════════════════════════════════════
@@ -183,11 +201,15 @@ where p.code like 'NVL-TOP%' or p.code like 'SKU-TOP%' or p.code like 'SKU-TPP%'
 order by nhom, p.code;
 
 -- 8c. Công thức của 3 nhóm này ghi định lượng theo đơn vị nào
+-- LƯU Ý: bảng `bom` KHÔNG có cột output_quantity — cột thật là
+-- yield_qty / yield_unit / batch_size.
 select
   po.code as ma_san_pham_dau_ra, po.name as ten_san_pham, po.unit as dvt_dau_ra,
-  b.code  as ma_cong_thuc, b.output_quantity as san_luong,
+  b.code  as ma_cong_thuc, b.name as ten_cong_thuc,
+  b.yield_qty as san_luong, b.yield_unit as dvt_san_luong, b.batch_size as co_me,
   pm.code as ma_nguyen_lieu, pm.name as ten_nguyen_lieu,
-  pm.unit as dvt_nguyen_lieu, bi.quantity as dinh_luong, bi.unit as dvt_ghi_trong_ct
+  pm.unit as dvt_nguyen_lieu, bi.quantity as dinh_luong,
+  bi.unit as dvt_ghi_trong_ct, bi.waste_percent as hao_hut_phan_tram
 from public.bom_items bi
 join public.bom b        on b.id = bi.bom_id
 join public.products pm  on pm.id = bi.material_id
