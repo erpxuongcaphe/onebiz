@@ -2176,6 +2176,17 @@ function FnbPosPageInner() {
         });
         setShiftReloadToken((n) => n + 1);
         return false;
+      case "giu_gio_cho_ket_noi":
+        // Mất mạng mà chưa biết chắc ca đang mở. GIỮ NGUYÊN GIỎ — không xoá,
+        // không đóng tab — chỉ chặn bước thu tiền.
+        toast({
+          title: "Mất mạng — chưa xác nhận được ca bán",
+          description:
+            "Đơn vẫn được giữ nguyên. Có mạng lại rồi bấm Thanh toán.",
+          variant: "warning",
+          duration: 6000,
+        });
+        return false;
       case "khong_lam_gi":
         return false;
     }

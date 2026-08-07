@@ -68,12 +68,29 @@ describe("PR-D · quyết định thanh toán (một cửa cho cả 3 lối vào
     expect(qd).not.toBe("yeu_cau_mo_ca");
   });
 
-  it("OFFLINE VẪN BÁN ĐƯỢC — mọi trạng thái ca đều mở thanh toán", () => {
-    for (const shiftStatus of MOI_TRANG_THAI_CA) {
+  it("OFFLINE + ca ĐÃ BIẾT CHẮC đang mở → vẫn bán được", () => {
+    expect(
+      quyetDinhThanhToan({ lineCount: 3, isOnline: false, shiftStatus: "open" }),
+    ).toBe("mo_thanh_toan");
+  });
+
+  it("OFFLINE + chưa biết chắc ca → GIỮ GIỎ, KHÔNG cho thu tiền", () => {
+    // CEO chốt 07/08. Bản trước cho bán offline ở mọi trạng thái → tiền có
+    // thể không vào ca nào. Kể cả `none` cũng giữ giỏ: offline không mở ca được.
+    for (const shiftStatus of ["loading", "none", "error"] as const) {
       expect(
         quyetDinhThanhToan({ lineCount: 3, isOnline: false, shiftStatus }),
-      ).toBe("mo_thanh_toan");
+      ).toBe("giu_gio_cho_ket_noi");
     }
+  });
+
+  it("offline chỉ ĐÚNG MỘT trạng thái được thu tiền", () => {
+    const choMo = MOI_TRANG_THAI_CA.filter(
+      (shiftStatus) =>
+        quyetDinhThanhToan({ lineCount: 1, isOnline: false, shiftStatus }) ===
+        "mo_thanh_toan",
+    );
+    expect(choMo).toEqual(["open"]);
   });
 
   it("offline + giỏ rỗng vẫn không mở màn thanh toán", () => {

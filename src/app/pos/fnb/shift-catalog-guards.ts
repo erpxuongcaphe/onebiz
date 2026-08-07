@@ -39,7 +39,12 @@ export type PaymentDecision =
   /** Chắc chắn chưa mở ca — báo + mở popup mở ca. */
   | "yeu_cau_mo_ca"
   /** Không kiểm tra được ca — báo + tự thử lại, KHÔNG kết luận chưa mở ca. */
-  | "thu_lai_kiem_ca";
+  | "thu_lai_kiem_ca"
+  /**
+   * Mất mạng VÀ chưa biết chắc ca đang mở → GIỮ GIỎ, yêu cầu kết nối lại.
+   * Không xoá giỏ, không cho thu tiền.
+   */
+  | "giu_gio_cho_ket_noi";
 
 /**
  * Quyết định duy nhất cho cả 3 lối vào thanh toán (nút desktop, nút giỏ
@@ -47,9 +52,11 @@ export type PaymentDecision =
  * thêm điều kiện là phải sửa 3 nơi và chắc chắn sót một.
  *
  * Hai quy tắc quan trọng:
- *  • OFFLINE VẪN BÁN ĐƯỢC. Luồng bán offline không đọc ca từ máy chủ và vốn
- *    đã chạy như vậy. Thêm guard mà chặn mất doanh thu lúc rớt mạng là làm
- *    hỏng, không phải làm chặt.
+ *  • OFFLINE CHỈ BÁN KHI ĐÃ BIẾT CHẮC CA ĐANG MỞ (CEO chốt 07/08).
+ *    Bản trước của em cho bán offline ở MỌI trạng thái ca — tiền có thể
+ *    không vào ca nào. Nay: `open` (đã đọc thành công cho ĐÚNG chi nhánh +
+ *    ĐÚNG người, và được giữ lại khi rớt mạng — xem `giuDuocCaDaBiet`) thì
+ *    bán bình thường; chưa rõ hoặc lỗi thì GIỮ GIỎ, yêu cầu kết nối lại.
  *  • LỖI ≠ CHƯA MỞ CA. Không kiểm tra được thì thử lại, không bắt nhân viên
  *    mở ca thứ hai chồng lên ca đang mở thật.
  */
@@ -59,7 +66,13 @@ export function quyetDinhThanhToan(input: {
   shiftStatus: ShiftStatus;
 }): PaymentDecision {
   if (input.lineCount <= 0) return "khong_lam_gi";
-  if (!input.isOnline) return "mo_thanh_toan";
+  if (!input.isOnline) {
+    // Mất mạng: chỉ ca ĐÃ BIẾT CHẮC mới được thu tiền. Mọi trạng thái khác
+    // đều giữ giỏ — kể cả `none`, vì offline cũng không mở ca mới được.
+    return input.shiftStatus === "open"
+      ? "mo_thanh_toan"
+      : "giu_gio_cho_ket_noi";
+  }
   switch (input.shiftStatus) {
     case "open":
       return "mo_thanh_toan";
