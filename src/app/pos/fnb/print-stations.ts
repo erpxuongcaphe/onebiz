@@ -26,6 +26,13 @@ interface RawTicketItem {
   quantity: number;
   unitPrice: number;
   toppings: { name: string; quantity: number; price: number }[];
+  /**
+   * Nhãn tuỳ chọn ("Mức đường: 50%", "Mức đá: Ít đá"). Trước đây kiểu này
+   * KHÔNG khai trường trên, nên POS truyền vào bao nhiêu cũng bị bước tách
+   * trạm bỏ đi — bếp nhận phiếu giấy không có Đường/Đá. TypeScript không
+   * bắt được vì đối tượng đi qua `.map()` nên mất kiểm tra thuộc tính thừa.
+   */
+  modifierLabels?: string[];
   note?: string | null;
 }
 
@@ -93,6 +100,7 @@ export async function printKitchenTicketsByStation(
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         toppings: it.toppings,
+        modifierLabels: it.modifierLabels,
         note: it.note ?? undefined,
       })),
     });
