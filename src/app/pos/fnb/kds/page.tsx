@@ -586,6 +586,11 @@ function KdsPageInner() {
               quantity: t.quantity,
               price: t.price,
             })),
+            // PR 1 (P0.5): in LẠI phiếu cũng phải kèm Đường/Đá — cùng cách
+            // dựng nhãn với chỗ hiển thị trên màn KDS ngay bên dưới.
+            modifierLabels: it.modifierSelections?.map(
+              (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+            ),
             note: it.note ?? undefined,
           })),
           createdAt: order.createdAt,

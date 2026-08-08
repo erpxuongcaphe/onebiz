@@ -580,22 +580,52 @@ export async function getEffectiveModifierGroupsForProduct(
 
   // 1. Check SP-level override
   const productLinks = await listProductModifierLinks(productId);
-  const groupIds = productLinks.length > 0
-    ? productLinks.map((l) => l.modifierGroupId)
-    : categoryId
-      ? (await listCategoryModifierLinks(categoryId)).map((l) => l.modifierGroupId)
-      : [];
+  // Liên kết hiệu lực: cấp món ĐÈ cấp nhóm hàng. Giữ nguyên object link vì
+  // còn cần `sortOrder` và `ruleOverride` — bản cũ chỉ lấy id rồi vứt hết.
+  // (category_modifier_groups KHÔNG có rule_override — khớp máy chủ, chỉ
+  // coalesce trên liên kết cấp món.)
+  const links: Array<{ modifierGroupId: string; sortOrder: number; ruleOverride?: ModifierRule | null }> =
+    productLinks.length > 0
+      ? productLinks
+      : categoryId
+        ? await listCategoryModifierLinks(categoryId)
+        : [];
 
-  if (groupIds.length === 0) return [];
+  if (links.length === 0) return [];
 
+  // PR 1 (nghiên cứu chuẩn hoá 08/08, P0.4): LỌC CHANNEL GIỐNG MÁY CHỦ.
+  // RPC gửi bếp chỉ nhận nhóm 'fnb' hoặc 'all'. Không lọc ở đây thì nhóm
+  // gán nhầm kênh vẫn hiện trên POS, nhân viên chọn xong mới bị từ chối.
   const { data, error } = await supabase
     .from("modifier_groups")
     .select("*, modifier_options(count)")
-    .in("id", groupIds)
+    .in(
+      "id",
+      links.map((l) => l.modifierGroupId),
+    )
     .eq("is_active", true)
-    .order("sort_order", { ascending: true });
+    .in("channel", ["fnb", "all"]);
   if (error) handleError(error, "getEffectiveModifierGroupsForProduct");
-  return ((data ?? []) as RawGroup[]).map((row) => mapGroup(row));
+
+  const theoId = new Map(
+    ((data ?? []) as RawGroup[]).map((row) => [row.id, mapGroup(row)]),
+  );
+
+  // P0.2 + P0.3: áp rule_override và sắp theo sort_order của LIÊN KẾT.
+  //  • rule hiệu lực = coalesce(link.rule_override, group.rule) — y máy chủ.
+  //    Lệch nhau thì POS cho bỏ qua trong khi máy chủ chặn gửi bếp (hoặc
+  //    ngược lại: POS bắt buộc oan).
+  //  • thứ tự do người quản lý đặt Ở LIÊN KẾT, không phải sort_order của
+  //    bản thân nhóm — bản cũ sắp theo nhóm nên thứ tự riêng bị bỏ qua.
+  return links
+    .slice()
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .map((l) => {
+      const g = theoId.get(l.modifierGroupId);
+      if (!g) return null; // đã tắt, sai kênh, hoặc link mồ côi
+      return l.ruleOverride ? { ...g, rule: l.ruleOverride } : g;
+    })
+    .filter((g): g is ModifierGroup => g !== null);
 }
 
 // ────────────────────────────────────────────────────────────

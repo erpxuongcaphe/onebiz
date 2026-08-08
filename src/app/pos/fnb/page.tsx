@@ -1483,6 +1483,11 @@ function FnbPosPageInner() {
               quantity: t.quantity,
               price: t.price,
             })),
+            // PR 1 (08/08): luồng gửi bếp CHÍNH trước đây thiếu dòng này —
+            // màn KDS có Đường/Đá nhưng PHIẾU GIẤY thì không.
+            modifierLabels: l.modifierSelections?.map(
+              (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+            ),
             note: l.note,
           })),
           {
