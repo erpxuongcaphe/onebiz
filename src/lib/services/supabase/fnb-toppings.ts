@@ -37,6 +37,41 @@ export interface ToppingPhan {
 export const TIEN_TO_SKU_TOPPING = "SKU-TPP";
 
 /**
+ * CỜ CHUYỂN ĐỔI CƠ CHẾ TOPPING (CEO 08/08) — hai cơ chế KHÔNG được cùng
+ * hiện trên popup:
+ *
+ *   TẮT (mặc định) — bảo toàn hệ thống hiện tại: popup KHÔNG hiện khu
+ *     topping SKU (kể cả khi đã có mã hợp lệ), các nhóm tuỳ chọn (gồm nhóm
+ *     "Topping" chọn-nhiều cũ) giữ nguyên. Không đụng dữ liệu thật.
+ *   BẬT — chạy mô hình mới: hiện khu topping SKU bán theo phần, ẨN các nhóm
+ *     tuỳ chọn CHỌN-NHIỀU (mô hình chốt: "chọn nhiều" chính là cơ chế
+ *     topping bị thay thế; Đường/Đá/Size là chọn-một nên giữ nguyên).
+ *
+ * Bật bằng biến môi trường Vercel `NEXT_PUBLIC_FNB_TOPPING_SKU=1` +
+ * redeploy — có vết, đảo lại được ngay, không cần sửa mã. Nằm trong
+ * checklist "Cấu hình trước khi vận hành F&B".
+ */
+export const CHE_DO_TOPPING_SKU =
+  process.env.NEXT_PUBLIC_FNB_TOPPING_SKU === "1";
+
+/**
+ * Lọc nhóm tuỳ chọn theo cơ chế topping đang chạy. Tách lõi thuần
+ * (`apDungCheDoTopping`) để test được cả hai trạng thái cờ.
+ */
+export function apDungCheDoTopping<T extends { rule: string }>(
+  groups: T[],
+  cheDoSku: boolean,
+): T[] {
+  return cheDoSku ? groups.filter((g) => g.rule !== "multi") : groups;
+}
+
+export function locNhomTheoCheDoTopping<T extends { rule: string }>(
+  groups: T[],
+): T[] {
+  return apDungCheDoTopping(groups, CHE_DO_TOPPING_SKU);
+}
+
+/**
  * PHIÊN BẢN NGUỒN TOPPING trong cache offline (CEO yêu cầu 08/08).
  *
  * Cache đời cũ chứa NVL-TOP giá nguyên túi/hộp; bản build mới PHẢI coi cache

@@ -61,7 +61,11 @@ import {
   type DiscountPreset,
 } from "@/lib/services/supabase/fnb-platform-settings";
 import { getClient } from "@/lib/services/supabase/base";
-import { getToppingPhanHopLe } from "@/lib/services/supabase/fnb-toppings";
+import {
+  getToppingPhanHopLe,
+  CHE_DO_TOPPING_SKU,
+  locNhomTheoCheDoTopping,
+} from "@/lib/services/supabase/fnb-toppings";
 // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
 import {
   getEffectiveModifierGroupsForProduct,
@@ -3058,12 +3062,27 @@ function FnbPosPageInner() {
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
             variantsLoading={itemVariantsLoading}
-            toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
+            // 08/08 (CEO): HAI cơ chế topping không được cùng hiện. Cờ TẮT
+            // (mặc định) → giấu khu topping SKU, giữ nguyên nhóm tuỳ chọn
+            // như hệ thống hiện tại; BẬT → hiện topping SKU + ẩn nhóm
+            // chọn-nhiều cũ. Xem CHE_DO_TOPPING_SKU trong fnb-toppings.ts.
+            toppings={
+              CHE_DO_TOPPING_SKU && toppingProducts.length > 0
+                ? toppingProducts
+                : undefined
+            }
             onConfirm={handleItemConfirm}
             initialSelection={dialogInitialSelection}
             confirmLabel={editingLineId ? "Cập nhật" : undefined}
             // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options
-            dynamicModifiers={itemModifierData}
+            dynamicModifiers={
+              itemModifierData
+                ? {
+                    ...itemModifierData,
+                    groups: locNhomTheoCheDoTopping(itemModifierData.groups),
+                  }
+                : itemModifierData
+            }
             // 06/08: tải tuỳ chọn hỏng → dialog hiện lỗi + nút này
             onRetryModifiers={handleRetryModifiers}
           />
