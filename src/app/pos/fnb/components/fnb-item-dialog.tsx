@@ -112,6 +112,38 @@ const SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as c
 const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
 /**
+ * 07/08 (CEO chốt) — VÙNG CHẠM CĂN THEO LOẠI CON TRỎ, KHÔNG THEO BỀ RỘNG.
+ *
+ * Bề rộng màn KHÔNG cho biết có phải thiết bị chạm hay không. Máy tính bảng
+ * nằm ngang là 1024px — căn theo bề rộng thì nó bị xếp vào "desktop" và nhận
+ * nút 36px, đúng cái thiết bị cần 44px nhất. Mà quán mình máy tính bảng là
+ * thiết bị chính.
+ *
+ * `pointer-coarse` = trình duyệt tự khai báo đang dùng NGÓN TAY → 44px.
+ * Còn lại (chuột) → 36px cho gọn. Thuần CSS, không đo bằng JS nên xoay máy
+ * không remount, lựa chọn không mất.
+ */
+const CHIP = "min-h-9 pointer-coarse:min-h-11 px-3.5 py-1.5 rounded-full border " +
+  "text-[13px] font-medium transition-colors";
+
+/**
+ * 07/08 — Ô của MỘT nhóm ngắn trong khu lựa chọn chính.
+ *
+ * Vì sao KHÔNG dùng lưới chia đều: đo trên bản xem trước thấy "Mức đường"
+ * (5 lựa chọn) bị ép trong ô 318px nên "100%" rớt xuống dòng hai, trong khi
+ * ô thứ ba bên phải bỏ trống. Chia đều 3 cột chỉ là bản khác của đúng lỗi
+ * "chỗ thừa chỗ chật".
+ *
+ * `flex-auto` = bề rộng khởi điểm bằng ĐÚNG nội dung, rồi mới chia phần dư.
+ * Nhóm 5 lựa chọn tự rộng hơn nhóm 4 lựa chọn; hết chỗ thì tự xuống dòng.
+ * Điện thoại (dưới sm) thì mỗi nhóm một dòng.
+ */
+const O_NHOM = "min-w-0 w-full sm:w-auto sm:flex-auto sm:min-w-[15rem] space-y-1.5";
+const NUT_TRON = "size-9 pointer-coarse:size-11 shrink-0 rounded-full border border-border " +
+  "flex items-center justify-center text-muted-foreground " +
+  "hover:bg-surface-container-high hover:text-foreground transition-colors";
+
+/**
  * Phase 1A.2: parse composed note ngược lại sweetness/ice/free.
  * Format khi confirm: `${ice}, ${sweet} đường — ${free}` (mỗi phần optional).
  * Nếu không match modifier nào → trả nguyên note làm free-text.
@@ -146,6 +178,76 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
   }
   const free = [remaining.join(", "), freePart].filter(Boolean).join(" — ");
   return { ice, sweet, free };
+}
+
+/**
+ * 06/08/2026 — PR-B: nhãn của một nhóm tuỳ chọn, BA trạng thái rõ ràng
+ * (CEO chốt): còn thiếu (bắt buộc mà chưa chọn) · đã chọn (hiện luôn lựa
+ * chọn hiện tại) · chưa chọn (nhóm không bắt buộc).
+ *
+ * Tên nhóm dài thì XUỐNG DÒNG, không cắt. Trên điện thoại nhóm thu gọn
+ * được nhưng nhãn vẫn phải nói đang chọn gì — nếu không, thu gọn xong là
+ * mất dấu vết.
+ */
+function NhanNhomTuyChon({
+  ten,
+  nhanQuyTac,
+  conThieu,
+  daChonNhan,
+  thuGonDuoc,
+  dangThuGon,
+  onToggleThuGon,
+}: {
+  ten: string;
+  nhanQuyTac: string;
+  conThieu: boolean;
+  daChonNhan: string;
+  thuGonDuoc: boolean;
+  dangThuGon: boolean;
+  onToggleThuGon: () => void;
+}) {
+  const noiDung = (
+    <>
+      <span className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-medium break-words">{ten}</span>
+        <span
+          className={cn(
+            "rounded-full px-2 py-0.5 text-xs font-normal whitespace-nowrap",
+            conThieu
+              ? "bg-status-error/15 text-status-error font-medium"
+              : "bg-surface-container-high text-muted-foreground",
+          )}
+        >
+          {conThieu ? "Chưa chọn — bắt buộc" : nhanQuyTac}
+        </span>
+      </span>
+      {/* Đã chọn gì — luôn hiện, kể cả khi nhóm đang thu gọn. */}
+      {daChonNhan && (
+        <span className="block text-xs text-muted-foreground break-words">
+          Đang chọn: <span className="text-foreground">{daChonNhan}</span>
+        </span>
+      )}
+    </>
+  );
+
+  if (!thuGonDuoc) {
+    return <div className="space-y-1">{noiDung}</div>;
+  }
+  return (
+    <button
+      type="button"
+      onClick={onToggleThuGon}
+      aria-expanded={!dangThuGon}
+      className="flex min-h-11 w-full items-start justify-between gap-2 text-left"
+    >
+      <span className="min-w-0 space-y-1">{noiDung}</span>
+      <Icon
+        name={dangThuGon ? "expand_more" : "expand_less"}
+        size={18}
+        className="mt-0.5 shrink-0 text-muted-foreground"
+      />
+    </button>
+  );
 }
 
 export function FnbItemDialog({
@@ -184,6 +286,20 @@ export function FnbItemDialog({
   // dựa vào state thì 2 cú bấm liền vẫn lọt cả hai.
   const submitLockRef = useRef(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // 06/08 — PR-B: nhóm nào đang thu gọn. Nội dung nhóm thu gọn vẫn NẰM
+  // NGUYÊN trong cây React (chỉ ẩn bằng CSS) nên lựa chọn không mất; đây
+  // cũng là lý do KHÔNG đo bề rộng bằng JS rồi render nhánh khác nhau —
+  // mỗi lần xoay máy là mất sạch lựa chọn.
+  const [nhomThuGon, setNhomThuGon] = useState<Set<string>>(new Set());
+  const toggleThuGon = useCallback((groupId: string) => {
+    setNhomThuGon((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -227,10 +343,29 @@ export function FnbItemDialog({
             );
           }
         }
+        /**
+         * 07/08 — TỰ VỆ khi dữ liệu nhóm "Chọn 1" có NHIỀU mặc định.
+         *
+         * Thấy tận mắt trên bản xem trước: nhóm "Mức đường — Chọn 1" sáng
+         * cùng lúc "Không đường" VÀ "100%". Đây là lỗi cấu hình dữ liệu (CEO
+         * đã biết), nhưng KHÔNG được để nó thành lỗi tiền: mỗi lựa chọn có
+         * phụ thu riêng, giữ cả hai là cộng phụ thu HAI LẦN cho một nhóm chỉ
+         * được chọn một.
+         *
+         * `toggleDynamicChoice` đã ép chọn-một khi NGƯỜI DÙNG bấm; chỗ này
+         * ép nốt lúc NẠP. Giữ theo thứ tự hiển thị để đoán được: cái đứng
+         * trước thắng. Nhóm chọn-nhiều giữ nguyên.
+         */
+        const epChonMot = (g: ModifierGroup, ids: Set<string>) => {
+          if (g.rule === "multi" || ids.size <= 1) return ids;
+          const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+          const dau = opts.find((o) => ids.has(o.id));
+          return new Set(dau ? [dau.id] : []);
+        };
         for (const g of dynamicModifiers.groups) {
           const saved = savedByGroup.get(g.id);
           if (saved && saved.size > 0) {
-            initChoices.set(g.id, saved);
+            initChoices.set(g.id, epChonMot(g, saved));
             continue;
           }
           // No saved → use defaults (only for "add new" mode)
@@ -238,7 +373,7 @@ export function FnbItemDialog({
             const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
             const defaults = opts.filter((o) => o.isDefault).map((o) => o.id);
             if (defaults.length > 0) {
-              initChoices.set(g.id, new Set(defaults));
+              initChoices.set(g.id, epChonMot(g, new Set(defaults)));
             }
           }
         }
@@ -246,6 +381,9 @@ export function FnbItemDialog({
       } else {
         setDynamicChoices(new Map());
       }
+      // Mở lại popup thì mọi nhóm đều bung — không để nhân viên mở món sau
+      // mà nhóm vẫn thu gọn theo món trước.
+      setNhomThuGon(new Set());
     }
   }, [open, variants, initialSelection, dynamicModifiers]);
 
@@ -327,6 +465,47 @@ export function FnbItemDialog({
     }
     return missing;
   }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
+
+  /**
+   * 07/08 (CEO chốt) — THỨ TỰ NHÓM TRONG POPUP.
+   *
+   * Nguồn thứ tự CHÍNH là `sort_order` do CEO đặt trong màn Nhóm tuỳ chọn.
+   * Nhưng hôm nay CẢ 4 nhóm trong dữ liệu đều `sort_order = 0` → không có
+   * thứ tự nào, máy chủ trả về sao thì hiện vậy, nhóm bắt buộc rơi xuống
+   * cuối. Nên xếp theo 3 mức, giảm dần độ ưu tiên:
+   *  0. Nhóm BẮT BUỘC (Size…) — luôn trong tầm mắt, không phải cuộn
+   *  1. Nhóm chọn-một ngắn (Đường, Đá)
+   *  2. Nhóm chọn-nhiều (Topping…) — xuống cuối vì dài nhất
+   * Cùng mức thì theo `sort_order`, rồi ít lựa chọn trước, rồi tên A→Z.
+   *
+   * HAI ĐIỀU CỐ Ý KHÔNG LÀM:
+   *  • KHÔNG dò theo TÊN nhóm ("Size", "Đường"…) — mai CEO đổi tên là hỏng.
+   *  • KHÔNG đẩy nhóm "còn thiếu" lên đầu. Bản nháp của em có làm vậy và
+   *    nó SAI: thứ tự phụ thuộc cái đang chọn, nên vừa bấm Size xong là cả
+   *    danh sách nhảy chỗ ngay dưới ngón tay, dễ bấm nhầm nhóm khác. Việc
+   *    "còn thiếu" đã được viền đỏ + nhãn + nút dưới cùng nói rõ rồi —
+   *    thứ tự phải ĐỨNG YÊN.
+   */
+  const nhomDaSapXep = useMemo(() => {
+    if (!dynamicModifiers) return [] as ModifierGroup[];
+    const soLuaChon = (g: ModifierGroup) =>
+      dynamicModifiers.optionsByGroup.get(g.id)?.length ?? 0;
+    const uuTien = (g: ModifierGroup) =>
+      g.rule === "single_required" ? 0 : g.rule === "single" ? 1 : 2;
+    return [...dynamicModifiers.groups]
+      .filter((g) => soLuaChon(g) > 0)
+      .sort(
+        (a, b) =>
+          uuTien(a) - uuTien(b) ||
+          (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
+          soLuaChon(a) - soLuaChon(b) ||
+          a.name.localeCompare(b.name, "vi"),
+      );
+  }, [dynamicModifiers]);
+
+  /** Nhóm NGẮN xếp lưới cùng Size ở khu trên; nhóm DÀI xuống dưới. */
+  const nhomNgan = nhomDaSapXep.filter((g) => g.rule !== "multi");
+  const nhomDai = nhomDaSapXep.filter((g) => g.rule === "multi");
 
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
@@ -435,6 +614,84 @@ export function FnbItemDialog({
     }
   }, [open, product?.id]);
 
+  /**
+   * Vẽ MỘT nhóm tuỳ chọn. Tách ra hàm để nhóm ngắn (khu trên) và nhóm dài
+   * (khu dưới) dùng CHUNG một cách vẽ — không có bản sao thứ hai để lệch.
+   */
+  function veNhom(g: ModifierGroup) {
+    const opts = dynamicModifiers?.optionsByGroup.get(g.id) ?? [];
+    if (opts.length === 0) return null;
+    const choices = dynamicChoices.get(g.id) ?? new Set<string>();
+    const ruleLabel =
+      g.rule === "single_required"
+        ? "Bắt buộc chọn 1"
+        : g.rule === "single"
+          ? "Chọn 1"
+          : "Chọn nhiều";
+    // BA trạng thái (CEO chốt): còn thiếu · đã chọn · chưa chọn.
+    const conThieu = missingRequiredGroupIds.has(g.id);
+    const daChonNhan = opts
+      .filter((o) => choices.has(o.id))
+      .map((o) => o.label)
+      .join(", ");
+    // Nhóm bắt buộc mà chưa chọn thì KHÔNG cho thu gọn — giấu đúng cái đang
+    // thiếu là cách chắc chắn nhất để bỏ sót.
+    const dangThuGon = nhomThuGon.has(g.id) && !conThieu;
+    return (
+      <section
+        key={g.id}
+        className={cn(
+          O_NHOM,
+          conThieu &&
+            "rounded-lg border border-status-error/40 bg-status-error/5 p-2.5",
+        )}
+      >
+        <NhanNhomTuyChon
+          ten={g.name}
+          nhanQuyTac={ruleLabel}
+          conThieu={conThieu}
+          daChonNhan={daChonNhan}
+          thuGonDuoc={!conThieu}
+          dangThuGon={dangThuGon}
+          onToggleThuGon={() => toggleThuGon(g.id)}
+        />
+        {/* Ẩn bằng CSS, KHÔNG gỡ khỏi cây React — thu gọn rồi bung lại vẫn
+            còn nguyên lựa chọn. */}
+        <div className={cn("flex flex-wrap gap-2", dangThuGon && "hidden")}>
+          {opts.map((o) => {
+            const active = choices.has(o.id);
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => toggleDynamicChoice(g, o.id)}
+                aria-pressed={active}
+                className={cn(
+                  CHIP,
+                  active
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:border-primary/40",
+                )}
+              >
+                <span className="break-words">{o.label}</span>
+                {o.priceDelta > 0 && (
+                  <span
+                    className={cn(
+                      "ml-1 whitespace-nowrap tabular-nums",
+                      active ? "" : "text-status-success",
+                    )}
+                  >
+                    +{formatCurrency(o.priceDelta)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </section>
+    );
+  }
+
   if (!product) return null;
 
   return (
@@ -444,13 +701,70 @@ export function FnbItemDialog({
           dialog cao 1.103px trên màn 574px, không cuộn được, nút "Thêm vào
           đơn" nằm ở y=791 NGOÀI màn — thu ngân không bấm được.
           (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
-      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="text-lg line-clamp-2">{product.name}</DialogTitle>
-          <DialogDescription>Giá: {formatCurrency(product.sell_price)}đ</DialogDescription>
+      {/* 06/08 PR-B — bề ngang theo thiết bị, KHÔNG phải bản desktop thu nhỏ:
+          điện thoại 95vw · tablet dọc 42rem · tablet ngang 56rem · desktop
+          68rem (1.088px, nằm trong khoảng 900–1.100 CEO chốt). Trần
+          `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
+      <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+        {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
+            tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
+            một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
+            tổng tiền thì chỉ thấy ở nút dưới cùng. */}
+        <DialogHeader className="shrink-0 gap-1.5">
+          <DialogTitle className="text-[19px] leading-tight line-clamp-2">
+            {product.name}
+          </DialogTitle>
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <DialogDescription className="text-[13px]">
+              Giá gốc{" "}
+              <span className="whitespace-nowrap tabular-nums text-foreground">
+                {formatCurrency(product.sell_price)}đ
+              </span>
+            </DialogDescription>
+
+            <div className="flex items-center gap-3">
+              {/* Bộ số lượng — cùng hàng với tên + giá, không đứng riêng cột */}
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Bớt số lượng"
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  className={NUT_TRON}
+                >
+                  <Icon name="remove" size={18} />
+                </button>
+                <span className="w-8 text-center text-base font-semibold tabular-nums">
+                  {formatNumber(quantity)}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Thêm số lượng"
+                  onClick={() => setQuantity((q) => q + 1)}
+                  className={NUT_TRON}
+                >
+                  <Icon name="add" size={18} />
+                </button>
+              </div>
+
+              <div className="text-right leading-tight">
+                {/* CEO 08/08: chữ phụ không nhỏ hơn 12px (text-xs = 12px). */}
+                <div className="text-xs text-muted-foreground">Tạm tính</div>
+                <div className="text-base font-semibold whitespace-nowrap tabular-nums">
+                  {formatCurrency(lineTotal)}đ
+                </div>
+              </div>
+            </div>
+          </div>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2">
+        {/* 07/08 (CEO chốt) — THÂN CUỘN xếp theo NỘI DUNG, không chia đều cột.
+            Trước đây mọi nhóm bị nhét vào lưới 3 cột bằng nhau: nhóm 2 lựa
+            chọn và nhóm 5 dòng dài chiếm ô như nhau → chỗ thừa chỗ chật.
+            Nay: khu lựa chọn NGẮN (Size/Đường/Đá) xếp lưới gọn ở trên, khu
+            DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
+            Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
+            còn nguyên. */}
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
@@ -472,70 +786,117 @@ export function FnbItemDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  size="sm"
-                  className="w-full"
+                  className="w-full min-h-11"
                   onClick={() => void onRetryModifiers()}
                 >
-                  <Icon name="refresh" size={14} /> Thử lại
+                  <Icon name="refresh" size={16} /> Thử lại
                 </Button>
               )}
             </div>
           )}
-          {/* Size / Variant selector. POS-FIX-C3: skeleton khi đang fetch
-              variants (cache miss) — tránh user thấy "không có size" rồi
-              tưởng món không có biến thể, click thêm với giá gốc. */}
-          {variantsLoading && (!variants || variants.length === 0) ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Kích cỡ</Label>
-              <div className="flex flex-wrap gap-2">
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="h-10 sm:h-8 w-20 rounded-lg bg-muted animate-pulse"
-                  />
-                ))}
-              </div>
-            </div>
-          ) : variants && variants.length > 0 ? (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Kích cỡ</Label>
-              <div className="flex flex-wrap gap-2">
-                {variants.map((v) => (
-                  <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
-                    className={cn(
-                      "rounded-lg border px-4 py-3 sm:px-3 sm:py-2 text-sm transition-colors active:scale-95",
-                      selectedVariant?.id === v.id
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "border-border hover:border-primary/50",
-                    )}>
-                    {v.label} {formatCurrency(v.sell_price)}đ
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null}
+          {/* ══ KHU LỰA CHỌN CHÍNH — Size đầu tiên, rồi Đường/Đá ══
+              Xếp hàng ngang tự xuống dòng, MỖI Ô RỘNG THEO NỘI DUNG (xem
+              O_NHOM). Size luôn ở ô đầu, nhìn thấy ngay khi mở popup, KHÔNG
+              phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem khối
+              `nhomNgan`.) */}
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-3.5">
+            {/* Size / Quy cách — POS-FIX-C3 giữ skeleton khi đang tải variants
+                để không ai tưởng món không có size rồi thêm với giá gốc. */}
+            {variantsLoading && (!variants || variants.length === 0) ? (
+              <section className={O_NHOM}>
+                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <div className="flex flex-wrap gap-2">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-9 w-20 rounded-full bg-muted animate-pulse" />
+                  ))}
+                </div>
+              </section>
+            ) : variants && variants.length > 0 ? (
+              <section className={O_NHOM}>
+                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <div className="flex flex-wrap gap-2">
+                  {variants.map((v) => (
+                    <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
+                      className={cn(
+                        CHIP, "active:scale-95",
+                        selectedVariant?.id === v.id
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border hover:border-primary/50",
+                      )}>
+                      <span className="break-words">{v.label}</span>{" "}
+                      {/* Tiền KHÔNG bao giờ được cắt bằng "…" */}
+                      <span className="whitespace-nowrap tabular-nums">
+                        {formatCurrency(v.sell_price)}đ
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
-          {/* Quantity */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Số lượng</Label>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" size="icon" className="h-10 w-10 sm:h-8 sm:w-8"
-                onClick={() => setQuantity((q) => Math.max(1, q - 1))}>
-                <Icon name="remove" size={16} />
-              </Button>
-              <span className="w-10 text-center text-lg sm:text-base font-semibold tabular-nums">{formatNumber(quantity)}</span>
-              <Button variant="outline" size="icon" className="h-10 w-10 sm:h-8 sm:w-8"
-                onClick={() => setQuantity((q) => q + 1)}>
-                <Icon name="add" size={16} />
-              </Button>
-            </div>
+            {/* Nhóm tuỳ chọn NGẮN (Size/Đường/Đá…) chèn vào cùng lưới này.
+                Nhóm bắt buộc chưa chọn xong luôn đứng trước — xem nhomDaSapXep. */}
+            {hasDynamicModifiers && nhomNgan.map(veNhom)}
+
+            {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
+                thu ngân không mất thao tác quen. */}
+            {!hasDynamicModifiers && (
+              <>
+                <section className={O_NHOM}>
+                  <Label className="text-[13px] font-medium">Mức đường</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {SWEETNESS_OPTIONS.map((s) => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSweetness(sweetness === s ? "" : s)}
+                        aria-pressed={sweetness === s}
+                        className={cn(
+                          CHIP,
+                          sweetness === s
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                <section className={O_NHOM}>
+                  <Label className="text-[13px] font-medium">Mức đá</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {ICE_OPTIONS.map((i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => setIceLevel(iceLevel === i ? "" : i)}
+                        aria-pressed={iceLevel === i}
+                        className={cn(
+                          CHIP,
+                          iceLevel === i
+                            ? "bg-primary text-primary-foreground border-primary"
+                            : "border-border hover:border-primary/40",
+                        )}
+                      >
+                        {i}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
           </div>
 
-          {/* Toppings */}
+          {/* ══ TOPPING — nhóm DÀI, chiếm TOÀN chiều ngang ══
+              Mỗi dòng: tên + giá bên trái, bộ tăng/giảm bên phải.
+              Từ 1280px chia 2 cột (ở 1024px mỗi cột chỉ ~400px, tên topping
+              thật dài 30+ ký tự sẽ xuống 3 dòng → rối hơn 1 cột). */}
           {toppings && toppings.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Topping</Label>
-              <div className="grid gap-2 sm:gap-2">
+            <section className="min-w-0 space-y-1.5">
+              <Label className="text-[13px] font-medium">Topping</Label>
+              <div className="grid gap-2 xl:grid-cols-2 xl:gap-x-4">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
                   const active = qty > 0;
@@ -549,7 +910,7 @@ export function FnbItemDialog({
                     >
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-foreground break-words">{t.name}</div>
-                        <Badge variant="secondary" className="mt-0.5">
+                        <Badge variant="secondary" className="mt-0.5 whitespace-nowrap tabular-nums">
                           +{formatCurrency(t.price)}đ
                         </Badge>
                       </div>
@@ -559,10 +920,10 @@ export function FnbItemDialog({
                           type="button"
                           onClick={() => setToppingQty(t.id, qty - 1)}
                           disabled={qty === 0}
-                          className="size-9 sm:size-8 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
+                          className="size-9 pointer-coarse:size-11 shrink-0 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground disabled:opacity-30 disabled:hover:bg-transparent"
                           aria-label="Bớt topping"
                         >
-                          <Icon name="remove" size={16} />
+                          <Icon name="remove" size={18} />
                         </button>
                         <span className="w-7 text-center text-sm font-semibold tabular-nums">
                           {formatNumber(qty)}
@@ -570,137 +931,34 @@ export function FnbItemDialog({
                         <button
                           type="button"
                           onClick={() => setToppingQty(t.id, qty + 1)}
-                          className="size-9 sm:size-8 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed"
+                          className="size-9 pointer-coarse:size-11 shrink-0 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed"
                           aria-label="Thêm topping"
                         >
-                          <Icon name="add" size={16} />
+                          <Icon name="add" size={18} />
                         </button>
                       </div>
                     </div>
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
 
-          {/* CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier groups từ DB.
-              Nếu SP có gán nhóm tuỳ chọn (qua category hoặc override) → render
-              ở đây. KHÔNG hiển thị hardcoded R7 nữa khi có dynamic. */}
-          {hasDynamicModifiers && dynamicModifiers && (
-            <>
-              {dynamicModifiers.groups.map((g) => {
-                const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
-                if (opts.length === 0) return null;
-                const choices = dynamicChoices.get(g.id) ?? new Set();
-                const ruleLabel =
-                  g.rule === "single_required"
-                    ? "Bắt buộc chọn 1"
-                    : g.rule === "single"
-                      ? "Chọn 1"
-                      : "Chọn nhiều";
-                return (
-                  <div key={g.id} className="space-y-2">
-                    <Label className="text-sm font-medium flex items-center gap-2">
-                      {g.name}
-                      <span
-                        className={cn(
-                          "text-[11px] px-1.5 py-0.5 rounded-full font-normal",
-                          g.rule === "single_required"
-                            ? "bg-status-error/10 text-status-error"
-                            : g.rule === "multi"
-                              ? "bg-status-success/10 text-status-success"
-                              : "bg-status-info/10 text-status-info",
-                        )}
-                      >
-                        {ruleLabel}
-                      </span>
-                    </Label>
-                    <div className="flex flex-wrap gap-2">
-                      {opts.map((o) => {
-                        const active = choices.has(o.id);
-                        return (
-                          <button
-                            key={o.id}
-                            type="button"
-                            onClick={() => toggleDynamicChoice(g, o.id)}
-                            className={cn(
-                              "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
-                              active
-                                ? "bg-primary text-primary-foreground border-primary"
-                                : "border-border hover:border-primary/40",
-                            )}
-                          >
-                            {o.label}
-                            {o.priceDelta > 0 && (
-                              <span className={cn("ml-1", active ? "" : "text-status-success")}>
-                                +{formatCurrency(o.priceDelta)}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </>
-          )}
+          {/* ══ NHÓM CHỌN-NHIỀU từ DB (Sprint 2.2e) — TOÀN chiều ngang ══
+              Loại này nhãn dài nhất và nhiều lựa chọn nhất, nên để riêng dưới
+              cùng thay vì nhét vào ô lưới bằng nhau ở trên. */}
+          {hasDynamicModifiers && nhomDai.map(veNhom)}
 
-          {/* R7: Modifier preset (FALLBACK khi chưa setup dynamic modifier) */}
-          {!hasDynamicModifiers && (
-            <>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Mức đường</Label>
-                <div className="flex flex-wrap gap-2">
-                  {SWEETNESS_OPTIONS.map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setSweetness(sweetness === s ? "" : s)}
-                      className={cn(
-                        "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
-                        sweetness === s
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Mức đá</Label>
-                <div className="flex flex-wrap gap-2">
-                  {ICE_OPTIONS.map((i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => setIceLevel(iceLevel === i ? "" : i)}
-                      className={cn(
-                        "px-3 py-2 rounded-full border text-xs font-medium transition-colors",
-                        iceLevel === i
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border hover:border-primary/40",
-                      )}
-                    >
-                      {i}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-
-          {/* Note tự do — chỉ dùng khi modifier preset không cover */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium flex items-center gap-2">
-              <Icon name="sticky_note_2" size={14} /> Ghi chú thêm
+          {/* Ghi chú tự do — trải hết bề ngang: chia cột cho ô nhập chữ chỉ
+              làm khó gõ. */}
+          <section className="min-w-0 space-y-1.5">
+            <Label className="text-[13px] font-medium flex items-center gap-2">
+              <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2} className="resize-none text-sm" />
-          </div>
+              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2}
+              className="resize-none text-[13px]" />
+          </section>
         </div>
 
         {/* Chân cố định — NGOÀI vùng cuộn (không sticky). */}
@@ -708,7 +966,9 @@ export function FnbItemDialog({
           {/* 06/08: nhãn nói ĐÚNG lý do đang khoá — đang tải / tải hỏng /
               thiếu mục bắt buộc — thay vì luôn báo "thiếu mục bắt buộc". */}
           <Button
-            className="w-full"
+            // min-h-11 + whitespace-normal: nhãn có tiền dài (9 chữ số) thì
+            // XUỐNG DÒNG, tuyệt đối không cắt bằng "…".
+            className="w-full min-h-11 whitespace-normal"
             onClick={handleConfirm}
             disabled={!canConfirm || submitting}
             title={
