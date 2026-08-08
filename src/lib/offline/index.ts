@@ -18,6 +18,7 @@ export type {
 export {
   prefetchMenuData,
   prefetchTableData,
+  saveToppingsToCache,
   getMenuFromCache,
   getTablesFromCache,
   shouldRefreshMenu,

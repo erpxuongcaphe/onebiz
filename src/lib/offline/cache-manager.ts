@@ -10,6 +10,12 @@
 import { getDb, getMeta, setMeta } from "./db";
 import { withQuotaRecovery } from "./quota-manager";
 import { getClient } from "@/lib/services/supabase/base";
+import {
+  getToppingPhanHopLe,
+  phamViCacheTopping,
+  toppingsCacheConHieuLuc,
+  type ToppingPhan,
+} from "@/lib/services/supabase/fnb-toppings";
 import { getTablesByBranch } from "@/lib/services/supabase/fnb-tables";
 import type { FnbCategory } from "@/app/pos/fnb/components/fnb-category-tabs";
 import type { FnbProduct } from "@/app/pos/fnb/components/fnb-product-grid";
@@ -41,7 +47,10 @@ function tablesMetaKey(tenantId: string, branchId: string, key: string): string 
   return `tables:${tenantId}:${branchId}:${key}`;
 }
 
-export async function prefetchMenuData(tenantId: string): Promise<void> {
+export async function prefetchMenuData(
+  tenantId: string,
+  branchId: string | null | undefined,
+): Promise<void> {
   const supabase = getClient();
 
   // Fetch categories
@@ -62,13 +71,9 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
     .eq("channel", "fnb")
     .order("name");
 
-  // Fetch toppings
-  const { data: toppings } = await supabase
-    .from("products")
-    .select("id, name, sell_price")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .ilike("code", "NVL-TOP%");
+  // 08/08 Giai đoạn 2 topping: SKU-TPP bán theo phần (giá 1 phần + BOM áp
+  // dụng ĐÚNG chi nhánh), KHÔNG còn NVL-TOP%. Xem fnb-toppings.ts.
+  const toppings = await getToppingPhanHopLe(tenantId, branchId);
 
   // Write to IndexedDB — wrap với quota recovery vì menu có thể lớn (500+ SKU
   // × image_url string → dễ đẩy usage gần quota trên Safari mobile).
@@ -108,13 +113,13 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
       });
     }
 
-    // Write toppings
-    for (const t of toppings ?? []) {
+    // Write toppings — đã là {id, name, price} (giá MỘT PHẦN)
+    for (const t of toppings) {
       await store.put({
         id: `top_${t.id}`,
         tenantId,
         _type: "topping",
-        data: { id: t.id, name: t.name, price: t.sell_price },
+        data: t,
       });
     }
 
@@ -122,9 +127,43 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
   });
 
   // Update meta timestamps
-  const version = computeVersion(prods ?? [], toppings ?? []);
+  const version = computeVersion(prods ?? [], toppings);
   await setMeta(menuMetaKey(tenantId, "last_sync"), Date.now());
   await setMeta(menuMetaKey(tenantId, "version"), version);
+  // Đóng dấu phạm vi topping (phiên bản nguồn + chi nhánh) — thiếu dấu này
+  // (cache đời NVL-TOP) thì lúc đọc bị coi là vô hiệu.
+  await setMeta(menuMetaKey(tenantId, "topping_scope"), phamViCacheTopping(branchId));
+}
+
+/**
+ * 08/08 — Ghi RIÊNG topping vào cache sau mỗi lần tải online.
+ *
+ * Vì sao cần: prefetchMenuData chỉ chạy khi menu "stale" (30 phút), nhưng
+ * topping theo CHI NHÁNH — thu ngân đổi quán trong cửa 30 phút thì menu
+ * không stale mà topping ĐÃ khác. Hàm này xoá sạch topping cũ của tenant
+ * (kể cả đời NVL-TOP) rồi ghi bản đúng chi nhánh + đóng dấu phạm vi.
+ */
+export async function saveToppingsToCache(
+  tenantId: string,
+  branchId: string | null | undefined,
+  toppings: ToppingPhan[],
+): Promise<void> {
+  await withQuotaRecovery(async () => {
+    const db = await getDb();
+    const tx = db.transaction("menu_cache", "readwrite");
+    const store = tx.objectStore("menu_cache");
+    const all = await store.getAll();
+    for (const rec of all) {
+      if (rec.tenantId === tenantId && rec._type === "topping") {
+        await store.delete(rec.id);
+      }
+    }
+    for (const t of toppings) {
+      await store.put({ id: `top_${t.id}`, tenantId, _type: "topping", data: t });
+    }
+    await tx.done;
+  });
+  await setMeta(menuMetaKey(tenantId, "topping_scope"), phamViCacheTopping(branchId));
 }
 
 // ── Prefetch: Tables ──
@@ -163,9 +202,21 @@ export async function prefetchTableData(
 
 // ── Read from cache ──
 
-export async function getMenuFromCache(tenantId: string): Promise<MenuData> {
+export async function getMenuFromCache(
+  tenantId: string,
+  branchId: string | null | undefined,
+): Promise<MenuData> {
   const db = await getDb();
   const all = await db.getAll("menu_cache");
+
+  // 08/08 (CEO): topping trong cache chỉ dùng được khi ĐÚNG phiên bản nguồn
+  // + ĐÚNG chi nhánh. Cache đời NVL-TOP không có dấu phạm vi → vô hiệu ngay
+  // từ bản build này; offline thà không hiện topping còn hơn hiện topping
+  // nguyên liệu cũ giá nguyên túi/hộp.
+  const phamViDaLuu = await getMeta<string>(
+    menuMetaKey(tenantId, "topping_scope"),
+  ).catch(() => undefined);
+  const toppingDungDuoc = toppingsCacheConHieuLuc(phamViDaLuu, branchId);
 
   const categories: FnbCategory[] = [];
   const products: FnbProduct[] = [];
@@ -181,7 +232,7 @@ export async function getMenuFromCache(tenantId: string): Promise<MenuData> {
         products.push(record.data as FnbProduct);
         break;
       case "topping":
-        toppings.push(record.data as ToppingProduct);
+        if (toppingDungDuoc) toppings.push(record.data as ToppingProduct);
         break;
     }
   }
