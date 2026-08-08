@@ -3079,7 +3079,10 @@ function FnbPosPageInner() {
               itemModifierData
                 ? {
                     ...itemModifierData,
-                    groups: locNhomTheoCheDoTopping(itemModifierData.groups),
+                    groups: locNhomTheoCheDoTopping(
+                      itemModifierData.groups,
+                      itemModifierData.optionsByGroup,
+                    ),
                   }
                 : itemModifierData
             }
