@@ -3,7 +3,10 @@
  */
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {
+  applyCreatedAtRangeFilter,
+  normalizeCreatedAtRange,
+} from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
@@ -591,4 +594,91 @@ function mapInvoice(row: any): Invoice {
       row.amount_tendered != null ? Number(row.amount_tendered) : undefined,
     createdBy: (row.profiles as { full_name: string } | null)?.full_name ?? "---",
   };
+}
+
+// ────────────────────────────────────────────────────────────
+// K2 — CHỈ SỐ MÀN HOÁ ĐƠN (RPC 00305)
+//
+// Vì sao có: trước đây 4 thẻ KPI cộng từ `data` — tức CHỈ 15 dòng của trang
+// đang xem — nhưng đặt cạnh "Tổng HĐ" lấy từ `total` của cả bộ lọc. Sang
+// trang 2 là ba số đổi, số đầu đứng yên.
+//
+// RPC tự chốt tenant + phạm vi chi nhánh phía máy chủ và TỰ ánh xạ
+// processing → draft + confirmed. Client KHÔNG ánh xạ lần hai — truyền thẳng
+// trạng thái của giao diện vào.
+// ────────────────────────────────────────────────────────────
+
+export interface InvoiceListSummary {
+  /** Mọi trạng thái còn sống — BỎ QUA riêng bộ lọc trạng thái. */
+  tatCaHoaDon: number;
+  hoanThanh: number;
+  daHuy: number;
+  /** sum(total) của hoá đơn completed. total ĐÃ trừ giảm giá — không trừ lần hai. */
+  giaTriHoanThanh: number;
+  /** Hiển thị riêng, KHÔNG trừ khỏi giaTriHoanThanh. */
+  giamGiaApDung: number;
+  /** ÁP bộ lọc trạng thái → phải khớp `total` của danh sách. Dùng để đối chiếu. */
+  soDongTheoBoLoc: number;
+}
+
+export interface InvoiceListSummaryParams {
+  branchId?: string;
+  /** Nhận NGUYÊN dateFrom/dateTo của danh sách; hàm tự quy về mốc đầu ngày kế tiếp. */
+  dateFrom?: string;
+  dateTo?: string;
+  /** Trạng thái đúng như giao diện đang chọn, kể cả 'processing'. */
+  statuses?: string[];
+  search?: string;
+  searchField?: string;
+  /** 'all' | 'delivery' | 'no_delivery'. K2 luôn 'all' — bộ lọc giao hàng thuộc K3. */
+  delivery?: "all" | "delivery" | "no_delivery";
+}
+
+export async function getInvoiceListSummary(
+  params: InvoiceListSummaryParams,
+): Promise<InvoiceListSummary> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  // Cùng một bộ quy tắc ngày với danh sách: >= from, < đầu ngày kế tiếp.
+  const { from, toExclusive } = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+
+  const { data, error } = await supabase.rpc("get_invoice_list_summary", {
+    p_branch_id: params.branchId ?? null,
+    p_date_from: from ?? null,
+    p_date_to_exclusive: toExclusive ?? null,
+    p_statuses: params.statuses && params.statuses.length > 0 ? params.statuses : null,
+    p_search: params.search && params.search !== "" ? params.search : null,
+    p_search_field: params.searchField ?? "all",
+    p_delivery: params.delivery ?? "all",
+  });
+  if (error) handleError(error, "getInvoiceListSummary");
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    tatCaHoaDon: Number(row?.tat_ca_hoa_don ?? 0),
+    hoanThanh: Number(row?.hoan_thanh ?? 0),
+    daHuy: Number(row?.da_huy ?? 0),
+    giaTriHoanThanh: Number(row?.gia_tri_hoan_thanh ?? 0),
+    giamGiaApDung: Number(row?.giam_gia_ap_dung ?? 0),
+    soDongTheoBoLoc: Number(row?.so_dong_theo_bo_loc ?? 0),
+  };
+}
+
+/**
+ * Khoá nhớ tạm cho chỉ số: gồm MỌI bộ lọc ảnh hưởng kết quả, KHÔNG gồm số
+ * trang — lật trang không được gọi lại RPC.
+ */
+export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
+  return JSON.stringify([
+    params.branchId ?? "",
+    params.dateFrom ?? "",
+    params.dateTo ?? "",
+    [...(params.statuses ?? [])].sort(),
+    params.search ?? "",
+    params.searchField ?? "all",
+    params.delivery ?? "all",
+  ]);
 }

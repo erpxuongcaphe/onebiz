@@ -8,6 +8,8 @@ export { duplicatePurchaseOrder, reopenPurchaseOrderForEdit, suaGiaPhieuNhap } f
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export {
   getInvoices,
+  getInvoiceListSummary,
+  khoaChiSoHoaDon,
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,
@@ -17,7 +19,7 @@ export {
   getReturnsForCustomer,
   getInvoiceById,
 } from "./invoices";
-export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
+export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow, InvoiceListSummary, InvoiceListSummaryParams } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,

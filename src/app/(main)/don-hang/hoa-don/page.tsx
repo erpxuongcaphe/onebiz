@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -56,6 +56,10 @@ import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/form
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getInvoices,
+  getInvoiceListSummary,
+  khoaChiSoHoaDon,
+  type InvoiceListSummary,
+  type InvoiceListSummaryParams,
   getInvoiceStatuses,
   cancelInvoice,
   voidCompletedInvoice,
@@ -529,24 +533,69 @@ export default function HoaDonPage() {
     });
   };
 
-  // P-7 13/06/2026 (audit lần 2): gộp 6 lần reduce/filter chạy mỗi render
-  // (totalAmount, totalDiscount, completed, delivery_failed × 3) vào 1 useMemo
-  // → chỉ tính lại khi `data` đổi. Giá trị y hệt, không đổi hành vi.
-  const kpis = useMemo(() => {
-    let totalAmount = 0;
-    let totalDiscount = 0;
-    let completedCount = 0;
-    let deliveryFailedCount = 0;
+  // ── K2 08/08: chỉ số lấy từ máy chủ, không cộng từ trang đang xem ──────
+  // Trước đây 4 thẻ cộng từ `data` — CHỈ 15 dòng của trang hiện tại — nhưng
+  // đặt cạnh "Tổng HĐ" lấy từ `total` của cả bộ lọc. Sang trang 2 là ba số
+  // đổi còn số đầu đứng yên. RPC 00305 tính trên toàn bộ phạm vi lọc.
+  const [chiSo, setChiSo] = useState<InvoiceListSummary | null>(null);
+  const [chiSoLoi, setChiSoLoi] = useState(false);
+  // Số thứ tự lượt gọi: kết quả về muộn của bộ lọc cũ KHÔNG được đè kết quả mới.
+  const luotChiSoRef = useRef(0);
+  // Nhớ tạm theo khoá bộ lọc (KHÔNG gồm số trang) → lật trang không gọi lại.
+  const nhoChiSoRef = useRef(new Map<string, InvoiceListSummary>());
+
+  // Dòng tổng ở CHÂN BẢNG là tổng của trang đang xem — đúng bản chất chân
+  // bảng, khác hẳn dải chỉ số phía trên (toàn bộ phạm vi lọc). Giữ riêng để
+  // không ai nhầm hai con số này với nhau.
+  const tongTrang = useMemo(() => {
+    let tien = 0;
+    let giam = 0;
     for (const inv of data) {
-      totalAmount += inv.totalAmount;
-      totalDiscount += inv.discount;
-      if (inv.status === "completed") completedCount += 1;
-      else if (inv.status === "delivery_failed") deliveryFailedCount += 1;
+      tien += inv.totalAmount;
+      giam += inv.discount;
     }
-    return { totalAmount, totalDiscount, completedCount, deliveryFailedCount };
+    return { tien, giam };
   }, [data]);
-  const totalAmount = kpis.totalAmount;
-  const totalDiscount = kpis.totalDiscount;
+
+  const thamSoChiSo = useMemo<InvoiceListSummaryParams>(() => {
+    const range = computeListPresetRange(datePreset);
+    return {
+      branchId: viewAllBranches ? undefined : activeBranchId,
+      dateFrom: range.from,
+      dateTo: range.to,
+      // Truyền THẲNG trạng thái của giao diện. RPC tự ánh xạ
+      // processing → draft + confirmed; không ánh xạ lần hai ở client.
+      statuses: selectedStatuses,
+      search: debouncedSearch,
+      searchField,
+      delivery: "all", // bộ lọc giao hàng thuộc K3
+    };
+  }, [datePreset, viewAllBranches, activeBranchId, selectedStatuses, debouncedSearch, searchField]);
+
+  useEffect(() => {
+    const khoa = khoaChiSoHoaDon(thamSoChiSo);
+    const daCo = nhoChiSoRef.current.get(khoa);
+    if (daCo) {
+      setChiSo(daCo);
+      setChiSoLoi(false);
+      return;
+    }
+    const luot = ++luotChiSoRef.current;
+    getInvoiceListSummary(thamSoChiSo)
+      .then((kq: InvoiceListSummary) => {
+        if (luot !== luotChiSoRef.current) return; // lượt cũ, bỏ
+        nhoChiSoRef.current.set(khoa, kq);
+        setChiSo(kq);
+        setChiSoLoi(false);
+      })
+      .catch((err: unknown) => {
+        if (luot !== luotChiSoRef.current) return;
+        // KHÔNG quay lại cộng từ trang hiện tại — làm vậy là tái tạo đúng lỗi
+        // vừa sửa. Giữ số hợp lệ gần nhất và báo rõ là chưa cập nhật được.
+        console.error("[Hoá đơn] không lấy được chỉ số:", err);
+        setChiSoLoi(true);
+      });
+  }, [thamSoChiSo]);
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
@@ -777,29 +826,43 @@ export default function HoaDonPage() {
           ]}
         />
 
-        {/* KPI row */}
+        {/* KPI row — K2 08/08: số lấy từ RPC 00305, tính trên TOÀN BỘ phạm vi
+            lọc chứ không cộng từ trang đang xem. Vẫn đúng 4 thẻ, không thêm
+            thẻ thứ năm (đổi chiều cao là việc của PR bố cục). */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
           <SummaryCard
             icon={<Icon name="receipt" size={16} />}
-            label="Tổng HĐ"
-            value={total.toString()}
+            label="Số hóa đơn"
+            value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
+            loading={!chiSo && !chiSoLoi}
+            hint={chiSoLoi ? "Chưa cập nhật được" : undefined}
           />
           <SummaryCard
             icon={<Icon name="check_circle" size={16} />}
             label="Hoàn thành"
-            value={kpis.completedCount.toString()}
+            value={chiSo ? formatNumber(chiSo.hoanThanh) : "—"}
+            loading={!chiSo && !chiSoLoi}
           />
           <SummaryCard
-            icon={<Icon name="warning" size={16} className="text-destructive" />}
-            label="Giao thất bại"
-            value={kpis.deliveryFailedCount.toString()}
-            danger={kpis.deliveryFailedCount > 0}
-            hint={kpis.deliveryFailedCount > 0 ? "Cần xử lý" : undefined}
+            icon={<Icon name="cancel" size={16} />}
+            label="Đã hủy"
+            value={chiSo ? formatNumber(chiSo.daHuy) : "—"}
+            loading={!chiSo && !chiSoLoi}
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
-            label="Tổng doanh thu"
-            value={formatCurrency(totalAmount - totalDiscount)}
+            label="Giá trị đã hoàn thành"
+            value={chiSo ? formatCurrency(chiSo.giaTriHoanThanh) : "—"}
+            loading={!chiSo && !chiSoLoi}
+            // Giảm giá đứng RIÊNG ở dòng phụ — KHÔNG trừ khỏi con số trên.
+            // `total` của hoá đơn vốn đã trừ giảm giá rồi.
+            hint={
+              chiSoLoi
+                ? "Chưa cập nhật được"
+                : chiSo
+                  ? `Giảm giá đã áp dụng: ${formatCurrency(chiSo.giamGiaApDung)}`
+                  : undefined
+            }
           />
         </div>
 
@@ -933,8 +996,8 @@ export default function HoaDonPage() {
             },
           ]}
           summaryRow={{
-            totalAmount: formatCurrency(totalAmount),
-            discount: formatCurrency(totalDiscount),
+            totalAmount: formatCurrency(tongTrang.tien),
+            discount: formatCurrency(tongTrang.giam),
           }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
