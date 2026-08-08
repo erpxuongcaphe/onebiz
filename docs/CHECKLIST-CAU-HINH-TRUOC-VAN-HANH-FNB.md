@@ -51,6 +51,11 @@ cho SKU topping hợp lệ; mã cũ/đơn cũ vẫn dùng giá payload (tương 
 - [ ] **Tắt nhóm modifier "Topping"** trong Tuỳ chọn món FnB.
 - [ ] Vercel → Project → Settings → Environment Variables:
       thêm `NEXT_PUBLIC_FNB_TOPPING_SKU = 1` (Production) → **Redeploy**.
+- [ ] *(khuyến nghị)* thêm `NEXT_PUBLIC_FNB_TOPPING_LEGACY_GROUP_IDS` = ID nhóm
+      Topping legacy (lấy ở màn Tuỳ chọn món FnB). Khai rồi thì hệ thống chỉ ẩn
+      đúng nhóm đó, không suy đoán. Bỏ trống cũng an toàn: chỉ nhóm vừa
+      *chọn-nhiều* vừa có lựa chọn **liên kết sản phẩm** mới bị ẩn — Syrup /
+      Thêm shot / Sốt chấm (chỉ có hệ số, không liên kết) vẫn hiện bình thường.
 
 **Kiểm sau khi bật:** mở POS FnB → popup món chỉ còn MỘT khu topping
 (SKU-TPP, giá theo phần); nhóm chọn-nhiều cũ không hiện; thêm 2 phần

@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { FnbItemDialog } from "@/app/pos/fnb/components/fnb-item-dialog";
 import {
   apDungCheDoTopping,
+  laNhomToppingLegacy,
   CHE_DO_TOPPING_SKU,
 } from "@/lib/services/supabase/fnb-toppings";
 
@@ -92,24 +93,73 @@ describe("Fixture topping 8.000đ/phần — tính tiền (không cần dữ li�
   });
 });
 
-describe("Cờ chuyển đổi cơ chế topping — an toàn, mặc định TẮT", () => {
-  const NHOM = [
-    { id: "g1", rule: "single_required", name: "Size" },
-    { id: "g2", rule: "single", name: "Mức đường" },
-    { id: "g3", rule: "multi", name: "Topping (cũ)" },
-  ];
+/**
+ * PR 0 (nghiên cứu chuẩn hoá 08/08 — P0.1): cờ chỉ được ẩn ĐÚNG nhóm Topping
+ * legacy. "Chọn nhiều" là quy tắc chọn, KHÔNG phải loại nghiệp vụ — ẩn theo
+ * `rule === "multi"` sẽ giết oan Syrup / Thêm shot / Sốt chấm sau này.
+ */
+describe("PR 0 — cờ topping chỉ ẩn đúng nhóm legacy", () => {
+  // Bối cảnh thật của quán: Size, Mức đường (scale, không liên kết SP),
+  // Topping legacy (multi + option liên kết NVL), và một nhóm CHỌN-NHIỀU
+  // KHÁC không phải topping (Syrup tính theo hệ số công thức).
+  const SIZE = { id: "g-size", rule: "single_required", name: "Size" };
+  const DUONG = { id: "g-duong", rule: "single", name: "Mức đường" };
+  const TOPPING_CU = { id: "g-top", rule: "multi", name: "Topping" };
+  const SYRUP = { id: "g-syrup", rule: "multi", name: "Syrup" };
+  const NHOM = [SIZE, DUONG, TOPPING_CU, SYRUP];
+
+  const OPTS = new Map<string, Array<{ linkedProductId?: string | null }>>([
+    ["g-size", [{}, {}]],
+    ["g-duong", [{}, {}, {}]],
+    // Dấu hiệu CẤU TRÚC của cơ chế cũ: lựa chọn liên kết sản phẩm để trừ kho
+    ["g-top", [{ linkedProductId: "nvl-top-com-xao" }]],
+    // Syrup chọn-nhiều nhưng KHÔNG liên kết sản phẩm → không phải topping
+    ["g-syrup", [{}, {}]],
+  ]);
 
   it("mặc định cờ TẮT — bảo toàn hệ thống hiện tại", () => {
-    // Test chạy không set NEXT_PUBLIC_FNB_TOPPING_SKU → phải là false.
     expect(CHE_DO_TOPPING_SKU).toBe(false);
   });
 
-  it("cờ TẮT: giữ NGUYÊN mọi nhóm tuỳ chọn (kể cả Topping cũ)", () => {
-    expect(apDungCheDoTopping(NHOM, false)).toEqual(NHOM);
+  it("cờ TẮT: giữ NGUYÊN mọi nhóm tuỳ chọn", () => {
+    expect(apDungCheDoTopping(NHOM, OPTS, false)).toEqual(NHOM);
   });
 
-  it("cờ BẬT: ẩn nhóm CHỌN-NHIỀU (cơ chế topping cũ), giữ Size/Đường", () => {
-    expect(apDungCheDoTopping(NHOM, true).map((g) => g.id)).toEqual(["g1", "g2"]);
+  it("cờ BẬT: ẩn Topping legacy NHƯNG GIỮ nhóm multi khác (Syrup)", () => {
+    // Đây là ca chống hồi quy chính của PR 0.
+    expect(apDungCheDoTopping(NHOM, OPTS, true).map((g) => g.id)).toEqual([
+      "g-size",
+      "g-duong",
+      "g-syrup",
+    ]);
+  });
+
+  it("ĐỔI TÊN nhóm Topping → vẫn nhận đúng (không dò theo tên)", () => {
+    const doiTen = [{ ...TOPPING_CU, name: "Món thêm" }, SYRUP];
+    expect(apDungCheDoTopping(doiTen, OPTS, true).map((g) => g.id)).toEqual([
+      "g-syrup",
+    ]);
+  });
+
+  it("danh sách ID cấu hình được ưu tiên; KHÔNG suy đoán thêm nhóm nào khác", () => {
+    // Khai đúng Syrup là legacy (giả định vận hành đặc thù) → chỉ Syrup ẩn,
+    // nhóm g-top có liên kết SP vẫn còn vì không nằm trong danh sách.
+    const kq = apDungCheDoTopping(NHOM, OPTS, true, ["g-syrup"]);
+    expect(kq.map((g) => g.id)).toEqual(["g-size", "g-duong", "g-top"]);
+  });
+
+  it("option liên kết SP đã TẮT → nhóm không còn bị coi là legacy", () => {
+    const optsTat = new Map([
+      ["g-top", [{ linkedProductId: "nvl-top", isActive: false }]],
+    ]);
+    expect(laNhomToppingLegacy(TOPPING_CU, optsTat.get("g-top")!, [])).toBe(false);
+  });
+
+  it("nhóm CHỌN-MỘT dù có liên kết SP cũng KHÔNG bị ẩn (vd chọn loại sữa)", () => {
+    const sua = { id: "g-sua", rule: "single", name: "Loại sữa" };
+    expect(laNhomToppingLegacy(sua, [{ linkedProductId: "nvl-sua-yen-mach" }], [])).toBe(
+      false,
+    );
   });
 });
 
@@ -130,7 +180,9 @@ describe("Khoá: POS FnB đấu cờ đúng 2 chỗ, không hiện 2 cơ chế",
   });
 
   it("nhóm tuỳ chọn đi qua bộ lọc theo cơ chế topping", () => {
-    expect(trang).toContain("locNhomTheoCheDoTopping(itemModifierData.groups)");
+    // Phải truyền CẢ optionsByGroup — thiếu nó thì lại phải đoán theo rule/tên.
+    expect(trang).toContain("locNhomTheoCheDoTopping(");
+    expect(trang).toContain("itemModifierData.optionsByGroup,");
   });
 
   it("dialog không render khu topping rỗng (không khoảng trống thừa)", () => {

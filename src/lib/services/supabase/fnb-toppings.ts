@@ -41,11 +41,9 @@ export const TIEN_TO_SKU_TOPPING = "SKU-TPP";
  * hiện trên popup:
  *
  *   TẮT (mặc định) — bảo toàn hệ thống hiện tại: popup KHÔNG hiện khu
- *     topping SKU (kể cả khi đã có mã hợp lệ), các nhóm tuỳ chọn (gồm nhóm
- *     "Topping" chọn-nhiều cũ) giữ nguyên. Không đụng dữ liệu thật.
- *   BẬT — chạy mô hình mới: hiện khu topping SKU bán theo phần, ẨN các nhóm
- *     tuỳ chọn CHỌN-NHIỀU (mô hình chốt: "chọn nhiều" chính là cơ chế
- *     topping bị thay thế; Đường/Đá/Size là chọn-một nên giữ nguyên).
+ *     topping SKU (kể cả khi đã có mã hợp lệ), MỌI nhóm tuỳ chọn giữ nguyên.
+ *   BẬT — chạy mô hình mới: hiện khu topping SKU bán theo phần, và ẩn ĐÚNG
+ *     nhóm Topping legacy (xem `laNhomToppingLegacy`).
  *
  * Bật bằng biến môi trường Vercel `NEXT_PUBLIC_FNB_TOPPING_SKU=1` +
  * redeploy — có vết, đảo lại được ngay, không cần sửa mã. Nằm trong
@@ -55,20 +53,81 @@ export const CHE_DO_TOPPING_SKU =
   process.env.NEXT_PUBLIC_FNB_TOPPING_SKU === "1";
 
 /**
- * Lọc nhóm tuỳ chọn theo cơ chế topping đang chạy. Tách lõi thuần
- * (`apDungCheDoTopping`) để test được cả hai trạng thái cờ.
+ * PR 0 (nghiên cứu chuẩn hoá 08/08, mục P0.1) — ĐỊNH DANH NHÓM TOPPING LEGACY.
+ *
+ * Bản trước lọc `rule === "multi"`: SAI về nguyên tắc. "Chọn nhiều" là một
+ * QUY TẮC CHỌN, không phải loại nghiệp vụ. Mai thêm nhóm Syrup, Thêm shot,
+ * Sốt chấm — cũng chọn-nhiều — sẽ bị ẩn oan, nhân viên không bán được.
+ *
+ * Chưa có cột `group_type` (PR 3 mới thêm), nên tạm nhận diện bằng hai lớp,
+ * theo thứ tự ưu tiên:
+ *
+ *  1. DANH SÁCH ID cấu hình qua `NEXT_PUBLIC_FNB_TOPPING_LEGACY_GROUP_IDS`
+ *     (phân tách bằng dấu phẩy). UUID là thứ ổn định nhất đang có: đổi tên
+ *     nhóm, đổi rule, đổi thứ tự đều không ảnh hưởng. Khi đã khai danh sách
+ *     thì CHỈ những ID đó bị ẩn — tuyệt đối không suy đoán thêm.
+ *
+ *  2. Không khai danh sách → suy theo CẤU TRÚC, không theo tên: nhóm vừa
+ *     `multi` VỪA có ít nhất một lựa chọn LIÊN KẾT SẢN PHẨM
+ *     (`linkedProductId`). Liên kết sản phẩm chính là cơ chế "bán thêm có
+ *     giá + trừ kho" mà khu topping SKU thay thế. Nhóm Đường/Đá/Syrup chỉ
+ *     có `scaleFactor`, không liên kết sản phẩm → không bao giờ bị ẩn.
+ *
+ * KHÔNG dò theo TÊN hiển thị ("Topping"): tên đổi được, dịch được.
  */
-export function apDungCheDoTopping<T extends { rule: string }>(
-  groups: T[],
-  cheDoSku: boolean,
-): T[] {
-  return cheDoSku ? groups.filter((g) => g.rule !== "multi") : groups;
+export const ID_NHOM_TOPPING_LEGACY: readonly string[] = (
+  process.env.NEXT_PUBLIC_FNB_TOPPING_LEGACY_GROUP_IDS ?? ""
+)
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+/** Hình dạng tối thiểu để xét — khớp cả ModifierGroup lẫn fixture test. */
+export interface NhomDeXet {
+  id: string;
+  rule: string;
+}
+export interface LuaChonDeXet {
+  linkedProductId?: string | null;
+  isActive?: boolean;
 }
 
-export function locNhomTheoCheDoTopping<T extends { rule: string }>(
+export function laNhomToppingLegacy(
+  group: NhomDeXet,
+  options: readonly LuaChonDeXet[],
+  idCauHinh: readonly string[] = ID_NHOM_TOPPING_LEGACY,
+): boolean {
+  // Lớp 1 — danh sách ID tường minh thì chỉ tin danh sách.
+  if (idCauHinh.length > 0) return idCauHinh.includes(group.id);
+  // Lớp 2 — suy theo cấu trúc, KHÔNG theo tên.
+  if (group.rule !== "multi") return false;
+  return options.some((o) => o.isActive !== false && !!o.linkedProductId);
+}
+
+/**
+ * Lọc nhóm tuỳ chọn theo cơ chế topping đang chạy. Tách lõi thuần
+ * (`apDungCheDoTopping`) để test được cả hai trạng thái cờ.
+ *
+ * Cần `optionsByGroup` vì nhận diện legacy dựa vào lựa chọn có liên kết sản
+ * phẩm — thiếu nó thì lại phải đoán theo rule/tên như bản cũ.
+ */
+export function apDungCheDoTopping<T extends NhomDeXet>(
   groups: T[],
+  optionsByGroup: ReadonlyMap<string, readonly LuaChonDeXet[]>,
+  cheDoSku: boolean,
+  idCauHinh: readonly string[] = ID_NHOM_TOPPING_LEGACY,
 ): T[] {
-  return apDungCheDoTopping(groups, CHE_DO_TOPPING_SKU);
+  if (!cheDoSku) return groups;
+  return groups.filter(
+    (g) => !laNhomToppingLegacy(g, optionsByGroup.get(g.id) ?? [], idCauHinh),
+  );
+}
+
+export function locNhomTheoCheDoTopping<T extends NhomDeXet>(
+  groups: T[],
+  optionsByGroup: ReadonlyMap<string, readonly LuaChonDeXet[]>,
+): T[] {
+  return apDungCheDoTopping(groups, optionsByGroup, CHE_DO_TOPPING_SKU);
 }
 
 /**
