@@ -10,6 +10,7 @@
 import { getDb, getMeta, setMeta } from "./db";
 import { withQuotaRecovery } from "./quota-manager";
 import { getClient } from "@/lib/services/supabase/base";
+import { getToppingPhanHopLe } from "@/lib/services/supabase/fnb-toppings";
 import { getTablesByBranch } from "@/lib/services/supabase/fnb-tables";
 import type { FnbCategory } from "@/app/pos/fnb/components/fnb-category-tabs";
 import type { FnbProduct } from "@/app/pos/fnb/components/fnb-product-grid";
@@ -62,13 +63,9 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
     .eq("channel", "fnb")
     .order("name");
 
-  // Fetch toppings
-  const { data: toppings } = await supabase
-    .from("products")
-    .select("id, name, sell_price")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .ilike("code", "NVL-TOP%");
+  // 08/08 Giai đoạn 2 topping: SKU-TPP bán theo phần (giá 1 phần + BOM đang
+  // bật), KHÔNG còn NVL-TOP% giá nguyên túi/hộp. Xem fnb-toppings.ts.
+  const toppings = await getToppingPhanHopLe(tenantId);
 
   // Write to IndexedDB — wrap với quota recovery vì menu có thể lớn (500+ SKU
   // × image_url string → dễ đẩy usage gần quota trên Safari mobile).
@@ -108,13 +105,13 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
       });
     }
 
-    // Write toppings
-    for (const t of toppings ?? []) {
+    // Write toppings — đã là {id, name, price} (giá MỘT PHẦN)
+    for (const t of toppings) {
       await store.put({
         id: `top_${t.id}`,
         tenantId,
         _type: "topping",
-        data: { id: t.id, name: t.name, price: t.sell_price },
+        data: t,
       });
     }
 
@@ -122,7 +119,7 @@ export async function prefetchMenuData(tenantId: string): Promise<void> {
   });
 
   // Update meta timestamps
-  const version = computeVersion(prods ?? [], toppings ?? []);
+  const version = computeVersion(prods ?? [], toppings);
   await setMeta(menuMetaKey(tenantId, "last_sync"), Date.now());
   await setMeta(menuMetaKey(tenantId, "version"), version);
 }
