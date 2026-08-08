@@ -2133,6 +2133,7 @@
   "get_inventory_aging_report_unsecured_legacy",
   "get_inventory_variance_report",
   "get_inventory_variance_report_unsecured_legacy",
+  "get_invoice_list_summary",
   "get_lots_for_product",
   "get_mkt_campaign_readiness_score",
   "get_payable_aging_report",
@@ -2334,5 +2335,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 318
+ "soRpc": 319
 }
