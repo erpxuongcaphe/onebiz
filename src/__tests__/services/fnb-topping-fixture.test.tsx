@@ -46,12 +46,16 @@ describe("Fixture topping 8.000đ/phần — tính tiền (không cần dữ li�
     const them = screen.getByLabelText("Thêm topping");
     fireEvent.click(them);
     fireEvent.click(them);
-    // Nút tăng SỐ LƯỢNG LY: icon "add" KHÔNG có aria-label (khác nút topping)
-    const tangLy = screen
-      .getAllByRole("button")
-      .find(
-        (b) => b.textContent?.trim() === "add" && !b.getAttribute("aria-label"),
-      )!;
+    // Nút tăng SỐ LƯỢNG LY — dialog mới có aria-label "Thêm số lượng";
+    // fallback cho bản cũ: icon "add" không nhãn (khác nút topping).
+    const tangLy =
+      screen.queryByLabelText("Thêm số lượng") ??
+      screen
+        .getAllByRole("button")
+        .find(
+          (b) =>
+            b.textContent?.trim() === "add" && !b.getAttribute("aria-label"),
+        )!;
     fireEvent.click(tangLy);
     expect(screen.getByText(/Thêm vào đơn — 102.000đ/)).toBeTruthy();
   });
