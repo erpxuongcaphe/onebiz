@@ -193,27 +193,38 @@ describe("P0.4 — client phải lọc channel giống máy chủ (fnb | all)", 
  * Soi mã nguồn từng lời gọi in (đã loại chú thích) — test hành vi đầy đủ cần
  * dựng cả luồng in trình duyệt, không đáng cho vòng này.
  */
-function boChuThich(src: string): string {
-  return src
+function docNguon(duongDan: string): string {
+  // Chuẩn hoá CRLF → LF: máy Windows lấy mã về dạng CRLF còn CI Linux dùng LF.
+  // Không chuẩn hoá thì mọi mẫu tìm theo "\n" cho kết quả khác nhau hai nơi —
+  // đã dính đúng bẫy này một lần (xanh ở máy, đỏ trên CI).
+  return readFileSync(duongDan, "utf8")
+    .replace(/\r\n/g, "\n")
     .replace(/\/\*[\s\S]*?\*\//g, "")
     .split("\n")
     .filter((d) => !d.trim().startsWith("//"))
     .join("\n");
 }
 
-/** Cắt đối số thứ nhất (mảng items) của một lời gọi hàm in. */
-function khoiItems(src: string, tenHam: string, tuViTri = 0): string {
+/**
+ * Cắt TRỌN một lời gọi hàm (cân bằng ngoặc) kể từ `tuViTri`.
+ * Cân bằng ngoặc thay vì dò chuỗi mốc — hai hàm in có chữ ký khác nhau
+ * (một hàm nhận mảng items rồi options, một hàm nhận một đối tượng).
+ */
+function khoiLoiGoi(src: string, tenHam: string, tuViTri = 0): string {
   const i = src.indexOf(tenHam, tuViTri);
   if (i < 0) throw new Error(`khong thay ${tenHam}`);
-  // items nằm giữa "(" đầu tiên và "], {" hoặc "}), {"
-  const j = src.indexOf("(", i);
-  const k = src.indexOf("{\n          orderNumber", j);
-  return src.slice(j, k > 0 ? k : j + 1200);
+  const batDau = src.indexOf("(", i);
+  let sau = 0;
+  for (let k = batDau; k < src.length; k++) {
+    if (src[k] === "(") sau++;
+    else if (src[k] === ")" && --sau === 0) return src.slice(batDau, k + 1);
+  }
+  throw new Error(`loi goi ${tenHam} khong dong ngoac`);
 }
 
 describe("P0.5 — phiếu bếp in giấy phải kèm modifier (Đường/Đá)", () => {
-  const pos = boChuThich(readFileSync("src/app/pos/fnb/page.tsx", "utf8"));
-  const kds = boChuThich(readFileSync("src/app/pos/fnb/kds/page.tsx", "utf8"));
+  const pos = docNguon("src/app/pos/fnb/page.tsx");
+  const kds = docNguon("src/app/pos/fnb/kds/page.tsx");
 
   it("mẫu in ĐÃ hỗ trợ modifierLabels — vấn đề nằm ở nơi GỌI", () => {
     const mau = readFileSync("src/lib/print-fnb.ts", "utf8");
@@ -230,13 +241,13 @@ describe("P0.5 — phiếu bếp in giấy phải kèm modifier (Đường/Đá)
     expect(viTri.length).toBeGreaterThanOrEqual(2);
     for (const v of viTri) {
       expect(
-        khoiItems(pos, "printKitchenTicketsByStation(", v),
+        khoiLoiGoi(pos, "printKitchenTicketsByStation(", v),
         "một lời gọi in phiếu bếp thiếu modifierLabels → bếp nhận phiếu giấy không có Đường/Đá",
       ).toContain("modifierLabels");
     }
   });
 
   it("KDS in lại phiếu cũng truyền modifierLabels", () => {
-    expect(khoiItems(kds, "printKitchenTicketV2(")).toContain("modifierLabels");
+    expect(khoiLoiGoi(kds, "printKitchenTicketV2(")).toContain("modifierLabels");
   });
 });
