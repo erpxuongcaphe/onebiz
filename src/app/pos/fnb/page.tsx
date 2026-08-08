@@ -22,6 +22,7 @@ import {
   offlineAddItemsToExistingOrder,
   prefetchMenuData,
   prefetchTableData,
+  saveToppingsToCache,
   getMenuFromCache,
   getTablesFromCache,
   shouldRefreshMenu,
@@ -353,7 +354,10 @@ function FnbPosPageInner() {
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
-          const cached = await getMenuFromCache(tenantId);
+          // 08/08: cache topping có dấu phạm vi (phiên bản nguồn + chi
+          // nhánh) — cache đời NVL-TOP hoặc của quán khác thì toppings về
+          // RỖNG, thà thiếu còn hơn hiện topping nguyên liệu giá túi/hộp.
+          const cached = await getMenuFromCache(tenantId, branchId);
           if (cached.products.length > 0) {
             setCategories(cached.categories);
             setProducts(cached.products);
@@ -379,7 +383,7 @@ function FnbPosPageInner() {
           const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
           const supabase = getClient();
 
-          // Parallel fetch: catalog (cats + products + toppings + platform_prices) + branch-scoped (tables + shift)
+          // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
           const catalogPromise = needsRefresh
             ? Promise.all([
                 // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
@@ -394,10 +398,6 @@ function FnbPosPageInner() {
                   .eq("channel", "fnb")
                   .order("name")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
-                // 08/08 Giai đoạn 2 topping: nguồn là SKU-TPP bán theo phần
-                // (giá 1 phần + BOM đang bật), KHÔNG còn NVL-TOP% giá nguyên
-                // túi/hộp. Xem fnb-toppings.ts.
-                getToppingPhanHopLe(tenantId),
                 // CEO 13/05: load platform price overrides để resolve giá theo
                 // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
                 supabase
@@ -407,6 +407,17 @@ function FnbPosPageInner() {
               ])
             : Promise.resolve(null);
 
+          // 08/08 Giai đoạn 2 topping (CEO): SKU-TPP bán theo phần, BOM áp
+          // dụng ĐÚNG chi nhánh — nên KHÔNG nấp sau cổng stale 30 phút của
+          // menu: đổi chi nhánh là topping phải khác ngay dù menu chưa stale.
+          // Lỗi mạng → null: GIỮ topping đang hiện, không xoá thành rỗng.
+          const toppingsPromise = getToppingPhanHopLe(tenantId, branchId).catch(
+            (err) => {
+              console.warn("[FnB] tải topping thất bại:", err);
+              return null;
+            },
+          );
+
           const tablesPromise = branchId
             ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])
             : Promise.resolve([] as RestaurantTable[]);
@@ -415,13 +426,24 @@ function FnbPosPageInner() {
           // nằm chung Promise.all này nên lỗi mạng bị `.catch(() => null)`
           // nuốt thành "chưa mở ca", và ca phải chờ cả catalog + bàn xong
           // mới biết kết quả.
-          const [catalogResult, tbls] = await Promise.all([
+          const [catalogResult, toppingsMoi, tbls] = await Promise.all([
             catalogPromise,
+            toppingsPromise,
             tablesPromise,
           ]);
 
+          if (toppingsMoi) {
+            // Đã là {id, name, price} với price = giá MỘT PHẦN.
+            setToppingProducts(toppingsMoi);
+            // Ghi cache topping theo (phiên bản nguồn + chi nhánh) — cache
+            // đời NVL-TOP bị thay/vô hiệu ngay từ bản build này.
+            saveToppingsToCache(tenantId, branchId, toppingsMoi).catch((err) =>
+              console.warn("[FnB] saveToppingsToCache failed:", err),
+            );
+          }
+
           if (catalogResult) {
-            const [cats, prodsResp, toppingsResp, ppResp] = catalogResult;
+            const [cats, prodsResp, ppResp] = catalogResult;
             // CEO 13/05: build platform price map → resolve nhanh trong POS
             const ppMap: Record<string, Partial<Record<string, number>>> = {};
             for (const row of ppResp?.data ?? []) {
@@ -452,11 +474,8 @@ function FnbPosPageInner() {
               }))
             );
 
-            // Đã là {id, name, price} với price = giá MỘT PHẦN.
-            setToppingProducts(toppingsResp);
-
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId).catch((err) =>
+            prefetchMenuData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
