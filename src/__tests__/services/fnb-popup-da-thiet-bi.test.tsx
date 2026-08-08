@@ -350,8 +350,10 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
     expect(nguon).toContain("grid gap-2 xl:grid-cols-2");
   });
 
-  it("KHÔNG cắt chữ bằng '…' ở tiền, và không có cỡ chữ dưới 11px", () => {
+  it("KHÔNG cắt chữ bằng '…' ở tiền, và chữ phụ không dưới 12px (CEO 08/08)", () => {
     expect(lop).not.toContain("truncate");
+    // text-xs = 12px là sàn; mọi cỡ pixel lẻ nhỏ hơn đều cấm.
+    expect(lop).not.toContain("text-[11px]");
     expect(lop).not.toContain("text-[10px]");
     expect(lop).not.toContain("text-[9px]");
   });

@@ -747,7 +747,8 @@ export function FnbItemDialog({
               </div>
 
               <div className="text-right leading-tight">
-                <div className="text-[11px] text-muted-foreground">Tạm tính</div>
+                {/* CEO 08/08: chữ phụ không nhỏ hơn 12px (text-xs = 12px). */}
+                <div className="text-xs text-muted-foreground">Tạm tính</div>
                 <div className="text-base font-semibold whitespace-nowrap tabular-nums">
                   {formatCurrency(lineTotal)}đ
                 </div>
