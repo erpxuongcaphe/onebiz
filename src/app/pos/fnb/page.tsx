@@ -22,6 +22,7 @@ import {
   offlineAddItemsToExistingOrder,
   prefetchMenuData,
   prefetchTableData,
+  saveToppingsToCache,
   getMenuFromCache,
   getTablesFromCache,
   shouldRefreshMenu,
@@ -60,6 +61,11 @@ import {
   type DiscountPreset,
 } from "@/lib/services/supabase/fnb-platform-settings";
 import { getClient } from "@/lib/services/supabase/base";
+import {
+  getToppingPhanHopLe,
+  CHE_DO_TOPPING_SKU,
+  locNhomTheoCheDoTopping,
+} from "@/lib/services/supabase/fnb-toppings";
 // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
 import {
   getEffectiveModifierGroupsForProduct,
@@ -352,7 +358,10 @@ function FnbPosPageInner() {
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
-          const cached = await getMenuFromCache(tenantId);
+          // 08/08: cache topping có dấu phạm vi (phiên bản nguồn + chi
+          // nhánh) — cache đời NVL-TOP hoặc của quán khác thì toppings về
+          // RỖNG, thà thiếu còn hơn hiện topping nguyên liệu giá túi/hộp.
+          const cached = await getMenuFromCache(tenantId, branchId);
           if (cached.products.length > 0) {
             setCategories(cached.categories);
             setProducts(cached.products);
@@ -378,7 +387,7 @@ function FnbPosPageInner() {
           const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
           const supabase = getClient();
 
-          // Parallel fetch: catalog (cats + products + toppings + platform_prices) + branch-scoped (tables + shift)
+          // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
           const catalogPromise = needsRefresh
             ? Promise.all([
                 // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
@@ -393,13 +402,6 @@ function FnbPosPageInner() {
                   .eq("channel", "fnb")
                   .order("name")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
-                supabase
-                  .from("products")
-                  .select("id, name, sell_price")
-                  .eq("tenant_id", tenantId)
-                  .eq("is_active", true)
-                  .ilike("code", "NVL-TOP%")
-                  .limit(1000), // tương tự — tăng từ 100 lên 1000 cho toppings
                 // CEO 13/05: load platform price overrides để resolve giá theo
                 // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
                 supabase
@@ -409,6 +411,17 @@ function FnbPosPageInner() {
               ])
             : Promise.resolve(null);
 
+          // 08/08 Giai đoạn 2 topping (CEO): SKU-TPP bán theo phần, BOM áp
+          // dụng ĐÚNG chi nhánh — nên KHÔNG nấp sau cổng stale 30 phút của
+          // menu: đổi chi nhánh là topping phải khác ngay dù menu chưa stale.
+          // Lỗi mạng → null: GIỮ topping đang hiện, không xoá thành rỗng.
+          const toppingsPromise = getToppingPhanHopLe(tenantId, branchId).catch(
+            (err) => {
+              console.warn("[FnB] tải topping thất bại:", err);
+              return null;
+            },
+          );
+
           const tablesPromise = branchId
             ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])
             : Promise.resolve([] as RestaurantTable[]);
@@ -417,13 +430,24 @@ function FnbPosPageInner() {
           // nằm chung Promise.all này nên lỗi mạng bị `.catch(() => null)`
           // nuốt thành "chưa mở ca", và ca phải chờ cả catalog + bàn xong
           // mới biết kết quả.
-          const [catalogResult, tbls] = await Promise.all([
+          const [catalogResult, toppingsMoi, tbls] = await Promise.all([
             catalogPromise,
+            toppingsPromise,
             tablesPromise,
           ]);
 
+          if (toppingsMoi) {
+            // Đã là {id, name, price} với price = giá MỘT PHẦN.
+            setToppingProducts(toppingsMoi);
+            // Ghi cache topping theo (phiên bản nguồn + chi nhánh) — cache
+            // đời NVL-TOP bị thay/vô hiệu ngay từ bản build này.
+            saveToppingsToCache(tenantId, branchId, toppingsMoi).catch((err) =>
+              console.warn("[FnB] saveToppingsToCache failed:", err),
+            );
+          }
+
           if (catalogResult) {
-            const [cats, prodsResp, toppingsResp, ppResp] = catalogResult;
+            const [cats, prodsResp, ppResp] = catalogResult;
             // CEO 13/05: build platform price map → resolve nhanh trong POS
             const ppMap: Record<string, Partial<Record<string, number>>> = {};
             for (const row of ppResp?.data ?? []) {
@@ -454,17 +478,8 @@ function FnbPosPageInner() {
               }))
             );
 
-            const toppings = toppingsResp.data ?? [];
-            setToppingProducts(
-              toppings.map((t) => ({
-                id: t.id,
-                name: t.name,
-                price: t.sell_price,
-              }))
-            );
-
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId).catch((err) =>
+            prefetchMenuData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
@@ -3047,12 +3062,27 @@ function FnbPosPageInner() {
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
             variantsLoading={itemVariantsLoading}
-            toppings={toppingProducts.length > 0 ? toppingProducts : undefined}
+            // 08/08 (CEO): HAI cơ chế topping không được cùng hiện. Cờ TẮT
+            // (mặc định) → giấu khu topping SKU, giữ nguyên nhóm tuỳ chọn
+            // như hệ thống hiện tại; BẬT → hiện topping SKU + ẩn nhóm
+            // chọn-nhiều cũ. Xem CHE_DO_TOPPING_SKU trong fnb-toppings.ts.
+            toppings={
+              CHE_DO_TOPPING_SKU && toppingProducts.length > 0
+                ? toppingProducts
+                : undefined
+            }
             onConfirm={handleItemConfirm}
             initialSelection={dialogInitialSelection}
             confirmLabel={editingLineId ? "Cập nhật" : undefined}
             // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options
-            dynamicModifiers={itemModifierData}
+            dynamicModifiers={
+              itemModifierData
+                ? {
+                    ...itemModifierData,
+                    groups: locNhomTheoCheDoTopping(itemModifierData.groups),
+                  }
+                : itemModifierData
+            }
             // 06/08: tải tuỳ chọn hỏng → dialog hiện lỗi + nút này
             onRetryModifiers={handleRetryModifiers}
           />
