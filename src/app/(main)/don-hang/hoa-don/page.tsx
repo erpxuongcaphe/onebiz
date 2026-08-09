@@ -169,7 +169,11 @@ function InvoiceDetail({
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
-  const itemTaxSum = items.reduce(
+  const storedItemTaxSum = items.reduce(
+    (sum, item) => sum + item.vatAmount,
+    0,
+  );
+  const inferredItemTaxSum = items.reduce(
     (sum, item) => sum + getInvoiceItemTaxAmount(item),
     0,
   );
@@ -177,7 +181,8 @@ function InvoiceDetail({
     subtotal,
     lineDiscount: itemDiscountSum,
     totalDiscount: invoice.discount,
-    itemTaxAmount: itemTaxSum,
+    itemTaxAmount: storedItemTaxSum,
+    inferredItemTaxAmount: inferredItemTaxSum,
     reportedTaxAmount: invoice.taxAmount ?? 0,
     deliveryFee: invoice.shippingFee ?? 0,
     invoiceTotal: invoice.totalAmount,

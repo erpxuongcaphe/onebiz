@@ -10,6 +10,10 @@ const invoicePage = readFileSync(
   resolve(process.cwd(), "src/app/(main)/don-hang/hoa-don/page.tsx"),
   "utf8",
 );
+const invoiceService = readFileSync(
+  resolve(process.cwd(), "src/lib/services/supabase/invoices.ts"),
+  "utf8",
+);
 
 describe("reconcileInvoiceTotal", () => {
   it("rebuilds missing legacy line VAT from the stored rate", () => {
@@ -62,6 +66,44 @@ describe("reconcileInvoiceTotal", () => {
       expectedTotal: 2_668_400,
       difference: 0,
       hasDifference: false,
+    });
+  });
+
+  it("accepts inferred legacy VAT only when it exactly explains the header", () => {
+    expect(
+      reconcileInvoiceTotal({
+        subtotal: 2_430_000,
+        lineDiscount: 0,
+        totalDiscount: 0,
+        itemTaxAmount: 0,
+        inferredItemTaxAmount: 238_400,
+        reportedTaxAmount: 0,
+        deliveryFee: 0,
+        invoiceTotal: 2_668_400,
+      }),
+    ).toMatchObject({
+      taxAmount: 238_400,
+      difference: 0,
+      hasDifference: false,
+    });
+  });
+
+  it("does not relabel an unrelated historical difference as inferred VAT", () => {
+    expect(
+      reconcileInvoiceTotal({
+        subtotal: 7_030_000,
+        lineDiscount: 0,
+        totalDiscount: 0,
+        itemTaxAmount: 0,
+        inferredItemTaxAmount: 703_000,
+        reportedTaxAmount: 0,
+        deliveryFee: 0,
+        invoiceTotal: 8_110_000,
+      }),
+    ).toMatchObject({
+      taxAmount: 0,
+      difference: 1_080_000,
+      hasDifference: true,
     });
   });
 
@@ -123,5 +165,12 @@ describe("reconcileInvoiceTotal", () => {
     expect(invoicePage).toContain(
       "value: formatCurrency(reconciliation.orderDiscount)",
     );
+  });
+
+  it("falls back to the product VAT rate for legacy invoice items", () => {
+    expect(invoiceService).toContain(
+      "products!invoice_items_product_id_fkey(code, vat_rate)",
+    );
+    expect(invoiceService).toContain("row.products?.vat_rate ?? 0");
   });
 });

@@ -3,6 +3,7 @@ export interface InvoiceReconciliationInput {
   lineDiscount: number;
   totalDiscount: number;
   itemTaxAmount: number;
+  inferredItemTaxAmount?: number;
   reportedTaxAmount: number;
   deliveryFee: number;
   invoiceTotal: number;
@@ -60,16 +61,36 @@ export function reconcileInvoiceTotal(
   const totalDiscount = Math.max(0, money(input.totalDiscount));
   const orderDiscount = Math.max(0, money(totalDiscount - lineDiscount));
   const itemTaxAmount = Math.max(0, money(input.itemTaxAmount));
+  const inferredItemTaxAmount = Math.max(
+    0,
+    money(input.inferredItemTaxAmount ?? 0),
+  );
   const reportedTaxAmount = Math.max(0, money(input.reportedTaxAmount));
   const deliveryFee = Math.max(0, money(input.deliveryFee));
   const invoiceTotal = Math.max(0, money(input.invoiceTotal));
+  const baseWithoutTax = Math.max(
+    0,
+    money(subtotal - lineDiscount - orderDiscount + deliveryFee),
+  );
+  const inferredTaxExplainsTotal =
+    itemTaxAmount <= 0 &&
+    inferredItemTaxAmount > 0 &&
+    Math.abs(
+      invoiceTotal - money(baseWithoutTax + inferredItemTaxAmount),
+    ) <= 0.01;
+  const effectiveItemTaxAmount =
+    itemTaxAmount > 0
+      ? itemTaxAmount
+      : inferredTaxExplainsTotal
+        ? inferredItemTaxAmount
+        : 0;
   const baseBeforeOrderTax = Math.max(
     0,
-    money(
-      subtotal - lineDiscount - orderDiscount + itemTaxAmount + deliveryFee,
-    ),
+    money(baseWithoutTax + effectiveItemTaxAmount),
   );
-  const reportedOrderTax = money(reportedTaxAmount - itemTaxAmount);
+  const reportedOrderTax = money(
+    reportedTaxAmount - effectiveItemTaxAmount,
+  );
   const orderTaxIsValid =
     Math.abs(reportedOrderTax) <= 0.01 ||
     [5, 8, 10].some(
@@ -78,7 +99,9 @@ export function reconcileInvoiceTotal(
           reportedOrderTax - Math.ceil((baseBeforeOrderTax * rate) / 100),
         ) <= 0.01,
     );
-  const taxAmount = orderTaxIsValid ? reportedTaxAmount : itemTaxAmount;
+  const taxAmount = orderTaxIsValid
+    ? Math.max(reportedTaxAmount, effectiveItemTaxAmount)
+    : effectiveItemTaxAmount;
   const expectedTotal = Math.max(
     0,
     money(subtotal - lineDiscount - orderDiscount + taxAmount + deliveryFee),
