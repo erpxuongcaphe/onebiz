@@ -8,8 +8,10 @@ import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
@@ -80,7 +82,6 @@ import {
 } from "@/lib/services";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
-import { SummaryCard } from "@/components/shared/summary-card";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
@@ -440,6 +441,7 @@ export default function HangHoaPage() {
   const [createdDateFrom, setCreatedDateFrom] = useState("");
   const [createdDateTo, setCreatedDateTo] = useState("");
   const [supplierFilter, setSupplierFilter] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [categories, setCategories] = useState<
     { label: string; value: string; count: number }[]
@@ -1566,99 +1568,87 @@ export default function HangHoaPage() {
 
   const columns = scope === "nvl" ? nvlColumns : skuColumns;
 
+  const stockOptions = [
+    { label: "Còn hàng", value: "in_stock" },
+    { label: "Hết hàng", value: "out_of_stock" },
+    { label: "Sắp hết (≤ 5)", value: "low_stock" },
+  ];
+  const statusOptions = [
+    { label: "Đang kinh doanh", value: "active" },
+    { label: "Đã ngừng KD (có thể khôi phục)", value: "inactive" },
+    { label: "Tất cả", value: "all" },
+  ];
+  const createdDateLabel =
+    STANDARD_LIST_PRESETS.find((preset) => preset.value === createdDatePreset)?.label ??
+    "Thời gian tạo";
+  const filterChips: ListFilterChip[] = [];
+
+  if (categoryFilter !== "all") {
+    filterChips.push({
+      key: "category",
+      label: "Nhóm hàng",
+      value: categories.find((item) => item.value === categoryFilter)?.label ?? categoryFilter,
+      onClear: () => setCategoryFilter("all"),
+    });
+  }
+  if (brandFilter !== "all") {
+    filterChips.push({
+      key: "brand",
+      label: "Thương hiệu",
+      value:
+        brandFilter === "__no_brand__"
+          ? "Chưa có thương hiệu"
+          : brandFilter,
+      onClear: () => setBrandFilter("all"),
+    });
+  }
+  if (stockFilter !== "all") {
+    filterChips.push({
+      key: "stock",
+      label: "Tồn kho",
+      value: stockOptions.find((item) => item.value === stockFilter)?.label ?? stockFilter,
+      onClear: () => setStockFilter("all"),
+    });
+  }
+  if (statusFilter !== "all") {
+    filterChips.push({
+      key: "status",
+      label: "Trạng thái",
+      value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter,
+      onClear: () => setStatusFilter("all"),
+    });
+  }
+  if (createdDatePreset !== "all") {
+    filterChips.push({
+      key: "created-date",
+      label: "Thời gian tạo",
+      value: createdDateLabel,
+      onClear: () => {
+        setCreatedDatePreset("all");
+        setCreatedDateFrom("");
+        setCreatedDateTo("");
+      },
+    });
+  }
+
+  const clearListFilters = () => {
+    setCategoryFilter("all");
+    setBrandFilter("all");
+    setStockFilter("all");
+    setStatusFilter("all");
+    setExpectedOutDate("all");
+    setCreatedDatePreset("all");
+    setCreatedDateFrom("");
+    setCreatedDateTo("");
+    setSupplierFilter("");
+  };
+
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup
-              label="Nhóm hàng"
-              action={
-                <span className="text-primary text-xs cursor-pointer">
-                  Tạo mới
-                </span>
-              }
-            >
-              <SelectFilter
-                options={categories}
-                value={categoryFilter}
-                onChange={setCategoryFilter}
-                placeholder="Tất cả"
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Thương hiệu">
-              <SelectFilter
-                options={[
-                  { label: "Chưa có thương hiệu", value: "__no_brand__" },
-                  ...brands.map((b) => ({ label: b, value: b })),
-                ]}
-                value={brandFilter}
-                onChange={setBrandFilter}
-                placeholder="Tất cả"
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Tồn kho">
-              <SelectFilter
-                options={[
-                  { label: "Còn hàng", value: "in_stock" },
-                  { label: "Hết hàng", value: "out_of_stock" },
-                ]}
-                value={stockFilter}
-                onChange={setStockFilter}
-                placeholder="Tất cả"
-              />
-            </FilterGroup>
-
-            {/* Day 17/05/2026: default "active" — chỉ hiện SP đang KD. User
-                chọn "Đã ngừng KD" để xem + khôi phục SP đã soft delete. */}
-            <FilterGroup label="Trạng thái kinh doanh">
-              <SelectFilter
-                options={[
-                  { label: "Đang kinh doanh", value: "active" },
-                  { label: "Đã ngừng KD (có thể khôi phục)", value: "inactive" },
-                  { label: "Tất cả", value: "all" },
-                ]}
-                value={statusFilter}
-                onChange={setStatusFilter}
-                placeholder="Đang kinh doanh"
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Dự kiến hết hàng">
-              <DatePresetFilter
-                value={expectedOutDate}
-                onChange={setExpectedOutDate}
-                presets={STANDARD_LIST_PRESETS}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Thời gian tạo">
-              <DatePresetFilter
-                value={createdDatePreset}
-                onChange={setCreatedDatePreset}
-                from={createdDateFrom}
-                to={createdDateTo}
-                onFromChange={setCreatedDateFrom}
-                onToChange={setCreatedDateTo}
-                presets={STANDARD_LIST_PRESETS}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Nhà cung cấp">
-              <PersonFilter
-                value={supplierFilter}
-                onChange={setSupplierFilter}
-                placeholder="Chọn nhà cung cấp"
-                suggestions={[]}
-              />
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Hàng hóa"
+          density="compact"
           tabs={
             <Tabs value={scope} onValueChange={(v) => setScope(v as ProductScope)}>
               <TabsList>
@@ -1723,67 +1713,6 @@ export default function HangHoaPage() {
           ]}
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-3 pb-1">
-          {/* CEO 22/05/2026 (UX P0 #2): pass loading=true khi stats null →
-              skeleton shimmer thay vì "—" gây user nghi ngờ "lỗi à?" */}
-          <SummaryCard
-            icon={<Icon name="inventory_2" size={16} />}
-            label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
-            value={stats ? formatNumber(stats.totalCount) : ""}
-            loading={!stats}
-          />
-          <SummaryCard
-            icon={<Icon name="savings" size={16} />}
-            label="Giá trị tồn kho"
-            value={stats ? formatCurrency(stats.stockValue) : ""}
-            loading={!stats}
-            highlight
-          />
-          <SummaryCard
-            icon={<Icon name="remove_shopping_cart" size={16} />}
-            label="Hết hàng"
-            value={stats ? formatNumber(stats.outOfStock) : ""}
-            loading={!stats}
-            danger={(stats?.outOfStock ?? 0) > 0}
-          />
-          <SummaryCard
-            icon={<Icon name="warning" size={16} />}
-            label="Sắp hết (≤ 5)"
-            value={stats ? formatNumber(stats.lowStock) : ""}
-            loading={!stats}
-            danger={(stats?.lowStock ?? 0) > 0}
-          />
-        </div>
-
-        {/* Day 17/05/2026: Tab chip filter status — visible ngay, không cần
-            mở FilterSidebar. CEO báo không tìm thấy filter "Ngừng KD" ở sidebar. */}
-        <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-2">
-          <span className="text-xs text-on-surface-variant mr-1">Trạng thái:</span>
-          {[
-            { label: "Đang kinh doanh", value: "active", icon: "check_circle" },
-            { label: "Đã ngừng KD", value: "inactive", icon: "block" },
-            { label: "Tất cả", value: "all", icon: "list" },
-          ].map((tab) => {
-            const isActive = statusFilter === tab.value;
-            return (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setStatusFilter(tab.value)}
-                className={
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border " +
-                  (isActive
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-surface-variant text-on-surface-variant border-border hover:bg-surface-container")
-                }
-              >
-                <Icon name={tab.icon} size={14} />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Branch-scope (CEO 13/07): xem toàn chuỗi → banner "về chi nhánh";
             xem theo CN → nhắc + nút "Xem toàn chuỗi" luôn hiện. */}
         {activeBranchId &&
@@ -1814,6 +1743,74 @@ export default function HangHoaPage() {
           columns={columns}
           data={data}
           loading={loading}
+          density="compact"
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="inventory_2" size={15} />}
+                label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
+                value={stats ? formatNumber(stats.totalCount) : "—"}
+                loading={!stats}
+              />
+              <ListMetric
+                icon={<Icon name="savings" size={15} />}
+                label="Giá trị tồn kho"
+                value={stats ? formatCurrency(stats.stockValue) : "—"}
+                loading={!stats}
+                tone="primary"
+              />
+              <ListMetric
+                icon={<Icon name="remove_shopping_cart" size={15} />}
+                label="Hết hàng"
+                value={stats ? formatNumber(stats.outOfStock) : "—"}
+                loading={!stats}
+                tone={(stats?.outOfStock ?? 0) > 0 ? "danger" : "default"}
+              />
+              <ListMetric
+                icon={<Icon name="warning" size={15} />}
+                label="Sắp hết (≤ 5)"
+                value={stats ? formatNumber(stats.lowStock) : "—"}
+                loading={!stats}
+                tone={(stats?.lowStock ?? 0) > 0 ? "danger" : "default"}
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{createdDateLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+                aria-label={`Mở bộ lọc${filterChips.length > 0 ? `, ${filterChips.length} điều kiện` : ""}`}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
           // CEO 22/05/2026 (UX P0 #1): empty state context-aware
           emptyIcon={scope === "nvl" ? "inventory_2" : "shopping_bag"}
           emptyTitle={
@@ -2072,6 +2069,82 @@ export default function HangHoaPage() {
           }}
         />
       </ListPageLayout>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc hàng hóa"
+      >
+        <FilterGroup label="Nhóm hàng">
+          <SelectFilter
+            options={categories}
+            value={categoryFilter}
+            onChange={setCategoryFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Thương hiệu">
+          <SelectFilter
+            options={[
+              { label: "Chưa có thương hiệu", value: "__no_brand__" },
+              ...brands.map((brand) => ({ label: brand, value: brand })),
+            ]}
+            value={brandFilter}
+            onChange={setBrandFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Tồn kho">
+          <SelectFilter
+            options={stockOptions}
+            value={stockFilter}
+            onChange={setStockFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Trạng thái kinh doanh">
+          <SelectFilter
+            options={statusOptions}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="Đang kinh doanh"
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Dự kiến hết hàng">
+          <DatePresetFilter
+            value={expectedOutDate}
+            onChange={setExpectedOutDate}
+            presets={STANDARD_LIST_PRESETS}
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Thời gian tạo" activeHint={createdDateLabel}>
+          <DatePresetFilter
+            value={createdDatePreset}
+            onChange={setCreatedDatePreset}
+            from={createdDateFrom}
+            to={createdDateTo}
+            onFromChange={setCreatedDateFrom}
+            onToChange={setCreatedDateTo}
+            presets={STANDARD_LIST_PRESETS}
+          />
+        </FilterGroup>
+
+        <FilterGroup label="Nhà cung cấp">
+          <PersonFilter
+            value={supplierFilter}
+            onChange={setSupplierFilter}
+            placeholder="Chọn nhà cung cấp"
+            suggestions={[]}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       <CreateProductDialog
         open={createOpen}
