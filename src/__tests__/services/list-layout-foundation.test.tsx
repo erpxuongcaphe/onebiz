@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { FilterChips } from "@/components/shared/filter-chips";
 import { ListStrip } from "@/components/shared/list-strip";
+import { FilterPanel } from "@/components/shared/filter-sidebar";
 
 describe("nền bố cục danh sách", () => {
   it("dải gọn phân tách chỉ số và công cụ", () => {
@@ -56,5 +57,35 @@ describe("nền bố cục danh sách", () => {
     expect(clearBranch).toHaveBeenCalledTimes(1);
     expect(clearAll).toHaveBeenCalledTimes(1);
   });
-});
 
+  it("panel lọc chỉ có lệnh xóa, không tạo nút áp dụng", () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      value: vi.fn().mockImplementation(() => ({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    });
+    const clearAll = vi.fn();
+    render(
+      <FilterPanel
+        open
+        onOpenChange={vi.fn()}
+        activeCount={3}
+        onClearAll={clearAll}
+      >
+        <label>
+          Trạng thái
+          <input type="checkbox" />
+        </label>
+      </FilterPanel>,
+    );
+
+    expect(screen.getByText("Bộ lọc")).toBeTruthy();
+    expect(screen.getByText("3")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /áp dụng/i })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Xóa tất cả" }));
+    expect(clearAll).toHaveBeenCalledTimes(1);
+  });
+});
