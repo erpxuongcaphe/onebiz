@@ -11,7 +11,6 @@ export {
   getInvoiceListSummary,
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
-  phamViChiNhanhHoaDon,
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,
@@ -628,3 +627,5 @@ export type {
 // POS invoice integrity (read-only, migration 00292)
 export { getPosInvoiceIntegrityReport } from "./pos-integrity";
 export type { PosIntegrityReportInput, PosInvoiceIntegrityRow, PosIntegrityIssueCode } from "./pos-integrity";
+export { phamViChiNhanhHoaDon, getInvoicesTheoPhamVi, demHoaDonChiNhanhKhac, getChiSoTheoPhamVi } from "./invoice-list-scope";
+export type { PhamViChiNhanh } from "./invoice-list-scope";

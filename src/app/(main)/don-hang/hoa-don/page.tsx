@@ -56,12 +56,15 @@ import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/form
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
   getInvoices,
-  getInvoiceListSummary,
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
   phamViChiNhanhHoaDon,
+  getInvoicesTheoPhamVi,
+  demHoaDonChiNhanhKhac,
+  getChiSoTheoPhamVi,
   type InvoiceListSummary,
   type InvoiceListSummaryParams,
+  type PhamViChiNhanh,
   getInvoiceStatuses,
   cancelInvoice,
   voidCompletedInvoice,
@@ -495,13 +498,13 @@ export default function HoaDonPage() {
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
     const pv = phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi });
-    const branchScope = pv.branchId;
-    const result = await getInvoices({
+    // mode "none" = chưa có chi nhánh và chưa chủ động xem toàn chuỗi → hàm
+    // này KHÔNG gọi getInvoices, trả rỗng và đợi người dùng chọn chi nhánh.
+    const result = await getInvoicesTheoPhamVi(pv, {
       page,
       pageSize,
       search: debouncedSearch,
       searchField,
-      branchId: branchScope,
       filters: commonFilters,
     });
     setData(result.data);
@@ -510,16 +513,14 @@ export default function HoaDonPage() {
     // bộ lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
     // KHÔNG có quyền xem toàn chuỗi thì tuyệt đối không phát sinh lời gọi
     // getInvoices với branchId undefined — kể cả chỉ để đếm.
-    if (pv.duocDemChiNhanhKhac && result.data.length === 0) {
-      const all = await getInvoices({
-        page: 0,
-        pageSize: 1,
-        search: debouncedSearch,
-        searchField,
-        branchId: undefined,
-        filters: commonFilters,
-      });
-      setOtherBranchCount(all.total);
+    if (result.data.length === 0) {
+      setOtherBranchCount(
+        await demHoaDonChiNhanhKhac(pv, {
+          search: debouncedSearch,
+          searchField,
+          filters: commonFilters,
+        }),
+      );
     } else {
       setOtherBranchCount(0);
     }
@@ -578,10 +579,12 @@ export default function HoaDonPage() {
     return { tien, giam };
   }, [data]);
 
-  const thamSoChiSo = useMemo<InvoiceListSummaryParams>(() => {
+  const thamSoChiSo = useMemo<
+    Omit<InvoiceListSummaryParams, "branchId"> & { phamVi: PhamViChiNhanh }
+  >(() => {
     const range = computeListPresetRange(datePreset);
     return {
-      branchId: phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }).branchId,
+      phamVi: phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
       dateFrom: range.from,
       dateTo: range.to,
       // Truyền THẲNG trạng thái của giao diện. RPC tự ánh xạ
@@ -615,17 +618,19 @@ export default function HoaDonPage() {
     // số: lượt A đang bay → đổi sang bộ lọc B đã có sẵn trong nhớ tạm → thoát
     // sớm mà KHÔNG tăng số lượt → A về muộn vẫn khớp số lượt và ghi đè số của
     // B. Tăng trước là vô hiệu hoá mọi lượt đang bay, kể cả khi đi đường cache.
-    const khoa = khoaChiSoHoaDon(thamSoChiSo);
+    const khoa =
+      JSON.stringify(thamSoChiSo.phamVi) + "|" + khoaChiSoHoaDon(thamSoChiSo);
     const { luot, sanCo } = boNhoRef.current.batDau(khoa);
     if (sanCo) {
       setChiSo(sanCo);
       setChiSoLoi(false);
       return;
     }
-    getInvoiceListSummary(thamSoChiSo)
-      .then((kq: InvoiceListSummary) => {
+    getChiSoTheoPhamVi(thamSoChiSo.phamVi, thamSoChiSo)
+      .then((kq: InvoiceListSummary | null) => {
         if (!boNhoRef.current.conMoiNhat(luot)) return; // lượt cũ, bỏ
-        boNhoRef.current.luu(khoa, kq);
+        // null = chưa chọn chi nhánh → không có gì để hiện, cũng không lỗi.
+        if (kq) boNhoRef.current.luu(khoa, kq);
         setChiSo(kq);
         setChiSoLoi(false);
       })

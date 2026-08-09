@@ -260,55 +260,5 @@ describe("Đổi dữ liệu hoá đơn thì chỉ số phải tải lại", () 
   });
 });
 
-const { phamViChiNhanhHoaDon } = await import("@/lib/services/supabase/invoices");
-
-describe("Phạm vi chi nhánh — không có quyền thì KHÔNG bao giờ chạy toàn chuỗi", () => {
-  const CN = "cn-1";
-
-  it("không quyền + không bật xem toàn chuỗi → luôn kèm chi nhánh", () => {
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: CN, viewAllBranches: false, duocXemToanChuoi: false,
-    });
-    expect(pv.branchId).toBe(CN);
-    // Và KHÔNG được phát sinh truy vấn đếm ở chi nhánh khác — đó cũng là một
-    // lời gọi getInvoices với branchId undefined.
-    expect(pv.duocDemChiNhanhKhac).toBe(false);
-  });
-
-  it("không quyền NHƯNG cờ xem toàn chuỗi đang bật → vẫn ép về chi nhánh", () => {
-    // Ca hiểm: cờ còn sót lại từ trước khi bị thu hồi quyền.
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: CN, viewAllBranches: true, duocXemToanChuoi: false,
-    });
-    expect(pv.branchId).toBe(CN);
-    expect(pv.duocDemChiNhanhKhac).toBe(false);
-  });
-
-  it("có quyền + bật xem toàn chuỗi → mới được chạy toàn tenant", () => {
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: CN, viewAllBranches: true, duocXemToanChuoi: true,
-    });
-    expect(pv.branchId).toBeUndefined();
-  });
-
-  it("có quyền, chưa bật → theo chi nhánh, và ĐƯỢC đếm chi nhánh khác", () => {
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: CN, viewAllBranches: false, duocXemToanChuoi: true,
-    });
-    expect(pv.branchId).toBe(CN);
-    expect(pv.duocDemChiNhanhKhac).toBe(true);
-  });
-
-  it("chưa chọn chi nhánh nào thì không đếm chi nhánh khác", () => {
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: undefined, viewAllBranches: false, duocXemToanChuoi: true,
-    });
-    expect(pv.duocDemChiNhanhKhac).toBe(false);
-  });
-
-  it("mất quyền thì trang tự tắt cờ xem toàn chuỗi", async () => {
-    const { readFileSync } = await import("node:fs");
-    const src = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
-    expect(src).toContain("if (!duocXemToanChuoi) setViewAllBranches(false);");
-  });
-});
+// Phạm vi chi nhánh: đã tách sang invoice-list-scope.test.ts —
+// nơi test ĐẾM lời gọi getInvoices thật thay vì kiểm giá trị hàm.
