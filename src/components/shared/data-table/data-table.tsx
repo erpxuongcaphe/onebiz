@@ -75,6 +75,10 @@ interface DataTableProps<TData, TValue> {
   rowActions?: (row: TData) => RowAction[];
   bulkActions?: BulkAction<TData>[];
   columnToggle?: boolean;
+  /** Ẩn hàng riêng chứa nút hiển thị cột khi nút được đặt ở dải công cụ ngoài. */
+  columnToggleToolbar?: boolean;
+  /** Mật độ desktop; mobile giữ nguyên vùng chạm và bố cục thẻ. */
+  density?: "comfortable" | "compact";
   /** Inline detail panel — render function receives the row data */
   renderDetail?: (row: TData, onClose: () => void) => ReactNode;
   /** Currently expanded row index (controlled) */
@@ -267,6 +271,8 @@ export function DataTable<TData, TValue>({
   rowActions,
   bulkActions,
   columnToggle = false,
+  columnToggleToolbar = true,
+  density = "comfortable",
   renderDetail,
   expandedRow: controlledExpanded,
   onExpandedRowChange,
@@ -489,7 +495,7 @@ export function DataTable<TData, TValue>({
     // luôn fit trong viewport.
     <div className="relative flex flex-col flex-1 min-h-0">
       {/* Column visibility toggle */}
-      {columnToggle && toggleableColumns.length > 0 && (
+      {columnToggle && columnToggleToolbar && toggleableColumns.length > 0 && (
         <div className="flex justify-end px-4 py-2">
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -722,7 +728,8 @@ export function DataTable<TData, TValue>({
                       <TableCell
                         key={cell.id}
                         className={cn(
-                          "text-sm py-3",
+                          "text-sm",
+                          density === "compact" ? "py-2" : "py-3",
                           pinned && (isExpanded ? pinCellSelectedClass : pinCellClass),
                         )}
                       >

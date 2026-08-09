@@ -1,5 +1,6 @@
 export { FilterSidebar, FilterGroup, ActiveFiltersBar } from "./filter-sidebar";
 export type { ActiveFilter } from "./filter-sidebar";
+export { FilterPanel } from "./filter-panel";
 export { CheckboxFilter } from "./checkbox-filter";
 export { DateRangeFilter } from "./date-range-filter";
 export { SelectFilter } from "./select-filter";
