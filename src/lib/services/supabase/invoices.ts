@@ -713,3 +713,28 @@ export function taoBoNhoChiSo() {
   };
 }
 export type BoNhoChiSo = ReturnType<typeof taoBoNhoChiSo>;
+
+/**
+ * Quyết định phạm vi chi nhánh cho MỌI truy vấn của màn Hoá đơn.
+ *
+ * Một cửa duy nhất, để không nơi nào lỡ tay bắn truy vấn toàn tenant. Trước
+ * đây có ba chỗ tự ghép điều kiện, và chỗ "đếm hoá đơn ở chi nhánh khác" bị
+ * bỏ sót — nó chạy `branchId: undefined` kể cả với người không có quyền.
+ */
+export function phamViChiNhanhHoaDon(opts: {
+  activeBranchId?: string;
+  viewAllBranches: boolean;
+  duocXemToanChuoi: boolean;
+}): {
+  /** undefined = toàn tenant. Chỉ xảy ra khi CÓ quyền. */
+  branchId: string | undefined;
+  /** Có được phép chạy truy vấn đếm ở chi nhánh khác không. */
+  duocDemChiNhanhKhac: boolean;
+} {
+  const toanChuoi = opts.viewAllBranches && opts.duocXemToanChuoi;
+  return {
+    branchId: toanChuoi ? undefined : opts.activeBranchId,
+    duocDemChiNhanhKhac:
+      opts.duocXemToanChuoi && !opts.viewAllBranches && !!opts.activeBranchId,
+  };
+}

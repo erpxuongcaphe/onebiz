@@ -11,6 +11,7 @@ export {
   getInvoiceListSummary,
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
+  phamViChiNhanhHoaDon,
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,

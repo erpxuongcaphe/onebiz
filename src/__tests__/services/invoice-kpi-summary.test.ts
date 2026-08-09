@@ -151,12 +151,15 @@ describe("Khoá nhớ tạm — gồm mọi bộ lọc, KHÔNG gồm số trang"
 });
 
 describe("Đối chiếu với danh sách", () => {
-  it("so_dong_theo_bo_loc phải khớp `total` của danh sách với CÙNG bộ lọc", async () => {
-    // Số máy chủ đo thật trên prod 08/08 (tenant OneBiz, không lọc):
-    //   danh sách total = 260  ·  RPC so_dong_theo_bo_loc = 260
+  it("ánh xạ đúng cột so_dong_theo_bo_loc từ máy chủ (fixture)", async () => {
+    // Ca này CHỈ chứng minh việc ánh xạ cột, KHÔNG chứng minh số liệu khớp
+    // danh sách — hai bên cùng lấy từ một fixture thì so nhau là vô nghĩa.
+    // Việc đối chiếu thật đã làm bằng preflight chỉ đọc trên prod 08/08:
+    // danh sách total = 260 và RPC so_dong_theo_bo_loc = 260, hai đường tính
+    // độc lập. Ghi lại ở docs/PREFLIGHT-KPI-HOA-DON-A1-A8.sql mục A8.
+    rpcTraVe = { ...SO_MAY_CHU, so_dong_theo_bo_loc: 137 };
     const kq = await getInvoiceListSummary({});
-    const totalCuaDanhSach = 260;
-    expect(kq.soDongTheoBoLoc).toBe(totalCuaDanhSach);
+    expect(kq.soDongTheoBoLoc).toBe(137);
   });
 
   it("giá trị hoàn thành KHÔNG bị trừ giảm giá lần hai", async () => {
@@ -257,17 +260,55 @@ describe("Đổi dữ liệu hoá đơn thì chỉ số phải tải lại", () 
   });
 });
 
-describe("Xem toàn chuỗi phải có quyền — bảng và chỉ số cùng phạm vi", () => {
-  it("nút và phạm vi truy vấn đều khoá theo 2 mã quyền RPC dùng", async () => {
+const { phamViChiNhanhHoaDon } = await import("@/lib/services/supabase/invoices");
+
+describe("Phạm vi chi nhánh — không có quyền thì KHÔNG bao giờ chạy toàn chuỗi", () => {
+  const CN = "cn-1";
+
+  it("không quyền + không bật xem toàn chuỗi → luôn kèm chi nhánh", () => {
+    const pv = phamViChiNhanhHoaDon({
+      activeBranchId: CN, viewAllBranches: false, duocXemToanChuoi: false,
+    });
+    expect(pv.branchId).toBe(CN);
+    // Và KHÔNG được phát sinh truy vấn đếm ở chi nhánh khác — đó cũng là một
+    // lời gọi getInvoices với branchId undefined.
+    expect(pv.duocDemChiNhanhKhac).toBe(false);
+  });
+
+  it("không quyền NHƯNG cờ xem toàn chuỗi đang bật → vẫn ép về chi nhánh", () => {
+    // Ca hiểm: cờ còn sót lại từ trước khi bị thu hồi quyền.
+    const pv = phamViChiNhanhHoaDon({
+      activeBranchId: CN, viewAllBranches: true, duocXemToanChuoi: false,
+    });
+    expect(pv.branchId).toBe(CN);
+    expect(pv.duocDemChiNhanhKhac).toBe(false);
+  });
+
+  it("có quyền + bật xem toàn chuỗi → mới được chạy toàn tenant", () => {
+    const pv = phamViChiNhanhHoaDon({
+      activeBranchId: CN, viewAllBranches: true, duocXemToanChuoi: true,
+    });
+    expect(pv.branchId).toBeUndefined();
+  });
+
+  it("có quyền, chưa bật → theo chi nhánh, và ĐƯỢC đếm chi nhánh khác", () => {
+    const pv = phamViChiNhanhHoaDon({
+      activeBranchId: CN, viewAllBranches: false, duocXemToanChuoi: true,
+    });
+    expect(pv.branchId).toBe(CN);
+    expect(pv.duocDemChiNhanhKhac).toBe(true);
+  });
+
+  it("chưa chọn chi nhánh nào thì không đếm chi nhánh khác", () => {
+    const pv = phamViChiNhanhHoaDon({
+      activeBranchId: undefined, viewAllBranches: false, duocXemToanChuoi: true,
+    });
+    expect(pv.duocDemChiNhanhKhac).toBe(false);
+  });
+
+  it("mất quyền thì trang tự tắt cờ xem toàn chuỗi", async () => {
     const { readFileSync } = await import("node:fs");
     const src = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
-    // Lỗi cũ: nút "Xem tất cả chi nhánh" không kiểm quyền → nhân viên 1 chi
-    // nhánh bấm được, danh sách chạy toàn tenant trong khi RPC chỉ số thu hẹp
-    // theo get_user_accessible_branches → hai số lệch nhau.
-    expect(src).toContain('"reports.view_all_branches"');
-    expect(src).toContain('"system.manage_branches"');
-    // Cả hai đường lấy dữ liệu đều phải kèm điều kiện quyền.
-    const soLanKhoa = src.split("viewAllBranches && duocXemToanChuoi").length - 1;
-    expect(soLanKhoa, "cả danh sách LẪN chỉ số phải khoá theo quyền").toBe(2);
+    expect(src).toContain("if (!duocXemToanChuoi) setViewAllBranches(false);");
   });
 });

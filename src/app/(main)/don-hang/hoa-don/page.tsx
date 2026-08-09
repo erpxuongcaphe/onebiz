@@ -59,6 +59,7 @@ import {
   getInvoiceListSummary,
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
+  phamViChiNhanhHoaDon,
   type InvoiceListSummary,
   type InvoiceListSummaryParams,
   getInvoiceStatuses,
@@ -470,6 +471,11 @@ export default function HoaDonPage() {
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  // Mất quyền (đổi vai trò, thu hồi riêng) thì tự thoát chế độ xem toàn chuỗi
+  // ngay, không đợi thao tác nào.
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
 
   const statuses = getInvoiceStatuses();
 
@@ -488,7 +494,8 @@ export default function HoaDonPage() {
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
-    const branchScope = viewAllBranches && duocXemToanChuoi ? undefined : activeBranchId;
+    const pv = phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi });
+    const branchScope = pv.branchId;
     const result = await getInvoices({
       page,
       pageSize,
@@ -501,7 +508,9 @@ export default function HoaDonPage() {
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng
     // bộ lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    // KHÔNG có quyền xem toàn chuỗi thì tuyệt đối không phát sinh lời gọi
+    // getInvoices với branchId undefined — kể cả chỉ để đếm.
+    if (pv.duocDemChiNhanhKhac && result.data.length === 0) {
       const all = await getInvoices({
         page: 0,
         pageSize: 1,
@@ -572,7 +581,7 @@ export default function HoaDonPage() {
   const thamSoChiSo = useMemo<InvoiceListSummaryParams>(() => {
     const range = computeListPresetRange(datePreset);
     return {
-      branchId: viewAllBranches && duocXemToanChuoi ? undefined : activeBranchId,
+      branchId: phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }).branchId,
       dateFrom: range.from,
       dateTo: range.to,
       // Truyền THẲNG trạng thái của giao diện. RPC tự ánh xạ
@@ -864,7 +873,7 @@ export default function HoaDonPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
           <SummaryCard
             icon={<Icon name="receipt" size={16} />}
-            label="Số hóa đơn"
+            label="Số hóa đơn (mọi trạng thái)"
             value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
             loading={!chiSo && !chiSoLoi}
             hint={chiSoLoi ? "Chưa cập nhật được" : undefined}
