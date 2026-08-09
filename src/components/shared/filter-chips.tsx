@@ -28,7 +28,7 @@ export function FilterChips({
     <div
       aria-label={`Đang lọc ${filters.length} điều kiện`}
       className={cn(
-        "flex h-7 min-h-7 items-center gap-1.5 overflow-x-auto border-b bg-background px-3 whitespace-nowrap no-scrollbar",
+        "flex h-7 min-h-7 items-center gap-1.5 overflow-x-auto border-b bg-background px-3 whitespace-nowrap no-scrollbar pointer-coarse:h-11 pointer-coarse:min-h-11",
         className,
       )}
     >
@@ -57,4 +57,3 @@ export function FilterChips({
     </div>
   );
 }
-

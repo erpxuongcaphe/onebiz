@@ -1,8 +1,22 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+import type { ColumnDef } from "@tanstack/react-table";
 import { FilterChips } from "@/components/shared/filter-chips";
 import { ListStrip } from "@/components/shared/list-strip";
 import { FilterPanel } from "@/components/shared/filter-sidebar";
+import { PageHeader } from "@/components/shared/page-header";
+import { DataTable } from "@/components/shared/data-table";
+
+beforeAll(() => {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation(() => ({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })),
+  });
+});
 
 describe("nền bố cục danh sách", () => {
   it("dải gọn phân tách chỉ số và công cụ", () => {
@@ -59,14 +73,6 @@ describe("nền bố cục danh sách", () => {
   });
 
   it("panel lọc chỉ có lệnh xóa, không tạo nút áp dụng", () => {
-    Object.defineProperty(window, "matchMedia", {
-      writable: true,
-      value: vi.fn().mockImplementation(() => ({
-        matches: true,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      })),
-    });
     const clearAll = vi.fn();
     render(
       <FilterPanel
@@ -87,5 +93,35 @@ describe("nền bố cục danh sách", () => {
     expect(screen.queryByRole("button", { name: /áp dụng/i })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Xóa tất cả" }));
     expect(clearAll).toHaveBeenCalledTimes(1);
+  });
+
+  it("PageHeader chỉ gọn khi trang chủ động bật", () => {
+    const { rerender } = render(<PageHeader title="Hóa đơn" />);
+    expect(screen.getByRole("heading", { name: "Hóa đơn" }).className).toContain(
+      "text-2xl",
+    );
+    rerender(<PageHeader title="Hóa đơn" density="compact" />);
+    expect(screen.getByRole("heading", { name: "Hóa đơn" }).className).toContain(
+      "text-xl",
+    );
+  });
+
+  it("DataTable cho tắt hàng hiển thị cột và dùng mật độ gọn", () => {
+    type Row = { code: string };
+    const columns: ColumnDef<Row>[] = [
+      { accessorKey: "code", header: "Mã", cell: ({ row }) => row.original.code },
+    ];
+    render(
+      <DataTable
+        columns={columns}
+        data={[{ code: "HD001" }]}
+        columnToggle
+        columnToggleToolbar={false}
+        density="compact"
+      />,
+    );
+    expect(screen.queryByText("Hiển thị cột")).toBeNull();
+    const value = screen.getAllByText("HD001").find((node) => node.tagName === "TD");
+    expect(value?.closest("td")?.className).toContain("py-2");
   });
 });

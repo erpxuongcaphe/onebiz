@@ -85,6 +85,8 @@ interface PageHeaderProps {
   onHelp?: () => void;
   children?: ReactNode;
   className?: string;
+  /** Chế độ gọn cho trang danh sách V2; mặc định giữ nguyên giao diện cũ. */
+  density?: "default" | "compact";
 }
 
 function ActionButton({ action }: { action: PageAction }) {
@@ -460,15 +462,17 @@ export function PageHeader({
   onHelp,
   children,
   className,
+  density = "default",
 }: PageHeaderProps) {
   const mainActions = actions.filter((a) => !a.overflow);
   const overflowActions = actions.filter((a) => a.overflow);
+  const compact = density === "compact";
 
   return (
     // Stitch style: bg-surface-container-lowest + ambient-shadow thay border-b;
     // title font-medium nhẹ nhàng hơn font-semibold.
     <div className={cn("bg-surface-container-lowest border-b", className)}>
-      <div className="p-4 space-y-3">
+      <div className={cn(compact ? "px-3 py-2 space-y-2" : "p-4 space-y-3")}>
         {/* Breadcrumbs (Sprint VISUAL-2: trợ giúp navigation cho user multi-level) */}
         {breadcrumbs && breadcrumbs.length > 0 && (
           <nav aria-label="Breadcrumb" className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -488,11 +492,25 @@ export function PageHeader({
         )}
 
         {/* Title row: Title (left) + Search (center) + Actions (right) */}
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        <div
+          className={cn(
+            "flex flex-col",
+            compact
+              ? "gap-2 md:flex-row md:items-center"
+              : "gap-3 lg:flex-row lg:items-center",
+          )}
+        >
           {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
               Page title cần weight rõ → user/CEO scan biết section đang ở đâu. */}
           <div className="min-w-0 shrink-0">
-            <h1 className="text-2xl font-bold text-on-surface leading-tight">{title}</h1>
+            <h1
+              className={cn(
+                "font-bold text-on-surface leading-tight",
+                compact ? "text-xl" : "text-2xl",
+              )}
+            >
+              {title}
+            </h1>
             {subtitle && (
               <p className="text-xs text-muted-foreground mt-0.5">{subtitle}</p>
             )}
