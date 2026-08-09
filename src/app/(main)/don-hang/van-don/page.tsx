@@ -6,14 +6,19 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
 import {
-  FilterSidebar,
+  FilterChips,
+  type ListFilterChip,
+} from "@/components/shared/filter-chips";
+import {
+  FilterPanel,
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { Button } from "@/components/ui/button";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
 // 04/08: dùng bản CÓ "Tất cả" — trang này mặc định xem toàn bộ (danh sách
 // nhỏ), radio không tự bỏ chọn nên thiếu "Tất cả" là lọc xong kẹt luôn.
@@ -376,6 +381,48 @@ export default function VanDonPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [partnerFilter, setPartnerFilter] = useState("all");
   const [createdDatePreset, setCreatedDatePreset] = useState<DatePresetValue>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
+
+  const createdDateLabel =
+    STANDARD_LIST_PRESETS_WITH_ALL.find(
+      (preset) => preset.value === createdDatePreset,
+    )?.label ?? "Thời gian tạo";
+  const selectedStatusLabel =
+    statusOptions.find((status) => status.value === statusFilter)?.label ??
+    statusFilter;
+  const selectedPartnerLabel =
+    partnerOptions.find((partner) => partner.value === partnerFilter)?.label ??
+    partnerFilter;
+  const filterChips: ListFilterChip[] = [];
+  if (statusFilter !== "all") {
+    filterChips.push({
+      key: "status",
+      label: "Trạng thái",
+      value: selectedStatusLabel,
+      onClear: () => setStatusFilter("all"),
+    });
+  }
+  if (partnerFilter !== "all") {
+    filterChips.push({
+      key: "partner",
+      label: "Đối tác",
+      value: selectedPartnerLabel,
+      onClear: () => setPartnerFilter("all"),
+    });
+  }
+  if (createdDatePreset !== "all") {
+    filterChips.push({
+      key: "created-date",
+      label: "Thời gian tạo",
+      value: createdDateLabel,
+      onClear: () => setCreatedDatePreset("all"),
+    });
+  }
+  const clearListFilters = () => {
+    setStatusFilter("all");
+    setPartnerFilter("all");
+    setCreatedDatePreset("all");
+  };
 
   // 04/08: KPI đếm trên TOÀN BỘ vận đơn (thẻ cũ đếm 15 dòng của trang hiện tại)
   const [statusCounts, setStatusCounts] = useState<ShippingStatusCounts | null>(null);
@@ -578,39 +625,10 @@ export default function VanDonPage() {
 
   /* ---- Render ---- */
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái giao hàng">
-            <SelectFilter
-              options={statusOptions}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Đối tác giao hàng">
-            <SelectFilter
-              options={partnerOptions}
-              value={partnerFilter}
-              onChange={setPartnerFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian tạo">
-            <DatePresetFilter
-              value={createdDatePreset}
-              onChange={setCreatedDatePreset}
-              presets={STANDARD_LIST_PRESETS_WITH_ALL}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Vận đơn"
+        density="compact"
         searchPlaceholder="Theo mã vận đơn, SĐT"
         searchValue={search}
         onSearchChange={setSearch}
@@ -634,37 +652,95 @@ export default function VanDonPage() {
         onSuccess={fetchData}
       />
 
-      {/* KPI row — đếm trên TOÀN BỘ vận đơn (04/08: thẻ cũ chỉ đếm trang hiện tại) */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="schedule" size={16} />}
-          label="Chờ lấy hàng"
-          value={(statusCounts?.pending ?? 0).toString()}
-          highlight={(statusCounts?.pending ?? 0) > 0}
-        />
-        <SummaryCard
-          icon={<Icon name="local_shipping" size={16} />}
-          label="Đang giao"
-          value={((statusCounts?.picked_up ?? 0) + (statusCounts?.in_transit ?? 0)).toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Đã giao"
-          value={(statusCounts?.delivered ?? 0).toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="warning" size={16} className="text-destructive" />}
-          label="Hoàn / Hủy"
-          value={((statusCounts?.returned ?? 0) + (statusCounts?.cancelled ?? 0)).toString()}
-          danger={((statusCounts?.returned ?? 0) + (statusCounts?.cancelled ?? 0)) > 0}
-        />
-      </div>
-
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
         total={total}
+        density="compact"
+        columnToggle
+        toolbarMetrics={
+          <>
+            <ListMetric
+              icon={<Icon name="schedule" size={15} />}
+              label="Chờ lấy hàng"
+              value={(statusCounts?.pending ?? 0).toString()}
+              loading={!statusCounts}
+              tone={(statusCounts?.pending ?? 0) > 0 ? "primary" : "default"}
+              hint="Toàn bộ vận đơn"
+            />
+            <ListMetric
+              icon={<Icon name="local_shipping" size={15} />}
+              label="Đang giao"
+              value={(
+                (statusCounts?.picked_up ?? 0) +
+                (statusCounts?.in_transit ?? 0)
+              ).toString()}
+              loading={!statusCounts}
+              hint="Toàn bộ vận đơn"
+            />
+            <ListMetric
+              icon={<Icon name="check_circle" size={15} />}
+              label="Đã giao"
+              value={(statusCounts?.delivered ?? 0).toString()}
+              loading={!statusCounts}
+              hint="Toàn bộ vận đơn"
+            />
+            <ListMetric
+              icon={<Icon name="warning" size={15} />}
+              label="Hoàn / Hủy"
+              value={(
+                (statusCounts?.returned ?? 0) +
+                (statusCounts?.cancelled ?? 0)
+              ).toString()}
+              loading={!statusCounts}
+              tone={
+                (statusCounts?.returned ?? 0) +
+                  (statusCounts?.cancelled ?? 0) >
+                0
+                  ? "danger"
+                  : "default"
+              }
+              hint="Toàn bộ vận đơn"
+            />
+          </>
+        }
+        toolbarActions={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="calendar_today" size={15} />
+              <span className="hidden sm:inline">{createdDateLabel}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+              aria-label={`Mở bộ lọc${filterChips.length > 0 ? `, ${filterChips.length} điều kiện` : ""}`}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          </>
+        }
+        toolbarFooter={
+          <FilterChips
+            filters={filterChips}
+            onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+          />
+        }
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -706,6 +782,49 @@ export default function VanDonPage() {
           })
         }
       />
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc vận đơn"
+      >
+        <FilterGroup
+          label="Trạng thái giao hàng"
+          activeHint={statusFilter === "all" ? undefined : selectedStatusLabel}
+        >
+          <SelectFilter
+            options={statusOptions}
+            value={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Đối tác giao hàng"
+          activeHint={partnerFilter === "all" ? undefined : selectedPartnerLabel}
+        >
+          <SelectFilter
+            options={partnerOptions}
+            value={partnerFilter}
+            onChange={setPartnerFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Thời gian tạo"
+          activeHint={createdDatePreset === "all" ? undefined : createdDateLabel}
+        >
+          <DatePresetFilter
+            value={createdDatePreset}
+            onChange={setCreatedDatePreset}
+            presets={STANDARD_LIST_PRESETS_WITH_ALL}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       {auditDialogTarget && (
         <AuditLogDialog
