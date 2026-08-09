@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FilterChips } from "@/components/shared/filter-chips";
 import { ListStrip } from "@/components/shared/list-strip";
+import { ListMetric } from "@/components/shared/list-metric";
 import { FilterPanel } from "@/components/shared/filter-sidebar";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -29,6 +30,22 @@ describe("nền bố cục danh sách", () => {
     expect(strip.className).toContain("h-12");
     expect(screen.getByText("34 hóa đơn")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Cột" })).toBeTruthy();
+  });
+
+  it("chỉ số gọn lọc được bằng chuột và bàn phím", () => {
+    const onClick = vi.fn();
+    render(
+      <ListMetric
+        label="Hoàn thành"
+        value="212"
+        onClick={onClick}
+        selected
+      />,
+    );
+    const metric = screen.getByRole("button", { name: "Hoàn thành: 212" });
+    expect(metric.getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(metric);
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it("không dựng hàng chip khi chưa lọc", () => {
@@ -123,5 +140,42 @@ describe("nền bố cục danh sách", () => {
     expect(screen.queryByText("Hiển thị cột")).toBeNull();
     const value = screen.getAllByText("HD001").find((node) => node.tagName === "TD");
     expect(value?.closest("td")?.className).toContain("py-2");
+  });
+
+  it("DataTable gom chỉ số, lọc và menu cột vào cùng một dải", () => {
+    type Row = { code: string };
+    const columns: ColumnDef<Row>[] = [
+      { accessorKey: "code", header: "Mã", cell: ({ row }) => row.original.code },
+    ];
+    render(
+      <DataTable
+        columns={columns}
+        data={[{ code: "HD001" }]}
+        columnToggle
+        toolbarMetrics={<span>260 hóa đơn</span>}
+        toolbarActions={<button>Bộ lọc</button>}
+        toolbarFooter={
+          <FilterChips
+            filters={[
+              {
+                key: "status",
+                label: "Trạng thái",
+                value: "Hoàn thành",
+                onClear: vi.fn(),
+              },
+            ]}
+          />
+        }
+      />,
+    );
+
+    expect(
+      screen.getByRole("region", { name: "Chỉ số và công cụ danh sách" }),
+    ).toBeTruthy();
+    expect(screen.getByText("260 hóa đơn")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Bộ lọc" })).toBeTruthy();
+    expect(screen.getByText("Hiển thị cột")).toBeTruthy();
+    expect(screen.getAllByText("Hiển thị cột")).toHaveLength(1);
+    expect(screen.getByLabelText("Đang lọc 1 điều kiện")).toBeTruthy();
   });
 });

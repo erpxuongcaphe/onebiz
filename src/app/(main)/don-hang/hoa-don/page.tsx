@@ -10,9 +10,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
   DatePresetFilter,
@@ -520,7 +521,8 @@ export default function HoaDonPage() {
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "processing",
+    "confirmed",
+    "draft",
     "completed",
   ]);
   const [selectedTypes, setSelectedTypes] = useState<string[]>([
@@ -532,6 +534,7 @@ export default function HoaDonPage() {
     [selectedTypes],
   );
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
@@ -551,6 +554,33 @@ export default function HoaDonPage() {
   }, [duocXemToanChuoi]);
 
   const statuses = getInvoiceStatuses();
+  const datePresetLabel =
+    STANDARD_LIST_PRESETS.find((preset) => preset.value === datePreset)?.label ??
+    "Thời gian";
+  const filterChips: ListFilterChip[] = [];
+  if (selectedStatuses.length > 0) {
+    const labels = statuses
+      .filter((status) => selectedStatuses.includes(status.value))
+      .map((status) => status.label);
+    filterChips.push({
+      key: "status",
+      label: "Trạng thái",
+      value: labels.join(", ") || `${selectedStatuses.length} lựa chọn`,
+      onClear: () => setSelectedStatuses([]),
+    });
+  }
+  if (deliveryFilter !== "all") {
+    filterChips.push({
+      key: "delivery",
+      label: "Loại hóa đơn",
+      value: deliveryFilter === "delivery" ? "Giao hàng" : "Không giao hàng",
+      onClear: () => setSelectedTypes(["no_delivery", "delivery"]),
+    });
+  }
+  const clearListFilters = () => {
+    setSelectedStatuses([]);
+    setSelectedTypes(["no_delivery", "delivery"]);
+  };
 
   // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
   // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
@@ -658,8 +688,9 @@ export default function HoaDonPage() {
       phamVi: phamViHienTai,
       dateFrom: range.from,
       dateTo: range.to,
-      // Truyền THẲNG trạng thái của giao diện. RPC tự ánh xạ
-      // processing → draft + confirmed; không ánh xạ lần hai ở client.
+      // Truyền THẲNG trạng thái của giao diện. RPC vẫn hỗ trợ alias legacy
+      // processing → draft + confirmed, nhưng UI dùng giá trị thật để ô chọn
+      // và chip phản ánh đúng phạm vi đang lọc.
       statuses: selectedStatuses,
       search: debouncedSearch,
       searchField,
@@ -879,38 +910,10 @@ export default function HoaDonPage() {
 
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Thời gian">
-              <DatePresetFilter
-                value={datePreset}
-                onChange={setDatePreset}
-                presets={STANDARD_LIST_PRESETS}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Loại hóa đơn">
-              <CheckboxFilter
-                options={invoiceTypeOptions}
-                selected={selectedTypes}
-                onChange={setSelectedTypes}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Trạng thái hóa đơn">
-              <CheckboxFilter
-                options={statuses}
-                selected={selectedStatuses}
-                onChange={setSelectedStatuses}
-              />
-            </FilterGroup>
-
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Hóa đơn"
+          density="compact"
           searchPlaceholder="Theo mã hóa đơn"
           searchValue={search}
           onSearchChange={setSearch}
@@ -940,61 +943,6 @@ export default function HoaDonPage() {
           ]}
         />
 
-        {/* KPI row — K2 08/08: số lấy từ RPC 00305, tính trên TOÀN BỘ phạm vi
-            lọc chứ không cộng từ trang đang xem. Vẫn đúng 4 thẻ, không thêm
-            thẻ thứ năm (đổi chiều cao là việc của PR bố cục). */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-          <SummaryCard
-            icon={<Icon name="receipt" size={16} />}
-            label="Số hóa đơn (mọi trạng thái)"
-            value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
-            loading={dangTaiChiSo}
-            onClick={() => locTheoChiSo("all")}
-            selected={isInvoiceKpiSelected(selectedStatuses, "all")}
-            ariaLabel="Lọc mọi trạng thái hóa đơn"
-            hint={
-              chiSoLoi
-                ? "Chưa cập nhật được"
-                : chuaCoPhamVi
-                  ? "Chưa có phạm vi chi nhánh"
-                  : undefined
-            }
-          />
-          <SummaryCard
-            icon={<Icon name="check_circle" size={16} />}
-            label="Hoàn thành"
-            value={chiSo ? formatNumber(chiSo.hoanThanh) : "—"}
-            loading={dangTaiChiSo}
-            onClick={() => locTheoChiSo("completed")}
-            selected={isInvoiceKpiSelected(selectedStatuses, "completed")}
-            ariaLabel="Lọc hóa đơn hoàn thành"
-          />
-          <SummaryCard
-            icon={<Icon name="cancel" size={16} />}
-            label="Đã hủy"
-            value={chiSo ? formatNumber(chiSo.daHuy) : "—"}
-            loading={dangTaiChiSo}
-            onClick={() => locTheoChiSo("cancelled")}
-            selected={isInvoiceKpiSelected(selectedStatuses, "cancelled")}
-            ariaLabel="Lọc hóa đơn đã hủy"
-          />
-          <SummaryCard
-            icon={<Icon name="payments" size={16} />}
-            label="Giá trị đã hoàn thành"
-            value={chiSo ? formatCurrency(chiSo.giaTriHoanThanh) : "—"}
-            loading={dangTaiChiSo}
-            // Giảm giá đứng RIÊNG ở dòng phụ — KHÔNG trừ khỏi con số trên.
-            // `total` của hoá đơn vốn đã trừ giảm giá rồi.
-            hint={
-              chiSoLoi
-                ? "Chưa cập nhật được"
-                : chiSo
-                  ? `Giảm giá đã áp dụng: ${formatCurrency(chiSo.giamGiaApDung)}`
-                  : undefined
-            }
-          />
-        </div>
-
         {viewAllBranches && (
           <AllBranchesBanner
             branchName={currentBranch?.name}
@@ -1007,6 +955,89 @@ export default function HoaDonPage() {
           data={data}
           loading={loading}
           total={total}
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="receipt" size={15} />}
+                label="Tất cả"
+                value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
+                loading={dangTaiChiSo}
+                onClick={() => locTheoChiSo("all")}
+                selected={isInvoiceKpiSelected(selectedStatuses, "all")}
+              />
+              <ListMetric
+                icon={<Icon name="check_circle" size={15} />}
+                label="Hoàn thành"
+                value={chiSo ? formatNumber(chiSo.hoanThanh) : "—"}
+                loading={dangTaiChiSo}
+                onClick={() => locTheoChiSo("completed")}
+                selected={isInvoiceKpiSelected(selectedStatuses, "completed")}
+              />
+              <ListMetric
+                icon={<Icon name="cancel" size={15} />}
+                label="Đã hủy"
+                value={chiSo ? formatNumber(chiSo.daHuy) : "—"}
+                loading={dangTaiChiSo}
+                tone="danger"
+                onClick={() => locTheoChiSo("cancelled")}
+                selected={isInvoiceKpiSelected(selectedStatuses, "cancelled")}
+              />
+              <ListMetric
+                icon={<Icon name="payments" size={15} />}
+                label="Giá trị hoàn thành"
+                value={chiSo ? formatCurrency(chiSo.giaTriHoanThanh) : "—"}
+                loading={dangTaiChiSo}
+                tone="primary"
+                hint={
+                  chiSoLoi
+                    ? "Chưa cập nhật được"
+                    : chiSo
+                      ? `Giảm giá đã áp dụng: ${formatCurrency(chiSo.giamGiaApDung)}`
+                      : chuaCoPhamVi
+                        ? "Chưa có phạm vi chi nhánh"
+                        : undefined
+                }
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+                aria-label={`Mở bộ lọc${filterChips.length > 0 ? `, ${filterChips.length} điều kiện` : ""}`}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
           emptyTitle={chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy hóa đơn"}
           emptyDescription={
             chuaCoPhamVi
@@ -1266,6 +1297,44 @@ export default function HoaDonPage() {
           }
         />
       </ListPageLayout>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc hóa đơn"
+      >
+        <FilterGroup label="Thời gian" activeHint={datePresetLabel}>
+          <DatePresetFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            presets={STANDARD_LIST_PRESETS}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Loại hóa đơn"
+          activeHint={deliveryFilter === "all" ? undefined : "Đã lọc"}
+        >
+          <CheckboxFilter
+            options={invoiceTypeOptions}
+            selected={selectedTypes}
+            onChange={setSelectedTypes}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Trạng thái hóa đơn"
+          activeHint={selectedStatuses.length > 0 ? `${selectedStatuses.length} chọn` : undefined}
+        >
+          <CheckboxFilter
+            options={statuses}
+            selected={selectedStatuses}
+            onChange={setSelectedStatuses}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       <EditInvoiceDialog
         open={!!editingItem}
