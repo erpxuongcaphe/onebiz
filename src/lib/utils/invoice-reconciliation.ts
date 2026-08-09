@@ -25,6 +25,10 @@ export interface InvoiceItemTaxInput {
   vatAmount: number;
 }
 
+const LEGACY_VAT_RATES = [0, 5, 8, 10] as const;
+const MAX_LEGACY_VAT_LINES = 64;
+const MAX_LEGACY_VAT_SUMS = 20_000;
+
 function money(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * 100) / 100;
@@ -47,6 +51,52 @@ export function getInvoiceItemTaxAmount(input: InvoiceItemTaxInput): number {
       Math.max(0, money(input.discount)),
   );
   return money(Math.ceil((lineValue * rate) / 100));
+}
+
+/**
+ * Some early invoices kept only the VAT-inclusive header total. Reconstruct a
+ * mixed-rate VAT candidate only when the exact unexplained amount can be made
+ * from supported rates. Abort on large state spaces instead of guessing.
+ */
+export function inferLegacyMixedTaxAmount(
+  lines: InvoiceItemTaxInput[],
+  unexplainedAmount: number,
+): number {
+  const target = Math.max(0, money(unexplainedAmount));
+  if (
+    target <= 0 ||
+    lines.length === 0 ||
+    lines.length > MAX_LEGACY_VAT_LINES
+  ) {
+    return 0;
+  }
+
+  let possibleSums = new Set<number>([0]);
+  for (const line of lines) {
+    const lineValue = Math.max(
+      0,
+      money(line.unitPrice) * Math.max(0, money(line.quantity)) -
+        Math.max(0, money(line.discount)),
+    );
+    const lineTaxes = new Set(
+      LEGACY_VAT_RATES.map((rate) =>
+        money(Math.ceil((lineValue * rate) / 100)),
+      ),
+    );
+    const nextSums = new Set<number>();
+
+    for (const sum of possibleSums) {
+      for (const tax of lineTaxes) {
+        const next = money(sum + tax);
+        if (next <= target) nextSums.add(next);
+      }
+    }
+
+    if (nextSums.size > MAX_LEGACY_VAT_SUMS) return 0;
+    possibleSums = nextSums;
+  }
+
+  return possibleSums.has(target) ? target : 0;
 }
 
 /**

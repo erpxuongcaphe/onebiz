@@ -85,6 +85,7 @@ import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import {
   getInvoiceItemTaxAmount,
+  inferLegacyMixedTaxAmount,
   reconcileInvoiceTotal,
 } from "@/lib/utils/invoice-reconciliation";
 
@@ -177,12 +178,24 @@ function InvoiceDetail({
     (sum, item) => sum + getInvoiceItemTaxAmount(item),
     0,
   );
+  const unexplainedHeaderAmount =
+    invoice.totalAmount -
+    (subtotal - invoice.discount + (invoice.shippingFee ?? 0));
+  const legacyMixedTaxSum =
+    storedItemTaxSum <= 0 &&
+    inferredItemTaxSum <= 0 &&
+    (invoice.taxAmount ?? 0) <= 0 &&
+    itemDiscountSum <= 0 &&
+    invoice.discount <= 0 &&
+    (invoice.shippingFee ?? 0) <= 0
+      ? inferLegacyMixedTaxAmount(items, unexplainedHeaderAmount)
+      : 0;
   const reconciliation = reconcileInvoiceTotal({
     subtotal,
     lineDiscount: itemDiscountSum,
     totalDiscount: invoice.discount,
     itemTaxAmount: storedItemTaxSum,
-    inferredItemTaxAmount: inferredItemTaxSum,
+    inferredItemTaxAmount: inferredItemTaxSum || legacyMixedTaxSum,
     reportedTaxAmount: invoice.taxAmount ?? 0,
     deliveryFee: invoice.shippingFee ?? 0,
     invoiceTotal: invoice.totalAmount,

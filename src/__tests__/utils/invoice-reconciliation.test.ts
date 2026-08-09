@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   getInvoiceItemTaxAmount,
+  inferLegacyMixedTaxAmount,
   reconcileInvoiceTotal,
 } from "@/lib/utils/invoice-reconciliation";
 
@@ -86,6 +87,61 @@ describe("reconcileInvoiceTotal", () => {
       difference: 0,
       hasDifference: false,
     });
+  });
+
+  it("reconstructs the exact mixed 10% and 8% VAT of HD001213", () => {
+    expect(
+      inferLegacyMixedTaxAmount(
+        [
+          {
+            quantity: 10,
+            unitPrice: 220_000,
+            discount: 0,
+            vatRate: 0,
+            vatAmount: 0,
+          },
+          {
+            quantity: 1,
+            unitPrice: 230_000,
+            discount: 0,
+            vatRate: 0,
+            vatAmount: 0,
+          },
+        ],
+        238_400,
+      ),
+    ).toBe(238_400);
+  });
+
+  it("does not turn the duplicated HD001494 item into legacy VAT", () => {
+    expect(
+      inferLegacyMixedTaxAmount(
+        [
+          {
+            quantity: 20,
+            unitPrice: 240_000,
+            discount: 0,
+            vatRate: 0,
+            vatAmount: 0,
+          },
+          {
+            quantity: 5,
+            unitPrice: 230_000,
+            discount: 0,
+            vatRate: 0,
+            vatAmount: 0,
+          },
+          {
+            quantity: 1,
+            unitPrice: 1_080_000,
+            discount: 0,
+            vatRate: 0,
+            vatAmount: 0,
+          },
+        ],
+        1_080_000,
+      ),
+    ).toBe(0);
   });
 
   it("does not relabel an unrelated historical difference as inferred VAT", () => {
