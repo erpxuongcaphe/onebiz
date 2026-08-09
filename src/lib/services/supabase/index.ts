@@ -8,6 +8,9 @@ export { duplicatePurchaseOrder, reopenPurchaseOrderForEdit, suaGiaPhieuNhap } f
 export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export {
   getInvoices,
+  getInvoiceListSummary,
+  khoaChiSoHoaDon,
+  taoBoNhoChiSo,
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,
@@ -17,7 +20,7 @@ export {
   getReturnsForCustomer,
   getInvoiceById,
 } from "./invoices";
-export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow } from "./invoices";
+export type { CustomerReturn, UpdateInvoicePatch, InvoiceItemRow, InvoiceListSummary, InvoiceListSummaryParams } from "./invoices";
 export {
   getPurchaseOrders,
   getPurchaseOrderStatuses,
@@ -624,3 +627,5 @@ export type {
 // POS invoice integrity (read-only, migration 00292)
 export { getPosInvoiceIntegrityReport } from "./pos-integrity";
 export type { PosIntegrityReportInput, PosInvoiceIntegrityRow, PosIntegrityIssueCode } from "./pos-integrity";
+export { phamViChiNhanhHoaDon, getInvoicesTheoPhamVi, demHoaDonChiNhanhKhac, getChiSoTheoPhamVi } from "./invoice-list-scope";
+export type { PhamViChiNhanh } from "./invoice-list-scope";
