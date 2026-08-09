@@ -9,16 +9,30 @@ import {
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 
+export function getInvoiceShipmentQueryPlan(
+  deliveryFilter: string | string[] | undefined,
+): { relation: string; requireNull: boolean } {
+  return {
+    relation:
+      deliveryFilter === "delivery"
+        ? "shipments:shipping_orders!shipping_orders_invoice_id_fkey!inner(id)"
+        : "shipments:shipping_orders!shipping_orders_invoice_id_fkey(id)",
+    requireNull: deliveryFilter === "no_delivery",
+  };
+}
+
 export async function getInvoices(params: QueryParams): Promise<QueryResult<Invoice>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
+  const deliveryFilter = params.filters?.delivery;
+  const shipmentPlan = getInvoiceShipmentQueryPlan(deliveryFilter);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
     .select(
-      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt)",
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), customers!invoices_customer_id_fkey(code, phone, address, debt), ${shipmentPlan.relation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -54,6 +68,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     }
   }
   query = applyCreatedAtRangeFilter(query, params.filters);
+  // Anti-join chỉ đọc: giữ các hóa đơn không có vận đơn liên quan.
+  // Nhánh "delivery" đã dùng !inner trong select nên tự loại hóa đơn không có vận đơn.
+  if (shipmentPlan.requireNull) {
+    query = query.is("shipments", null);
+  }
   // Filter: branch
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);
@@ -594,7 +613,10 @@ function mapInvoice(row: any): Invoice {
     status: (statusMap[row.status] ?? row.status) as Invoice["status"],
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
-    deliveryType: "no_delivery", // Would need join to shipping_orders
+    deliveryType:
+      Array.isArray(row.shipments) && row.shipments.length > 0
+        ? "delivery"
+        : "no_delivery",
     // CEO 08/07: ghi chú người bán — để in trên hóa đơn (print-templates).
     note: row.note ?? undefined,
     // 00179: tiền khách đưa thực tế tại POS — in lại tái hiện Khách đưa/Thối.

@@ -94,6 +94,13 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
     const src = xoaGhiChu(fs.readFileSync(f, "utf8"));
     const rel = path.relative(ROOT, f).replace(/\\/g, "/");
     const soDong = (i: number) => src.slice(0, i).split("\n").length;
+    // Quan hệ có thể được dựng trong helper rồi mới chèn vào select bằng template string.
+    // Chỉ nhận cú pháp alias PostgREST đầy đủ, không bỏ qua một tên biến tùy ý.
+    const quanHeNhungTrongFile = new Set(
+      [...src.matchAll(
+        /\b([a-z_][a-z0-9_]*):[a-z_][a-z0-9_]*(?:![A-Za-z0-9_]+)*\s*\(/g,
+      )].map((m) => m[1]),
+    );
 
     for (const m of src.matchAll(/\.rpc\(\s*["'`]([A-Za-z0-9_]+)["'`]/g)) {
       if (!RPC.has(m[1])) {
@@ -112,6 +119,8 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
     const bienBang = new Map<string, string>(
       [...gan].filter(([, t]) => t.size === 1).map(([b, t]) => [b, [...t][0]]),
     );
+    // Alias quan hệ nhúng trong select là tài nguyên PostgREST, không phải cột bảng cha.
+    const quanHeNhungTheoBang = new Map<string, Set<string>>();
 
     const bao = (bang: string, c: string, idx: number, kieu: string) => {
       if (!COT.has(bang)) {
@@ -135,6 +144,14 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
 
       // select("a, b, rel(c, d)") — bỏ nhóm lồng VÀ tên quan hệ đứng trước "("
       for (const s of doan.matchAll(/\.select\(\s*(["'`])([\s\S]*?)\1/g)) {
+        for (const qh of s[2].matchAll(
+          /\b([a-z_][a-z0-9_]*):[a-z_][a-z0-9_]*(?:![A-Za-z0-9_]+)*\s*\(/g,
+        )) {
+          if (!quanHeNhungTheoBang.has(bang)) {
+            quanHeNhungTheoBang.set(bang, new Set());
+          }
+          quanHeNhungTheoBang.get(bang)!.add(qh[1]);
+        }
         let phang = "";
         let sau = 0;
         for (const ch of s[2]) {
@@ -152,6 +169,10 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
       }
 
       for (const s of doan.matchAll(new RegExp(`\\.(${LOC})\\(\\s*(["'\`])([A-Za-z0-9_]+)\\2`, "g"))) {
+        if (
+          quanHeNhungTheoBang.get(bang)?.has(s[3]) ||
+          quanHeNhungTrongFile.has(s[3])
+        ) continue;
         bao(bang, s[3], batDau + s.index!, s[1]);
       }
 
@@ -188,7 +209,13 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
         `\\b${bien}\\b(?:\\s+as\\s+\\w+\\s*\\))?\\s*\\.(${LOC})\\(\\s*(["'\`])([A-Za-z0-9_]+)\\2`,
         "g",
       );
-      for (const s of src.matchAll(re)) bao(bang, s[3], s.index!, `${s[1]} qua biến`);
+      for (const s of src.matchAll(re)) {
+        if (
+          quanHeNhungTheoBang.get(bang)?.has(s[3]) ||
+          quanHeNhungTrongFile.has(s[3])
+        ) continue;
+        bao(bang, s[3], s.index!, `${s[1]} qua biến`);
+      }
     }
   }
   return { rpc: loiRpc, cot: loiCot, bang: loiBang };

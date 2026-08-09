@@ -107,10 +107,17 @@ describe("Khoảng ngày khớp danh sách: >= from, < đầu ngày kế tiếp"
   });
 });
 
-describe("K2 chưa nối bộ lọc giao hàng", () => {
+describe("K3 nối bộ lọc giao hàng", () => {
   it("mặc định luôn 'all'", async () => {
     await getInvoiceListSummary({});
     expect(rpcCalls[0].args.p_delivery).toBe("all");
+  });
+
+  it("truyền nguyên loại giao hàng đã chọn vào RPC", async () => {
+    await getInvoiceListSummary({ delivery: "delivery" });
+    expect(rpcCalls[0].args.p_delivery).toBe("delivery");
+    await getInvoiceListSummary({ delivery: "no_delivery" });
+    expect(rpcCalls[1].args.p_delivery).toBe("no_delivery");
   });
 });
 
