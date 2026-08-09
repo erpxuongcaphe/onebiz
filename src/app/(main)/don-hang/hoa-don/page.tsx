@@ -55,7 +55,6 @@ import { useTxRowPermissions, usePermissions } from "@/lib/permissions";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
-  getInvoices,
   khoaChiSoHoaDon,
   taoBoNhoChiSo,
   phamViChiNhanhHoaDon,
@@ -88,6 +87,12 @@ import {
   inferLegacyMixedTaxAmount,
   reconcileInvoiceTotal,
 } from "@/lib/utils/invoice-reconciliation";
+import {
+  invoiceStatusesForKpi,
+  isInvoiceKpiSelected,
+  resolveInvoiceDeliveryFilter,
+  type InvoiceKpiFilter,
+} from "@/lib/utils/invoice-list-filters";
 
 const statusMap: Record<
   Invoice["status"],
@@ -522,6 +527,10 @@ export default function HoaDonPage() {
     "no_delivery",
     "delivery",
   ]);
+  const deliveryFilter = useMemo(
+    () => resolveInvoiceDeliveryFilter(selectedTypes),
+    [selectedTypes],
+  );
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -557,6 +566,7 @@ export default function HoaDonPage() {
     const range = dateRange();
     const commonFilters: Record<string, string | string[]> = {};
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
+    commonFilters.delivery = deliveryFilter;
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
     // mode "none" = chưa có chi nhánh và chưa chủ động xem toàn chuỗi → hàm
@@ -594,7 +604,7 @@ export default function HoaDonPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, branchScopeReady, dateRange, phamViHienTai, toast]);
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, dateRange, phamViHienTai, toast]);
 
   useEffect(() => {
     fetchData();
@@ -653,9 +663,13 @@ export default function HoaDonPage() {
       statuses: selectedStatuses,
       search: debouncedSearch,
       searchField,
-      delivery: "all", // bộ lọc giao hàng thuộc K3
+      delivery: deliveryFilter,
     };
-  }, [datePreset, phamViHienTai, selectedStatuses, debouncedSearch, searchField]);
+  }, [datePreset, phamViHienTai, selectedStatuses, debouncedSearch, searchField, deliveryFilter]);
+
+  const locTheoChiSo = useCallback((filter: InvoiceKpiFilter) => {
+    setSelectedStatuses(invoiceStatusesForKpi(filter));
+  }, []);
 
   // Mỗi lần dữ liệu hoá đơn đổi (hủy, sửa, thanh toán, gắn vận đơn…) thì tăng
   // số này → xoá nhớ tạm và gọi lại RPC. Không có nó thì hủy một hoá đơn xong
@@ -892,26 +906,6 @@ export default function HoaDonPage() {
               />
             </FilterGroup>
 
-            <FilterGroup label="Trạng thái giao hàng">
-              <CheckboxFilter
-                options={[
-                  { label: "Chờ lấy hàng", value: "pending" },
-                  { label: "Đã lấy hàng", value: "picked_up" },
-                  { label: "Đang giao", value: "in_transit" },
-                  { label: "Đã giao", value: "delivered" },
-                  { label: "Đã hoàn", value: "returned" },
-                  { label: "Đã hủy", value: "cancelled" },
-                ]}
-                selected={[]}
-                onChange={() => {}}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Đối tác giao hàng">
-              <select className="w-full h-8 text-sm border rounded-lg px-2 bg-white">
-                <option value="">Chọn đối tác giao hàng</option>
-              </select>
-            </FilterGroup>
           </FilterSidebar>
         }
       >
@@ -955,6 +949,9 @@ export default function HoaDonPage() {
             label="Số hóa đơn (mọi trạng thái)"
             value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
             loading={dangTaiChiSo}
+            onClick={() => locTheoChiSo("all")}
+            selected={isInvoiceKpiSelected(selectedStatuses, "all")}
+            ariaLabel="Lọc mọi trạng thái hóa đơn"
             hint={
               chiSoLoi
                 ? "Chưa cập nhật được"
@@ -968,12 +965,18 @@ export default function HoaDonPage() {
             label="Hoàn thành"
             value={chiSo ? formatNumber(chiSo.hoanThanh) : "—"}
             loading={dangTaiChiSo}
+            onClick={() => locTheoChiSo("completed")}
+            selected={isInvoiceKpiSelected(selectedStatuses, "completed")}
+            ariaLabel="Lọc hóa đơn hoàn thành"
           />
           <SummaryCard
             icon={<Icon name="cancel" size={16} />}
             label="Đã hủy"
             value={chiSo ? formatNumber(chiSo.daHuy) : "—"}
             loading={dangTaiChiSo}
+            onClick={() => locTheoChiSo("cancelled")}
+            selected={isInvoiceKpiSelected(selectedStatuses, "cancelled")}
+            ariaLabel="Lọc hóa đơn đã hủy"
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
