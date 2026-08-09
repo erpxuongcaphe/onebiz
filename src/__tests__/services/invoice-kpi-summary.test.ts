@@ -173,3 +173,101 @@ describe("Đối chiếu với danh sách", () => {
     expect(kq.giaTriHoanThanh - kq.giamGiaApDung).not.toBe(kq.giaTriHoanThanh);
   });
 });
+
+// ────────────────────────────────────────────────────────────────────────
+// Chống kết quả cũ đè kết quả mới + làm mới sau khi đổi dữ liệu
+// ────────────────────────────────────────────────────────────────────────
+
+const { taoBoNhoChiSo } = await import("@/lib/services/supabase/invoices");
+
+const SO_A = {
+  tatCaHoaDon: 260, hoanThanh: 212, daHuy: 48,
+  giaTriHoanThanh: 594_922_690, giamGiaApDung: 0, soDongTheoBoLoc: 260,
+};
+const SO_B = {
+  tatCaHoaDon: 12, hoanThanh: 10, daHuy: 2,
+  giaTriHoanThanh: 5_000_000, giamGiaApDung: 0, soDongTheoBoLoc: 12,
+};
+
+describe("Kết quả cũ không được đè kết quả mới", () => {
+  it("A đang bay → đổi sang B ĐÃ CÓ trong nhớ tạm → A về sau bị bỏ", () => {
+    const bo = taoBoNhoChiSo();
+    // B đã từng tải trước đó nên nằm sẵn trong nhớ tạm.
+    bo.luu("khoa-B", SO_B);
+
+    // Người dùng đang ở bộ lọc A — lượt A bắt đầu, chưa có sẵn.
+    const luotA = bo.batDau("khoa-A");
+    expect(luotA.sanCo).toBeUndefined();
+
+    // Chưa kịp về thì đổi sang bộ lọc B — đi đường nhớ tạm, KHÔNG gọi mạng.
+    const luotB = bo.batDau("khoa-B");
+    expect(luotB.sanCo).toEqual(SO_B);
+
+    // A về muộn: phải bị coi là cũ. Đây chính là ca mà bản trước làm sai —
+    // nhánh nhớ tạm thoát sớm mà không tăng số lượt.
+    expect(bo.conMoiNhat(luotA.luot)).toBe(false);
+    expect(bo.conMoiNhat(luotB.luot)).toBe(true);
+  });
+
+  it("A rồi B đều gọi mạng: chỉ B được ghi nhận", () => {
+    const bo = taoBoNhoChiSo();
+    const a = bo.batDau("khoa-A");
+    const b = bo.batDau("khoa-B");
+    expect(bo.conMoiNhat(a.luot)).toBe(false);
+    expect(bo.conMoiNhat(b.luot)).toBe(true);
+  });
+
+  it("quay lại bộ lọc cũ thì dùng nhớ tạm, không gọi mạng", () => {
+    const bo = taoBoNhoChiSo();
+    const a = bo.batDau("khoa-A");
+    bo.luu("khoa-A", SO_A);
+    expect(bo.conMoiNhat(a.luot)).toBe(true);
+    expect(bo.batDau("khoa-A").sanCo).toEqual(SO_A);
+  });
+});
+
+describe("Đổi dữ liệu hoá đơn thì chỉ số phải tải lại", () => {
+  it("xoá hết nhớ tạm → bộ lọc cũ KHÔNG còn số sẵn, buộc gọi lại RPC", () => {
+    const bo = taoBoNhoChiSo();
+    bo.luu("khoa-A", SO_A);
+    expect(bo.batDau("khoa-A").sanCo).toEqual(SO_A);
+    // Hủy một hoá đơn → số cũ không còn đúng.
+    bo.xoaHet();
+    expect(bo.batDau("khoa-A").sanCo).toBeUndefined();
+  });
+
+  it("mọi nơi đổi dữ liệu hoá đơn đều đi qua taiLaiSauKhiDoiDuLieu", async () => {
+    // Quét mã nguồn: hủy · hủy hàng loạt · sửa · thanh toán · gắn vận đơn.
+    // Không nơi nào được gọi fetchData() trần — gọi trần thì bảng mới mà dải
+    // chỉ số vẫn số cũ.
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
+    for (const noi of [
+      "onDone={taiLaiSauKhiDoiDuLieu}",        // hủy hoá đơn
+      "onDataChanged={taiLaiSauKhiDoiDuLieu}", // gắn vận đơn
+      "onSuccess={taiLaiSauKhiDoiDuLieu}",     // sửa + thanh toán
+      "await taiLaiSauKhiDoiDuLieu();",        // thao tác trên dòng
+    ]) {
+      expect(src, `thiếu nơi gọi: ${noi}`).toContain(noi);
+    }
+    // Chỉ còn 3 chỗ nhắc fetchData: khai báo, effect tải lần đầu, và bên
+    // trong taiLaiSauKhiDoiDuLieu.
+    const soLanDungFetchData = src.split("fetchData").length - 1;
+    expect(soLanDungFetchData).toBeLessThanOrEqual(6);
+  });
+});
+
+describe("Xem toàn chuỗi phải có quyền — bảng và chỉ số cùng phạm vi", () => {
+  it("nút và phạm vi truy vấn đều khoá theo 2 mã quyền RPC dùng", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync("src/app/(main)/don-hang/hoa-don/page.tsx", "utf8");
+    // Lỗi cũ: nút "Xem tất cả chi nhánh" không kiểm quyền → nhân viên 1 chi
+    // nhánh bấm được, danh sách chạy toàn tenant trong khi RPC chỉ số thu hẹp
+    // theo get_user_accessible_branches → hai số lệch nhau.
+    expect(src).toContain('"reports.view_all_branches"');
+    expect(src).toContain('"system.manage_branches"');
+    // Cả hai đường lấy dữ liệu đều phải kèm điều kiện quyền.
+    const soLanKhoa = src.split("viewAllBranches && duocXemToanChuoi").length - 1;
+    expect(soLanKhoa, "cả danh sách LẪN chỉ số phải khoá theo quyền").toBe(2);
+  });
+});

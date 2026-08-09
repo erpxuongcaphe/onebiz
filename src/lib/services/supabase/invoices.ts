@@ -682,3 +682,34 @@ export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
     params.delivery ?? "all",
   ]);
 }
+
+/**
+ * Bộ nhớ tạm + chống kết quả cũ đè kết quả mới cho dải chỉ số.
+ *
+ * Tách khỏi component để test được hành vi thật, không phải bản sao logic.
+ *
+ * Quy tắc sống còn: `batDau()` LUÔN tăng số lượt, kể cả khi khoá đã có sẵn
+ * trong nhớ tạm. Nếu chỉ tăng ở nhánh gọi mạng thì: lượt A đang bay → đổi
+ * sang bộ lọc B đã có nhớ tạm → thoát sớm không tăng lượt → A về muộn vẫn
+ * được coi là mới nhất và ghi đè số của B.
+ */
+export function taoBoNhoChiSo() {
+  let luotHienTai = 0;
+  const nho = new Map<string, InvoiceListSummary>();
+  return {
+    batDau(khoa: string): { luot: number; sanCo: InvoiceListSummary | undefined } {
+      return { luot: ++luotHienTai, sanCo: nho.get(khoa) };
+    },
+    conMoiNhat(luot: number): boolean {
+      return luot === luotHienTai;
+    },
+    luu(khoa: string, kq: InvoiceListSummary): void {
+      nho.set(khoa, kq);
+    },
+    /** Gọi sau mọi thao tác đổi dữ liệu hoá đơn — số cũ không còn đúng nữa. */
+    xoaHet(): void {
+      nho.clear();
+    },
+  };
+}
+export type BoNhoChiSo = ReturnType<typeof taoBoNhoChiSo>;

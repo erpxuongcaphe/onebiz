@@ -10,6 +10,7 @@ export {
   getInvoices,
   getInvoiceListSummary,
   khoaChiSoHoaDon,
+  taoBoNhoChiSo,
   getInvoiceStatuses,
   getInvoiceItems,
   cancelInvoice,
