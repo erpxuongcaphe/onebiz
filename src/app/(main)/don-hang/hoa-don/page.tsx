@@ -83,6 +83,11 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice, ShippingOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import {
+  getInvoiceItemTaxAmount,
+  inferLegacyMixedTaxAmount,
+  reconcileInvoiceTotal,
+} from "@/lib/utils/invoice-reconciliation";
 
 const statusMap: Record<
   Invoice["status"],
@@ -165,6 +170,36 @@ function InvoiceDetail({
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
+  const storedItemTaxSum = items.reduce(
+    (sum, item) => sum + item.vatAmount,
+    0,
+  );
+  const inferredItemTaxSum = items.reduce(
+    (sum, item) => sum + getInvoiceItemTaxAmount(item),
+    0,
+  );
+  const unexplainedHeaderAmount =
+    invoice.totalAmount -
+    (subtotal - invoice.discount + (invoice.shippingFee ?? 0));
+  const legacyMixedTaxSum =
+    storedItemTaxSum <= 0 &&
+    inferredItemTaxSum <= 0 &&
+    (invoice.taxAmount ?? 0) <= 0 &&
+    itemDiscountSum <= 0 &&
+    invoice.discount <= 0 &&
+    (invoice.shippingFee ?? 0) <= 0
+      ? inferLegacyMixedTaxAmount(items, unexplainedHeaderAmount)
+      : 0;
+  const reconciliation = reconcileInvoiceTotal({
+    subtotal,
+    lineDiscount: itemDiscountSum,
+    totalDiscount: invoice.discount,
+    itemTaxAmount: storedItemTaxSum,
+    inferredItemTaxAmount: inferredItemTaxSum || legacyMixedTaxSum,
+    reportedTaxAmount: invoice.taxAmount ?? 0,
+    deliveryFee: invoice.shippingFee ?? 0,
+    invoiceTotal: invoice.totalAmount,
+  });
 
   return (
     <InlineDetailPanel
@@ -325,13 +360,34 @@ function InvoiceDetail({
                       },
                       {
                         label: "Giảm giá hóa đơn",
-                        value: formatCurrency(invoice.discount),
+                        value: formatCurrency(reconciliation.orderDiscount),
                       },
+                      ...(reconciliation.taxAmount > 0
+                        ? [
+                            {
+                              label: "VAT",
+                              value: formatCurrency(reconciliation.taxAmount),
+                            },
+                          ]
+                        : []),
                       ...((invoice.shippingFee ?? 0) > 0
                         ? [
                             {
                               label: "Phí giao hàng",
                               value: formatCurrency(invoice.shippingFee),
+                            },
+                          ]
+                        : []),
+                      ...(reconciliation.hasDifference
+                        ? [
+                            {
+                              label: "Chênh lệch dữ liệu",
+                              value: (
+                                <span className="text-destructive font-semibold">
+                                  {reconciliation.difference > 0 ? "+" : "-"}
+                                  {formatCurrency(Math.abs(reconciliation.difference))}
+                                </span>
+                              ),
                             },
                           ]
                         : []),

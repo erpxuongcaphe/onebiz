@@ -490,6 +490,8 @@ export interface InvoiceItemRow {
   quantity: number;
   unitPrice: number;
   discount: number;
+  vatRate: number;
+  vatAmount: number;
   total: number;
   unit?: string;
   /** 00208: ghi chú từng món — in ra phiếu. */
@@ -518,7 +520,7 @@ export async function getInvoiceItems(
   // 00208: select("*") + join để lấy cả note mà không vỡ trước khi migrate.
   const { data, error } = await supabase
     .from("invoice_items")
-    .select("*, products!invoice_items_product_id_fkey(code)")
+    .select("*, products!invoice_items_product_id_fkey(code, vat_rate)")
     .eq("invoice_id", invoiceId);
 
   if (error) {
@@ -534,6 +536,12 @@ export async function getInvoiceItems(
     quantity: Number(row.quantity ?? 0),
     unitPrice: Number(row.unit_price ?? 0),
     discount: Number(row.discount ?? 0),
+    vatRate: Number(
+      Number(row.vat_rate ?? 0) > 0
+        ? row.vat_rate
+        : row.products?.vat_rate ?? 0,
+    ),
+    vatAmount: Number(row.vat_amount ?? 0),
     total: Number(row.total ?? 0),
     unit: row.unit ?? undefined,
     note: row.note ?? undefined, // 00208
