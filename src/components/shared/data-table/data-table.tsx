@@ -33,6 +33,7 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTablePagination } from "./pagination";
 import { Icon } from "@/components/ui/icon";
+import { ListStrip } from "@/components/shared/list-strip";
 
 export interface RowAction {
   label: string;
@@ -77,6 +78,12 @@ interface DataTableProps<TData, TValue> {
   columnToggle?: boolean;
   /** Ẩn hàng riêng chứa nút hiển thị cột khi nút được đặt ở dải công cụ ngoài. */
   columnToggleToolbar?: boolean;
+  /** Chỉ số đặt ở trái dải công cụ gọn; khi có sẽ thay hàng "Hiển thị cột" riêng. */
+  toolbarMetrics?: ReactNode;
+  /** Nút lọc hoặc công cụ của trang, đặt trước menu hiển thị cột. */
+  toolbarActions?: ReactNode;
+  /** Nội dung một hàng ngay dưới dải công cụ, thường là các điều kiện lọc đang áp dụng. */
+  toolbarFooter?: ReactNode;
   /** Mật độ desktop; mobile giữ nguyên vùng chạm và bố cục thẻ. */
   density?: "comfortable" | "compact";
   /** Inline detail panel — render function receives the row data */
@@ -272,6 +279,9 @@ export function DataTable<TData, TValue>({
   bulkActions,
   columnToggle = false,
   columnToggleToolbar = true,
+  toolbarMetrics,
+  toolbarActions,
+  toolbarFooter,
   density = "comfortable",
   renderDetail,
   expandedRow: controlledExpanded,
@@ -479,6 +489,33 @@ export function DataTable<TData, TValue>({
 
   const totalColSpan = allColumns.length;
 
+  const columnToggleMenu =
+    columnToggle && toggleableColumns.length > 0 ? (
+      <DropdownMenu>
+        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11">
+          <Icon name="tune" size={15} />
+          <span className="hidden lg:inline">Hiển thị cột</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
+          <DropdownMenuLabel>Chọn cột hiển thị</DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          {toggleableColumns.map((column) => {
+            const headerDef = column.columnDef.header;
+            const label = typeof headerDef === "string" ? headerDef : column.id;
+            return (
+              <DropdownMenuCheckboxItem
+                key={column.id}
+                checked={column.getIsVisible()}
+                onCheckedChange={(value) => column.toggleVisibility(!!value)}
+              >
+                {label}
+              </DropdownMenuCheckboxItem>
+            );
+          })}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    ) : null;
+
   const handleRowClick = (row: TData, index: number) => {
     if (renderDetail) {
       setExpandedRowIdx(expandedRowIdx === index ? null : index);
@@ -494,37 +531,24 @@ export function DataTable<TData, TValue>({
     // Đổi sang flex-1 min-h-0 → DataTable fill RESIDUAL space → pagination
     // luôn fit trong viewport.
     <div className="relative flex flex-col flex-1 min-h-0">
-      {/* Column visibility toggle */}
-      {columnToggle && columnToggleToolbar && toggleableColumns.length > 0 && (
+      {toolbarMetrics || toolbarActions ? (
+        <>
+          <ListStrip
+            metrics={toolbarMetrics}
+            tools={
+              <>
+                {toolbarActions}
+                {columnToggleToolbar ? columnToggleMenu : null}
+              </>
+            }
+          />
+          {toolbarFooter}
+        </>
+      ) : columnToggleToolbar && columnToggleMenu ? (
         <div className="flex justify-end px-4 py-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-lg border border-input bg-background px-3 py-2 text-sm font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Icon name="tune" size={16} />
-              <span className="hidden sm:inline">Hiển thị cột</span>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-              <DropdownMenuLabel>Chọn cột hiển thị</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {toggleableColumns.map((column) => {
-                const headerDef = column.columnDef.header;
-                const label =
-                  typeof headerDef === "string" ? headerDef : column.id;
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    checked={column.getIsVisible()}
-                    onCheckedChange={(value) =>
-                      column.toggleVisibility(!!value)
-                    }
-                  >
-                    {label}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {columnToggleMenu}
         </div>
-      )}
+      ) : null}
 
       {/* Day 17/05/2026: Select-all-matching banner (Gmail pattern). Hiện khi
           user tick header → chọn cả trang + tổng còn nhiều SP chưa chọn. */}
