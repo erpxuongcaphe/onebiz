@@ -403,7 +403,7 @@ function InvoiceDetail({
 
 export default function HoaDonPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, currentBranch, branches, isReady: branchScopeReady } = useBranchFilter();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("invoice");
@@ -470,6 +470,11 @@ export default function HoaDonPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const phamViHienTai = useMemo(
+    () => phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
+    [activeBranchId, viewAllBranches, duocXemToanChuoi],
+  );
+  const chuaCoPhamVi = branchScopeReady && phamViHienTai.mode === "none";
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
@@ -488,6 +493,7 @@ export default function HoaDonPage() {
   const dateRange = useCallback(() => computeListPresetRange(datePreset), [datePreset]);
 
   const fetchData = useCallback(async () => {
+    if (!branchScopeReady) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -497,10 +503,9 @@ export default function HoaDonPage() {
     if (selectedStatuses.length > 0) commonFilters.status = selectedStatuses;
     if (range.from) commonFilters.dateFrom = range.from;
     if (range.to) commonFilters.dateTo = range.to;
-    const pv = phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi });
     // mode "none" = chưa có chi nhánh và chưa chủ động xem toàn chuỗi → hàm
     // này KHÔNG gọi getInvoices, trả rỗng và đợi người dùng chọn chi nhánh.
-    const result = await getInvoicesTheoPhamVi(pv, {
+    const result = await getInvoicesTheoPhamVi(phamViHienTai, {
       page,
       pageSize,
       search: debouncedSearch,
@@ -515,7 +520,7 @@ export default function HoaDonPage() {
     // getInvoices với branchId undefined — kể cả chỉ để đếm.
     if (result.data.length === 0) {
       setOtherBranchCount(
-        await demHoaDonChiNhanhKhac(pv, {
+        await demHoaDonChiNhanhKhac(phamViHienTai, {
           search: debouncedSearch,
           searchField,
           filters: commonFilters,
@@ -533,7 +538,7 @@ export default function HoaDonPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, activeBranchId, dateRange, viewAllBranches, duocXemToanChuoi, toast]);
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, branchScopeReady, dateRange, phamViHienTai, toast]);
 
   useEffect(() => {
     fetchData();
@@ -584,7 +589,7 @@ export default function HoaDonPage() {
   >(() => {
     const range = computeListPresetRange(datePreset);
     return {
-      phamVi: phamViChiNhanhHoaDon({ activeBranchId, viewAllBranches, duocXemToanChuoi }),
+      phamVi: phamViHienTai,
       dateFrom: range.from,
       dateTo: range.to,
       // Truyền THẲNG trạng thái của giao diện. RPC tự ánh xạ
@@ -594,7 +599,7 @@ export default function HoaDonPage() {
       searchField,
       delivery: "all", // bộ lọc giao hàng thuộc K3
     };
-  }, [datePreset, viewAllBranches, duocXemToanChuoi, activeBranchId, selectedStatuses, debouncedSearch, searchField]);
+  }, [datePreset, phamViHienTai, selectedStatuses, debouncedSearch, searchField]);
 
   // Mỗi lần dữ liệu hoá đơn đổi (hủy, sửa, thanh toán, gắn vận đơn…) thì tăng
   // số này → xoá nhớ tạm và gọi lại RPC. Không có nó thì hủy một hoá đơn xong
@@ -614,6 +619,7 @@ export default function HoaDonPage() {
   }, [fetchData, lamMoiChiSo]);
 
   useEffect(() => {
+    if (!branchScopeReady) return;
     // TĂNG SỐ LƯỢT TRƯỚC khi xét nhớ tạm. Nếu để sau, tình huống sau làm hỏng
     // số: lượt A đang bay → đổi sang bộ lọc B đã có sẵn trong nhớ tạm → thoát
     // sớm mà KHÔNG tăng số lượt → A về muộn vẫn khớp số lượt và ghi đè số của
@@ -621,6 +627,11 @@ export default function HoaDonPage() {
     const khoa =
       JSON.stringify(thamSoChiSo.phamVi) + "|" + khoaChiSoHoaDon(thamSoChiSo);
     const { luot, sanCo } = boNhoRef.current.batDau(khoa);
+    if (thamSoChiSo.phamVi.mode === "none") {
+      setChiSo(null);
+      setChiSoLoi(false);
+      return;
+    }
     if (sanCo) {
       setChiSo(sanCo);
       setChiSoLoi(false);
@@ -641,7 +652,14 @@ export default function HoaDonPage() {
         console.error("[Hoá đơn] không lấy được chỉ số:", err);
         setChiSoLoi(true);
       });
-  }, [thamSoChiSo, nhipChiSo]);
+  }, [branchScopeReady, thamSoChiSo, nhipChiSo]);
+
+  const dangTaiChiSo =
+    !branchScopeReady || (!chuaCoPhamVi && !chiSo && !chiSoLoi);
+  const moTaChuaCoPhamVi =
+    branches.length > 0
+      ? "Chọn chi nhánh trên thanh phía trên để xem đúng hóa đơn và chỉ số."
+      : "Tài khoản chưa được phân quyền chi nhánh. Vui lòng liên hệ quản trị viên.";
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
@@ -880,26 +898,32 @@ export default function HoaDonPage() {
             icon={<Icon name="receipt" size={16} />}
             label="Số hóa đơn (mọi trạng thái)"
             value={chiSo ? formatNumber(chiSo.tatCaHoaDon) : "—"}
-            loading={!chiSo && !chiSoLoi}
-            hint={chiSoLoi ? "Chưa cập nhật được" : undefined}
+            loading={dangTaiChiSo}
+            hint={
+              chiSoLoi
+                ? "Chưa cập nhật được"
+                : chuaCoPhamVi
+                  ? "Chưa có phạm vi chi nhánh"
+                  : undefined
+            }
           />
           <SummaryCard
             icon={<Icon name="check_circle" size={16} />}
             label="Hoàn thành"
             value={chiSo ? formatNumber(chiSo.hoanThanh) : "—"}
-            loading={!chiSo && !chiSoLoi}
+            loading={dangTaiChiSo}
           />
           <SummaryCard
             icon={<Icon name="cancel" size={16} />}
             label="Đã hủy"
             value={chiSo ? formatNumber(chiSo.daHuy) : "—"}
-            loading={!chiSo && !chiSoLoi}
+            loading={dangTaiChiSo}
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
             label="Giá trị đã hoàn thành"
             value={chiSo ? formatCurrency(chiSo.giaTriHoanThanh) : "—"}
-            loading={!chiSo && !chiSoLoi}
+            loading={dangTaiChiSo}
             // Giảm giá đứng RIÊNG ở dòng phụ — KHÔNG trừ khỏi con số trên.
             // `total` của hoá đơn vốn đã trừ giảm giá rồi.
             hint={
@@ -924,6 +948,13 @@ export default function HoaDonPage() {
           data={data}
           loading={loading}
           total={total}
+          emptyTitle={chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy hóa đơn"}
+          emptyDescription={
+            chuaCoPhamVi
+              ? moTaChuaCoPhamVi
+              : "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+          }
+          emptyIcon={chuaCoPhamVi ? "apartment" : "receipt_long"}
           emptyBranchHint={
             // Không có quyền xem toàn chuỗi thì KHÔNG hiện gợi ý luôn — hiện
             // ra rồi bấm không được còn khó chịu hơn.
