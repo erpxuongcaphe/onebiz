@@ -16,9 +16,36 @@ export interface InvoiceReconciliation {
   hasDifference: boolean;
 }
 
+export interface InvoiceItemTaxInput {
+  quantity: number;
+  unitPrice: number;
+  discount: number;
+  vatRate: number;
+  vatAmount: number;
+}
+
 function money(value: number): number {
   if (!Number.isFinite(value)) return 0;
   return Math.round(value * 100) / 100;
+}
+
+/**
+ * Older invoices can have a VAT rate but no persisted VAT amount. Prefer the
+ * stored amount and only rebuild it from the line net value for those rows.
+ */
+export function getInvoiceItemTaxAmount(input: InvoiceItemTaxInput): number {
+  const storedAmount = Math.max(0, money(input.vatAmount));
+  if (storedAmount > 0) return storedAmount;
+
+  const rate = Math.max(0, money(input.vatRate));
+  if (rate <= 0) return 0;
+
+  const lineValue = Math.max(
+    0,
+    money(input.unitPrice) * Math.max(0, money(input.quantity)) -
+      Math.max(0, money(input.discount)),
+  );
+  return money(Math.ceil((lineValue * rate) / 100));
 }
 
 /**

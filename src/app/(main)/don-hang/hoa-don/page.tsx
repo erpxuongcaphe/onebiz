@@ -83,7 +83,10 @@ import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import type { Invoice, ShippingOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
-import { reconcileInvoiceTotal } from "@/lib/utils/invoice-reconciliation";
+import {
+  getInvoiceItemTaxAmount,
+  reconcileInvoiceTotal,
+} from "@/lib/utils/invoice-reconciliation";
 
 const statusMap: Record<
   Invoice["status"],
@@ -166,7 +169,10 @@ function InvoiceDetail({
 
   const subtotal = items.reduce((s, it) => s + it.unitPrice * it.quantity, 0);
   const itemDiscountSum = items.reduce((s, it) => s + it.discount, 0);
-  const itemTaxSum = items.reduce((s, it) => s + it.vatAmount, 0);
+  const itemTaxSum = items.reduce(
+    (sum, item) => sum + getInvoiceItemTaxAmount(item),
+    0,
+  );
   const reconciliation = reconcileInvoiceTotal({
     subtotal,
     lineDiscount: itemDiscountSum,

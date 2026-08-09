@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { reconcileInvoiceTotal } from "@/lib/utils/invoice-reconciliation";
+import {
+  getInvoiceItemTaxAmount,
+  reconcileInvoiceTotal,
+} from "@/lib/utils/invoice-reconciliation";
 
 const invoicePage = readFileSync(
   resolve(process.cwd(), "src/app/(main)/don-hang/hoa-don/page.tsx"),
@@ -9,6 +12,39 @@ const invoicePage = readFileSync(
 );
 
 describe("reconcileInvoiceTotal", () => {
+  it("rebuilds missing legacy line VAT from the stored rate", () => {
+    expect(
+      getInvoiceItemTaxAmount({
+        quantity: 10,
+        unitPrice: 220_000,
+        discount: 0,
+        vatRate: 10,
+        vatAmount: 0,
+      }),
+    ).toBe(220_000);
+    expect(
+      getInvoiceItemTaxAmount({
+        quantity: 1,
+        unitPrice: 230_000,
+        discount: 0,
+        vatRate: 8,
+        vatAmount: 0,
+      }),
+    ).toBe(18_400);
+  });
+
+  it("prefers the persisted line VAT amount when available", () => {
+    expect(
+      getInvoiceItemTaxAmount({
+        quantity: 1,
+        unitPrice: 100_000,
+        discount: 0,
+        vatRate: 10,
+        vatAmount: 9_500,
+      }),
+    ).toBe(9_500);
+  });
+
   it("recognizes mixed line VAT as part of the invoice total", () => {
     expect(
       reconcileInvoiceTotal({
