@@ -2,6 +2,7 @@ export { ConfirmDialog } from "./confirm-dialog";
 export { PrintSizePickerDialog } from "./print-size-picker-dialog";
 export { CreateProductDialog } from "./create-product-dialog";
 export { CreateCustomerDialog } from "./create-customer-dialog";
+export { ChangeCustomerCodeDialog } from "./change-customer-code-dialog";
 export { CreateSupplierDialog } from "./create-supplier-dialog";
 export { EditInvoiceDialog } from "./edit-invoice-dialog";
 export { CreateCashTransactionDialog } from "./create-cash-transaction-dialog";

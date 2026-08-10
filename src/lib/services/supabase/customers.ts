@@ -600,15 +600,62 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   return mapCustomer(data);
 }
 
-/**
- * Xóa khách hàng.
- *
- * Sprint S2 Phase 1 (CEO 12/05): chuyển sang RPC SECURITY DEFINER để enforce
- * quyền `customers.delete` ở DB layer + atomic audit log snapshot.
- *
- * Sprint S2 Phase 3a (CEO 12/05): nhận optional `otpId` để hỗ trợ delegation
- * — cashier không có quyền vẫn xoá được nếu có OTP đã verify từ manager.
- */
+/** Kết quả của thao tác đổi riêng mã khách hàng. */
+export interface ChangeCustomerCodeResult {
+  customerId: string;
+  oldCode: string;
+  newCode: string;
+  changed: boolean;
+}
+
+/** Đổi riêng mã khách hàng qua RPC có kiểm quyền, tenant, trùng mã và audit. */
+export async function changeCustomerCode(
+  customerId: string,
+  newCode: string,
+): Promise<ChangeCustomerCodeResult> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "change_customer_code_atomic",
+    {
+      p_customer_id: customerId,
+      p_new_code: newCode.trim().toUpperCase(),
+    },
+  );
+
+  if (error) {
+    const message = String(error.message ?? "");
+    if (isRpcUnavailable(error)) {
+      throw new Error("Chưa cài đặt chức năng đổi mã khách hàng (migration 00307).");
+    }
+    if (error.code === "23505" || message.includes("CUSTOMER_CODE_DUPLICATE")) {
+      throw new Error("Mã khách hàng này đã được sử dụng.");
+    }
+    if (message.includes("CUSTOMER_CODE_INVALID")) {
+      throw new Error("Mã khách hàng không hợp lệ.");
+    }
+    if (message.includes("SYSTEM_CUSTOMER_CODE_LOCKED")) {
+      throw new Error("Không thể đổi mã khách hàng hệ thống.");
+    }
+    if (error.code === "42501") {
+      throw new Error("Anh/chị không có quyền đổi mã khách hàng.");
+    }
+    handleError(error, "changeCustomerCode:atomic_rpc");
+  }
+
+  if (!data || data.success !== true) {
+    throw new Error("Máy chủ không trả kết quả đổi mã khách hàng hợp lệ.");
+  }
+
+  return {
+    customerId: String(data.customer_id),
+    oldCode: String(data.old_code),
+    newCode: String(data.new_code),
+    changed: data.changed === true,
+  };
+}
+
+/** Xóa khách hàng qua RPC có kiểm quyền và hỗ trợ OTP ủy quyền. */
 export async function deleteCustomer(id: string, otpId?: string): Promise<void> {
   const supabase = getClient();
 

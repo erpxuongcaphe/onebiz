@@ -42,6 +42,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 import {
   createCustomer,
   updateCustomer,
+  changeCustomerCode,
   deleteCustomer,
   getCustomerGroups,
 } from "@/lib/services/supabase/customers";
@@ -141,6 +142,58 @@ describe("deleteCustomer", () => {
     });
 
     await expect(deleteCustomer("c-1")).rejects.toThrow(/PERMISSION_DENIED/);
+  });
+});
+
+describe("changeCustomerCode", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("calls the secure atomic RPC with a normalized code", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        success: true,
+        changed: true,
+        customer_id: "c-1",
+        old_code: "KH069091",
+        new_code: "KHA-KLE-064",
+      },
+      error: null,
+    });
+
+    const result = await changeCustomerCode("c-1", " kha-kle-064 ");
+
+    expect(mockRpc).toHaveBeenCalledWith("change_customer_code_atomic", {
+      p_customer_id: "c-1",
+      p_new_code: "KHA-KLE-064",
+    });
+    expect(result).toEqual({
+      customerId: "c-1",
+      oldCode: "KH069091",
+      newCode: "KHA-KLE-064",
+      changed: true,
+    });
+  });
+
+  it("returns a clear duplicate-code error", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "23505", message: "CUSTOMER_CODE_DUPLICATE" },
+    });
+
+    await expect(changeCustomerCode("c-1", "KHA-KLE-064")).rejects.toThrow(
+      "Mã khách hàng này đã được sử dụng.",
+    );
+  });
+
+  it("returns a clear permission error", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "42501", message: "CUSTOMER_EDIT_PERMISSION_REQUIRED" },
+    });
+
+    await expect(changeCustomerCode("c-1", "KHA-KLE-064")).rejects.toThrow(
+      "không có quyền",
+    );
   });
 });
 
