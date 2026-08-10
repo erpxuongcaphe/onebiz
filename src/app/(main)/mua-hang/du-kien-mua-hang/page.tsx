@@ -5,7 +5,7 @@ import { ChartCard } from "../../phan-tich/_components";
 import { ReportPageHeader } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useToast } from "@/lib/contexts";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatShortDate } from "@/lib/format";
 // getCustomerGroups() (đồng bộ) luôn trả mảng RỖNG — phải dùng bản Async,
 // nếu không ô chọn nhóm khách sẽ trống mãi mà không báo lỗi gì.
 import {
@@ -20,15 +20,23 @@ import {
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import {
+  filterPurchaseForecastRows,
+  normalizePurchaseForecastQuery,
+} from "@/lib/utils/purchase-forecast-filter";
+
+type ItemView = "all" | "materials" | "sku";
 
 export default function DuKienMuaHangPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", forceTable: true });
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
 
   const [data, setData] = useState<PurchaseForecastResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [itemView, setItemView] = useState<ItemView>("all");
+  const [itemQuery, setItemQuery] = useState("");
 
   // 29/07 (CEO): xem nhu cầu mua hàng theo TỪNG KHÁCH hoặc NHÓM KHÁCH —
   // trả lời câu "đơn của nhóm khách sỉ cần mua bao nhiêu nguyên liệu".
@@ -61,6 +69,7 @@ export default function DuKienMuaHangPage() {
   }, []);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
     try {
       setLoading(true);
       const res = await getPurchaseForecast(
@@ -83,13 +92,26 @@ export default function DuKienMuaHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, activeBranchId, customerId, groupId, toast]);
+  }, [range.from, range.to, activeBranchId, customerId, groupId, isReady, toast]);
 
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
 
-  const branchLabel = currentBranch?.name ?? "Tất cả chi nhánh";
+  const normalizedItemQuery = normalizePurchaseForecastQuery(itemQuery);
+
+  const filteredMaterials = useMemo(
+    () => filterPurchaseForecastRows(data?.materials ?? [], itemQuery),
+    [data?.materials, itemQuery],
+  );
+  const filteredSkuRows = useMemo(
+    () => filterPurchaseForecastRows(data?.skuRows ?? [], itemQuery),
+    [data?.skuRows, itemQuery],
+  );
+  const filteredToBuyAmount = useMemo(
+    () => filteredMaterials.reduce((sum, row) => sum + row.amount, 0),
+    [filteredMaterials],
+  );
 
   // Gộp SKU theo chi nhánh (tab 1)
   const skuByBranch = useMemo(() => {
@@ -97,14 +119,14 @@ export default function DuKienMuaHangPage() {
       string,
       { branchName: string; rows: PurchaseForecastResult["skuRows"] }
     >();
-    for (const r of data?.skuRows ?? []) {
+    for (const r of filteredSkuRows) {
       const key = r.branchId ?? "null";
       const g = groups.get(key) ?? { branchName: r.branchName, rows: [] };
       g.rows.push(r);
       groups.set(key, g);
     }
     return [...groups.values()];
-  }, [data]);
+  }, [filteredSkuRows]);
 
   const handleExport = useCallback(() => {
     if (!data) return;
@@ -114,8 +136,9 @@ export default function DuKienMuaHangPage() {
       branchName: branchLabel,
       generatedAt: new Date(),
     });
-    const sheets: ExcelSheet[] = [
-      {
+    const sheets: ExcelSheet[] = [];
+    if (itemView !== "sku") {
+      sheets.push({
         name: "Dự kiến mua NVL",
         titleRows: [
           "DỰ KIẾN MUA NGUYÊN VẬT LIỆU",
@@ -132,7 +155,7 @@ export default function DuKienMuaHangPage() {
           { label: "Đơn giá", key: "cost", width: 12, format: "currency" },
           { label: "Thành tiền", key: "amount", width: 16, format: "currency" },
         ],
-        rows: data.materials.map((m) => ({
+        rows: filteredMaterials.map((m) => ({
           code: m.code,
           name: m.name,
           unit: m.unit,
@@ -142,9 +165,11 @@ export default function DuKienMuaHangPage() {
           cost: m.unitCost,
           amount: m.amount,
         })),
-        footer: { code: "TỔNG", amount: data.totalToBuyAmount },
-      },
-      {
+        footer: { code: "TỔNG", amount: filteredToBuyAmount },
+      });
+    }
+    if (itemView !== "materials") {
+      sheets.push({
         name: "Đặt hàng theo chi nhánh",
         titleRows: ["ĐẶT HÀNG THEO CHI NHÁNH (SKU)", ...title.slice(1)],
         columns: [
@@ -155,7 +180,7 @@ export default function DuKienMuaHangPage() {
           { label: "SL đặt", key: "qty", width: 12, format: "number" },
           { label: "Giá trị", key: "amount", width: 16, format: "currency" },
         ],
-        rows: (data.skuRows ?? []).map((r) => ({
+        rows: filteredSkuRows.map((r) => ({
           branch: r.branchName,
           code: r.code,
           name: r.name,
@@ -163,8 +188,8 @@ export default function DuKienMuaHangPage() {
           qty: r.quantity,
           amount: r.amount,
         })),
-      },
-    ];
+      });
+    }
     exportReportToExcel({
       kind: "du-kien-mua-hang",
       mode: "full",
@@ -172,7 +197,7 @@ export default function DuKienMuaHangPage() {
       branchName: branchLabel,
       sheets,
     });
-  }, [data, range, branchLabel]);
+  }, [data, range, branchLabel, itemView, filteredMaterials, filteredSkuRows, filteredToBuyAmount]);
 
   return (
     <div className="space-y-4">
@@ -188,6 +213,70 @@ export default function DuKienMuaHangPage() {
         onExportFull={handleExport}
         exportDisabled={loading || !data}
       />
+
+      <div className="border-y bg-surface-container-lowest px-4 py-3 lg:px-6">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[180px]">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Loại cần xem
+            </label>
+            <select
+              value={itemView}
+              onChange={(event) => setItemView(event.target.value as ItemView)}
+              className="h-9 w-full rounded-lg border bg-background px-3 text-sm"
+            >
+              <option value="all">Tất cả NVL và SKU</option>
+              <option value="materials">NVL cần mua</option>
+              <option value="sku">SKU đã đặt</option>
+            </select>
+          </div>
+
+          <div className="min-w-[260px] flex-1 lg:max-w-[460px]">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Mã hoặc tên NVL / SKU
+            </label>
+            <div className="relative">
+              <Icon
+                name="search"
+                size={16}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                value={itemQuery}
+                onChange={(event) => setItemQuery(event.target.value)}
+                placeholder="Ví dụ: NVL-SUA, SKU-TPP, Trân châu..."
+                className="h-9 w-full rounded-lg border bg-background pl-9 pr-9 text-sm"
+              />
+              {itemQuery && (
+                <button
+                  type="button"
+                  onClick={() => setItemQuery("")}
+                  aria-label="Xóa nội dung tìm kiếm"
+                  className="absolute right-1.5 top-1/2 inline-flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                >
+                  <Icon name="close" size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex min-h-9 flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5">
+              <Icon name="storefront" size={14} />
+              Chi nhánh đặt: <strong>{branchLabel}</strong>
+            </span>
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-muted px-2.5">
+              <Icon name="event" size={14} />
+              Ngày đơn: <strong>{formatShortDate(range.from)} - {formatShortDate(range.to)}</strong>
+            </span>
+            {normalizedItemQuery && (
+              <span className="inline-flex h-8 items-center rounded-lg bg-primary/10 px-2.5 text-primary">
+                {filteredMaterials.length} NVL · {filteredSkuRows.length} SKU
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {/* 29/07 (CEO): lọc theo khách / nhóm khách. Đặt ngay dưới đầu trang để
           thấy trước khi đọc số — tránh nhìn nhầm số đã lọc thành số toàn bộ. */}
@@ -267,13 +356,13 @@ export default function DuKienMuaHangPage() {
       </div>
 
       {/* ① Dự kiến mua NVL */}
-      <ChartCard
+      {itemView !== "sku" && <ChartCard
         title="Dự kiến mua nguyên vật liệu"
-        subtitle={`${data?.materials.length ?? 0} loại NVL · Tổng cần mua: ${formatCurrency(data?.totalToBuyAmount ?? 0)}`}
+        subtitle={`${filteredMaterials.length} loại NVL · Tổng cần mua: ${formatCurrency(filteredToBuyAmount)}`}
       >
         {loading ? (
           <div className="py-12 text-center text-sm text-muted-foreground">Đang tính...</div>
-        ) : !data || data.materials.length === 0 ? (
+        ) : !data || filteredMaterials.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
             Không có đơn đặt hàng chưa hoàn tất trong khoảng thời gian này (hoặc SKU chưa có công thức).
           </div>
@@ -293,7 +382,7 @@ export default function DuKienMuaHangPage() {
                 </tr>
               </thead>
               <tbody>
-                {data.materials.map((m) => (
+                {filteredMaterials.map((m) => (
                   <tr
                     key={m.materialId}
                     className={m.toBuy > 0 ? "border-b last:border-0 bg-status-warning/5" : "border-b last:border-0"}
@@ -314,16 +403,16 @@ export default function DuKienMuaHangPage() {
               <tfoot>
                 <tr className="font-bold border-t-2">
                   <td className="py-2 pr-3" colSpan={7}>TỔNG TIỀN CẦN MUA</td>
-                  <td className="py-2 text-right tabular-nums text-primary">{formatCurrency(data.totalToBuyAmount)}</td>
+                  <td className="py-2 text-right tabular-nums text-primary">{formatCurrency(filteredToBuyAmount)}</td>
                 </tr>
               </tfoot>
             </table>
           </div>
         )}
-      </ChartCard>
+      </ChartCard>}
 
       {/* ② Đặt hàng theo chi nhánh */}
-      <ChartCard title="Đặt hàng theo chi nhánh" subtitle="Chi tiết SKU đã đặt trong các đơn (nguồn của dự kiến trên)">
+      {itemView !== "materials" && <ChartCard title="Đặt hàng theo chi nhánh" subtitle="Chi tiết SKU đã đặt trong các đơn (nguồn của dự kiến trên)">
         {loading ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Đang tải...</div>
         ) : skuByBranch.length === 0 ? (
@@ -364,7 +453,7 @@ export default function DuKienMuaHangPage() {
             ))}
           </div>
         )}
-      </ChartCard>
+      </ChartCard>}
     </div>
   );
 }
