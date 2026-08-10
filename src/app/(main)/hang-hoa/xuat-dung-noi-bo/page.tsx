@@ -1,21 +1,23 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
   DatePresetFilter,
   PersonFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { Button } from "@/components/ui/button";
 import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
@@ -182,6 +184,7 @@ export default function XuatDungNoiBoPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
@@ -325,47 +328,36 @@ export default function XuatDungNoiBoPage() {
     <InternalExportDetail item={item} onClose={onClose} />
   );
 
+  const pageCompleted = data.filter((row) => row.status === "completed").length;
+  const pageDraft = data.filter((row) => row.status === "draft").length;
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "custom") {
+      if (!dateFrom && !dateTo) return "Tùy chỉnh";
+      return `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    }
+    return STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+  }, [dateFrom, datePreset, dateTo]);
+  const clearListFilters = useCallback(() => {
+    setSelectedStatuses([]);
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setCreatorFilter("");
+  }, []);
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
+    if (selectedStatuses.length) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.map((value) => statusMap[value as InternalExport["status"]]?.label ?? value).join(", "), onClear: () => setSelectedStatuses([]) });
+    if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
+    return chips;
+  }, [creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
+
   /* ---- Render ---- */
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <CheckboxFilter
-              options={statuses}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={STANDARD_LIST_PRESETS}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Người tạo">
-            <PersonFilter
-              value={creatorFilter}
-              onChange={setCreatorFilter}
-              placeholder="Chọn người tạo"
-              suggestions={[
-                { label: "Admin", value: "admin" },
-                { label: "Cao Thị Huyền Trang", value: "trang" },
-              ]}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Xuất dùng nội bộ"
+        density="compact"
         searchPlaceholder="Theo mã phiếu xuất nội bộ"
         searchValue={search}
         onSearchChange={setSearch}
@@ -383,26 +375,6 @@ export default function XuatDungNoiBoPage() {
         ]}
       />
 
-      {/* KPI row — tính trên trang hiện tại */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="inventory_2" size={16} />}
-          label="Tổng phiếu"
-          value={total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Hoàn thành"
-          value={data.filter((r) => r.status === "completed").length.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="edit_note" size={16} />}
-          label="Phiếu tạm"
-          value={data.filter((r) => r.status === "draft").length.toString()}
-          highlight={data.filter((r) => r.status === "draft").length > 0}
-        />
-      </div>
-
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}
@@ -415,6 +387,11 @@ export default function XuatDungNoiBoPage() {
         data={data}
         loading={loading}
         total={total}
+        density="compact"
+        columnToggle
+        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyBranchHint={{
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
@@ -549,6 +526,12 @@ export default function XuatDungNoiBoPage() {
           })
         }
       />
+
+      <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc xuất dùng nội bộ">
+        <FilterGroup label="Trạng thái" activeHint={selectedStatuses.length ? `${selectedStatuses.length} lựa chọn` : undefined}><CheckboxFilter options={statuses} selected={selectedStatuses} onChange={setSelectedStatuses} /></FilterGroup>
+        <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS} /></FilterGroup>
+        <FilterGroup label="Người tạo" activeHint={creatorFilter || undefined}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} /></FilterGroup>
+      </FilterPanel>
 
       {auditDialogTarget && (
         <AuditLogDialog
