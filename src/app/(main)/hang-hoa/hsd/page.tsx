@@ -5,11 +5,14 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
 } from "@/components/shared/filter-sidebar";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
 import { getExpiringLots } from "@/lib/services";
 import { formatDate, formatNumber } from "@/lib/format";
@@ -23,6 +26,7 @@ export default function HSDPage() {
   const [loading, setLoading] = useState(true);
   const [thresholdDays, setThresholdDays] = useState(30);
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -57,6 +61,12 @@ export default function HSDPage() {
 
   const expiredCount = data.filter((l) => l.isExpired).length;
   const expiringCount = data.length - expiredCount;
+  const filterChips: ListFilterChip[] = thresholdDays === 30 ? [] : [{
+    key: "threshold",
+    label: "Ngưỡng cảnh báo",
+    value: `${thresholdDays} ngày`,
+    onClear: () => setThresholdDays(30),
+  }];
 
   const columns: ColumnDef<ExpiringLot, unknown>[] = [
     {
@@ -129,117 +139,28 @@ export default function HSDPage() {
   ];
 
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Ngưỡng cảnh báo (ngày)">
-            <Input
-              type="number"
-              value={thresholdDays}
-              onChange={(e) => setThresholdDays(Number(e.target.value) || 30)}
-              min={1}
-              max={365}
-            />
-            <p className="text-xs text-muted-foreground mt-2">
-              Hiển thị các lô sắp hết hạn trong vòng N ngày
-            </p>
-          </FilterGroup>
-
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Hạn sử dụng (HSD)"
+        density="compact"
         searchPlaceholder="Theo số lô, sản phẩm..."
         searchValue={search}
         onSearchChange={setSearch}
       />
 
-      {/* KPI summary cards — đồng đều design với lo-san-xuat / lich-su-kho */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
-        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary-fixed/15 text-primary">
-              <Icon name="event" size={16} />
-            </span>
-            <div>
-              <div className="text-2xl font-bold text-primary leading-tight">{formatNumber(total)}</div>
-              <div className="text-xs text-muted-foreground">Tổng lô cần chú ý</div>
-            </div>
-          </div>
-        </div>
-        <div
-          className={`rounded-xl border p-3 ambient-shadow ${
-            expiredCount > 0
-              ? "bg-status-error/10 border-status-error/25"
-              : "bg-surface-container-lowest border-border"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex size-8 items-center justify-center rounded-lg ${
-                expiredCount > 0
-                  ? "bg-status-error/15 text-status-error"
-                  : "bg-status-success/10 text-status-success"
-              }`}
-            >
-              <Icon name={expiredCount > 0 ? "warning" : "verified"} size={16} />
-            </span>
-            <div>
-              <div
-                className={`text-2xl font-bold leading-tight ${
-                  expiredCount > 0 ? "text-status-error" : "text-status-success"
-                }`}
-              >
-                {expiredCount}
-              </div>
-              <div className="text-xs text-muted-foreground">Đã hết hạn</div>
-            </div>
-          </div>
-        </div>
-        <div
-          className={`rounded-xl border p-3 ambient-shadow ${
-            expiringCount > 0
-              ? "bg-status-warning/10 border-status-warning/25"
-              : "bg-surface-container-lowest border-border"
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            <span
-              className={`inline-flex size-8 items-center justify-center rounded-lg ${
-                expiringCount > 0
-                  ? "bg-status-warning/15 text-status-warning"
-                  : "bg-surface-container-high text-foreground"
-              }`}
-            >
-              <Icon name="schedule" size={16} />
-            </span>
-            <div>
-              <div
-                className={`text-2xl font-bold leading-tight ${
-                  expiringCount > 0 ? "text-status-warning" : "text-foreground"
-                }`}
-              >
-                {expiringCount}
-              </div>
-              <div className="text-xs text-muted-foreground">Sắp hết ({thresholdDays}d)</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {!loading && filtered.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-          <Icon name="event" size={48} className="mb-3 opacity-30" />
-          <p className="text-sm">Không có lô nào sắp hết hạn trong {thresholdDays} ngày tới</p>
-          <Icon name="inventory_2" size={16} className="mt-1 opacity-0" />
-        </div>
-      ) : (
-        <DataTable
+      <DataTable
           columns={columns}
           data={filtered}
           loading={loading}
           total={filtered.length}
+          density="compact"
+          columnToggle
+          toolbarMetrics={<><ListMetric icon={<Icon name="event" size={15} />} label="Lô cần chú ý" value={formatNumber(total)} hint={`Theo ngưỡng ${thresholdDays} ngày`} tone="primary" /><ListMetric icon={<Icon name={expiredCount > 0 ? "warning" : "verified"} size={15} />} label="Đã hết hạn" value={formatNumber(expiredCount)} tone={expiredCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="schedule" size={15} />} label={`Sắp hết (${thresholdDays} ngày)`} value={formatNumber(expiringCount)} /></>}
+          toolbarActions={<Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button>}
+          toolbarFooter={<FilterChips filters={filterChips} />}
+          emptyTitle={`Không có lô sắp hết hạn trong ${thresholdDays} ngày tới`}
+          emptyDescription="Thử tăng ngưỡng cảnh báo hoặc thay đổi nội dung tìm kiếm."
+          emptyIcon="event"
           pageIndex={0}
           pageSize={50}
           pageCount={1}
@@ -247,7 +168,13 @@ export default function HSDPage() {
           onPageSizeChange={() => {}}
           getRowId={(row) => row.lotId}
         />
-      )}
+
+      <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={() => setThresholdDays(30)} title="Bộ lọc hạn sử dụng">
+        <FilterGroup label="Ngưỡng cảnh báo (ngày)" activeHint={`${thresholdDays} ngày`}>
+          <Input type="number" value={thresholdDays} onChange={(event) => setThresholdDays(Number(event.target.value) || 30)} min={1} max={365} />
+          <p className="mt-2 text-xs text-muted-foreground">Hiển thị các lô sắp hết hạn trong vòng N ngày.</p>
+        </FilterGroup>
+      </FilterPanel>
     </ListPageLayout>
   );
 }

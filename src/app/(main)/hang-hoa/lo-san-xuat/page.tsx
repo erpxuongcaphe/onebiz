@@ -12,10 +12,13 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
+import { ListMetric } from "@/components/shared/list-metric";
+import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate, formatNumber } from "@/lib/format";
 import { getAllProductLots } from "@/lib/services";
@@ -80,6 +83,7 @@ export default function LoSanXuatPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [sourceFilter, setSourceFilter] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   // Sprint UX-1 Stage 4: Audit log shortcut (master data lot)
   const [auditDialogTarget, setAuditDialogTarget] = useState<LotRow | null>(null);
   // Day 18/05/2026 (CEO): mockup dialog gắn HSD cho tồn cũ
@@ -122,6 +126,24 @@ export default function LoSanXuatPage() {
     const days = (new Date(l.expiryDate).getTime() - now) / 86400000;
     return days > 0 && days <= 30;
   }).length;
+
+  const filterChips: ListFilterChip[] = [];
+  if (statusFilter !== "all") {
+    filterChips.push({
+      key: "status",
+      label: "Trạng thái",
+      value: statusOptions.find((option) => option.value === statusFilter)?.label ?? statusFilter,
+      onClear: () => setStatusFilter("all"),
+    });
+  }
+  if (sourceFilter !== "all") {
+    filterChips.push({
+      key: "source",
+      label: "Nguồn",
+      value: sourceOptions.find((option) => option.value === sourceFilter)?.label ?? sourceFilter,
+      onClear: () => setSourceFilter("all"),
+    });
+  }
 
   const columns: ColumnDef<LotRow>[] = [
     {
@@ -244,23 +266,13 @@ export default function LoSanXuatPage() {
   ];
 
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} />
-          </FilterGroup>
-          <FilterGroup label="Nguồn">
-            <SelectFilter options={sourceOptions} value={sourceFilter} onChange={setSourceFilter} />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Lô sản xuất"
         searchPlaceholder="Tìm theo số lô, tên sản phẩm..."
         searchValue={search}
         onSearchChange={setSearch}
+        density="compact"
         actions={[
           {
             label: "Gắn HSD cho tồn cũ",
@@ -271,86 +283,52 @@ export default function LoSanXuatPage() {
         ]}
       />
 
-      {/* Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary-fixed/15 text-primary">
-              <Icon name="inventory_2" size={16} />
-            </span>
-            <div>
-              <div className="text-2xl font-bold text-primary leading-tight">{data.length}</div>
-              <div className="text-xs text-muted-foreground">Tổng lô</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
-              <Icon name="check_circle" size={16} />
-            </span>
-            <div>
-              <div className="text-2xl font-bold text-status-success leading-tight">{activeLots}</div>
-              <div className="text-xs text-muted-foreground">Đang hoạt động</div>
-            </div>
-          </div>
-        </div>
-        <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex size-8 items-center justify-center rounded-lg bg-surface-container-high text-foreground">
-              <Icon name="inventory" size={16} />
-            </span>
-            <div>
-              <div className="text-2xl font-bold text-foreground leading-tight">
-                {formatNumber(totalQty)}
-              </div>
-              <div className="text-xs text-muted-foreground">Tổng SL hiện tại</div>
-            </div>
-          </div>
-        </div>
-        {expiredCount > 0 ? (
-          <div className="bg-status-error/10 rounded-xl border border-status-error/25 p-3 ambient-shadow">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-error/15 text-status-error">
-                <Icon name="warning" size={16} />
-              </span>
-              <div>
-                <div className="text-2xl font-bold text-status-error leading-tight">{expiredCount}</div>
-                <div className="text-xs text-status-error/80">Đã hết hạn</div>
-              </div>
-            </div>
-          </div>
-        ) : nearExpiryCount > 0 ? (
-          <div className="bg-status-warning/10 rounded-xl border border-status-warning/25 p-3 ambient-shadow">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-warning/15 text-status-warning">
-                <Icon name="schedule" size={16} />
-              </span>
-              <div>
-                <div className="text-2xl font-bold text-status-warning leading-tight">{nearExpiryCount}</div>
-                <div className="text-xs text-status-warning/80">Sắp hết hạn (30 ngày)</div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-surface-container-lowest rounded-xl border border-border p-3 ambient-shadow">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
-                <Icon name="verified" size={16} />
-              </span>
-              <div>
-                <div className="text-2xl font-bold text-status-success leading-tight">0</div>
-                <div className="text-xs text-muted-foreground">Không lô sắp hết hạn</div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
+        density="compact"
+        columnToggle
+        toolbarMetrics={
+          <>
+            <ListMetric label="Kết quả đang xem" value={formatNumber(data.length)} tone="primary" />
+            <ListMetric label="Đang hoạt động" value={formatNumber(activeLots)} />
+            <ListMetric label="Số lượng đang xem" value={formatNumber(totalQty)} />
+            <ListMetric
+              label={expiredCount > 0 ? "Đã hết hạn" : "Sắp hết hạn (30 ngày)"}
+              value={formatNumber(expiredCount > 0 ? expiredCount : nearExpiryCount)}
+              tone={expiredCount > 0 ? "danger" : "default"}
+            />
+          </>
+        }
+        toolbarActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+            onClick={() => setFilterOpen(true)}
+          >
+            <Icon name="filter_alt" size={15} />
+            <span className="hidden sm:inline">Bộ lọc</span>
+            {filterChips.length > 0 && (
+              <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                {filterChips.length}
+              </span>
+            )}
+          </Button>
+        }
+        toolbarFooter={
+          filterChips.length > 0 ? (
+            <FilterChips
+              filters={filterChips}
+              onClearAll={() => {
+                setStatusFilter("all");
+                setSourceFilter("all");
+              }}
+            />
+          ) : null
+        }
         rowActions={(row) =>
           buildTransactionRowActions({
             row,
@@ -361,6 +339,24 @@ export default function LoSanXuatPage() {
           })
         }
       />
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={() => {
+          setStatusFilter("all");
+          setSourceFilter("all");
+        }}
+        title="Bộ lọc lô sản xuất"
+      >
+        <FilterGroup label="Trạng thái">
+          <SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} />
+        </FilterGroup>
+        <FilterGroup label="Nguồn">
+          <SelectFilter options={sourceOptions} value={sourceFilter} onChange={setSourceFilter} />
+        </FilterGroup>
+      </FilterPanel>
 
       {auditDialogTarget && (
         <AuditLogDialog
