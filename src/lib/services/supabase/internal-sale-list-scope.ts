@@ -15,7 +15,7 @@ export function phamViBanNoiBo(opts: {
   viewAllBranches: boolean;
   duocXemToanChuoi: boolean;
 }): PhamViBanNoiBo {
-  if (opts.viewAllBranches && opts.duocXemToanChuoi) {
+  if (opts.duocXemToanChuoi && (opts.viewAllBranches || !opts.activeBranchId)) {
     return { mode: "all", duocDemChiNhanhKhac: false };
   }
   if (opts.activeBranchId) {

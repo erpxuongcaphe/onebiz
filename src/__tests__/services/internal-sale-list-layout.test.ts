@@ -197,6 +197,18 @@ describe("dịch vụ danh sách Bán nội bộ", () => {
 });
 
 describe("phạm vi chi nhánh Bán nội bộ", () => {
+  it("global switcher chọn tất cả và có quyền thì truy vấn toàn chuỗi", async () => {
+    const scope = phamViBanNoiBo({
+      activeBranchId: undefined,
+      viewAllBranches: false,
+      duocXemToanChuoi: true,
+    });
+    await getInternalSalesTheoPhamVi(scope, { page: 1, pageSize: 15 });
+    expect(scope.mode).toBe("all");
+    expect(queryCalls.length).toBeGreaterThan(0);
+    expect(queryCalls.some((call) => call.args.includes("branch-1"))).toBe(false);
+  });
+
   it("không có chi nhánh và không có quyền toàn chuỗi thì không truy vấn", async () => {
     const scope = phamViBanNoiBo({
       activeBranchId: undefined,

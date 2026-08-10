@@ -12,7 +12,7 @@ export function phamViTraHang(opts: {
   viewAllBranches: boolean;
   duocXemToanChuoi: boolean;
 }): PhamViTraHang {
-  if (opts.viewAllBranches && opts.duocXemToanChuoi) {
+  if (opts.duocXemToanChuoi && (opts.viewAllBranches || !opts.activeBranchId)) {
     return { mode: "all", duocDemChiNhanhKhac: false };
   }
   if (opts.activeBranchId) {

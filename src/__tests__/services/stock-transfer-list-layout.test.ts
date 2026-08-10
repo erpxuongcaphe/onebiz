@@ -192,6 +192,18 @@ describe("dich vu danh sach Chuyen kho", () => {
 });
 
 describe("pham vi chi nhanh Chuyen kho", () => {
+  it("global switcher chon tat ca va co quyen thi truy van toan chuoi", async () => {
+    const scope = phamViChuyenKho({
+      activeBranchId: undefined,
+      viewAllBranches: false,
+      duocXemToanChuoi: true,
+    });
+    await getStockTransfersTheoPhamVi(scope, { page: 0, pageSize: 15 });
+    expect(scope.mode).toBe("all");
+    expect(queryCalls.length).toBeGreaterThan(0);
+    expect(queryCalls.some((call) => call.args.includes("branch-1"))).toBe(false);
+  });
+
   it("khong co chi nhanh va khong co quyen toan chuoi thi khong truy van", async () => {
     const scope = phamViChuyenKho({
       activeBranchId: undefined,

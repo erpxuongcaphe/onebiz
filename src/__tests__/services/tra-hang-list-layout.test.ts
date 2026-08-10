@@ -196,6 +196,18 @@ describe("dịch vụ danh sách Trả hàng", () => {
 });
 
 describe("phạm vi chi nhánh Trả hàng", () => {
+  it("global switcher chọn tất cả và có quyền thì truy vấn toàn chuỗi", async () => {
+    const scope = phamViTraHang({
+      activeBranchId: undefined,
+      viewAllBranches: false,
+      duocXemToanChuoi: true,
+    });
+    await getReturnsTheoPhamVi(scope, { page: 0, pageSize: 15 });
+    expect(scope.mode).toBe("all");
+    expect(queryCalls.length).toBeGreaterThan(0);
+    expect(queryCalls.some((call) => call.args.includes("branch-1"))).toBe(false);
+  });
+
   it("không có chi nhánh và không bật toàn chuỗi thì không truy vấn", async () => {
     const scope = phamViTraHang({
       activeBranchId: undefined,
