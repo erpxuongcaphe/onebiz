@@ -12,6 +12,7 @@
 
 import type { InternalSaleImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, handleError } from "./base";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
 
 // ────────────────────────────────────────────
 // Types
@@ -45,17 +46,52 @@ export interface InternalSaleResult {
   total: number;
 }
 
-// ────────────────────────────────────────────
-// Queries
-// ────────────────────────────────────────────
-
-export async function getInternalSales(params: {
+export interface InternalSalesListParams {
   page?: number;
   pageSize?: number;
   status?: string;
   branchId?: string;
   search?: string;
-}) {
+  searchField?: string;
+  filters?: Record<string, string | string[]>;
+}
+
+export interface InternalSaleListRow {
+  id: string;
+  code: string;
+  fromBranchId: string;
+  fromBranchCode: string;
+  fromBranchName: string;
+  toBranchId: string;
+  toBranchCode: string;
+  toBranchName: string;
+  invoiceId?: string;
+  inputInvoiceId?: string;
+  status: "draft" | "confirmed" | "completed" | "cancelled";
+  subtotal: number;
+  taxAmount: number;
+  total: number;
+  note?: string;
+  createdBy: string;
+  createdByName?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const VALID_INTERNAL_SALE_STATUSES = new Set([
+  "draft",
+  "confirmed",
+  "completed",
+  "cancelled",
+]);
+
+// ────────────────────────────────────────────
+// Queries
+// ────────────────────────────────────────────
+
+export async function getInternalSales(
+  params: InternalSalesListParams,
+): Promise<{ data: InternalSaleListRow[]; total: number }> {
   const supabase = getClient();
   // P0-11 fix 12/06/2026: filter tenant_id để chống cross-tenant leak khi RLS
   // bị bypass (multi-tenant SaaS). Trước đây query lấy bất kỳ internal_sales nào
@@ -66,23 +102,122 @@ export async function getInternalSales(params: {
   const from = (page - 1) * size;
   const to = from + size - 1;
 
-  let query = supabase
+  const search = params.search?.trim();
+  const fromBranchRelation =
+    search &&
+    (params.searchField === "from_branch_code" ||
+      params.searchField === "from_branch_name")
+      ? "from_branch:branches!internal_sales_from_branch_id_fkey!inner(code, name, tenant_id)"
+      : "from_branch:branches!internal_sales_from_branch_id_fkey(code, name)";
+  const toBranchRelation =
+    search &&
+    (params.searchField === "to_branch_code" ||
+      params.searchField === "to_branch_name")
+      ? "to_branch:branches!internal_sales_to_branch_id_fkey!inner(code, name, tenant_id)"
+      : "to_branch:branches!internal_sales_to_branch_id_fkey(code, name)";
+  const creatorRelation =
+    search && params.searchField === "creator_name"
+      ? "creator:profiles!internal_sales_created_by_fkey!inner(full_name, tenant_id)"
+      : "creator:profiles!internal_sales_created_by_fkey(full_name)";
+  const itemRelation =
+    search &&
+    (params.searchField === "product_code" ||
+      params.searchField === "product_name")
+      ? ", item_match:internal_sale_items!inner(product_code, product_name)"
+      : "";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("internal_sales")
     .select(
-      "*, from_branch:branches!internal_sales_from_branch_id_fkey(name), to_branch:branches!internal_sales_to_branch_id_fkey(name), creator:profiles!internal_sales_created_by_fkey(full_name)",
+      `*, ${fromBranchRelation}, ${toBranchRelation}, ${creatorRelation}${itemRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", ctx.tenantId)
     .order("created_at", { ascending: false })
     .range(from, to);
 
-  if (params.status) query = query.eq("status", params.status as any);
+  const rawStatuses = params.filters?.status ?? params.status;
+  if (rawStatuses && rawStatuses !== "all") {
+    const statuses = (Array.isArray(rawStatuses) ? rawStatuses : [rawStatuses]).filter(
+      (status) => VALID_INTERNAL_SALE_STATUSES.has(status),
+    );
+    if (statuses.length > 0) query = query.in("status", statuses);
+  }
+
+  query = applyCreatedAtRangeFilter(query, params.filters);
+
   if (params.branchId) {
     query = query.or(
       `from_branch_id.eq.${params.branchId},to_branch_id.eq.${params.branchId}`,
     );
   }
-  if (params.search) query = query.ilike("code", `%${params.search}%`);
+
+  const fromBranchId = params.filters?.fromBranchId;
+  const toBranchId = params.filters?.toBranchId;
+  const createdBy = params.filters?.createdBy;
+  if (typeof fromBranchId === "string" && fromBranchId) {
+    query = query.eq("from_branch_id", fromBranchId);
+  }
+  if (typeof toBranchId === "string" && toBranchId) {
+    query = query.eq("to_branch_id", toBranchId);
+  }
+  if (typeof createdBy === "string" && createdBy) {
+    query = query.eq("created_by", createdBy);
+  }
+
+  const amountMin = Number(params.filters?.amountMin);
+  const amountMax = Number(params.filters?.amountMax);
+  if (Number.isFinite(amountMin) && amountMin >= 0) {
+    query = query.gte("total", amountMin);
+  }
+  if (Number.isFinite(amountMax) && amountMax >= 0) {
+    query = query.lte("total", amountMax);
+  }
+
+  if (search) {
+    const escaped = search.replace(/[%_]/g, "\\$&");
+    switch (params.searchField) {
+      case "from_branch_code":
+        query = query
+          .eq("from_branch.tenant_id", ctx.tenantId)
+          .ilike("from_branch.code", `%${escaped}%`);
+        break;
+      case "from_branch_name":
+        query = query
+          .eq("from_branch.tenant_id", ctx.tenantId)
+          .ilike("from_branch.name", `%${escaped}%`);
+        break;
+      case "to_branch_code":
+        query = query
+          .eq("to_branch.tenant_id", ctx.tenantId)
+          .ilike("to_branch.code", `%${escaped}%`);
+        break;
+      case "to_branch_name":
+        query = query
+          .eq("to_branch.tenant_id", ctx.tenantId)
+          .ilike("to_branch.name", `%${escaped}%`);
+        break;
+      case "creator_name":
+        query = query
+          .eq("creator.tenant_id", ctx.tenantId)
+          .ilike("creator.full_name", `%${escaped}%`);
+        break;
+      case "product_code":
+        query = query.ilike("item_match.product_code", `%${escaped}%`);
+        break;
+      case "product_name":
+        query = query.ilike("item_match.product_name", `%${escaped}%`);
+        break;
+      case "note":
+        query = query.ilike("note", `%${escaped}%`);
+        break;
+      case "code":
+      default:
+        query = query.ilike("code", `%${escaped}%`);
+        break;
+    }
+  }
 
   const { data, count, error } = await query;
   if (error) handleError(error, "getInternalSales");
@@ -139,61 +274,46 @@ export async function getInternalSaleById(id: string) {
  * liên kết). Để đơn giản, export bỏ trống — user có thể chỉnh trong Excel
  * trước khi import. Default "debt" khi import lại.
  */
-export async function getInternalSalesForExport(params: {
-  search?: string;
-  status?: string;
-  branchId?: string;
-}): Promise<InternalSaleImportRow[]> {
+export async function getInternalSalesForExport(
+  params: Omit<InternalSalesListParams, "page" | "pageSize">,
+): Promise<InternalSaleImportRow[]> {
   const supabase = getClient();
-  // P0-11 fix 12/06/2026: filter tenant_id (defense-in-depth ngoài RLS).
-  const ctx = await getCurrentContext();
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let headerQuery: any = supabase
-    .from("internal_sales")
-    .select(
-      "id, code, note, status, from_branch:branches!internal_sales_from_branch_id_fkey(code), to_branch:branches!internal_sales_to_branch_id_fkey(code)"
-    )
-    .eq("tenant_id", ctx.tenantId)
-    .order("created_at", { ascending: false });
-
-  if (params.search) headerQuery = headerQuery.ilike("code", `%${params.search}%`);
-  if (params.status) headerQuery = headerQuery.eq("status", params.status);
-  if (params.branchId) {
-    headerQuery = headerQuery.or(
-      `from_branch_id.eq.${params.branchId},to_branch_id.eq.${params.branchId}`
-    );
+  const headerList: InternalSaleListRow[] = [];
+  const batchSize = 500;
+  for (let page = 1; ; page += 1) {
+    const result = await getInternalSales({
+      ...params,
+      page,
+      pageSize: batchSize,
+    });
+    headerList.push(...result.data);
+    if (headerList.length >= result.total || result.data.length < batchSize) break;
   }
-
-  const { data: headers, error: hErr } = await headerQuery;
-  if (hErr) handleError(hErr, "getInternalSalesForExport.headers");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const headerList = (headers ?? []) as any[];
   if (headerList.length === 0) return [];
 
-  const saleIds = headerList.map((h) => h.id as string);
+  const saleIds = headerList.map((header) => header.id);
+  const items: Array<Record<string, unknown>> = [];
+  for (let offset = 0; offset < saleIds.length; offset += 200) {
+    const { data, error } = await supabase
+      .from("internal_sale_items")
+      .select("internal_sale_id, product_code, quantity, unit_price, vat_rate")
+      .in("internal_sale_id", saleIds.slice(offset, offset + 200));
+    if (error) handleError(error, "getInternalSalesForExport.items");
+    items.push(...((data ?? []) as Array<Record<string, unknown>>));
+  }
 
-  const { data: items, error: iErr } = await supabase
-    .from("internal_sale_items")
-    .select("internal_sale_id, product_code, quantity, unit_price, vat_rate")
-    .in("internal_sale_id", saleIds);
-  if (iErr) handleError(iErr, "getInternalSalesForExport.items");
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const headerMap = new Map<string, any>();
+  const headerMap = new Map<string, InternalSaleListRow>();
   for (const h of headerList) headerMap.set(h.id, h);
 
   const rows: InternalSaleImportRow[] = [];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const it of (items ?? []) as any[]) {
-    const h = headerMap.get(it.internal_sale_id);
+  for (const it of items) {
+    const h = headerMap.get(it.internal_sale_id as string);
     if (!h) continue;
     rows.push({
-      code: h.code as string,
-      fromBranchCode: (h.from_branch?.code ?? "") as string,
-      toBranchCode: (h.to_branch?.code ?? "") as string,
-      note: (h.note ?? "") as string,
+      code: h.code,
+      fromBranchCode: h.fromBranchCode,
+      toBranchCode: h.toBranchCode,
+      note: h.note ?? "",
       productCode: (it.product_code ?? "") as string,
       quantity: Number(it.quantity ?? 0),
       unitPrice: Number(it.unit_price ?? 0),
@@ -373,17 +493,19 @@ export async function cancelInternalSale(id: string, reason?: string): Promise<v
 // Mapper
 // ────────────────────────────────────────────
 
-function mapInternalSale(row: Record<string, unknown>) {
-  const fromBranch = row.from_branch as { name: string } | null;
-  const toBranch = row.to_branch as { name: string } | null;
+function mapInternalSale(row: Record<string, unknown>): InternalSaleListRow {
+  const fromBranch = row.from_branch as { code?: string; name: string } | null;
+  const toBranch = row.to_branch as { code?: string; name: string } | null;
   const creator = row.creator as { full_name: string } | null;
 
   return {
     id: row.id as string,
     code: row.code as string,
     fromBranchId: row.from_branch_id as string,
+    fromBranchCode: fromBranch?.code ?? "",
     fromBranchName: fromBranch?.name ?? "",
     toBranchId: row.to_branch_id as string,
+    toBranchCode: toBranch?.code ?? "",
     toBranchName: toBranch?.name ?? "",
     invoiceId: (row.invoice_id as string) ?? undefined,
     inputInvoiceId: (row.input_invoice_id as string) ?? undefined,

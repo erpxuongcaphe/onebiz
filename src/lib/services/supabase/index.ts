@@ -567,7 +567,9 @@ export type {
 
 // Internal Sales (Bán hàng nội bộ giữa chi nhánh)
 export { getInternalSales, getInternalSaleById, getInternalSalesForExport, createInternalSale, cancelInternalSale } from "./internal-sales";
-export type { InternalSaleItemInput, CreateInternalSaleInput, InternalSaleResult } from "./internal-sales";
+export type { InternalSaleItemInput, CreateInternalSaleInput, InternalSaleResult, InternalSaleListRow, InternalSalesListParams } from "./internal-sales";
+export { phamViBanNoiBo, getInternalSalesTheoPhamVi, demBanNoiBoChiNhanhKhac } from "./internal-sale-list-scope";
+export type { PhamViBanNoiBo } from "./internal-sale-list-scope";
 
 // Production Dashboard
 export { getProductionKpis, getNvlStock, getProductionTrend, getTopOutputProducts, getActiveProductionOrders } from "./production-dashboard";
