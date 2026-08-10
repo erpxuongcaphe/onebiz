@@ -228,14 +228,19 @@ export interface ReturnOrder {
   invoiceCode: string;
   invoiceId?: string;
   date: string;
+  customerCode?: string;
   customerName: string;
+  customerPhone?: string;
   totalAmount: number;
-  status: "completed" | "draft";
+  refundedAmount: number;
+  status: "draft" | "confirmed" | "completed" | "cancelled";
   statusName: string;
+  createdById?: string;
   createdBy: string;
   /** Chi nhánh ghi nhận phiếu trả (resolved từ branches.name). */
   branchId?: string;
   branchName?: string;
+  reason?: string;
   /** 06/08: ghi chú phiếu trả — panel chi tiết từng đặt textarea trần nên không hiện. */
   note?: string;
 }

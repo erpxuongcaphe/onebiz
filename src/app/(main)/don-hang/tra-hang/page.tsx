@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
   DatePresetFilter,
   type DatePresetValue,
   PersonFilter,
+  RangeFilter,
+  SelectFilter,
 } from "@/components/shared/filter-sidebar";
-// CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
-import { STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -30,12 +36,14 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildReturnPrintData, toPrintLines } from "@/lib/print-templates";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
-  getReturns,
-  getReturnStatuses,
+  phamViTraHang,
+  getReturnsTheoPhamVi,
+  demTraHangChiNhanhKhac,
   getReturnItems,
+  getProfilesForPersonFilter,
   type ReturnItemRow,
 } from "@/lib/services";
 import type { ReturnOrder } from "@/lib/types";
@@ -50,8 +58,9 @@ const CreateReturnDialog = dynamic(
 );
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
-import { useTxRowPermissions } from "@/lib/permissions";
+import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 
 // --- Status config ---
 
@@ -59,19 +68,33 @@ const statusMap: Record<
   string,
   { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
+  draft: { label: "Phiếu tạm", variant: "secondary" },
+  confirmed: { label: "Đã xác nhận", variant: "secondary" },
   completed: { label: "Đã trả", variant: "default" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
-const returnTypeOptions = [
-  { label: "Theo hóa đơn", value: "by_invoice" },
-  { label: "Trả nhanh", value: "quick_return" },
-  { label: "Chuyển hoàn", value: "reverse" },
-];
-
 const returnStatusOptions = [
+  { label: "Phiếu tạm", value: "draft" },
+  { label: "Đã xác nhận", value: "confirmed" },
   { label: "Đã trả", value: "completed" },
   { label: "Đã hủy", value: "cancelled" },
+];
+
+const refundStateOptions = [
+  { label: "Tất cả", value: "all" },
+  { label: "Chưa ghi nhận hoàn tiền", value: "none" },
+  { label: "Đã ghi nhận hoàn tiền", value: "recorded" },
+];
+
+const searchFields = [
+  { value: "code", label: "Mã phiếu trả" },
+  { value: "invoice_code", label: "Mã hóa đơn" },
+  { value: "customer_name", label: "Tên khách hàng" },
+  { value: "customer_code", label: "Mã khách hàng" },
+  { value: "customer_phone", label: "Số điện thoại" },
+  { value: "reason", label: "Lý do trả" },
+  { value: "note", label: "Ghi chú" },
 ];
 
 // --- Inline Detail ---
@@ -133,10 +156,6 @@ function ReturnDetail({
                         <strong>{formatUser(undefined, returnOrder.createdBy)}</strong>
                       </span>
                       <span>
-                        Người nhận trả:{" "}
-                        <strong>{formatUser(undefined, returnOrder.createdBy)}</strong>
-                      </span>
-                      <span>
                         Ngày trả:{" "}
                         <strong>{formatDate(returnOrder.date)}</strong>
                       </span>
@@ -144,6 +163,11 @@ function ReturnDetail({
                         Hóa đơn gốc:{" "}
                         <strong>{returnOrder.invoiceCode}</strong>
                       </span>
+                      {returnOrder.customerCode && (
+                        <span>
+                          Mã KH: <strong>{returnOrder.customerCode}</strong>
+                        </span>
+                      )}
                     </div>
                   }
                 />
@@ -194,8 +218,19 @@ function ReturnDetail({
                         value: formatCurrency(returnOrder.totalAmount),
                         className: "font-bold text-base",
                       },
+                      {
+                        label: "Đã hoàn khách",
+                        value: formatCurrency(returnOrder.refundedAmount),
+                      },
                     ]}
                   />
+                )}
+
+                {returnOrder.reason && (
+                  <div className="rounded-md border bg-muted/20 px-3 py-2 text-sm">
+                    <span className="text-muted-foreground">Lý do trả: </span>
+                    <strong>{returnOrder.reason}</strong>
+                  </div>
                 )}
 
                 {/* 06/08: trước là <textarea> trần không hiện note đã lưu.
@@ -219,84 +254,150 @@ function ReturnDetail({
 
 export default function TraHangPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("sales_return");
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [searchField, setSearchField] = useState("code");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<ReturnOrder | null>(null);
 
   // Filters
-  const [selectedTypes, setSelectedTypes] = useState<string[]>([
-    "by_invoice",
-    "quick_return",
-    "reverse",
-  ]);
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
     "completed",
   ]);
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [createdBy, setCreatedBy] = useState("");
-  const [receiver, setReceiver] = useState("");
-  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
+  const [creatorOptions, setCreatorOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [refundState, setRefundState] = useState("all");
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
-  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  const requestSequence = useRef(0);
+
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
+
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
-    // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
-    // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
-    try {
-    const commonFilters = {
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
+
+  useEffect(() => {
+    if (!branchReady) return;
+    getProfilesForPersonFilter().then(setCreatorOptions).catch(() => setCreatorOptions([]));
+  }, [branchReady]);
+
+  const dateRange = useMemo(
+    () =>
+      datePreset === "custom"
+        ? { from: dateFrom || undefined, to: dateTo || undefined }
+        : computeListPresetRange(datePreset),
+    [dateFrom, datePreset, dateTo],
+  );
+
+  const commonFilters = useMemo<Record<string, string | string[]>>(
+    () => ({
       ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      ...(selectedTypes.length > 0 && { type: selectedTypes }),
-    };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
-    const result = await getReturns({
-      page,
-      pageSize,
-      search,
-      branchId: branchScope,
-      filters: commonFilters,
-    });
-    setData(result.data);
-    setTotal(result.total);
-    // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
-    // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getReturns({
-        page: 0,
-        pageSize: 1,
-        search,
-        branchId: undefined,
+      ...(dateRange.from && { dateFrom: dateRange.from }),
+      ...(dateRange.to && { dateTo: dateRange.to }),
+      ...(createdBy && { createdBy }),
+      ...(amountMin && { amountMin }),
+      ...(amountMax && { amountMax }),
+      ...(refundState !== "all" && { refundState }),
+    }),
+    [
+      amountMax,
+      amountMin,
+      createdBy,
+      dateRange.from,
+      dateRange.to,
+      refundState,
+      selectedStatuses,
+    ],
+  );
+
+  const phamVi = useMemo(
+    () =>
+      phamViTraHang({
+        activeBranchId,
+        viewAllBranches,
+        duocXemToanChuoi,
+      }),
+    [activeBranchId, duocXemToanChuoi, viewAllBranches],
+  );
+
+  const chuaCoPhamVi = phamVi.mode === "none";
+
+  const fetchData = useCallback(async () => {
+    if (!branchReady || permissionsLoading) return;
+    const requestId = ++requestSequence.current;
+    setLoading(true);
+    try {
+      const result = await getReturnsTheoPhamVi(phamVi, {
+        page,
+        pageSize,
+        search: debouncedSearch,
+        searchField,
         filters: commonFilters,
       });
-      setOtherBranchCount(all.total);
-    } else {
-      setOtherBranchCount(0);
-    }
+      if (requestId !== requestSequence.current) return;
+
+      setData(result.data);
+      setTotal(result.total);
+
+      const count =
+        result.data.length === 0
+          ? await demTraHangChiNhanhKhac(phamVi, {
+              search: debouncedSearch,
+              searchField,
+              filters: commonFilters,
+            })
+          : 0;
+      if (requestId === requestSequence.current) setOtherBranchCount(count);
     } catch (e) {
+      if (requestId !== requestSequence.current) return;
       toast({
         variant: "error",
         title: "Không tải được danh sách phiếu trả hàng",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [page, pageSize, search, selectedStatuses, selectedTypes, activeBranchId, viewAllBranches, toast]);
+  }, [
+    branchReady,
+    commonFilters,
+    debouncedSearch,
+    page,
+    pageSize,
+    permissionsLoading,
+    phamVi,
+    searchField,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -305,7 +406,18 @@ export default function TraHangPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, selectedTypes, datePreset, createdBy, receiver]);
+  }, [
+    amountMax,
+    amountMin,
+    createdBy,
+    dateFrom,
+    datePreset,
+    dateTo,
+    debouncedSearch,
+    refundState,
+    searchField,
+    selectedStatuses,
+  ]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {
@@ -316,36 +428,203 @@ export default function TraHangPage() {
     });
   };
 
-  const totalReturnAmount = data.reduce((sum, o) => sum + o.totalAmount, 0);
+  const pageReturnAmount = data.reduce((sum, item) => sum + item.totalAmount, 0);
+  const pageRefundedAmount = data.reduce(
+    (sum, item) => sum + item.refundedAmount,
+    0,
+  );
+  const pageOutstandingAmount = data.reduce(
+    (sum, item) => sum + Math.max(0, item.totalAmount - item.refundedAmount),
+    0,
+  );
 
-  const handleExport = (type: "excel" | "csv") => {
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") {
+      if (!dateFrom && !dateTo) return "Tùy chỉnh";
+      return `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    }
+    return (
+      STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)
+        ?.label ?? "Thời gian"
+    );
+  }, [dateFrom, datePreset, dateTo]);
+
+  const clearListFilters = useCallback(() => {
+    setSelectedStatuses([]);
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setCreatedBy("");
+    setAmountMin("");
+    setAmountMax("");
+    setRefundState("all");
+  }, []);
+
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") {
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value: datePresetLabel,
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    }
+    if (selectedStatuses.length > 0) {
+      chips.push({
+        key: "status",
+        label: "Trạng thái",
+        value: selectedStatuses
+          .map(
+            (value) =>
+              returnStatusOptions.find((option) => option.value === value)?.label ?? value,
+          )
+          .join(", "),
+        onClear: () => setSelectedStatuses([]),
+      });
+    }
+    if (createdBy) {
+      chips.push({
+        key: "creator",
+        label: "Người tạo",
+        value:
+          creatorOptions.find((option) => option.value === createdBy)?.label ??
+          "Đã chọn",
+        onClear: () => setCreatedBy(""),
+      });
+    }
+    if (amountMin || amountMax) {
+      chips.push({
+        key: "amount",
+        label: "Giá trị phiếu",
+        value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} đến ${
+          amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"
+        }`,
+        onClear: () => {
+          setAmountMin("");
+          setAmountMax("");
+        },
+      });
+    }
+    if (refundState !== "all") {
+      chips.push({
+        key: "refund",
+        label: "Hoàn tiền",
+        value:
+          refundStateOptions.find((option) => option.value === refundState)?.label ??
+          refundState,
+        onClear: () => setRefundState("all"),
+      });
+    }
+    return chips;
+  }, [
+    amountMax,
+    amountMin,
+    createdBy,
+    creatorOptions,
+    datePreset,
+    datePresetLabel,
+    refundState,
+    selectedStatuses,
+  ]);
+
+  const handleExport = useCallback(async (type: "excel" | "csv") => {
+    if (exporting || phamVi.mode === "none") return;
+    setExporting(true);
     const exportColumns = [
       { header: "Mã trả hàng", key: "code", width: 15 },
-      { header: "Người bán", key: "createdBy", width: 18 },
+      { header: "Mã hóa đơn", key: "invoiceCode", width: 15 },
       {
         header: "Thời gian",
         key: "date",
         width: 18,
         format: (v: string) => formatDate(v),
       },
+      { header: "Chi nhánh", key: "branchName", width: 22 },
+      { header: "Mã khách hàng", key: "customerCode", width: 16 },
       { header: "Khách hàng", key: "customerName", width: 25 },
+      { header: "Số điện thoại", key: "customerPhone", width: 16 },
       {
-        header: "Tổng tiền hàng",
+        header: "Giá trị trả hàng",
         key: "totalAmount",
         width: 15,
         format: (v: number) => v,
       },
       {
-        header: "Trạng thái",
-        key: "status",
+        header: "Đã hoàn khách",
+        key: "refundedAmount",
         width: 15,
-        format: (v: string) => statusMap[v]?.label ?? v,
+        format: (v: number) => v,
       },
+      { header: "Lý do trả", key: "reason", width: 30 },
+      { header: "Người tạo", key: "createdBy", width: 18 },
+      {
+        header: "Trạng thái",
+        key: "statusName",
+        width: 15,
+      },
+      { header: "Ghi chú", key: "note", width: 35 },
     ];
-    if (type === "excel")
-      exportToExcel(data, exportColumns, "danh-sach-tra-hang");
-    else exportToCsv(data, exportColumns, "danh-sach-tra-hang");
-  };
+    try {
+      const rows: ReturnOrder[] = [];
+      const seen = new Set<string>();
+      let exportPage = 0;
+      let expectedTotal = Number.POSITIVE_INFINITY;
+      while (rows.length < expectedTotal) {
+        const result = await getReturnsTheoPhamVi(phamVi, {
+          page: exportPage,
+          pageSize: 500,
+          search: debouncedSearch,
+          searchField,
+          filters: commonFilters,
+        });
+        expectedTotal = result.total;
+        for (const row of result.data) {
+          if (!seen.has(row.id)) {
+            seen.add(row.id);
+            rows.push(row);
+          }
+        }
+        if (result.data.length < 500) break;
+        exportPage += 1;
+      }
+
+      if (rows.length === 0) {
+        toast({ variant: "info", title: "Không có phiếu trả hàng để xuất" });
+        return;
+      }
+      if (type === "excel") {
+        exportToExcel(rows, exportColumns, "danh-sach-tra-hang");
+      } else {
+        exportToCsv(rows, exportColumns, "danh-sach-tra-hang");
+      }
+      toast({
+        variant: "success",
+        title: "Đã xuất danh sách trả hàng",
+        description: `${formatNumber(rows.length)} phiếu theo đúng bộ lọc`,
+      });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Không xuất được danh sách trả hàng",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại",
+      });
+    } finally {
+      setExporting(false);
+    }
+  }, [
+    commonFilters,
+    debouncedSearch,
+    exporting,
+    phamVi,
+    searchField,
+    toast,
+  ]);
 
   const columns: ColumnDef<ReturnOrder, unknown>[] = [
     {
@@ -370,9 +649,9 @@ export default function TraHangPage() {
       ),
     },
     {
-      accessorKey: "createdBy",
-      header: "Người bán",
-      size: 130,
+      accessorKey: "invoiceCode",
+      header: "Mã hóa đơn",
+      size: 120,
     },
     {
       accessorKey: "date",
@@ -384,9 +663,7 @@ export default function TraHangPage() {
       accessorKey: "customerCode",
       header: "Mã KH",
       size: 100,
-      cell: ({ row }) =>
-        (row.original as ReturnOrder & { customerCode?: string })
-          .customerCode ?? "-",
+      cell: ({ row }) => row.original.customerCode ?? "—",
     },
     {
       accessorKey: "customerName",
@@ -394,8 +671,20 @@ export default function TraHangPage() {
       size: 180,
     },
     {
+      accessorKey: "customerPhone",
+      header: "Số điện thoại",
+      size: 125,
+      cell: ({ row }) => row.original.customerPhone ?? "—",
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 150,
+      cell: ({ row }) => row.original.branchName ?? "—",
+    },
+    {
       accessorKey: "totalAmount",
-      header: "Tổng tiền hàng",
+      header: "Giá trị trả hàng",
       cell: ({ row }) => (
         <span className="text-right block">
           {formatCurrency(row.original.totalAmount)}
@@ -403,71 +692,55 @@ export default function TraHangPage() {
       ),
     },
     {
-      id: "refundAmount",
-      header: "Cần trả khách",
+      accessorKey: "refundedAmount",
+      header: "Đã hoàn khách",
       cell: ({ row }) => (
         <span className="text-right block text-primary font-semibold">
-          {formatCurrency(row.original.totalAmount)}
+          {formatCurrency(row.original.refundedAmount)}
         </span>
       ),
+    },
+    {
+      accessorKey: "reason",
+      header: "Lý do trả",
+      size: 180,
+      cell: ({ row }) => (
+        <span className="block max-w-[180px] truncate" title={row.original.reason}>
+          {row.original.reason || "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "createdBy",
+      header: "Người tạo",
+      size: 130,
+    },
+    {
+      accessorKey: "status",
+      header: "Trạng thái",
+      size: 120,
+      cell: ({ row }) => {
+        const status = statusMap[row.original.status];
+        return <Badge variant={status.variant}>{status.label}</Badge>;
+      },
     },
   ];
 
   return (
     <>
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Loại trả hàng">
-            <CheckboxFilter
-              options={returnTypeOptions}
-              selected={selectedTypes}
-              onChange={setSelectedTypes}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Trạng thái">
-            <CheckboxFilter
-              options={returnStatusOptions}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              presets={STANDARD_LIST_PRESETS}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Người tạo">
-            <PersonFilter
-              value={createdBy}
-              onChange={setCreatedBy}
-              placeholder="Chọn người tạo"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Người nhận trả">
-            <PersonFilter
-              value={receiver}
-              onChange={setReceiver}
-              placeholder="Chọn người nhận trả"
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Trả hàng"
-        searchPlaceholder="Theo mã phiếu trả, hóa đơn, khách hàng"
+        density="compact"
+        searchPlaceholder="Nhập nội dung tìm kiếm"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={searchFields}
+        searchField={searchField}
+        onSearchFieldChange={setSearchField}
         onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
+          excel: () => void handleExport("excel"),
+          csv: () => void handleExport("csv"),
         }}
         actions={[
           {
@@ -478,25 +751,6 @@ export default function TraHangPage() {
           },
         ]}
       />
-
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="undo" size={16} />}
-          label="Tổng phiếu trả"
-          value={total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Đã trả"
-          value={data.filter((r) => r.status === "completed").length.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="payments" size={16} />}
-          label="Tổng tiền trả khách"
-          value={formatCurrency(totalReturnAmount)}
-        />
-      </div>
 
       {viewAllBranches && (
         <AllBranchesBanner
@@ -510,11 +764,98 @@ export default function TraHangPage() {
         data={data}
         loading={loading}
         total={total}
-        emptyBranchHint={{
-          otherBranchCount,
-          onViewAllBranches: () => setViewAllBranches(true),
-          entityLabel: "phiếu trả hàng",
+        density="compact"
+        columnToggle
+        toolbarMetrics={
+          <>
+            <ListMetric
+              icon={<Icon name="undo" size={15} />}
+              label="Kết quả"
+              value={formatNumber(total)}
+              hint="Tổng số phiếu theo toàn bộ bộ lọc"
+            />
+            <ListMetric
+              icon={<Icon name="receipt_long" size={15} />}
+              label="Giá trị trang này"
+              value={formatCurrency(pageReturnAmount)}
+              hint={`Tổng của ${data.length} dòng đang hiển thị`}
+              tone="primary"
+            />
+            <ListMetric
+              icon={<Icon name="payments" size={15} />}
+              label="Đã hoàn trang này"
+              value={formatCurrency(pageRefundedAmount)}
+              hint={`Tổng của ${data.length} dòng đang hiển thị`}
+            />
+            <ListMetric
+              icon={<Icon name="pending_actions" size={15} />}
+              label="Còn hoàn trang này"
+              value={formatCurrency(pageOutstandingAmount)}
+              hint="Giá trị phiếu trừ số tiền đã hoàn trên trang hiện tại"
+              tone={pageOutstandingAmount > 0 ? "danger" : "default"}
+            />
+          </>
+        }
+        toolbarActions={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="calendar_today" size={15} />
+              <span className="hidden sm:inline">{datePresetLabel}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+              aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          </>
+        }
+        toolbarFooter={
+          <FilterChips
+            filters={filterChips}
+            onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+          />
+        }
+        defaultColumnVisibility={{
+          customerPhone: false,
+          branchName: false,
+          reason: false,
+          createdBy: false,
         }}
+        emptyTitle={
+          chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy phiếu trả hàng"
+        }
+        emptyDescription={
+          chuaCoPhamVi
+            ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
+            : "Thử thay đổi thời gian, trạng thái hoặc nội dung tìm kiếm."
+        }
+        emptyIcon={chuaCoPhamVi ? "apartment" : "undo"}
+        emptyBranchHint={
+          duocXemToanChuoi
+            ? {
+                otherBranchCount,
+                onViewAllBranches: () => setViewAllBranches(true),
+                entityLabel: "phiếu trả hàng",
+              }
+            : undefined
+        }
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -525,14 +866,15 @@ export default function TraHangPage() {
         }}
         selectable
         summaryRow={{
-          totalAmount: formatCurrency(totalReturnAmount),
-          refundAmount: formatCurrency(totalReturnAmount),
+          totalAmount: formatCurrency(pageReturnAmount),
+          refundedAmount: formatCurrency(pageRefundedAmount),
         }}
         expandedRow={expandedRow}
         onExpandedRowChange={setExpandedRow}
         renderDetail={(returnOrder, onClose) => (
           <ReturnDetail returnOrder={returnOrder} onClose={onClose} />
         )}
+        getRowId={(row) => row.id}
         rowActions={(row) =>
           buildTransactionRowActions({
             row,
@@ -564,6 +906,86 @@ export default function TraHangPage() {
           })
         }
       />
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc trả hàng"
+      >
+        <FilterGroup label="Thời gian tạo" activeHint={datePresetLabel}>
+          <DatePresetFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            presets={STANDARD_LIST_PRESETS_WITH_ALL}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Trạng thái"
+          activeHint={
+            selectedStatuses.length > 0
+              ? `${selectedStatuses.length} lựa chọn`
+              : undefined
+          }
+        >
+          <CheckboxFilter
+            options={returnStatusOptions}
+            selected={selectedStatuses}
+            onChange={setSelectedStatuses}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Người tạo"
+          activeHint={
+            creatorOptions.find((option) => option.value === createdBy)?.label
+          }
+        >
+          <PersonFilter
+            value={createdBy}
+            onChange={setCreatedBy}
+            placeholder="Chọn người tạo"
+            suggestions={creatorOptions}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Giá trị phiếu"
+          activeHint={amountMin || amountMax ? "Đang lọc" : undefined}
+        >
+          <RangeFilter
+            fromValue={amountMin}
+            toValue={amountMax}
+            onFromChange={setAmountMin}
+            onToChange={setAmountMax}
+            fromPlaceholder="Số tiền tối thiểu"
+            toPlaceholder="Số tiền tối đa"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Tình trạng hoàn tiền"
+          activeHint={
+            refundState === "all"
+              ? undefined
+              : refundStateOptions.find((option) => option.value === refundState)
+                  ?.label
+          }
+        >
+          <SelectFilter
+            options={refundStateOptions}
+            value={refundState}
+            onChange={setRefundState}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+      </FilterPanel>
     </ListPageLayout>
 
     <CreateReturnDialog

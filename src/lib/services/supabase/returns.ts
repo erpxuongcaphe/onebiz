@@ -4,33 +4,106 @@
 
 import type { ReturnOrder, QueryParams, QueryResult } from "@/lib/types";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+
+const VALID_RETURN_STATUSES = new Set([
+  "draft",
+  "confirmed",
+  "completed",
+  "cancelled",
+]);
 
 export async function getReturns(params: QueryParams): Promise<QueryResult<ReturnOrder>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
-  let query = supabase
+  const invoiceRelation =
+    params.search && params.searchField === "invoice_code"
+      ? "invoice:invoices!sales_returns_invoice_id_fkey!inner(code, tenant_id)"
+      : "invoice:invoices!sales_returns_invoice_id_fkey(code)";
+  const customerRelation =
+    params.search &&
+    (params.searchField === "customer_code" ||
+      params.searchField === "customer_phone")
+      ? "customer:customers!sales_returns_customer_id_fkey!inner(code, phone, tenant_id)"
+      : "customer:customers!sales_returns_customer_id_fkey(code, phone)";
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("sales_returns")
     .select(
-      "*, invoices!sales_returns_invoice_id_fkey(code), profiles!sales_returns_created_by_fkey(full_name), branches!sales_returns_branch_id_fkey(name)",
+      `*, ${invoiceRelation}, ${customerRelation}, creator:profiles!sales_returns_created_by_fkey(full_name), branch:branches!sales_returns_branch_id_fkey(name)`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId);
 
-  // Search
+  // Tìm theo đúng cột người dùng chọn. Quan hệ hóa đơn/khách hàng dùng
+  // !inner để bộ lọc ở bảng liên quan thực sự thu hẹp sales_returns.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    query = query.or(`code.ilike.%${esc}%`);
+    switch (params.searchField) {
+      case "invoice_code":
+        query = query
+          .eq("invoice.tenant_id", tenantId)
+          .ilike("invoice.code", `%${esc}%`);
+        break;
+      case "customer_name":
+        query = query.ilike("customer_name", `%${esc}%`);
+        break;
+      case "customer_code":
+        query = query
+          .eq("customer.tenant_id", tenantId)
+          .ilike("customer.code", `%${esc}%`);
+        break;
+      case "customer_phone":
+        query = query
+          .eq("customer.tenant_id", tenantId)
+          .ilike("customer.phone", `%${esc}%`);
+        break;
+      case "reason":
+        query = query.ilike("reason", `%${esc}%`);
+        break;
+      case "note":
+        query = query.ilike("note", `%${esc}%`);
+        break;
+      case "code":
+      default:
+        query = query.ilike("code", `%${esc}%`);
+        break;
+    }
   }
 
   // Filter: status — hỗ trợ cả mảng (nhiều trạng thái) lẫn 1 giá trị.
   // BUG cũ: .eq với mảng → so sánh status = cả mảng → khớp 0 dòng → ẩn sạch.
   if (params.filters?.status && params.filters.status !== "all") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const st = params.filters.status as any;
-    query = Array.isArray(st) ? query.in("status", st) : query.eq("status", st);
+    const raw = Array.isArray(params.filters.status)
+      ? params.filters.status
+      : [params.filters.status];
+    const statuses = raw.filter((status) => VALID_RETURN_STATUSES.has(status));
+    if (statuses.length > 0) query = query.in("status", statuses);
   }
+
+  query = applyCreatedAtRangeFilter(query, params.filters);
+
+  const createdBy = params.filters?.createdBy;
+  if (typeof createdBy === "string" && createdBy) {
+    query = query.eq("created_by", createdBy);
+  }
+
+  const amountMin = Number(params.filters?.amountMin);
+  const amountMax = Number(params.filters?.amountMax);
+  if (Number.isFinite(amountMin) && amountMin >= 0) {
+    query = query.gte("total", amountMin);
+  }
+  if (Number.isFinite(amountMax) && amountMax >= 0) {
+    query = query.lte("total", amountMax);
+  }
+
+  const refundState = params.filters?.refundState;
+  if (refundState === "none") query = query.lte("refunded", 0);
+  if (refundState === "recorded") query = query.gt("refunded", 0);
 
   // Filter: branch
   if (params.branchId) {
@@ -52,8 +125,10 @@ export async function getReturns(params: QueryParams): Promise<QueryResult<Retur
 export function getReturnStatuses() {
   return [
     { value: "all", label: "Tất cả" },
-    { value: "completed", label: "Hoàn thành" },
     { value: "draft", label: "Phiếu tạm" },
+    { value: "confirmed", label: "Đã xác nhận" },
+    { value: "completed", label: "Hoàn thành" },
+    { value: "cancelled", label: "Đã hủy" },
   ];
 }
 
@@ -68,21 +143,27 @@ function mapReturn(row: any): ReturnOrder {
     cancelled: "Đã hủy",
   };
 
-  const profile = row.profiles as { full_name: string } | null;
-  const branch = row.branches as { name: string } | null;
+  const profile = row.creator as { full_name: string } | null;
+  const branch = row.branch as { name: string } | null;
+  const customer = row.customer as { code?: string; phone?: string } | null;
   return {
     id: row.id,
     code: row.code,
-    invoiceCode: (row.invoices as { code: string } | null)?.code ?? "---",
+    invoiceCode: (row.invoice as { code: string } | null)?.code ?? "---",
     invoiceId: row.invoice_id ?? undefined,
     date: row.created_at,
+    customerCode: customer?.code ?? undefined,
     customerName: row.customer_name,
-    totalAmount: row.total,
-    status: row.status === "completed" ? "completed" : "draft",
+    customerPhone: customer?.phone ?? undefined,
+    totalAmount: Number(row.total ?? 0),
+    refundedAmount: Number(row.refunded ?? 0),
+    status: VALID_RETURN_STATUSES.has(row.status) ? row.status : "draft",
     statusName: statusNameMap[row.status] ?? row.status,
+    createdById: row.created_by ?? undefined,
     createdBy: profile?.full_name ?? row.created_by,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
+    reason: row.reason ?? undefined,
     // 06/08: select("*") đã kéo note từ trước nhưng mapper bỏ rơi → panel
     // chi tiết không có gì để hiện.
     note: row.note ?? undefined,

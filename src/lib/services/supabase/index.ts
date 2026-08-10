@@ -83,6 +83,8 @@ export {
 export type { PhamViDonDatHang } from "./sales-order-list-scope";
 export { getReturns, getReturnStatuses, getReturnItems } from "./returns";
 export type { ReturnItemRow } from "./returns";
+export { phamViTraHang, getReturnsTheoPhamVi, demTraHangChiNhanhKhac } from "./return-list-scope";
+export type { PhamViTraHang } from "./return-list-scope";
 export { createSalesReturnAtomic } from "./returns-completion";
 export {
   getShippingOrders,
