@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
   SelectFilter,
@@ -30,6 +31,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildGoodsReceiptPrintData, toPrintLines } from "@/lib/print-templates";
@@ -467,6 +469,7 @@ function PurchaseOrderDetail({
 export default function NhapHangPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const router = useRouter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("goods_receipt");
@@ -525,13 +528,18 @@ export default function NhapHangPage() {
   const [creatorFilter, setCreatorFilter] = useState("");
   const [importerFilter, setImporterFilter] = useState("");
   const [costReturnFilter, setCostReturnFilter] = useState("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
 
   const statuses = getPurchaseOrderStatuses();
 
@@ -603,6 +611,14 @@ export default function NhapHangPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) {
+      setData([]);
+      setTotal(0);
+      setOtherBranchCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -618,7 +634,7 @@ export default function NhapHangPage() {
       ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
     };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
+    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
     const result = await getPurchaseOrders({
       page,
       pageSize,
@@ -631,7 +647,7 @@ export default function NhapHangPage() {
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       const all = await getPurchaseOrders({
         page: 0,
         pageSize: 1,
@@ -653,7 +669,7 @@ export default function NhapHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast]);
+  }, [page, pageSize, search, searchField, selectedStatuses, creatorFilter, importerFilter, costReturnFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -1008,73 +1024,30 @@ export default function NhapHangPage() {
   const kpiTotalOwed = data.reduce((sum, d) => sum + (d.amountOwed ?? 0), 0);
   const kpiPartial = data.filter((d) => d.status === "partial").length;
   const kpiCompleted = data.filter((d) => d.status === "completed").length;
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    return STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+  }, [dateFrom, datePreset, dateTo]);
+  const defaultStatuses = useMemo(() => ["draft", "ordered", "partial", "completed"], []);
+  const clearListFilters = useCallback(() => { setSelectedStatuses(defaultStatuses); setDatePreset("this_month"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setImporterFilter(""); setCostReturnFilter("all"); }, [defaultStatuses]);
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "this_month") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("this_month"); setDateFrom(""); setDateTo(""); } });
+    if (selectedStatuses.join("|") !== defaultStatuses.join("|")) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.length === 0 ? "Tất cả" : selectedStatuses.map((value) => statuses.find((item) => item.value === value)?.label ?? value).join(", "), onClear: () => setSelectedStatuses(defaultStatuses) });
+    if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
+    if (importerFilter) chips.push({ key: "importer", label: "Người nhập", value: importerFilter, onClear: () => setImporterFilter("") });
+    if (costReturnFilter !== "all") chips.push({ key: "cost", label: "Chi phí nhập trả NCC", value: costReturnFilter === "has_cost" ? "Có chi phí" : "Không chi phí", onClear: () => setCostReturnFilter("all") });
+    return chips;
+  }, [costReturnFilter, creatorFilter, datePreset, datePresetLabel, defaultStatuses, importerFilter, selectedStatuses, statuses]);
 
   /* ---- Render ---- */
   return (
     <>
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <CheckboxFilter
-              options={statuses}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={STANDARD_LIST_PRESETS}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Người tạo">
-            <PersonFilter
-              value={creatorFilter}
-              onChange={setCreatorFilter}
-              placeholder="Chọn người tạo"
-              suggestions={[
-                { label: "Admin", value: "admin" },
-                { label: "Cao Thị Huyền Trang", value: "trang" },
-              ]}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Người nhập">
-            <PersonFilter
-              value={importerFilter}
-              onChange={setImporterFilter}
-              placeholder="Chọn người nhập"
-              suggestions={[
-                { label: "Admin", value: "admin" },
-                { label: "Cao Thị Huyền Trang", value: "trang" },
-              ]}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Chi phí nhập trả NCC">
-            <SelectFilter
-              options={[
-                { label: "Có chi phí", value: "has_cost" },
-                { label: "Không chi phí", value: "no_cost" },
-              ]}
-              value={costReturnFilter}
-              onChange={setCostReturnFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Nhập hàng"
+        density="compact"
         searchPlaceholder="Theo mã phiếu nhập, mã NCC, tên NCC"
         searchValue={search}
         onSearchChange={setSearch}
@@ -1112,34 +1085,6 @@ export default function NhapHangPage() {
           },
         ]}
       />
-
-      {!loading && data.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-          <SummaryCard
-            icon={<Icon name="receipt_long" size={16} />}
-            label="Tổng phiếu nhập"
-            value={total.toString()}
-          />
-          <SummaryCard
-            icon={<Icon name="hourglass_bottom" size={16} />}
-            label="Đang nhận"
-            value={kpiPartial.toString()}
-            highlight={kpiPartial > 0}
-          />
-          <SummaryCard
-            icon={<Icon name="check_circle" size={16} />}
-            label="Đã hoàn tất"
-            value={kpiCompleted.toString()}
-          />
-          <SummaryCard
-            icon={<Icon name="payments" size={16} />}
-            label="Công nợ NCC"
-            value={formatCurrency(kpiTotalOwed)}
-            hint={`Tổng GTGT: ${formatCurrency(kpiTotalAmount)}`}
-            danger={kpiTotalOwed > 0}
-          />
-        </div>
-      )}
 
       {viewAllBranches && (
         <AllBranchesBanner
@@ -1192,11 +1137,16 @@ export default function NhapHangPage() {
         data={data}
         loading={loading}
         total={total}
-        emptyBranchHint={{
+        density="compact"
+        columnToggle
+        toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_bottom" size={15} />} label="Đang nhận trang này" value={kpiPartial.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={kpiPartial > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất trang này" value={kpiCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="payments" size={15} />} label="Công nợ trang này" value={formatCurrency(kpiTotalOwed)} hint={`Giá trị trang này: ${formatCurrency(kpiTotalAmount)}`} tone={kpiTotalOwed > 0 ? "danger" : "default"} /></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
           entityLabel: "phiếu nhập",
-        }}
+        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -1454,6 +1404,14 @@ export default function NhapHangPage() {
         }}
       />
       )}
+
+      <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc nhập hàng">
+        <FilterGroup label="Trạng thái"><CheckboxFilter options={statuses} selected={selectedStatuses} onChange={setSelectedStatuses} /></FilterGroup>
+        <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS} /></FilterGroup>
+        <FilterGroup label="Người tạo" activeHint={creatorFilter || undefined}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} /></FilterGroup>
+        <FilterGroup label="Người nhập" activeHint={importerFilter || undefined}><PersonFilter value={importerFilter} onChange={setImporterFilter} placeholder="Chọn người nhập" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} /></FilterGroup>
+        <FilterGroup label="Chi phí nhập trả NCC" activeHint={costReturnFilter === "all" ? undefined : costReturnFilter === "has_cost" ? "Có chi phí" : "Không chi phí"}><SelectFilter options={[{ label: "Có chi phí", value: "has_cost" }, { label: "Không chi phí", value: "no_cost" }]} value={costReturnFilter} onChange={setCostReturnFilter} placeholder="Tất cả" /></FilterGroup>
+      </FilterPanel>
     </ListPageLayout>
 
     <CreatePurchaseOrderDialog
