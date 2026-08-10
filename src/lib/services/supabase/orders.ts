@@ -27,7 +27,10 @@ import {
   type PosCheckoutItem,
 } from "./pos-checkout";
 import { recordAuditLog } from "./audit";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {
+  applyCreatedAtRangeFilter,
+  normalizeCreatedAtRange,
+} from "@/lib/utils/list-date-preset-range";
 
 // ============================================================
 // Sales Orders — real Supabase queries against `sales_orders`
@@ -64,10 +67,60 @@ export async function getOrders(
   // tất rớt khỏi list. Đơn hoàn thành vẫn hiện ở CẢ trang Hóa đơn (chủ đích).
   // Bảng sales_orders là hệ CŨ (0 dữ liệu, không nút nào ghi vào).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const partnerId =
+    typeof params.filters?.deliveryPartnerId === "string" &&
+    params.filters.deliveryPartnerId !== "all"
+      ? params.filters.deliveryPartnerId
+      : undefined;
+  const shippingDateFrom =
+    typeof params.filters?.shippingDateFrom === "string"
+      ? params.filters.shippingDateFrom
+      : undefined;
+  const shippingDateTo =
+    typeof params.filters?.shippingDateTo === "string"
+      ? params.filters.shippingDateTo
+      : undefined;
+  const deliveryArea =
+    typeof params.filters?.deliveryArea === "string"
+      ? params.filters.deliveryArea.trim()
+      : "";
+  const fulfillmentState =
+    typeof params.filters?.fulfillmentState === "string"
+      ? params.filters.fulfillmentState
+      : "all";
+  const debtState =
+    typeof params.filters?.debtState === "string"
+      ? params.filters.debtState
+      : "all";
+  const shippingState =
+    typeof params.filters?.shippingState === "string"
+      ? params.filters.shippingState
+      : "all";
+  const amountMin = Number(params.filters?.amountMin);
+  const amountMax = Number(params.filters?.amountMax);
+  const hasCustomerPhoneFilter = Boolean(
+    params.search && params.searchField === "customer_phone",
+  );
+  const hasShippingFilter = Boolean(
+    partnerId ||
+      shippingDateFrom ||
+      shippingDateTo ||
+      deliveryArea ||
+      shippingState !== "all",
+  );
+  const customerRelation = hasCustomerPhoneFilter
+    ? "customer:customers!invoices_customer_id_fkey!inner(phone, tenant_id)"
+    : "customer:customers!invoices_customer_id_fkey(phone)";
+  const shipmentRelation = hasShippingFilter
+    ? shippingState === "none"
+      ? ", shipments:shipping_orders!shipping_orders_invoice_id_fkey(id)"
+      : ", shipments:shipping_orders!shipping_orders_invoice_id_fkey!inner(id)"
+    : "";
+
   let query = (supabase as any)
     .from("invoices")
     .select(
-      "*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name)",
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -90,19 +143,74 @@ export async function getOrders(
   // toàn cả trước/sau migration (trước: cột thiếu → fulfilledById undefined →
   // không loại gì, cũng đúng vì chưa có đơn nào fulfilled).
 
-  // Search by mã hoặc tên khách. Escape % để tránh wildcard injection.
+  // Tìm theo đúng nội dung đang hiển thị: mã DH gốc, mã chứng từ hiện tại,
+  // tên hoặc SĐT khách. Escape wildcard để chuỗi người dùng là chuỗi thường.
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
-    if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
+    if (params.searchField === "code") {
+      query = query.or(`code.ilike.%${esc}%,order_code.ilike.%${esc}%`);
+    }
     else if (params.searchField === "customer_name")
       query = query.ilike("customer_name", `%${esc}%`);
+    else if (params.searchField === "customer_phone") {
+      query = query
+        .eq("customer.tenant_id", tenantId)
+        .ilike("customer.phone", `%${esc}%`);
+    }
     else
-      query = query.or(`code.ilike.%${esc}%,customer_name.ilike.%${esc}%`);
+      query = query.or(
+        `code.ilike.%${esc}%,order_code.ilike.%${esc}%,customer_name.ilike.%${esc}%`,
+      );
   }
 
   // Filter: khoảng ngày (created_at) — timezone-safe. FIX (CEO 08/07): trang có
   // ô "Thời gian" nhưng trước đây KHÔNG áp ngày; nay truyền dateFrom/dateTo.
   query = applyCreatedAtRangeFilter(query, params.filters);
+
+  if (fulfillmentState === "pending") {
+    query = query.is("fulfilled_by_id", null);
+  } else if (fulfillmentState === "fulfilled") {
+    query = query.not("fulfilled_by_id", "is", null);
+  }
+
+  if (debtState === "outstanding") {
+    query = query.gt("debt", 0);
+  } else if (debtState === "settled") {
+    query = query.lte("debt", 0);
+  }
+
+  if (Number.isFinite(amountMin) && amountMin >= 0) {
+    query = query.gte("total", amountMin);
+  }
+  if (Number.isFinite(amountMax) && amountMax >= 0) {
+    query = query.lte("total", amountMax);
+  }
+
+  // Ba bộ lọc vận chuyển cùng đi qua quan hệ !inner: chỉ giữ đơn có ít nhất
+  // một vận đơn khớp. PostgREST vẫn trả mỗi hóa đơn một lần dù có nhiều vận đơn.
+  if (hasShippingFilter) {
+    const shippingRange = normalizeCreatedAtRange({
+      dateFrom: shippingDateFrom,
+      dateTo: shippingDateTo,
+    });
+    if (shippingState === "none") {
+      query = query.is("shipments", null);
+    } else if (shippingState !== "all" && shippingState !== "any") {
+      query = query.eq("shipments.status", shippingState);
+    }
+    query = query.eq("shipments.tenant_id", tenantId);
+    if (partnerId) query = query.eq("shipments.partner_id", partnerId);
+    if (shippingRange.from) {
+      query = query.gte("shipments.created_at", shippingRange.from);
+    }
+    if (shippingRange.toExclusive) {
+      query = query.lt("shipments.created_at", shippingRange.toExclusive);
+    }
+    if (deliveryArea) {
+      const escArea = deliveryArea.replace(/[%_]/g, "\\$&");
+      query = query.ilike("shipments.receiver_address", `%${escArea}%`);
+    }
+  }
 
   // Filter: branch (falsy = tất cả chi nhánh).
   if (params.branchId) {
@@ -121,6 +229,7 @@ export async function getOrders(
   const orders: SalesOrder[] = (data ?? []).map((row: any) => {
     const profile = row.profiles as { full_name: string } | null;
     const branch = row.branches as { name: string } | null;
+    const customer = row.customer as { phone: string | null } | null;
     return {
       id: row.id,
       // CEO 10/07: hiện MÃ ĐƠN gốc (DH). Trước hoàn tất code=DH; sau hoàn tất
@@ -130,7 +239,7 @@ export async function getOrders(
       invoiceCode: row.order_code ? row.code : undefined,
       date: row.created_at,
       customerName: row.customer_name ?? "",
-      customerPhone: row.customer_phone ?? "",
+      customerPhone: customer?.phone ?? "",
       totalAmount: row.total ?? 0,
       // Phí giao = cột delivery_fee (invoices KHÔNG có shipping_fee).
       shippingFee: Number(row.delivery_fee ?? 0),
@@ -184,6 +293,144 @@ export function getOrderStatuses() {
     { value: "completed", label: "Hoàn thành" },
     { value: "cancelled", label: "Đã hủy" },
   ];
+}
+
+// ============================================================
+// Read-only summary for the Sales Order list (RPC 00306)
+// ============================================================
+
+export interface SalesOrderListSummary {
+  tongDon: number;
+  tongTienHang: number;
+  tongPhiGiao: number;
+  tongCanThu: number;
+}
+
+export interface SalesOrderListSummaryParams {
+  branchId?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  statuses?: string[];
+  search?: string;
+  searchField?: string;
+  deliveryPartnerId?: string;
+  shippingDateFrom?: string;
+  shippingDateTo?: string;
+  deliveryArea?: string;
+  fulfillmentState?: string;
+  debtState?: string;
+  shippingState?: string;
+  amountMin?: number;
+  amountMax?: number;
+}
+
+export async function getSalesOrderListSummary(
+  params: SalesOrderListSummaryParams,
+): Promise<SalesOrderListSummary> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const orderRange = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+  const shippingRange = normalizeCreatedAtRange({
+    dateFrom: params.shippingDateFrom,
+    dateTo: params.shippingDateTo,
+  });
+
+  const { data, error } = await supabase.rpc("get_sales_order_list_summary", {
+    p_branch_id: params.branchId ?? null,
+    p_date_from: orderRange.from ?? null,
+    p_date_to_exclusive: orderRange.toExclusive ?? null,
+    p_statuses:
+      params.statuses && params.statuses.length > 0 ? params.statuses : null,
+    p_search: params.search?.trim() || null,
+    p_search_field: params.searchField ?? "all",
+    p_delivery_partner_id:
+      params.deliveryPartnerId && params.deliveryPartnerId !== "all"
+        ? params.deliveryPartnerId
+        : null,
+    p_shipping_date_from: shippingRange.from ?? null,
+    p_shipping_date_to_exclusive: shippingRange.toExclusive ?? null,
+    p_delivery_area: params.deliveryArea?.trim() || null,
+    p_fulfillment_state:
+      params.fulfillmentState && params.fulfillmentState !== "all"
+        ? params.fulfillmentState
+        : null,
+    p_debt_state:
+      params.debtState && params.debtState !== "all" ? params.debtState : null,
+    p_shipping_state:
+      params.shippingState && params.shippingState !== "all"
+        ? params.shippingState
+        : null,
+    p_amount_min:
+      typeof params.amountMin === "number" &&
+      Number.isFinite(params.amountMin) &&
+      params.amountMin >= 0
+        ? params.amountMin
+        : null,
+    p_amount_max:
+      typeof params.amountMax === "number" &&
+      Number.isFinite(params.amountMax) &&
+      params.amountMax >= 0
+        ? params.amountMax
+        : null,
+  });
+  if (error) handleError(error, "getSalesOrderListSummary");
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    tongDon: Number(row?.tong_don ?? 0),
+    tongTienHang: Number(row?.tong_tien_hang ?? 0),
+    tongPhiGiao: Number(row?.tong_phi_giao ?? 0),
+    tongCanThu: Number(row?.tong_can_thu ?? 0),
+  };
+}
+
+export function khoaChiSoDonDatHang(
+  params: SalesOrderListSummaryParams,
+): string {
+  return JSON.stringify([
+    params.branchId ?? "",
+    params.dateFrom ?? "",
+    params.dateTo ?? "",
+    [...(params.statuses ?? [])].sort(),
+    params.search ?? "",
+    params.searchField ?? "all",
+    params.deliveryPartnerId ?? "",
+    params.shippingDateFrom ?? "",
+    params.shippingDateTo ?? "",
+    params.deliveryArea ?? "",
+    params.fulfillmentState ?? "",
+    params.debtState ?? "",
+    params.shippingState ?? "",
+    params.amountMin ?? "",
+    params.amountMax ?? "",
+  ]);
+}
+
+/** Nhớ tạm theo bộ lọc, đồng thời chặn kết quả cũ về muộn ghi đè bộ lọc mới. */
+export function taoBoNhoChiSoDonDatHang() {
+  let luotHienTai = 0;
+  const nho = new Map<string, SalesOrderListSummary>();
+  return {
+    batDau(khoa: string): {
+      luot: number;
+      sanCo: SalesOrderListSummary | undefined;
+    } {
+      return { luot: ++luotHienTai, sanCo: nho.get(khoa) };
+    },
+    conMoiNhat(luot: number): boolean {
+      return luot === luotHienTai;
+    },
+    luu(khoa: string, ketQua: SalesOrderListSummary): void {
+      nho.set(khoa, ketQua);
+    },
+    xoaHet(): void {
+      nho.clear();
+      luotHienTai += 1;
+    },
+  };
 }
 
 // ============================================================

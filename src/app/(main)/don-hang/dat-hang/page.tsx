@@ -1,23 +1,29 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
 import {
-  FilterSidebar,
+  FilterChips,
+  type ListFilterChip,
+} from "@/components/shared/filter-chips";
+import {
+  FilterPanel,
   FilterGroup,
   DatePresetFilter,
   type DatePresetValue,
   SelectFilter,
   CheckboxFilter,
 } from "@/components/shared/filter-sidebar";
+import { Input } from "@/components/ui/input";
 // CEO 06/06/2026 Phase 3: chuẩn hoá 11 preset thời gian
 import {
   STANDARD_LIST_PRESETS,
@@ -39,11 +45,20 @@ import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/form
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { computeListPresetRange } from "@/lib/utils/list-date-preset-range";
 import {
-  getOrders,
   cancelInvoice,
   getDraftOrderItems,
   getDraftOrderById,
   getShippingOrderByInvoice,
+  getPartnerOptionsAsync,
+  phamViDonDatHang,
+  getOrdersTheoPhamVi,
+  demDonDatHangChiNhanhKhac,
+  getChiSoDonDatHangTheoPhamVi,
+  khoaChiSoDonDatHang,
+  taoBoNhoChiSoDonDatHang,
+  type PhamViDonDatHang,
+  type SalesOrderListSummary,
+  type SalesOrderListSummaryParams,
   type SalesOrderItemRow,
 } from "@/lib/services";
 import type { EditOrderInput } from "@/components/shared/dialogs/create-order-dialog";
@@ -62,7 +77,7 @@ const CreateOrderDialog = dynamic(
 );
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
-import { useTxRowPermissions } from "@/lib/permissions";
+import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 // --- Status config ---
@@ -79,25 +94,59 @@ const statusMap: Record<
   cancelled: { label: "Đã hủy", variant: "destructive" },
 };
 
-// Bộ lọc trạng thái cho sidebar — chỉ 3 mốc chính người dùng quan tâm.
+// Trạng thái thật của invoices nguồn đơn đặt hàng.
 const statusFilterOptions = [
   { label: "Chờ xử lý", value: "draft" },
+  { label: "Đã xác nhận", value: "confirmed" },
+  { label: "Đang giao hàng", value: "delivering" },
   { label: "Hoàn thành", value: "completed" },
   { label: "Đã hủy", value: "cancelled" },
 ];
 
-const deliveryPartnerOptions = [
-  { label: "Giao Hàng Nhanh", value: "ghn" },
-  { label: "Giao Hàng Tiết Kiệm", value: "ghtk" },
-  { label: "Viettel Post", value: "vtp" },
-  { label: "J&T Express", value: "jt" },
+const fulfillmentOptions = [
+  { label: "Tất cả", value: "all" },
+  { label: "Chưa xuất hóa đơn", value: "pending" },
+  { label: "Đã xuất hóa đơn", value: "fulfilled" },
 ];
 
-const deliveryAreaOptions = [
-  { label: "Miền Bắc", value: "north" },
-  { label: "Miền Trung", value: "central" },
-  { label: "Miền Nam", value: "south" },
+const debtStateOptions = [
+  { label: "Tất cả", value: "all" },
+  { label: "Còn phải thu", value: "outstanding" },
+  { label: "Đã thu đủ", value: "settled" },
 ];
+
+const shippingStateOptions = [
+  { label: "Tất cả", value: "all" },
+  { label: "Chưa có vận đơn", value: "none" },
+  { label: "Đã có vận đơn", value: "any" },
+  { label: "Chờ lấy hàng", value: "pending" },
+  { label: "Đã lấy hàng", value: "picked_up" },
+  { label: "Đang giao", value: "in_transit" },
+  { label: "Đã giao", value: "delivered" },
+  { label: "Đã hoàn", value: "returned" },
+  { label: "Đã hủy vận đơn", value: "cancelled" },
+];
+
+function resolveDateRange(
+  preset: DatePresetValue,
+  customFrom: string,
+  customTo: string,
+) {
+  if (preset === "custom") {
+    return {
+      from: customFrom || undefined,
+      to: customTo || undefined,
+    };
+  }
+  return computeListPresetRange(preset);
+}
+
+function labelForOption(
+  options: Array<{ label: string; value: string }>,
+  value: string,
+) {
+  return options.find((option) => option.value === value)?.label ?? value;
+}
 
 // --- Inline detail ---
 
@@ -361,13 +410,25 @@ function OrderDetail({
 export default function DatHangPage() {
   const { toast } = useToast();
   const router = useRouter();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const {
+    activeBranchId,
+    currentBranch,
+    branches,
+    isReady: branchScopeReady,
+  } = useBranchFilter();
   const { printWithPicker, printerDialog } = usePrintWithPicker();
   const txPerms = useTxRowPermissions("sales_order");
+  const { hasAny } = usePermissions();
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
   const [data, setData] = useState<SalesOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const fetchLuotRef = useRef(0);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
   // CEO 05/07: ô "Tìm theo" — "all" = gộp mã+tên+SĐT như cũ.
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
@@ -384,73 +445,376 @@ export default function DatHangPage() {
 
   // Filters
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   // CEO 08/07: lọc trạng thái — rỗng = tất cả (đơn đã giữ đủ mọi trạng thái).
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [fulfillmentState, setFulfillmentState] = useState("all");
+  const [debtState, setDebtState] = useState("all");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [shippingState, setShippingState] = useState("all");
   const [deliveryPartner, setDeliveryPartner] = useState("all");
+  const [deliveryPartnerOptions, setDeliveryPartnerOptions] = useState<
+    Array<{ value: string; label: string }>
+  >([{ value: "all", label: "Tất cả" }]);
   const [deliveryDatePreset, setDeliveryDatePreset] =
     useState<DatePresetValue>("all");
-  const [deliveryArea, setDeliveryArea] = useState("all");
+  const [deliveryDateFrom, setDeliveryDateFrom] = useState("");
+  const [deliveryDateTo, setDeliveryDateTo] = useState("");
+  const [deliveryArea, setDeliveryArea] = useState("");
+  const debouncedDeliveryArea = useDebounce(deliveryArea, 300);
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const phamViHienTai = useMemo(
+    () =>
+      phamViDonDatHang({
+        activeBranchId,
+        viewAllBranches,
+        duocXemToanChuoi,
+      }),
+    [activeBranchId, viewAllBranches, duocXemToanChuoi],
+  );
+  const chuaCoPhamVi = branchScopeReady && phamViHienTai.mode === "none";
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
 
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
+
+  useEffect(() => {
+    getPartnerOptionsAsync()
+      .then(setDeliveryPartnerOptions)
+      .catch(() => {
+        // Giữ lựa chọn "Tất cả"; danh sách đơn vẫn dùng được khi tải đối tác lỗi.
+      });
+  }, []);
+
+  const datePresetLabel =
+    STANDARD_LIST_PRESETS.find((preset) => preset.value === datePreset)?.label ??
+    "Thời gian";
+  const deliveryDateLabel =
+    STANDARD_LIST_PRESETS_WITH_ALL.find(
+      (preset) => preset.value === deliveryDatePreset,
+    )?.label ?? "Tất cả";
+  const orderDateDisplay =
+    datePreset === "custom"
+      ? `${dateFrom || "..."} đến ${dateTo || "..."}`
+      : datePresetLabel;
+  const shippingDateDisplay =
+    deliveryDatePreset === "custom"
+      ? `${deliveryDateFrom || "..."} đến ${deliveryDateTo || "..."}`
+      : deliveryDateLabel;
+  const deliveryPartnerLabel =
+    deliveryPartnerOptions.find((option) => option.value === deliveryPartner)
+      ?.label ?? deliveryPartner;
+  const filterChips: ListFilterChip[] = [];
+  if (datePreset !== "this_month") {
+    filterChips.push({
+      key: "order-date",
+      label: "Thời gian tạo đơn",
+      value: orderDateDisplay,
+      onClear: () => {
+        setDatePreset("this_month");
+        setDateFrom("");
+        setDateTo("");
+      },
+    });
+  }
+  if (selectedStatuses.length > 0) {
+    const labels = statusFilterOptions
+      .filter((option) => selectedStatuses.includes(option.value))
+      .map((option) => option.label);
+    filterChips.push({
+      key: "status",
+      label: "Trạng thái",
+      value: labels.join(", ") || `${selectedStatuses.length} lựa chọn`,
+      onClear: () => setSelectedStatuses([]),
+    });
+  }
+  if (deliveryPartner !== "all") {
+    filterChips.push({
+      key: "delivery-partner",
+      label: "Đối tác giao hàng",
+      value: deliveryPartnerLabel,
+      onClear: () => setDeliveryPartner("all"),
+    });
+  }
+  if (fulfillmentState !== "all") {
+    filterChips.push({
+      key: "fulfillment",
+      label: "Xuất hóa đơn",
+      value: labelForOption(fulfillmentOptions, fulfillmentState),
+      onClear: () => setFulfillmentState("all"),
+    });
+  }
+  if (debtState !== "all") {
+    filterChips.push({
+      key: "debt",
+      label: "Công nợ",
+      value: labelForOption(debtStateOptions, debtState),
+      onClear: () => setDebtState("all"),
+    });
+  }
+  if (amountMin || amountMax) {
+    filterChips.push({
+      key: "amount",
+      label: "Giá trị đơn",
+      value: `${amountMin || "0"} đến ${amountMax || "không giới hạn"}`,
+      onClear: () => {
+        setAmountMin("");
+        setAmountMax("");
+      },
+    });
+  }
+  if (shippingState !== "all") {
+    filterChips.push({
+      key: "shipping-state",
+      label: "Vận đơn",
+      value: labelForOption(shippingStateOptions, shippingState),
+      onClear: () => setShippingState("all"),
+    });
+  }
+  if (deliveryDatePreset !== "all") {
+    filterChips.push({
+      key: "shipping-date",
+      label: "Thời gian tạo vận đơn",
+      value: shippingDateDisplay,
+      onClear: () => {
+        setDeliveryDatePreset("all");
+        setDeliveryDateFrom("");
+        setDeliveryDateTo("");
+      },
+    });
+  }
+  if (debouncedDeliveryArea) {
+    filterChips.push({
+      key: "delivery-area",
+      label: "Địa chỉ giao hàng",
+      value: debouncedDeliveryArea,
+      onClear: () => setDeliveryArea(""),
+    });
+  }
+  const clearListFilters = () => {
+    setDatePreset("this_month");
+    setDateFrom("");
+    setDateTo("");
+    setSelectedStatuses([]);
+    setFulfillmentState("all");
+    setDebtState("all");
+    setAmountMin("");
+    setAmountMax("");
+    setShippingState("all");
+    setDeliveryPartner("all");
+    setDeliveryDatePreset("all");
+    setDeliveryDateFrom("");
+    setDeliveryDateTo("");
+    setDeliveryArea("");
+  };
+
+  const buildFilters = useCallback(() => {
+    const orderRange = resolveDateRange(datePreset, dateFrom, dateTo);
+    const shippingRange = resolveDateRange(
+      deliveryDatePreset,
+      deliveryDateFrom,
+      deliveryDateTo,
+    );
+    return {
+      ...(orderRange.from && { dateFrom: orderRange.from }),
+      ...(orderRange.to && { dateTo: orderRange.to }),
+      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
+      ...(fulfillmentState !== "all" && { fulfillmentState }),
+      ...(debtState !== "all" && { debtState }),
+      ...(amountMin && { amountMin }),
+      ...(amountMax && { amountMax }),
+      ...(shippingState !== "all" && { shippingState }),
+      ...(deliveryPartner !== "all" && {
+        deliveryPartnerId: deliveryPartner,
+      }),
+      ...(shippingRange.from && { shippingDateFrom: shippingRange.from }),
+      ...(shippingRange.to && { shippingDateTo: shippingRange.to }),
+      ...(debouncedDeliveryArea && { deliveryArea: debouncedDeliveryArea }),
+    } satisfies Record<string, string | string[]>;
+  }, [
+    datePreset,
+    dateFrom,
+    dateTo,
+    selectedStatuses,
+    fulfillmentState,
+    debtState,
+    amountMin,
+    amountMax,
+    shippingState,
+    deliveryPartner,
+    deliveryDatePreset,
+    deliveryDateFrom,
+    deliveryDateTo,
+    debouncedDeliveryArea,
+  ]);
+
   const fetchData = useCallback(async () => {
+    if (!branchScopeReady) return;
+    const luot = ++fetchLuotRef.current;
     setLoading(true);
     // Trước đây không có try/finally: truy vấn lỗi là cờ loading không bao giờ
     // tắt → trang treo mãi ở vòng xoay, không nói vì sao.
     try {
-    // FIX (CEO 08/07): áp ô "Thời gian" (trước đây không lọc ngày). getOrders
-    // đọc hóa đơn nháp — bỏ lọc status cũ (mọi đơn đều là nháp/chờ xử lý).
-    const presetRange = computeListPresetRange(datePreset);
-    const commonFilters: Record<string, string | string[]> = {
-      ...(presetRange.from && { dateFrom: presetRange.from }),
-      ...(presetRange.to && { dateTo: presetRange.to }),
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-    };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
-    const result = await getOrders({
+    const commonFilters = buildFilters();
+    const result = await getOrdersTheoPhamVi(phamViHienTai, {
       page,
       pageSize,
-      search,
+      search: debouncedSearch,
       searchField,
-      branchId: branchScope,
       filters: commonFilters,
     });
-    setData(result.data);
-    setTotal(result.total);
+    let soDonChiNhanhKhac = 0;
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getOrders({
-        page: 0,
-        pageSize: 1,
-        search,
+    if (result.data.length === 0) {
+      soDonChiNhanhKhac = await demDonDatHangChiNhanhKhac(phamViHienTai, {
+        search: debouncedSearch,
         searchField,
-        branchId: undefined,
         filters: commonFilters,
       });
-      setOtherBranchCount(all.total);
-    } else {
-      setOtherBranchCount(0);
     }
+    if (luot !== fetchLuotRef.current) return;
+    setData(result.data);
+    setTotal(result.total);
+    setOtherBranchCount(soDonChiNhanhKhac);
     } catch (e) {
+      if (luot !== fetchLuotRef.current) return;
       toast({
         variant: "error",
         title: "Không tải được danh sách đơn đặt hàng",
         description: e instanceof Error ? e.message : "Lỗi không xác định",
       });
     } finally {
-      setLoading(false);
+      if (luot === fetchLuotRef.current) setLoading(false);
     }
-  }, [page, pageSize, search, searchField, datePreset, selectedStatuses, activeBranchId, viewAllBranches, toast]);
+  }, [
+    branchScopeReady,
+    buildFilters,
+    phamViHienTai,
+    page,
+    pageSize,
+    debouncedSearch,
+    searchField,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const [chiSo, setChiSo] = useState<SalesOrderListSummary | null>(null);
+  const [chiSoLoi, setChiSoLoi] = useState(false);
+  const [nhipChiSo, setNhipChiSo] = useState(0);
+  const [boNhoChiSo] = useState(() => taoBoNhoChiSoDonDatHang());
+  const thamSoChiSo = useMemo<
+    Omit<SalesOrderListSummaryParams, "branchId"> & {
+      phamVi: PhamViDonDatHang;
+    }
+  >(() => {
+    const orderRange = resolveDateRange(datePreset, dateFrom, dateTo);
+    const shippingRange = resolveDateRange(
+      deliveryDatePreset,
+      deliveryDateFrom,
+      deliveryDateTo,
+    );
+    const parsedAmountMin = amountMin === "" ? undefined : Number(amountMin);
+    const parsedAmountMax = amountMax === "" ? undefined : Number(amountMax);
+    return {
+      phamVi: phamViHienTai,
+      dateFrom: orderRange.from,
+      dateTo: orderRange.to,
+      statuses: selectedStatuses,
+      fulfillmentState,
+      debtState,
+      shippingState,
+      amountMin:
+        Number.isFinite(parsedAmountMin) && (parsedAmountMin ?? -1) >= 0
+          ? parsedAmountMin
+          : undefined,
+      amountMax:
+        Number.isFinite(parsedAmountMax) && (parsedAmountMax ?? -1) >= 0
+          ? parsedAmountMax
+          : undefined,
+      search: debouncedSearch,
+      searchField,
+      deliveryPartnerId:
+        deliveryPartner === "all" ? undefined : deliveryPartner,
+      shippingDateFrom: shippingRange.from,
+      shippingDateTo: shippingRange.to,
+      deliveryArea: debouncedDeliveryArea,
+    };
+  }, [
+    datePreset,
+    dateFrom,
+    dateTo,
+    deliveryDatePreset,
+    deliveryDateFrom,
+    deliveryDateTo,
+    phamViHienTai,
+    selectedStatuses,
+    fulfillmentState,
+    debtState,
+    shippingState,
+    amountMin,
+    amountMax,
+    debouncedSearch,
+    searchField,
+    deliveryPartner,
+    debouncedDeliveryArea,
+  ]);
+
+  useEffect(() => {
+    if (!branchScopeReady) return;
+    const khoa =
+      JSON.stringify(thamSoChiSo.phamVi) +
+      "|" +
+      khoaChiSoDonDatHang(thamSoChiSo);
+    const { luot, sanCo } = boNhoChiSo.batDau(khoa);
+    if (thamSoChiSo.phamVi.mode === "none") {
+      setChiSo(null);
+      setChiSoLoi(false);
+      return;
+    }
+    if (sanCo) {
+      setChiSo(sanCo);
+      setChiSoLoi(false);
+      return;
+    }
+    setChiSo(null);
+    setChiSoLoi(false);
+    getChiSoDonDatHangTheoPhamVi(thamSoChiSo.phamVi, thamSoChiSo)
+      .then((ketQua) => {
+        if (!boNhoChiSo.conMoiNhat(luot)) return;
+        if (ketQua) boNhoChiSo.luu(khoa, ketQua);
+        setChiSo(ketQua);
+        setChiSoLoi(false);
+      })
+      .catch((error: unknown) => {
+        if (!boNhoChiSo.conMoiNhat(luot)) return;
+        console.error("[Đơn đặt hàng] không lấy được chỉ số:", error);
+        setChiSo(null);
+        setChiSoLoi(true);
+      });
+  }, [boNhoChiSo, branchScopeReady, thamSoChiSo, nhipChiSo]);
+
+  const lamMoiChiSo = useCallback(() => {
+    boNhoChiSo.xoaHet();
+    setNhipChiSo((nhip) => nhip + 1);
+  }, [boNhoChiSo]);
+
+  const taiLaiSauKhiDoiDuLieu = useCallback(async () => {
+    lamMoiChiSo();
+    await fetchData();
+  }, [fetchData, lamMoiChiSo]);
 
   // CEO 20/07: mở form SỬA đơn — load đủ dòng hàng rồi bật dialog (chế độ sửa).
   const openEditOrder = useCallback(
@@ -491,8 +855,8 @@ export default function DatHangPage() {
     [toast],
   );
 
-  // CEO 23/05/2026: refetch khi tab visible/focus lại → fix bug F5 stale
-  useRevalidateOnFocus(fetchData);
+  // Khi quay lại tab, làm mới cả bảng và chỉ số; không giữ KPI cũ từ cache.
+  useRevalidateOnFocus(taiLaiSauKhiDoiDuLieu);
 
   useEffect(() => {
     setPage(0);
@@ -508,7 +872,16 @@ export default function DatHangPage() {
     });
   };
 
-  const totalAmount = data.reduce((sum, o) => sum + o.totalAmount, 0);
+  const totalAmount = useMemo(
+    () => data.reduce((sum, order) => sum + order.totalAmount, 0),
+    [data],
+  );
+  const dangTaiChiSo =
+    !branchScopeReady || (!chuaCoPhamVi && !chiSo && !chiSoLoi);
+  const moTaChuaCoPhamVi =
+    branches.length > 0
+      ? "Chọn chi nhánh trên thanh phía trên để xem đúng đơn và chỉ số."
+      : "Tài khoản chưa được phân quyền chi nhánh. Vui lòng liên hệ quản trị viên.";
 
   const handleExport = (type: "excel" | "csv") => {
     const exportColumns = [
@@ -627,58 +1000,10 @@ export default function DatHangPage() {
 
   return (
     <>
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              presets={STANDARD_LIST_PRESETS}
-            />
-          </FilterGroup>
-
-          {/* CEO 08/07: lọc "Trạng thái" — đơn đặt hàng nay GIỮ qua mọi trạng
-              thái (Chờ xử lý → Hoàn thành → Đã hủy) nên lọc lại có ý nghĩa.
-              Rỗng = tất cả. */}
-          <FilterGroup label="Trạng thái">
-            <CheckboxFilter
-              options={statusFilterOptions}
-              selected={selectedStatuses}
-              onChange={setSelectedStatuses}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Đối tác giao hàng">
-            <SelectFilter
-              options={deliveryPartnerOptions}
-              value={deliveryPartner}
-              onChange={setDeliveryPartner}
-              placeholder="Chọn đối tác giao hàng"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian giao hàng">
-            <DatePresetFilter
-              value={deliveryDatePreset}
-              onChange={setDeliveryDatePreset}
-              presets={STANDARD_LIST_PRESETS_WITH_ALL}
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Khu vực giao hàng">
-            <SelectFilter
-              options={deliveryAreaOptions}
-              value={deliveryArea}
-              onChange={setDeliveryArea}
-              placeholder="Chọn khu vực"
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Đặt hàng"
+        density="compact"
         searchPlaceholder="Theo mã đơn, khách hàng"
         searchValue={search}
         onSearchChange={setSearch}
@@ -713,45 +1038,6 @@ export default function DatHangPage() {
         ]}
       />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="receipt_long" size={16} />}
-          label="Tổng đơn"
-          value={total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="shopping_bag" size={16} />}
-          label="Tổng tiền hàng"
-          value={formatCurrency(
-            data
-              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
-              .reduce(
-                (sum, r) => sum + ((r.totalAmount ?? 0) - (r.shippingFee ?? 0)),
-                0,
-              ),
-          )}
-        />
-        <SummaryCard
-          icon={<Icon name="local_shipping" size={16} />}
-          label="Tổng phí giao"
-          value={formatCurrency(
-            data
-              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
-              .reduce((sum, r) => sum + (r.shippingFee ?? 0), 0),
-          )}
-        />
-        <SummaryCard
-          icon={<Icon name="payments" size={16} />}
-          label="Tổng cần thu"
-          value={formatCurrency(
-            data
-              .filter((r) => r.status !== "cancelled" && !r.fulfilledById)
-              .reduce((sum, r) => sum + (r.debt ?? 0), 0),
-          )}
-        />
-      </div>
-
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}
@@ -764,11 +1050,96 @@ export default function DatHangPage() {
         data={data}
         loading={loading}
         total={total}
-        emptyBranchHint={{
-          otherBranchCount,
-          onViewAllBranches: () => setViewAllBranches(true),
-          entityLabel: "đơn đặt hàng",
-        }}
+        density="compact"
+        columnToggle
+        toolbarMetrics={
+          <>
+            <ListMetric
+              icon={<Icon name="receipt_long" size={15} />}
+              label="Số đơn"
+              value={chiSo ? formatNumber(chiSo.tongDon) : "—"}
+              loading={dangTaiChiSo}
+              hint={chiSoLoi ? "Chưa cập nhật được" : "Theo toàn bộ bộ lọc"}
+            />
+            <ListMetric
+              icon={<Icon name="shopping_bag" size={15} />}
+              label="Tiền hàng"
+              value={chiSo ? formatCurrency(chiSo.tongTienHang) : "—"}
+              loading={dangTaiChiSo}
+              tone="primary"
+              hint="Không gồm phí giao"
+            />
+            <ListMetric
+              icon={<Icon name="local_shipping" size={15} />}
+              label="Phí giao"
+              value={chiSo ? formatCurrency(chiSo.tongPhiGiao) : "—"}
+              loading={dangTaiChiSo}
+              hint="Theo toàn bộ bộ lọc"
+            />
+            <ListMetric
+              icon={<Icon name="payments" size={15} />}
+              label="Cần thu"
+              value={chiSo ? formatCurrency(chiSo.tongCanThu) : "—"}
+              loading={dangTaiChiSo}
+              tone={(chiSo?.tongCanThu ?? 0) > 0 ? "danger" : "default"}
+              hint="Không tính đơn đã hủy hoặc đã xuất hóa đơn riêng"
+            />
+          </>
+        }
+        toolbarActions={
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="calendar_today" size={15} />
+              <span className="hidden sm:inline">{datePresetLabel}</span>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+              aria-label={`Mở bộ lọc${filterChips.length > 0 ? `, ${filterChips.length} điều kiện` : ""}`}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          </>
+        }
+        toolbarFooter={
+          <FilterChips
+            filters={filterChips}
+            onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+          />
+        }
+        emptyTitle={
+          chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy đơn đặt hàng"
+        }
+        emptyDescription={
+          chuaCoPhamVi
+            ? moTaChuaCoPhamVi
+            : "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+        }
+        emptyIcon={chuaCoPhamVi ? "apartment" : "receipt_long"}
+        emptyBranchHint={
+          duocXemToanChuoi
+            ? {
+                otherBranchCount,
+                onViewAllBranches: () => setViewAllBranches(true),
+                entityLabel: "đơn đặt hàng",
+              }
+            : undefined
+        }
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -861,7 +1232,7 @@ export default function DatHangPage() {
                   title: `Đã hủy ${cancellable.length} đơn`,
                   variant: "success",
                 });
-                await fetchData();
+                await taiLaiSauKhiDoiDuLieu();
               } catch (err) {
                 toast({
                   title: "Lỗi hủy hàng loạt",
@@ -882,7 +1253,7 @@ export default function DatHangPage() {
           <OrderDetail
             order={order}
             onClose={onClose}
-            onDataChanged={fetchData}
+            onDataChanged={taiLaiSauKhiDoiDuLieu}
             onEdit={
               // CEO 20/07: nút chính "Sửa đơn" → mở form sửa (giống form tạo,
               // có cảnh báo thay đổi). Chuyển thành hóa đơn/thanh toán nằm ở menu.
@@ -934,12 +1305,189 @@ export default function DatHangPage() {
           })
         }
       />
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc đơn đặt hàng"
+      >
+        <FilterGroup label="Thời gian tạo đơn" activeHint={orderDateDisplay}>
+          <DatePresetFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            presets={STANDARD_LIST_PRESETS}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Trạng thái"
+          activeHint={
+            selectedStatuses.length > 0
+              ? `${selectedStatuses.length} lựa chọn`
+              : undefined
+          }
+        >
+          <CheckboxFilter
+            options={statusFilterOptions}
+            selected={selectedStatuses}
+            onChange={setSelectedStatuses}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Tình trạng xuất hóa đơn"
+          activeHint={
+            fulfillmentState === "all"
+              ? undefined
+              : labelForOption(fulfillmentOptions, fulfillmentState)
+          }
+        >
+          <SelectFilter
+            options={fulfillmentOptions}
+            value={fulfillmentState}
+            onChange={setFulfillmentState}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Công nợ"
+          activeHint={
+            debtState === "all"
+              ? undefined
+              : labelForOption(debtStateOptions, debtState)
+          }
+        >
+          <SelectFilter
+            options={debtStateOptions}
+            value={debtState}
+            onChange={setDebtState}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Giá trị đơn"
+          activeHint={amountMin || amountMax ? "Đang lọc" : undefined}
+        >
+          <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
+            <Input
+              type="number"
+              min="0"
+              inputMode="decimal"
+              value={amountMin}
+              onChange={(event) => setAmountMin(event.target.value)}
+              placeholder="Từ"
+              className="h-9 min-w-0 text-sm"
+            />
+            <span className="text-xs text-muted-foreground">đến</span>
+            <Input
+              type="number"
+              min="0"
+              inputMode="decimal"
+              value={amountMax}
+              onChange={(event) => setAmountMax(event.target.value)}
+              placeholder="Đến"
+              className="h-9 min-w-0 text-sm"
+            />
+          </div>
+        </FilterGroup>
+
+        <FilterGroup
+          label="Tình trạng vận đơn"
+          activeHint={
+            shippingState === "all"
+              ? undefined
+              : labelForOption(shippingStateOptions, shippingState)
+          }
+        >
+          <SelectFilter
+            options={shippingStateOptions}
+            value={shippingState}
+            onChange={(value) => {
+              setShippingState(value);
+              if (value === "none") {
+                setDeliveryPartner("all");
+                setDeliveryDatePreset("all");
+                setDeliveryDateFrom("");
+                setDeliveryDateTo("");
+                setDeliveryArea("");
+              }
+            }}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Đối tác giao hàng"
+          activeHint={
+            deliveryPartner === "all" ? undefined : deliveryPartnerLabel
+          }
+        >
+          <SelectFilter
+            options={deliveryPartnerOptions}
+            value={deliveryPartner}
+            onChange={(value) => {
+              setDeliveryPartner(value);
+              if (value !== "all" && shippingState === "none") {
+                setShippingState("any");
+              }
+            }}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Thời gian tạo vận đơn"
+          activeHint={
+            deliveryDatePreset === "all" ? undefined : shippingDateDisplay
+          }
+        >
+          <DatePresetFilter
+            value={deliveryDatePreset}
+            onChange={(value) => {
+              setDeliveryDatePreset(value);
+              if (value !== "all" && shippingState === "none") {
+                setShippingState("any");
+              }
+            }}
+            from={deliveryDateFrom}
+            to={deliveryDateTo}
+            onFromChange={setDeliveryDateFrom}
+            onToChange={setDeliveryDateTo}
+            presets={STANDARD_LIST_PRESETS_WITH_ALL}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Địa chỉ giao hàng"
+          activeHint={debouncedDeliveryArea || undefined}
+        >
+          <Input
+            value={deliveryArea}
+            onChange={(event) => {
+              setDeliveryArea(event.target.value);
+              if (event.target.value && shippingState === "none") {
+                setShippingState("any");
+              }
+            }}
+            placeholder="Tỉnh, quận hoặc địa chỉ"
+            className="h-9 text-sm"
+          />
+        </FilterGroup>
+      </FilterPanel>
     </ListPageLayout>
 
     <CreateOrderDialog
       open={createOpen}
       onOpenChange={setCreateOpen}
-      onSuccess={fetchData}
+      onSuccess={taiLaiSauKhiDoiDuLieu}
     />
 
     {loadingEdit && (
@@ -956,7 +1504,7 @@ export default function DatHangPage() {
       <CreateOrderDialog
         open={!!editingOrder}
         onOpenChange={(o) => { if (!o) setEditingOrder(null); }}
-        onSuccess={fetchData}
+        onSuccess={taiLaiSauKhiDoiDuLieu}
         editOrder={editingOrder}
       />
     )}
@@ -970,7 +1518,7 @@ export default function DatHangPage() {
           : null
       }
       onClose={() => setCancellingItem(null)}
-      onDone={fetchData}
+      onDone={taiLaiSauKhiDoiDuLieu}
       onConfirm={async () => {
         if (!cancellingItem) return;
         await cancelInvoice(cancellingItem.id);

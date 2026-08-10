@@ -2147,6 +2147,7 @@
   "get_recent_manager_otps",
   "get_rfm_report",
   "get_rfm_report_unsecured_legacy",
+  "get_sales_order_list_summary",
   "get_sales_report_invoice_page",
   "get_sales_report_summary",
   "get_sales_return_report",
@@ -2335,5 +2336,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 319
+ "soRpc": 320
 }
