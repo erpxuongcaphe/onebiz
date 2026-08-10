@@ -1,18 +1,29 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
+  DatePresetFilter,
+  type DatePresetValue,
+  PersonFilter,
+  RangeFilter,
+  SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -23,17 +34,21 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import type { ItemColumn } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import {
-  getInternalSales,
+  phamViBanNoiBo,
+  getInternalSalesTheoPhamVi,
+  demBanNoiBoChiNhanhKhac,
   getInternalSaleById,
   getInternalSalesForExport,
   cancelInternalSale,
+  getBranches,
+  getProfilesForPersonFilter,
 } from "@/lib/services";
 import { CreateInternalSaleDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
-import { useTxRowPermissions } from "@/lib/permissions";
+import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { internalSaleExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportInternalSales } from "@/lib/services/supabase/excel-import";
@@ -42,6 +57,7 @@ import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInternalSalePrintData, toPrintLines } from "@/lib/print-templates";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                               */
@@ -51,8 +67,10 @@ interface InternalSaleRow {
   id: string;
   code: string;
   fromBranchId: string;
+  fromBranchCode: string;
   fromBranchName: string;
   toBranchId: string;
+  toBranchCode: string;
   toBranchName: string;
   status: "draft" | "confirmed" | "completed" | "cancelled";
   subtotal: number;
@@ -117,7 +135,17 @@ const STATUS_OPTIONS = Object.entries(STATUS_META).map(([value, meta]) => ({
   label: meta.label,
 }));
 
-const PAGE_SIZE = 20;
+const SEARCH_FIELDS = [
+  { value: "code", label: "Mã phiếu nội bộ" },
+  { value: "from_branch_name", label: "Tên chi nhánh bán" },
+  { value: "from_branch_code", label: "Mã chi nhánh bán" },
+  { value: "to_branch_name", label: "Tên chi nhánh mua" },
+  { value: "to_branch_code", label: "Mã chi nhánh mua" },
+  { value: "product_name", label: "Tên sản phẩm" },
+  { value: "product_code", label: "Mã sản phẩm" },
+  { value: "creator_name", label: "Người tạo" },
+  { value: "note", label: "Ghi chú" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Detail panel                                                        */
@@ -271,15 +299,33 @@ function InternalSaleDetail({
 
 export default function InternalSalePage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("internal_sale");
   const [data, setData] = useState<InternalSaleRow[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [searchField, setSearchField] = useState("code");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
-  const [selected, setSelected] = useState<InternalSaleRow | null>(null);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [fromBranchId, setFromBranchId] = useState("all");
+  const [toBranchId, setToBranchId] = useState("all");
+  const [createdBy, setCreatedBy] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [branchOptions, setBranchOptions] = useState<
+    { label: string; value: string }[]
+  >([{ label: "Tất cả", value: "all" }]);
+  const [creatorOptions, setCreatorOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -290,62 +336,263 @@ export default function InternalSalePage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const requestSequence = useRef(0);
+
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
+
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
 
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
+
+  useEffect(() => {
+    if (!branchReady) return;
+    Promise.all([getBranches(), getProfilesForPersonFilter()])
+      .then(([branches, profiles]) => {
+        setBranchOptions([
+          { label: "Tất cả", value: "all" },
+          ...branches.map((branch) => ({
+            label: branch.code ? `${branch.code} · ${branch.name}` : branch.name,
+            value: branch.id,
+          })),
+        ]);
+        setCreatorOptions(profiles);
+      })
+      .catch(() => {
+        setBranchOptions([{ label: "Tất cả", value: "all" }]);
+        setCreatorOptions([]);
+      });
+  }, [branchReady]);
+
+  const dateRange = useMemo(
+    () =>
+      datePreset === "custom"
+        ? { from: dateFrom || undefined, to: dateTo || undefined }
+        : computeListPresetRange(datePreset),
+    [dateFrom, datePreset, dateTo],
+  );
+
+  const commonFilters = useMemo<Record<string, string | string[]>>(
+    () => ({
+      ...(statusFilter.length > 0 && { status: statusFilter }),
+      ...(dateRange.from && { dateFrom: dateRange.from }),
+      ...(dateRange.to && { dateTo: dateRange.to }),
+      ...(fromBranchId !== "all" && { fromBranchId }),
+      ...(toBranchId !== "all" && { toBranchId }),
+      ...(createdBy && { createdBy }),
+      ...(amountMin && { amountMin }),
+      ...(amountMax && { amountMax }),
+    }),
+    [
+      amountMax,
+      amountMin,
+      createdBy,
+      dateRange.from,
+      dateRange.to,
+      fromBranchId,
+      statusFilter,
+      toBranchId,
+    ],
+  );
+
+  const phamVi = useMemo(
+    () =>
+      phamViBanNoiBo({
+        activeBranchId,
+        viewAllBranches,
+        duocXemToanChuoi,
+      }),
+    [activeBranchId, duocXemToanChuoi, viewAllBranches],
+  );
+
+  const chuaCoPhamVi = phamVi.mode === "none";
+
   const fetchData = useCallback(async () => {
+    if (!branchReady || permissionsLoading) return;
+    const requestId = ++requestSequence.current;
     setLoading(true);
     try {
-      const commonFilters = {
-        search: search || undefined,
-        status: statusFilter.length === 1 ? statusFilter[0] : undefined,
-      };
-      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
-      const result = await getInternalSales({
-        page,
-        pageSize: PAGE_SIZE,
-        ...commonFilters,
-        branchId: branchScope,
+      const result = await getInternalSalesTheoPhamVi(phamVi, {
+        page: page + 1,
+        pageSize,
+        search: debouncedSearch || undefined,
+        searchField,
+        filters: commonFilters,
       });
+      if (requestId !== requestSequence.current) return;
       setData(result.data as InternalSaleRow[]);
       setTotal(result.total);
-      // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
-      // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-      if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
-        const all = await getInternalSales({
-          page: 1,
-          pageSize: 1,
-          ...commonFilters,
-          branchId: undefined,
-        });
-        setOtherBranchCount(all.total);
-      } else {
-        setOtherBranchCount(0);
-      }
-    } catch {
-      toast({ title: "Lỗi tải dữ liệu", variant: "error" });
+
+      const count =
+        result.data.length === 0
+          ? await demBanNoiBoChiNhanhKhac(phamVi, {
+              search: debouncedSearch || undefined,
+              searchField,
+              filters: commonFilters,
+            })
+          : 0;
+      if (requestId === requestSequence.current) setOtherBranchCount(count);
+    } catch (error) {
+      if (requestId !== requestSequence.current) return;
+      toast({
+        title: "Không tải được danh sách bán nội bộ",
+        description: error instanceof Error ? error.message : "Lỗi không xác định",
+        variant: "error",
+      });
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [page, search, statusFilter, activeBranchId, viewAllBranches, toast]);
+  }, [
+    branchReady,
+    commonFilters,
+    debouncedSearch,
+    page,
+    pageSize,
+    permissionsLoading,
+    phamVi,
+    searchField,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // KPI row — tính nhẹ dựa trên trang hiện tại (quick feedback, không phải toàn dataset).
-  // Khi CEO muốn số chính xác toàn cục, Sprint KHO-3 sẽ thêm RPC count riêng.
-  const kpis = useMemo(() => {
-    const draft = data.filter((d) => d.status === "draft").length;
-    const confirmed = data.filter((d) => d.status === "confirmed").length;
-    const completed = data.filter((d) => d.status === "completed").length;
-    const totalRevenue = data
-      .filter((d) => d.status === "completed")
-      .reduce((s, d) => s + d.total, 0);
-    return { draft, confirmed, completed, totalRevenue };
-  }, [data]);
+  useEffect(() => {
+    setPage(0);
+    setExpandedRow(null);
+  }, [
+    amountMax,
+    amountMin,
+    createdBy,
+    dateFrom,
+    datePreset,
+    dateTo,
+    debouncedSearch,
+    fromBranchId,
+    searchField,
+    statusFilter,
+    toBranchId,
+  ]);
+
+  const pageCompletedCount = data.filter((item) => item.status === "completed").length;
+  const pageTotalAmount = data.reduce((sum, item) => sum + item.total, 0);
+  const pageCompletedAmount = data
+    .filter((item) => item.status === "completed")
+    .reduce((sum, item) => sum + item.total, 0);
+  const pageTaxAmount = data.reduce((sum, item) => sum + item.taxAmount, 0);
+
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") {
+      if (!dateFrom && !dateTo) return "Tùy chỉnh";
+      return `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    }
+    return (
+      STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)
+        ?.label ?? "Thời gian"
+    );
+  }, [dateFrom, datePreset, dateTo]);
+
+  const clearListFilters = useCallback(() => {
+    setStatusFilter([]);
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setFromBranchId("all");
+    setToBranchId("all");
+    setCreatedBy("");
+    setAmountMin("");
+    setAmountMax("");
+  }, []);
+
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") {
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value: datePresetLabel,
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    }
+    if (statusFilter.length > 0) {
+      chips.push({
+        key: "status",
+        label: "Trạng thái",
+        value: statusFilter
+          .map((value) => STATUS_META[value as StatusKey]?.label ?? value)
+          .join(", "),
+        onClear: () => setStatusFilter([]),
+      });
+    }
+    if (fromBranchId !== "all") {
+      chips.push({
+        key: "fromBranch",
+        label: "Chi nhánh bán",
+        value:
+          branchOptions.find((option) => option.value === fromBranchId)?.label ??
+          "Đã chọn",
+        onClear: () => setFromBranchId("all"),
+      });
+    }
+    if (toBranchId !== "all") {
+      chips.push({
+        key: "toBranch",
+        label: "Chi nhánh mua",
+        value:
+          branchOptions.find((option) => option.value === toBranchId)?.label ??
+          "Đã chọn",
+        onClear: () => setToBranchId("all"),
+      });
+    }
+    if (createdBy) {
+      chips.push({
+        key: "creator",
+        label: "Người tạo",
+        value:
+          creatorOptions.find((option) => option.value === createdBy)?.label ??
+          "Đã chọn",
+        onClear: () => setCreatedBy(""),
+      });
+    }
+    if (amountMin || amountMax) {
+      chips.push({
+        key: "amount",
+        label: "Tổng tiền",
+        value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} đến ${
+          amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"
+        }`,
+        onClear: () => {
+          setAmountMin("");
+          setAmountMax("");
+        },
+      });
+    }
+    return chips;
+  }, [
+    amountMax,
+    amountMin,
+    branchOptions,
+    createdBy,
+    creatorOptions,
+    datePreset,
+    datePresetLabel,
+    fromBranchId,
+    statusFilter,
+    toBranchId,
+  ]);
 
   const columns: ColumnDef<InternalSaleRow>[] = [
     {
@@ -358,7 +605,7 @@ export default function InternalSalePage() {
     },
     {
       accessorKey: "createdAt",
-      header: "Ngày tạo",
+      header: "Thời gian",
       size: 140,
       cell: ({ row }) => (
         <span className="text-sm">{formatDate(row.original.createdAt)}</span>
@@ -366,16 +613,26 @@ export default function InternalSalePage() {
     },
     {
       id: "flow",
-      header: "Chi nhánh bán → mua",
-      size: 280,
+      header: "Bên bán → bên mua",
+      size: 330,
       cell: ({ row }) => (
         <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium truncate max-w-[110px]" title={row.original.fromBranchName}>
-            {row.original.fromBranchName || "—"}
+          <span
+            className="font-medium truncate max-w-[135px]"
+            title={`${row.original.fromBranchCode} · ${row.original.fromBranchName}`}
+          >
+            {[row.original.fromBranchCode, row.original.fromBranchName]
+              .filter(Boolean)
+              .join(" · ") || "—"}
           </span>
           <Icon name="arrow_forward" size={14} className="text-muted-foreground shrink-0" />
-          <span className="font-medium truncate max-w-[110px]" title={row.original.toBranchName}>
-            {row.original.toBranchName || "—"}
+          <span
+            className="font-medium truncate max-w-[135px]"
+            title={`${row.original.toBranchCode} · ${row.original.toBranchName}`}
+          >
+            {[row.original.toBranchCode, row.original.toBranchName]
+              .filter(Boolean)
+              .join(" · ") || "—"}
           </span>
         </div>
       ),
@@ -456,87 +713,61 @@ export default function InternalSalePage() {
 
   return (
     <>
-      <PageHeader
-        title="Bán hàng nội bộ"
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Tìm mã đơn..."
-        onExport={{
-          // Export theo schema Import → round-trip edit & re-upload không mất field
-          excel: async () => {
-            try {
-              toast({
-                title: "Đang chuẩn bị file Excel…",
-                description: "Tải tất cả dòng hàng theo bộ lọc hiện tại",
-                variant: "info",
-              });
-              const rows = await getInternalSalesForExport({
-                search: search || undefined,
-                status: statusFilter.length === 1 ? statusFilter[0] : undefined,
-                branchId: activeBranchId || undefined,
-              });
-              if (rows.length === 0) {
-                toast({ title: "Không có dữ liệu để xuất", variant: "info" });
-                return;
+      <ListPageLayout sidebar={null}>
+        <PageHeader
+          title="Bán nội bộ chuỗi"
+          density="compact"
+          searchValue={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Nhập nội dung tìm kiếm"
+          searchFields={SEARCH_FIELDS}
+          searchField={searchField}
+          onSearchFieldChange={setSearchField}
+          onExport={{
+            excel: async () => {
+              if (phamVi.mode === "none") return;
+              try {
+                toast({
+                  title: "Đang chuẩn bị file Excel…",
+                  description: "Tải tất cả dòng hàng theo bộ lọc hiện tại",
+                  variant: "info",
+                });
+                const rows = await getInternalSalesForExport({
+                  search: debouncedSearch || undefined,
+                  searchField,
+                  filters: commonFilters,
+                  branchId:
+                    phamVi.mode === "branch" ? phamVi.branchId : undefined,
+                });
+                if (rows.length === 0) {
+                  toast({ title: "Không có dữ liệu để xuất", variant: "info" });
+                  return;
+                }
+                exportToExcelFromSchema(rows, internalSaleExcelSchema);
+              } catch (err) {
+                toast({
+                  title: "Lỗi xuất Excel",
+                  description: err instanceof Error ? err.message : "Vui lòng thử lại",
+                  variant: "error",
+                });
               }
-              exportToExcelFromSchema(rows, internalSaleExcelSchema);
-            } catch (err) {
-              toast({
-                title: "Lỗi xuất Excel",
-                description: err instanceof Error ? err.message : "Vui lòng thử lại",
-                variant: "error",
-              });
-            }
-          },
-        }}
-        actions={[
-          {
-            label: "Tạo đơn nội bộ",
-            icon: <Icon name="add" size={16} />,
-            onClick: () => setShowCreate(true),
-          },
-          {
-            label: "Nhập Excel",
-            icon: <Icon name="upload_file" size={16} />,
-            variant: "outline",
-            onClick: () => setImportOpen(true),
-          },
-        ]}
-      />
+            },
+          }}
+          actions={[
+            {
+              label: "Tạo đơn nội bộ",
+              icon: <Icon name="add" size={16} />,
+              onClick: () => setShowCreate(true),
+            },
+            {
+              label: "Nhập Excel",
+              icon: <Icon name="upload_file" size={16} />,
+              variant: "outline",
+              onClick: () => setImportOpen(true),
+            },
+          ]}
+        />
 
-      {/* KPI row — nhanh gọn, tính theo page hiện tại */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-3">
-        <Card size="sm" className="px-4">
-          <div className="text-xs text-muted-foreground">Nháp</div>
-          <div className="text-xl font-bold">{kpis.draft}</div>
-        </Card>
-        <Card size="sm" className="px-4">
-          <div className="text-xs text-muted-foreground">Xác nhận</div>
-          <div className="text-xl font-bold text-primary">{kpis.confirmed}</div>
-        </Card>
-        <Card size="sm" className="px-4">
-          <div className="text-xs text-muted-foreground">Hoàn thành</div>
-          <div className="text-xl font-bold text-status-success">{kpis.completed}</div>
-        </Card>
-        <Card size="sm" className="px-4">
-          <div className="text-xs text-muted-foreground">Doanh thu nội bộ</div>
-          <div className="text-xl font-bold">{formatCurrency(kpis.totalRevenue)}</div>
-        </Card>
-      </div>
-
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Trạng thái">
-              <CheckboxFilter
-                options={STATUS_OPTIONS}
-                selected={statusFilter}
-                onChange={setStatusFilter}
-              />
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
         {viewAllBranches && (
           <AllBranchesBanner
             branchName={currentBranch?.name}
@@ -549,16 +780,113 @@ export default function InternalSalePage() {
           data={data}
           loading={loading}
           total={total}
-          emptyBranchHint={{
-            otherBranchCount,
-            onViewAllBranches: () => setViewAllBranches(true),
-            entityLabel: "phiếu bán nội bộ",
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="swap_horiz" size={15} />}
+                label="Kết quả"
+                value={formatNumber(total)}
+                hint="Tổng số phiếu theo toàn bộ bộ lọc"
+              />
+              <ListMetric
+                icon={<Icon name="receipt_long" size={15} />}
+                label="Giá trị trang này"
+                value={formatCurrency(pageTotalAmount)}
+                hint={`Tổng của ${data.length} dòng đang hiển thị`}
+                tone="primary"
+              />
+              <ListMetric
+                icon={<Icon name="task_alt" size={15} />}
+                label="Hoàn thành trang này"
+                value={`${formatNumber(pageCompletedCount)} · ${formatCurrency(pageCompletedAmount)}`}
+                hint="Chỉ tính các dòng hoàn thành trên trang hiện tại"
+              />
+              <ListMetric
+                icon={<Icon name="percent" size={15} />}
+                label="VAT trang này"
+                value={formatCurrency(pageTaxAmount)}
+                hint={`Tổng VAT của ${data.length} dòng đang hiển thị`}
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+                aria-label={`Mở bộ lọc${
+                  filterChips.length ? `, ${filterChips.length} điều kiện` : ""
+                }`}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
+          defaultColumnVisibility={{
+            subtotal: false,
+            taxAmount: false,
+            createdByName: false,
           }}
-          pageSize={PAGE_SIZE}
-          pageIndex={page - 1}
-          pageCount={Math.ceil(total / PAGE_SIZE)}
-          onPageChange={(idx) => setPage(idx + 1)}
-          onRowClick={(row) => setSelected(row)}
+          emptyTitle={
+            chuaCoPhamVi
+              ? "Chưa có chi nhánh làm việc"
+              : "Không tìm thấy phiếu bán nội bộ"
+          }
+          emptyDescription={
+            chuaCoPhamVi
+              ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
+              : "Thử thay đổi thời gian, trạng thái, chi nhánh hoặc nội dung tìm kiếm."
+          }
+          emptyIcon={chuaCoPhamVi ? "apartment" : "swap_horiz"}
+          emptyBranchHint={
+            duocXemToanChuoi
+              ? {
+                  otherBranchCount,
+                  onViewAllBranches: () => setViewAllBranches(true),
+                  entityLabel: "phiếu bán nội bộ",
+                }
+              : undefined
+          }
+          pageSize={pageSize}
+          pageIndex={page}
+          pageCount={Math.ceil(total / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          summaryRow={{
+            subtotal: formatCurrency(data.reduce((sum, item) => sum + item.subtotal, 0)),
+            taxAmount: formatCurrency(pageTaxAmount),
+            total: formatCurrency(pageTotalAmount),
+          }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
           renderDetail={(row, onClose) => (
@@ -580,7 +908,6 @@ export default function InternalSalePage() {
               onView: () => {
                 const idx = data.findIndex((d) => d.id === row.id);
                 setExpandedRow(expandedRow === idx ? null : idx);
-                setSelected(row);
               },
               // Anomaly fix Stage 5c: thêm In phiếu (trước đây thiếu)
               // Nạp chi tiết hàng trước rồi mới in (item dùng field `amount`).
@@ -604,6 +931,97 @@ export default function InternalSalePage() {
             })
           }
         />
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={clearListFilters}
+          title="Bộ lọc bán nội bộ"
+        >
+          <FilterGroup label="Thời gian tạo" activeHint={datePresetLabel}>
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
+            />
+          </FilterGroup>
+
+          <FilterGroup
+            label="Trạng thái"
+            activeHint={statusFilter.length ? `${statusFilter.length} lựa chọn` : undefined}
+          >
+            <CheckboxFilter
+              options={STATUS_OPTIONS}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+            />
+          </FilterGroup>
+
+          <FilterGroup
+            label="Chi nhánh bán"
+            activeHint={
+              fromBranchId === "all"
+                ? undefined
+                : branchOptions.find((option) => option.value === fromBranchId)?.label
+            }
+          >
+            <SelectFilter
+              options={branchOptions}
+              value={fromBranchId}
+              onChange={setFromBranchId}
+              placeholder="Tất cả"
+            />
+          </FilterGroup>
+
+          <FilterGroup
+            label="Chi nhánh mua"
+            activeHint={
+              toBranchId === "all"
+                ? undefined
+                : branchOptions.find((option) => option.value === toBranchId)?.label
+            }
+          >
+            <SelectFilter
+              options={branchOptions}
+              value={toBranchId}
+              onChange={setToBranchId}
+              placeholder="Tất cả"
+            />
+          </FilterGroup>
+
+          <FilterGroup
+            label="Người tạo"
+            activeHint={
+              creatorOptions.find((option) => option.value === createdBy)?.label
+            }
+          >
+            <PersonFilter
+              value={createdBy}
+              onChange={setCreatedBy}
+              placeholder="Chọn người tạo"
+              suggestions={creatorOptions}
+            />
+          </FilterGroup>
+
+          <FilterGroup
+            label="Tổng tiền"
+            activeHint={amountMin || amountMax ? "Đang lọc" : undefined}
+          >
+            <RangeFilter
+              fromValue={amountMin}
+              toValue={amountMax}
+              onFromChange={setAmountMin}
+              onToChange={setAmountMax}
+              fromPlaceholder="Số tiền tối thiểu"
+              toPlaceholder="Số tiền tối đa"
+            />
+          </FilterGroup>
+        </FilterPanel>
       </ListPageLayout>
 
       <CreateInternalSaleDialog
