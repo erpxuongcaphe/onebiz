@@ -8,12 +8,14 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
+import { ListMetric } from "@/components/shared/list-metric";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useBranchFilter, useToast } from "@/lib/contexts";
@@ -110,6 +112,7 @@ export default function LichSuKhoPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Load branches once
   useEffect(() => {
@@ -291,6 +294,39 @@ export default function LichSuKhoPage() {
     : [];
 
   // === Columns ===
+  const filterChips: ListFilterChip[] = [];
+  if (typeFilter !== "all") {
+    filterChips.push({
+      key: "type",
+      label: "Loại phiếu",
+      value: movementTypeOptions.find((option) => option.value === typeFilter)?.label ?? typeFilter,
+      onClear: () => setTypeFilter("all"),
+    });
+  }
+  if (branchFilter !== "all") {
+    filterChips.push({
+      key: "branch",
+      label: "Chi nhánh",
+      value: branches.find((branch) => branch.id === branchFilter)?.name ?? "Đang chọn",
+      onClear: () => setBranchFilter("all"),
+    });
+  }
+  if (datePreset !== "all") {
+    const dateLabel = datePreset === "custom"
+      ? `${dateFrom || "..."} - ${dateTo || "..."}`
+      : datePresets.find((preset) => preset.value === datePreset)?.label ?? datePreset;
+    filterChips.push({
+      key: "date",
+      label: "Thời gian",
+      value: dateLabel,
+      onClear: () => {
+        setDatePreset("all");
+        setDateFrom("");
+        setDateTo("");
+      },
+    });
+  }
+
   const columns: ColumnDef<AllStockMovementRow, unknown>[] = [
     {
       accessorKey: "code",
@@ -421,104 +457,86 @@ export default function LichSuKhoPage() {
   ];
 
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Loại phiếu">
-            <SelectFilter
-              options={movementTypeOptions}
-              value={typeFilter}
-              onChange={setTypeFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Chi nhánh">
-            <SelectFilter
-              options={branches.map((b) => ({
-                label: b.name,
-                value: b.id,
-              }))}
-              value={branchFilter}
-              onChange={setBranchFilter}
-              placeholder="Tất cả chi nhánh"
-            />
-          </FilterGroup>
-
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={datePresets}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Lịch sử kho"
         searchPlaceholder="Theo tên hàng, mã hàng, ghi chú..."
         searchValue={search}
         onSearchChange={setSearch}
+        density="compact"
       />
-
-      {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="history" size={16} />}
-          label="Dòng biến động"
-          value={movementCounts.total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="arrow_circle_down" size={16} className="text-status-success" />}
-          label="Dòng nhập"
-          value={formatNumber(movementCounts.inbound)}
-          highlight
-        />
-        <SummaryCard
-          icon={<Icon name="arrow_circle_up" size={16} className="text-status-error" />}
-          label="Dòng xuất"
-          value={formatNumber(movementCounts.outbound)}
-          danger={movementCounts.outbound > 0}
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center justify-end gap-2 px-4 pt-3">
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => void handleExport("csv")}
-          disabled={exporting}
-          className="gap-2"
-        >
-          <Icon name="description" size={15} />
-          Xuất CSV
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => void handleExport("excel")}
-          disabled={exporting}
-          className="gap-2"
-        >
-          <Icon
-            name={exporting ? "progress_activity" : "table_view"}
-            size={15}
-            className={exporting ? "animate-spin" : undefined}
-          />
-          {exporting ? "Đang xuất..." : "Xuất Excel lịch sử kho"}
-        </Button>
-      </div>
 
       <DataTable
         columns={columns}
         data={data}
         loading={loading}
+        density="compact"
+        columnToggle
+        toolbarMetrics={
+          <>
+            <ListMetric label="Dòng biến động" value={formatNumber(movementCounts.total)} tone="primary" />
+            <ListMetric label="Dòng nhập" value={formatNumber(movementCounts.inbound)} />
+            <ListMetric label="Dòng xuất" value={formatNumber(movementCounts.outbound)} />
+          </>
+        }
+        toolbarActions={
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleExport("csv")}
+              disabled={exporting}
+              className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+            >
+              <Icon name="description" size={15} />
+              <span className="hidden sm:inline">CSV</span>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => void handleExport("excel")}
+              disabled={exporting}
+              className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+            >
+              <Icon
+                name={exporting ? "progress_activity" : "table_view"}
+                size={15}
+                className={exporting ? "animate-spin" : undefined}
+              />
+              {exporting ? "Đang xuất..." : "Xuất Excel lịch sử kho"}
+            </Button>
+          </>
+        }
+        toolbarFooter={
+          filterChips.length > 0 ? (
+            <FilterChips
+              filters={filterChips}
+              onClearAll={() => {
+                setTypeFilter("all");
+                setBranchFilter("all");
+                setDatePreset("all");
+                setDateFrom("");
+                setDateTo("");
+              }}
+            />
+          ) : null
+        }
         total={total}
         pageIndex={page}
         pageSize={pageSize}
@@ -530,40 +548,48 @@ export default function LichSuKhoPage() {
         }}
         getRowId={(r) => r.id}
       />
-    </ListPageLayout>
-  );
-}
 
-function SummaryCard({
-  icon,
-  label,
-  value,
-  highlight,
-  danger,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  highlight?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <div
-      className={`border rounded-lg p-3 bg-background ${
-        highlight ? "border-primary/30 bg-primary/5" : ""
-      } ${danger ? "border-destructive/30 bg-destructive/5" : ""}`}
-    >
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div
-        className={`text-lg font-semibold ${
-          highlight ? "text-primary" : danger ? "text-destructive" : ""
-        }`}
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={() => {
+          setTypeFilter("all");
+          setBranchFilter("all");
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        }}
+        title="Bộ lọc lịch sử kho"
       >
-        {value}
-      </div>
-    </div>
+        <FilterGroup label="Loại phiếu">
+          <SelectFilter
+            options={movementTypeOptions}
+            value={typeFilter}
+            onChange={setTypeFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+        <FilterGroup label="Chi nhánh">
+          <SelectFilter
+            options={branches.map((branch) => ({ label: branch.name, value: branch.id }))}
+            value={branchFilter}
+            onChange={setBranchFilter}
+            placeholder="Tất cả chi nhánh"
+          />
+        </FilterGroup>
+        <FilterGroup label="Thời gian">
+          <DatePresetFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            presets={datePresets}
+          />
+        </FilterGroup>
+      </FilterPanel>
+    </ListPageLayout>
   );
 }
