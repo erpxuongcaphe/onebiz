@@ -519,7 +519,7 @@ export default function LichSuKhoPage() {
                 size={15}
                 className={exporting ? "animate-spin" : undefined}
               />
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
+              {exporting ? "Đang xuất..." : "Xuất Excel lịch sử kho"}
             </Button>
           </>
         }
