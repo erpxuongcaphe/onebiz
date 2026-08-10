@@ -36,6 +36,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInternalExportPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
@@ -156,6 +157,7 @@ function InternalExportDetail({
 export default function XuatDungNoiBoPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("internal_export");
   const [data, setData] = useState<InternalExport[]>([]);
   const [total, setTotal] = useState(0);
@@ -188,10 +190,12 @@ export default function XuatDungNoiBoPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
 
   const statuses = getInternalExportStatuses();
 
@@ -253,6 +257,8 @@ export default function XuatDungNoiBoPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -266,7 +272,7 @@ export default function XuatDungNoiBoPage() {
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
       ...(creatorFilter && { createdBy: creatorFilter }),
     };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
+    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
     const result = await getInternalExports({
       page,
       pageSize,
@@ -278,7 +284,7 @@ export default function XuatDungNoiBoPage() {
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       const all = await getInternalExports({
         page: 0,
         pageSize: 1,
@@ -299,7 +305,7 @@ export default function XuatDungNoiBoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast]);
+  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -392,11 +398,11 @@ export default function XuatDungNoiBoPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
-        emptyBranchHint={{
+        emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
           entityLabel: "phiếu xuất dùng",
-        }}
+        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}

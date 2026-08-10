@@ -33,6 +33,7 @@ import { useTxRowPermissions } from "@/lib/permissions";
 import { PipelineStatusBadge } from "@/components/shared/pipeline";
 import { Button } from "@/components/ui/button";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
 import { formatCurrency, formatDate, formatNumber, formatDateInputValue } from "@/lib/format";
@@ -229,6 +230,7 @@ function ProductionOrderDetail({
 export default function SanXuatPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("production");
   const [data, setData] = useState<ProductionOrder[]>([]);
   const [total, setTotal] = useState(0);
@@ -259,18 +261,22 @@ export default function SanXuatPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
 
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
     setLoading(true);
     try {
       // Branch-aware: chỉ lấy production orders của chi nhánh đang active
       // (Xưởng rang → coffee orders, Kho tổng → yaourt/siro orders).
       // viewAllBranches (cục bộ) → bỏ lọc chi nhánh, xem tất cả.
-      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
+      const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId || undefined;
       const result = await getProductionOrders({
         limit: 200,
         branchId: branchScope,
@@ -279,7 +285,7 @@ export default function SanXuatPage() {
       setTotal(result.total);
       // Danh sách lọc client-side (search + trạng thái). Nếu SAU khi lọc mà rỗng
       // vì đang bó theo 1 chi nhánh → đếm lệnh khớp bộ lọc ở các chi nhánh khác.
-      if (!viewAllBranches && activeBranchId) {
+      if (duocXemToanChuoi && !viewAllBranches && activeBranchId) {
         const q = search.trim().toLowerCase();
         const matchesLocalFilters = (o: ProductionOrder) => {
           if (statusFilters.length > 0 && !statusFilters.includes(o.status)) return false;
@@ -309,7 +315,7 @@ export default function SanXuatPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, activeBranchId, viewAllBranches, search, statusFilters]);
+  }, [toast, activeBranchId, viewAllBranches, search, statusFilters, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -578,11 +584,11 @@ export default function SanXuatPage() {
             loading={loading}
             density="compact"
             total={filtered.length}
-            emptyBranchHint={{
+            emptyBranchHint={duocXemToanChuoi ? {
               otherBranchCount,
               onViewAllBranches: () => setViewAllBranches(true),
               entityLabel: "lệnh sản xuất",
-            }}
+            } : undefined}
             pageIndex={page}
             pageSize={pageSize}
             pageCount={Math.ceil(filtered.length / pageSize)}

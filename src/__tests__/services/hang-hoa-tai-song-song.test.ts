@@ -59,7 +59,8 @@ describe("Trang Hàng hóa — 3 việc phụ chạy cùng lúc", () => {
   });
 
   it("bộ lọc danh sách giữ nguyên — số liệu bất biến", () => {
-    expect(fetchData).toContain("branchId: viewAllBranches ? undefined : activeBranchId");
+    expect(fetchData).toContain("branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId");
+    expect(fetchData).toContain("if (!activeBranchId && !duocXemToanChuoi)");
     expect(fetchData).toContain("filters: listFilters");
     expect(fetchData).toContain("search: debouncedSearch");
   });

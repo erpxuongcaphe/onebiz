@@ -36,6 +36,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildPurchaseReturnPrintData, toPrintLines } from "@/lib/print-templates";
@@ -176,6 +177,7 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
 export default function TraHangNhapPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("purchase_return");
   const [data, setData] = useState<PurchaseReturn[]>([]);
   const [total, setTotal] = useState(0);
@@ -197,12 +199,16 @@ export default function TraHangNhapPage() {
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
 
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -218,7 +224,7 @@ export default function TraHangNhapPage() {
       ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
     };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
+    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
     const result = await getPurchaseReturns({
       page,
       pageSize,
@@ -232,7 +238,7 @@ export default function TraHangNhapPage() {
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       const all = await getPurchaseReturns({
         page: 0,
         pageSize: 1,
@@ -252,7 +258,7 @@ export default function TraHangNhapPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast]);
+  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -309,11 +315,11 @@ export default function TraHangNhapPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="undo" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị trang này" value={formatCurrency(pageValue)} hint="Chỉ tính các dòng đang hiển thị" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
-        emptyBranchHint={{
+        emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
           entityLabel: "phiếu trả hàng",
-        }}
+        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}

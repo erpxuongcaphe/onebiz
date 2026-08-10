@@ -1,15 +1,16 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
@@ -53,6 +54,7 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import type { InputInvoice } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -192,6 +194,7 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 export default function HoaDonDauVaoPage() {
   const { toast } = useToast();
   const { activeBranchId, currentBranch } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("input_invoice");
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
@@ -221,15 +224,28 @@ export default function HoaDonDauVaoPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
   // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
 
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) {
+      setData([]);
+      setTotal(0);
+      setOtherBranchCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -245,7 +261,7 @@ export default function HoaDonDauVaoPage() {
       ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
       ...(effectiveDateTo && { dateTo: effectiveDateTo }),
     };
-    const branchScope = viewAllBranches ? undefined : activeBranchId;
+    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
     const result = await getInputInvoices({
       page,
       pageSize,
@@ -259,7 +275,7 @@ export default function HoaDonDauVaoPage() {
     setTotal(result.total);
     // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       const all = await getInputInvoices({
         page: 0,
         pageSize: 1,
@@ -279,7 +295,7 @@ export default function HoaDonDauVaoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast]);
+  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -290,35 +306,27 @@ export default function HoaDonDauVaoPage() {
     setExpandedRow(null);
   }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
-  return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <SelectFilter
-              options={statusOptions}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
+  const pageRecorded = data.filter((row) => row.status === "recorded").length;
+  const pageUnrecorded = data.filter((row) => row.status === "unrecorded").length;
+  const pageValue = data.reduce((sum, row) => sum + (row.status === "cancelled" ? 0 : (row.totalAmount ?? 0)), 0);
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+  }, [dateFrom, datePreset, dateTo]);
+  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); }, []);
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
+    if (statusFilter !== "all") chips.push({ key: "status", label: "Trạng thái", value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter("all") });
+    return chips;
+  }, [datePreset, datePresetLabel, statusFilter]);
 
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={STANDARD_LIST_PRESETS_WITH_ALL}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+  return (
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Hóa đơn đầu vào"
+        density="compact"
         searchPlaceholder="Theo mã HĐ, NCC"
         searchValue={search}
         onSearchChange={setSearch}
@@ -357,37 +365,6 @@ export default function HoaDonDauVaoPage() {
         onSuccess={fetchData}
       />
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="receipt_long" size={16} />}
-          label="Tổng hóa đơn"
-          value={total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Đã ghi sổ"
-          value={data.filter((r) => r.status === "recorded").length.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="warning" size={16} className="text-destructive" />}
-          label="Chưa ghi sổ"
-          value={data.filter((r) => r.status === "unrecorded").length.toString()}
-          danger={data.filter((r) => r.status === "unrecorded").length > 0}
-          hint={data.filter((r) => r.status === "unrecorded").length > 0 ? "Cần đối chiếu" : undefined}
-        />
-        <SummaryCard
-          icon={<Icon name="payments" size={16} />}
-          label="Tổng tiền hàng"
-          value={formatCurrency(
-            data.reduce(
-              (sum, r) => sum + (r.status === "cancelled" ? 0 : (r.totalAmount ?? 0)),
-              0,
-            ),
-          )}
-        />
-      </div>
-
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}
@@ -400,11 +377,16 @@ export default function HoaDonDauVaoPage() {
         data={data}
         loading={loading}
         total={total}
-        emptyBranchHint={{
+        density="compact"
+        columnToggle
+        toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số hóa đơn theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã ghi sổ trang này" value={pageRecorded.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="warning" size={15} />} label="Chưa ghi sổ trang này" value={pageUnrecorded.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageUnrecorded > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Tiền hàng trang này" value={formatCurrency(pageValue)} hint="Chỉ tính các dòng đang hiển thị" /></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
           entityLabel: "hóa đơn",
-        }}
+        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -468,6 +450,11 @@ export default function HoaDonDauVaoPage() {
           })
         }
       />
+
+      <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc hóa đơn đầu vào">
+        <FilterGroup label="Trạng thái" activeHint={statusFilter !== "all" ? statusOptions.find((item) => item.value === statusFilter)?.label : undefined}><SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} placeholder="Tất cả" /></FilterGroup>
+        <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
+      </FilterPanel>
 
       {/* Phase 6.3 (CEO 12/05): Dialog hủy với textarea lý do bắt buộc */}
       <Dialog

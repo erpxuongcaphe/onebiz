@@ -384,7 +384,11 @@ export default function HangHoaPage() {
   //   - canDeleteProduct = false → bấm Xoá → ConfirmDialog → mở OTP dialog
   //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
   // Server (migration 00060/00062) enforce permission của OTP issuer thay actor.
-  const { hasPermission } = usePermissions();
+  const { hasPermission, hasAny, isLoading: permissionsLoading } = usePermissions();
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
   const canDeleteProduct = hasPermission(PERMISSIONS.PRODUCTS_DELETE);
   // Sprint A.2 (CEO 12/05): cashier KHÔNG được thấy giá vốn / lợi nhuận
   // → leak business KPI. Gate cả column trong DataTable + detail panel.
@@ -498,6 +502,14 @@ export default function HangHoaPage() {
   ]);
 
   const fetchData = useCallback(async () => {
+    if (permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) {
+      setData([]);
+      setTotal(0);
+      setOtherBranchCount(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const listFilters = buildListFilters();
     const result = await getProducts({
@@ -506,13 +518,13 @@ export default function HangHoaPage() {
       search: debouncedSearch,
       searchField,
       // Branch-scope: mặc định theo CN đang chọn; "Toàn chuỗi" → undefined.
-      branchId: viewAllBranches ? undefined : activeBranchId,
+      branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
       filters: listFilters,
     });
     setData(result.data);
     setTotal(result.total);
     // Trống vì đang lọc theo chi nhánh? Đếm SP toàn chuỗi (cùng bộ lọc) để gợi ý.
-    if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
+    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       try {
         const all = await getProducts({
           page: 0,
@@ -605,12 +617,15 @@ export default function HangHoaPage() {
         }
       })(),
     ]);
-  }, [page, pageSize, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches]);
+  }, [page, pageSize, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches, duocXemToanChuoi, permissionsLoading]);
 
   // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
   useEffect(() => {
     setPage(0);
   }, [activeBranchId, viewAllBranches]);
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
 
   useEffect(() => {
     fetchData();
@@ -1017,7 +1032,7 @@ export default function HangHoaPage() {
         pageSize: 100000, // lấy hết dòng khớp lọc, không giới hạn theo trang
         search: debouncedSearch,
         searchField,
-        branchId: viewAllBranches ? undefined : activeBranchId,
+        branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
         filters: buildListFilters(),
       });
       const rows = all.data;
@@ -1825,7 +1840,7 @@ export default function HangHoaPage() {
           }
           // Branch-scope: bảng trống vì lọc CN → gợi ý xem toàn chuỗi.
           emptyBranchHint={
-            branchStockView && otherBranchCount > 0
+            duocXemToanChuoi && branchStockView && otherBranchCount > 0
               ? {
                   otherBranchCount,
                   onViewAllBranches: () => setViewAllBranches(true),
@@ -1870,7 +1885,7 @@ export default function HangHoaPage() {
               search,
               page: 0,
               pageSize: 5000,
-              branchId: viewAllBranches ? undefined : activeBranchId,
+              branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
               filters: {
                 productType: scope,
                 ...(categoryFilter !== "all" && { category: [categoryFilter] }),
