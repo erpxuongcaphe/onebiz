@@ -67,6 +67,19 @@ describe("phạm vi chi nhánh Đơn đặt hàng", () => {
     expect(summaryCalls[0].branchId).toBeUndefined();
   });
 
+  it("global switcher chọn tất cả và có quyền thì xem toàn chuỗi", async () => {
+    const scope = phamViDonDatHang({
+      activeBranchId: undefined,
+      viewAllBranches: false,
+      duocXemToanChuoi: true,
+    });
+    await getOrdersTheoPhamVi(scope, LOC);
+    await getChiSoDonDatHangTheoPhamVi(scope, {});
+    expect(scope.mode).toBe("all");
+    expect(orderCalls[0].branchId).toBeUndefined();
+    expect(summaryCalls[0].branchId).toBeUndefined();
+  });
+
   it("không có quyền thì tuyệt đối không đếm chi nhánh khác", async () => {
     const scope = phamViDonDatHang({
       activeBranchId: "branch-1",

@@ -37,7 +37,10 @@ export function phamViChiNhanhHoaDon(opts: {
   viewAllBranches: boolean;
   duocXemToanChuoi: boolean;
 }): PhamViChiNhanh {
-  if (opts.viewAllBranches && opts.duocXemToanChuoi) {
+  // `activeBranchId` rỗng là lựa chọn "Tất cả chi nhánh" của global
+  // switcher (sau khi AuthContext đã sẵn sàng), không phải thiếu phạm vi.
+  // Người không có quyền toàn chuỗi vẫn rơi xuống mode "none" bên dưới.
+  if (opts.duocXemToanChuoi && (opts.viewAllBranches || !opts.activeBranchId)) {
     return { mode: "all", duocDemChiNhanhKhac: false };
   }
   if (opts.activeBranchId) {

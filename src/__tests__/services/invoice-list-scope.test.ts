@@ -85,26 +85,20 @@ describe("Không quyền + chưa có chi nhánh thì KHÔNG truy vấn", () => {
   });
 });
 
-describe("Có quyền nhưng chưa bật toàn chuỗi + chưa có chi nhánh thì vẫn KHÔNG truy vấn", () => {
-  it("getInvoices không được gọi", async () => {
+describe("Global switcher chọn Tất cả chi nhánh", () => {
+  it("có quyền toàn chuỗi thì lấy danh sách và chỉ số toàn công ty", async () => {
     const pv = phamViChiNhanhHoaDon({
       activeBranchId: undefined,
       viewAllBranches: false,
       duocXemToanChuoi: true,
     });
-    expect(pv.mode).toBe("none");
+    expect(pv.mode).toBe("all");
     await getInvoicesTheoPhamVi(pv, LOC);
-    expect(goiGetInvoices).toHaveLength(0);
-  });
-
-  it("cũng không được đếm chi nhánh khác", async () => {
-    const pv = phamViChiNhanhHoaDon({
-      activeBranchId: undefined,
-      viewAllBranches: false,
-      duocXemToanChuoi: true,
-    });
-    expect(await demHoaDonChiNhanhKhac(pv, { filters: {} })).toBe(0);
-    expect(goiGetInvoices).toHaveLength(0);
+    await getChiSoTheoPhamVi(pv, {});
+    expect(goiGetInvoices).toHaveLength(1);
+    expect(goiGetInvoices[0].branchId).toBeUndefined();
+    expect(goiRpcChiSo).toHaveLength(1);
+    expect(goiRpcChiSo[0].branchId).toBeUndefined();
   });
 });
 
@@ -228,11 +222,13 @@ describe("Quét toàn bộ tổ hợp", () => {
     // được lời gọi không kèm chi nhánh.
     expect(choPhep.every((s) => s.includes("quyen=true"))).toBe(true);
 
-    // Ba trường hợp, cả ba đều đòi quyền:
+    // Bốn trường hợp, tất cả đều đòi quyền:
+    //   • global switcher chọn Tất cả + có quyền → "all"
     //   • bật xem toàn chuỗi + có quyền (có hay chưa chọn chi nhánh) → "all"
     //   • có quyền + có chi nhánh → truy vấn ĐẾM ở chi nhánh khác
     expect(choPhep.sort()).toEqual([
       "viewAll=false quyen=true cn=cn-1",
+      "viewAll=false quyen=true cn=khong",
       "viewAll=true quyen=true cn=cn-1",
       "viewAll=true quyen=true cn=khong",
     ]);

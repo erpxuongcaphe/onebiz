@@ -17,7 +17,7 @@ export function phamViDonDatHang(opts: {
   viewAllBranches: boolean;
   duocXemToanChuoi: boolean;
 }): PhamViDonDatHang {
-  if (opts.viewAllBranches && opts.duocXemToanChuoi) {
+  if (opts.duocXemToanChuoi && (opts.viewAllBranches || !opts.activeBranchId)) {
     return { mode: "all", duocDemChiNhanhKhac: false };
   }
   if (opts.activeBranchId) {
