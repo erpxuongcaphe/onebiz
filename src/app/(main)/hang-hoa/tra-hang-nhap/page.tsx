@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { Button } from "@/components/ui/button";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter sang
 // DatePresetFilter + STANDARD_LIST_PRESETS_WITH_ALL (12 option).
 import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
@@ -191,6 +193,7 @@ export default function TraHangNhapPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
@@ -260,35 +263,27 @@ export default function TraHangNhapPage() {
     setExpandedRow(null);
   }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
 
-  return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <SelectFilter
-              options={statusOptions}
-              value={statusFilter}
-              onChange={setStatusFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
+  const pageCompleted = data.filter((row) => row.status === "completed").length;
+  const pageDraft = data.filter((row) => row.status === "draft").length;
+  const pageValue = data.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+  }, [dateFrom, datePreset, dateTo]);
+  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); }, []);
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
+    if (statusFilter !== "all") chips.push({ key: "status", label: "Trạng thái", value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter("all") });
+    return chips;
+  }, [datePreset, datePresetLabel, statusFilter]);
 
-          <FilterGroup label="Thời gian">
-            <DatePresetFilter
-              value={datePreset}
-              onChange={setDatePreset}
-              from={dateFrom}
-              to={dateTo}
-              onFromChange={setDateFrom}
-              onToChange={setDateTo}
-              presets={STANDARD_LIST_PRESETS_WITH_ALL}
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+  return (
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Trả hàng nhập"
+        density="compact"
         searchPlaceholder="Theo mã phiếu"
         searchValue={search}
         onSearchChange={setSearch}
@@ -296,33 +291,6 @@ export default function TraHangNhapPage() {
           { label: "Tạo phiếu trả", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
-
-      {/* KPI row — tính trên trang hiện tại, không call extra query */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="undo" size={16} />}
-          label="Tổng phiếu"
-          value={total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Hoàn thành"
-          value={data.filter((r) => r.status === "completed").length.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="edit_note" size={16} />}
-          label="Phiếu tạm"
-          value={data.filter((r) => r.status === "draft").length.toString()}
-          highlight={data.filter((r) => r.status === "draft").length > 0}
-        />
-        <SummaryCard
-          icon={<Icon name="payments" size={16} />}
-          label="Tổng giá trị"
-          value={formatCurrency(
-            data.reduce((sum, r) => sum + (r.totalAmount ?? 0), 0),
-          )}
-        />
-      </div>
 
       {viewAllBranches && (
         <AllBranchesBanner
@@ -336,6 +304,11 @@ export default function TraHangNhapPage() {
         data={data}
         loading={loading}
         total={total}
+        density="compact"
+        columnToggle
+        toolbarMetrics={<><ListMetric icon={<Icon name="undo" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị trang này" value={formatCurrency(pageValue)} hint="Chỉ tính các dòng đang hiển thị" /></>}
+        toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
+        toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyBranchHint={{
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
@@ -378,6 +351,11 @@ export default function TraHangNhapPage() {
           })
         }
       />
+
+      <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc trả hàng nhập">
+        <FilterGroup label="Trạng thái" activeHint={statusFilter !== "all" ? statusOptions.find((item) => item.value === statusFilter)?.label : undefined}><SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} placeholder="Tất cả" /></FilterGroup>
+        <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
+      </FilterPanel>
 
       <CreatePurchaseReturnDialog
         open={createOpen}
