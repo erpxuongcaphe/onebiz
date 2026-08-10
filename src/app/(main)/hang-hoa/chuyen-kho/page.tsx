@@ -9,14 +9,29 @@
  *   - Complete / Cancel transfer actions
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
-import { FilterSidebar, FilterGroup } from "@/components/shared/filter-sidebar";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
+import {
+  FilterPanel,
+  FilterGroup,
+  CheckboxFilter,
+  DatePresetFilter,
+  PersonFilter,
+  RangeFilter,
+  SelectFilter,
+  type DatePresetValue,
+} from "@/components/shared/filter-sidebar";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -46,12 +61,16 @@ import {
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
-import { useTxRowPermissions } from "@/lib/permissions";
+import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { useToast, useBranchFilter } from "@/lib/contexts";
 import { formatDate, formatNumber } from "@/lib/format";
-import { getBranches, getBranchStockRows } from "@/lib/services";
 import {
-  getStockTransfers,
+  getBranches,
+  getBranchStockRows,
+  getProfilesForPersonFilter,
+} from "@/lib/services";
+import {
+  getStockTransfersForExport,
   getStockTransferById,
   createStockTransfer,
   completeStockTransfer,
@@ -59,6 +78,11 @@ import {
   updateTransferStatus,
   getTransferStatusMeta,
 } from "@/lib/services/supabase/transfers";
+import {
+  phamViChuyenKho,
+  getStockTransfersTheoPhamVi,
+  demChuyenKhoChiNhanhKhac,
+} from "@/lib/services/supabase/stock-transfer-list-scope";
 import type {
   StockTransfer,
   StockTransferStatus,
@@ -67,30 +91,72 @@ import type {
 import { formatUser } from "@/lib/format";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
+import { exportToExcelFromSchema } from "@/lib/excel";
+import { stockTransferExcelSchema } from "@/lib/excel/schemas";
 
 const STATUS_META = getTransferStatusMeta();
-const PAGE_SIZE = 25;
+const SEARCH_FIELDS = [
+  { value: "code", label: "Mã phiếu" },
+  { value: "from_branch_code", label: "Mã kho xuất" },
+  { value: "from_branch_name", label: "Tên kho xuất" },
+  { value: "to_branch_code", label: "Mã kho nhận" },
+  { value: "to_branch_name", label: "Tên kho nhận" },
+  { value: "product_code", label: "Mã sản phẩm" },
+  { value: "product_name", label: "Tên sản phẩm" },
+  { value: "creator_name", label: "Người tạo" },
+  { value: "note", label: "Ghi chú" },
+];
+const STATUS_OPTIONS = Object.entries(STATUS_META).map(([value, meta]) => ({
+  value,
+  label: meta.label,
+}));
 
 export default function ChuyenKhoPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
+  const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("stock_transfer");
   const [data, setData] = useState<StockTransfer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [searchField, setSearchField] = useState("code");
   const [page, setPage] = useState(0);
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [pageSize, setPageSize] = useState(15);
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [fromBranchId, setFromBranchId] = useState("all");
+  const [toBranchId, setToBranchId] = useState("all");
+  const [createdBy, setCreatedBy] = useState("");
+  const [itemCountMin, setItemCountMin] = useState("");
+  const [itemCountMax, setItemCountMax] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
-  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
-  // Phiếu chuyển kho có 2 chi nhánh (from/to) — service lọc bằng
-  // .or(from_branch_id.eq, to_branch_id.eq); bỏ branchId = bỏ điều kiện .or → tất cả.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
-  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
+  const [branchOptions, setBranchOptions] = useState<
+    { label: string; value: string }[]
+  >([{ label: "Tất cả", value: "all" }]);
+  const [creatorOptions, setCreatorOptions] = useState<
+    { label: string; value: string }[]
+  >([]);
+  const requestSequence = useRef(0);
+
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
+
   useEffect(() => {
     setViewAllBranches(false);
   }, [activeBranchId]);
+
+  useEffect(() => {
+    if (!duocXemToanChuoi) setViewAllBranches(false);
+  }, [duocXemToanChuoi]);
 
   // Branches for dialog
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -110,50 +176,135 @@ export default function ChuyenKhoPage() {
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<StockTransfer | null>(null);
 
+  useEffect(() => {
+    if (!branchReady) return;
+    Promise.all([getBranches(), getProfilesForPersonFilter()])
+      .then(([branchRows, profiles]) => {
+        setBranches(branchRows);
+        setBranchOptions([
+          { label: "Tất cả", value: "all" },
+          ...branchRows.map((branch) => ({
+            label: branch.code ? `${branch.code} · ${branch.name}` : branch.name,
+            value: branch.id,
+          })),
+        ]);
+        setCreatorOptions(profiles);
+      })
+      .catch(() => {
+        setBranches([]);
+        setBranchOptions([{ label: "Tất cả", value: "all" }]);
+        setCreatorOptions([]);
+      });
+  }, [branchReady]);
+
+  const dateRange = useMemo(
+    () =>
+      datePreset === "custom"
+        ? { from: dateFrom || undefined, to: dateTo || undefined }
+        : computeListPresetRange(datePreset),
+    [dateFrom, datePreset, dateTo],
+  );
+
+  const commonFilters = useMemo<Record<string, string | string[]>>(
+    () => ({
+      ...(statusFilter.length > 0 && { status: statusFilter }),
+      ...(dateRange.from && { dateFrom: dateRange.from }),
+      ...(dateRange.to && { dateTo: dateRange.to }),
+      ...(fromBranchId !== "all" && { fromBranchId }),
+      ...(toBranchId !== "all" && { toBranchId }),
+      ...(createdBy && { createdBy }),
+      ...(itemCountMin && { itemCountMin }),
+      ...(itemCountMax && { itemCountMax }),
+    }),
+    [
+      createdBy,
+      dateRange.from,
+      dateRange.to,
+      fromBranchId,
+      itemCountMax,
+      itemCountMin,
+      statusFilter,
+      toBranchId,
+    ],
+  );
+
+  const phamVi = useMemo(
+    () =>
+      phamViChuyenKho({
+        activeBranchId,
+        viewAllBranches,
+        duocXemToanChuoi,
+      }),
+    [activeBranchId, duocXemToanChuoi, viewAllBranches],
+  );
+
   const fetchData = useCallback(async () => {
+    if (!branchReady || permissionsLoading) return;
+    const requestId = ++requestSequence.current;
     setLoading(true);
     try {
-      // viewAllBranches (cục bộ) → bỏ điều kiện chi nhánh (.or from/to) → tất cả.
-      const branchScope = viewAllBranches ? undefined : activeBranchId || undefined;
-      const commonFilters = { status: statusFilter };
-      const result = await getStockTransfers({
+      const result = await getStockTransfersTheoPhamVi(phamVi, {
         page,
-        pageSize: PAGE_SIZE,
-        search,
-        filters: {
-          ...commonFilters,
-          ...(branchScope && { branchId: branchScope }),
-        },
+        pageSize,
+        search: debouncedSearch || undefined,
+        searchField,
+        filters: commonFilters,
       });
+      if (requestId !== requestSequence.current) return;
       setData(result.data);
       setTotal(result.total);
-      // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác (cùng bộ lọc, bỏ
-      // branch) để gợi ý. Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-      if (result.data.length === 0 && !viewAllBranches && activeBranchId) {
-        const all = await getStockTransfers({
-          page: 0,
-          pageSize: 1,
-          search,
-          filters: commonFilters,
-        });
-        setOtherBranchCount(all.total);
-      } else {
-        setOtherBranchCount(0);
-      }
-    } catch {
-      toast({ variant: "error", title: "Lỗi tải dữ liệu chuyển kho" });
+
+      const count =
+        result.data.length === 0
+          ? await demChuyenKhoChiNhanhKhac(phamVi, {
+              search: debouncedSearch || undefined,
+              searchField,
+              filters: commonFilters,
+            })
+          : 0;
+      if (requestId === requestSequence.current) setOtherBranchCount(count);
+    } catch (error) {
+      if (requestId !== requestSequence.current) return;
+      toast({
+        variant: "error",
+        title: "Lỗi tải dữ liệu chuyển kho",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại",
+      });
     } finally {
-      setLoading(false);
+      if (requestId === requestSequence.current) setLoading(false);
     }
-  }, [search, page, statusFilter, activeBranchId, viewAllBranches, toast]);
+  }, [
+    branchReady,
+    commonFilters,
+    debouncedSearch,
+    page,
+    pageSize,
+    permissionsLoading,
+    phamVi,
+    searchField,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
   useEffect(() => {
-    getBranches().then(setBranches).catch(() => {});
-  }, []);
+    setPage(0);
+    setExpandedRow(null);
+  }, [
+    createdBy,
+    dateFrom,
+    datePreset,
+    dateTo,
+    debouncedSearch,
+    fromBranchId,
+    itemCountMax,
+    itemCountMin,
+    searchField,
+    statusFilter,
+    toBranchId,
+  ]);
 
   // Mở ConfirmDialog cho action tương ứng — không fire action thật ở đây.
   const requestStartTransit = (t: StockTransfer) =>
@@ -248,22 +399,20 @@ export default function ChuyenKhoPage() {
       header: "Từ → Đến",
       size: 280,
       cell: ({ row }) => (
-        <div className="flex items-center gap-2 text-sm">
-          {/* CEO 06/06/2026 P0 #4: thêm title tooltip để người duyệt thấy
-              tên chi nhánh đầy đủ "Chi nhánh Hà Nội Cầu Giấy" qua hover */}
-          <span
-            className="font-medium truncate max-w-[120px]"
-            title={row.original.fromBranchName}
-          >
-            {row.original.fromBranchName}
-          </span>
+        <div className="flex items-center gap-2 text-sm min-w-0">
+          <div className="min-w-0 max-w-[120px]" title={row.original.fromBranchName}>
+            <div className="font-medium truncate">{row.original.fromBranchName}</div>
+            <div className="text-xs text-muted-foreground font-mono truncate">
+              {row.original.fromBranchCode || "—"}
+            </div>
+          </div>
           <Icon name="arrow_forward" size={14} className="text-muted-foreground shrink-0" />
-          <span
-            className="font-medium truncate max-w-[120px]"
-            title={row.original.toBranchName}
-          >
-            {row.original.toBranchName}
-          </span>
+          <div className="min-w-0 max-w-[120px]" title={row.original.toBranchName}>
+            <div className="font-medium truncate">{row.original.toBranchName}</div>
+            <div className="text-xs text-muted-foreground font-mono truncate">
+              {row.original.toBranchCode || "—"}
+            </div>
+          </div>
         </div>
       ),
     },
@@ -304,6 +453,16 @@ export default function ChuyenKhoPage() {
       ),
     },
     {
+      accessorKey: "createdByName",
+      header: "Người tạo",
+      size: 150,
+      cell: ({ row }) => (
+        <span className="text-xs">
+          {formatUser(row.original.createdByName, row.original.createdBy)}
+        </span>
+      ),
+    },
+    {
       accessorKey: "note",
       header: "Ghi chú",
       cell: ({ row }) => (
@@ -316,61 +475,163 @@ export default function ChuyenKhoPage() {
     // rowActions menu (DataTable rowActions prop below).
   ];
 
-  const pageCount = Math.ceil(total / PAGE_SIZE);
-
-  const statusOptions = Object.entries(STATUS_META).map(([val, m]) => ({
-    value: val,
-    label: m.label,
-  }));
-
-  // KPI stats tính trên trang hiện tại (data đã load) — nhanh, không call extra query.
+  const pageCount = Math.ceil(total / pageSize);
   const now = Date.now();
-  const weekAgo = now - 7 * 24 * 3600 * 1000;
   const sevenDaysMs = 7 * 24 * 3600 * 1000;
-  const kpi = {
-    total,
-    inTransit: data.filter((t) => t.status === "in_transit").length,
-    completedThisWeek: data.filter(
-      (t) => t.status === "completed" && new Date(t.createdAt).getTime() >= weekAgo,
-    ).length,
-    stuckTransit: data.filter(
+  const pageInTransit = data.filter((item) => item.status === "in_transit").length;
+  const pageCompleted = data.filter((item) => item.status === "completed").length;
+  const pageProductCount = data.reduce((sum, item) => sum + item.totalItems, 0);
+  const pageStuckTransit = data.filter(
       (t) =>
         t.status === "in_transit" &&
         now - new Date(t.createdAt).getTime() > sevenDaysMs,
-    ).length,
-  };
+    ).length;
+
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom") {
+      if (!dateFrom && !dateTo) return "Tùy chỉnh";
+      return `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    }
+    return (
+      STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)
+        ?.label ?? "Thời gian"
+    );
+  }, [dateFrom, datePreset, dateTo]);
+
+  const clearListFilters = useCallback(() => {
+    setStatusFilter([]);
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setFromBranchId("all");
+    setToBranchId("all");
+    setCreatedBy("");
+    setItemCountMin("");
+    setItemCountMax("");
+  }, []);
+
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (datePreset !== "all") {
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value: datePresetLabel,
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    }
+    if (statusFilter.length > 0) {
+      chips.push({
+        key: "status",
+        label: "Trạng thái",
+        value: statusFilter
+          .map((value) => STATUS_META[value as StockTransferStatus]?.label ?? value)
+          .join(", "),
+        onClear: () => setStatusFilter([]),
+      });
+    }
+    if (fromBranchId !== "all") {
+      chips.push({
+        key: "fromBranch",
+        label: "Kho xuất",
+        value:
+          branchOptions.find((option) => option.value === fromBranchId)?.label ??
+          "Đã chọn",
+        onClear: () => setFromBranchId("all"),
+      });
+    }
+    if (toBranchId !== "all") {
+      chips.push({
+        key: "toBranch",
+        label: "Kho nhận",
+        value:
+          branchOptions.find((option) => option.value === toBranchId)?.label ??
+          "Đã chọn",
+        onClear: () => setToBranchId("all"),
+      });
+    }
+    if (createdBy) {
+      chips.push({
+        key: "creator",
+        label: "Người tạo",
+        value:
+          creatorOptions.find((option) => option.value === createdBy)?.label ??
+          "Đã chọn",
+        onClear: () => setCreatedBy(""),
+      });
+    }
+    if (itemCountMin || itemCountMax) {
+      chips.push({
+        key: "itemCount",
+        label: "Số mặt hàng",
+        value: `${itemCountMin || "0"} đến ${itemCountMax || "không giới hạn"}`,
+        onClear: () => {
+          setItemCountMin("");
+          setItemCountMax("");
+        },
+      });
+    }
+    return chips;
+  }, [
+    branchOptions,
+    createdBy,
+    creatorOptions,
+    datePreset,
+    datePresetLabel,
+    fromBranchId,
+    itemCountMax,
+    itemCountMin,
+    statusFilter,
+    toBranchId,
+  ]);
+
+  const chuaCoPhamVi = phamVi.mode === "none";
 
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <FilterGroup label="Trạng thái">
-            <div className="space-y-1">
-              <button
-                onClick={() => { setStatusFilter("all"); setPage(0); }}
-                className={`w-full text-left text-xs px-2 py-2 rounded ${statusFilter === "all" ? "bg-primary text-white" : "hover:bg-muted"}`}
-              >
-                Tất cả
-              </button>
-              {statusOptions.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => { setStatusFilter(opt.value); setPage(0); }}
-                  className={`w-full text-left text-xs px-2 py-2 rounded ${statusFilter === opt.value ? "bg-primary text-white" : "hover:bg-muted"}`}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Chuyển kho"
-        searchPlaceholder="Tìm theo mã phiếu, ghi chú..."
+        density="compact"
+        searchPlaceholder="Nhập nội dung tìm kiếm"
         searchValue={search}
-        onSearchChange={(v) => { setSearch(v); setPage(0); }}
+        onSearchChange={setSearch}
+        searchFields={SEARCH_FIELDS}
+        searchField={searchField}
+        onSearchFieldChange={setSearchField}
+        onExport={{
+          excel: async () => {
+            if (phamVi.mode === "none") return;
+            try {
+              toast({
+                title: "Đang chuẩn bị file Excel…",
+                description: "Tải toàn bộ phiếu và dòng sản phẩm theo bộ lọc hiện tại",
+                variant: "info",
+              });
+              const rows = await getStockTransfersForExport({
+                search: debouncedSearch || undefined,
+                searchField,
+                filters: commonFilters,
+                branchId: phamVi.mode === "branch" ? phamVi.branchId : undefined,
+              });
+              if (rows.length === 0) {
+                toast({ title: "Không có dữ liệu để xuất", variant: "info" });
+                return;
+              }
+              await exportToExcelFromSchema(rows, stockTransferExcelSchema);
+            } catch (error) {
+              toast({
+                title: "Lỗi xuất Excel",
+                description: error instanceof Error ? error.message : "Vui lòng thử lại",
+                variant: "error",
+              });
+            }
+          },
+        }}
         actions={[
           {
             label: "Tạo phiếu chuyển kho",
@@ -381,49 +642,6 @@ export default function ChuyenKhoPage() {
         ]}
       />
 
-      {kpi.stuckTransit > 0 && (
-        <div className="mx-4 mt-4 rounded-lg border border-destructive/30 bg-destructive/5 p-3">
-          <div className="flex items-start gap-2">
-            <Icon name="warning" size={20} className="text-destructive mt-0.5 shrink-0" />
-            <div className="flex-1 text-sm">
-              <div className="font-semibold text-destructive">
-                Có {kpi.stuckTransit} phiếu chuyển kho đang vận chuyển quá 7 ngày
-              </div>
-              <div className="text-muted-foreground mt-0.5">
-                Cần kiểm tra với đối tác vận chuyển hoặc chi nhánh nhận để xác nhận tình trạng
-                — hàng có thể đã nhận nhưng chưa ghi nhận vào hệ thống.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="swap_horiz" size={16} />}
-          label="Tổng phiếu"
-          value={kpi.total.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="local_shipping" size={16} />}
-          label="Đang chuyển"
-          value={kpi.inTransit.toString()}
-          highlight={kpi.inTransit > 0}
-        />
-        <SummaryCard
-          icon={<Icon name="check_circle" size={16} />}
-          label="Hoàn thành trong tuần"
-          value={kpi.completedThisWeek.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="warning" size={16} className="text-destructive" />}
-          label="Quá hạn (>7 ngày)"
-          value={kpi.stuckTransit.toString()}
-          danger={kpi.stuckTransit > 0}
-          hint={kpi.stuckTransit > 0 ? "Cần kiểm tra gấp" : undefined}
-        />
-      </div>
-
       {viewAllBranches && (
         <AllBranchesBanner
           branchName={currentBranch?.name}
@@ -431,22 +649,124 @@ export default function ChuyenKhoPage() {
         />
       )}
 
-      <div className="flex-1 min-h-0 px-4 pt-2 pb-4">
-        <DataTable
+      {pageStuckTransit > 0 && (
+        <div className="mx-3 mt-2 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
+          <div className="flex items-start gap-2">
+            <Icon name="warning" size={17} className="text-destructive mt-0.5 shrink-0" />
+            <div className="flex-1 text-xs">
+              <div className="font-semibold text-destructive">
+                Trang này có {pageStuckTransit} phiếu đang vận chuyển quá 7 ngày
+              </div>
+              <div className="text-muted-foreground mt-0.5">
+                Cần kiểm tra với kho nhận; cảnh báo này chỉ tính các dòng đang hiển thị.
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <DataTable
           columns={columns}
           data={data}
           loading={loading}
           total={total}
-          emptyBranchHint={{
-            otherBranchCount,
-            onViewAllBranches: () => setViewAllBranches(true),
-            entityLabel: "phiếu chuyển kho",
-          }}
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="swap_horiz" size={15} />}
+                label="Kết quả"
+                value={formatNumber(total)}
+                hint="Tổng số phiếu theo toàn bộ bộ lọc"
+              />
+              <ListMetric
+                icon={<Icon name="inventory_2" size={15} />}
+                label="Mặt hàng trang này"
+                value={formatNumber(pageProductCount)}
+                hint={`Tổng trên ${data.length} phiếu đang hiển thị`}
+                tone="primary"
+              />
+              <ListMetric
+                icon={<Icon name="local_shipping" size={15} />}
+                label="Đang chuyển trang này"
+                value={formatNumber(pageInTransit)}
+                hint="Chỉ tính các dòng trên trang hiện tại"
+              />
+              <ListMetric
+                icon={<Icon name="check_circle" size={15} />}
+                label="Hoàn thành trang này"
+                value={formatNumber(pageCompleted)}
+                hint="Chỉ tính các dòng trên trang hiện tại"
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+                aria-label={`Mở bộ lọc${
+                  filterChips.length ? `, ${filterChips.length} điều kiện` : ""
+                }`}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
+          defaultColumnVisibility={{ createdByName: false }}
+          emptyTitle={
+            chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy phiếu chuyển kho"
+          }
+          emptyDescription={
+            chuaCoPhamVi
+              ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
+              : "Thử thay đổi thời gian, trạng thái, kho hoặc nội dung tìm kiếm."
+          }
+          emptyIcon={chuaCoPhamVi ? "apartment" : "swap_horiz"}
+          emptyBranchHint={
+            duocXemToanChuoi
+              ? {
+                  otherBranchCount,
+                  onViewAllBranches: () => setViewAllBranches(true),
+                  entityLabel: "phiếu chuyển kho",
+                }
+              : undefined
+          }
           pageIndex={page}
-          pageSize={PAGE_SIZE}
+          pageSize={pageSize}
           pageCount={pageCount}
           onPageChange={setPage}
-          onPageSizeChange={() => {}}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          summaryRow={{ totalItems: formatNumber(pageProductCount) }}
           getRowId={(r) => r.id}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
@@ -489,7 +809,95 @@ export default function ChuyenKhoPage() {
             });
           }}
         />
-      </div>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearListFilters}
+        title="Bộ lọc chuyển kho"
+      >
+        <FilterGroup label="Thời gian tạo" activeHint={datePresetLabel}>
+          <DatePresetFilter
+            value={datePreset}
+            onChange={setDatePreset}
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={setDateFrom}
+            onToChange={setDateTo}
+            presets={STANDARD_LIST_PRESETS_WITH_ALL}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Trạng thái"
+          activeHint={statusFilter.length ? `${statusFilter.length} lựa chọn` : undefined}
+        >
+          <CheckboxFilter
+            options={STATUS_OPTIONS}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Kho xuất"
+          activeHint={
+            fromBranchId === "all"
+              ? undefined
+              : branchOptions.find((option) => option.value === fromBranchId)?.label
+          }
+        >
+          <SelectFilter
+            options={branchOptions}
+            value={fromBranchId}
+            onChange={setFromBranchId}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Kho nhận"
+          activeHint={
+            toBranchId === "all"
+              ? undefined
+              : branchOptions.find((option) => option.value === toBranchId)?.label
+          }
+        >
+          <SelectFilter
+            options={branchOptions}
+            value={toBranchId}
+            onChange={setToBranchId}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Người tạo"
+          activeHint={creatorOptions.find((option) => option.value === createdBy)?.label}
+        >
+          <PersonFilter
+            value={createdBy}
+            onChange={setCreatedBy}
+            placeholder="Chọn người tạo"
+            suggestions={creatorOptions}
+          />
+        </FilterGroup>
+
+        <FilterGroup
+          label="Số mặt hàng"
+          activeHint={itemCountMin || itemCountMax ? "Đang lọc" : undefined}
+        >
+          <RangeFilter
+            fromValue={itemCountMin}
+            toValue={itemCountMax}
+            onFromChange={setItemCountMin}
+            onToChange={setItemCountMax}
+            fromPlaceholder="Tối thiểu"
+            toPlaceholder="Tối đa"
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       {/* Create Transfer Dialog */}
       <CreateTransferDialog

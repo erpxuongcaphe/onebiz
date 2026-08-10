@@ -372,11 +372,17 @@ export { BRANCH_TYPE_LABELS, BRANCH_CODE_PREFIX } from "./branches";
 
 // Stock Transfers (Chuyển kho giữa chi nhánh)
 export {
-  getStockTransfers, getStockTransferById, getTransferStatuses, getTransferStatusMeta,
+  getStockTransfers, getStockTransfersForExport, getStockTransferById, getTransferStatuses, getTransferStatusMeta,
   createStockTransfer, completeStockTransfer, cancelStockTransfer,
   updateTransferStatus, canTransitionTransfer,
 } from "./transfers";
-export type { StockTransfer, StockTransferStatus, StockTransferItem, CreateStockTransferInput } from "./transfers";
+export type { StockTransfer, StockTransferStatus, StockTransferItem, StockTransferExportRow, CreateStockTransferInput } from "./transfers";
+export {
+  phamViChuyenKho,
+  getStockTransfersTheoPhamVi,
+  demChuyenKhoChiNhanhKhac,
+} from "./stock-transfer-list-scope";
+export type { PhamViChuyenKho } from "./stock-transfer-list-scope";
 
 // Audit Log (Lịch sử thao tác)
 export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
