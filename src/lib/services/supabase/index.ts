@@ -46,6 +46,9 @@ export type {
 } from "./purchase-orders";
 export {
   getOrders,
+  getSalesOrderListSummary,
+  khoaChiSoDonDatHang,
+  taoBoNhoChiSoDonDatHang,
   getOrderStatuses,
   saveSalesOrderAtomic,
   saveDraftOrder,
@@ -62,6 +65,8 @@ export {
   getDraftOrderItems,
 } from "./orders";
 export type {
+  SalesOrderListSummary,
+  SalesOrderListSummaryParams,
   DraftOrderSummary,
   DraftOrderDetail,
   SalesOrderItemRow,
@@ -69,6 +74,13 @@ export type {
   SaveSalesOrderInput,
   SaveSalesOrderResult,
 } from "./orders";
+export {
+  phamViDonDatHang,
+  getOrdersTheoPhamVi,
+  demDonDatHangChiNhanhKhac,
+  getChiSoDonDatHangTheoPhamVi,
+} from "./sales-order-list-scope";
+export type { PhamViDonDatHang } from "./sales-order-list-scope";
 export { getReturns, getReturnStatuses, getReturnItems } from "./returns";
 export type { ReturnItemRow } from "./returns";
 export { createSalesReturnAtomic } from "./returns-completion";

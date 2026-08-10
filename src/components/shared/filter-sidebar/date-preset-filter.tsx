@@ -1,4 +1,5 @@
 "use client";
+import { useId } from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -55,6 +56,8 @@ export function DatePresetFilter({
   onToChange,
   presets = defaultPresets,
 }: DatePresetFilterProps) {
+  const radioGroupName = useId();
+
   return (
     <div className="space-y-2">
       {presets.map((preset) => (
@@ -64,7 +67,7 @@ export function DatePresetFilter({
         >
           <input
             type="radio"
-            name="date-preset-filter"
+            name={`date-preset-filter-${radioGroupName}`}
             checked={value === preset.value}
             onChange={() => onChange(preset.value)}
             className="h-3.5 w-3.5 accent-primary cursor-pointer"
