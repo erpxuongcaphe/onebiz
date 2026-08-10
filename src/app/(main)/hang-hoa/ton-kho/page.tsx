@@ -9,12 +9,12 @@ import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
-  ActiveFiltersBar,
   type ActiveFilter,
 } from "@/components/shared/filter-sidebar";
 import {
@@ -782,6 +782,7 @@ export default function TonKhoPage() {
   }, [activeBranchId]);
   const [typeFilter, setTypeFilter] = useState<ProductTypeFilter>("all");
   const [lowStockOnly, setLowStockOnly] = useState<string>("all"); // all | low
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -1084,74 +1085,13 @@ export default function TonKhoPage() {
   };
 
   return (
-    <ListPageLayout
-      sidebar={
-        <FilterSidebar>
-          <ActiveFiltersBar
-            filters={activeFilters}
-            onClearAll={handleClearAllFilters}
-          />
-
-          <FilterGroup
-            label="Chi nhánh"
-            activeHint={
-              branchFilter !== "all"
-                ? branches.find((b) => b.id === branchFilter)?.name?.slice(0, 12)
-                : undefined
-            }
-          >
-            <SelectFilter
-              options={[
-                { label: "Tất cả chi nhánh", value: "all" },
-                ...branches.map((b) => ({
-                  label: b.name,
-                  value: b.id,
-                })),
-              ]}
-              value={branchFilter}
-              onChange={setBranchFilter}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-
-          <FilterGroup
-            label="Loại hàng"
-            activeHint={typeFilter !== "all" ? typeFilter.toUpperCase() : undefined}
-          >
-            <SelectFilter
-              options={[
-                { label: "Tất cả", value: "all" },
-                { label: "NVL — Nguyên vật liệu", value: "nvl" },
-                { label: "SKU — Hàng bán", value: "sku" },
-              ]}
-              value={typeFilter}
-              onChange={(v) => setTypeFilter(v as ProductTypeFilter)}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-
-          <FilterGroup
-            label="Định mức"
-            activeHint={lowStockOnly === "low" ? "Dưới ĐM" : undefined}
-          >
-            <SelectFilter
-              options={[
-                { label: "Tất cả", value: "all" },
-                { label: "Dưới định mức", value: "low" },
-              ]}
-              value={lowStockOnly}
-              onChange={setLowStockOnly}
-              placeholder="Tất cả"
-            />
-          </FilterGroup>
-        </FilterSidebar>
-      }
-    >
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Tồn kho"
         searchPlaceholder="Theo mã hàng, tên hàng..."
         searchValue={search}
         onSearchChange={setSearch}
+        density="compact"
         actions={[
           {
             label: "Tải mẫu tồn kho đầu kỳ",
@@ -1230,29 +1170,6 @@ export default function TonKhoPage() {
         }}
       />
 
-      {/* Summary cards — Responsive Sprint B5 (CEO 25/05/2026):
-          Trước: grid-cols-[repeat(3,minmax(150px,1fr))] → mobile 3 col chật.
-          Sau: 1 col mobile, 2 col sm:, 3 col md:. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-4 pb-1">
-        <SummaryCard
-          icon={<Icon name="inventory" size={16} />}
-          label="Tổng SP"
-          value={totalRows.toString()}
-        />
-        <SummaryCard
-          icon={<Icon name="inventory" size={16} />}
-          label="Tổng giá trị tồn"
-          value={formatCurrency(totalValue)}
-          highlight
-        />
-        <SummaryCard
-          icon={<Icon name="warning" size={16} className="text-destructive" />}
-          label="Dưới định mức"
-          value={lowStockCount.toString()}
-          danger={lowStockCount > 0}
-        />
-      </div>
-
       {/* CEO 28/05/2026: banner trạng thái khóa — mọi người đều thấy. */}
       {inventoryLocked && (
         <div className="mx-4 mb-2 flex items-center gap-2 rounded-lg border border-status-warning/40 bg-status-warning/10 px-3 py-2 text-sm">
@@ -1270,6 +1187,36 @@ export default function TonKhoPage() {
         columns={columns}
         data={rows}
         loading={loading}
+        density="compact"
+        toolbarMetrics={
+          <>
+            <ListMetric label="Tổng sản phẩm" value={formatNumber(totalRows)} icon={<Icon name="inventory" size={15} />} />
+            <ListMetric label="Giá trị tồn" value={formatCurrency(totalValue)} tone="primary" icon={<Icon name="payments" size={15} />} />
+            <ListMetric label="Dưới định mức" value={formatNumber(lowStockCount)} tone={lowStockCount > 0 ? "danger" : "default"} icon={<Icon name="warning" size={15} />} />
+          </>
+        }
+        toolbarActions={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+            onClick={() => setFilterOpen(true)}
+          >
+            <Icon name="filter_alt" size={15} />
+            <span className="hidden sm:inline">Bộ lọc</span>
+            {activeFilters.length > 0 && (
+              <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </Button>
+        }
+        toolbarFooter={
+          activeFilters.length > 0 ? (
+            <FilterChips filters={activeFilters} onClearAll={handleClearAllFilters} />
+          ) : null
+        }
         total={totalRows}
         pageIndex={page}
         pageSize={pageSize}
@@ -1302,6 +1249,49 @@ export default function TonKhoPage() {
           />
         )}
       />
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={activeFilters.length}
+        onClearAll={handleClearAllFilters}
+        title="Bộ lọc tồn kho"
+      >
+        <FilterGroup label="Chi nhánh">
+          <SelectFilter
+            options={[
+              { label: "Tất cả chi nhánh", value: "all" },
+              ...branches.map((branch) => ({ label: branch.name, value: branch.id })),
+            ]}
+            value={branchFilter}
+            onChange={setBranchFilter}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+        <FilterGroup label="Loại hàng">
+          <SelectFilter
+            options={[
+              { label: "Tất cả", value: "all" },
+              { label: "NVL — Nguyên vật liệu", value: "nvl" },
+              { label: "SKU — Hàng bán", value: "sku" },
+            ]}
+            value={typeFilter}
+            onChange={(value) => setTypeFilter(value as ProductTypeFilter)}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+        <FilterGroup label="Định mức">
+          <SelectFilter
+            options={[
+              { label: "Tất cả", value: "all" },
+              { label: "Dưới định mức", value: "low" },
+            ]}
+            value={lowStockOnly}
+            onChange={setLowStockOnly}
+            placeholder="Tất cả"
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       <ImportExcelDialog
         open={importOpen}

@@ -6,10 +6,13 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
+import { ListStrip } from "@/components/shared/list-strip";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -17,7 +20,6 @@ import {
   DetailInfoGrid,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
-import { SummaryCard } from "@/components/shared/summary-card";
 // PERF (CEO 23/05/2026): Lazy-load BOMEditorDialog (572 dòng).
 import dynamic from "next/dynamic";
 const BOMEditorDialog = dynamic(
@@ -33,7 +35,7 @@ import { bomExcelSchema, type BOMImportRow } from "@/lib/excel/schemas";
 import { bulkImportBOMs } from "@/lib/services/supabase/excel-import";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast, useBranchFilter } from "@/lib/contexts";
+import { useToast } from "@/lib/contexts";
 import {
   getAllBOMs,
   getBOMById,
@@ -307,7 +309,6 @@ function BOMDetail({
 
 export default function CongThucPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
   const [data, setData] = useState<BOM[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -326,6 +327,7 @@ export default function CongThucPage() {
 
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [branchFilter, setBranchFilter] = useState<string>("all");
+  const [filterOpen, setFilterOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // CEO 26/05/2026: BỎ auto-sync branchFilter với activeBranchId vì gây
@@ -384,6 +386,17 @@ export default function CongThucPage() {
   });
 
   const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
+  const filterChips: ListFilterChip[] =
+    branchFilter === "all"
+      ? []
+      : [
+          {
+            key: "branch",
+            label: "Chi nhánh sử dụng",
+            value: branches.find((branch) => branch.id === branchFilter)?.name ?? branchFilter,
+            onClear: () => setBranchFilter("all"),
+          },
+        ];
 
   const handleDelete = useCallback(
     async (id: string, name: string) => {
@@ -476,31 +489,13 @@ export default function CongThucPage() {
 
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Chi nhánh sử dụng">
-              <SelectFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  ...branches.map((b) => ({ label: b.name, value: b.id })),
-                ]}
-                value={branchFilter}
-                onChange={setBranchFilter}
-                placeholder="Tất cả"
-              />
-              <div className="text-xs text-muted-foreground mt-1">
-                Chỉ hiện BOM đã dùng trong lệnh sản xuất tại chi nhánh này.
-              </div>
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Công thức sản xuất (BOM)"
           searchPlaceholder="Theo tên công thức, SKU..."
           searchValue={search}
           onSearchChange={setSearch}
+          density="compact"
           onExport={{
             excel: () => {
               // Day 20/05/2026 (CEO Phase 3): Xuất BOM hiện có ra Excel format
@@ -599,28 +594,39 @@ export default function CongThucPage() {
           }}
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-3 pb-1">
-          <SummaryCard
-            icon={<Icon name="science" size={16} />}
-            label="Tổng công thức"
-            value={formatNumber(data.length)}
-          />
-          <SummaryCard
-            icon={<Icon name="factory" size={16} />}
-            label="Đang sử dụng"
-            value={formatNumber(filtered.length)}
-            highlight
-          />
-          <SummaryCard
-            icon={<Icon name="schedule" size={16} />}
-            label="Phiên bản mới nhất"
-            value={
-              data.length > 0
-                ? `v${Math.max(...data.map((b) => b.version))}`
-                : "—"
-            }
-          />
-        </div>
+        <ListStrip
+          metrics={
+            <>
+              <ListMetric label="Tổng công thức" value={formatNumber(data.length)} icon={<Icon name="science" size={15} />} />
+              <ListMetric label="Đang hiển thị" value={formatNumber(filtered.length)} tone="primary" icon={<Icon name="factory" size={15} />} />
+              <ListMetric
+                label="Phiên bản mới nhất"
+                value={data.length > 0 ? `v${Math.max(...data.map((bom) => bom.version))}` : "—"}
+                icon={<Icon name="schedule" size={15} />}
+              />
+            </>
+          }
+          tools={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          }
+        />
+        {filterChips.length > 0 && (
+          <FilterChips filters={filterChips} onClearAll={() => setBranchFilter("all")} />
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-20 text-muted-foreground">
@@ -653,6 +659,7 @@ export default function CongThucPage() {
             columns={columns}
             data={pagedData}
             loading={false}
+            density="compact"
             total={filtered.length}
             pageIndex={page}
             pageSize={pageSize}
@@ -713,6 +720,29 @@ export default function CongThucPage() {
             }}
           />
         )}
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={() => setBranchFilter("all")}
+          title="Bộ lọc công thức"
+        >
+          <FilterGroup label="Chi nhánh sử dụng">
+            <SelectFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                ...branches.map((branch) => ({ label: branch.name, value: branch.id })),
+              ]}
+              value={branchFilter}
+              onChange={setBranchFilter}
+              placeholder="Tất cả"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Chỉ hiện BOM đã dùng trong lệnh sản xuất tại chi nhánh này.
+            </p>
+          </FilterGroup>
+        </FilterPanel>
       </ListPageLayout>
 
       <BOMEditorDialog
