@@ -6,10 +6,12 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListStrip } from "@/components/shared/list-strip";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import { KanbanBoard, type KanbanColumn } from "@/components/shared/kanban-board";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
 } from "@/components/shared/filter-sidebar";
@@ -242,6 +244,7 @@ export default function SanXuatPage() {
   const [cancellingItem, setCancellingItem] = useState<ProductionOrder | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [filterOpen, setFilterOpen] = useState(false);
   // Sprint UX-1 Stage 4: Audit log shortcut
   const [auditDialogTarget, setAuditDialogTarget] = useState<ProductionOrder | null>(null);
 
@@ -337,6 +340,21 @@ export default function SanXuatPage() {
     ).length,
     totalCogs: data.reduce((sum, o) => sum + (o.cogsAmount ?? 0), 0),
   };
+  const allStatuses = Object.keys(STATUS_META);
+  const filterChips: ListFilterChip[] =
+    statusFilters.length === allStatuses.length
+      ? []
+      : [
+          {
+            key: "status",
+            label: "Trạng thái",
+            value:
+              statusFilters.length === 0
+                ? "Không chọn"
+                : statusFilters.map((status) => STATUS_META[status as ProductionOrderStatus]?.label ?? status).join(", "),
+            onClear: () => setStatusFilters(allStatuses),
+          },
+        ];
 
   // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
   const kanbanColumns: KanbanColumn<ProductionOrder>[] = (
@@ -437,27 +455,13 @@ export default function SanXuatPage() {
 
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Trạng thái">
-              <CheckboxFilter
-                options={Object.entries(STATUS_META).map(([value, meta]) => ({
-                  label: meta.label,
-                  value,
-                }))}
-                selected={statusFilters}
-                onChange={setStatusFilters}
-              />
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Lệnh sản xuất"
           searchPlaceholder="Theo mã phiếu, sản phẩm..."
           searchValue={search}
           onSearchChange={setSearch}
+          density="compact"
           actions={[
             {
               label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
@@ -480,30 +484,35 @@ export default function SanXuatPage() {
           ]}
         />
 
-        {!loading && data.length > 0 && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-            <SummaryCard
-              icon={<Icon name="factory" size={16} />}
-              label="Tổng lệnh SX"
-              value={kpi.total.toString()}
-            />
-            <SummaryCard
-              icon={<Icon name="precision_manufacturing" size={16} />}
-              label="Đang sản xuất"
-              value={kpi.inProgress.toString()}
-              highlight={kpi.inProgress > 0}
-            />
-            <SummaryCard
-              icon={<Icon name="check_circle" size={16} />}
-              label="Hoàn thành hôm nay"
-              value={kpi.completedToday.toString()}
-            />
-            <SummaryCard
-              icon={<Icon name="payments" size={16} />}
-              label="Tổng giá vốn SX"
-              value={formatCurrency(kpi.totalCogs)}
-            />
-          </div>
+        <ListStrip
+          metrics={
+            <>
+              <ListMetric label="Tổng lệnh SX" value={formatNumber(kpi.total)} icon={<Icon name="factory" size={15} />} />
+              <ListMetric label="Đang sản xuất" value={formatNumber(kpi.inProgress)} tone={kpi.inProgress > 0 ? "primary" : "default"} icon={<Icon name="precision_manufacturing" size={15} />} />
+              <ListMetric label="Hoàn thành hôm nay" value={formatNumber(kpi.completedToday)} icon={<Icon name="check_circle" size={15} />} />
+              <ListMetric label="Tổng giá vốn SX" value={formatCurrency(kpi.totalCogs)} icon={<Icon name="payments" size={15} />} />
+            </>
+          }
+          tools={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          }
+        />
+        {filterChips.length > 0 && (
+          <FilterChips filters={filterChips} onClearAll={() => setStatusFilters(allStatuses)} />
         )}
 
         {viewAllBranches && (
@@ -567,6 +576,7 @@ export default function SanXuatPage() {
             columns={columns}
             data={pagedData}
             loading={loading}
+            density="compact"
             total={filtered.length}
             emptyBranchHint={{
               otherBranchCount,
@@ -643,6 +653,25 @@ export default function SanXuatPage() {
             }
           />
         )}
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={() => setStatusFilters(allStatuses)}
+          title="Bộ lọc lệnh sản xuất"
+        >
+          <FilterGroup label="Trạng thái">
+            <CheckboxFilter
+              options={Object.entries(STATUS_META).map(([value, meta]) => ({
+                label: meta.label,
+                value,
+              }))}
+              selected={statusFilters}
+              onChange={setStatusFilters}
+            />
+          </FilterGroup>
+        </FilterPanel>
       </ListPageLayout>
 
       <CreateProductionOrderDialog
