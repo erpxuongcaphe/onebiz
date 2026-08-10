@@ -45,6 +45,10 @@ export {
 } from "./internal-sales";
 
 export {
+  stockTransferExcelSchema,
+} from "./stock-transfers";
+
+export {
   bomExcelSchema,
   type BOMImportRow,
 } from "./bom";
