@@ -2067,6 +2067,7 @@
   "cancel_internal_sale_atomic",
   "cancel_inventory_check_atomic",
   "cancel_legacy_sales_order_atomic",
+  "change_customer_code_atomic",
   "change_my_pos_pin",
   "change_production_status_atomic",
   "check_expiring_lots",
@@ -2336,5 +2337,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 320
+ "soRpc": 321
 }

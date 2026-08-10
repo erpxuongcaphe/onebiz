@@ -34,7 +34,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
-import { ConfirmDialog } from "@/components/shared/dialogs";
+import { ChangeCustomerCodeDialog, ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
 import dynamic from "next/dynamic";
 const CreateCustomerDialog = dynamic(
@@ -97,6 +97,7 @@ export default function KhachHangPage() {
   //     → manager cấp OTP từ /manager/otp → cashier nhập → service với otpId
   const { hasPermission } = usePermissions();
   const canDeleteCustomer = hasPermission(PERMISSIONS.CUSTOMERS_DELETE);
+  const canEditCustomer = hasPermission(PERMISSIONS.CUSTOMERS_EDIT);
   // Sprint A.2: cashier KHÔNG được thấy công nợ KH (leak business data).
   const canViewDebt = hasPermission(PERMISSIONS.CUSTOMERS_VIEW_DEBT);
 
@@ -148,6 +149,7 @@ export default function KhachHangPage() {
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [changingCodeCustomer, setChangingCodeCustomer] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
   // Delete
@@ -818,6 +820,15 @@ export default function KhachHangPage() {
                 setCreateOpen(true);
               },
             },
+            ...(canEditCustomer && !row.isInternal && row.code !== "KL-VL"
+              ? [
+                  {
+                    label: "Đổi mã khách hàng",
+                    icon: <Icon name="badge" size={16} />,
+                    onClick: () => setChangingCodeCustomer(row),
+                  },
+                ]
+              : []),
             // Phase 3a: luôn hiện row action "Xoá". Permission check chuyển
             // sang ConfirmDialog onConfirm — không có quyền sẽ mở OTP dialog.
             {
@@ -839,6 +850,14 @@ export default function KhachHangPage() {
         }}
         onSuccess={fetchData}
         initialData={editingCustomer ?? undefined}
+      />
+
+      <ChangeCustomerCodeDialog
+        customer={changingCodeCustomer}
+        onOpenChange={(open) => {
+          if (!open) setChangingCodeCustomer(null);
+        }}
+        onSuccess={fetchData}
       />
 
       <ConfirmDialog
