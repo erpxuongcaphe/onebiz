@@ -15,11 +15,19 @@
 //  - Toast undo khi xoá thay confirm dialog (giảm anxiety, giảm 1 click).
 //  - Tab label "Hàng bán (SKU)" đồng bộ với trang Hàng hoá.
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+} from "@/components/shared/filter-sidebar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -62,6 +70,19 @@ import {
 } from "@/lib/services/supabase/modifier-groups";
 
 type CategoryScope = "nvl" | "sku";
+type CategoryUsageFilter = "all" | "used" | "empty";
+
+const CHANNEL_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Retail", value: "retail" },
+  { label: "FnB", value: "fnb" },
+];
+
+const USAGE_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Có sản phẩm", value: "used" },
+  { label: "Chưa có sản phẩm", value: "empty" },
+];
 
 // ============================================================
 // Inline panel — list SP trong nhóm (CEO bấm nhóm "Cà phê" → thấy ngay
@@ -69,7 +90,13 @@ type CategoryScope = "nvl" | "sku";
 // ============================================================
 function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
   const [items, setItems] = useState<
-    Array<{ id: string; code: string; name: string; stock: number; unit?: string }>
+    Array<{
+      id: string;
+      code: string;
+      name: string;
+      stock: number;
+      unit?: string;
+    }>
   >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -97,7 +124,11 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-6 text-muted-foreground">
-        <Icon name="progress_activity" size={16} className="animate-spin mr-2" />
+        <Icon
+          name="progress_activity"
+          size={16}
+          className="animate-spin mr-2"
+        />
         <span className="text-sm">Đang tải sản phẩm...</span>
       </div>
     );
@@ -157,7 +188,9 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
               >
                 {formatCurrency(p.stock)}
               </span>
-              <span className="text-xs text-muted-foreground">{p.unit ?? "—"}</span>
+              <span className="text-xs text-muted-foreground">
+                {p.unit ?? "—"}
+              </span>
             </li>
           ))}
         </ul>
@@ -184,6 +217,8 @@ export default function NhomHangPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [usageFilter, setUsageFilter] = useState<CategoryUsageFilter>("all");
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // Search debounce — 300ms vừa snappy vừa không filter mỗi keystroke
@@ -196,12 +231,15 @@ export default function NhomHangPage() {
 
   // Dialog state
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<ProductCategory | null>(null);
+  const [editingCategory, setEditingCategory] =
+    useState<ProductCategory | null>(null);
   const [categoryName, setCategoryName] = useState("");
   const [categoryCode, setCategoryCode] = useState("");
   // Day 22/05/2026 (CEO V1): channel cho category scope='sku'. Mặc định 'fnb'
   // (vì chuỗi coffee chain anh chủ yếu FnB). Edit mode prefill từ DB.
-  const [categoryChannel, setCategoryChannel] = useState<"fnb" | "retail">("fnb");
+  const [categoryChannel, setCategoryChannel] = useState<"fnb" | "retail">(
+    "fnb",
+  );
   // Track xem user đã edit code thủ công chưa — nếu rồi thì stop auto-suggest
   // khi họ tiếp tục gõ name (tôn trọng input của user).
   const codeManuallyEditedRef = useRef(false);
@@ -322,18 +360,80 @@ export default function NhomHangPage() {
   }
 
   // Filter by debouncedSearch + channelFilter (Day 20/05/2026 CEO Fix #3)
-  const filtered = data
-    .filter((c) =>
-      !debouncedSearch.trim()
-        ? true
-        : c.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-    )
-    .filter((c) => {
-      if (scope !== "sku" || channelFilter === "all") return true;
-      const slot = channelBreakdown.get(c.id);
-      if (!slot) return false;
-      return channelFilter === "fnb" ? slot.fnb > 0 : slot.retail > 0;
-    });
+  const filtered = useMemo(
+    () =>
+      data
+        .filter((category) => {
+          const normalizedSearch = debouncedSearch.trim().toLowerCase();
+          if (!normalizedSearch) return true;
+          return (
+            category.name.toLowerCase().includes(normalizedSearch) ||
+            (category.code ?? "").toLowerCase().includes(normalizedSearch)
+          );
+        })
+        .filter((category) => {
+          if (usageFilter === "used" && (category.productCount ?? 0) <= 0)
+            return false;
+          if (usageFilter === "empty" && (category.productCount ?? 0) > 0)
+            return false;
+          return true;
+        })
+        .filter((c) => {
+          if (scope !== "sku" || channelFilter === "all") return true;
+          const slot = channelBreakdown.get(c.id);
+          if (!slot) return false;
+          return channelFilter === "fnb" ? slot.fnb > 0 : slot.retail > 0;
+        }),
+    [
+      channelBreakdown,
+      channelFilter,
+      data,
+      debouncedSearch,
+      scope,
+      usageFilter,
+    ],
+  );
+
+  const totalProducts = data.reduce(
+    (sum, category) => sum + (category.productCount ?? 0),
+    0,
+  );
+  const emptyGroups = data.filter(
+    (category) => (category.productCount ?? 0) <= 0,
+  ).length;
+  const fnbGroups = Array.from(channelBreakdown.values()).filter(
+    (slot) => slot.fnb > 0,
+  ).length;
+
+  const activeFilters = useMemo(() => {
+    const filters = [];
+    if (scope === "sku" && channelFilter !== "all") {
+      filters.push({
+        key: "channel",
+        label: "Kênh",
+        value:
+          CHANNEL_OPTIONS.find((option) => option.value === channelFilter)
+            ?.label ?? channelFilter,
+        onClear: () => setChannelFilter("all"),
+      });
+    }
+    if (usageFilter !== "all") {
+      filters.push({
+        key: "usage",
+        label: "Sử dụng",
+        value:
+          USAGE_OPTIONS.find((option) => option.value === usageFilter)?.label ??
+          usageFilter,
+        onClear: () => setUsageFilter("all"),
+      });
+    }
+    return filters;
+  }, [channelFilter, scope, usageFilter]);
+
+  const clearFilters = useCallback(() => {
+    setChannelFilter("all");
+    setUsageFilter("all");
+  }, []);
 
   // -----------------------------------------------------------------------
   // Create / Edit handlers
@@ -439,7 +539,9 @@ export default function NhomHangPage() {
       const msg = err instanceof Error ? err.message : "Vui lòng thử lại";
       const isDup = /unique|duplicate|23505/i.test(msg);
       if (isDup) {
-        setErrors({ code: `Mã "${trimmedCode}" đã tồn tại trong ${scope === "nvl" ? "NVL" : "Hàng bán"}` });
+        setErrors({
+          code: `Mã "${trimmedCode}" đã tồn tại trong ${scope === "nvl" ? "NVL" : "Hàng bán"}`,
+        });
       } else {
         toast({
           variant: "error",
@@ -556,7 +658,11 @@ export default function NhomHangPage() {
       size: 280,
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
-          <Icon name="label" size={16} className="text-muted-foreground shrink-0" />
+          <Icon
+            name="label"
+            size={16}
+            className="text-muted-foreground shrink-0"
+          />
           <span className="font-medium">{row.original.name}</span>
         </div>
       ),
@@ -585,8 +691,7 @@ export default function NhomHangPage() {
               className="text-xs text-status-warning inline-flex items-center gap-1"
               title="Category chưa có sản phẩm → sẽ ẨN khỏi POS đến khi thêm SP đầu tiên"
             >
-              <Icon name="warning" size={12} />
-              0 — ẩn khỏi POS
+              <Icon name="warning" size={12} />0 — ẩn khỏi POS
             </span>
           );
         }
@@ -687,9 +792,10 @@ export default function NhomHangPage() {
 
   return (
     <>
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Nhóm hàng"
+          density="compact"
           tabs={
             <Tabs
               value={scope}
@@ -705,7 +811,7 @@ export default function NhomHangPage() {
               </TabsList>
             </Tabs>
           }
-          searchPlaceholder="Tìm theo tên nhóm..."
+          searchPlaceholder="Theo tên hoặc mã nhóm..."
           searchValue={search}
           onSearchChange={setSearch}
           actions={[
@@ -758,40 +864,61 @@ export default function NhomHangPage() {
           ]}
         />
 
-        {/* Day 20/05/2026 (CEO Fix #3): chip filter "Kênh áp dụng" cho SKU
-            categories. CEO biết ngay category nào dùng retail/FnB mà không
-            cần ghi tay "(retail)/(FnB)" trong tên. */}
-        {scope === "sku" && (
-          <div className="flex flex-wrap items-center gap-2 px-4 pt-3 pb-1">
-            <span className="text-xs text-muted-foreground mr-1">
-              Kênh áp dụng:
-            </span>
-            {(
-              [
-                { v: "all", l: "Tất cả" },
-                { v: "retail", l: "Retail" },
-                { v: "fnb", l: "FnB" },
-              ] as const
-            ).map((tab) => {
-              const isActive = channelFilter === tab.v;
-              return (
-                <button
-                  key={tab.v}
-                  type="button"
-                  onClick={() => setChannelFilter(tab.v)}
-                  className={
-                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors border " +
-                    (isActive
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-surface-variant text-on-surface-variant border-border hover:bg-surface-container")
-                  }
-                >
-                  {tab.l}
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <div
+          className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+          role="region"
+          aria-label="Chỉ số và công cụ nhóm hàng"
+        >
+          <ListMetric
+            label="Nhóm hàng"
+            value={data.length.toString()}
+            hint={`${filtered.length} đang hiển thị`}
+            icon={<Icon name="category" size={16} />}
+            loading={loading}
+          />
+          <ListMetric
+            label="Sản phẩm"
+            value={totalProducts.toString()}
+            icon={<Icon name="inventory_2" size={16} />}
+            loading={loading}
+          />
+          <ListMetric
+            label="Nhóm trống"
+            value={emptyGroups.toString()}
+            icon={<Icon name="folder_off" size={16} />}
+            tone={emptyGroups > 0 ? "danger" : "default"}
+            loading={loading}
+          />
+          {scope === "sku" && (
+            <ListMetric
+              label="Nhóm FnB"
+              value={fnbGroups.toString()}
+              icon={<Icon name="restaurant" size={16} />}
+              loading={loading}
+            />
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-8 shrink-0 gap-1.5"
+            onClick={() => setFilterOpen(true)}
+            aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+          >
+            <Icon name="filter_alt" size={15} />
+            Bộ lọc
+            {activeFilters.length > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </Button>
+        </div>
+
+        <FilterChips
+          filters={activeFilters}
+          onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
+        />
 
         {isEmpty ? (
           <div className="flex flex-1 flex-col items-center justify-center text-center px-6 py-12">
@@ -801,8 +928,7 @@ export default function NhomHangPage() {
               className="text-muted-foreground/30 mb-4"
             />
             <h3 className="text-base font-medium mb-1">
-              Chưa có nhóm hàng nào trong{" "}
-              {scope === "nvl" ? "NVL" : "Hàng bán"}
+              Chưa có nhóm hàng nào trong {scope === "nvl" ? "NVL" : "Hàng bán"}
             </h3>
             <p className="text-sm text-muted-foreground mb-4 max-w-md">
               Nhóm hàng giúp anh tổ chức sản phẩm theo loại (Cà phê, Sữa,
@@ -818,18 +944,68 @@ export default function NhomHangPage() {
             </Button>
           </div>
         ) : (
-          <DataTable
-            columns={columns}
-            data={filtered}
-            loading={loading}
-            total={filtered.length}
-            getRowId={(row) => row.id}
-            expandedRow={expandedRow}
-            onExpandedRowChange={setExpandedRow}
-            renderDetail={(cat) => <CategoryProductsPanel categoryId={cat.id} />}
-          />
+          <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+            <DataTable
+              columns={columns}
+              data={filtered}
+              loading={loading}
+              total={filtered.length}
+              getRowId={(row) => row.id}
+              expandedRow={expandedRow}
+              onExpandedRowChange={setExpandedRow}
+              renderDetail={(cat) => (
+                <CategoryProductsPanel categoryId={cat.id} />
+              )}
+            />
+          </div>
         )}
-      </div>
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={activeFilters.length}
+          onClearAll={clearFilters}
+          title="Bộ lọc nhóm hàng"
+        >
+          {scope === "sku" && (
+            <FilterGroup
+              label="Kênh áp dụng"
+              activeHint={
+                channelFilter === "all"
+                  ? undefined
+                  : CHANNEL_OPTIONS.find(
+                      (option) => option.value === channelFilter,
+                    )?.label
+              }
+            >
+              <RadioFilter
+                name="category-channel"
+                options={CHANNEL_OPTIONS}
+                value={channelFilter}
+                onChange={(value) =>
+                  setChannelFilter(value as "all" | "fnb" | "retail")
+                }
+              />
+            </FilterGroup>
+          )}
+          <FilterGroup
+            label="Tình trạng sử dụng"
+            activeHint={
+              usageFilter === "all"
+                ? undefined
+                : USAGE_OPTIONS.find((option) => option.value === usageFilter)
+                    ?.label
+            }
+          >
+            <RadioFilter
+              name="category-usage"
+              options={USAGE_OPTIONS}
+              value={usageFilter}
+              onChange={(value) => setUsageFilter(value as CategoryUsageFilter)}
+            />
+          </FilterGroup>
+        </FilterPanel>
+      </ListPageLayout>
 
       {/* ============================================================ */}
       {/* Create / Edit dialog                                         */}
@@ -960,22 +1136,33 @@ export default function NhomHangPage() {
             {scope === "sku" && categoryChannel === "fnb" && (
               <div className="space-y-2 rounded-lg border bg-status-warning/5 p-3">
                 <div className="flex items-start gap-2">
-                  <Icon name="tune" size={16} className="text-status-warning shrink-0 mt-0.5" />
+                  <Icon
+                    name="tune"
+                    size={16}
+                    className="text-status-warning shrink-0 mt-0.5"
+                  />
                   <div className="flex-1">
                     <label className="text-sm font-medium">
                       Tuỳ chọn mặc định cho nhóm
                     </label>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Mọi SP trong nhóm này sẽ tự thừa kế các nhóm tuỳ chọn anh tick. SP riêng có thể override sau ở form sửa SP.
+                      Mọi SP trong nhóm này sẽ tự thừa kế các nhóm tuỳ chọn anh
+                      tick. SP riêng có thể override sau ở form sửa SP.
                     </p>
                   </div>
                 </div>
                 {loadingModifiers ? (
-                  <p className="text-xs text-muted-foreground py-2">Đang tải...</p>
+                  <p className="text-xs text-muted-foreground py-2">
+                    Đang tải...
+                  </p>
                 ) : availableModifierGroups.length === 0 ? (
                   <p className="text-xs text-muted-foreground py-2">
                     Chưa có nhóm tuỳ chọn nào. Vào{" "}
-                    <a href="/hang-hoa/tuy-chon-fnb" target="_blank" className="text-primary underline">
+                    <a
+                      href="/hang-hoa/tuy-chon-fnb"
+                      target="_blank"
+                      className="text-primary underline"
+                    >
                       Tuỳ chọn món FnB
                     </a>{" "}
                     để tạo (có nút "Tạo bộ tuỳ chọn mẫu" sinh sẵn 4 nhóm).
@@ -1012,7 +1199,8 @@ export default function NhomHangPage() {
                 )}
                 {selectedModifierGroupIds.size > 0 && (
                   <p className="text-xs text-status-warning mt-1">
-                    Đã chọn {selectedModifierGroupIds.size} nhóm — tất cả SP trong nhóm này sẽ tự thừa kế.
+                    Đã chọn {selectedModifierGroupIds.size} nhóm — tất cả SP
+                    trong nhóm này sẽ tự thừa kế.
                   </p>
                 )}
               </div>
