@@ -402,7 +402,7 @@ export {
 export type { PhamViChuyenKho } from "./stock-transfer-list-scope";
 
 // Audit Log (Lịch sử thao tác)
-export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter } from "./audit";
+export { getAuditLogs, getAuditLogsByEntity, recordAuditLog, getAuditStats, getActionOptions, getEntityTypeOptions, getProfilesForPersonFilter, getAuditActionLabel, getAuditEntityTypeLabel, getAuditFieldLabel, localizeAuditData } from "./audit";
 export { getTenantBusinessInfo, updateTenantBusinessInfo, getTenantSetting, setTenantSetting, listTenantSettings, isAllowNegativeStock, setAllowNegativeStock, isRequireBomForSku, setRequireBomForSku, getInventoryLockState, isInventoryLocked, setInventoryLocked } from "./tenant-settings";
 export type { TenantBusinessInfo, TenantSettingRow, SettingValue, InventoryLockState } from "./tenant-settings";
 export type { BomConsumeResult, BomConsumedMaterial, BomConsumeWarning } from "./pos-checkout";
