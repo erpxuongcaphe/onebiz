@@ -10,10 +10,18 @@
  * create-product-dialog.tsx) để PREVENT duplicate from the start.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+} from "@/components/shared/filter-sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,18 +43,35 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/lib/contexts";
 import { getAllUnits, renameUnit, mergeUnits } from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
-import { SummaryCard } from "@/components/shared/summary-card";
 
 interface UnitRow {
   unit: string;
   productCount: number;
 }
 
+type UnitHealthFilter = "all" | "duplicate" | "clean";
+type UnitUsageFilter = "all" | "used" | "unused";
+
+const HEALTH_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Có khả năng trùng", value: "duplicate" },
+  { label: "Không trùng tên", value: "clean" },
+];
+
+const USAGE_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Đang được sử dụng", value: "used" },
+  { label: "Chưa được sử dụng", value: "unused" },
+];
+
 export default function DonViTinhPage() {
   const { toast } = useToast();
   const [units, setUnits] = useState<UnitRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [healthFilter, setHealthFilter] = useState<UnitHealthFilter>("all");
+  const [usageFilter, setUsageFilter] = useState<UnitUsageFilter>("all");
 
   // Rename dialog state
   const [renameOpen, setRenameOpen] = useState(false);
@@ -81,15 +106,8 @@ export default function DonViTinhPage() {
     fetchData();
   }, [fetchData]);
 
-  // Filter
-  const filtered = search.trim()
-    ? units.filter((u) =>
-        u.unit.toLowerCase().includes(search.toLowerCase().trim()),
-      )
-    : units;
-
   // Detect potential duplicates (case-insensitive groups)
-  const duplicateGroups = (() => {
+  const duplicateGroups = useMemo(() => {
     const groups = new Map<string, string[]>();
     for (const u of units) {
       const key = u.unit.toLowerCase();
@@ -98,7 +116,60 @@ export default function DonViTinhPage() {
       groups.set(key, list);
     }
     return Array.from(groups.entries()).filter(([, list]) => list.length > 1);
-  })();
+  }, [units]);
+
+  const duplicateNames = useMemo(
+    () => new Set(duplicateGroups.map(([key]) => key)),
+    [duplicateGroups],
+  );
+
+  const filtered = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return units.filter((unit) => {
+      if (
+        normalizedSearch &&
+        !unit.unit.toLowerCase().includes(normalizedSearch)
+      ) {
+        return false;
+      }
+      const hasDuplicate = duplicateNames.has(unit.unit.toLowerCase());
+      if (healthFilter === "duplicate" && !hasDuplicate) return false;
+      if (healthFilter === "clean" && hasDuplicate) return false;
+      if (usageFilter === "used" && unit.productCount <= 0) return false;
+      if (usageFilter === "unused" && unit.productCount > 0) return false;
+      return true;
+    });
+  }, [duplicateNames, healthFilter, search, units, usageFilter]);
+
+  const activeFilters = useMemo(() => {
+    const filters = [];
+    if (healthFilter !== "all") {
+      filters.push({
+        key: "health",
+        label: "Chuẩn hóa",
+        value:
+          HEALTH_OPTIONS.find((option) => option.value === healthFilter)
+            ?.label ?? healthFilter,
+        onClear: () => setHealthFilter("all"),
+      });
+    }
+    if (usageFilter !== "all") {
+      filters.push({
+        key: "usage",
+        label: "Sử dụng",
+        value:
+          USAGE_OPTIONS.find((option) => option.value === usageFilter)?.label ??
+          usageFilter,
+        onClear: () => setUsageFilter("all"),
+      });
+    }
+    return filters;
+  }, [healthFilter, usageFilter]);
+
+  const clearFilters = useCallback(() => {
+    setHealthFilter("all");
+    setUsageFilter("all");
+  }, []);
 
   // ─────────── Handlers ───────────
   function openRename(unit: string) {
@@ -120,7 +191,9 @@ export default function DonViTinhPage() {
     }
     // Check existing — nếu newName đã tồn tại trong list, đề nghị Gộp thay vì Đổi tên
     const exists = units.some(
-      (u) => u.unit !== renameSource && u.unit.toLowerCase() === newName.toLowerCase(),
+      (u) =>
+        u.unit !== renameSource &&
+        u.unit.toLowerCase() === newName.toLowerCase(),
     );
     if (exists) {
       setRenameError(
@@ -265,37 +338,74 @@ export default function DonViTinhPage() {
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Đơn vị tính"
+        density="compact"
         searchPlaceholder="Tìm đơn vị..."
         searchValue={search}
         onSearchChange={setSearch}
       />
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-3">
-        <SummaryCard
+      <div
+        className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+        role="region"
+        aria-label="Chỉ số và công cụ đơn vị tính"
+      >
+        <ListMetric
           icon={<Icon name="straighten" size={16} />}
-          label="Tổng đơn vị"
+          label="Đơn vị tính"
           value={units.length.toString()}
+          hint={`${filtered.length} đang hiển thị`}
+          loading={loading}
         />
-        <SummaryCard
+        <ListMetric
           icon={<Icon name="layers" size={16} />}
           label="Lần dùng"
           value={units.reduce((s, u) => s + u.productCount, 0).toString()}
+          loading={loading}
         />
-        <SummaryCard
+        <ListMetric
           icon={<Icon name="warning" size={16} />}
           label="Có khả năng trùng"
           value={duplicateGroups.length.toString()}
-          danger={duplicateGroups.length > 0}
+          tone={duplicateGroups.length > 0 ? "danger" : "default"}
+          loading={loading}
         />
+        <ListMetric
+          icon={<Icon name="inventory_2" size={16} />}
+          label="Chưa sử dụng"
+          value={units
+            .filter((unit) => unit.productCount <= 0)
+            .length.toString()}
+          loading={loading}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto h-8 shrink-0 gap-1.5"
+          onClick={() => setFilterOpen(true)}
+          aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+        >
+          <Icon name="filter_alt" size={15} />
+          Bộ lọc
+          {activeFilters.length > 0 && (
+            <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              {activeFilters.length}
+            </span>
+          )}
+        </Button>
       </div>
+
+      <FilterChips
+        filters={activeFilters}
+        onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
+      />
 
       {/* Banner: cảnh báo khi có duplicate */}
       {duplicateGroups.length > 0 && (
-        <div className="mx-4 mt-3 flex items-start gap-2 p-3 bg-status-warning/10 border border-status-warning/30 rounded-lg text-xs">
+        <div className="mx-3 mt-2 flex items-start gap-2 rounded-md border border-status-warning/30 bg-status-warning/10 px-3 py-2 text-xs">
           <Icon
             name="warning"
             size={16}
@@ -318,25 +428,60 @@ export default function DonViTinhPage() {
         </div>
       )}
 
-      {/* Banner info — chuẩn hoá về SummaryCard pattern */}
-      <div className="mx-4 mt-3 flex items-start gap-2 p-3 bg-primary-fixed/40 border border-primary-fixed rounded-lg text-xs">
-        <Icon name="info" size={16} className="shrink-0 mt-0.5 text-primary" />
-        <div className="text-muted-foreground">
-          <p className="font-medium text-foreground">Quản lý tên đơn vị tính</p>
-          <p className="mt-0.5">
-            Mỗi sản phẩm có 3 đơn vị (mua / kho / bán) — set khi tạo SP. Trang
-            này dùng để <strong>đổi tên</strong> (sửa chính tả) hoặc{" "}
-            <strong>gộp</strong> 2 đơn vị thành 1 (khi data lộn xộn).
-          </p>
-        </div>
+      <div className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+        Đổi tên để sửa cách viết; gộp để hợp nhất các đơn vị trùng trên sản
+        phẩm.
       </div>
 
-      <DataTable
-        columns={columns}
-        data={filtered}
-        loading={loading}
-        getRowId={(row) => row.unit}
-      />
+      <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+        <DataTable
+          columns={columns}
+          data={filtered}
+          loading={loading}
+          getRowId={(row) => row.unit}
+        />
+      </div>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={activeFilters.length}
+        onClearAll={clearFilters}
+        title="Bộ lọc đơn vị tính"
+      >
+        <FilterGroup
+          label="Tình trạng chuẩn hóa"
+          activeHint={
+            healthFilter === "all"
+              ? undefined
+              : HEALTH_OPTIONS.find((option) => option.value === healthFilter)
+                  ?.label
+          }
+        >
+          <RadioFilter
+            name="unit-health"
+            options={HEALTH_OPTIONS}
+            value={healthFilter}
+            onChange={(value) => setHealthFilter(value as UnitHealthFilter)}
+          />
+        </FilterGroup>
+        <FilterGroup
+          label="Tình trạng sử dụng"
+          activeHint={
+            usageFilter === "all"
+              ? undefined
+              : USAGE_OPTIONS.find((option) => option.value === usageFilter)
+                  ?.label
+          }
+        >
+          <RadioFilter
+            name="unit-usage"
+            options={USAGE_OPTIONS}
+            value={usageFilter}
+            onChange={(value) => setUsageFilter(value as UnitUsageFilter)}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       {/* ───────── Rename Dialog ───────── */}
       <Dialog
@@ -469,6 +614,6 @@ export default function DonViTinhPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ListPageLayout>
   );
 }
