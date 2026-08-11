@@ -4,10 +4,18 @@
 // Đây là bảng THẬT mà khách hàng link tới + POS đọc chiết khấu mặc định.
 // (Trước đây trang này sửa nhầm bảng categories scope=customer — bảng rỗng.)
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+} from "@/components/shared/filter-sidebar";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -28,11 +36,21 @@ import {
 } from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
 
+type DiscountFilter = "all" | "with_discount" | "without_discount";
+
+const DISCOUNT_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Có chiết khấu", value: "with_discount" },
+  { label: "Không chiết khấu", value: "without_discount" },
+];
+
 export default function NhomKhachHangPage() {
   const { toast } = useToast();
   const [data, setData] = useState<CustomerGroupFull[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [discountFilter, setDiscountFilter] = useState<DiscountFilter>("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerGroupFull | null>(null);
 
@@ -56,10 +74,44 @@ export default function NhomKhachHangPage() {
     fetchData();
   }, [fetchData]);
 
-  const filtered = data.filter((g) => {
-    if (!search) return true;
-    return g.name.toLowerCase().includes(search.toLowerCase());
-  });
+  const filtered = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return data.filter((group) => {
+      if (
+        normalizedSearch &&
+        !group.name.toLowerCase().includes(normalizedSearch) &&
+        !(group.note ?? "").toLowerCase().includes(normalizedSearch)
+      ) {
+        return false;
+      }
+      if (discountFilter === "with_discount") return group.discountPercent > 0;
+      if (discountFilter === "without_discount")
+        return group.discountPercent <= 0;
+      return true;
+    });
+  }, [data, discountFilter, search]);
+
+  const discountedCount = data.filter(
+    (group) => group.discountPercent > 0,
+  ).length;
+  const highestDiscount = data.reduce(
+    (highest, group) => Math.max(highest, group.discountPercent),
+    0,
+  );
+
+  const activeFilters = useMemo(() => {
+    if (discountFilter === "all") return [];
+    return [
+      {
+        key: "discount",
+        label: "Chiết khấu",
+        value:
+          DISCOUNT_OPTIONS.find((option) => option.value === discountFilter)
+            ?.label ?? discountFilter,
+        onClear: () => setDiscountFilter("all"),
+      },
+    ];
+  }, [discountFilter]);
 
   async function handleDelete(group: CustomerGroupFull) {
     if (
@@ -116,17 +168,20 @@ export default function NhomKhachHangPage() {
       accessorKey: "note",
       header: "Ghi chú",
       cell: ({ row }) => (
-        <span className="text-sm text-muted-foreground">{row.original.note ?? "—"}</span>
+        <span className="text-sm text-muted-foreground">
+          {row.original.note ?? "—"}
+        </span>
       ),
     },
   ];
 
   return (
     <>
-      <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Nhóm khách hàng"
-          searchPlaceholder="Theo tên nhóm..."
+          density="compact"
+          searchPlaceholder="Theo tên nhóm, ghi chú..."
           searchValue={search}
           onSearchChange={setSearch}
           actions={[
@@ -142,42 +197,120 @@ export default function NhomKhachHangPage() {
           ]}
         />
 
-        <div className="px-4 pt-3">
-          <p className="text-xs text-muted-foreground">
-            Chiết khấu mặc định sẽ tự áp khi bán cho khách thuộc nhóm (nhân viên vẫn sửa tay được trên POS).
-          </p>
+        <div
+          className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+          role="region"
+          aria-label="Chỉ số và công cụ nhóm khách hàng"
+        >
+          <ListMetric
+            label="Nhóm khách hàng"
+            value={data.length.toString()}
+            hint={`${filtered.length} đang hiển thị`}
+            icon={<Icon name="groups" size={16} />}
+            loading={loading}
+          />
+          <ListMetric
+            label="Có chiết khấu"
+            value={discountedCount.toString()}
+            icon={<Icon name="sell" size={16} />}
+            loading={loading}
+          />
+          <ListMetric
+            label="Không chiết khấu"
+            value={(data.length - discountedCount).toString()}
+            icon={<Icon name="money_off" size={16} />}
+            loading={loading}
+          />
+          <ListMetric
+            label="Mức cao nhất"
+            value={`${highestDiscount}%`}
+            hint="chiết khấu mặc định"
+            icon={<Icon name="percent" size={16} />}
+            loading={loading}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto h-8 shrink-0 gap-1.5"
+            onClick={() => setFilterOpen(true)}
+            aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+          >
+            <Icon name="filter_alt" size={15} />
+            Bộ lọc
+            {activeFilters.length > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </Button>
         </div>
 
-        <DataTable
-          columns={columns}
-          data={filtered}
-          loading={loading}
-          total={filtered.length}
-          pageIndex={0}
-          pageSize={50}
-          pageCount={1}
-          onPageChange={() => {}}
-          onPageSizeChange={() => {}}
-          getRowId={(r) => r.id}
-          rowActions={(row) => [
-            {
-              label: "Sửa",
-              icon: <Icon name="edit" size={16} />,
-              onClick: () => {
-                setEditing(row);
-                setDialogOpen(true);
+        <FilterChips filters={activeFilters} />
+
+        <div className="border-b px-3 py-1.5 text-xs text-muted-foreground">
+          Chiết khấu mặc định tự áp khi bán cho khách thuộc nhóm; nhân viên vẫn
+          có thể điều chỉnh trên POS.
+        </div>
+
+        <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            loading={loading}
+            total={filtered.length}
+            pageIndex={0}
+            pageSize={50}
+            pageCount={1}
+            onPageChange={() => {}}
+            onPageSizeChange={() => {}}
+            getRowId={(r) => r.id}
+            rowActions={(row) => [
+              {
+                label: "Sửa",
+                icon: <Icon name="edit" size={16} />,
+                onClick: () => {
+                  setEditing(row);
+                  setDialogOpen(true);
+                },
               },
-            },
-            {
-              label: "Xóa",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => handleDelete(row),
-              variant: "destructive",
-              separator: true,
-            },
-          ]}
-        />
-      </div>
+              {
+                label: "Xóa",
+                icon: <Icon name="delete" size={16} />,
+                onClick: () => handleDelete(row),
+                variant: "destructive",
+                separator: true,
+              },
+            ]}
+          />
+        </div>
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={activeFilters.length}
+          onClearAll={() => setDiscountFilter("all")}
+          title="Bộ lọc nhóm khách hàng"
+        >
+          <FilterGroup
+            label="Chiết khấu mặc định"
+            activeHint={
+              discountFilter === "all"
+                ? undefined
+                : DISCOUNT_OPTIONS.find(
+                    (option) => option.value === discountFilter,
+                  )?.label
+            }
+          >
+            <RadioFilter
+              name="customer-group-discount"
+              options={DISCOUNT_OPTIONS}
+              value={discountFilter}
+              onChange={(value) => setDiscountFilter(value as DiscountFilter)}
+            />
+          </FilterGroup>
+        </FilterPanel>
+      </ListPageLayout>
 
       <CustomerGroupDialog
         open={dialogOpen}
@@ -277,10 +410,14 @@ function CustomerGroupDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Chiết khấu mặc định (%)</label>
+            <label className="text-sm font-medium">
+              Chiết khấu mặc định (%)
+            </label>
             <NumericInput
               value={discountPercent}
-              onChange={(v) => setDiscountPercent(Math.min(100, Math.max(0, v ?? 0)))}
+              onChange={(v) =>
+                setDiscountPercent(Math.min(100, Math.max(0, v ?? 0)))
+              }
               min={0}
               max={100}
               decimals={2}
