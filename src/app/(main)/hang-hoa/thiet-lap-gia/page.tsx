@@ -4,12 +4,20 @@
 // Real Supabase data via getPriceTiers + getPriceTierItems
 // Inline detail panel hiển thị danh sách item của từng tier với add/edit/delete
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+} from "@/components/shared/filter-sidebar";
 import {
   InlineDetailPanel,
   DetailHeader,
@@ -22,8 +30,6 @@ import {
   AdjustPriceTierPercentDialog,
 } from "@/components/shared/dialogs";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
-import { SummaryCard } from "@/components/shared/summary-card";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
@@ -46,6 +52,26 @@ import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 type ScopeFilter = "all" | "retail" | "fnb";
+type ItemFilter = "all" | "with-items" | "empty";
+type PriorityFilter = "all" | "prioritized" | "normal";
+
+const SCOPE_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Bán lẻ / Sỉ", value: "retail" },
+  { label: "Quán FnB", value: "fnb" },
+];
+
+const ITEM_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Đã có sản phẩm", value: "with-items" },
+  { label: "Chưa có sản phẩm", value: "empty" },
+];
+
+const PRIORITY_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Có đặt ưu tiên", value: "prioritized" },
+  { label: "Ưu tiên mặc định", value: "normal" },
+];
 
 const SCOPE_LABEL: Record<PriceTierScope, string> = {
   retail: "Bán lẻ / Sỉ",
@@ -303,6 +329,7 @@ export default function ThietLapGiaPage() {
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editingTier, setEditingTier] = useState<PriceTier | null>(null);
@@ -311,6 +338,9 @@ export default function ThietLapGiaPage() {
 
   // Tab filter theo channel — Q1 multi-channel
   const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
+  const [itemFilter, setItemFilter] = useState<ItemFilter>("all");
+  const [priorityFilter, setPriorityFilter] =
+    useState<PriorityFilter>("all");
 
   // Clone dialog state — Q3
   const [cloningTier, setCloningTier] = useState<PriceTier | null>(null);
@@ -342,23 +372,29 @@ export default function ThietLapGiaPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, scopeFilter]);
+  }, [search, scopeFilter, itemFilter, priorityFilter]);
 
-  const filtered = data.filter((t) => {
-    // Scope filter — tab "Bán lẻ" hiện tier scope retail+both, "FnB" hiện fnb+both
-    if (scopeFilter === "retail" && !["retail", "both"].includes(t.scope))
-      return false;
-    if (scopeFilter === "fnb" && !["fnb", "both"].includes(t.scope))
-      return false;
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return data.filter((t) => {
+      // Bảng giá dùng chung xuất hiện ở cả hai kênh tương ứng.
+      if (scopeFilter === "retail" && !["retail", "both"].includes(t.scope))
+        return false;
+      if (scopeFilter === "fnb" && !["fnb", "both"].includes(t.scope))
+        return false;
+      if (itemFilter === "with-items" && (t.itemCount ?? 0) <= 0) return false;
+      if (itemFilter === "empty" && (t.itemCount ?? 0) > 0) return false;
+      if (priorityFilter === "prioritized" && t.priority <= 0) return false;
+      if (priorityFilter === "normal" && t.priority > 0) return false;
 
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      t.name.toLowerCase().includes(q) ||
-      t.code.toLowerCase().includes(q) ||
-      (t.description ?? "").toLowerCase().includes(q)
-    );
-  });
+      return (
+        !q ||
+        t.name.toLowerCase().includes(q) ||
+        t.code.toLowerCase().includes(q) ||
+        (t.description ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [data, itemFilter, priorityFilter, scopeFilter, search]);
 
   const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
 
@@ -435,6 +471,47 @@ export default function ThietLapGiaPage() {
     data.length > 0
       ? [...data].sort((a, b) => b.priority - a.priority)[0]
       : null;
+
+  const activeFilters = useMemo(() => {
+    const filters = [];
+    if (scopeFilter !== "all") {
+      filters.push({
+        key: "scope",
+        label: "Kênh áp dụng",
+        value:
+          SCOPE_OPTIONS.find((option) => option.value === scopeFilter)?.label ??
+          scopeFilter,
+        onClear: () => setScopeFilter("all"),
+      });
+    }
+    if (itemFilter !== "all") {
+      filters.push({
+        key: "items",
+        label: "Sản phẩm",
+        value:
+          ITEM_OPTIONS.find((option) => option.value === itemFilter)?.label ??
+          itemFilter,
+        onClear: () => setItemFilter("all"),
+      });
+    }
+    if (priorityFilter !== "all") {
+      filters.push({
+        key: "priority",
+        label: "Mức ưu tiên",
+        value:
+          PRIORITY_OPTIONS.find((option) => option.value === priorityFilter)
+            ?.label ?? priorityFilter,
+        onClear: () => setPriorityFilter("all"),
+      });
+    }
+    return filters;
+  }, [itemFilter, priorityFilter, scopeFilter]);
+
+  function clearFilters() {
+    setScopeFilter("all");
+    setItemFilter("all");
+    setPriorityFilter("all");
+  }
 
   const columns: ColumnDef<PriceTier, unknown>[] = [
     {
@@ -515,22 +592,11 @@ export default function ThietLapGiaPage() {
   ];
 
   return (
-    <div className="h-[calc(100vh-4rem)] flex flex-col">
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Bảng giá"
-        tabs={
-          <Tabs
-            value={scopeFilter}
-            onValueChange={(v) => setScopeFilter(v as ScopeFilter)}
-          >
-            <TabsList>
-              <TabsTrigger value="all">Tất cả</TabsTrigger>
-              <TabsTrigger value="retail">Bán lẻ / Sỉ</TabsTrigger>
-              <TabsTrigger value="fnb">Quán FnB</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        }
-        searchPlaceholder="Theo tên hoặc mã bảng giá..."
+        density="compact"
+        searchPlaceholder="Tìm tên, mã hoặc mô tả bảng giá..."
         searchValue={search}
         onSearchChange={setSearch}
         actions={[
@@ -546,95 +612,171 @@ export default function ThietLapGiaPage() {
         ]}
       />
 
-      {/* KPI cards — Q2: 3 metric đầu trang */}
-      {!loading && data.length > 0 && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 px-4 pt-3">
-          <SummaryCard
-            icon={<Icon name="sell" size={16} />}
-            label="Tổng bảng giá"
-            value={data.length.toString()}
-          />
-          <SummaryCard
-            icon={<Icon name="inventory_2" size={16} />}
-            label="Tổng SP áp dụng"
-            value={totalItems.toString()}
-          />
-          <SummaryCard
-            icon={<Icon name="star" size={16} />}
-            label="Ưu tiên cao nhất"
-            value={
-              topPriorityTier
-                ? `${topPriorityTier.name} (${topPriorityTier.priority})`
-                : "—"
-            }
-          />
-        </div>
-      )}
+      <div
+        className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+        role="region"
+        aria-label="Chỉ số và công cụ bảng giá"
+      >
+        <ListMetric
+          icon={<Icon name="sell" size={16} />}
+          label="Bảng giá"
+          value={data.length.toString()}
+          hint={`${filtered.length} đang hiển thị`}
+          loading={loading}
+        />
+        <ListMetric
+          icon={<Icon name="inventory_2" size={16} />}
+          label="Sản phẩm áp dụng"
+          value={totalItems.toString()}
+          loading={loading}
+        />
+        <ListMetric
+          icon={<Icon name="star" size={16} />}
+          label="Ưu tiên cao nhất"
+          value={topPriorityTier ? topPriorityTier.priority.toString() : "—"}
+          hint={topPriorityTier?.name}
+          loading={loading}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="ml-auto h-8 shrink-0 gap-1.5"
+          onClick={() => setFilterOpen(true)}
+          aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+        >
+          <Icon name="filter_alt" size={15} />
+          Bộ lọc
+          {activeFilters.length > 0 && (
+            <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              {activeFilters.length}
+            </span>
+          )}
+        </Button>
+      </div>
+
+      <FilterChips
+        filters={activeFilters}
+        onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
+      />
 
       {!loading && filtered.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
           <Icon name="sell" size={48} className="mb-3 opacity-30" />
-          <p className="text-sm">Chưa có bảng giá nào</p>
-          <Button
-            size="sm"
-            className="mt-3"
-            onClick={() => {
-              setEditingTier(null);
-              setCreateOpen(true);
-            }}
-          >
-            <Icon name="add" size={16} className="mr-1" />
-            Tạo bảng giá đầu tiên
-          </Button>
+          <p className="text-sm">
+            {data.length === 0
+              ? "Chưa có bảng giá nào"
+              : "Không có bảng giá phù hợp điều kiện tìm kiếm"}
+          </p>
+          {data.length === 0 ? (
+            <Button
+              size="sm"
+              className="mt-3"
+              onClick={() => {
+                setEditingTier(null);
+                setCreateOpen(true);
+              }}
+            >
+              <Icon name="add" size={16} className="mr-1" />
+              Tạo bảng giá đầu tiên
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              variant="outline"
+              className="mt-3"
+              onClick={() => {
+                setSearch("");
+                clearFilters();
+              }}
+            >
+              Xóa điều kiện tìm kiếm
+            </Button>
+          )}
         </div>
       ) : (
-        <DataTable
-          columns={columns}
-          data={pagedData}
-          loading={loading}
-          total={filtered.length}
-          pageIndex={page}
-          pageSize={pageSize}
-          pageCount={Math.ceil(filtered.length / pageSize)}
-          onPageChange={setPage}
-          onPageSizeChange={(size) => {
-            setPageSize(size);
-            setPage(0);
-          }}
-          expandedRow={expandedRow}
-          onExpandedRowChange={setExpandedRow}
-          getRowId={(row) => row.id}
-          renderDetail={(tier, onClose) => (
-            <PriceTierDetail
-              tier={tier}
-              onClose={onClose}
-              onChange={fetchData}
-            />
-          )}
-          rowActions={(row) => [
-            {
-              label: "Sửa",
-              icon: <Icon name="edit" size={16} />,
-              onClick: () => {
-                setEditingTier(row);
-                setCreateOpen(true);
+        <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+          <DataTable
+            columns={columns}
+            data={pagedData}
+            loading={loading}
+            total={filtered.length}
+            pageIndex={page}
+            pageSize={pageSize}
+            pageCount={Math.ceil(filtered.length / pageSize)}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(0);
+            }}
+            expandedRow={expandedRow}
+            onExpandedRowChange={setExpandedRow}
+            getRowId={(row) => row.id}
+            renderDetail={(tier, onClose) => (
+              <PriceTierDetail
+                tier={tier}
+                onClose={onClose}
+                onChange={fetchData}
+              />
+            )}
+            rowActions={(row) => [
+              {
+                label: "Sửa",
+                icon: <Icon name="edit" size={16} />,
+                onClick: () => {
+                  setEditingTier(row);
+                  setCreateOpen(true);
+                },
               },
-            },
-            {
-              label: "Nhân bản",
-              icon: <Icon name="content_copy" size={16} />,
-              onClick: () => openClone(row),
-            },
-            {
-              label: "Xoá",
-              icon: <Icon name="delete" size={16} />,
-              onClick: () => setDeletingTier(row),
-              variant: "destructive",
-              separator: true,
-            },
-          ]}
-        />
+              {
+                label: "Nhân bản",
+                icon: <Icon name="content_copy" size={16} />,
+                onClick: () => openClone(row),
+              },
+              {
+                label: "Xoá",
+                icon: <Icon name="delete" size={16} />,
+                onClick: () => setDeletingTier(row),
+                variant: "destructive",
+                separator: true,
+              },
+            ]}
+          />
+        </div>
       )}
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={activeFilters.length}
+        onClearAll={clearFilters}
+        title="Bộ lọc bảng giá"
+      >
+        <FilterGroup label="Kênh áp dụng">
+          <RadioFilter
+            name="price-tier-scope"
+            options={SCOPE_OPTIONS}
+            value={scopeFilter}
+            onChange={(value) => setScopeFilter(value as ScopeFilter)}
+          />
+        </FilterGroup>
+        <FilterGroup label="Sản phẩm trong bảng giá">
+          <RadioFilter
+            name="price-tier-items"
+            options={ITEM_OPTIONS}
+            value={itemFilter}
+            onChange={(value) => setItemFilter(value as ItemFilter)}
+          />
+        </FilterGroup>
+        <FilterGroup label="Mức ưu tiên">
+          <RadioFilter
+            name="price-tier-priority"
+            options={PRIORITY_OPTIONS}
+            value={priorityFilter}
+            onChange={(value) => setPriorityFilter(value as PriorityFilter)}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       <PriceTierDialog
         open={createOpen}
@@ -736,6 +878,6 @@ export default function ThietLapGiaPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </ListPageLayout>
   );
 }
