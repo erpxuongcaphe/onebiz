@@ -2157,6 +2157,7 @@
   "get_staff_revenue_report_unsecured_legacy",
   "get_stock_card_v2",
   "get_stockout_forecast",
+  "get_supplier_list_workspace",
   "get_tenant_setting",
   "get_user_accessible_branches",
   "get_user_effective_permissions",
@@ -2337,5 +2338,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 321
+ "soRpc": 322
 }

@@ -17,12 +17,102 @@ import {
 import { isRpcUnavailable } from "./rpc-utils";
 import { recordAuditLog } from "./audit";
 import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {
+  applyCreatedAtRangeFilter,
+  normalizeCreatedAtRange,
+} from "@/lib/utils/list-date-preset-range";
 
 type SupplierInsert = Database["public"]["Tables"]["suppliers"]["Insert"];
 type SupplierUpdate = Database["public"]["Tables"]["suppliers"]["Update"];
 
-export async function getSuppliers(params: QueryParams): Promise<QueryResult<Supplier>> {
+export interface SupplierListWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: string;
+  statuses?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  province?: string;
+  debtFrom?: string;
+  debtTo?: string;
+  totalPurchaseFrom?: string;
+  totalPurchaseTo?: string;
+}
+
+export interface SupplierListSummary {
+  totalPurchases: number;
+  totalDebt: number;
+  suppliersWithDebt: number;
+}
+
+export interface SupplierListWorkspaceResult extends QueryResult<Supplier> {
+  summary: SupplierListSummary;
+}
+
+function optionalNumber(value: string | undefined): number | null {
+  if (!value?.trim()) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Một nguồn đọc cho danh sách NCC: phân trang, lọc Tổng mua và chỉ số cùng dùng
+ * đúng một tập kết quả. RPC thuần SELECT; không thay đổi NCC hay phiếu nhập.
+ */
+export async function getSupplierListWorkspace(
+  params: SupplierListWorkspaceParams,
+): Promise<SupplierListWorkspaceResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { from, toExclusive } = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+
+  const { data, error } = await supabase.rpc("get_supplier_list_workspace", {
+    p_page: Math.max(params.page, 0),
+    p_page_size: Math.min(Math.max(params.pageSize, 1), 200),
+    p_search: params.search?.trim() || null,
+    p_search_field: params.searchField || "all",
+    p_statuses: params.statuses?.length ? params.statuses : null,
+    p_created_from: from ?? null,
+    p_created_to_exclusive: toExclusive ?? null,
+    p_province:
+      params.province && params.province !== "all" ? params.province : null,
+    p_debt_min: optionalNumber(params.debtFrom),
+    p_debt_max: optionalNumber(params.debtTo),
+    p_total_purchase_min: optionalNumber(params.totalPurchaseFrom),
+    p_total_purchase_max: optionalNumber(params.totalPurchaseTo),
+  });
+  if (error) handleError(error, "getSupplierListWorkspace");
+
+  const payload = (data ?? {}) as {
+    items?: Array<Record<string, unknown>>;
+    total?: number | string;
+    summary?: {
+      totalPurchases?: number | string;
+      totalDebt?: number | string;
+      suppliersWithDebt?: number | string;
+    };
+  };
+
+  return {
+    data: (payload.items ?? []).map((row) =>
+      mapSupplier(row, Number(row.total_purchases ?? 0)),
+    ),
+    total: Number(payload.total ?? 0),
+    summary: {
+      totalPurchases: Number(payload.summary?.totalPurchases ?? 0),
+      totalDebt: Number(payload.summary?.totalDebt ?? 0),
+      suppliersWithDebt: Number(payload.summary?.suppliersWithDebt ?? 0),
+    },
+  };
+}
+
+export async function getSuppliers(
+  params: QueryParams,
+): Promise<QueryResult<Supplier>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
@@ -44,8 +134,10 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
     const esc = params.search.replace(/[%_]/g, "\\$&");
     // CEO 04/07: tìm theo cột chọn — "all"/lạ → OR tên+mã+SĐT như cũ.
     if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
-    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
-    else if (params.searchField === "phone") query = query.ilike("phone", `%${esc}%`);
+    else if (params.searchField === "name")
+      query = query.ilike("name", `%${esc}%`);
+    else if (params.searchField === "phone")
+      query = query.ilike("phone", `%${esc}%`);
     else
       query = query.or(
         `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
@@ -86,7 +178,9 @@ export async function getSuppliers(params: QueryParams): Promise<QueryResult<Sup
 
   // Sort & paginate
   query = query
-    .order(params.sortBy ?? "created_at", { ascending: params.sortOrder === "asc" })
+    .order(params.sortBy ?? "created_at", {
+      ascending: params.sortOrder === "asc",
+    })
     .range(from, to);
 
   const { data, count, error } = await query;
@@ -172,7 +266,9 @@ export async function getSupplierById(id: string): Promise<Supplier | null> {
  * BYPASS fallback). KHÔNG hardcode "" — production có RLS policy yêu cầu
  * tenant_id khớp với auth context.
  */
-export async function createSupplier(supplier: Partial<Supplier>): Promise<Supplier> {
+export async function createSupplier(
+  supplier: Partial<Supplier>,
+): Promise<Supplier> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -237,7 +333,10 @@ export async function createSupplier(supplier: Partial<Supplier>): Promise<Suppl
  * Cập nhật nhà cung cấp. Filter tenant_id để defense-in-depth — id là
  * UUID global unique nhưng tránh user tenant khác sửa NCC qua URL inject.
  */
-export async function updateSupplier(id: string, updates: Partial<Supplier>): Promise<Supplier> {
+export async function updateSupplier(
+  id: string,
+  updates: Partial<Supplier>,
+): Promise<Supplier> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -275,7 +374,8 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
   if (updates.email !== undefined) payload.email = updates.email || null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = payload as any;
-  if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.houseNumber !== undefined)
+    p.house_number = updates.houseNumber || null;
   if (updates.street !== undefined) p.street = updates.street || null;
   if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
   if (updates.ward !== undefined) p.ward = updates.ward || null;
@@ -297,9 +397,7 @@ export async function updateSupplier(id: string, updates: Partial<Supplier>): Pr
           ? updates.quarter
           : (old.quarter as string | null),
       ward:
-        updates.ward !== undefined
-          ? updates.ward
-          : (old.ward as string | null),
+        updates.ward !== undefined ? updates.ward : (old.ward as string | null),
       province:
         updates.province !== undefined
           ? updates.province
@@ -378,7 +476,9 @@ export async function deleteSupplier(id: string): Promise<void> {
       throw new Error(msg.replace(/^[^:]*SUPPLIER_HAS_RETURNS:\s*/, ""));
     }
     if (msg.includes("SUPPLIER_NOT_FOUND")) {
-      throw new Error("Không tìm thấy nhà cung cấp — có thể đã bị xoá trước đó.");
+      throw new Error(
+        "Không tìm thấy nhà cung cấp — có thể đã bị xoá trước đó.",
+      );
     }
     handleError(error, "deleteSupplier");
   }
@@ -417,7 +517,7 @@ function mapSupplier(row: any, totalPurchases = 0): Supplier {
     country: row.country ?? undefined,
     taxCode: row.tax_code ?? undefined,
     note: row.note ?? undefined,
-    currentDebt: row.debt,
+    currentDebt: Number(row.debt ?? 0),
     totalPurchases,
     createdAt: row.created_at,
   };

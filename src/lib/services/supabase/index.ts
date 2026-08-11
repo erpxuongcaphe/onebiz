@@ -5,7 +5,8 @@ export type { ChangeCustomerCodeResult, CustomerGroupFull } from "./customers";
 // Sprint UX-1 Stage 3: duplicate services for "Sao chép" row action
 export { duplicateInvoice } from "./orders";
 export { duplicatePurchaseOrder, reopenPurchaseOrderForEdit, suaGiaPhieuNhap } from "./purchase-orders";
-export { getSuppliers, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
+export { getSuppliers, getSupplierListWorkspace, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
+export type { SupplierListWorkspaceParams, SupplierListWorkspaceResult, SupplierListSummary } from "./suppliers";
 export {
   getInvoices,
   getInvoiceListSummary,
