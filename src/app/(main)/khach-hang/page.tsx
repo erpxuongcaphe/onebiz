@@ -54,7 +54,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { customerExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCustomers } from "@/lib/services/supabase/excel-import";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dialog";
@@ -96,6 +96,7 @@ function useStarredSet() {
 /* ------------------------------------------------------------------ */
 export default function KhachHangPage() {
   const { toast } = useToast();
+  const { activeBranchId, isReady: branchScopeReady } = useBranchFilter();
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá KH.
   //   - canDeleteCustomer = true  → bấm Xoá → ConfirmDialog → service trực tiếp
@@ -293,6 +294,7 @@ export default function KhachHangPage() {
 
   /* ---- Fetch data ---- */
   const fetchData = useCallback(async () => {
+    if (!branchScopeReady) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -304,6 +306,7 @@ export default function KhachHangPage() {
       const result = await getCustomerListWorkspace({
         page,
         pageSize,
+        branchId: activeBranchId ?? undefined,
         search,
         searchField,
         groupIds: selectedGroups,
@@ -334,6 +337,8 @@ export default function KhachHangPage() {
   }, [
     page,
     pageSize,
+    activeBranchId,
+    branchScopeReady,
     search,
     searchField,
     selectedGroups,
@@ -350,7 +355,6 @@ export default function KhachHangPage() {
     dateFrom,
     dateTo,
     provinceFilter,
-    ,
     toast,
   ]);
 
@@ -370,6 +374,7 @@ export default function KhachHangPage() {
     setExpandedRow(null);
   }, [
     search,
+    activeBranchId,
     selectedGroups,
     typeFilter,
     genderFilter,

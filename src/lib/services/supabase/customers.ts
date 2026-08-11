@@ -24,6 +24,7 @@ type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 export interface CustomerListWorkspaceParams {
   page: number;
   pageSize: number;
+  branchId?: string;
   search?: string;
   searchField?: string;
   groupIds?: string[];
@@ -106,6 +107,7 @@ export async function getCustomerListWorkspace(
     p_created_to_exclusive: toExclusive ?? null,
     p_province:
       params.province && params.province !== "all" ? params.province : null,
+    p_branch_id: params.branchId || null,
   });
   if (error) handleError(error, "getCustomerListWorkspace");
 

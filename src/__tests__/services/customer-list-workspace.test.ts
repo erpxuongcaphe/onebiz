@@ -75,6 +75,7 @@ describe("getCustomerListWorkspace", () => {
     await getCustomerListWorkspace({
       page: 2,
       pageSize: 50,
+      branchId: "00000000-0000-0000-0000-000000000099",
       search: " KH ",
       searchField: "phone",
       groupIds: ["00000000-0000-0000-0000-000000000001"],
@@ -96,6 +97,7 @@ describe("getCustomerListWorkspace", () => {
       expect.objectContaining({
         p_page: 2,
         p_page_size: 50,
+        p_branch_id: "00000000-0000-0000-0000-000000000099",
         p_search: "KH",
         p_search_field: "phone",
         p_customer_type: "company",
@@ -121,7 +123,7 @@ describe("customer list wiring", () => {
     "utf8",
   );
   const migration = fs.readFileSync(
-    path.join(root, "supabase/migrations/00309_customer_list_workspace.sql"),
+    path.join(root, "supabase/migrations/00310_customer_actual_sales.sql"),
     "utf8",
   );
 
@@ -145,8 +147,22 @@ describe("customer list wiring", () => {
       "public.user_has_permission(v_actor, 'customers.view_debt')",
     );
     expect(migration).toContain("extract(month from s.birthday)");
+    expect(migration).toContain("from public.invoices i");
+    expect(migration).toContain("i.status = 'completed'");
+    expect(migration).toContain("i.deleted_at is null");
+    expect(migration).toContain("coalesce(sum(i.total), 0)");
+    expect(migration).toContain("public.get_user_accessible_branches(v_actor)");
+    expect(migration).toContain("public.user_has_branch_access(v_actor, p_branch_id)");
+    expect(migration).not.toContain("sum(total_spent)");
     expect(sqlWithoutComments).not.toMatch(
       /\b(update|delete from|insert into|alter table)\b/i,
     );
+  });
+
+  it("passes the active branch and refetches when the branch changes", () => {
+    expect(page).toContain("useBranchFilter");
+    expect(page).toContain("branchId: activeBranchId ?? undefined");
+    expect(page).toContain("branchScopeReady");
+    expect(page).toContain("activeBranchId,");
   });
 });
