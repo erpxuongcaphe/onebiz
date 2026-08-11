@@ -7,7 +7,10 @@ import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
 import { ListMetric } from "@/components/shared/list-metric";
-import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
+import {
+  FilterChips,
+  type ListFilterChip,
+} from "@/components/shared/filter-chips";
 import {
   FilterPanel,
   FilterGroup,
@@ -17,7 +20,10 @@ import {
   RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
-import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
 import { VN_PROVINCES } from "@/lib/data/vn-provinces";
 import {
   InlineDetailPanel,
@@ -48,7 +54,7 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { SupplierImportRow } from "@/lib/excel/schemas";
 import {
-  getSuppliers,
+  getSupplierListWorkspace,
   deleteSupplier,
   getPurchaseOrdersForSupplier,
   getPurchaseOrderStatusMeta,
@@ -132,7 +138,11 @@ function SupplierDetail({
             { label: "Tên NCC", value: supplier.name },
             { label: "Điện thoại", value: supplier.phone },
             { label: "Email", value: supplier.email || "" },
-            { label: "Địa chỉ", value: supplier.address || "", fullWidth: true },
+            {
+              label: "Địa chỉ",
+              value: supplier.address || "",
+              fullWidth: true,
+            },
             {
               label: "Nợ cần trả hiện tại",
               value: (
@@ -332,17 +342,18 @@ function SupplierDetail({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    >
       <div className="p-4 space-y-4">
         <DetailHeader
           title={supplier.name}
           code={supplier.code}
           subtitle={supplier.phone}
-          meta={
-            <span>
-              Ngày tạo: {formatDate(supplier.createdAt)}
-            </span>
-          }
+          meta={<span>Ngày tạo: {formatDate(supplier.createdAt)}</span>}
         />
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
@@ -373,11 +384,12 @@ export default function NhaCungCapPage() {
   const [importOpen, setImportOpen] = useState(false);
 
   // Delete
-  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(null);
+  const [deletingSupplier, setDeletingSupplier] = useState<Supplier | null>(
+    null,
+  );
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Filters
-  const [supplierGroupFilter, setSupplierGroupFilter] = useState("all");
   const [totalBuyFrom, setTotalBuyFrom] = useState("");
   const [totalBuyTo, setTotalBuyTo] = useState("");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
@@ -392,6 +404,11 @@ export default function NhaCungCapPage() {
   // Day 17/05/2026: filter Tỉnh/TP
   const [provinceFilter, setProvinceFilter] = useState("all");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [summary, setSummary] = useState({
+    totalPurchases: 0,
+    totalDebt: 0,
+    suppliersWithDebt: 0,
+  });
 
   /* ---- Columns ---- */
   const columns: ColumnDef<Supplier, unknown>[] = [
@@ -426,9 +443,7 @@ export default function NhaCungCapPage() {
         const debt = row.original.currentDebt;
         return (
           <span
-            className={
-              debt > 0 ? "text-destructive" : "text-muted-foreground"
-            }
+            className={debt > 0 ? "text-destructive" : "text-muted-foreground"}
           >
             {formatCurrency(debt)}
           </span>
@@ -448,27 +463,27 @@ export default function NhaCungCapPage() {
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const presetRange = computeListPresetRange(datePreset);
-    const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
-    const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const result = await getSuppliers({
-      page,
-      pageSize,
-      search,
-      searchField,
-      filters: {
-        ...(supplierGroupFilter !== "all" && { group: supplierGroupFilter }),
-        ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-        ...(debtFrom && { debtFrom }),
-        ...(debtTo && { debtTo }),
-        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-        // Day 17/05: filter Tỉnh/TP
-        ...(provinceFilter !== "all" && { province: provinceFilter }),
-      },
-    });
-    setData(result.data);
-    setTotal(result.total);
+      const presetRange = computeListPresetRange(datePreset);
+      const effectiveDateFrom =
+        datePreset === "custom" ? dateFrom : presetRange.from;
+      const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
+      const result = await getSupplierListWorkspace({
+        page,
+        pageSize,
+        search,
+        searchField,
+        statuses: selectedStatuses,
+        debtFrom,
+        debtTo,
+        totalPurchaseFrom: totalBuyFrom,
+        totalPurchaseTo: totalBuyTo,
+        dateFrom: effectiveDateFrom,
+        dateTo: effectiveDateTo,
+        province: provinceFilter,
+      });
+      setData(result.data);
+      setTotal(result.total);
+      setSummary(result.summary);
     } catch (e) {
       toast({
         variant: "error",
@@ -478,18 +493,22 @@ export default function NhaCungCapPage() {
     } finally {
       setLoading(false);
     }
-  }, [page,
+  }, [
+    page,
     pageSize,
     search,
     searchField,
-    supplierGroupFilter,
     selectedStatuses,
     debtFrom,
     debtTo,
     datePreset,
     dateFrom,
     dateTo,
-    provinceFilter,, toast]);
+    totalBuyFrom,
+    totalBuyTo,
+    provinceFilter,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -501,28 +520,109 @@ export default function NhaCungCapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, supplierGroupFilter, selectedStatuses, datePreset, dateFrom, dateTo, totalBuyFrom, totalBuyTo, debtFrom, debtTo]);
+  }, [
+    search,
+    selectedStatuses,
+    datePreset,
+    dateFrom,
+    dateTo,
+    totalBuyFrom,
+    totalBuyTo,
+    debtFrom,
+    debtTo,
+    provinceFilter,
+  ]);
 
   /* ---- Summary ---- */
-  const totalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);
-  const totalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
-  const debtSupplierCount = data.filter((s) => s.currentDebt > 0).length;
+  const pageTotalDebt = data.reduce((sum, s) => sum + s.currentDebt, 0);
+  const pageTotalPurchases = data.reduce((sum, s) => sum + s.totalPurchases, 0);
   const datePresetLabel = useMemo(() => {
     if (datePreset === "all") return "Tất cả thời gian";
-    if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
-    return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+    if (datePreset === "custom")
+      return !dateFrom && !dateTo
+        ? "Tùy chỉnh"
+        : `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    return (
+      STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)
+        ?.label ?? "Thời gian"
+    );
   }, [dateFrom, datePreset, dateTo]);
-  const clearListFilters = useCallback(() => { setSupplierGroupFilter("all"); setTotalBuyFrom(""); setTotalBuyTo(""); setDatePreset("all"); setDateFrom(""); setDateTo(""); setDebtFrom(""); setDebtTo(""); setProvinceFilter("all"); setSelectedStatuses(["active", "inactive"]); }, []);
+  const clearListFilters = useCallback(() => {
+    setTotalBuyFrom("");
+    setTotalBuyTo("");
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setDebtFrom("");
+    setDebtTo("");
+    setProvinceFilter("all");
+    setSelectedStatuses(["active", "inactive"]);
+  }, []);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
-    if (supplierGroupFilter !== "all") chips.push({ key: "group", label: "Nhóm NCC", value: "Nhóm mặc định", onClear: () => setSupplierGroupFilter("all") });
-    if (totalBuyFrom || totalBuyTo) chips.push({ key: "purchase", label: "Tổng mua", value: `${totalBuyFrom || "0"} đến ${totalBuyTo || "..."}`, onClear: () => { setTotalBuyFrom(""); setTotalBuyTo(""); } });
-    if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
-    if (debtFrom || debtTo) chips.push({ key: "debt", label: "Nợ hiện tại", value: `${debtFrom || "0"} đến ${debtTo || "..."}`, onClear: () => { setDebtFrom(""); setDebtTo(""); } });
-    if (provinceFilter !== "all") chips.push({ key: "province", label: "Tỉnh / Thành phố", value: provinceFilter, onClear: () => setProvinceFilter("all") });
-    if (selectedStatuses.length !== 2) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.length === 0 ? "Tất cả" : selectedStatuses.map((value) => value === "active" ? "Đang giao dịch" : "Ngừng giao dịch").join(", "), onClear: () => setSelectedStatuses(["active", "inactive"]) });
+    if (totalBuyFrom || totalBuyTo)
+      chips.push({
+        key: "purchase",
+        label: "Tổng mua",
+        value: `${totalBuyFrom || "0"} đến ${totalBuyTo || "..."}`,
+        onClear: () => {
+          setTotalBuyFrom("");
+          setTotalBuyTo("");
+        },
+      });
+    if (datePreset !== "all")
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value: datePresetLabel,
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    if (debtFrom || debtTo)
+      chips.push({
+        key: "debt",
+        label: "Nợ hiện tại",
+        value: `${debtFrom || "0"} đến ${debtTo || "..."}`,
+        onClear: () => {
+          setDebtFrom("");
+          setDebtTo("");
+        },
+      });
+    if (provinceFilter !== "all")
+      chips.push({
+        key: "province",
+        label: "Tỉnh / Thành phố",
+        value: provinceFilter,
+        onClear: () => setProvinceFilter("all"),
+      });
+    if (selectedStatuses.length !== 2)
+      chips.push({
+        key: "status",
+        label: "Trạng thái",
+        value:
+          selectedStatuses.length === 0
+            ? "Tất cả"
+            : selectedStatuses
+                .map((value) =>
+                  value === "active" ? "Đang giao dịch" : "Ngừng giao dịch",
+                )
+                .join(", "),
+        onClear: () => setSelectedStatuses(["active", "inactive"]),
+      });
     return chips;
-  }, [datePreset, datePresetLabel, debtFrom, debtTo, provinceFilter, selectedStatuses, supplierGroupFilter, totalBuyFrom, totalBuyTo]);
+  }, [
+    datePreset,
+    datePresetLabel,
+    debtFrom,
+    debtTo,
+    provinceFilter,
+    selectedStatuses,
+    totalBuyFrom,
+    totalBuyTo,
+  ]);
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -545,8 +645,18 @@ export default function NhaCungCapPage() {
       { header: "Tên NCC", key: "name", width: 25 },
       { header: "Điện thoại", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
-      { header: "Nợ cần trả hiện tại", key: "currentDebt", width: 18, format: (v: number) => v },
-      { header: "Tổng mua", key: "totalPurchases", width: 15, format: (v: number) => v },
+      {
+        header: "Nợ cần trả hiện tại",
+        key: "currentDebt",
+        width: 18,
+        format: (v: number) => v,
+      },
+      {
+        header: "Tổng mua",
+        key: "totalPurchases",
+        width: 15,
+        format: (v: number) => v,
+      },
     ];
     exportToCsv(data, exportColumns, "danh-sach-nha-cung-cap");
   };
@@ -617,9 +727,74 @@ export default function NhaCungCapPage() {
           total={total}
           density="compact"
           columnToggle
-          toolbarMetrics={<><ListMetric icon={<Icon name="local_shipping" size={15} />} label="Kết quả" value={formatNumber(total)} hint="Tổng số NCC theo bộ lọc" /><ListMetric icon={<Icon name="trending_up" size={15} />} label="Tổng mua trang này" value={formatCurrency(totalPurchases)} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="account_balance_wallet" size={15} />} label="Công nợ trang này" value={formatCurrency(totalDebt)} hint={debtSupplierCount > 0 ? `${debtSupplierCount} NCC còn nợ trên trang` : "Không có nợ trên trang"} tone={totalDebt > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="verified" size={15} />} label="Đang hiển thị" value={formatNumber(data.length)} hint={`Trang ${page + 1}`} /></>}
-          toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
-          toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="local_shipping" size={15} />}
+                label="Kết quả"
+                value={formatNumber(total)}
+                hint="Tổng số NCC theo bộ lọc"
+              />
+              <ListMetric
+                icon={<Icon name="trending_up" size={15} />}
+                label="Tổng mua"
+                value={formatCurrency(summary.totalPurchases)}
+                hint="Toàn bộ kết quả đang lọc"
+              />
+              <ListMetric
+                icon={<Icon name="account_balance_wallet" size={15} />}
+                label="Công nợ"
+                value={formatCurrency(summary.totalDebt)}
+                hint={
+                  summary.suppliersWithDebt > 0
+                    ? `${summary.suppliersWithDebt} NCC còn nợ`
+                    : "Không có nợ"
+                }
+                tone={summary.totalDebt > 0 ? "danger" : "default"}
+              />
+              <ListMetric
+                icon={<Icon name="verified" size={15} />}
+                label="Đang hiển thị"
+                value={formatNumber(data.length)}
+                hint={`Trang ${page + 1}`}
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
@@ -630,8 +805,8 @@ export default function NhaCungCapPage() {
           }}
           selectable
           summaryRow={{
-            currentDebt: formatCurrency(totalDebt),
-            totalPurchases: formatCurrency(totalPurchases),
+            currentDebt: formatCurrency(pageTotalDebt),
+            totalPurchases: formatCurrency(pageTotalPurchases),
           }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
@@ -656,13 +831,68 @@ export default function NhaCungCapPage() {
           ]}
         />
 
-        <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc nhà cung cấp">
-          <FilterGroup label="Nhóm NCC" activeHint={supplierGroupFilter !== "all" ? "Nhóm mặc định" : undefined}><SelectFilter options={[{ label: "Nhóm mặc định", value: "default" }]} value={supplierGroupFilter} onChange={setSupplierGroupFilter} placeholder="Tất cả các nhóm" /></FilterGroup>
-          <FilterGroup label="Tổng mua"><RangeFilter fromValue={totalBuyFrom} toValue={totalBuyTo} onFromChange={setTotalBuyFrom} onToChange={setTotalBuyTo} fromPlaceholder="Giá trị" toPlaceholder="Giá trị" /></FilterGroup>
-          <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
-          <FilterGroup label="Nợ hiện tại"><RangeFilter fromValue={debtFrom} toValue={debtTo} onFromChange={setDebtFrom} onToChange={setDebtTo} fromPlaceholder="Nhập giá trị" toPlaceholder="Nhập giá trị" /></FilterGroup>
-          <FilterGroup label="Tỉnh / Thành phố" activeHint={provinceFilter !== "all" ? provinceFilter : undefined}><SelectFilter value={provinceFilter} onChange={setProvinceFilter} options={[{ label: "Tất cả tỉnh/thành", value: "all" }, ...VN_PROVINCES.map((p) => ({ label: p.name, value: p.name }))]} placeholder="Chọn tỉnh/thành" /></FilterGroup>
-          <FilterGroup label="Trạng thái"><CheckboxFilter options={[{ label: "Đang giao dịch", value: "active" }, { label: "Ngừng giao dịch", value: "inactive" }]} selected={selectedStatuses} onChange={setSelectedStatuses} /></FilterGroup>
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={clearListFilters}
+          title="Bộ lọc nhà cung cấp"
+        >
+          <FilterGroup label="Tổng mua">
+            <RangeFilter
+              fromValue={totalBuyFrom}
+              toValue={totalBuyTo}
+              onFromChange={setTotalBuyFrom}
+              onToChange={setTotalBuyTo}
+              fromPlaceholder="Giá trị"
+              toPlaceholder="Giá trị"
+            />
+          </FilterGroup>
+          <FilterGroup label="Thời gian" activeHint={datePresetLabel}>
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
+            />
+          </FilterGroup>
+          <FilterGroup label="Nợ hiện tại">
+            <RangeFilter
+              fromValue={debtFrom}
+              toValue={debtTo}
+              onFromChange={setDebtFrom}
+              onToChange={setDebtTo}
+              fromPlaceholder="Nhập giá trị"
+              toPlaceholder="Nhập giá trị"
+            />
+          </FilterGroup>
+          <FilterGroup
+            label="Tỉnh / Thành phố"
+            activeHint={provinceFilter !== "all" ? provinceFilter : undefined}
+          >
+            <SelectFilter
+              value={provinceFilter}
+              onChange={setProvinceFilter}
+              options={[
+                { label: "Tất cả tỉnh/thành", value: "all" },
+                ...VN_PROVINCES.map((p) => ({ label: p.name, value: p.name })),
+              ]}
+              placeholder="Chọn tỉnh/thành"
+            />
+          </FilterGroup>
+          <FilterGroup label="Trạng thái">
+            <CheckboxFilter
+              options={[
+                { label: "Đang giao dịch", value: "active" },
+                { label: "Ngừng giao dịch", value: "inactive" },
+              ]}
+              selected={selectedStatuses}
+              onChange={setSelectedStatuses}
+            />
+          </FilterGroup>
         </FilterPanel>
       </ListPageLayout>
 
@@ -678,7 +908,9 @@ export default function NhaCungCapPage() {
 
       <ConfirmDialog
         open={!!deletingSupplier}
-        onOpenChange={(open) => { if (!open) setDeletingSupplier(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeletingSupplier(null);
+        }}
         title="Xóa nhà cung cấp"
         description={`Xóa nhà cung cấp ${deletingSupplier?.code} — ${deletingSupplier?.name}?`}
         confirmLabel="Xóa"
@@ -689,11 +921,20 @@ export default function NhaCungCapPage() {
           setDeleteLoading(true);
           try {
             await deleteSupplier(deletingSupplier.id);
-            toast({ title: "Đã xóa nhà cung cấp", description: `${deletingSupplier.code} — ${deletingSupplier.name}`, variant: "success" });
+            toast({
+              title: "Đã xóa nhà cung cấp",
+              description: `${deletingSupplier.code} — ${deletingSupplier.name}`,
+              variant: "success",
+            });
             setDeletingSupplier(null);
             fetchData();
           } catch (err) {
-            toast({ title: "Lỗi xóa nhà cung cấp", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+            toast({
+              title: "Lỗi xóa nhà cung cấp",
+              description:
+                err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
           } finally {
             setDeleteLoading(false);
           }
