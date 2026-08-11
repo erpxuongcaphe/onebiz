@@ -593,6 +593,86 @@ function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
   };
 }
 
+export interface InputInvoiceListWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: number;
+  amountMax?: number;
+  branchId?: string;
+}
+
+export interface InputInvoiceListSummary {
+  recordedCount: number;
+  unrecordedCount: number;
+  cancelledCount: number;
+  activeValue: number;
+  taxValue: number;
+}
+
+export interface InputInvoiceListWorkspaceResult extends QueryResult<InputInvoice> {
+  summary: InputInvoiceListSummary;
+}
+
+/** Một nguồn đọc duy nhất cho bảng, chỉ số, bộ lọc và phạm vi chi nhánh. */
+export async function getInputInvoiceListWorkspace(
+  params: InputInvoiceListWorkspaceParams,
+): Promise<InputInvoiceListWorkspaceResult> {
+  const supabase = getClient();
+  const { from, toExclusive } = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+  const { data, error } = await (supabase.rpc as any)(
+    "get_input_invoice_list_workspace",
+    {
+      p_page: params.page,
+      p_page_size: params.pageSize,
+      p_search: params.search?.trim() || null,
+      p_search_field: params.searchField ?? "all",
+      p_status: params.status && params.status !== "all" ? params.status : null,
+      p_date_from: from ?? null,
+      p_date_to_exclusive: toExclusive ?? null,
+      p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+      p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+      p_branch_id: params.branchId ?? null,
+    },
+  );
+  if (error) handleError(error, "getInputInvoiceListWorkspace");
+
+  const payload = (data ?? {}) as Record<string, any>;
+  const rawSummary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items) ? payload.items.map(mapInputInvoice) : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      recordedCount: Number(rawSummary.recordedCount ?? 0),
+      unrecordedCount: Number(rawSummary.unrecordedCount ?? 0),
+      cancelledCount: Number(rawSummary.cancelledCount ?? 0),
+      activeValue: Number(rawSummary.activeValue ?? 0),
+      taxValue: Number(rawSummary.taxValue ?? 0),
+    },
+  };
+}
+
+export async function getInputInvoicesForExport(
+  params: Omit<InputInvoiceListWorkspaceParams, "page" | "pageSize">,
+): Promise<InputInvoice[]> {
+  const rows: InputInvoice[] = [];
+  let page = 0;
+  const pageSize = 200;
+  while (true) {
+    const result = await getInputInvoiceListWorkspace({ ...params, page, pageSize });
+    rows.push(...result.data);
+    if (rows.length >= result.total || result.data.length === 0) return rows;
+    page += 1;
+  }
+}
+
 const purchaseReturnStatusNameMap: Record<string, string> = {
   completed: "Hoàn thành",
   draft: "Phiếu tạm",
@@ -634,6 +714,7 @@ function mapInputInvoice(row: any): InputInvoice {
     code: row.code,
     date: row.created_at,
     supplierName: row.supplier_name ?? "---",
+    supplierCode: row.supplier_code ?? undefined,
     totalAmount: row.total_amount ?? row.total ?? 0,
     taxAmount: row.tax_amount ?? 0,
     status: (["recorded", "unrecorded", "cancelled"].includes(row.status)
@@ -644,5 +725,6 @@ function mapInputInvoice(row: any): InputInvoice {
     createdByName: profile?.full_name ?? undefined,
     branchId: row.branch_id ?? branch?.id ?? undefined,
     branchName: branch?.name ?? undefined,
+    note: row.note ?? undefined,
   };
 }

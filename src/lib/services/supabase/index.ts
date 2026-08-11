@@ -211,7 +211,8 @@ export type {
   VatByRate,
 } from "./finance-marketing-reports";
 // Manufacturing handled by production.ts (getProductionOrders)
-export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems, getInputInvoices, getInputInvoiceStatuses, getInputInvoiceItems, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
+export { getPurchaseOrderEntries, getPurchaseOrdersForExport, getPurchaseEntryStatuses, getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems, getInputInvoices, getInputInvoiceListWorkspace, getInputInvoicesForExport, getInputInvoiceStatuses, getInputInvoiceItems, cancelInputInvoice, recordInputInvoice, completeSupplierReturn, cancelPurchaseOrderEntry } from "./purchase-entries";
+export type { InputInvoiceListWorkspaceParams, InputInvoiceListWorkspaceResult, InputInvoiceListSummary } from "./purchase-entries";
 export { recordInvoicePayment, recordPurchasePayment, getPaymentHistory, getOpenInvoicesByCustomer, getOpenPurchasesBySupplier } from "./payments";
 export type { RecordPaymentInput, RecordPaymentResult, OpenInvoiceLine, OpenPurchaseLine } from "./payments";
 export { getFavorites, isFavorite, toggleFavorite, getFavoriteIds } from "./favorites";

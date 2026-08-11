@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
-import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { ListMetric } from "@/components/shared/list-metric";
 import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
@@ -14,6 +13,7 @@ import {
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter
@@ -30,7 +30,7 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildInputInvoicePrintData, toPrintLines } from "@/lib/print-templates";
-import { getInputInvoices, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice, getInputInvoiceItems } from "@/lib/services";
+import { getInputInvoiceListWorkspace, getInputInvoicesForExport, getInputInvoiceStatuses, cancelInputInvoice, recordInputInvoice, getInputInvoiceItems } from "@/lib/services";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateInputInvoiceDialog (662 dòng).
 import dynamic from "next/dynamic";
@@ -193,13 +193,14 @@ const columns: ColumnDef<InputInvoice, unknown>[] = [
 
 export default function HoaDonDauVaoPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
-  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const { activeBranchId, isReady: branchReady } = useBranchFilter();
+  const { isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("input_invoice");
   const [data, setData] = useState<InputInvoice[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
@@ -224,28 +225,19 @@ export default function HoaDonDauVaoPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
-  const [viewAllBranches, setViewAllBranches] = useState(false);
-  const [otherBranchCount, setOtherBranchCount] = useState(0);
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
-  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
-  useEffect(() => {
-    setViewAllBranches(false);
-  }, [activeBranchId]);
-  useEffect(() => {
-    if (!duocXemToanChuoi) setViewAllBranches(false);
-  }, [duocXemToanChuoi]);
+  const [summary, setSummary] = useState({
+    recordedCount: 0,
+    unrecordedCount: 0,
+    cancelledCount: 0,
+    activeValue: 0,
+    taxValue: 0,
+  });
 
   const fetchData = useCallback(async () => {
-    if (permissionsLoading) return;
-    if (!activeBranchId && !duocXemToanChuoi) {
-      setData([]);
-      setTotal(0);
-      setOtherBranchCount(0);
-      setLoading(false);
-      return;
-    }
+    if (!branchReady || permissionsLoading) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -253,39 +245,21 @@ export default function HoaDonDauVaoPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    // Lọc chung (không kèm chi nhánh) — dùng lại cho cả lời gọi chính lẫn probe
-    // "đếm hóa đơn ở chi nhánh khác". Service này nhận chi nhánh qua filters.branchId,
-    // falsy/"all" → tất cả chi nhánh.
-    const commonFilters = {
-      ...(statusFilter !== "all" && { status: statusFilter }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-    };
-    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getInputInvoices({
+    const result = await getInputInvoiceListWorkspace({
       page,
       pageSize,
       search,
-      filters: {
-        ...commonFilters,
-        ...(branchScope && { branchId: branchScope }),
-      },
+      searchField,
+      status: statusFilter,
+      dateFrom: effectiveDateFrom,
+      dateTo: effectiveDateTo,
+      amountMin: amountMin ? Number(amountMin) : undefined,
+      amountMax: amountMax ? Number(amountMax) : undefined,
+      branchId: activeBranchId,
     });
     setData(result.data);
     setTotal(result.total);
-    // Bảng trống vì lọc chi nhánh? Đếm hóa đơn ở chi nhánh khác để gợi ý (cùng bộ
-    // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getInputInvoices({
-        page: 0,
-        pageSize: 1,
-        search,
-        filters: commonFilters,
-      });
-      setOtherBranchCount(all.total);
-    } else {
-      setOtherBranchCount(0);
-    }
+    setSummary(result.summary);
     } catch (e) {
       toast({
         variant: "error",
@@ -295,7 +269,7 @@ export default function HoaDonDauVaoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [activeBranchId, amountMax, amountMin, branchReady, dateFrom, datePreset, dateTo, page, pageSize, permissionsLoading, search, searchField, statusFilter, toast]);
 
   useEffect(() => {
     fetchData();
@@ -304,54 +278,90 @@ export default function HoaDonDauVaoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
-
-  const pageRecorded = data.filter((row) => row.status === "recorded").length;
-  const pageUnrecorded = data.filter((row) => row.status === "unrecorded").length;
-  const pageValue = data.reduce((sum, row) => sum + (row.status === "cancelled" ? 0 : (row.totalAmount ?? 0)), 0);
+  }, [activeBranchId, amountMax, amountMin, search, searchField, statusFilter, datePreset, dateFrom, dateTo]);
   const datePresetLabel = useMemo(() => {
     if (datePreset === "all") return "Tất cả thời gian";
     if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
     return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
-  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); }, []);
+  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); setAmountMin(""); setAmountMax(""); }, []);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
     if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (statusFilter !== "all") chips.push({ key: "status", label: "Trạng thái", value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter("all") });
+    if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
-  }, [datePreset, datePresetLabel, statusFilter]);
+  }, [amountMax, amountMin, datePreset, datePresetLabel, statusFilter]);
 
   return (
     <ListPageLayout sidebar={null}>
       <PageHeader
         title="Hóa đơn đầu vào"
         density="compact"
-        searchPlaceholder="Theo mã HĐ, NCC"
+        searchPlaceholder="Theo mã HĐ, mã/tên NCC, ghi chú"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" },
+          { value: "code", label: "Mã hóa đơn" },
+          { value: "supplier", label: "Nhà cung cấp" },
+          { value: "note", label: "Ghi chú" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(value) => {
+          setSearchField(value);
+          setPage(0);
+        }}
         onExport={{
-          excel: () => {
+          excel: async () => {
             const cols = [
               { header: "Mã HĐ", key: "code", width: 15 },
               { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "Chi nhánh", key: "branchName", width: 22 },
+              { header: "Mã NCC", key: "supplierCode", width: 16 },
               { header: "NCC", key: "supplierName", width: 25 },
               { header: "Tiền hàng", key: "totalAmount", width: 18, format: (v: number) => v },
               { header: "Thuế", key: "taxAmount", width: 15, format: (v: number) => v },
               { header: "Trạng thái", key: "statusName", width: 15 },
+              { header: "Ghi chú", key: "note", width: 30 },
             ];
-            exportToExcel(data, cols, "hoa-don-dau-vao");
+            const presetRange = computeListPresetRange(datePreset);
+            const rows = await getInputInvoicesForExport({
+              search,
+              searchField,
+              status: statusFilter,
+              dateFrom: datePreset === "custom" ? dateFrom : presetRange.from,
+              dateTo: datePreset === "custom" ? dateTo : presetRange.to,
+              amountMin: amountMin ? Number(amountMin) : undefined,
+              amountMax: amountMax ? Number(amountMax) : undefined,
+              branchId: activeBranchId,
+            });
+            exportToExcel(rows, cols, "hoa-don-dau-vao");
           },
-          csv: () => {
+          csv: async () => {
             const cols = [
               { header: "Mã HĐ", key: "code", width: 15 },
               { header: "Ngày", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "Chi nhánh", key: "branchName", width: 22 },
+              { header: "Mã NCC", key: "supplierCode", width: 16 },
               { header: "NCC", key: "supplierName", width: 25 },
               { header: "Tiền hàng", key: "totalAmount", width: 18, format: (v: number) => v },
               { header: "Thuế", key: "taxAmount", width: 15, format: (v: number) => v },
               { header: "Trạng thái", key: "statusName", width: 15 },
+              { header: "Ghi chú", key: "note", width: 30 },
             ];
-            exportToCsv(data, cols, "hoa-don-dau-vao");
+            const presetRange = computeListPresetRange(datePreset);
+            const rows = await getInputInvoicesForExport({
+              search,
+              searchField,
+              status: statusFilter,
+              dateFrom: datePreset === "custom" ? dateFrom : presetRange.from,
+              dateTo: datePreset === "custom" ? dateTo : presetRange.to,
+              amountMin: amountMin ? Number(amountMin) : undefined,
+              amountMax: amountMax ? Number(amountMax) : undefined,
+              branchId: activeBranchId,
+            });
+            exportToCsv(rows, cols, "hoa-don-dau-vao");
           },
         }}
         actions={txPerms.canEdit ? [
@@ -365,13 +375,6 @@ export default function HoaDonDauVaoPage() {
         onSuccess={fetchData}
       />
 
-      {viewAllBranches && (
-        <AllBranchesBanner
-          branchName={currentBranch?.name}
-          onBackToBranch={() => setViewAllBranches(false)}
-        />
-      )}
-
       <DataTable
         columns={columns}
         data={data}
@@ -379,14 +382,9 @@ export default function HoaDonDauVaoPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số hóa đơn theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã ghi sổ trang này" value={pageRecorded.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="warning" size={15} />} label="Chưa ghi sổ trang này" value={pageUnrecorded.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageUnrecorded > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Tiền hàng trang này" value={formatCurrency(pageValue)} hint="Chỉ tính các dòng đang hiển thị" /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint={`${summary.cancelledCount} hóa đơn đã hủy`} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã ghi sổ" value={summary.recordedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="warning" size={15} />} label="Chưa ghi sổ" value={summary.unrecordedCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.unrecordedCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Tiền hàng" value={formatCurrency(summary.activeValue)} hint={`Thuế: ${formatCurrency(summary.taxValue)}`} /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
-        emptyBranchHint={duocXemToanChuoi ? {
-          otherBranchCount,
-          onViewAllBranches: () => setViewAllBranches(true),
-          entityLabel: "hóa đơn",
-        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -423,7 +421,7 @@ export default function HoaDonDauVaoPage() {
               await printDocumentWithTemplate({
                 channel: "backoffice",
                 docType: "input_invoice",
-                branchId: activeBranchId ?? null,
+                branchId: row.branchId ?? activeBranchId ?? null,
                 base: buildInputInvoicePrintData(row, toPrintLines(items)),
               });
             },
@@ -454,6 +452,7 @@ export default function HoaDonDauVaoPage() {
       <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc hóa đơn đầu vào">
         <FilterGroup label="Trạng thái" activeHint={statusFilter !== "all" ? statusOptions.find((item) => item.value === statusFilter)?.label : undefined}><SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} placeholder="Tất cả" /></FilterGroup>
         <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
+        <FilterGroup label="Giá trị hóa đơn" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Số tiền tối thiểu" toPlaceholder="Số tiền tối đa" /></FilterGroup>
       </FilterPanel>
 
       {/* Phase 6.3 (CEO 12/05): Dialog hủy với textarea lý do bắt buộc */}

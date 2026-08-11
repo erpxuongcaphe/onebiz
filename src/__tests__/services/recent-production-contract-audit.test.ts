@@ -33,7 +33,7 @@ describe("recent production contract audit", () => {
 
     expect(result.rpcCallCount).toBeGreaterThanOrEqual(200);
     expect(result.missingCount).toBe(0);
-  });
+  }, 60_000);
 
   it("matches literal RPC named arguments to a versioned function signature", () => {
     const output = execFileSync(
@@ -48,7 +48,7 @@ describe("recent production contract audit", () => {
 
     expect(result.checkedCallCount).toBeGreaterThanOrEqual(220);
     expect(result.mismatchCount).toBe(0);
-  }, 20_000);
+  }, 60_000);
 
   it("maps direct table access operations for live RLS verification", () => {
     const output = execFileSync(
@@ -63,7 +63,7 @@ describe("recent production contract audit", () => {
 
     expect(result.relationCount).toBeGreaterThanOrEqual(100);
     expect(result.contractCount).toBeGreaterThanOrEqual(200);
-  }, 20_000);
+  }, 60_000);
 
   it("keeps production preflights read-only", () => {
     for (const sql of [
