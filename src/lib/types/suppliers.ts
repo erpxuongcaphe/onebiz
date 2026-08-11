@@ -109,6 +109,7 @@ export interface InputInvoice {
   code: string;
   date: string;
   supplierName: string;
+  supplierCode?: string;
   totalAmount: number;
   taxAmount: number;
   status: "recorded" | "unrecorded" | "cancelled";
@@ -117,4 +118,5 @@ export interface InputInvoice {
   createdByName?: string;
   branchId?: string;
   branchName?: string;
+  note?: string;
 }

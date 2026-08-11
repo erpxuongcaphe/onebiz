@@ -2132,6 +2132,7 @@
   "get_financial_analysis_details_report",
   "get_fnb_serve_time_report",
   "get_fnb_serve_time_report_unsecured_legacy",
+  "get_input_invoice_list_workspace",
   "get_inventory_aging_report",
   "get_inventory_aging_report_unsecured_legacy",
   "get_inventory_variance_report",
