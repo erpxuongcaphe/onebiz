@@ -4,23 +4,153 @@
 
 import type { Customer, QueryParams, QueryResult } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
-import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import {
+  getClient,
+  getPaginationRange,
+  handleError,
+  getCurrentTenantId,
+} from "./base";
 import { recordAuditLog } from "./audit";
 import { isRpcUnavailable } from "./rpc-utils";
 import { composeAddress as composeStructuredAddress } from "@/lib/data/vn-provinces";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {
+  applyCreatedAtRangeFilter,
+  normalizeCreatedAtRange,
+} from "@/lib/utils/list-date-preset-range";
 
 type CustomerInsert = Database["public"]["Tables"]["customers"]["Insert"];
 type CustomerUpdate = Database["public"]["Tables"]["customers"]["Update"];
 
-export async function getCustomers(params: QueryParams): Promise<QueryResult<Customer>> {
+export interface CustomerListWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: string;
+  groupIds?: string[];
+  customerType?: string;
+  gender?: string;
+  debtFilter?: string;
+  salesRange?: string;
+  ordersRange?: string;
+  lastPurchase?: string;
+  birthdayMonth?: string;
+  tags?: string[];
+  dateFrom?: string;
+  dateTo?: string;
+  province?: string;
+}
+
+export interface CustomerListSummary {
+  totalSales: number;
+  totalReturns: number;
+  netSales: number;
+  totalDebt: number;
+  customersWithDebt: number;
+  canViewDebt: boolean;
+}
+
+export interface CustomerListWorkspaceResult extends QueryResult<Customer> {
+  summary: CustomerListSummary;
+}
+
+/**
+ * Một nguồn đọc cho danh sách khách hàng và toàn bộ chỉ số theo bộ lọc.
+ * RPC thuần SELECT; không cập nhật khách hàng, công nợ hay chứng từ.
+ */
+export async function getCustomerListWorkspace(
+  params: CustomerListWorkspaceParams,
+): Promise<CustomerListWorkspaceResult> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { from, toExclusive } = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+  const parsedBirthdayMonth = Number(params.birthdayMonth);
+
+  const { data, error } = await supabase.rpc("get_customer_list_workspace", {
+    p_page: Math.max(params.page, 0),
+    p_page_size: Math.min(Math.max(params.pageSize, 1), 200),
+    p_search: params.search?.trim() || null,
+    p_search_field: params.searchField || "all",
+    p_group_ids: params.groupIds?.length ? params.groupIds : null,
+    p_customer_type:
+      params.customerType && params.customerType !== "all"
+        ? params.customerType
+        : null,
+    p_gender: params.gender && params.gender !== "all" ? params.gender : null,
+    p_debt_filter:
+      params.debtFilter && params.debtFilter !== "all"
+        ? params.debtFilter
+        : null,
+    p_sales_range:
+      params.salesRange && params.salesRange !== "all"
+        ? params.salesRange
+        : null,
+    p_orders_range:
+      params.ordersRange && params.ordersRange !== "all"
+        ? params.ordersRange
+        : null,
+    p_last_purchase:
+      params.lastPurchase && params.lastPurchase !== "all"
+        ? params.lastPurchase
+        : null,
+    p_birthday_month:
+      Number.isInteger(parsedBirthdayMonth) &&
+      parsedBirthdayMonth >= 1 &&
+      parsedBirthdayMonth <= 12
+        ? parsedBirthdayMonth
+        : null,
+    p_tags: params.tags?.length ? params.tags : null,
+    p_created_from: from ?? null,
+    p_created_to_exclusive: toExclusive ?? null,
+    p_province:
+      params.province && params.province !== "all" ? params.province : null,
+  });
+  if (error) handleError(error, "getCustomerListWorkspace");
+
+  const payload = (data ?? {}) as {
+    items?: Array<Record<string, unknown>>;
+    total?: number | string;
+    summary?: {
+      totalSales?: number | string;
+      totalReturns?: number | string;
+      netSales?: number | string;
+      totalDebt?: number | string;
+      customersWithDebt?: number | string;
+      canViewDebt?: boolean;
+    };
+  };
+
+  return {
+    data: (payload.items ?? []).map((row) =>
+      mapCustomer(row, Number(row.returned_total ?? 0)),
+    ),
+    total: Number(payload.total ?? 0),
+    summary: {
+      totalSales: Number(payload.summary?.totalSales ?? 0),
+      totalReturns: Number(payload.summary?.totalReturns ?? 0),
+      netSales: Number(payload.summary?.netSales ?? 0),
+      totalDebt: Number(payload.summary?.totalDebt ?? 0),
+      customersWithDebt: Number(payload.summary?.customersWithDebt ?? 0),
+      canViewDebt: payload.summary?.canViewDebt === true,
+    },
+  };
+}
+
+export async function getCustomers(
+  params: QueryParams,
+): Promise<QueryResult<Customer>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)", { count: "exact" })
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+      { count: "exact" },
+    )
     .eq("tenant_id", tenantId);
 
   // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
@@ -33,8 +163,10 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     const esc = params.search.replace(/[%_]/g, "\\$&");
     // CEO 04/07: tìm theo cột chọn — "all"/lạ → OR tên+mã+SĐT như cũ.
     if (params.searchField === "code") query = query.ilike("code", `%${esc}%`);
-    else if (params.searchField === "name") query = query.ilike("name", `%${esc}%`);
-    else if (params.searchField === "phone") query = query.ilike("phone", `%${esc}%`);
+    else if (params.searchField === "name")
+      query = query.ilike("name", `%${esc}%`);
+    else if (params.searchField === "phone")
+      query = query.ilike("phone", `%${esc}%`);
     else
       query = query.or(
         `name.ilike.%${esc}%,code.ilike.%${esc}%,phone.ilike.%${esc}%`,
@@ -86,8 +218,11 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
     else if (range === "tier_regular") {
       query = query.gte("total_spent", 1_000_000).lt("total_spent", 10_000_000);
     } else if (range === "tier_loyal") {
-      query = query.gte("total_spent", 10_000_000).lt("total_spent", 50_000_000);
-    } else if (range === "tier_vip") query = query.gte("total_spent", 50_000_000);
+      query = query
+        .gte("total_spent", 10_000_000)
+        .lt("total_spent", 50_000_000);
+    } else if (range === "tier_vip")
+      query = query.gte("total_spent", 50_000_000);
   }
 
   // CEO 06/06/2026: filter số lần mua (orders count).
@@ -118,14 +253,26 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
       startOfDay.setHours(0, 0, 0, 0);
       query = query.gte("last_purchase_at", startOfDay.toISOString());
     } else if (range === "week") {
-      query = query.gte("last_purchase_at", new Date(now - 7 * dayMs).toISOString());
+      query = query.gte(
+        "last_purchase_at",
+        new Date(now - 7 * dayMs).toISOString(),
+      );
     } else if (range === "month") {
-      query = query.gte("last_purchase_at", new Date(now - 30 * dayMs).toISOString());
+      query = query.gte(
+        "last_purchase_at",
+        new Date(now - 30 * dayMs).toISOString(),
+      );
     } else if (range === "3months") {
-      query = query.gte("last_purchase_at", new Date(now - 90 * dayMs).toISOString());
+      query = query.gte(
+        "last_purchase_at",
+        new Date(now - 90 * dayMs).toISOString(),
+      );
     } else if (range === "churned") {
       // Square pattern: KH không mua > 90 ngày = at-risk
-      query = query.lt("last_purchase_at", new Date(now - 90 * dayMs).toISOString());
+      query = query.lt(
+        "last_purchase_at",
+        new Date(now - 90 * dayMs).toISOString(),
+      );
     }
   }
 
@@ -146,7 +293,9 @@ export async function getCustomers(params: QueryParams): Promise<QueryResult<Cus
 
   // Sort & paginate
   query = query
-    .order(params.sortBy ?? "created_at", { ascending: params.sortOrder === "asc" })
+    .order(params.sortBy ?? "created_at", {
+      ascending: params.sortOrder === "asc",
+    })
     .range(from, to);
 
   const { data, count, error } = await query;
@@ -265,7 +414,9 @@ export async function getCustomerGroupsFull(): Promise<CustomerGroupFull[]> {
   return (data ?? []).map((g) => ({
     id: g.id as string,
     name: g.name as string,
-    discountPercent: Number((g as { discount_percent?: number }).discount_percent ?? 0),
+    discountPercent: Number(
+      (g as { discount_percent?: number }).discount_percent ?? 0,
+    ),
     note: ((g as { note?: string | null }).note ?? undefined) || undefined,
   }));
 }
@@ -292,9 +443,14 @@ export async function updateCustomerGroup(
 ): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const payload: { name?: string; discount_percent?: number; note?: string | null } = {};
+  const payload: {
+    name?: string;
+    discount_percent?: number;
+    note?: string | null;
+  } = {};
   if (input.name !== undefined) payload.name = input.name;
-  if (input.discountPercent !== undefined) payload.discount_percent = input.discountPercent;
+  if (input.discountPercent !== undefined)
+    payload.discount_percent = input.discountPercent;
   if (input.note !== undefined) payload.note = input.note || null;
   const { error } = await supabase
     .from("customer_groups")
@@ -321,7 +477,9 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
 
   const { data, error } = await supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+    )
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -339,7 +497,9 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
 /**
  * Tạo khách hàng mới.
  */
-export async function createCustomer(customer: Partial<Customer>): Promise<Customer> {
+export async function createCustomer(
+  customer: Partial<Customer>,
+): Promise<Customer> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -390,7 +550,9 @@ export async function createCustomer(customer: Partial<Customer>): Promise<Custo
       tags: Array.isArray(customer.tags) ? customer.tags : [],
       is_active: true,
     } as CustomerInsert)
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+    )
     .single();
 
   if (error) handleError(error, "createCustomer");
@@ -438,7 +600,9 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
   // Tìm trước
   const { data: existing } = await supabase
     .from("customers")
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+    )
     .eq("tenant_id", tenantId)
     .eq("code", "KL-VL")
     .maybeSingle();
@@ -472,7 +636,9 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
       price_tier_id: null,
       is_active: true,
     } satisfies CustomerInsert)
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+    )
     .single();
 
   if (error) handleError(error, "getOrCreateWalkInCustomer");
@@ -483,7 +649,10 @@ export async function getOrCreateWalkInCustomer(): Promise<Customer> {
 /**
  * Cập nhật khách hàng.
  */
-export async function updateCustomer(id: string, updates: Partial<Customer>): Promise<Customer> {
+export async function updateCustomer(
+  id: string,
+  updates: Partial<Customer>,
+): Promise<Customer> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -523,7 +692,8 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
   if (updates.email !== undefined) payload.email = updates.email || null;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const p = payload as any;
-  if (updates.houseNumber !== undefined) p.house_number = updates.houseNumber || null;
+  if (updates.houseNumber !== undefined)
+    p.house_number = updates.houseNumber || null;
   if (updates.street !== undefined) p.street = updates.street || null;
   if (updates.quarter !== undefined) p.quarter = updates.quarter || null;
   if (updates.ward !== undefined) p.ward = updates.ward || null;
@@ -548,9 +718,7 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
           ? updates.quarter
           : (old.quarter as string | null),
       ward:
-        updates.ward !== undefined
-          ? updates.ward
-          : (old.ward as string | null),
+        updates.ward !== undefined ? updates.ward : (old.ward as string | null),
       province:
         updates.province !== undefined
           ? updates.province
@@ -584,7 +752,9 @@ export async function updateCustomer(id: string, updates: Partial<Customer>): Pr
     .update(payload)
     .eq("tenant_id", tenantId)
     .eq("id", id)
-    .select("*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)")
+    .select(
+      "*, customer_groups!customers_group_id_fkey(name, discount_percent), loyalty_tiers(name, discount_percent)",
+    )
     .single();
 
   if (error) handleError(error, "updateCustomer");
@@ -626,7 +796,9 @@ export async function changeCustomerCode(
   if (error) {
     const message = String(error.message ?? "");
     if (isRpcUnavailable(error)) {
-      throw new Error("Chưa cài đặt chức năng đổi mã khách hàng (migration 00307).");
+      throw new Error(
+        "Chưa cài đặt chức năng đổi mã khách hàng (migration 00307).",
+      );
     }
     if (error.code === "23505" || message.includes("CUSTOMER_CODE_DUPLICATE")) {
       throw new Error("Mã khách hàng này đã được sử dụng.");
@@ -656,7 +828,10 @@ export async function changeCustomerCode(
 }
 
 /** Xóa khách hàng qua RPC có kiểm quyền và hỗ trợ OTP ủy quyền. */
-export async function deleteCustomer(id: string, otpId?: string): Promise<void> {
+export async function deleteCustomer(
+  id: string,
+  otpId?: string,
+): Promise<void> {
   const supabase = getClient();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -677,7 +852,10 @@ export async function deleteCustomer(id: string, otpId?: string): Promise<void> 
     handleError(error, "deleteCustomer:atomic_rpc");
   }
 
-  if (!data || (typeof data === "object" && "success" in data && !data.success)) {
+  if (
+    !data ||
+    (typeof data === "object" && "success" in data && !data.success)
+  ) {
     throw new Error("Server không trả kết quả xoá khách hàng hợp lệ.");
   }
 }
@@ -713,7 +891,7 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     country: row.country ?? undefined,
     // Day 18/05/2026: MST cho KH doanh nghiệp
     taxCode: row.tax_code ?? undefined,
-    currentDebt: row.debt,
+    currentDebt: Number(row.debt ?? 0),
     totalSales: totalSpent,
     totalSalesMinusReturns: netSales,
     groupId: row.group_id ?? undefined,
@@ -725,7 +903,8 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     type: row.customer_type,
     gender: row.gender ?? undefined,
     priceTierId: row.price_tier_id ?? undefined,
-    loyaltyPoints: typeof row.loyalty_points === "number" ? row.loyalty_points : 0,
+    loyaltyPoints:
+      typeof row.loyalty_points === "number" ? row.loyalty_points : 0,
     loyaltyTierId: row.loyalty_tier_id ?? undefined,
     loyaltyTierName: row.loyalty_tiers?.name ?? undefined,
     loyaltyTierDiscount:
