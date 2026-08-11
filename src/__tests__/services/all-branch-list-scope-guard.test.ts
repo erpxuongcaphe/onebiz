@@ -4,7 +4,6 @@ import { describe, expect, it } from "vitest";
 const guardedPages = [
   "src/app/(main)/hang-hoa/page.tsx",
   "src/app/(main)/hang-hoa/nhap-hang/page.tsx",
-  "src/app/(main)/hang-hoa/tra-hang-nhap/page.tsx",
   "src/app/(main)/hang-hoa/kiem-kho/page.tsx",
   "src/app/(main)/hang-hoa/xuat-huy/page.tsx",
   "src/app/(main)/hang-hoa/xuat-dung-noi-bo/page.tsx",
@@ -39,5 +38,23 @@ describe("phạm vi Tất cả chi nhánh của các danh sách kho", () => {
     expect(migration).toContain("get_user_accessible_branches");
     expect(migration).toContain("user_has_branch_access");
     expect(migration).toContain("ii.tenant_id = v_tenant");
+  });
+
+  it("supplier returns lock branch scope in the server workspace", () => {
+    const page = readFileSync(
+      "src/app/(main)/hang-hoa/tra-hang-nhap/page.tsx",
+      "utf8",
+    );
+    const migration = readFileSync(
+      "supabase/migrations/00314_supplier_return_list_workspace.sql",
+      "utf8",
+    );
+
+    expect(page).toContain("getSupplierReturnListWorkspace");
+    expect(migration).toContain("reports.view_all_branches");
+    expect(migration).toContain("system.manage_branches");
+    expect(migration).toContain("get_user_accessible_branches");
+    expect(migration).toContain("user_has_branch_access");
+    expect(migration).toContain("sr.tenant_id=v_tenant");
   });
 });

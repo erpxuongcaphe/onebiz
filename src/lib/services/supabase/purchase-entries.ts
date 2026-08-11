@@ -593,6 +593,55 @@ function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
   };
 }
 
+export interface SupplierReturnListWorkspaceParams {
+  page: number; pageSize: number; search?: string; searchField?: string;
+  status?: string; dateFrom?: string; dateTo?: string;
+  amountMin?: number; amountMax?: number; branchId?: string;
+}
+
+export interface SupplierReturnListWorkspaceResult extends QueryResult<PurchaseReturn> {
+  summary: { completedCount: number; draftCount: number; totalValue: number };
+}
+
+export async function getSupplierReturnListWorkspace(
+  params: SupplierReturnListWorkspaceParams,
+): Promise<SupplierReturnListWorkspaceResult> {
+  const supabase = getClient();
+  const { from, toExclusive } = normalizeCreatedAtRange({ dateFrom: params.dateFrom, dateTo: params.dateTo });
+  const { data, error } = await (supabase.rpc as any)("get_supplier_return_list_workspace", {
+    p_page: params.page, p_page_size: params.pageSize,
+    p_search: params.search?.trim() || null, p_search_field: params.searchField ?? "all",
+    p_status: params.status && params.status !== "all" ? params.status : null,
+    p_date_from: from ?? null, p_date_to_exclusive: toExclusive ?? null,
+    p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+    p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+    p_branch_id: params.branchId ?? null,
+  });
+  if (error) handleError(error, "getSupplierReturnListWorkspace");
+  const payload = (data ?? {}) as Record<string, any>;
+  const summary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items) ? payload.items.map(mapPurchaseReturn) : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      completedCount: Number(summary.completedCount ?? 0),
+      draftCount: Number(summary.draftCount ?? 0),
+      totalValue: Number(summary.totalValue ?? 0),
+    },
+  };
+}
+
+export async function getSupplierReturnsForExport(
+  params: Omit<SupplierReturnListWorkspaceParams, "page" | "pageSize">,
+): Promise<PurchaseReturn[]> {
+  const rows: PurchaseReturn[] = [];
+  for (let page = 0; ; page += 1) {
+    const result = await getSupplierReturnListWorkspace({ ...params, page, pageSize: 200 });
+    rows.push(...result.data);
+    if (rows.length >= result.total || result.data.length === 0) return rows;
+  }
+}
+
 export interface InputInvoiceListWorkspaceParams {
   page: number;
   pageSize: number;
@@ -688,6 +737,7 @@ function mapPurchaseReturn(row: any): PurchaseReturn {
     date: row.created_at,
     importCode: row.import_code ?? "",
     supplierName: row.supplier_name ?? "---",
+    supplierCode: row.supplier_code ?? undefined,
     totalAmount: row.total ?? 0,
     status: (row.status === "completed" ? "completed" : "draft") as PurchaseReturn["status"],
     statusName: purchaseReturnStatusNameMap[row.status] ?? row.status,
