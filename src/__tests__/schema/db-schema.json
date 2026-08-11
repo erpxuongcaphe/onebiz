@@ -2120,6 +2120,7 @@
   "get_branch_profit_and_loss_report",
   "get_consolidated_profit_and_loss_report",
   "get_customer_cohort_report",
+  "get_customer_list_workspace",
   "get_customer_product_detail_page",
   "get_customer_product_export_page",
   "get_customer_product_report",
@@ -2338,5 +2339,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 322
+ "soRpc": 323
 }

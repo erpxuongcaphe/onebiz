@@ -1,21 +1,24 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
+import { ListMetric } from "@/components/shared/list-metric";
+import {
+  FilterChips,
+  type ListFilterChip,
+} from "@/components/shared/filter-chips";
 import { SavedViewsTabs } from "@/components/shared/saved-views-tabs";
 import type { CustomerFilters } from "@/lib/services/supabase/customer-saved-views";
-import { SummaryCard } from "@/components/shared/summary-card";
 import {
-  FilterSidebar,
+  FilterPanel,
   FilterGroup,
   CheckboxFilter,
   DatePresetFilter,
   ChipToggleFilter,
-  PersonFilter,
   SelectFilter,
 } from "@/components/shared/filter-sidebar";
 import { VN_PROVINCES } from "@/lib/data/vn-provinces";
@@ -34,7 +37,10 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { Badge } from "@/components/ui/badge";
-import { ChangeCustomerCodeDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import {
+  ChangeCustomerCodeDialog,
+  ConfirmDialog,
+} from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
 import dynamic from "next/dynamic";
 const CreateCustomerDialog = dynamic(
@@ -58,17 +64,17 @@ import { exportToCsv } from "@/lib/utils/export";
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CustomerImportRow } from "@/lib/excel/schemas";
 import {
-  getCustomers,
+  getCustomerListWorkspace,
   getCustomerGroupsAsync,
   deleteCustomer,
   getInvoicesForCustomer,
   getReturnsForCustomer,
   getLoyaltyTransactions,
-  getProfilesForPersonFilter,
   type CustomerReturn,
 } from "@/lib/services";
 import type { Customer, Invoice, LoyaltyTransaction } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 
 /* ------------------------------------------------------------------ */
 /*  Starred set (local state — could be persisted to backend later)   */
@@ -103,7 +109,9 @@ export default function KhachHangPage() {
 
   // OTP delegation state
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
-  const [otpTargetCustomer, setOtpTargetCustomer] = useState<Customer | null>(null);
+  const [otpTargetCustomer, setOtpTargetCustomer] = useState<Customer | null>(
+    null,
+  );
   const [data, setData] = useState<Customer[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -112,6 +120,14 @@ export default function KhachHangPage() {
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [summary, setSummary] = useState({
+    totalSales: 0,
+    totalReturns: 0,
+    netSales: 0,
+    totalDebt: 0,
+    customersWithDebt: 0,
+  });
 
   // Filters
   const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
@@ -131,7 +147,6 @@ export default function KhachHangPage() {
     setDateFrom(range.from ?? "");
     setDateTo(range.to ?? "");
   }, [datePreset]);
-  const [creatorFilter, setCreatorFilter] = useState("");
   // Day 17/05/2026: filter theo Tỉnh/TP (34 tỉnh sau sáp nhập)
   const [provinceFilter, setProvinceFilter] = useState("all");
   // CEO 06/06/2026 (research Sapo + Square + Toast + HubSpot):
@@ -149,11 +164,14 @@ export default function KhachHangPage() {
   // Dialog
   const [createOpen, setCreateOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [changingCodeCustomer, setChangingCodeCustomer] = useState<Customer | null>(null);
+  const [changingCodeCustomer, setChangingCodeCustomer] =
+    useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
   // Delete
-  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(null);
+  const [deletingCustomer, setDeletingCustomer] = useState<Customer | null>(
+    null,
+  );
   const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Stars
@@ -164,21 +182,14 @@ export default function KhachHangPage() {
   const [customerGroups, setCustomerGroups] = useState<
     { label: string; value: string; count: number }[]
   >([]);
-  // Profile suggestions cho PersonFilter (Người tạo). Trước đây hardcode
-  // ["admin", "trang"] → suggestion giả không match user thực tế.
-  const [profileSuggestions, setProfileSuggestions] = useState<
-    { label: string; value: string }[]
-  >([]);
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getCustomerGroupsAsync().catch(() => []),
-      getProfilesForPersonFilter().catch(() => []),
-    ]).then(([groups, profiles]) => {
-      if (cancelled) return;
-      setCustomerGroups(groups);
-      setProfileSuggestions(profiles);
-    });
+    getCustomerGroupsAsync()
+      .catch(() => [])
+      .then((groups) => {
+        if (cancelled) return;
+        setCustomerGroups(groups);
+      });
     return () => {
       cancelled = true;
     };
@@ -286,44 +297,31 @@ export default function KhachHangPage() {
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
-    const result = await getCustomers({
-      page,
-      pageSize,
-      search,
-      searchField,
-      filters: {
-        ...(selectedGroups.length > 0 && { group: selectedGroups }),
-        ...(typeFilter !== "all" && { type: typeFilter }),
-        ...(genderFilter !== "all" && { gender: genderFilter }),
-        ...(debtFilter !== "all" && { debt: debtFilter }),
-        ...(salesRangeFilter !== "all" && { salesRange: salesRangeFilter }),
-        ...(ordersRangeFilter !== "all" && { ordersRange: ordersRangeFilter }),
-        ...(lastPurchaseFilter !== "all" && { lastPurchase: lastPurchaseFilter }),
-        ...(selectedTags.length > 0 && { tags: selectedTags as unknown as string }),
-        ...(creatorFilter && { createdBy: creatorFilter }),
-        ...(dateFrom && { dateFrom }),
-        ...(dateTo && { dateTo }),
-        // Day 17/05: filter Tỉnh/TP
-        ...(provinceFilter !== "all" && { province: provinceFilter }),
-      },
-    });
-    // CEO 06/06/2026 Phase 3: filter sinh nhật theo tháng — client-side
-    // (Supabase JS không hỗ trợ EXTRACT(MONTH) trực tiếp; data nhỏ < 1000 KH).
-    let finalData = result.data;
-    let finalTotal = result.total;
-    if (birthdayMonthFilter !== "all") {
-      const month = Number(birthdayMonthFilter);
-      if (Number.isFinite(month) && month >= 1 && month <= 12) {
-        finalData = finalData.filter((c) => {
-          if (!c.birthday) return false;
-          const d = new Date(c.birthday);
-          return d.getMonth() + 1 === month;
-        });
-        finalTotal = finalData.length;
-      }
-    }
-    setData(finalData);
-    setTotal(finalTotal);
+      const presetRange = computeListPresetRange(datePreset);
+      const effectiveDateFrom =
+        datePreset === "custom" ? dateFrom : presetRange.from;
+      const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
+      const result = await getCustomerListWorkspace({
+        page,
+        pageSize,
+        search,
+        searchField,
+        groupIds: selectedGroups,
+        customerType: typeFilter,
+        gender: genderFilter,
+        debtFilter: canViewDebt ? debtFilter : "all",
+        salesRange: salesRangeFilter,
+        ordersRange: ordersRangeFilter,
+        lastPurchase: lastPurchaseFilter,
+        birthdayMonth: birthdayMonthFilter,
+        tags: selectedTags,
+        dateFrom: effectiveDateFrom,
+        dateTo: effectiveDateTo,
+        province: provinceFilter,
+      });
+      setData(result.data);
+      setTotal(result.total);
+      setSummary(result.summary);
     } catch (e) {
       toast({
         variant: "error",
@@ -333,7 +331,8 @@ export default function KhachHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [page,
+  }, [
+    page,
     pageSize,
     search,
     searchField,
@@ -346,10 +345,14 @@ export default function KhachHangPage() {
     lastPurchaseFilter,
     birthdayMonthFilter,
     selectedTags,
-    creatorFilter,
+    canViewDebt,
+    datePreset,
     dateFrom,
     dateTo,
-    provinceFilter,, toast]);
+    provinceFilter,
+    ,
+    toast,
+  ]);
 
   useEffect(() => {
     fetchData();
@@ -376,19 +379,144 @@ export default function KhachHangPage() {
     lastPurchaseFilter,
     birthdayMonthFilter,
     selectedTags,
-    creatorFilter,
     dateFrom,
     dateTo,
     provinceFilter,
   ]);
 
-  /* ---- Summaries ---- */
-  const totalDebt = data.reduce((sum, c) => sum + c.currentDebt, 0);
-  const totalSales = data.reduce((sum, c) => sum + c.totalSales, 0);
-  const totalSalesMinusReturns = data.reduce(
-    (sum, c) => sum + c.totalSalesMinusReturns,
-    0
-  );
+  const datePresetLabel = useMemo(() => {
+    if (datePreset === "all") return "Tất cả thời gian";
+    if (datePreset === "custom")
+      return !dateFrom && !dateTo
+        ? "Tùy chỉnh"
+        : `${dateFrom || "..."} đến ${dateTo || "..."}`;
+    return (
+      STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)
+        ?.label ?? "Thời gian"
+    );
+  }, [dateFrom, datePreset, dateTo]);
+
+  const clearListFilters = useCallback(() => {
+    setSelectedGroups([]);
+    setTypeFilter("all");
+    setGenderFilter("all");
+    setDebtFilter("all");
+    setSalesRangeFilter("all");
+    setOrdersRangeFilter("all");
+    setLastPurchaseFilter("all");
+    setBirthdayMonthFilter("all");
+    setSelectedTags([]);
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setProvinceFilter("all");
+  }, []);
+
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (selectedGroups.length > 0)
+      chips.push({
+        key: "groups",
+        label: "Nhóm",
+        value: selectedGroups
+          .map(
+            (id) =>
+              customerGroups.find((group) => group.value === id)?.label ?? id,
+          )
+          .join(", "),
+        onClear: () => setSelectedGroups([]),
+      });
+    if (typeFilter !== "all")
+      chips.push({
+        key: "type",
+        label: "Loại",
+        value: typeFilter === "individual" ? "Cá nhân" : "Công ty",
+        onClear: () => setTypeFilter("all"),
+      });
+    if (genderFilter !== "all")
+      chips.push({
+        key: "gender",
+        label: "Giới tính",
+        value: genderFilter === "male" ? "Nam" : "Nữ",
+        onClear: () => setGenderFilter("all"),
+      });
+    if (canViewDebt && debtFilter !== "all")
+      chips.push({
+        key: "debt",
+        label: "Công nợ",
+        value: debtFilter === "has_debt" ? "Còn nợ" : "Đã trả đủ",
+        onClear: () => setDebtFilter("all"),
+      });
+    if (salesRangeFilter !== "all")
+      chips.push({
+        key: "sales",
+        label: "Tổng chi tiêu",
+        value: salesRangeFilter,
+        onClear: () => setSalesRangeFilter("all"),
+      });
+    if (ordersRangeFilter !== "all")
+      chips.push({
+        key: "orders",
+        label: "Số lần mua",
+        value: ordersRangeFilter,
+        onClear: () => setOrdersRangeFilter("all"),
+      });
+    if (lastPurchaseFilter !== "all")
+      chips.push({
+        key: "last-purchase",
+        label: "Lần mua cuối",
+        value: lastPurchaseFilter,
+        onClear: () => setLastPurchaseFilter("all"),
+      });
+    if (birthdayMonthFilter !== "all")
+      chips.push({
+        key: "birthday",
+        label: "Sinh nhật",
+        value: `Tháng ${birthdayMonthFilter}`,
+        onClear: () => setBirthdayMonthFilter("all"),
+      });
+    if (selectedTags.length > 0)
+      chips.push({
+        key: "tags",
+        label: "Tags",
+        value: selectedTags.join(", "),
+        onClear: () => setSelectedTags([]),
+      });
+    if (datePreset !== "all")
+      chips.push({
+        key: "date",
+        label: "Thời gian tạo",
+        value: datePresetLabel,
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    if (provinceFilter !== "all")
+      chips.push({
+        key: "province",
+        label: "Tỉnh / Thành phố",
+        value: provinceFilter,
+        onClear: () => setProvinceFilter("all"),
+      });
+    return chips;
+  }, [
+    birthdayMonthFilter,
+    canViewDebt,
+    customerGroups,
+    datePreset,
+    datePresetLabel,
+    debtFilter,
+    genderFilter,
+    lastPurchaseFilter,
+    ordersRangeFilter,
+    provinceFilter,
+    salesRangeFilter,
+    selectedGroups,
+    selectedTags,
+    typeFilter,
+  ]);
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -413,8 +541,18 @@ export default function KhachHangPage() {
       { header: "Tên khách hàng", key: "name", width: 25 },
       { header: "SĐT", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
-      { header: "Nợ hiện tại", key: "currentDebt", width: 15, format: (v: number) => v },
-      { header: "Tổng bán", key: "totalSales", width: 15, format: (v: number) => v },
+      {
+        header: "Nợ hiện tại",
+        key: "currentDebt",
+        width: 15,
+        format: (v: number) => v,
+      },
+      {
+        header: "Tổng bán",
+        key: "totalSales",
+        width: 15,
+        format: (v: number) => v,
+      },
       { header: "Nhóm", key: "groupName", width: 20 },
     ];
     exportToCsv(data, exportColumns, "danh-sach-khach-hang");
@@ -438,199 +576,10 @@ export default function KhachHangPage() {
   /* ---- Render ---- */
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Nhóm khách hàng">
-              <CheckboxFilter
-                options={customerGroups}
-                selected={selectedGroups}
-                onChange={setSelectedGroups}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Loại khách hàng">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Cá nhân", value: "individual" },
-                  { label: "Công ty", value: "company" },
-                ]}
-                value={typeFilter}
-                onChange={setTypeFilter}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Giới tính">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Nam", value: "male" },
-                  { label: "Nữ", value: "female" },
-                ]}
-                value={genderFilter}
-                onChange={setGenderFilter}
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026: filter Công nợ — anh hỏi "lọc khách còn nợ".
-                Service đã hỗ trợ has_debt/no_debt sẵn (customers.ts:55-56),
-                trước đây thiếu UI nên CEO không thấy. */}
-            <FilterGroup label="Công nợ">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Còn nợ", value: "has_debt" },
-                  { label: "Đã trả đủ", value: "no_debt" },
-                ]}
-                value={debtFilter}
-                onChange={setDebtFilter}
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026 — Phase 1 sau research: Lifetime Value tiers.
-                Chuẩn Sapo + Square + Toast + HubSpot. 4 mức cho FnB VN. */}
-            <FilterGroup label="Tổng chi tiêu (VIP)">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Mới (<1M)", value: "tier_new" },
-                  { label: "Thường (1–10M)", value: "tier_regular" },
-                  { label: "Thân thiết (10–50M)", value: "tier_loyal" },
-                  { label: "VIP (≥50M)", value: "tier_vip" },
-                ]}
-                value={salesRangeFilter}
-                onChange={setSalesRangeFilter}
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026 — Phase 1: Tần suất mua.
-                Square POS định nghĩa "Regulars" = 3+ trong 6 tháng — em chia
-                4 tier theo total_orders để cashier dễ phân loại nhanh. */}
-            <FilterGroup label="Số lần mua">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Chưa mua", value: "no_purchase" },
-                  { label: "1 lần", value: "first_time" },
-                  { label: "2–5 lần", value: "occasional" },
-                  { label: "≥6 lần", value: "frequent" },
-                ]}
-                value={ordersRangeFilter}
-                onChange={setOrdersRangeFilter}
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026 — Phase 3 sau migration 00131:
-                Lần mua cuối (Recency) — TOP 1 filter ngành FnB cho churn.
-                Có ở Sapo, Square, Toast, HubSpot. */}
-            <FilterGroup label="Lần mua cuối">
-              <ChipToggleFilter
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Hôm nay", value: "today" },
-                  { label: "7 ngày", value: "week" },
-                  { label: "30 ngày", value: "month" },
-                  { label: "90 ngày", value: "3months" },
-                  { label: "Đã rời (>90 ngày)", value: "churned" },
-                  { label: "Chưa mua bao giờ", value: "never" },
-                ]}
-                value={lastPurchaseFilter}
-                onChange={setLastPurchaseFilter}
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026 — Phase 3: Sinh nhật theo tháng (Sapo).
-                Loyalty marketing chuỗi cà phê — gửi voucher tháng sinh nhật. */}
-            <FilterGroup label="Sinh nhật tháng">
-              <SelectFilter
-                value={birthdayMonthFilter}
-                onChange={setBirthdayMonthFilter}
-                options={[
-                  { label: "Tất cả", value: "all" },
-                  { label: "Tháng 1", value: "1" },
-                  { label: "Tháng 2", value: "2" },
-                  { label: "Tháng 3", value: "3" },
-                  { label: "Tháng 4", value: "4" },
-                  { label: "Tháng 5", value: "5" },
-                  { label: "Tháng 6", value: "6" },
-                  { label: "Tháng 7 ", value: "7" },
-                  { label: "Tháng 8", value: "8" },
-                  { label: "Tháng 9", value: "9" },
-                  { label: "Tháng 10", value: "10" },
-                  { label: "Tháng 11", value: "11" },
-                  { label: "Tháng 12", value: "12" },
-                ]}
-                placeholder="Chọn tháng sinh nhật"
-              />
-            </FilterGroup>
-
-            {/* CEO 06/06/2026 — Phase 3: Tags filter (Sapo/HubSpot/Square).
-                Multi-select đơn giản qua text input — cách nhau bằng dấu phẩy.
-                KH phải chứa TẤT CẢ tags được chọn (AND, không OR).
-                Sau Phase 4 sẽ có UI quản lý tags + suggest từ list. */}
-            <FilterGroup label="Tags">
-              <div className="space-y-1">
-                <input
-                  type="text"
-                  value={selectedTags.join(", ")}
-                  onChange={(e) => {
-                    const tags = e.target.value
-                      .split(",")
-                      .map((t) => t.trim())
-                      .filter(Boolean);
-                    setSelectedTags(tags);
-                  }}
-                  placeholder="VD: VIP, Shopee, dị ứng sữa"
-                  className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Cách nhau bằng dấu phẩy. KH phải chứa TẤT CẢ tag.
-                </p>
-              </div>
-            </FilterGroup>
-
-            <FilterGroup label="Thời gian">
-              <DatePresetFilter
-                value={datePreset}
-                onChange={setDatePreset}
-                from={dateFrom}
-                to={dateTo}
-                onFromChange={setDateFrom}
-                onToChange={setDateTo}
-                presets={STANDARD_LIST_PRESETS_WITH_ALL}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Người tạo">
-              <PersonFilter
-                value={creatorFilter}
-                onChange={setCreatorFilter}
-                placeholder="Chọn người tạo"
-                suggestions={profileSuggestions}
-              />
-            </FilterGroup>
-
-            {/* Day 17/05/2026: filter Tỉnh/TP */}
-            <FilterGroup label="Tỉnh / Thành phố">
-              <SelectFilter
-                value={provinceFilter}
-                onChange={setProvinceFilter}
-                options={[
-                  { label: "Tất cả tỉnh/thành", value: "all" },
-                  ...VN_PROVINCES.map((p) => ({
-                    label: p.name,
-                    value: p.name,
-                  })),
-                ]}
-                placeholder="Chọn tỉnh/thành"
-              />
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
           title="Khách hàng"
+          density="compact"
           searchPlaceholder="Theo mã, tên, SĐT"
           searchValue={search}
           onSearchChange={setSearch}
@@ -670,33 +619,6 @@ export default function KhachHangPage() {
           ]}
         />
 
-        {/* KPI row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-          <SummaryCard
-            icon={<Icon name="group" size={16} />}
-            label="Tổng khách"
-            value={total.toString()}
-          />
-          <SummaryCard
-            icon={<Icon name="point_of_sale" size={16} />}
-            label="Doanh số"
-            value={formatCurrency(totalSales)}
-          />
-          <SummaryCard
-            icon={<Icon name="sell" size={16} />}
-            label="Doanh số ròng"
-            value={formatCurrency(totalSalesMinusReturns)}
-            hint="Đã trừ trả hàng"
-          />
-          <SummaryCard
-            icon={<Icon name="account_balance" size={16} />}
-            label="Công nợ hiện tại"
-            value={formatCurrency(totalDebt)}
-            danger={totalDebt > 0}
-            hint={totalDebt > 0 ? "Cần thu hồi" : undefined}
-          />
-        </div>
-
         {/* CEO 06/06/2026 — Phase 4 Saved Views (pattern Sapo/HubSpot) */}
         <SavedViewsTabs
           currentFilters={{
@@ -732,6 +654,78 @@ export default function KhachHangPage() {
           data={data}
           loading={loading}
           total={total}
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="group" size={15} />}
+                label="Kết quả"
+                value={formatNumber(total)}
+                hint="Toàn bộ khách theo bộ lọc"
+              />
+              <ListMetric
+                icon={<Icon name="point_of_sale" size={15} />}
+                label="Doanh số"
+                value={formatCurrency(summary.totalSales)}
+                hint="Toàn bộ kết quả đang lọc"
+              />
+              <ListMetric
+                icon={<Icon name="sell" size={15} />}
+                label="Doanh số ròng"
+                value={formatCurrency(summary.netSales)}
+                hint={`Đã trừ ${formatCurrency(summary.totalReturns)} trả hàng`}
+              />
+              {canViewDebt && (
+                <ListMetric
+                  icon={<Icon name="account_balance" size={15} />}
+                  label="Công nợ"
+                  value={formatCurrency(summary.totalDebt)}
+                  hint={
+                    summary.customersWithDebt > 0
+                      ? `${summary.customersWithDebt} khách còn nợ`
+                      : "Không có nợ"
+                  }
+                  tone={summary.totalDebt > 0 ? "danger" : "default"}
+                />
+              )}
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
@@ -803,9 +797,20 @@ export default function KhachHangPage() {
             },
           ]}
           summaryRow={{
-            currentDebt: formatCurrency(totalDebt),
-            totalSales: formatCurrency(totalSales),
-            totalSalesMinusReturns: formatCurrency(totalSalesMinusReturns),
+            ...(canViewDebt && {
+              currentDebt: formatCurrency(
+                data.reduce((sum, customer) => sum + customer.currentDebt, 0),
+              ),
+            }),
+            totalSales: formatCurrency(
+              data.reduce((sum, customer) => sum + customer.totalSales, 0),
+            ),
+            totalSalesMinusReturns: formatCurrency(
+              data.reduce(
+                (sum, customer) => sum + customer.totalSalesMinusReturns,
+                0,
+              ),
+            ),
           }}
           expandedRow={expandedRow}
           onExpandedRowChange={setExpandedRow}
@@ -840,6 +845,153 @@ export default function KhachHangPage() {
             },
           ]}
         />
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={clearListFilters}
+          title="Bộ lọc khách hàng"
+        >
+          <FilterGroup label="Nhóm khách hàng">
+            <CheckboxFilter
+              options={customerGroups}
+              selected={selectedGroups}
+              onChange={setSelectedGroups}
+            />
+          </FilterGroup>
+          <FilterGroup label="Loại khách hàng">
+            <ChipToggleFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                { label: "Cá nhân", value: "individual" },
+                { label: "Công ty", value: "company" },
+              ]}
+              value={typeFilter}
+              onChange={setTypeFilter}
+            />
+          </FilterGroup>
+          <FilterGroup label="Giới tính">
+            <ChipToggleFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                { label: "Nam", value: "male" },
+                { label: "Nữ", value: "female" },
+              ]}
+              value={genderFilter}
+              onChange={setGenderFilter}
+            />
+          </FilterGroup>
+          {canViewDebt && (
+            <FilterGroup label="Công nợ">
+              <ChipToggleFilter
+                options={[
+                  { label: "Tất cả", value: "all" },
+                  { label: "Còn nợ", value: "has_debt" },
+                  { label: "Đã trả đủ", value: "no_debt" },
+                ]}
+                value={debtFilter}
+                onChange={setDebtFilter}
+              />
+            </FilterGroup>
+          )}
+          <FilterGroup label="Tổng chi tiêu">
+            <ChipToggleFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                { label: "Mới (<1M)", value: "tier_new" },
+                { label: "Thường (1–10M)", value: "tier_regular" },
+                { label: "Thân thiết (10–50M)", value: "tier_loyal" },
+                { label: "VIP (≥50M)", value: "tier_vip" },
+              ]}
+              value={salesRangeFilter}
+              onChange={setSalesRangeFilter}
+            />
+          </FilterGroup>
+          <FilterGroup label="Số lần mua">
+            <ChipToggleFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                { label: "Chưa mua", value: "no_purchase" },
+                { label: "1 lần", value: "first_time" },
+                { label: "2–5 lần", value: "occasional" },
+                { label: "≥6 lần", value: "frequent" },
+              ]}
+              value={ordersRangeFilter}
+              onChange={setOrdersRangeFilter}
+            />
+          </FilterGroup>
+          <FilterGroup label="Lần mua cuối">
+            <ChipToggleFilter
+              options={[
+                { label: "Tất cả", value: "all" },
+                { label: "Hôm nay", value: "today" },
+                { label: "7 ngày", value: "week" },
+                { label: "30 ngày", value: "month" },
+                { label: "90 ngày", value: "3months" },
+                { label: "Đã rời (>90 ngày)", value: "churned" },
+                { label: "Chưa mua bao giờ", value: "never" },
+              ]}
+              value={lastPurchaseFilter}
+              onChange={setLastPurchaseFilter}
+            />
+          </FilterGroup>
+          <FilterGroup label="Sinh nhật tháng">
+            <SelectFilter
+              value={birthdayMonthFilter}
+              onChange={setBirthdayMonthFilter}
+              options={[
+                { label: "Tất cả", value: "all" },
+                ...Array.from({ length: 12 }, (_, index) => ({
+                  label: `Tháng ${index + 1}`,
+                  value: String(index + 1),
+                })),
+              ]}
+              placeholder="Chọn tháng sinh nhật"
+            />
+          </FilterGroup>
+          <FilterGroup label="Tags">
+            <input
+              type="text"
+              value={selectedTags.join(", ")}
+              onChange={(event) =>
+                setSelectedTags(
+                  event.target.value
+                    .split(",")
+                    .map((tag) => tag.trim())
+                    .filter(Boolean),
+                )
+              }
+              placeholder="VD: VIP, Shopee"
+              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </FilterGroup>
+          <FilterGroup label="Thời gian tạo" activeHint={datePresetLabel}>
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              presets={STANDARD_LIST_PRESETS_WITH_ALL}
+            />
+          </FilterGroup>
+          <FilterGroup label="Tỉnh / Thành phố">
+            <SelectFilter
+              value={provinceFilter}
+              onChange={setProvinceFilter}
+              options={[
+                { label: "Tất cả tỉnh/thành", value: "all" },
+                ...VN_PROVINCES.map((province) => ({
+                  label: province.name,
+                  value: province.name,
+                })),
+              ]}
+              placeholder="Chọn tỉnh/thành"
+            />
+          </FilterGroup>
+        </FilterPanel>
       </ListPageLayout>
 
       <CreateCustomerDialog
@@ -862,7 +1014,9 @@ export default function KhachHangPage() {
 
       <ConfirmDialog
         open={!!deletingCustomer}
-        onOpenChange={(open) => { if (!open) setDeletingCustomer(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeletingCustomer(null);
+        }}
         title="Xóa khách hàng"
         description={
           canDeleteCustomer
@@ -884,11 +1038,20 @@ export default function KhachHangPage() {
           setDeleteLoading(true);
           try {
             await deleteCustomer(deletingCustomer.id);
-            toast({ title: "Đã xóa khách hàng", description: `${deletingCustomer.code} — ${deletingCustomer.name}`, variant: "success" });
+            toast({
+              title: "Đã xóa khách hàng",
+              description: `${deletingCustomer.code} — ${deletingCustomer.name}`,
+              variant: "success",
+            });
             setDeletingCustomer(null);
             fetchData();
           } catch (err) {
-            toast({ title: "Lỗi xóa khách hàng", description: err instanceof Error ? err.message : "Vui lòng thử lại", variant: "error" });
+            toast({
+              title: "Lỗi xóa khách hàng",
+              description:
+                err instanceof Error ? err.message : "Vui lòng thử lại",
+              variant: "error",
+            });
           } finally {
             setDeleteLoading(false);
           }
@@ -905,7 +1068,11 @@ export default function KhachHangPage() {
         actionCode={OTP_ACTION_CODES.CRM_DELETE_CUSTOMER}
         targetMeta={
           otpTargetCustomer
-            ? { entity_type: "customer", entity_id: otpTargetCustomer.id, code: otpTargetCustomer.code }
+            ? {
+                entity_type: "customer",
+                entity_id: otpTargetCustomer.id,
+                code: otpTargetCustomer.code,
+              }
             : undefined
         }
         contextLabel={
@@ -926,7 +1093,8 @@ export default function KhachHangPage() {
           } catch (err) {
             toast({
               title: "Lỗi xoá khách hàng",
-              description: err instanceof Error ? err.message : "Vui lòng thử lại",
+              description:
+                err instanceof Error ? err.message : "Vui lòng thử lại",
               variant: "error",
             });
           } finally {
@@ -1015,7 +1183,7 @@ function CustomerDetailPanel({
   const outstandingInvoices = invoices.filter((i) => (i.debt ?? 0) > 0);
   const totalOutstanding = outstandingInvoices.reduce(
     (s, i) => s + (i.debt ?? 0),
-    0
+    0,
   );
 
   const tabs: DetailTab[] = [
@@ -1030,7 +1198,11 @@ function CustomerDetailPanel({
             { label: "Tên khách hàng", value: customer.name },
             { label: "Điện thoại", value: customer.phone },
             { label: "Email", value: customer.email || "" },
-            { label: "Địa chỉ", value: customer.address || "", fullWidth: true },
+            {
+              label: "Địa chỉ",
+              value: customer.address || "",
+              fullWidth: true,
+            },
             { label: "Nhóm khách hàng", value: customer.groupName || "" },
             {
               label: "Loại khách hàng",
@@ -1077,7 +1249,9 @@ function CustomerDetailPanel({
                     )}
                 </span>
               ) : (
-                <span className="text-muted-foreground text-xs">— Chưa có hạng —</span>
+                <span className="text-muted-foreground text-xs">
+                  — Chưa có hạng —
+                </span>
               ),
             },
             {
@@ -1400,17 +1574,18 @@ function CustomerDetailPanel({
   ];
 
   return (
-    <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
+    <InlineDetailPanel
+      open
+      onClose={onClose}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    >
       <div className="p-4 space-y-4">
         <DetailHeader
           title={customer.name}
           code={customer.code}
           subtitle={customer.groupName}
-          meta={
-            <span>
-              Ngày tạo: {formatDate(customer.createdAt)}
-            </span>
-          }
+          meta={<span>Ngày tạo: {formatDate(customer.createdAt)}</span>}
         />
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
