@@ -2145,6 +2145,7 @@
   "get_pos_invoice_integrity_report",
   "get_products_with_branch_stock",
   "get_profit_and_loss_report",
+  "get_purchase_order_list_workspace",
   "get_receivable_aging_report",
   "get_receivable_aging_report_unsecured_legacy",
   "get_recent_manager_otps",
@@ -2340,5 +2341,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 324
+ "soRpc": 325
 }

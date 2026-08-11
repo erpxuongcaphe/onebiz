@@ -14,6 +14,7 @@ import {
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 // CEO 06/06/2026 Phase 4: migrate khỏi legacy DateRangeFilter
@@ -32,7 +33,7 @@ import { exportToExcelFromSchema } from "@/lib/excel";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildPurchaseEntryPrintData, toPrintLines } from "@/lib/print-templates";
 import {
-  getPurchaseOrderEntries,
+  getPurchaseOrderListWorkspace,
   getPurchaseOrdersForExport,
   getPurchaseEntryStatuses,
   cancelPurchaseOrderEntry,
@@ -54,7 +55,8 @@ import { buildTransactionRowActions } from "@/components/shared/transaction-row-
 import { useTxRowPermissions } from "@/lib/permissions";
 import { purchaseOrderExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportPurchaseOrders } from "@/lib/services/supabase/excel-import";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
 import type { PurchaseOrderEntry } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -94,7 +96,7 @@ function PurchaseOrderEntryDetail({
             title={`Đặt hàng nhập ${item.code}`}
             code={item.code}
             status={{ label: st.label, variant: st.variant }}
-            subtitle="Chi nhánh trung tâm"
+            subtitle={item.branchName ?? "Chưa xác định chi nhánh"}
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
@@ -165,6 +167,12 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
     size: 220,
   },
   {
+    accessorKey: "branchName",
+    header: "Chi nhánh",
+    size: 170,
+    cell: ({ row }) => row.original.branchName ?? "---",
+  },
+  {
     accessorKey: "totalAmount",
     header: "Tổng tiền",
     cell: ({ row }) => formatCurrency(row.original.totalAmount),
@@ -197,11 +205,14 @@ const columns: ColumnDef<PurchaseOrderEntry, unknown>[] = [
 ];
 
 export default function DatHangNhapPage() {
+  const { activeBranchId, isReady: branchReady } = useBranchFilter();
+  const { isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("purchase_order");
   const [data, setData] = useState<PurchaseOrderEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
@@ -219,9 +230,18 @@ export default function DatHangNhapPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [summary, setSummary] = useState({
+    outstandingCount: 0,
+    outstandingValue: 0,
+    completedCount: 0,
+    cancelledCount: 0,
+  });
 
   const fetchData = useCallback(async () => {
+    if (!branchReady || permissionsLoading) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -229,18 +249,21 @@ export default function DatHangNhapPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const result = await getPurchaseOrderEntries({
+    const result = await getPurchaseOrderListWorkspace({
       page,
       pageSize,
       search,
-      filters: {
-        ...(statusFilter !== "all" && { status: statusFilter }),
-        ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-        ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-      },
+      searchField,
+      status: statusFilter,
+      dateFrom: effectiveDateFrom,
+      dateTo: effectiveDateTo,
+      amountMin: amountMin ? Number(amountMin) : undefined,
+      amountMax: amountMax ? Number(amountMax) : undefined,
+      branchId: activeBranchId,
     });
     setData(result.data);
     setTotal(result.total);
+    setSummary(result.summary);
     } catch (e) {
       toast({
         variant: "error",
@@ -250,7 +273,7 @@ export default function DatHangNhapPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, datePreset, dateFrom, dateTo, toast]);
+  }, [activeBranchId, amountMax, amountMin, branchReady, dateFrom, datePreset, dateTo, page, pageSize, permissionsLoading, search, searchField, statusFilter, toast]);
 
   useEffect(() => {
     fetchData();
@@ -259,38 +282,40 @@ export default function DatHangNhapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, datePreset, dateFrom, dateTo]);
-
-  /* ---- KPI row (outstanding orders = CEO attention) ---- */
-  const kpiOutstanding = data.filter(
-    (d) => d.status === "pending" || d.status === "partial",
-  ).length;
-  const kpiOutstandingValue = data
-    .filter((d) => d.status === "pending" || d.status === "partial")
-    .reduce((sum, d) => sum + (d.totalAmount ?? 0), 0);
-  const kpiCompleted = data.filter((d) => d.status === "completed").length;
-  const kpiCancelled = data.filter((d) => d.status === "cancelled").length;
+  }, [activeBranchId, amountMax, amountMin, search, searchField, statusFilter, datePreset, dateFrom, dateTo]);
   const datePresetLabel = useMemo(() => {
     if (datePreset === "all") return "Tất cả thời gian";
     if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
     return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
-  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); }, []);
+  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); setAmountMin(""); setAmountMax(""); }, []);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
     if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (statusFilter !== "all") chips.push({ key: "status", label: "Trạng thái", value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter("all") });
+    if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
-  }, [datePreset, datePresetLabel, statusFilter]);
+  }, [amountMax, amountMin, datePreset, datePresetLabel, statusFilter]);
 
   return (
     <ListPageLayout sidebar={null}>
       <PageHeader
         title="Đặt hàng nhập"
         density="compact"
-        searchPlaceholder="Theo mã, NCC"
+        searchPlaceholder="Theo mã đơn, mã/tên NCC, ghi chú"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" },
+          { value: "code", label: "Mã đơn" },
+          { value: "supplier", label: "Nhà cung cấp" },
+          { value: "note", label: "Ghi chú" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(value) => {
+          setSearchField(value);
+          setPage(0);
+        }}
         onExport={{
           excel: async () => {
             // Export theo schema Import → mỗi dòng = 1 line item, gộp theo "code"
@@ -348,7 +373,7 @@ export default function DatHangNhapPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="shopping_cart" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số đơn theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_top" size={15} />} label="Chờ / đang nhập trang này" value={kpiOutstanding.toString()} hint={formatCurrency(kpiOutstandingValue)} tone={kpiOutstanding > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất trang này" value={kpiCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="cancel" size={15} />} label="Đã hủy trang này" value={kpiCancelled.toString()} hint="Chỉ tính các dòng đang hiển thị" /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="shopping_cart" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số đơn theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_top" size={15} />} label="Chờ / đang nhập" value={summary.outstandingCount.toString()} hint={formatCurrency(summary.outstandingValue)} tone={summary.outstandingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="cancel" size={15} />} label="Đã hủy" value={summary.cancelledCount.toString()} hint="Toàn bộ kết quả lọc" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         pageIndex={page}
@@ -399,7 +424,7 @@ export default function DatHangNhapPage() {
                 await printDocumentWithTemplate({
                   channel: "backoffice",
                   docType: "purchase_order",
-                  branchId: null, // đặt hàng NCC không gắn chi nhánh ở trang này
+                  branchId: row.branchId ?? activeBranchId ?? null,
                   base: buildPurchaseEntryPrintData(row, toPrintLines(items)),
                 });
               }
@@ -473,7 +498,7 @@ export default function DatHangNhapPage() {
               await printDocumentWithTemplate({
                 channel: "backoffice",
                 docType: "purchase_order",
-                branchId: null, // đặt hàng NCC không gắn chi nhánh ở trang này
+                branchId: row.branchId ?? activeBranchId ?? null,
                 base: buildPurchaseEntryPrintData(row, toPrintLines(items)),
               });
             },
@@ -502,6 +527,7 @@ export default function DatHangNhapPage() {
       <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc đặt hàng nhập">
         <FilterGroup label="Trạng thái" activeHint={statusFilter !== "all" ? statusOptions.find((item) => item.value === statusFilter)?.label : undefined}><SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} placeholder="Tất cả" /></FilterGroup>
         <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
+        <FilterGroup label="Giá trị đơn" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Số tiền tối thiểu" toPlaceholder="Số tiền tối đa" /></FilterGroup>
       </FilterPanel>
 
       <ConfirmDialog

@@ -14,7 +14,10 @@ import type {
   QueryResult,
 } from "@/lib/types";
 import type { PurchaseOrderImportRow } from "@/lib/excel/schemas";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import {
+  applyCreatedAtRangeFilter,
+  normalizeCreatedAtRange,
+} from "@/lib/utils/list-date-preset-range";
 import { getClient, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { updatePurchaseOrderStatus } from "./purchase-orders";
 
@@ -27,6 +30,73 @@ function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undef
 }
 
 // ==================== Purchase Order Entries (Đặt hàng nhập) ====================
+
+export interface PurchaseOrderListWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: string;
+  status?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: number;
+  amountMax?: number;
+  branchId?: string;
+}
+
+export interface PurchaseOrderListSummary {
+  outstandingCount: number;
+  outstandingValue: number;
+  completedCount: number;
+  cancelledCount: number;
+}
+
+export interface PurchaseOrderListWorkspaceResult
+  extends QueryResult<PurchaseOrderEntry> {
+  summary: PurchaseOrderListSummary;
+}
+
+/** Một nguồn đọc duy nhất cho bảng, KPI, bộ lọc và phạm vi chi nhánh. */
+export async function getPurchaseOrderListWorkspace(
+  params: PurchaseOrderListWorkspaceParams,
+): Promise<PurchaseOrderListWorkspaceResult> {
+  const supabase = getClient();
+  const { from, toExclusive } = normalizeCreatedAtRange({
+    dateFrom: params.dateFrom,
+    dateTo: params.dateTo,
+  });
+  const { data, error } = await (supabase.rpc as any)(
+    "get_purchase_order_list_workspace",
+    {
+      p_page: params.page,
+      p_page_size: params.pageSize,
+      p_search: params.search?.trim() || null,
+      p_search_field: params.searchField ?? "all",
+      p_status: params.status && params.status !== "all" ? params.status : null,
+      p_date_from: from ?? null,
+      p_date_to_exclusive: toExclusive ?? null,
+      p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+      p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+      p_branch_id: params.branchId ?? null,
+    },
+  );
+  if (error) handleError(error, "getPurchaseOrderListWorkspace");
+
+  const payload = (data ?? {}) as Record<string, any>;
+  const rawSummary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items)
+      ? payload.items.map(mapPurchaseOrderEntry)
+      : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      outstandingCount: Number(rawSummary.outstandingCount ?? 0),
+      outstandingValue: Number(rawSummary.outstandingValue ?? 0),
+      completedCount: Number(rawSummary.completedCount ?? 0),
+      cancelledCount: Number(rawSummary.cancelledCount ?? 0),
+    },
+  };
+}
 
 export async function getPurchaseOrderEntries(
   params: QueryParams
@@ -504,6 +574,7 @@ const purchaseOrderStatusNameMap: Record<string, string> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
   const profile = row.profiles as { full_name: string } | null;
+  const branch = row.branches as { name: string } | null;
   return {
     id: row.id,
     code: row.code,
@@ -515,6 +586,9 @@ function mapPurchaseOrderEntry(row: any): PurchaseOrderEntry {
     expectedDate: row.expected_date ?? "",
     createdBy: row.created_by ?? "---",
     createdByName: profile?.full_name ?? undefined,
+    branchId: row.branch_id ?? undefined,
+    branchName: branch?.name ?? undefined,
+    supplierCode: row.supplier_code ?? undefined,
     note: row.note ?? undefined,
   };
 }
