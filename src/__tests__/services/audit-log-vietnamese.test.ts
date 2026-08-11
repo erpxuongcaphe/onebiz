@@ -35,18 +35,24 @@ describe("Vietnamese audit log", () => {
       status: "completed",
       product_id: "P-001",
       is_exception: true,
+      auto_saved: true,
+      atomic: true,
       nested: { reason: "Thiếu hàng" },
     };
     expect(localizeAuditData(source)).toEqual({
       "Trạng thái": "Hoàn thành",
       "Sản phẩm": "P-001",
       "Là ngoại lệ": "Có",
+      "Tự động lưu": "Có",
+      "Thao tác đồng bộ": "Có",
       Nested: { "Lý do": "Thiếu hàng" },
     });
     expect(source).toEqual({
       status: "completed",
       product_id: "P-001",
       is_exception: true,
+      auto_saved: true,
+      atomic: true,
       nested: { reason: "Thiếu hàng" },
     });
   });
