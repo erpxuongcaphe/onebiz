@@ -33,6 +33,7 @@ interface SettleCodDialogProps {
   /** null = nhóm vận đơn chưa gán đối tác */
   partnerId: string | null;
   partnerName: string;
+  branchId?: string;
   onSuccess?: () => void;
 }
 
@@ -41,6 +42,7 @@ export function SettleCodDialog({
   onOpenChange,
   partnerId,
   partnerName,
+  branchId,
   onSuccess,
 }: SettleCodDialogProps) {
   const { toast } = useToast();
@@ -61,7 +63,7 @@ export function SettleCodDialog({
     setSaving(false);
     setLoading(true);
     setLoadError(null);
-    getUnsettledShipments(partnerId)
+    getUnsettledShipments(partnerId, branchId)
       .then((rows) => {
         setShipments(rows);
         // mặc định tick hết — thao tác phổ biến là đối soát trọn kỳ
@@ -74,7 +76,7 @@ export function SettleCodDialog({
         );
       })
       .finally(() => setLoading(false));
-  }, [open, partnerId]);
+  }, [branchId, open, partnerId]);
 
   const selected = useMemo(
     () => shipments.filter((s) => checked.has(s.id)),

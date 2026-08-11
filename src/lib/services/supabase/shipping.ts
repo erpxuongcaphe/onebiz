@@ -366,6 +366,7 @@ const FAILED_SHIPPING_STATUSES = ["returned", "cancelled"];
 
 export async function getDeliveryPartnersWithStats(
   params: QueryParams,
+  scope?: { branchId?: string },
 ): Promise<
   QueryResult<DeliveryPartnerWithStats> & {
     /** Vận đơn CHƯA gán đối tác — hiện đang là toàn bộ, cần cho CEO biết. */
@@ -389,15 +390,23 @@ export async function getDeliveryPartnersWithStats(
     data: StatsRow[] | null;
     error: { code?: string; message: string } | null;
   };
-  let ordersResult = (await supabase
+  let ordersQuery = supabase
     .from("shipping_orders")
-    .select("partner_id, status, shipping_fee, cod_amount, settlement_id")
-    .eq("tenant_id", tenantId)) as unknown as StatsResult;
+    .select("partner_id, status, shipping_fee, cod_amount, settlement_id, invoices!inner(branch_id)")
+    .eq("tenant_id", tenantId);
+  if (scope?.branchId) {
+    ordersQuery = ordersQuery.eq("invoices.branch_id", scope.branchId);
+  }
+  let ordersResult = (await ordersQuery) as unknown as StatsResult;
   if (ordersResult.error?.code === "42703") {
-    ordersResult = (await supabase
+    let legacyOrdersQuery = supabase
       .from("shipping_orders")
-      .select("partner_id, status, shipping_fee, cod_amount")
-      .eq("tenant_id", tenantId)) as unknown as StatsResult;
+      .select("partner_id, status, shipping_fee, cod_amount, invoices!inner(branch_id)")
+      .eq("tenant_id", tenantId);
+    if (scope?.branchId) {
+      legacyOrdersQuery = legacyOrdersQuery.eq("invoices.branch_id", scope.branchId);
+    }
+    ordersResult = (await legacyOrdersQuery) as unknown as StatsResult;
   }
   const partnersResult = await getDeliveryPartners(params);
 
@@ -464,6 +473,7 @@ export interface UnsettledShipment {
  */
 export async function getUnsettledShipments(
   partnerId: string | null,
+  branchId?: string,
 ): Promise<UnsettledShipment[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -471,12 +481,13 @@ export async function getUnsettledShipments(
   let query = supabase
     .from("shipping_orders")
     .select(
-      "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey(code, customer_name)",
+      "id, code, cod_amount, updated_at, settlement_id, invoices!shipping_orders_invoice_id_fkey!inner(code, customer_name, branch_id)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "delivered")
     .is("settlement_id", null)
     .order("updated_at", { ascending: true });
+  if (branchId) query = query.eq("invoices.branch_id", branchId);
   query = partnerId
     ? query.eq("partner_id", partnerId)
     : query.is("partner_id", null);

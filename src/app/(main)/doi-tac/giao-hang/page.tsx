@@ -23,13 +23,20 @@
  * đối soát. Nên trang này chỉ nêu đúng phần đo được, không suy diễn thành nợ.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+} from "@/components/shared/filter-sidebar";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import {
@@ -43,7 +50,7 @@ import {
   ConfirmDialog,
   SettleCodDialog,
 } from "@/components/shared/dialogs";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import type { DeliveryPartner } from "@/lib/types";
 
@@ -55,14 +62,35 @@ const EMPTY_STATS: DeliveryPartnerStats = {
   feeCollected: 0,
 };
 
+type PartnerStatusFilter = "all" | "active" | "inactive";
+type PartnerActivityFilter = "all" | "active_orders" | "holding_cod" | "delivered" | "failed";
+
+const STATUS_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Đang hoạt động", value: "active" },
+  { label: "Ngừng hoạt động", value: "inactive" },
+];
+
+const ACTIVITY_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "Có đơn đang giao", value: "active_orders" },
+  { label: "Đang giữ COD", value: "holding_cod" },
+  { label: "Đã giao thành công", value: "delivered" },
+  { label: "Có đơn hoàn / hủy", value: "failed" },
+];
+
 export default function DoiTacGiaoHangPage() {
   const { toast } = useToast();
+  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
 
   const [partners, setPartners] = useState<DeliveryPartnerWithStats[]>([]);
   const [unassigned, setUnassigned] = useState<DeliveryPartnerStats>(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<PartnerStatusFilter>("all");
+  const [activityFilter, setActivityFilter] = useState<PartnerActivityFilter>("all");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<DeliveryPartner | null>(null);
@@ -70,6 +98,7 @@ export default function DoiTacGiaoHangPage() {
   const [settling, setSettling] = useState<DeliveryPartnerWithStats | null>(null);
 
   const fetchData = useCallback(async () => {
+    if (!isReady) return;
     setLoading(true);
     setLoadError(null);
     try {
@@ -77,7 +106,7 @@ export default function DoiTacGiaoHangPage() {
         page: 0,
         pageSize: 100,
         search,
-      });
+      }, { branchId: activeBranchId });
       setPartners(result.data);
       setUnassigned(result.unassigned);
     } catch (err) {
@@ -88,7 +117,7 @@ export default function DoiTacGiaoHangPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, toast]);
+  }, [activeBranchId, isReady, search, toast]);
 
   useEffect(() => {
     fetchData();
@@ -98,6 +127,41 @@ export default function DoiTacGiaoHangPage() {
   const totalCod = partners.reduce((sum, p) => sum + p.stats.codHolding, 0);
   const totalFee = partners.reduce((sum, p) => sum + p.stats.feeCollected, 0);
   const unassignedTotal = unassigned.activeOrders + unassigned.deliveredOrders;
+
+  const filteredPartners = useMemo(() => partners.filter((partner) => {
+    if (statusFilter !== "all" && partner.status !== statusFilter) return false;
+    if (activityFilter === "active_orders") return partner.stats.activeOrders > 0;
+    if (activityFilter === "holding_cod") return partner.stats.codHolding > 0;
+    if (activityFilter === "delivered") return partner.stats.deliveredOrders > 0;
+    if (activityFilter === "failed") return partner.stats.failedOrders > 0;
+    return true;
+  }), [activityFilter, partners, statusFilter]);
+
+  const activeFilters = useMemo(() => {
+    const filters = [];
+    if (statusFilter !== "all") {
+      filters.push({
+        key: "status",
+        label: "Trạng thái",
+        value: STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label ?? statusFilter,
+        onClear: () => setStatusFilter("all"),
+      });
+    }
+    if (activityFilter !== "all") {
+      filters.push({
+        key: "activity",
+        label: "Hoạt động",
+        value: ACTIVITY_OPTIONS.find((option) => option.value === activityFilter)?.label ?? activityFilter,
+        onClear: () => setActivityFilter("all"),
+      });
+    }
+    return filters;
+  }, [activityFilter, statusFilter]);
+
+  const clearFilters = useCallback(() => {
+    setStatusFilter("all");
+    setActivityFilter("all");
+  }, []);
 
   const columns: ColumnDef<DeliveryPartnerWithStats, unknown>[] = [
     {
@@ -235,9 +299,10 @@ export default function DoiTacGiaoHangPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Đối tác giao hàng"
+        density="compact"
         searchPlaceholder="Theo tên đối tác..."
         searchValue={search}
         onSearchChange={setSearch}
@@ -251,7 +316,7 @@ export default function DoiTacGiaoHangPage() {
         onExport={{
           csv: () => {
             exportToCsv(
-              partners.map((p) => ({
+              filteredPartners.map((p) => ({
                 code: p.code,
                 name: p.name,
                 phone: p.phone,
@@ -277,6 +342,70 @@ export default function DoiTacGiaoHangPage() {
             );
           },
         }}
+      />
+
+      <div
+        className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+        role="region"
+        aria-label="Chỉ số và công cụ đối tác giao hàng"
+      >
+        <ListMetric
+          label="Đối tác"
+          value={formatNumber(partners.length)}
+          hint={`${filteredPartners.length} đang hiển thị`}
+          icon={<Icon name="local_shipping" size={16} />}
+          loading={loading}
+        />
+        <ListMetric
+          label="Đơn đang giao"
+          value={formatNumber(totalActive)}
+          icon={<Icon name="pending" size={16} />}
+          loading={loading}
+        />
+        <ListMetric
+          label="COD đang giữ"
+          value={formatCurrency(totalCod)}
+          hint="chưa đối soát"
+          icon={<Icon name="payments" size={16} />}
+          loading={loading}
+          tone={totalCod > 0 ? "danger" : "default"}
+        />
+        <ListMetric
+          label="Phí giao đã thu"
+          value={formatCurrency(totalFee)}
+          icon={<Icon name="account_balance_wallet" size={16} />}
+          loading={loading}
+        />
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <span
+            className="hidden max-w-48 truncate text-xs text-muted-foreground lg:inline"
+            title={`Phạm vi vận đơn: ${branchLabel}`}
+          >
+            <Icon name="location_on" size={14} className="mr-1 inline" />
+            Phạm vi vận đơn: {branchLabel}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setFilterOpen(true)}
+            aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+          >
+            <Icon name="filter_alt" size={15} />
+            Bộ lọc
+            {activeFilters.length > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </Button>
+        </div>
+      </div>
+
+      <FilterChips
+        filters={activeFilters}
+        onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
       />
 
       {loadError && (
@@ -306,42 +435,12 @@ export default function DoiTacGiaoHangPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-3 px-4 pt-4 md:grid-cols-4">
-        <SummaryCard
-          label="Đối tác"
-          value={formatNumber(partners.length)}
-          icon="local_shipping"
-          loading={loading}
-        />
-        <SummaryCard
-          label="Đơn đang giao"
-          value={formatNumber(totalActive)}
-          icon="pending"
-          loading={loading}
-        />
-        <SummaryCard
-          label="COD đối tác đang giữ"
-          value={formatCurrency(totalCod)}
-          icon="payments"
-          tone={totalCod > 0 ? "error" : "default"}
-          hint="tiền của mình đối tác đang cầm"
-          loading={loading}
-        />
-        <SummaryCard
-          label="Phí giao đã thu"
-          value={formatCurrency(totalFee)}
-          icon="account_balance_wallet"
-          hint="trên các đơn đã giao"
-          loading={loading}
-        />
-      </div>
-
-      <div className="flex-1 min-h-0 px-4 pb-4 pt-3">
+      <div className="flex-1 min-h-0 px-3 pb-3 pt-2">
         <DataTable
           columns={columns}
-          data={partners}
+          data={filteredPartners}
           loading={loading}
-          total={partners.length}
+          total={filteredPartners.length}
           pageIndex={0}
           pageSize={100}
           pageCount={1}
@@ -353,6 +452,37 @@ export default function DoiTacGiaoHangPage() {
           }
         />
       </div>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={activeFilters.length}
+        onClearAll={clearFilters}
+        title="Bộ lọc đối tác giao hàng"
+      >
+        <FilterGroup
+          label="Trạng thái đối tác"
+          activeHint={statusFilter === "all" ? undefined : STATUS_OPTIONS.find((option) => option.value === statusFilter)?.label}
+        >
+          <RadioFilter
+            name="delivery-partner-status"
+            options={STATUS_OPTIONS}
+            value={statusFilter}
+            onChange={(value) => setStatusFilter(value as PartnerStatusFilter)}
+          />
+        </FilterGroup>
+        <FilterGroup
+          label="Tình hình vận chuyển"
+          activeHint={activityFilter === "all" ? undefined : ACTIVITY_OPTIONS.find((option) => option.value === activityFilter)?.label}
+        >
+          <RadioFilter
+            name="delivery-partner-activity"
+            options={ACTIVITY_OPTIONS}
+            value={activityFilter}
+            onChange={(value) => setActivityFilter(value as PartnerActivityFilter)}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       <CreateDeliveryPartnerDialog
         open={createOpen || !!editing}
@@ -376,6 +506,7 @@ export default function DoiTacGiaoHangPage() {
           onOpenChange={(open) => !open && setSettling(null)}
           partnerId={settling.id}
           partnerName={settling.name}
+          branchId={activeBranchId}
           onSuccess={() => {
             setSettling(null);
             fetchData();
@@ -411,6 +542,6 @@ export default function DoiTacGiaoHangPage() {
           }}
         />
       )}
-    </div>
+    </ListPageLayout>
   );
 }
