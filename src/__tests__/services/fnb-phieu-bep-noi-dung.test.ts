@@ -82,18 +82,14 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
     expect(tron).not.toContain("**");
   });
 
-  /**
-   * GHI NHẬN HIỆN TRẠNG (không phải sửa): kiểu phiếu "Gọn" ở Cài đặt in ấn
-   * CHỈ in số lượng + tên + Size. Chọn kiểu này là bếp mất Đường/Đá/topping/
-   * ghi chú. Mặc định đang là "Tiêu chuẩn" nên chưa ai dính. Khoá lại để nếu
-   * sau này đổi thì thấy ngay, và để CEO quyết có nên chặn kiểu Gọn không.
-   */
-  it("kiểu Gọn hiện KHÔNG in Đường/Đá/topping/ghi chú (hiện trạng)", () => {
+  it("kiểu Gọn vẫn in đủ thông tin pha chế, chỉ giảm mật độ trình bày", () => {
     const gon = buildKitchenTicketHtml({ ...PHIEU, style: "compact" });
     expect(gon).toContain("(Size L)");
-    expect(gon).not.toContain("Mức đường");
-    expect(gon).not.toContain("Trân châu trắng");
-    expect(gon).not.toContain("Không ống hút");
+    expect(gon).toContain("Trân châu trắng x2");
+    expect(gon).toContain("Mức đường: 50%");
+    expect(gon).toContain("Mức đá: Ít đá");
+    expect(gon).toContain("Không ống hút");
+    expect(gon).not.toContain('class="price"');
   });
 });
 

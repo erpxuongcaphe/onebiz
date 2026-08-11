@@ -546,13 +546,8 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const date = formatDate(data.createdAt);
 
   const itemsHtml = data.items.map((item) => {
-    if (style === "compact") {
-      return `<div class="item">
-        <span class="qty">${formatNumber(item.quantity)}x</span> ${item.name}${item.variant ? ` (${item.variant})` : ""}
-      </div>`;
-    }
-
-    // Standard + Detailed
+    // Mọi kiểu phiếu đều phải giữ đủ thông tin pha chế. "Gọn" chỉ giảm
+    // kích thước và khoảng cách, không được làm mất topping, tuỳ chọn hay ghi chú.
     let html = `<div class="item">
       <div class="item-name">
         <span class="qty">${formatNumber(item.quantity)}x</span>
