@@ -5,12 +5,21 @@
  * Real DataTable with filters, pagination, detail viewer.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  DatePresetFilter,
+  FilterGroup,
+  FilterPanel,
+  SelectFilter,
+  type DatePresetValue,
+} from "@/components/shared/filter-sidebar";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -25,11 +34,16 @@ import {
   getAuditStats,
   getActionOptions,
   getEntityTypeOptions,
+  localizeAuditData,
 } from "@/lib/services/supabase/audit";
 import type { AuditLogEntry } from "@/lib/services/supabase/audit";
 import { Icon } from "@/components/ui/icon";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
+import {
+  computeListPresetRange,
+  STANDARD_LIST_PRESETS_WITH_ALL,
+} from "@/lib/utils/list-date-preset-range";
 
 const PAGE_SIZE = 25;
 
@@ -64,6 +78,10 @@ function AuditPage() {
   // Filters
   const [actionFilter, setActionFilter] = useState("all");
   const [entityFilter, setEntityFilter] = useState("all");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
 
   // Stats
   const [stats, setStats] = useState<{
@@ -75,7 +93,7 @@ function AuditPage() {
 
   // Detail dialog
   const [selectedEntry, setSelectedEntry] = useState<AuditLogEntry | null>(
-    null
+    null,
   );
 
   const actionOpts = getActionOptions();
@@ -92,6 +110,8 @@ function AuditPage() {
           filters: {
             action: actionFilter,
             entityType: entityFilter,
+            ...(dateFrom ? { dateFrom } : {}),
+            ...(dateTo ? { dateTo } : {}),
           },
         }),
         page === 0 ? getAuditStats() : Promise.resolve(null),
@@ -101,14 +121,14 @@ function AuditPage() {
       if (statsRes) setStats(statsRes);
     } catch (err) {
       toast({
-        title: "Lỗi tải audit log",
+        title: "Lỗi tải lịch sử thao tác",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
         variant: "error",
       });
     } finally {
       setLoading(false);
     }
-  }, [page, search, actionFilter, entityFilter, toast]);
+  }, [page, search, actionFilter, entityFilter, dateFrom, dateTo, toast]);
 
   useEffect(() => {
     fetchData();
@@ -187,11 +207,84 @@ function AuditPage() {
 
   const pageCount = Math.ceil(total / PAGE_SIZE);
 
+  const filterChips = useMemo(() => {
+    const chips = [];
+    if (actionFilter !== "all") {
+      chips.push({
+        key: "action",
+        label: "Hành động",
+        value:
+          actionOpts.find((option) => option.value === actionFilter)?.label ??
+          actionFilter,
+        onClear: () => setActionFilter("all"),
+      });
+    }
+    if (entityFilter !== "all") {
+      chips.push({
+        key: "entity",
+        label: "Đối tượng",
+        value:
+          entityOpts.find((option) => option.value === entityFilter)?.label ??
+          entityFilter,
+        onClear: () => setEntityFilter("all"),
+      });
+    }
+    if (datePreset !== "all" || dateFrom || dateTo) {
+      const presetLabel = STANDARD_LIST_PRESETS_WITH_ALL.find(
+        (option) => option.value === datePreset,
+      )?.label;
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value:
+          datePreset === "custom"
+            ? `${dateFrom || "..."} đến ${dateTo || "..."}`
+            : (presetLabel ?? "Tùy chỉnh"),
+        onClear: () => {
+          setDatePreset("all");
+          setDateFrom("");
+          setDateTo("");
+        },
+      });
+    }
+    return chips;
+  }, [
+    actionFilter,
+    actionOpts,
+    dateFrom,
+    datePreset,
+    dateTo,
+    entityFilter,
+    entityOpts,
+  ]);
+
+  function clearFilters() {
+    setActionFilter("all");
+    setEntityFilter("all");
+    setDatePreset("all");
+    setDateFrom("");
+    setDateTo("");
+    setPage(0);
+  }
+
+  function handleDatePreset(value: DatePresetValue) {
+    setDatePreset(value);
+    if (value === "custom") {
+      setPage(0);
+      return;
+    }
+    const range = computeListPresetRange(value);
+    setDateFrom(range.from ?? "");
+    setDateTo(range.to ?? "");
+    setPage(0);
+  }
+
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Lịch sử thao tác"
-        searchPlaceholder="Tìm theo mã đối tượng, hành động..."
+        density="compact"
+        searchPlaceholder="Tìm mã đối tượng hoặc mã hành động..."
         searchValue={search}
         onSearchChange={(v) => {
           setSearch(v);
@@ -199,72 +292,61 @@ function AuditPage() {
         }}
       />
 
-      {/* Stats cards */}
-      {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-          <StatCard
-            icon={<Icon name="monitoring" size={16} className="text-primary" />}
-            label="Hôm nay"
-            value={`${stats.totalToday} thao tác`}
-            bg="bg-primary-fixed border-primary-fixed"
-          />
-          <StatCard
-            icon={<Icon name="calendar_today" size={16} className="text-status-success" />}
-            label="7 ngày qua"
-            value={`${stats.totalWeek} thao tác`}
-            bg="bg-status-success/10 border-status-success/25"
-          />
-          <StatCard
-            icon={<Icon name="file_present" size={16} className="text-status-info" />}
-            label="Hành động phổ biến"
-            value={stats.topAction}
-            bg="bg-status-info/10 border-status-info/25"
-          />
-          <StatCard
-            icon={<Icon name="file_present" size={16} className="text-status-warning" />}
-            label="Đối tượng phổ biến"
-            value={stats.topEntity}
-            bg="bg-status-warning/10 border-status-warning/25"
-          />
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="flex items-center gap-3 px-4 pt-3">
-        <FilterSelect
-          label="Hành động"
-          value={actionFilter}
-          onChange={(v) => {
-            setActionFilter(v);
-            setPage(0);
-          }}
-          options={[
-            { value: "all", label: "Tất cả" },
-            ...actionOpts,
-          ]}
-        />
-        <FilterSelect
-          label="Đối tượng"
-          value={entityFilter}
-          onChange={(v) => {
-            setEntityFilter(v);
-            setPage(0);
-          }}
-          options={[
-            { value: "all", label: "Tất cả" },
-            ...entityOpts,
-          ]}
-        />
-        <div className="ml-auto text-xs text-muted-foreground">
-          {total} bản ghi
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 px-4 pt-3 pb-4">
+      <div className="flex-1 min-h-0 px-3 pt-2 pb-3">
         <DataTable
           columns={columns}
           data={data}
           loading={loading}
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="monitoring" size={16} />}
+                label="Hôm nay"
+                value={(stats?.totalToday ?? 0).toString()}
+                loading={!stats && loading}
+              />
+              <ListMetric
+                icon={<Icon name="calendar_today" size={16} />}
+                label="7 ngày qua"
+                value={(stats?.totalWeek ?? 0).toString()}
+                loading={!stats && loading}
+              />
+              <ListMetric
+                icon={<Icon name="rule" size={16} />}
+                label="Phổ biến"
+                value={stats?.topAction ?? "—"}
+                hint={stats?.topEntity}
+                loading={!stats && loading}
+              />
+            </>
+          }
+          toolbarActions={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+              onClick={() => setFilterOpen(true)}
+            >
+              <Icon name="filter_alt" size={15} />
+              <span className="hidden sm:inline">Bộ lọc</span>
+              {filterChips.length > 0 && (
+                <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                  {filterChips.length}
+                </span>
+              )}
+            </Button>
+          }
+          toolbarFooter={
+            filterChips.length > 0 ? (
+              <FilterChips
+                filters={filterChips}
+                onClearAll={filterChips.length > 1 ? clearFilters : undefined}
+              />
+            ) : null
+          }
           total={total}
           pageIndex={page}
           pageSize={PAGE_SIZE}
@@ -274,6 +356,54 @@ function AuditPage() {
           getRowId={(r) => r.id}
         />
       </div>
+
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={filterChips.length}
+        onClearAll={clearFilters}
+        title="Bộ lọc lịch sử thao tác"
+      >
+        <FilterGroup label="Hành động">
+          <SelectFilter
+            value={actionFilter}
+            onChange={(value) => {
+              setActionFilter(value);
+              setPage(0);
+            }}
+            options={actionOpts}
+            placeholder="Tất cả hành động"
+          />
+        </FilterGroup>
+        <FilterGroup label="Đối tượng">
+          <SelectFilter
+            value={entityFilter}
+            onChange={(value) => {
+              setEntityFilter(value);
+              setPage(0);
+            }}
+            options={entityOpts}
+            placeholder="Tất cả đối tượng"
+          />
+        </FilterGroup>
+        <FilterGroup label="Thời gian">
+          <DatePresetFilter
+            value={datePreset}
+            onChange={handleDatePreset}
+            from={dateFrom}
+            to={dateTo}
+            onFromChange={(value) => {
+              setDateFrom(value);
+              setPage(0);
+            }}
+            onToChange={(value) => {
+              setDateTo(value);
+              setPage(0);
+            }}
+            presets={STANDARD_LIST_PRESETS_WITH_ALL}
+          />
+        </FilterGroup>
+      </FilterPanel>
 
       {/* Detail dialog */}
       <Dialog
@@ -324,9 +454,7 @@ function AuditPage() {
                   <span className="text-muted-foreground text-xs">
                     Đối tượng
                   </span>
-                  <p className="font-medium">
-                    {selectedEntry.entityTypeLabel}
-                  </p>
+                  <p className="font-medium">{selectedEntry.entityTypeLabel}</p>
                 </div>
                 <div className="col-span-2">
                   <span className="text-muted-foreground text-xs">
@@ -338,9 +466,7 @@ function AuditPage() {
                 </div>
                 {selectedEntry.ipAddress && (
                   <div className="col-span-2">
-                    <span className="text-muted-foreground text-xs">
-                      IP
-                    </span>
+                    <span className="text-muted-foreground text-xs">IP</span>
                     <p className="font-mono text-xs">
                       {selectedEntry.ipAddress}
                     </p>
@@ -357,7 +483,11 @@ function AuditPage() {
                         Dữ liệu cũ
                       </p>
                       <pre className="text-xs bg-status-error/10 border border-status-error/25 rounded p-2 overflow-auto max-h-40">
-                        {JSON.stringify(selectedEntry.oldData, null, 2)}
+                        {JSON.stringify(
+                          localizeAuditData(selectedEntry.oldData),
+                          null,
+                          2,
+                        )}
                       </pre>
                     </div>
                   )}
@@ -367,7 +497,11 @@ function AuditPage() {
                         Dữ liệu mới
                       </p>
                       <pre className="text-xs bg-status-success/10 border border-status-success/25 rounded p-2 overflow-auto max-h-40">
-                        {JSON.stringify(selectedEntry.newData, null, 2)}
+                        {JSON.stringify(
+                          localizeAuditData(selectedEntry.newData),
+                          null,
+                          2,
+                        )}
                       </pre>
                     </div>
                   )}
@@ -377,57 +511,6 @@ function AuditPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  bg,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  bg: string;
-}) {
-  return (
-    <div className={`border rounded-lg p-3 ${bg}`}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        {icon}
-        <span>{label}</span>
-      </div>
-      <div className="text-sm font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <div className="relative">
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="appearance-none text-xs border rounded-lg px-3 py-2 pr-7 bg-background cursor-pointer hover:bg-muted/50 transition-colors"
-      >
-        {options.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {label}: {opt.label}
-          </option>
-        ))}
-      </select>
-      <Icon name="expand_more" size={14} className="text-muted-foreground absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-    </div>
+    </ListPageLayout>
   );
 }

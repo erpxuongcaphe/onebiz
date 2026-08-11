@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getAuditLogsByEntity, type AuditLogEntry } from "@/lib/services";
+import {
+  getAuditFieldLabel,
+  getAuditLogsByEntity,
+  localizeAuditData,
+  type AuditLogEntry,
+} from "@/lib/services";
 import { formatDate } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 
@@ -51,7 +56,11 @@ export function AuditHistoryTab({
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <Icon name="progress_activity" size={16} className="animate-spin mr-2" />
+        <Icon
+          name="progress_activity"
+          size={16}
+          className="animate-spin mr-2"
+        />
         Đang tải lịch sử...
       </div>
     );
@@ -167,7 +176,10 @@ function DiffSummary({
     if (codeOrName) {
       return (
         <p className="text-xs text-muted-foreground mt-0.5">
-          Tạo <span className="font-medium text-foreground">{String(codeOrName)}</span>
+          Tạo{" "}
+          <span className="font-medium text-foreground">
+            {String(codeOrName)}
+          </span>
         </p>
       );
     }
@@ -181,7 +193,7 @@ function DiffSummary({
         k !== "updated_by" &&
         k !== "tenant_id" &&
         !k.endsWith("_id") &&
-        JSON.stringify(oldData[k]) !== JSON.stringify(newData[k])
+        JSON.stringify(oldData[k]) !== JSON.stringify(newData[k]),
     );
     if (changedKeys.length === 0) return null;
     const shown = changedKeys.slice(0, 4);
@@ -193,8 +205,7 @@ function DiffSummary({
             <span className="line-through opacity-60">
               {formatValue(oldData[k])}
             </span>{" "}
-            →{" "}
-            <span className="text-foreground">{formatValue(newData[k])}</span>
+            → <span className="text-foreground">{formatValue(newData[k])}</span>
           </li>
         ))}
         {changedKeys.length > shown.length && (
@@ -212,26 +223,20 @@ function DiffSummary({
 function formatValue(v: unknown): string {
   if (v === null || v === undefined) return "—";
   if (typeof v === "string" && isUuid(v)) return "Đã cập nhật";
-  if (typeof v === "object") return scrubUuidText(JSON.stringify(v));
-  return scrubUuidText(String(v));
+  const localized = localizeAuditData(v);
+  if (typeof localized === "object")
+    return scrubUuidText(JSON.stringify(localized));
+  return scrubUuidText(String(localized));
 }
 
 function fieldLabel(key: string): string {
-  const labels: Record<string, string> = {
-    full_name: "Tên",
-    name: "Tên",
-    code: "Mã",
-    email: "Email",
-    phone: "Điện thoại",
-    status: "Trạng thái",
-    role: "Vai trò",
-    note: "Ghi chú",
-  };
-  return labels[key] ?? key;
+  return getAuditFieldLabel(key);
 }
 
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  );
 }
 
 function scrubUuidText(value: string): string {
