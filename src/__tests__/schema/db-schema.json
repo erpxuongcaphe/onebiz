@@ -2118,6 +2118,7 @@
   "get_bom_availability_batch",
   "get_bom_items_for_branch",
   "get_branch_profit_and_loss_report",
+  "get_cash_book_list_workspace",
   "get_consolidated_profit_and_loss_report",
   "get_customer_cohort_report",
   "get_customer_list_workspace",
@@ -2339,5 +2340,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 323
+ "soRpc": 324
 }

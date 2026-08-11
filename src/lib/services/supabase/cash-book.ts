@@ -12,6 +12,101 @@ import {
   handleError,
 } from "./base";
 
+export interface CashBookWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: string;
+  types?: string[];
+  paymentMethods?: string[];
+  categories?: string[];
+  statuses?: string[];
+  dateFrom?: string;
+  dateToExclusive?: string;
+  amountMin?: number;
+  amountMax?: number;
+  branchId?: string;
+}
+
+export interface CashBookWorkspaceSummary {
+  totalReceipt: number;
+  totalPayment: number;
+  receiptCount: number;
+  paymentCount: number;
+  openingBalance: number;
+  closingBalance: number;
+}
+
+export interface CashBookWorkspaceResult extends QueryResult<CashBookEntry> {
+  summary: CashBookWorkspaceSummary;
+  categoryOptions: Array<{ value: string; count: number }>;
+}
+
+/** Một nguồn đọc duy nhất cho bảng, KPI, bộ lọc và file xuất Sổ quỹ. */
+export async function getCashBookListWorkspace(
+  params: CashBookWorkspaceParams,
+): Promise<CashBookWorkspaceResult> {
+  const supabase = getClient();
+  const { data, error } = await (supabase.rpc as any)(
+    "get_cash_book_list_workspace",
+    {
+      p_page: params.page,
+      p_page_size: params.pageSize,
+      p_search: params.search?.trim() || null,
+      p_search_field: params.searchField ?? "all",
+      p_types: params.types?.length ? params.types : null,
+      p_payment_methods: params.paymentMethods?.length
+        ? params.paymentMethods
+        : null,
+      p_categories: params.categories?.length ? params.categories : null,
+      p_statuses: params.statuses?.length ? params.statuses : null,
+      p_date_from: params.dateFrom?.slice(0, 10) || null,
+      p_date_to_exclusive: params.dateToExclusive?.slice(0, 10) || null,
+      p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+      p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+      p_branch_id: params.branchId ?? null,
+    },
+  );
+  if (error) handleError(error, "getCashBookListWorkspace");
+
+  const payload = (data ?? {}) as Record<string, any>;
+  const rawSummary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items) ? payload.items.map(mapCashEntry) : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      totalReceipt: Number(rawSummary.totalReceipt ?? 0),
+      totalPayment: Number(rawSummary.totalPayment ?? 0),
+      receiptCount: Number(rawSummary.receiptCount ?? 0),
+      paymentCount: Number(rawSummary.paymentCount ?? 0),
+      openingBalance: Number(rawSummary.openingBalance ?? 0),
+      closingBalance: Number(rawSummary.closingBalance ?? 0),
+    },
+    categoryOptions: Array.isArray(payload.categoryOptions)
+      ? payload.categoryOptions.map((item: Record<string, unknown>) => ({
+          value: String(item.value ?? ""),
+          count: Number(item.count ?? 0),
+        })).filter((item: { value: string }) => item.value.length > 0)
+      : [],
+  };
+}
+
+/** Tải đủ kết quả theo lô 200 dòng; không làm phình một phản hồi RPC. */
+export async function getAllCashBookEntries(
+  params: Omit<CashBookWorkspaceParams, "page" | "pageSize">,
+): Promise<CashBookEntry[]> {
+  const rows: CashBookEntry[] = [];
+  let page = 0;
+  let total = 0;
+  do {
+    const result = await getCashBookListWorkspace({ ...params, page, pageSize: 200 });
+    rows.push(...result.data);
+    total = result.total;
+    page += 1;
+  } while (rows.length < total);
+  return rows;
+}
+
 export async function getCashBookEntries(params: QueryParams): Promise<QueryResult<CashBookEntry>> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -282,7 +377,7 @@ function mapCashEntry(row: any): CashBookEntry {
   return {
     id: row.id,
     code: row.code,
-    date: row.created_at,
+    date: row.transaction_date ?? row.created_at,
     type: row.type,
     typeName: row.type === "receipt" ? "Phiếu thu" : "Phiếu chi",
     category: row.category,
@@ -296,5 +391,8 @@ function mapCashEntry(row: any): CashBookEntry {
     branchName: branch?.name ?? undefined,
     referenceType: row.reference_type ?? undefined,
     referenceId: row.reference_id ?? undefined,
+    referenceCode: row.reference_code ?? undefined,
+    status: row.status ?? undefined,
+    createdAt: row.created_at ?? undefined,
   };
 }

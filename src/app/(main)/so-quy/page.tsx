@@ -1,20 +1,25 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable, StarCell } from "@/components/shared/data-table";
-import { SummaryCard } from "@/components/shared/summary-card";
+import { ListMetric } from "@/components/shared/list-metric";
 import {
-  FilterSidebar,
+  FilterChips,
+  type ListFilterChip,
+} from "@/components/shared/filter-chips";
+import {
+  FilterPanel,
   FilterGroup,
-  RadioFilter,
   CheckboxFilter,
   SelectFilter,
   DatePresetFilter,
+  ChipToggleFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import {
@@ -52,15 +57,17 @@ import {
 import { exportToExcelFromSchema } from "@/lib/excel";
 import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
-  getCashBookEntries,
-  getCashBookSummaryAsync,
+  getCashBookListWorkspace,
+  getAllCashBookEntries,
   cancelCashTransaction,
 } from "@/lib/services";
 import { useToast, useBranchFilter } from "@/lib/contexts";
+import { usePermissions } from "@/lib/permissions/use-permission";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildCashTransactionPrintData } from "@/lib/print-templates";
 import type { CashBookEntry } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { Button } from "@/components/ui/button";
 
 // === Status map ===
 const statusMap: Record<
@@ -68,14 +75,22 @@ const statusMap: Record<
   { label: string; variant: "default" | "secondary" | "destructive" }
 > = {
   completed: { label: "Hoàn thành", variant: "default" },
-  pending: { label: "Phiếu tạm", variant: "secondary" },
+  draft: { label: "Phiếu tạm", variant: "secondary" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
+  card: "Thẻ",
+  ewallet: "Ví điện tử",
 };
 
 // === Fund type options ===
 const fundTypeOptions = [
   { label: "Tiền mặt", value: "cash" },
-  { label: "Ngân hàng", value: "bank" },
+  { label: "Chuyển khoản", value: "transfer" },
+  { label: "Thẻ", value: "card" },
   { label: "Ví điện tử", value: "ewallet" },
   { label: "Tổng quỹ", value: "all" },
 ];
@@ -98,11 +113,9 @@ const thuChiCategoryOptions = [
 ];
 
 // === Status filter options ===
-// Note: DB schema chưa có cột `status` (sẽ thêm ở migration SỔ-QUỸ-2).
-// Filter này hiện chỉ là UI placeholder — không tham gia query backend.
 const statusFilterOptions = [
   { label: "Hoàn thành", value: "completed" },
-  { label: "Phiếu tạm", value: "pending" },
+  { label: "Phiếu tạm", value: "draft" },
   { label: "Đã hủy", value: "cancelled" },
 ];
 
@@ -136,6 +149,7 @@ import {
 } from "@/lib/utils/list-date-preset-range";
 
 const presetToRange = (preset: DatePresetValue) => computeListPresetRange(preset);
+const INITIAL_CASH_BOOK_RANGE = computeListPresetRange("this_month");
 
 // === Inline Detail ===
 function TransactionDetail({
@@ -194,6 +208,7 @@ function TransactionDetail({
                     { label: "Chi nhánh", value: entry.branchName || "—" },
                     { label: "Người nộp/nhận", value: entry.counterparty },
                     { label: "Loại thu chi", value: categoryLabel(entry.category) },
+                    { label: "Chứng từ gốc", value: entry.referenceCode || "—" },
                     {
                       label: "Phương thức",
                       value:
@@ -231,13 +246,24 @@ function TransactionDetail({
 // === Page Component ===
 export default function SoQuyPage() {
   const { toast } = useToast();
-  const { activeBranchId } = useBranchFilter();
+  const {
+    activeBranchId,
+    branchLabel,
+    isReady: branchScopeReady,
+  } = useBranchFilter();
+  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const duocXemToanChuoi = hasAny([
+    "reports.view_all_branches",
+    "system.manage_branches",
+  ]);
   const txPerms = useTxRowPermissions("cash_transaction");
   const [data, setData] = useState<CashBookEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
   // CEO 05/07: ô "Tìm theo" — "all" = gộp mã phiếu+đối tượng như cũ.
   const [searchField, setSearchField] = useState("all");
@@ -263,6 +289,10 @@ export default function SoQuyPage() {
   // Filters
   const [fundType, setFundType] = useState("all");
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [dateFrom, setDateFrom] = useState(INITIAL_CASH_BOOK_RANGE.from ?? "");
+  const [dateTo, setDateTo] = useState(INITIAL_CASH_BOOK_RANGE.to ?? "");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
   const [selectedDocTypes, setSelectedDocTypes] = useState<string[]>([
     "receipt",
     "payment",
@@ -270,7 +300,7 @@ export default function SoQuyPage() {
   const [thuChiCategory, setThuChiCategory] = useState("all");
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
     "completed",
-    "pending",
+    "draft",
   ]);
 
   // Summary state — load async theo branch + period; trước đây dùng
@@ -280,52 +310,102 @@ export default function SoQuyPage() {
     totalReceipt: 0,
     totalPayment: 0,
     openingBalance: 0,
+    closingBalance: 0,
+    receiptCount: 0,
+    paymentCount: 0,
   });
+  const [categoryOptions, setCategoryOptions] = useState<
+    Array<{ label: string; value: string; count?: number }>
+  >([]);
+
+  useEffect(() => {
+    if (datePreset === "custom") return;
+    const range = presetToRange(datePreset);
+    setDateFrom(range.from ?? "");
+    setDateTo(range.to ?? "");
+  }, [datePreset]);
+
+  const dateToExclusive = useMemo(() => {
+    if (!dateTo) return undefined;
+    const date = new Date(`${dateTo}T00:00:00`);
+    date.setDate(date.getDate() + 1);
+    return formatDateInputValue(date);
+  }, [dateTo]);
+
+  const buildWorkspaceParams = useCallback(
+    () => ({
+      search,
+      searchField,
+      types: selectedDocTypes,
+      paymentMethods: fundType === "all" ? undefined : [fundType],
+      categories: thuChiCategory === "all" ? undefined : [thuChiCategory],
+      statuses: selectedStatuses,
+      dateFrom: dateFrom || undefined,
+      dateToExclusive,
+      amountMin: amountMin === "" ? undefined : Number(amountMin),
+      amountMax: amountMax === "" ? undefined : Number(amountMax),
+      branchId: activeBranchId,
+    }),
+    [
+      activeBranchId,
+      amountMax,
+      amountMin,
+      dateFrom,
+      dateToExclusive,
+      fundType,
+      search,
+      searchField,
+      selectedDocTypes,
+      selectedStatuses,
+      thuChiCategory,
+    ],
+  );
 
   const fetchData = useCallback(async () => {
+    if (!branchScopeReady || permissionsLoading) return;
+    if (!activeBranchId && !duocXemToanChuoi) {
+      setData([]);
+      setTotal(0);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
-    const range = presetToRange(datePreset);
-    const filters: Record<string, string | string[]> = {};
-    if (selectedDocTypes.length === 1) filters.type = selectedDocTypes[0];
-    if (fundType !== "all") filters.paymentMethod = fundType;
-    if (thuChiCategory !== "all") filters.category = thuChiCategory;
-    if (range.from) filters.dateFrom = range.from;
-    if (range.to) filters.dateTo = range.to;
-    // CEO 11/06/2026 (P0-3): truyền selectedStatuses vào filter.
-    // Trước đây UI có state nhưng KHÔNG wire → phiếu cancelled vào tổng quỹ.
-    if (selectedStatuses.length > 0) filters.statuses = selectedStatuses;
-
-    const [listResult, summaryResult] = await Promise.all([
-      getCashBookEntries({
+    try {
+      const result = await getCashBookListWorkspace({
+        ...buildWorkspaceParams(),
         page,
         pageSize,
-        search,
-        searchField,
-        branchId: activeBranchId,
-        filters,
-      }),
-      getCashBookSummaryAsync({
-        branchId: activeBranchId,
-        dateFrom: range.from,
-        dateTo: range.to,
-        statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-      }).catch(() => ({ totalReceipt: 0, totalPayment: 0, openingBalance: 0 })),
-    ]);
-    setData(listResult.data);
-    setTotal(listResult.total);
-    setSummary(summaryResult);
-    setLoading(false);
+      });
+      setData(result.data);
+      setTotal(result.total);
+      setSummary(result.summary);
+      setCategoryOptions(
+        result.categoryOptions.map((item) => ({
+          value: item.value,
+          label: categoryLabel(item.value),
+          count: item.count,
+        })),
+      );
+    } catch (error) {
+      setData([]);
+      setTotal(0);
+      toast({
+        title: "Lỗi tải sổ quỹ",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }, [
-    search,
-    searchField,
-    selectedDocTypes,
-    selectedStatuses,
+    activeBranchId,
+    branchScopeReady,
+    buildWorkspaceParams,
+    duocXemToanChuoi,
     page,
     pageSize,
-    activeBranchId,
-    fundType,
-    thuChiCategory,
-    datePreset,
+    permissionsLoading,
+    toast,
   ]);
 
   useEffect(() => {
@@ -338,7 +418,18 @@ export default function SoQuyPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, fundType, datePreset, selectedDocTypes, thuChiCategory, selectedStatuses]);
+  }, [
+    search,
+    fundType,
+    datePreset,
+    dateFrom,
+    dateTo,
+    amountMin,
+    amountMax,
+    selectedDocTypes,
+    thuChiCategory,
+    selectedStatuses,
+  ]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {
@@ -350,8 +441,7 @@ export default function SoQuyPage() {
   };
 
   // Summary calculations từ DB (đã filter theo period + branch)
-  const { totalReceipt, totalPayment, openingBalance } = summary;
-  const closingBalance = openingBalance + totalReceipt - totalPayment;
+  const { totalReceipt, totalPayment, openingBalance, closingBalance } = summary;
 
   // Day 2 16/05/2026: Excel sổ quỹ theo pattern focused-per-module
   //   - Sheet 0: Thông tin (Doanh nghiệp / Kỳ / Chi nhánh / Disclaimer)
@@ -360,7 +450,21 @@ export default function SoQuyPage() {
   //   - Sheet 2: Tổng kết theo ngày (Thu / Chi / Tồn cuối ngày)
   //   - Sheet 3: Tổng kết theo nhóm bút toán
   //   - Có signature block (Người lập / Kế toán / Giám đốc)
-  const handleExport = (type: "excel" | "csv") => {
+  const handleExport = async (type: "excel" | "csv") => {
+    if (exporting) return;
+    setExporting(true);
+    let exportData: CashBookEntry[];
+    try {
+      exportData = await getAllCashBookEntries(buildWorkspaceParams());
+    } catch (error) {
+      toast({
+        title: "Lỗi tải dữ liệu xuất file",
+        description: error instanceof Error ? error.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+      setExporting(false);
+      return;
+    }
     if (type === "excel") {
       const range = presetToRange(datePreset);
       const isoToYmd = (iso: string | undefined): string => {
@@ -369,7 +473,7 @@ export default function SoQuyPage() {
       };
 
       // Sort data ascending by date for running balance
-      const sortedData = [...data].sort(
+      const sortedData = [...exportData].sort(
         (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
       );
 
@@ -385,6 +489,7 @@ export default function SoQuyPage() {
           category: e.category,
           counterparty: e.counterparty ?? "",
           note: e.note ?? "",
+          reference: e.referenceCode ?? "",
           receipt: thu,
           payment: chi,
           balance: runningBalance,
@@ -402,6 +507,7 @@ export default function SoQuyPage() {
           { label: "Nhóm bút toán", key: "category", width: 22 },
           { label: "Đối tác", key: "counterparty", width: 24 },
           { label: "Diễn giải", key: "note", width: 32 },
+          { label: "Chứng từ gốc", key: "reference", width: 16 },
           { label: "Thu", key: "receipt", width: 16, format: "currency" },
           { label: "Chi", key: "payment", width: 16, format: "currency" },
           { label: "Số dư", key: "balance", width: 18, format: "currency" },
@@ -413,6 +519,7 @@ export default function SoQuyPage() {
           category: "",
           counterparty: "",
           note: "TỔNG CỘNG",
+          reference: "",
           receipt: totalReceipt,
           payment: totalPayment,
           balance: closingBalance,
@@ -540,7 +647,7 @@ export default function SoQuyPage() {
             from: isoToYmd(range.from),
             to: isoToYmd(range.to),
           },
-          branchName: activeBranchId ? "Chi nhánh đang chọn" : undefined,
+          branchName: branchLabel,
           tenantName: "OneBiz",
           sheets: [infoSheet, detailSheet, dailySheet, groupSheet],
         });
@@ -556,6 +663,7 @@ export default function SoQuyPage() {
           variant: "error",
         });
       }
+      setExporting(false);
       return;
     }
     const exportColumns = [
@@ -563,10 +671,118 @@ export default function SoQuyPage() {
       { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
       { header: "Loại thu chi", key: "category", width: 20 },
       { header: "Người nộp/nhận", key: "counterparty", width: 22 },
+      { header: "Chứng từ gốc", key: "referenceCode", width: 16 },
       { header: "Giá trị", key: "amount", width: 15, format: (v: number) => v },
     ];
-    exportToCsv(data, exportColumns, "so-quy");
+    exportToCsv(exportData, exportColumns, "so-quy");
+    toast({
+      title: "Đã xuất CSV sổ quỹ",
+      description: `${exportData.length} bút toán theo bộ lọc`,
+      variant: "success",
+    });
+    setExporting(false);
   };
+
+  const datePresetLabel =
+    STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ??
+    "Thời gian";
+
+  const clearListFilters = useCallback(() => {
+    setFundType("all");
+    setDatePreset("this_month");
+    setAmountMin("");
+    setAmountMax("");
+    setSelectedDocTypes(["receipt", "payment"]);
+    setThuChiCategory("all");
+    setSelectedStatuses(["completed", "draft"]);
+    setPage(0);
+  }, []);
+
+  const filterChips = useMemo<ListFilterChip[]>(() => {
+    const chips: ListFilterChip[] = [];
+    if (fundType !== "all") {
+      chips.push({
+        key: "fund",
+        label: "Quỹ",
+        value: fundTypeOptions.find((item) => item.value === fundType)?.label ?? fundType,
+        onClear: () => setFundType("all"),
+      });
+    }
+    if (datePreset !== "this_month") {
+      chips.push({
+        key: "date",
+        label: "Thời gian",
+        value:
+          datePreset === "custom"
+            ? `${dateFrom || "..."} – ${dateTo || "..."}`
+            : datePresetLabel,
+        onClear: () => setDatePreset("this_month"),
+      });
+    }
+    if (selectedDocTypes.length !== 2) {
+      chips.push({
+        key: "types",
+        label: "Loại phiếu",
+        value:
+          selectedDocTypes.length === 0
+            ? "Không chọn"
+            : documentTypeOptions
+                .filter((item) => selectedDocTypes.includes(item.value))
+                .map((item) => item.label)
+                .join(", "),
+        onClear: () => setSelectedDocTypes(["receipt", "payment"]),
+      });
+    }
+    if (thuChiCategory !== "all") {
+      chips.push({
+        key: "category",
+        label: "Nhóm",
+        value: categoryLabel(thuChiCategory),
+        onClear: () => setThuChiCategory("all"),
+      });
+    }
+    if (
+      selectedStatuses.length !== 2 ||
+      !selectedStatuses.includes("completed") ||
+      !selectedStatuses.includes("draft")
+    ) {
+      chips.push({
+        key: "statuses",
+        label: "Trạng thái",
+        value:
+          selectedStatuses.length === 0
+            ? "Không chọn"
+            : statusFilterOptions
+                .filter((item) => selectedStatuses.includes(item.value))
+                .map((item) => item.label)
+                .join(", "),
+        onClear: () => setSelectedStatuses(["completed", "draft"]),
+      });
+    }
+    if (amountMin || amountMax) {
+      chips.push({
+        key: "amount",
+        label: "Số tiền",
+        value: `${amountMin || "0"} – ${amountMax || "∞"}`,
+        onClear: () => {
+          setAmountMin("");
+          setAmountMax("");
+        },
+      });
+    }
+    return chips;
+  }, [
+    amountMax,
+    amountMin,
+    dateFrom,
+    datePreset,
+    datePresetLabel,
+    dateTo,
+    fundType,
+    selectedDocTypes,
+    selectedStatuses,
+    thuChiCategory,
+  ]);
 
   // === Columns ===
   const columns: ColumnDef<CashBookEntry, unknown>[] = [
@@ -621,6 +837,36 @@ export default function SoQuyPage() {
       size: 180,
     },
     {
+      accessorKey: "referenceCode",
+      header: "Chứng từ gốc",
+      size: 125,
+      cell: ({ row }) => (
+        <span className="text-xs text-primary">
+          {row.original.referenceCode || "—"}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "paymentMethod",
+      header: "Phương thức",
+      size: 125,
+      cell: ({ row }) =>
+        PAYMENT_METHOD_LABELS[row.original.paymentMethod ?? ""] ?? "—",
+    },
+    {
+      accessorKey: "status",
+      header: "Trạng thái",
+      size: 110,
+      cell: ({ row }) => {
+        const status = row.original.status ?? "completed";
+        const meta = statusMap[status] ?? {
+          label: status,
+          variant: "secondary" as const,
+        };
+        return <Badge variant={meta.variant}>{meta.label}</Badge>;
+      },
+    },
+    {
       accessorKey: "amount",
       header: "Giá trị",
       cell: ({ row }) => {
@@ -643,64 +889,19 @@ export default function SoQuyPage() {
 
   return (
     <>
-      <ListPageLayout
-        sidebar={
-          <FilterSidebar>
-            <FilterGroup label="Quỹ tiền">
-              <RadioFilter
-                options={fundTypeOptions}
-                value={fundType}
-                onChange={setFundType}
-                name="fund-type"
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Thời gian">
-              {/* CEO 06/06/2026: dùng STANDARD_LIST_PRESETS (11 option)
-                  thay default 2 option (Tháng này + Tùy chỉnh). */}
-              <DatePresetFilter
-                value={datePreset}
-                onChange={setDatePreset}
-                presets={STANDARD_LIST_PRESETS}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Loại chứng từ">
-              <CheckboxFilter
-                options={documentTypeOptions}
-                selected={selectedDocTypes}
-                onChange={setSelectedDocTypes}
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Loại thu chi">
-              <SelectFilter
-                options={thuChiCategoryOptions}
-                value={thuChiCategory}
-                onChange={setThuChiCategory}
-                placeholder="Tất cả"
-              />
-            </FilterGroup>
-
-            <FilterGroup label="Trạng thái">
-              <CheckboxFilter
-                options={statusFilterOptions}
-                selected={selectedStatuses}
-                onChange={setSelectedStatuses}
-              />
-            </FilterGroup>
-          </FilterSidebar>
-        }
-      >
+      <ListPageLayout sidebar={null}>
         <PageHeader
-          title="Sổ quỹ tiền mặt"
-          searchPlaceholder="Theo mã phiếu, người nộp/nhận"
+          title="Sổ quỹ"
+          density="compact"
+          searchPlaceholder="Theo mã phiếu, người nộp/nhận, ghi chú"
           searchValue={search}
           onSearchChange={setSearch}
           searchFields={[
             { value: "all", label: "Tất cả" },
             { value: "code", label: "Mã phiếu" },
             { value: "counterparty", label: "Người nộp/nhận" },
+            { value: "note", label: "Ghi chú" },
+            { value: "reference", label: "Chứng từ gốc" },
           ]}
           searchField={searchField}
           onSearchFieldChange={(v) => {
@@ -745,37 +946,91 @@ export default function SoQuyPage() {
           ]}
         />
 
-        {/* KPI row — đồng nhất design với các module khác */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 px-4 pt-4">
-          <SummaryCard
-            icon={<Icon name="savings" size={16} />}
-            label="Quỹ đầu kỳ"
-            value={formatCurrency(openingBalance)}
-          />
-          <SummaryCard
-            icon={<Icon name="south_west" size={16} />}
-            label="Tổng thu"
-            value={formatCurrency(totalReceipt)}
-          />
-          <SummaryCard
-            icon={<Icon name="north_east" size={16} />}
-            label="Tổng chi"
-            value={formatCurrency(totalPayment)}
-            danger={totalPayment > totalReceipt}
-          />
-          <SummaryCard
-            icon={<Icon name="account_balance_wallet" size={16} />}
-            label="Tồn quỹ"
-            value={formatCurrency(closingBalance)}
-            highlight
-          />
-        </div>
-
         <DataTable
           columns={columns}
           data={data}
           loading={loading}
           total={total}
+          density="compact"
+          columnToggle
+          toolbarMetrics={
+            <>
+              <ListMetric
+                icon={<Icon name="savings" size={15} />}
+                label="Quỹ đầu kỳ"
+                value={formatCurrency(openingBalance)}
+                hint="Số dư thực tế trước kỳ theo chi nhánh và quỹ"
+              />
+              <ListMetric
+                icon={<Icon name="south_west" size={15} />}
+                label="Tổng thu"
+                value={formatCurrency(totalReceipt)}
+                hint={`${summary.receiptCount} phiếu hoàn thành theo bộ lọc`}
+                tone="primary"
+              />
+              <ListMetric
+                icon={<Icon name="north_east" size={15} />}
+                label="Tổng chi"
+                value={formatCurrency(totalPayment)}
+                hint={`${summary.paymentCount} phiếu hoàn thành theo bộ lọc`}
+                tone={totalPayment > totalReceipt ? "danger" : "default"}
+              />
+              <ListMetric
+                icon={<Icon name="account_balance_wallet" size={15} />}
+                label="Tồn quỹ"
+                value={formatCurrency(closingBalance)}
+                hint="Số dư thực tế cuối kỳ theo chi nhánh và quỹ"
+                tone="primary"
+              />
+            </>
+          }
+          toolbarActions={
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+              >
+                <Icon name="calendar_today" size={15} />
+                <span className="hidden sm:inline">{datePresetLabel}</span>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
+                onClick={() => setFilterOpen(true)}
+                aria-label={`Mở bộ lọc, ${filterChips.length} điều kiện`}
+              >
+                <Icon name="filter_alt" size={15} />
+                <span className="hidden sm:inline">Bộ lọc</span>
+                {filterChips.length > 0 && (
+                  <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">
+                    {filterChips.length}
+                  </span>
+                )}
+              </Button>
+            </>
+          }
+          toolbarFooter={
+            <FilterChips
+              filters={filterChips}
+              onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
+            />
+          }
+          emptyTitle={
+            !activeBranchId && !duocXemToanChuoi
+              ? "Chưa có chi nhánh làm việc"
+              : "Không tìm thấy phiếu thu/chi"
+          }
+          emptyDescription={
+            !activeBranchId && !duocXemToanChuoi
+              ? "Chọn chi nhánh trên thanh phía trên để xem đúng sổ quỹ."
+              : "Thử thay đổi thời gian, quỹ, trạng thái hoặc từ khóa tìm kiếm."
+          }
+          emptyIcon={!activeBranchId && !duocXemToanChuoi ? "apartment" : "payments"}
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}
@@ -889,6 +1144,81 @@ export default function SoQuyPage() {
             })
           }
         />
+
+        <FilterPanel
+          open={filterOpen}
+          onOpenChange={setFilterOpen}
+          activeCount={filterChips.length}
+          onClearAll={clearListFilters}
+          title="Bộ lọc sổ quỹ"
+        >
+          <FilterGroup label="Quỹ / phương thức">
+            <ChipToggleFilter
+              options={fundTypeOptions}
+              value={fundType}
+              onChange={setFundType}
+            />
+          </FilterGroup>
+          <FilterGroup label="Ngày hạch toán" activeHint={datePresetLabel}>
+            <DatePresetFilter
+              value={datePreset}
+              onChange={setDatePreset}
+              from={dateFrom}
+              to={dateTo}
+              onFromChange={setDateFrom}
+              onToChange={setDateTo}
+              presets={STANDARD_LIST_PRESETS}
+            />
+          </FilterGroup>
+          <FilterGroup label="Loại chứng từ">
+            <CheckboxFilter
+              options={documentTypeOptions}
+              selected={selectedDocTypes}
+              onChange={(value) =>
+                setSelectedDocTypes(
+                  value.length ? value : documentTypeOptions.map((item) => item.value),
+                )
+              }
+            />
+          </FilterGroup>
+          <FilterGroup label="Nhóm thu chi">
+            <SelectFilter
+              options={[
+                { value: "all", label: "Tất cả" },
+                ...(categoryOptions.length > 0
+                  ? categoryOptions.map((item) => ({
+                      value: item.value,
+                      label: `${item.label}${item.count ? ` (${item.count})` : ""}`,
+                    }))
+                  : thuChiCategoryOptions.filter((item) => item.value !== "all")),
+              ]}
+              value={thuChiCategory}
+              onChange={setThuChiCategory}
+              placeholder="Tất cả"
+            />
+          </FilterGroup>
+          <FilterGroup label="Trạng thái">
+            <CheckboxFilter
+              options={statusFilterOptions}
+              selected={selectedStatuses}
+              onChange={(value) =>
+                setSelectedStatuses(
+                  value.length ? value : statusFilterOptions.map((item) => item.value),
+                )
+              }
+            />
+          </FilterGroup>
+          <FilterGroup label="Khoảng tiền">
+            <RangeFilter
+              fromValue={amountMin}
+              toValue={amountMax}
+              onFromChange={setAmountMin}
+              onToChange={setAmountMax}
+              fromPlaceholder="Từ số tiền"
+              toPlaceholder="Đến số tiền"
+            />
+          </FilterGroup>
+        </FilterPanel>
       </ListPageLayout>
 
       <CreateCashTransactionDialog

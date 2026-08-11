@@ -114,7 +114,23 @@ export type {
   SettleCodInput,
   SettleCodResult,
 } from "./shipping";
-export { getCashBookEntries, getCashBookTypes, getCashBookSummary, getCashBookSummaryAsync, createManualCashTransactionAtomic, createCashTransaction, deleteCashTransaction, cancelCashTransaction } from "./cash-book";
+export {
+  getCashBookEntries,
+  getCashBookTypes,
+  getCashBookSummary,
+  getCashBookSummaryAsync,
+  getCashBookListWorkspace,
+  getAllCashBookEntries,
+  createManualCashTransactionAtomic,
+  createCashTransaction,
+  deleteCashTransaction,
+  cancelCashTransaction,
+} from "./cash-book";
+export type {
+  CashBookWorkspaceParams,
+  CashBookWorkspaceSummary,
+  CashBookWorkspaceResult,
+} from "./cash-book";
 export type { CreateManualCashTransactionInput } from "./cash-book";
 export {
   getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck,
