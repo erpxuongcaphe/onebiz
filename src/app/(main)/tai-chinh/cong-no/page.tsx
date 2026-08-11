@@ -11,6 +11,15 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
+import { ListPageLayout } from "@/components/shared/list-page-layout";
+import { ListMetric } from "@/components/shared/list-metric";
+import { FilterChips } from "@/components/shared/filter-chips";
+import {
+  FilterGroup,
+  FilterPanel,
+  RadioFilter,
+  RangeFilter,
+} from "@/components/shared/filter-sidebar";
 import {
   Tabs,
   TabsContent,
@@ -39,6 +48,15 @@ import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportDebtOpening } from "@/lib/services/supabase/excel-import";
 
 type Mode = "customer" | "supplier" | "aging";
+type AgingBucketFilter = "all" | "0-30 ngày" | "31-60 ngày" | "61-90 ngày" | "90+ ngày";
+
+const AGING_BUCKET_OPTIONS = [
+  { label: "Tất cả", value: "all" },
+  { label: "0-30 ngày", value: "0-30 ngày" },
+  { label: "31-60 ngày", value: "31-60 ngày" },
+  { label: "61-90 ngày", value: "61-90 ngày" },
+  { label: "Trên 90 ngày", value: "90+ ngày" },
+];
 
 const BUCKET_TEXT_COLORS = [
   "text-status-success",
@@ -70,6 +88,11 @@ export default function CongNoPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const [mode, setMode] = useState<Mode>("customer");
   const [search, setSearch] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [agingBucketFilter, setAgingBucketFilter] =
+    useState<AgingBucketFilter>("all");
+  const [minimumDebt, setMinimumDebt] = useState("");
+  const [maximumDebt, setMaximumDebt] = useState("");
 
   const [workspace, setWorkspace] = useState<DebtWorkspace | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,17 +166,54 @@ export default function CongNoPage() {
 
   const { receivableDebtors, payableDebtors } = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
+    const minimum = minimumDebt === "" ? null : Number(minimumDebt);
+    const maximum = maximumDebt === "" ? null : Number(maximumDebt);
     const matches = (row: DebtPartyRow) =>
-      !keyword ||
-      row.code.toLocaleLowerCase("vi").includes(keyword) ||
-      row.name.toLocaleLowerCase("vi").includes(keyword) ||
-      (row.phone ?? "").includes(keyword);
+      (!keyword ||
+        row.code.toLocaleLowerCase("vi").includes(keyword) ||
+        row.name.toLocaleLowerCase("vi").includes(keyword) ||
+        (row.phone ?? "").includes(keyword)) &&
+      (agingBucketFilter === "all" || row.bucket === agingBucketFilter) &&
+      (minimum === null || !Number.isFinite(minimum) || row.debt >= minimum) &&
+      (maximum === null || !Number.isFinite(maximum) || row.debt <= maximum);
 
     return {
       receivableDebtors: (workspace?.receivables ?? []).filter(matches),
       payableDebtors: (workspace?.payables ?? []).filter(matches),
     };
-  }, [search, workspace]);
+  }, [agingBucketFilter, maximumDebt, minimumDebt, search, workspace]);
+
+  const activeFilters = useMemo(() => {
+    const filters = [];
+    if (agingBucketFilter !== "all") {
+      filters.push({
+        key: "aging",
+        label: "Tuổi nợ",
+        value: agingBucketFilter,
+        onClear: () => setAgingBucketFilter("all"),
+      });
+    }
+    if (minimumDebt || maximumDebt) {
+      filters.push({
+        key: "amount",
+        label: "Số tiền",
+        value: `${minimumDebt || "0"} - ${maximumDebt || "không giới hạn"}`,
+        onClear: () => {
+          setMinimumDebt("");
+          setMaximumDebt("");
+        },
+      });
+    }
+    return filters;
+  }, [agingBucketFilter, maximumDebt, minimumDebt]);
+
+  const clearFilters = useCallback(() => {
+    setAgingBucketFilter("all");
+    setMinimumDebt("");
+    setMaximumDebt("");
+  }, []);
+
+  const overdue90Total = aging?.buckets.find((bucket) => bucket.range === "90+ ngày");
 
   const customerColumns: ColumnDef<DebtPartyRow, unknown>[] = [
     {
@@ -420,9 +480,10 @@ export default function CongNoPage() {
   ];
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <ListPageLayout sidebar={null}>
       <PageHeader
         title="Công nợ"
+        density="compact"
         searchPlaceholder={
           mode === "customer"
             ? "Theo mã, tên KH, SĐT..."
@@ -494,13 +555,73 @@ export default function CongNoPage() {
         } : undefined}
       />
 
-      <div className="mx-4 mt-3 flex items-center gap-2 rounded-md border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-        <Icon name="location_on" size={15} />
-        <span>
-          Phạm vi số liệu:{" "}
-          <strong className="text-foreground">{branchLabel}</strong>
-        </span>
+      <div
+        className="flex min-h-11 items-center gap-1 overflow-x-auto border-b bg-background px-3 py-1 no-scrollbar"
+        role="region"
+        aria-label="Chỉ số và công cụ công nợ"
+      >
+        <ListMetric
+          label="Phải thu"
+          value={formatCurrency(totalCustomerDebt)}
+          hint={`${customerDebtCount} khách hàng còn nợ`}
+          icon={<Icon name="trending_up" size={16} />}
+          selected={mode === "customer"}
+          onClick={() => setMode("customer")}
+          loading={loading}
+          tone="primary"
+        />
+        <ListMetric
+          label="Phải trả"
+          value={formatCurrency(totalSupplierDebt)}
+          hint={`${supplierDebtCount} nhà cung cấp còn nợ`}
+          icon={<Icon name="trending_down" size={16} />}
+          selected={mode === "supplier"}
+          onClick={() => setMode("supplier")}
+          loading={loading}
+        />
+        <ListMetric
+          label="Trên 90 ngày"
+          value={formatCurrency(overdue90Total?.totalAmount ?? 0)}
+          hint={`${(overdue90Total?.customerCount ?? 0) + (overdue90Total?.supplierCount ?? 0)} đối tượng`}
+          icon={<Icon name="warning" size={16} />}
+          onClick={() => {
+            setAgingBucketFilter("90+ ngày");
+            setMode("aging");
+          }}
+          loading={loading}
+          tone="danger"
+        />
+        <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <span
+            className="hidden max-w-48 truncate text-xs text-muted-foreground lg:inline"
+            title={`Phạm vi số liệu: ${branchLabel}`}
+          >
+            <Icon name="location_on" size={14} className="mr-1 inline" />
+            Phạm vi số liệu: {branchLabel}
+          </span>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => setFilterOpen(true)}
+            aria-label={`Mở bộ lọc, ${activeFilters.length} điều kiện`}
+          >
+            <Icon name="filter_alt" size={15} />
+            Bộ lọc
+            {activeFilters.length > 0 && (
+              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                {activeFilters.length}
+              </span>
+            )}
+          </Button>
+        </div>
       </div>
+
+      <FilterChips
+        filters={activeFilters}
+        onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
+      />
 
       {loadError && mode !== "aging" && (
         <div className="mx-4 mt-3 flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
@@ -512,28 +633,10 @@ export default function CongNoPage() {
         </div>
       )}
 
-      {/* Summary — luôn show tổng cả KH + NCC bất kể tab nào */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 px-4 pt-4">
-        <SummaryCard
-          icon={<Icon name="trending_up" size={16} className="text-status-success" />}
-          label="Khách hàng đang nợ"
-          count={customerDebtCount}
-          value={formatCurrency(totalCustomerDebt)}
-          tone="success"
-        />
-        <SummaryCard
-          icon={<Icon name="trending_down" size={16} className="text-status-warning" />}
-          label="Phải trả NCC"
-          count={supplierDebtCount}
-          value={formatCurrency(totalSupplierDebt)}
-          tone="warning"
-        />
-      </div>
-
       <Tabs
         value={mode}
         onValueChange={(v) => setMode(v as Mode)}
-        className="px-4 pt-4 flex-1 flex flex-col min-h-0"
+        className="flex flex-1 flex-col min-h-0 px-3 pt-2"
       >
         <TabsList className="grid w-full grid-cols-3 sm:flex sm:w-fit">
           <TabsTrigger value="customer" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
@@ -790,6 +893,39 @@ export default function CongNoPage() {
         </TabsContent>
       </Tabs>
 
+      <FilterPanel
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        activeCount={activeFilters.length}
+        onClearAll={clearFilters}
+        title="Bộ lọc công nợ"
+      >
+        <FilterGroup
+          label="Tuổi nợ"
+          activeHint={agingBucketFilter === "all" ? undefined : agingBucketFilter}
+        >
+          <RadioFilter
+            name="debt-aging-bucket"
+            options={AGING_BUCKET_OPTIONS}
+            value={agingBucketFilter}
+            onChange={(value) => setAgingBucketFilter(value as AgingBucketFilter)}
+          />
+        </FilterGroup>
+        <FilterGroup
+          label="Khoảng tiền"
+          activeHint={minimumDebt || maximumDebt ? "đã lọc" : undefined}
+        >
+          <RangeFilter
+            fromValue={minimumDebt}
+            toValue={maximumDebt}
+            onFromChange={setMinimumDebt}
+            onToChange={setMaximumDebt}
+            fromPlaceholder="Số tiền tối thiểu"
+            toPlaceholder="Số tiền tối đa"
+          />
+        </FilterGroup>
+      </FilterPanel>
+
       <ImportExcelDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -846,35 +982,6 @@ export default function CongNoPage() {
           estimatedDebt={detailTarget.estimatedDebt}
         />
       )}
-    </div>
-  );
-}
-
-function SummaryCard({
-  icon,
-  label,
-  count,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  count: number;
-  value: string;
-  tone: "success" | "warning";
-}) {
-  const accent =
-    tone === "success"
-      ? "border-status-success/25 bg-status-success/10"
-      : "border-status-warning/25 bg-status-warning/10";
-  return (
-    <div className={`border rounded-lg p-3 ${accent}`}>
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-        {icon}
-        <span>{label}</span>
-        <span className="ml-auto text-xs font-medium">{count} đối tượng</span>
-      </div>
-      <div className="text-lg font-semibold">{value}</div>
-    </div>
+    </ListPageLayout>
   );
 }
