@@ -356,6 +356,8 @@ const AUDIT_FIELD_LABELS: Record<string, string> = {
   severity: "Mức độ",
   result: "Kết quả",
   mode: "Chế độ",
+  auto_saved: "Tự động lưu",
+  atomic: "Thao tác đồng bộ",
   type: "Loại",
   kind: "Phân loại",
   warnings: "Cảnh báo",
