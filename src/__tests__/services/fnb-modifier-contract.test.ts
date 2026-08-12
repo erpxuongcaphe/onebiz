@@ -142,6 +142,7 @@ describe("P0.3 — thứ tự phải theo sort_order của LIÊN KẾT", () => {
     };
     const kq = await getEffectiveModifierGroupsForProduct("sp1", null);
     expect(kq.map((g) => g.id)).toEqual(["g-b", "g-a"]);
+    expect(kq.map((g) => g.sortOrder)).toEqual([0, 1]);
   });
 
   it("cấp nhóm hàng: cũng theo sort_order của liên kết category", async () => {
@@ -155,6 +156,7 @@ describe("P0.3 — thứ tự phải theo sort_order của LIÊN KẾT", () => {
     };
     const kq = await getEffectiveModifierGroupsForProduct("sp1", "cat1");
     expect(kq.map((g) => g.id)).toEqual(["g-b", "g-a"]);
+    expect(kq.map((g) => g.sortOrder)).toEqual([0, 1]);
   });
 });
 

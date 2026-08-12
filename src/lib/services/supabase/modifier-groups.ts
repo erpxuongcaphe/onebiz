@@ -623,7 +623,14 @@ export async function getEffectiveModifierGroupsForProduct(
     .map((l) => {
       const g = theoId.get(l.modifierGroupId);
       if (!g) return null; // đã tắt, sai kênh, hoặc link mồ côi
-      return l.ruleOverride ? { ...g, rule: l.ruleOverride } : g;
+      return {
+        ...g,
+        rule: l.ruleOverride ?? g.rule,
+        // Popup phải theo thứ tự người quản lý đặt trên liên kết.
+        // Nếu giữ sortOrder của bản thân nhóm, tầng giao diện sẽ
+        // vô tình xếp lại và làm mất ý nghĩa của liên kết.
+        sortOrder: l.sortOrder ?? 0,
+      };
     })
     .filter((g): g is ModifierGroup => g !== null);
 }

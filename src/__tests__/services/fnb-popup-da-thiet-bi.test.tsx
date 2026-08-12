@@ -23,6 +23,7 @@ function nhom(
   id: string,
   name: string,
   rule: ModifierGroup["rule"],
+  sortOrder = 0,
 ): ModifierGroup {
   return {
     id,
@@ -30,7 +31,7 @@ function nhom(
     name,
     rule,
     channel: "fnb",
-    sortOrder: 0,
+    sortOrder,
     isActive: true,
     createdAt: "",
     updatedAt: "",
@@ -58,8 +59,8 @@ function opt(
 
 /** Một nhóm KHÔNG bắt buộc (Mức đá) + một nhóm BẮT BUỘC (Size) chưa chọn. */
 function duLieu(): DynamicModifierData {
-  const gDa = nhom("g-da", "Mức đá", "single");
-  const gSize = nhom("g-size", "Size", "single_required");
+  const gDa = nhom("g-da", "Mức đá", "single", 1);
+  const gSize = nhom("g-size", "Size", "single_required", 0);
   return {
     groups: [gDa, gSize],
     optionsByGroup: new Map<string, ModifierOption[]>([
@@ -156,7 +157,7 @@ describe("PR-B · thứ tự nhóm ĐỨNG YÊN khi đang chọn", () => {
       .filter(Boolean);
   }
 
-  it("nhóm bắt buộc đứng trước nhóm thường, kể cả khi sort_order đều = 0", () => {
+  it("nhóm hiển thị theo sort_order của liên kết", () => {
     moPopup();
     const thuTu = thuTuNhom();
     expect(thuTu).toContain("Size");
@@ -336,17 +337,17 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
 
   it("Size đứng TRƯỚC mọi nhóm tuỳ chọn khác trong khu lựa chọn chính", () => {
     const viTriSize = nguon.indexOf("Kích cỡ");
-    const viTriNhomNgan = nguon.indexOf("nhomNgan.map(veNhom)");
+    const viTriNhom = nguon.indexOf("nhomDaSapXep.map(veNhom)");
     expect(viTriSize).toBeGreaterThan(0);
-    expect(viTriNhomNgan).toBeGreaterThan(viTriSize);
+    expect(viTriNhom).toBeGreaterThan(viTriSize);
   });
 
-  it("nhóm chọn-nhiều (Topping) nằm DƯỚI khu lựa chọn ngắn và trải 2 cột ở desktop", () => {
-    expect(nguon).toContain('nhomDai = nhomDaSapXep.filter((g) => g.rule === "multi")');
-    expect(nguon).toContain('nhomNgan = nhomDaSapXep.filter((g) => g.rule !== "multi")');
-    expect(nguon.indexOf("nhomDai.map(veNhom)")).toBeGreaterThan(
-      nguon.indexOf("nhomNgan.map(veNhom)"),
-    );
+  it("giữ thứ tự liên kết và cho nhóm chọn-nhiều chiếm trọn hàng", () => {
+    expect(nguon).toContain("nhomDaSapXep.map(veNhom)");
+    expect(nguon).toContain('g.rule === "multi" && "basis-full"');
+    expect(nguon).not.toContain("const uuTien");
+    expect(nguon).not.toContain("nhomNgan");
+    expect(nguon).not.toContain("nhomDai");
     expect(nguon).toContain("grid gap-2 xl:grid-cols-2");
   });
 
