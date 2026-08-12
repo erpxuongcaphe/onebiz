@@ -860,6 +860,13 @@ export default function InternalSalePage() {
               onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
             />
           }
+          emptyState={
+            chuaCoPhamVi
+              ? "no-scope"
+              : search.trim() || filterChips.length > 0
+                ? "no-results"
+                : "no-data"
+          }
           defaultColumnVisibility={{
             subtotal: false,
             taxAmount: false,
@@ -868,12 +875,16 @@ export default function InternalSalePage() {
           emptyTitle={
             chuaCoPhamVi
               ? "Chưa có chi nhánh làm việc"
-              : "Không tìm thấy phiếu bán nội bộ"
+              : search.trim() || filterChips.length > 0
+                ? "Không tìm thấy phiếu bán nội bộ"
+                : "Chưa có phiếu bán nội bộ"
           }
           emptyDescription={
             chuaCoPhamVi
               ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
-              : "Thử thay đổi thời gian, trạng thái, chi nhánh hoặc nội dung tìm kiếm."
+              : search.trim() || filterChips.length > 0
+                ? "Thử thay đổi thời gian, trạng thái, chi nhánh hoặc nội dung tìm kiếm."
+                : "Phiếu bán nội bộ mới sẽ hiển thị tại đây sau khi được tạo."
           }
           emptyIcon={chuaCoPhamVi ? "apartment" : "swap_horiz"}
           emptyBranchHint={
