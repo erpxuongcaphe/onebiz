@@ -49,6 +49,16 @@ const RULE_LABEL: Record<ModifierRule, string> = {
   single: "Chọn 1 — tuỳ chọn (vd Mức đường)",
   multi: "Chọn nhiều (vd Topping)",
 };
+
+function moTaQuyTac(g: ModifierGroup): string {
+  if (g.rule !== "multi") return RULE_LABEL[g.rule];
+  if (g.minSelect > 0 && g.maxSelect !== null) {
+    return `Chọn từ ${g.minSelect} đến ${g.maxSelect}`;
+  }
+  if (g.minSelect > 0) return `Chọn ít nhất ${g.minSelect}`;
+  if (g.maxSelect !== null) return `Chọn tối đa ${g.maxSelect}`;
+  return RULE_LABEL.multi;
+}
 const RULE_BADGE: Record<ModifierRule, string> = {
   single_required: "bg-status-error/10 text-status-error",
   single: "bg-status-info/10 text-status-info",
@@ -281,13 +291,13 @@ export default function ModifierFnbPage() {
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold">{g.name}</h3>
                         <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", RULE_BADGE[g.rule])}>
-                          {RULE_LABEL[g.rule].split(" — ")[0]}
+                          {moTaQuyTac(g).split(" — ")[0]}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {g.optionCount ?? 0} option{(g.optionCount ?? 0) !== 1 ? "s" : ""}
                         </span>
                       </div>
-                      <p className="text-xs text-muted-foreground">{RULE_LABEL[g.rule]}</p>
+                      <p className="text-xs text-muted-foreground">{moTaQuyTac(g)}</p>
                     </div>
                   </button>
                   <Button variant="outline" size="sm" onClick={() => openEditGroup(g)}>
@@ -400,6 +410,12 @@ function GroupDialog({
   const [rule, setRule] = useState<ModifierRule>(editing?.rule ?? "single");
   const [channel, setChannel] = useState<ModifierChannel>(editing?.channel ?? "fnb");
   const [sortOrder, setSortOrder] = useState(editing?.sortOrder ?? 0);
+  const [minSelect, setMinSelect] = useState(editing?.minSelect ?? 0);
+  const [maxSelect, setMaxSelect] = useState<string>(
+    editing?.maxSelect === null || editing?.maxSelect === undefined
+      ? ""
+      : String(editing.maxSelect),
+  );
   const [saving, setSaving] = useState(false);
 
   async function handleSave() {
@@ -407,13 +423,42 @@ function GroupDialog({
       toast({ variant: "warning", title: "Thiếu tên", description: "Vui lòng nhập tên nhóm." });
       return;
     }
+    const parsedMax = maxSelect.trim() === "" ? null : Number(maxSelect);
+    if (
+      rule === "multi" &&
+      (!Number.isInteger(minSelect) ||
+        minSelect < 0 ||
+        (parsedMax !== null &&
+          (!Number.isInteger(parsedMax) || parsedMax < 1 || parsedMax < minSelect)))
+    ) {
+      toast({
+        variant: "warning",
+        title: "Giới hạn chưa hợp lệ",
+        description: "Số tối thiểu phải từ 0; số tối đa phải lớn hơn hoặc bằng số tối thiểu.",
+      });
+      return;
+    }
     setSaving(true);
     try {
       if (editing) {
-        await updateModifierGroup(editing.id, { name, rule, channel, sortOrder });
+        await updateModifierGroup(editing.id, {
+          name,
+          rule,
+          channel,
+          sortOrder,
+          minSelect: rule === "multi" ? minSelect : 0,
+          maxSelect: rule === "multi" ? parsedMax : null,
+        });
         toast({ variant: "success", title: "Đã lưu", description: `Cập nhật "${name}".` });
       } else {
-        await createModifierGroup({ name, rule, channel, sortOrder });
+        await createModifierGroup({
+          name,
+          rule,
+          channel,
+          sortOrder,
+          minSelect: rule === "multi" ? minSelect : 0,
+          maxSelect: rule === "multi" ? parsedMax : null,
+        });
         toast({ variant: "success", title: "Đã tạo", description: `Tạo nhóm "${name}".` });
       }
       await onSuccess();
@@ -484,6 +529,34 @@ function GroupDialog({
               />
             </div>
           </div>
+          {rule === "multi" && (
+            <div className="grid grid-cols-2 gap-3 rounded-md border border-border p-3">
+              <div>
+                <Label>Chọn tối thiểu</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={minSelect}
+                  onChange={(e) => setMinSelect(Number.parseInt(e.target.value, 10) || 0)}
+                />
+              </div>
+              <div>
+                <Label>Chọn tối đa</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={maxSelect}
+                  onChange={(e) => setMaxSelect(e.target.value)}
+                  placeholder="Không giới hạn"
+                />
+              </div>
+              <p className="col-span-2 text-xs text-muted-foreground">
+                Để trống tối đa nếu nhân viên được chọn không giới hạn.
+              </p>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={saving}>

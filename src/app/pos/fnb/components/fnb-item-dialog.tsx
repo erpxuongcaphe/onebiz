@@ -192,6 +192,7 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
 function NhanNhomTuyChon({
   ten,
   nhanQuyTac,
+  thongBaoThieu,
   conThieu,
   daChonNhan,
   thuGonDuoc,
@@ -200,6 +201,7 @@ function NhanNhomTuyChon({
 }: {
   ten: string;
   nhanQuyTac: string;
+  thongBaoThieu?: string;
   conThieu: boolean;
   daChonNhan: string;
   thuGonDuoc: boolean;
@@ -218,7 +220,7 @@ function NhanNhomTuyChon({
               : "bg-surface-container-high text-muted-foreground",
           )}
         >
-          {conThieu ? "Chưa chọn — bắt buộc" : nhanQuyTac}
+          {conThieu ? (thongBaoThieu ?? "Chưa chọn — bắt buộc") : nhanQuyTac}
         </span>
       </span>
       {/* Đã chọn gì — luôn hiện, kể cả khi nhóm đang thu gọn. */}
@@ -402,6 +404,13 @@ export function FnbItemDialog({
         }
         current.delete(optionId);
       } else {
+        if (
+          group.rule === "multi" &&
+          group.maxSelect !== null &&
+          current.size >= group.maxSelect
+        ) {
+          return prev;
+        }
         // Single rule → clear hết, add 1 cái mới
         if (group.rule === "single" || group.rule === "single_required") {
           current.clear();
@@ -452,16 +461,23 @@ export function FnbItemDialog({
   // CEO 11/06/2026 (P0-9 audit): validate single_required khi confirm.
   // Trước đây quán đặt "Mức đường - bắt buộc 1" mà cashier không pick →
   // snapshot rỗng → bếp pha mặc định → khách phàn nàn "không đúng mức yêu cầu".
-  const missingRequiredGroupIds = useMemo(() => {
+  const invalidModifierGroupIds = useMemo(() => {
     if (!hasDynamicModifiers || !dynamicModifiers) return new Set<string>();
     const missing = new Set<string>();
     for (const g of dynamicModifiers.groups) {
-      if (g.rule !== "single_required") continue;
       // Group có options? (nếu group rỗng coi như N/A)
       const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
       if (opts.length === 0) continue;
       const choices = dynamicChoices.get(g.id);
-      if (!choices || choices.size === 0) missing.add(g.id);
+      const selectedCount = choices?.size ?? 0;
+      if (g.rule === "single_required" && selectedCount === 0) missing.add(g.id);
+      if (
+        g.rule === "multi" &&
+        (selectedCount < g.minSelect ||
+          (g.maxSelect !== null && selectedCount > g.maxSelect))
+      ) {
+        missing.add(g.id);
+      }
     }
     return missing;
   }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
@@ -483,7 +499,7 @@ export function FnbItemDialog({
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
   const canConfirm =
-    missingRequiredGroupIds.size === 0 && !modifiersLoading && !modifiersFailed;
+    invalidModifierGroupIds.size === 0 && !modifiersLoading && !modifiersFailed;
 
   const handleConfirm = () => {
     // Lớp 1 — khoá tức thì: chặn cú bấm thứ 2 trong CÙNG nhịp render.
@@ -600,9 +616,15 @@ export function FnbItemDialog({
         ? "Bắt buộc chọn 1"
         : g.rule === "single"
           ? "Chọn 1"
-          : "Chọn nhiều";
+          : g.minSelect > 0 && g.maxSelect !== null
+            ? `Chọn từ ${g.minSelect} đến ${g.maxSelect}`
+            : g.minSelect > 0
+              ? `Chọn ít nhất ${g.minSelect}`
+              : g.maxSelect !== null
+                ? `Chọn tối đa ${g.maxSelect}`
+                : "Chọn nhiều";
     // BA trạng thái (CEO chốt): còn thiếu · đã chọn · chưa chọn.
-    const conThieu = missingRequiredGroupIds.has(g.id);
+    const conThieu = invalidModifierGroupIds.has(g.id);
     const daChonNhan = opts
       .filter((o) => choices.has(o.id))
       .map((o) => o.label)
@@ -623,6 +645,7 @@ export function FnbItemDialog({
         <NhanNhomTuyChon
           ten={g.name}
           nhanQuyTac={ruleLabel}
+          thongBaoThieu={g.rule === "multi" ? `${ruleLabel} — chưa đủ` : undefined}
           conThieu={conThieu}
           daChonNhan={daChonNhan}
           thuGonDuoc={!conThieu}
@@ -634,12 +657,18 @@ export function FnbItemDialog({
         <div className={cn("flex flex-wrap gap-2", dangThuGon && "hidden")}>
           {opts.map((o) => {
             const active = choices.has(o.id);
+            const daDatToiDa =
+              g.rule === "multi" &&
+              g.maxSelect !== null &&
+              choices.size >= g.maxSelect;
             return (
               <button
                 key={o.id}
                 type="button"
                 onClick={() => toggleDynamicChoice(g, o.id)}
                 aria-pressed={active}
+                aria-disabled={!active && daDatToiDa}
+                title={!active && daDatToiDa ? `Đã chọn tối đa ${g.maxSelect} mục` : undefined}
                 className={cn(
                   CHIP,
                   active
@@ -954,8 +983,8 @@ export function FnbItemDialog({
               ? "Chưa tải được tuỳ chọn"
               : modifiersLoading
                 ? "Đang tải tuỳ chọn…"
-                : missingRequiredGroupIds.size > 0
-                  ? `⚠️ Còn ${missingRequiredGroupIds.size} mục BẮT BUỘC chưa chọn`
+                : invalidModifierGroupIds.size > 0
+                  ? `Còn ${invalidModifierGroupIds.size} nhóm tuỳ chọn chưa hợp lệ`
                   : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
           </Button>
         </DialogFooter>
