@@ -602,6 +602,11 @@ export default function ChuyenKhoPage() {
   ]);
 
   const chuaCoPhamVi = phamVi.mode === "none";
+  const emptyState = chuaCoPhamVi
+    ? "no-scope"
+    : debouncedSearch.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   return (
     <ListPageLayout sidebar={null}>
@@ -751,13 +756,20 @@ export default function ChuyenKhoPage() {
             />
           }
           defaultColumnVisibility={{ createdByName: false }}
+          emptyState={emptyState}
           emptyTitle={
-            chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy phiếu chuyển kho"
+            chuaCoPhamVi
+              ? "Chưa có chi nhánh làm việc"
+              : emptyState === "no-results"
+                ? "Không tìm thấy phiếu chuyển kho"
+                : "Chưa có phiếu chuyển kho"
           }
           emptyDescription={
             chuaCoPhamVi
               ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
-              : "Thử thay đổi thời gian, trạng thái, kho hoặc nội dung tìm kiếm."
+              : emptyState === "no-results"
+                ? "Thử thay đổi thời gian, trạng thái, kho hoặc nội dung tìm kiếm."
+                : "Phiếu chuyển kho mới sẽ hiển thị tại đây sau khi được tạo."
           }
           emptyIcon={chuaCoPhamVi ? "apartment" : "swap_horiz"}
           emptyBranchHint={

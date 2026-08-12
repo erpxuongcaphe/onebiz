@@ -656,6 +656,10 @@ export default function KiemKhoPage() {
     if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
     return chips;
   }, [creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   /* ---- Inline detail renderer ---- */
   const renderDetail = (item: InventoryCheck, onClose: () => void) => (
@@ -712,6 +716,16 @@ export default function KiemKhoPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Đang xử lý" value={summary.processingCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.processingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã cân bằng" value={summary.balancedCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} /><ListMetric icon={<Icon name={summary.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch ròng" value={formatCurrency(summary.netVariance)} hint="Toàn bộ kết quả lọc" tone={summary.netVariance < 0 ? "danger" : "default"} /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyState={emptyState}
+        emptyTitle={
+          emptyState === "no-results" ? "Không tìm thấy phiếu kiểm kho" : "Chưa có phiếu kiểm kho"
+        }
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi ngày tạo, trạng thái, người tạo hoặc nội dung tìm kiếm."
+            : "Phiếu kiểm kho mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="inventory_2"
         emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),

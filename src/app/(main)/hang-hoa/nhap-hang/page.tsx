@@ -1040,6 +1040,10 @@ export default function NhapHangPage() {
     if (costReturnFilter !== "all") chips.push({ key: "cost", label: "Chi phí nhập trả NCC", value: costReturnFilter === "has_cost" ? "Có chi phí" : "Không chi phí", onClear: () => setCostReturnFilter("all") });
     return chips;
   }, [costReturnFilter, creatorFilter, datePreset, datePresetLabel, defaultStatuses, importerFilter, selectedStatuses, statuses]);
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   /* ---- Render ---- */
   return (
@@ -1142,6 +1146,14 @@ export default function NhapHangPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="receipt_long" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_bottom" size={15} />} label="Đang nhận trang này" value={kpiPartial.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={kpiPartial > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất trang này" value={kpiCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="payments" size={15} />} label="Công nợ trang này" value={formatCurrency(kpiTotalOwed)} hint={`Giá trị trang này: ${formatCurrency(kpiTotalAmount)}`} tone={kpiTotalOwed > 0 ? "danger" : "default"} /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyState={emptyState}
+        emptyTitle={emptyState === "no-results" ? "Không tìm thấy phiếu nhập" : "Chưa có phiếu nhập"}
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi thời gian, trạng thái, nhà cung cấp hoặc nội dung tìm kiếm."
+            : "Phiếu nhập mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="move_to_inbox"
         emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
