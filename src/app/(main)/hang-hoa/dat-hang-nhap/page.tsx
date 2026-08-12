@@ -296,6 +296,10 @@ export default function DatHangNhapPage() {
     if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
   }, [amountMax, amountMin, datePreset, datePresetLabel, statusFilter]);
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   return (
     <ListPageLayout sidebar={null}>
@@ -376,6 +380,18 @@ export default function DatHangNhapPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="shopping_cart" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số đơn theo bộ lọc" /><ListMetric icon={<Icon name="hourglass_top" size={15} />} label="Chờ / đang nhập" value={summary.outstandingCount.toString()} hint={formatCurrency(summary.outstandingValue)} tone={summary.outstandingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="cancel" size={15} />} label="Đã hủy" value={summary.cancelledCount.toString()} hint="Toàn bộ kết quả lọc" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyState={emptyState}
+        emptyTitle={
+          emptyState === "no-results"
+            ? "Không tìm thấy đơn đặt hàng nhập"
+            : "Chưa có đơn đặt hàng nhập"
+        }
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi thời gian, trạng thái, giá trị hoặc nội dung tìm kiếm."
+            : "Đơn đặt hàng nhập mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="shopping_cart"
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}

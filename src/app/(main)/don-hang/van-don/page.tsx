@@ -423,6 +423,8 @@ export default function VanDonPage() {
     setPartnerFilter("all");
     setCreatedDatePreset("all");
   };
+  const emptyState =
+    search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   // 04/08: KPI đếm trên TOÀN BỘ vận đơn (thẻ cũ đếm 15 dòng của trang hiện tại)
   const [statusCounts, setStatusCounts] = useState<ShippingStatusCounts | null>(null);
@@ -741,6 +743,16 @@ export default function VanDonPage() {
             onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
           />
         }
+        emptyState={emptyState}
+        emptyTitle={
+          emptyState === "no-results" ? "Không tìm thấy vận đơn" : "Chưa có vận đơn"
+        }
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi trạng thái, đối tác, thời gian tạo hoặc nội dung tìm kiếm."
+            : "Vận đơn mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="local_shipping"
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
