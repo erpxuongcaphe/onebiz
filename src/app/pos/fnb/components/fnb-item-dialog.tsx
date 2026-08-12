@@ -466,46 +466,19 @@ export function FnbItemDialog({
     return missing;
   }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
 
-  /**
-   * 07/08 (CEO chốt) — THỨ TỰ NHÓM TRONG POPUP.
-   *
-   * Nguồn thứ tự CHÍNH là `sort_order` do CEO đặt trong màn Nhóm tuỳ chọn.
-   * Nhưng hôm nay CẢ 4 nhóm trong dữ liệu đều `sort_order = 0` → không có
-   * thứ tự nào, máy chủ trả về sao thì hiện vậy, nhóm bắt buộc rơi xuống
-   * cuối. Nên xếp theo 3 mức, giảm dần độ ưu tiên:
-   *  0. Nhóm BẮT BUỘC (Size…) — luôn trong tầm mắt, không phải cuộn
-   *  1. Nhóm chọn-một ngắn (Đường, Đá)
-   *  2. Nhóm chọn-nhiều (Topping…) — xuống cuối vì dài nhất
-   * Cùng mức thì theo `sort_order`, rồi ít lựa chọn trước, rồi tên A→Z.
-   *
-   * HAI ĐIỀU CỐ Ý KHÔNG LÀM:
-   *  • KHÔNG dò theo TÊN nhóm ("Size", "Đường"…) — mai CEO đổi tên là hỏng.
-   *  • KHÔNG đẩy nhóm "còn thiếu" lên đầu. Bản nháp của em có làm vậy và
-   *    nó SAI: thứ tự phụ thuộc cái đang chọn, nên vừa bấm Size xong là cả
-   *    danh sách nhảy chỗ ngay dưới ngón tay, dễ bấm nhầm nhóm khác. Việc
-   *    "còn thiếu" đã được viền đỏ + nhãn + nút dưới cùng nói rõ rồi —
-   *    thứ tự phải ĐỨNG YÊN.
-   */
+  /** Giữ đúng thứ tự liên kết do người quản lý đặt. */
   const nhomDaSapXep = useMemo(() => {
     if (!dynamicModifiers) return [] as ModifierGroup[];
     const soLuaChon = (g: ModifierGroup) =>
       dynamicModifiers.optionsByGroup.get(g.id)?.length ?? 0;
-    const uuTien = (g: ModifierGroup) =>
-      g.rule === "single_required" ? 0 : g.rule === "single" ? 1 : 2;
     return [...dynamicModifiers.groups]
       .filter((g) => soLuaChon(g) > 0)
       .sort(
         (a, b) =>
-          uuTien(a) - uuTien(b) ||
           (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
-          soLuaChon(a) - soLuaChon(b) ||
           a.name.localeCompare(b.name, "vi"),
       );
   }, [dynamicModifiers]);
-
-  /** Nhóm NGẮN xếp lưới cùng Size ở khu trên; nhóm DÀI xuống dưới. */
-  const nhomNgan = nhomDaSapXep.filter((g) => g.rule !== "multi");
-  const nhomDai = nhomDaSapXep.filter((g) => g.rule === "multi");
 
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
@@ -642,6 +615,7 @@ export function FnbItemDialog({
         key={g.id}
         className={cn(
           O_NHOM,
+          g.rule === "multi" && "basis-full",
           conThieu &&
             "rounded-lg border border-status-error/40 bg-status-error/5 p-2.5",
         )}
@@ -834,9 +808,9 @@ export function FnbItemDialog({
               </section>
             ) : null}
 
-            {/* Nhóm tuỳ chọn NGẮN (Size/Đường/Đá…) chèn vào cùng lưới này.
-                Nhóm bắt buộc chưa chọn xong luôn đứng trước — xem nhomDaSapXep. */}
-            {hasDynamicModifiers && nhomNgan.map(veNhom)}
+            {/* Mọi nhóm theo đúng thứ tự liên kết. Nhóm chọn nhiều
+                tự chiếm trọn hàng nhưng không bị ép xuống cuối. */}
+            {hasDynamicModifiers && nhomDaSapXep.map(veNhom)}
 
             {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
                 thu ngân không mất thao tác quen. */}
@@ -943,11 +917,6 @@ export function FnbItemDialog({
               </div>
             </section>
           )}
-
-          {/* ══ NHÓM CHỌN-NHIỀU từ DB (Sprint 2.2e) — TOÀN chiều ngang ══
-              Loại này nhãn dài nhất và nhiều lựa chọn nhất, nên để riêng dưới
-              cùng thay vì nhét vào ô lưới bằng nhau ở trên. */}
-          {hasDynamicModifiers && nhomDai.map(veNhom)}
 
           {/* Ghi chú tự do — trải hết bề ngang: chia cột cho ô nhập chữ chỉ
               làm khó gõ. */}
