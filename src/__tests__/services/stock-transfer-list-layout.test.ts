@@ -284,11 +284,13 @@ describe("giao dien danh sach Chuyen kho", () => {
     }
   });
 
-  it("phan biet ket qua toan bo voi chi so trang hien tai", () => {
+  it("hien thi toan bo chi so theo toan bo ket qua loc", () => {
     expect(page).toContain('label="Kết quả"');
-    expect(page).toContain('label="Mặt hàng trang này"');
-    expect(page).toContain('label="Đang chuyển trang này"');
-    expect(page).toContain('label="Hoàn thành trang này"');
+    expect(page).toContain('label="Tổng mặt hàng"');
+    expect(page).toContain('label="Đang chuyển"');
+    expect(page).toContain('label="Hoàn thành"');
+    expect(page).toContain('hint="Toàn bộ kết quả lọc"');
+    expect(page).not.toContain("trang này");
   });
 
   it("xuat file theo dung pham vi, tim kiem va bo loc", () => {

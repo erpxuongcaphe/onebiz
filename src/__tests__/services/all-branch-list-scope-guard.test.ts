@@ -75,4 +75,23 @@ describe("phạm vi Tất cả chi nhánh của các danh sách kho", () => {
     expect(migration).toContain("user_has_branch_access");
     expect(migration).toContain("d.tenant_id=v_tenant");
   });
+
+  it("the remaining five warehouse lists lock branch scope in server workspaces", () => {
+    const migration = readFileSync(
+      "supabase/migrations/00316_warehouse_list_workspaces_batch.sql",
+      "utf8",
+    );
+    for (const rpc of [
+      "get_internal_export_list_workspace",
+      "get_inventory_check_list_workspace",
+      "get_stock_transfer_list_workspace",
+      "get_production_order_list_workspace",
+      "get_internal_sale_list_workspace",
+    ]) {
+      expect(migration).toContain(`create or replace function public.${rpc}`);
+    }
+    expect(migration.match(/reports\.view_all_branches/g)).toHaveLength(5);
+    expect(migration.match(/system\.manage_branches/g)).toHaveLength(5);
+    expect(migration.match(/user_has_branch_access/g)).toHaveLength(5);
+  });
 });

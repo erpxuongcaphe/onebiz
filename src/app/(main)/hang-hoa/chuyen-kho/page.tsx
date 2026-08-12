@@ -71,6 +71,7 @@ import {
 } from "@/lib/services";
 import {
   getStockTransfersForExport,
+  getStockTransferListWorkspace,
   getStockTransferById,
   createStockTransfer,
   completeStockTransfer,
@@ -81,7 +82,6 @@ import {
 import {
   phamViChuyenKho,
   getStockTransfersTheoPhamVi,
-  demChuyenKhoChiNhanhKhac,
 } from "@/lib/services/supabase/stock-transfer-list-scope";
 import type {
   StockTransfer,
@@ -137,6 +137,7 @@ export default function ChuyenKhoPage() {
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
+  const [summary, setSummary] = useState({ inTransitCount: 0, completedCount: 0, cancelledCount: 0, totalItems: 0 });
   const [branchOptions, setBranchOptions] = useState<
     { label: string; value: string }[]
   >([{ label: "Tất cả", value: "all" }]);
@@ -243,25 +244,35 @@ export default function ChuyenKhoPage() {
     const requestId = ++requestSequence.current;
     setLoading(true);
     try {
-      const result = await getStockTransfersTheoPhamVi(phamVi, {
-        page,
-        pageSize,
-        search: debouncedSearch || undefined,
-        searchField,
-        filters: commonFilters,
+      const result = phamVi.mode === "none" ? { data: [], total: 0, summary: { inTransitCount: 0, completedCount: 0, cancelledCount: 0, totalItems: 0 } } : await getStockTransferListWorkspace({
+        page, pageSize, search: debouncedSearch || undefined, searchField,
+        statuses: statusFilter, dateFrom: dateRange.from, dateTo: dateRange.to,
+        fromBranchId: fromBranchId !== "all" ? fromBranchId : undefined,
+        toBranchId: toBranchId !== "all" ? toBranchId : undefined, createdBy: createdBy || undefined,
+        itemCountMin: itemCountMin ? Number(itemCountMin) : undefined, itemCountMax: itemCountMax ? Number(itemCountMax) : undefined,
+        branchId: phamVi.mode === "branch" ? phamVi.branchId : undefined,
       });
       if (requestId !== requestSequence.current) return;
       setData(result.data);
       setTotal(result.total);
+      setSummary(result.summary);
 
-      const count =
-        result.data.length === 0
-          ? await demChuyenKhoChiNhanhKhac(phamVi, {
-              search: debouncedSearch || undefined,
-              searchField,
-              filters: commonFilters,
-            })
-          : 0;
+      const count = result.data.length === 0 && phamVi.mode === "branch" && duocXemToanChuoi
+        ? Math.max(0, (await getStockTransferListWorkspace({
+            page: 0,
+            pageSize: 1,
+            search: debouncedSearch || undefined,
+            searchField,
+            statuses: statusFilter,
+            dateFrom: dateRange.from,
+            dateTo: dateRange.to,
+            fromBranchId: fromBranchId !== "all" ? fromBranchId : undefined,
+            toBranchId: toBranchId !== "all" ? toBranchId : undefined,
+            createdBy: createdBy || undefined,
+            itemCountMin: itemCountMin ? Number(itemCountMin) : undefined,
+            itemCountMax: itemCountMax ? Number(itemCountMax) : undefined,
+          })).total - result.total)
+        : 0;
       if (requestId === requestSequence.current) setOtherBranchCount(count);
     } catch (error) {
       if (requestId !== requestSequence.current) return;
@@ -682,22 +693,22 @@ export default function ChuyenKhoPage() {
               />
               <ListMetric
                 icon={<Icon name="inventory_2" size={15} />}
-                label="Mặt hàng trang này"
-                value={formatNumber(pageProductCount)}
-                hint={`Tổng trên ${data.length} phiếu đang hiển thị`}
+                label="Tổng mặt hàng"
+                value={formatNumber(summary.totalItems)}
+                hint="Toàn bộ kết quả lọc"
                 tone="primary"
               />
               <ListMetric
                 icon={<Icon name="local_shipping" size={15} />}
-                label="Đang chuyển trang này"
-                value={formatNumber(pageInTransit)}
-                hint="Chỉ tính các dòng trên trang hiện tại"
+                label="Đang chuyển"
+                value={formatNumber(summary.inTransitCount)}
+                hint="Toàn bộ kết quả lọc"
               />
               <ListMetric
                 icon={<Icon name="check_circle" size={15} />}
-                label="Hoàn thành trang này"
-                value={formatNumber(pageCompleted)}
-                hint="Chỉ tính các dòng trên trang hiện tại"
+                label="Hoàn thành"
+                value={formatNumber(summary.completedCount)}
+                hint={`${summary.cancelledCount} phiếu đã hủy`}
               />
             </>
           }

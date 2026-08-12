@@ -1,6 +1,6 @@
 // Production service — Production orders, lot tracking, FIFO allocation
 
-import { getClient } from "./base";
+import { getClient, handleError } from "./base";
 import { getCurrentTenantId } from "./base";
 import type {
   ProductionOrder,
@@ -8,6 +8,7 @@ import type {
   ExpiringLot,
 } from "@/lib/types";
 import { formatDateInputValue } from "@/lib/format";
+import { normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 
 const supabase = getClient();
 
@@ -41,6 +42,33 @@ export async function getProductionOrders(params?: {
     data: (data ?? []).map(mapProductionOrder),
     total: count ?? 0,
   };
+}
+
+export interface ProductionOrderListWorkspaceParams {
+  page:number; pageSize:number; search?:string; searchField?:string; statuses?:string[];
+  dateFrom?:string; dateTo?:string; createdBy?:string; qtyMin?:number; qtyMax?:number; branchId?:string;
+}
+export interface ProductionOrderListWorkspaceResult {
+  data:ProductionOrder[]; total:number;
+  summary:{inProgressCount:number;completedTodayCount:number;cancelledCount:number;totalCogs:number};
+}
+export async function getProductionOrderListWorkspace(params:ProductionOrderListWorkspaceParams):Promise<ProductionOrderListWorkspaceResult>{
+  const client=getClient(); const {from,toExclusive}=normalizeCreatedAtRange({dateFrom:params.dateFrom,dateTo:params.dateTo});
+  const {data,error}=await(client.rpc as any)("get_production_order_list_workspace",{
+    p_page:params.page,p_page_size:params.pageSize,p_search:params.search?.trim()||null,p_search_field:params.searchField??"all",
+    p_statuses:params.statuses?.length?params.statuses:null,p_date_from:from??null,p_date_to_exclusive:toExclusive??null,
+    p_created_by:params.createdBy||null,p_qty_min:Number.isFinite(params.qtyMin)?params.qtyMin:null,
+    p_qty_max:Number.isFinite(params.qtyMax)?params.qtyMax:null,p_branch_id:params.branchId??null,
+  });
+  if(error)handleError(error,"getProductionOrderListWorkspace");
+  const payload=(data??{})as Record<string,any>; const summary=(payload.summary??{})as Record<string,unknown>;
+  return{data:Array.isArray(payload.items)?payload.items.map(mapProductionOrder):[],total:Number(payload.total??0),summary:{
+    inProgressCount:Number(summary.inProgressCount??0),completedTodayCount:Number(summary.completedTodayCount??0),
+    cancelledCount:Number(summary.cancelledCount??0),totalCogs:Number(summary.totalCogs??0),
+  }};
+}
+export async function getProductionOrdersForExport(params:Omit<ProductionOrderListWorkspaceParams,"page"|"pageSize">):Promise<ProductionOrder[]>{
+  const rows:ProductionOrder[]=[];for(let page=0;;page+=1){const result=await getProductionOrderListWorkspace({...params,page,pageSize:200});rows.push(...result.data);if(rows.length>=result.total||result.data.length===0)return rows;}
 }
 
 export async function getProductionOrderById(id: string) {

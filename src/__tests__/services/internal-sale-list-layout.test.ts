@@ -290,11 +290,13 @@ describe("giao diện danh sách Bán nội bộ", () => {
     }
   });
 
-  it("phân biệt chỉ số toàn bộ với số tiền của trang hiện tại", () => {
+  it("hiển thị toàn bộ chỉ số theo toàn bộ kết quả lọc", () => {
     expect(page).toContain('label="Kết quả"');
-    expect(page).toContain('label="Giá trị trang này"');
-    expect(page).toContain('label="Hoàn thành trang này"');
-    expect(page).toContain('label="VAT trang này"');
+    expect(page).toContain('label="Tổng giá trị"');
+    expect(page).toContain('label="Hoàn thành"');
+    expect(page).toContain('label="Tổng VAT"');
+    expect(page).toContain('hint="Toàn bộ kết quả lọc"');
+    expect(page).not.toContain("trang này");
   });
 
   it("xuất file theo đúng phạm vi, tìm kiếm và toàn bộ bộ lọc", () => {
