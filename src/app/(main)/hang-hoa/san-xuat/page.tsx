@@ -367,6 +367,10 @@ export default function SanXuatPage() {
   ];
 
   const clearListFilters = () => { setStatusFilters(allStatuses); setDatePreset("all"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setQtyMin(""); setQtyMax(""); };
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   const handleExport = async (type: "excel" | "csv") => {
     const range = datePreset === "custom" ? { from: dateFrom || undefined, to: dateTo || undefined } : computeListPresetRange(datePreset);
@@ -616,6 +620,16 @@ export default function SanXuatPage() {
             loading={loading}
             density="compact"
             total={total}
+            emptyState={emptyState}
+            emptyTitle={
+              emptyState === "no-results" ? "Không tìm thấy lệnh sản xuất" : "Chưa có lệnh sản xuất"
+            }
+            emptyDescription={
+              emptyState === "no-results"
+                ? "Thử thay đổi thời gian, trạng thái, người tạo, số lượng hoặc nội dung tìm kiếm."
+                : "Lệnh sản xuất mới sẽ hiển thị tại đây sau khi được tạo."
+            }
+            emptyIcon="factory"
             emptyBranchHint={duocXemToanChuoi ? {
               otherBranchCount,
               onViewAllBranches: () => setViewAllBranches(true),
