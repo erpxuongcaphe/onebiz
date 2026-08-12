@@ -420,6 +420,106 @@ export async function getAllProductLots(options?: {
   });
 }
 
+export interface ProductLotListWorkspaceParams {
+  page: number;
+  pageSize: number;
+  search?: string;
+  searchField?: "all" | "lot_number" | "product_code" | "product_name";
+  statuses?: string[];
+  sourceTypes?: string[];
+  expiryState?: "all" | "attention" | "expired" | "upcoming" | "no_expiry";
+  thresholdDays?: number;
+  receivedFrom?: string;
+  receivedToExclusive?: string;
+  branchId?: string;
+}
+
+export interface ProductLotListWorkspaceResult {
+  data: (ProductLot & { productName: string; productCode: string; daysUntilExpiry?: number })[];
+  total: number;
+  summary: {
+    activeCount: number;
+    currentQty: number;
+    expiredCount: number;
+    nearExpiryCount: number;
+  };
+}
+
+function mapProductLotWorkspaceRow(row: Record<string, unknown>) {
+  return {
+    id: row.id as string,
+    tenantId: row.tenant_id as string,
+    productId: row.product_id as string,
+    productName: (row.product_name as string) ?? "",
+    productCode: (row.product_code as string) ?? "",
+    lotNumber: row.lot_number as string,
+    sourceType: row.source_type as ProductLot["sourceType"],
+    productionOrderId: (row.production_order_id as string) || undefined,
+    purchaseOrderId: (row.purchase_order_id as string) || undefined,
+    manufacturedDate: (row.manufactured_date as string) || undefined,
+    expiryDate: (row.expiry_date as string) || undefined,
+    receivedDate: row.received_date as string,
+    initialQty: Number(row.initial_qty ?? 0),
+    currentQty: Number(row.current_qty ?? 0),
+    branchId: row.branch_id as string,
+    branchName: (row.branch_name as string) ?? "",
+    status: row.status as ProductLot["status"],
+    note: (row.note as string) || undefined,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+    daysUntilExpiry:
+      row.days_remaining === null || row.days_remaining === undefined
+        ? undefined
+        : Number(row.days_remaining),
+  };
+}
+
+/** Shared server-side workspace for the lot list, expiry alerts and full exports. */
+export async function getProductLotListWorkspace(
+  params: ProductLotListWorkspaceParams,
+): Promise<ProductLotListWorkspaceResult> {
+  const client = getClient();
+  const { data, error } = await (client.rpc as any)("get_product_lot_list_workspace", {
+    p_page: params.page,
+    p_page_size: params.pageSize,
+    p_search: params.search?.trim() || null,
+    p_search_field: params.searchField ?? "all",
+    p_statuses: params.statuses?.length ? params.statuses : null,
+    p_source_types: params.sourceTypes?.length ? params.sourceTypes : null,
+    p_expiry_state: params.expiryState ?? "all",
+    p_threshold_days: params.thresholdDays ?? 30,
+    p_received_from: params.receivedFrom || null,
+    p_received_to_exclusive: params.receivedToExclusive || null,
+    p_branch_id: params.branchId ?? null,
+  });
+  if (error) handleError(error, "getProductLotListWorkspace");
+  const payload = (data ?? {}) as Record<string, any>;
+  const summary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items)
+      ? payload.items.map((row: Record<string, unknown>) => mapProductLotWorkspaceRow(row))
+      : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      activeCount: Number(summary.activeCount ?? 0),
+      currentQty: Number(summary.currentQty ?? 0),
+      expiredCount: Number(summary.expiredCount ?? 0),
+      nearExpiryCount: Number(summary.nearExpiryCount ?? 0),
+    },
+  };
+}
+
+export async function getProductLotsForExport(
+  params: Omit<ProductLotListWorkspaceParams, "page" | "pageSize">,
+) {
+  const rows: ProductLotListWorkspaceResult["data"] = [];
+  for (let page = 0; ; page += 1) {
+    const result = await getProductLotListWorkspace({ ...params, page, pageSize: 200 });
+    rows.push(...result.data);
+    if (rows.length >= result.total || result.data.length === 0) return rows;
+  }
+}
+
 export async function getProductLots(
   productId: string,
   branchId?: string

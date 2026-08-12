@@ -350,8 +350,9 @@ export {
   updateProductionStatus, canTransitionProductionStatus,
   checkMaterialsAvailability,
   getProductLots, getAllProductLots, getExpiringLots,
+  getProductLotListWorkspace, getProductLotsForExport,
 } from "./production";
-export type { MaterialCheckInput, MaterialCheckResult, ProductionOrderListWorkspaceParams, ProductionOrderListWorkspaceResult } from "./production";
+export type { MaterialCheckInput, MaterialCheckResult, ProductionOrderListWorkspaceParams, ProductionOrderListWorkspaceResult, ProductLotListWorkspaceParams, ProductLotListWorkspaceResult } from "./production";
 
 // Pricing (Price Tiers)
 export {

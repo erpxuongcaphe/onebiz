@@ -111,7 +111,7 @@ export interface ProductLot {
   productId: string;
   variantId?: string;
   lotNumber: string;
-  sourceType: 'production' | 'purchase';
+  sourceType: 'production' | 'purchase' | 'opening' | 'adjustment' | 'transfer';
   productionOrderId?: string;
   purchaseOrderId?: string;
   supplierId?: string;
@@ -121,7 +121,7 @@ export interface ProductLot {
   initialQty: number;
   currentQty: number;
   branchId: string;
-  status: 'active' | 'expired' | 'consumed' | 'disposed';
+  status: 'active' | 'expired' | 'consumed' | 'disposed' | 'cancelled';
   note?: string;
   createdAt: string;
   updatedAt: string;
@@ -171,6 +171,7 @@ export interface ExpiringLot {
   expiryDate: string;
   currentQty: number;
   branchName: string;
+  branchId?: string;
   daysRemaining: number;
   isExpired: boolean;
 }
