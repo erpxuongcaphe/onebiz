@@ -532,6 +532,11 @@ export default function TraHangPage() {
     refundState,
     selectedStatuses,
   ]);
+  const emptyState = chuaCoPhamVi
+    ? "no-scope"
+    : debouncedSearch.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   const handleExport = useCallback(async (type: "excel" | "csv") => {
     if (exporting || phamVi.mode === "none") return;
@@ -838,13 +843,20 @@ export default function TraHangPage() {
           reason: false,
           createdBy: false,
         }}
+        emptyState={emptyState}
         emptyTitle={
-          chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy phiếu trả hàng"
+          chuaCoPhamVi
+            ? "Chưa có chi nhánh làm việc"
+            : emptyState === "no-results"
+              ? "Không tìm thấy phiếu trả hàng"
+              : "Chưa có phiếu trả hàng"
         }
         emptyDescription={
           chuaCoPhamVi
             ? "Hãy chọn một chi nhánh hoặc dùng quyền xem toàn chuỗi."
-            : "Thử thay đổi thời gian, trạng thái hoặc nội dung tìm kiếm."
+            : emptyState === "no-results"
+              ? "Thử thay đổi thời gian, trạng thái hoặc nội dung tìm kiếm."
+              : "Phiếu trả hàng mới sẽ hiển thị tại đây sau khi được tạo."
         }
         emptyIcon={chuaCoPhamVi ? "apartment" : "undo"}
         emptyBranchHint={

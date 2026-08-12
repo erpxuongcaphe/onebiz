@@ -581,6 +581,11 @@ export default function HoaDonPage() {
     setSelectedStatuses([]);
     setSelectedTypes(["no_delivery", "delivery"]);
   };
+  const emptyState = chuaCoPhamVi
+    ? "no-scope"
+    : debouncedSearch.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
   // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
@@ -1038,11 +1043,20 @@ export default function HoaDonPage() {
               onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
             />
           }
-          emptyTitle={chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy hóa đơn"}
+          emptyState={emptyState}
+          emptyTitle={
+            chuaCoPhamVi
+              ? "Chưa có chi nhánh làm việc"
+              : emptyState === "no-results"
+                ? "Không tìm thấy hóa đơn"
+                : "Chưa có hóa đơn"
+          }
           emptyDescription={
             chuaCoPhamVi
               ? moTaChuaCoPhamVi
-              : "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+              : emptyState === "no-results"
+                ? "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+                : "Hóa đơn mới sẽ hiển thị tại đây sau khi được tạo."
           }
           emptyIcon={chuaCoPhamVi ? "apartment" : "receipt_long"}
           emptyBranchHint={

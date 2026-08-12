@@ -616,6 +616,11 @@ export default function DatHangPage() {
     setDeliveryDateTo("");
     setDeliveryArea("");
   };
+  const emptyState = chuaCoPhamVi
+    ? "no-scope"
+    : debouncedSearch.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   const buildFilters = useCallback(() => {
     const orderRange = resolveDateRange(datePreset, dateFrom, dateTo);
@@ -1122,13 +1127,20 @@ export default function DatHangPage() {
             onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
           />
         }
+        emptyState={emptyState}
         emptyTitle={
-          chuaCoPhamVi ? "Chưa có chi nhánh làm việc" : "Không tìm thấy đơn đặt hàng"
+          chuaCoPhamVi
+            ? "Chưa có chi nhánh làm việc"
+            : emptyState === "no-results"
+              ? "Không tìm thấy đơn đặt hàng"
+              : "Chưa có đơn đặt hàng"
         }
         emptyDescription={
           chuaCoPhamVi
             ? moTaChuaCoPhamVi
-            : "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+            : emptyState === "no-results"
+              ? "Thử thay đổi thời gian, trạng thái hoặc từ khóa tìm kiếm."
+              : "Đơn đặt hàng mới sẽ hiển thị tại đây sau khi được tạo."
         }
         emptyIcon={chuaCoPhamVi ? "apartment" : "receipt_long"}
         emptyBranchHint={
