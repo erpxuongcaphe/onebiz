@@ -35,12 +35,16 @@ describe("warehouse transaction list standardization", () => {
     expect(page).toContain('datePreset === "custom"');
   });
 
-  it("labels page-derived metrics honestly", () => {
+  it("labels page-derived and whole-filter metrics honestly", () => {
     const combined = pages.map(source).join("\n");
     expect(combined).toContain("Phiếu tạm trang này");
     expect(combined).toContain("Hoàn thành trang này");
-    expect(combined).toContain("Giá trị trang này");
     expect(combined).toContain("Chênh lệch trang này");
     expect(combined).toContain("Chỉ tính các dòng đang hiển thị");
+
+    const disposal = source("src/app/(main)/hang-hoa/xuat-huy/page.tsx");
+    expect(disposal).toContain("Giá trị tổn thất");
+    expect(disposal).toContain("Toàn bộ kết quả lọc");
+    expect(disposal).not.toContain("Giá trị trang này");
   });
 });

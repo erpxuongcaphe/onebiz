@@ -2160,6 +2160,7 @@
   "get_staff_revenue_report",
   "get_staff_revenue_report_unsecured_legacy",
   "get_supplier_return_list_workspace",
+  "get_disposal_export_list_workspace",
   "get_stock_card_v2",
   "get_stockout_forecast",
   "get_supplier_list_workspace",

@@ -18,11 +18,11 @@ import {
   FilterGroup,
   CheckboxFilter,
   DatePresetFilter,
-  PersonFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import { Button } from "@/components/ui/button";
-import { computeListPresetRange, STANDARD_LIST_PRESETS } from "@/lib/utils/list-date-preset-range";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -33,7 +33,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getDisposalExports, getDisposalStatuses, cancelDisposalExport } from "@/lib/services";
+import { getDisposalExportListWorkspace, getDisposalExportsForExport, getDisposalStatuses, cancelDisposalExport } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
@@ -51,6 +51,7 @@ const statusMap: Record<
 > = {
   draft: { label: "Phiếu tạm", variant: "secondary" },
   completed: { label: "Hoàn thành", variant: "default" },
+  cancelled: { label: "Đã hủy", variant: "secondary" },
 };
 
 /* ------------------------------------------------------------------ */
@@ -97,7 +98,7 @@ function DisposalExportDetail({
                   ? "bg-primary-fixed text-primary border-primary-fixed"
                   : undefined,
             }}
-            subtitle="Chi nhánh trung tâm"
+            subtitle={item.branchName || "Chưa có tên chi nhánh"}
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
@@ -173,6 +174,7 @@ export default function XuatHuyPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [createOpen, setCreateOpen] = useState(false);
@@ -188,14 +190,13 @@ export default function XuatHuyPage() {
   const { starred, toggle: toggleStar } = useStarredSet();
 
   // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "draft",
-    "completed",
-  ]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [creatorFilter, setCreatorFilter] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0 });
   const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -245,6 +246,12 @@ export default function XuatHuyPage() {
       cell: ({ row }) => formatUser(row.original.createdByName, row.original.createdBy),
     },
     {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 180,
+      cell: ({ row }) => row.original.branchName || "—",
+    },
+    {
       accessorKey: "totalAmount",
       header: "Tổng giá trị",
       size: 140,
@@ -276,31 +283,26 @@ export default function XuatHuyPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const commonFilters = {
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-      ...(creatorFilter && { createdBy: creatorFilter }),
-    };
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getDisposalExports({
-      page,
-      pageSize,
-      search,
+    const result = await getDisposalExportListWorkspace({
+      page, pageSize, search, searchField, statuses: selectedStatuses,
+      dateFrom: effectiveDateFrom, dateTo: effectiveDateTo,
+      amountMin: amountMin ? Number(amountMin) : undefined,
+      amountMax: amountMax ? Number(amountMax) : undefined,
       branchId: branchScope,
-      filters: commonFilters,
     });
     setData(result.data);
     setTotal(result.total);
+    setSummary(result.summary);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
     if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getDisposalExports({
-        page: 0,
-        pageSize: 1,
-        search,
+      const all = await getDisposalExportListWorkspace({
+        page: 0, pageSize: 1, search, searchField, statuses: selectedStatuses,
+        dateFrom: effectiveDateFrom, dateTo: effectiveDateTo,
+        amountMin: amountMin ? Number(amountMin) : undefined,
+        amountMax: amountMax ? Number(amountMax) : undefined,
         branchId: undefined,
-        filters: commonFilters,
       });
       setOtherBranchCount(all.total);
     } else {
@@ -315,7 +317,7 @@ export default function XuatHuyPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [page, pageSize, search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, amountMin, amountMax, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -324,20 +326,29 @@ export default function XuatHuyPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter]);
+  }, [search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, amountMin, amountMax]);
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
+  const handleExport = async (type: "excel" | "csv") => {
+    const range = computeListPresetRange(datePreset);
+    const rows = await getDisposalExportsForExport({ search, searchField, statuses: selectedStatuses,
+      dateFrom: datePreset === "custom" ? dateFrom : range.from,
+      dateTo: datePreset === "custom" ? dateTo : range.to,
+      amountMin: amountMin ? Number(amountMin) : undefined,
+      amountMax: amountMax ? Number(amountMax) : undefined,
+      branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
       { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Người tạo", key: "createdBy", width: 15 },
+      { header: "Chi nhánh", key: "branchName", width: 22 },
+      { header: "Người tạo", key: "createdByName", width: 20 },
       { header: "Tổng giá trị", key: "totalAmount", width: 15, format: (v: number) => v },
       { header: "Lý do", key: "reason", width: 25 },
+      { header: "Ghi chú", key: "note", width: 30 },
       { header: "Trạng thái", key: "status", width: 15, format: (v: DisposalExport["status"]) => statusMap[v]?.label ?? v },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "xuat-huy");
-    else exportToCsv(data, exportColumns, "xuat-huy");
+    if (type === "excel") exportToExcel(rows, exportColumns, "xuat-huy");
+    else exportToCsv(rows, exportColumns, "xuat-huy");
   };
 
   /* ---- Inline detail renderer ---- */
@@ -346,17 +357,13 @@ export default function XuatHuyPage() {
   );
 
   /* ---- KPI row ---- */
-  // Tổng GT xuất huỷ = thiệt hại — CEO cần visibility trực tiếp trên danh sách.
-  const kpiTotalLoss = data.reduce((sum, d) => sum + (d.totalAmount ?? 0), 0);
-  const kpiDraft = data.filter((d) => d.status === "draft").length;
-  const kpiCompleted = data.filter((d) => d.status === "completed").length;
-
+  // Tổn thất chỉ tính phiếu đã hoàn thành; phiếu hủy đã hoàn kho không được cộng.
   const datePresetLabel = useMemo(() => {
     if (datePreset === "custom") {
       if (!dateFrom && !dateTo) return "Tùy chỉnh";
       return `${dateFrom || "..."} đến ${dateTo || "..."}`;
     }
-    return STANDARD_LIST_PRESETS.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+    return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
 
   const clearListFilters = useCallback(() => {
@@ -364,7 +371,8 @@ export default function XuatHuyPage() {
     setDatePreset("all");
     setDateFrom("");
     setDateTo("");
-    setCreatorFilter("");
+    setAmountMin("");
+    setAmountMax("");
   }, []);
 
   const filterChips = useMemo<ListFilterChip[]>(() => {
@@ -389,16 +397,9 @@ export default function XuatHuyPage() {
         onClear: () => setSelectedStatuses([]),
       });
     }
-    if (creatorFilter) {
-      chips.push({
-        key: "creator",
-        label: "Người tạo",
-        value: creatorFilter,
-        onClear: () => setCreatorFilter(""),
-      });
-    }
+    if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
-  }, [creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
+  }, [amountMax, amountMin, datePreset, datePresetLabel, selectedStatuses]);
 
   /* ---- Render ---- */
   return (
@@ -406,12 +407,19 @@ export default function XuatHuyPage() {
       <PageHeader
         title="Xuất hủy"
         density="compact"
-        searchPlaceholder="Theo mã phiếu xuất hủy"
+        searchPlaceholder="Theo mã phiếu, sản phẩm, lý do, ghi chú, người tạo"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" }, { value: "code", label: "Mã phiếu" },
+          { value: "product", label: "Sản phẩm" }, { value: "reason", label: "Lý do" },
+          { value: "note", label: "Ghi chú" }, { value: "creator", label: "Người tạo" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(value) => { setSearchField(value); setPage(0); }}
         onExport={{
-          excel: () => handleExport("excel"),
-          csv: () => handleExport("csv"),
+            excel: () => void handleExport("excel"),
+            csv: () => void handleExport("csv"),
         }}
         actions={[
           {
@@ -440,9 +448,9 @@ export default function XuatHuyPage() {
         toolbarMetrics={
           <>
             <ListMetric icon={<Icon name="delete_sweep" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" />
-            <ListMetric icon={<Icon name="drafts" size={15} />} label="Phiếu tạm trang này" value={kpiDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={kpiDraft > 0 ? "danger" : "default"} />
-            <ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn tất trang này" value={kpiCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" />
-            <ListMetric icon={<Icon name="trending_down" size={15} />} label="Giá trị trang này" value={formatCurrency(kpiTotalLoss)} hint="Chỉ tính các dòng đang hiển thị" tone={kpiTotalLoss > 0 ? "danger" : "default"} />
+            <ListMetric icon={<Icon name="drafts" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.draftCount > 0 ? "danger" : "default"} />
+            <ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" />
+            <ListMetric icon={<Icon name="trending_down" size={15} />} label="Giá trị tổn thất" value={formatCurrency(summary.completedValue)} hint={`${summary.cancelledCount} phiếu đã hủy không tính vào tổn thất`} tone={summary.completedValue > 0 ? "danger" : "default"} />
           </>
         }
         toolbarActions={
@@ -600,11 +608,9 @@ export default function XuatHuyPage() {
           <CheckboxFilter options={statuses} selected={selectedStatuses} onChange={setSelectedStatuses} />
         </FilterGroup>
         <FilterGroup label="Thời gian" activeHint={datePresetLabel}>
-          <DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS} />
+          <DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} />
         </FilterGroup>
-        <FilterGroup label="Người tạo" activeHint={creatorFilter || undefined}>
-          <PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} />
-        </FilterGroup>
+        <FilterGroup label="Giá trị phiếu" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Số tiền tối thiểu" toPlaceholder="Số tiền tối đa" /></FilterGroup>
       </FilterPanel>
 
       {auditDialogTarget && (

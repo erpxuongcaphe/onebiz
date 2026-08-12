@@ -15,7 +15,7 @@ import type { InventoryCheck, DisposalExport, InternalExport, QueryParams, Query
 import { getClient, getCurrentContext, getCurrentTenantId, getPaginationRange, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
 import { roundDecimals } from "@/lib/format";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { applyCreatedAtRangeFilter, normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 
 // --- Disposal Exports / Xuất hủy (Supabase) ---
 
@@ -50,20 +50,72 @@ function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undef
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapDisposalExport(row: any): DisposalExport {
   const profile = row.profiles as { full_name: string } | null;
+  const branch = row.branches as { name: string } | null;
   return {
     id: row.id,
     code: row.code,
     date: row.created_at,
-    totalProducts: 0, // Cần aggregate từ disposal_export_items — bỏ qua ở list view
+    totalProducts: Number(row.total_products ?? 0),
     totalAmount: Number(row.total_amount ?? 0),
     reason: row.reason ?? "",
     note: row.note ?? undefined,
-    status: row.status === "completed" ? "completed" : "draft",
+    status: row.status === "completed" || row.status === "cancelled" ? row.status : "draft",
     statusName: disposalStatusNameMap[row.status] ?? row.status,
     createdBy: row.created_by ?? "",
     createdByName: profile?.full_name ?? "",
     branchId: row.branch_id ?? undefined,
+    branchName: branch?.name ?? undefined,
   };
+}
+
+export interface DisposalExportListWorkspaceParams {
+  page: number; pageSize: number; search?: string; searchField?: string;
+  statuses?: string[]; dateFrom?: string; dateTo?: string;
+  amountMin?: number; amountMax?: number; branchId?: string;
+}
+
+export interface DisposalExportListWorkspaceResult extends QueryResult<DisposalExport> {
+  summary: { completedCount: number; draftCount: number; cancelledCount: number; completedValue: number };
+}
+
+export async function getDisposalExportListWorkspace(
+  params: DisposalExportListWorkspaceParams,
+): Promise<DisposalExportListWorkspaceResult> {
+  const supabase = getClient();
+  const { from, toExclusive } = normalizeCreatedAtRange({ dateFrom: params.dateFrom, dateTo: params.dateTo });
+  const { data, error } = await (supabase.rpc as any)("get_disposal_export_list_workspace", {
+    p_page: params.page, p_page_size: params.pageSize,
+    p_search: params.search?.trim() || null, p_search_field: params.searchField ?? "all",
+    p_statuses: params.statuses?.length ? params.statuses : null,
+    p_date_from: from ?? null, p_date_to_exclusive: toExclusive ?? null,
+    p_amount_min: Number.isFinite(params.amountMin) ? params.amountMin : null,
+    p_amount_max: Number.isFinite(params.amountMax) ? params.amountMax : null,
+    p_branch_id: params.branchId ?? null,
+  });
+  if (error) handleError(error, "getDisposalExportListWorkspace");
+  const payload = (data ?? {}) as Record<string, any>;
+  const summary = (payload.summary ?? {}) as Record<string, unknown>;
+  return {
+    data: Array.isArray(payload.items) ? payload.items.map(mapDisposalExport) : [],
+    total: Number(payload.total ?? 0),
+    summary: {
+      completedCount: Number(summary.completedCount ?? 0),
+      draftCount: Number(summary.draftCount ?? 0),
+      cancelledCount: Number(summary.cancelledCount ?? 0),
+      completedValue: Number(summary.completedValue ?? 0),
+    },
+  };
+}
+
+export async function getDisposalExportsForExport(
+  params: Omit<DisposalExportListWorkspaceParams, "page" | "pageSize">,
+): Promise<DisposalExport[]> {
+  const rows: DisposalExport[] = [];
+  for (let page = 0; ; page += 1) {
+    const result = await getDisposalExportListWorkspace({ ...params, page, pageSize: 200 });
+    rows.push(...result.data);
+    if (rows.length >= result.total || result.data.length === 0) return rows;
+  }
 }
 
 export async function getDisposalExports(params: QueryParams): Promise<QueryResult<DisposalExport>> {
@@ -107,6 +159,7 @@ export function getDisposalStatuses() {
     { value: "all", label: "Tất cả" },
     { value: "completed", label: "Hoàn thành" },
     { value: "draft", label: "Phiếu tạm" },
+    { value: "cancelled", label: "Đã hủy" },
   ];
 }
 
