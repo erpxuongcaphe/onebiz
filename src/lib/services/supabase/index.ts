@@ -7,6 +7,8 @@ export { duplicateInvoice } from "./orders";
 export { duplicatePurchaseOrder, reopenPurchaseOrderForEdit, suaGiaPhieuNhap } from "./purchase-orders";
 export { getSuppliers, getSupplierListWorkspace, getSupplierById, createSupplier, updateSupplier, deleteSupplier } from "./suppliers";
 export type { SupplierListWorkspaceParams, SupplierListWorkspaceResult, SupplierListSummary } from "./suppliers";
+export { getDisposalExportListWorkspace, getDisposalExportsForExport } from "./inventory";
+export type { DisposalExportListWorkspaceParams, DisposalExportListWorkspaceResult } from "./inventory";
 export {
   getInvoices,
   getInvoiceListSummary,

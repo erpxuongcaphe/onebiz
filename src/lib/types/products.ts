@@ -219,12 +219,13 @@ export interface DisposalExport {
   reason: string;
   /** 06/08: ghi chú (khác Lý do) — form tạo có ô này nhưng chi tiết không hiện. */
   note?: string;
-  status: "completed" | "draft";
+  status: "completed" | "draft" | "cancelled";
   statusName: string;
   createdBy: string;
   createdByName?: string;
   /** Chi nhánh của phiếu — resolve mẫu in theo chi nhánh (CEO 05/07). */
   branchId?: string;
+  branchName?: string;
 }
 
 // Xuất nội bộ
