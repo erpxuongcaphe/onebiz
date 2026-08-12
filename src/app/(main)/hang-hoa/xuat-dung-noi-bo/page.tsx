@@ -371,6 +371,10 @@ export default function XuatDungNoiBoPage() {
     if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} đến ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
   }, [amountMax, amountMin, creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   /* ---- Render ---- */
   return (
@@ -415,6 +419,18 @@ export default function XuatDungNoiBoPage() {
         toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} tone={summary.draftCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị đã xuất" value={formatCurrency(summary.completedValue)} hint="Chỉ tính phiếu hoàn thành" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyState={emptyState}
+        emptyTitle={
+          emptyState === "no-results"
+            ? "Không tìm thấy phiếu xuất dùng nội bộ"
+            : "Chưa có phiếu xuất dùng nội bộ"
+        }
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi thời gian, trạng thái, người tạo, giá trị hoặc nội dung tìm kiếm."
+            : "Phiếu xuất dùng nội bộ mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="inventory_2"
         emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),

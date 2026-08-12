@@ -400,6 +400,10 @@ export default function XuatHuyPage() {
     if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
   }, [amountMax, amountMin, datePreset, datePresetLabel, selectedStatuses]);
+  const emptyState =
+    search.trim() || datePreset !== "all" || filterChips.length > 0
+      ? "no-results"
+      : "no-data";
 
   /* ---- Render ---- */
   return (
@@ -467,6 +471,14 @@ export default function XuatHuyPage() {
           </>
         }
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
+        emptyState={emptyState}
+        emptyTitle={emptyState === "no-results" ? "Không tìm thấy phiếu xuất hủy" : "Chưa có phiếu xuất hủy"}
+        emptyDescription={
+          emptyState === "no-results"
+            ? "Thử thay đổi thời gian, trạng thái, giá trị hoặc nội dung tìm kiếm."
+            : "Phiếu xuất hủy mới sẽ hiển thị tại đây sau khi được tạo."
+        }
+        emptyIcon="delete_sweep"
         emptyBranchHint={duocXemToanChuoi ? {
           otherBranchCount,
           onViewAllBranches: () => setViewAllBranches(true),
