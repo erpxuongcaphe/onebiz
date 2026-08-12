@@ -92,6 +92,7 @@ export interface PurchaseReturn {
   date: string;
   importCode: string;
   supplierName: string;
+  supplierCode?: string;
   totalAmount: number;
   status: "completed" | "draft";
   statusName: string;

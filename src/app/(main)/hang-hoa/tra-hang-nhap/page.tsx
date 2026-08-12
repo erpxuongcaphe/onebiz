@@ -6,7 +6,6 @@ import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
 import { DataTable } from "@/components/shared/data-table";
-import { AllBranchesBanner } from "@/components/shared/all-branches-banner";
 import { ListMetric } from "@/components/shared/list-metric";
 import { FilterChips, type ListFilterChip } from "@/components/shared/filter-chips";
 import {
@@ -14,6 +13,7 @@ import {
   FilterGroup,
   SelectFilter,
   DatePresetFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,8 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
-import { getPurchaseReturns, getPurchaseReturnStatuses, getPurchaseReturnItems } from "@/lib/services";
+import { getSupplierReturnListWorkspace, getSupplierReturnsForExport, getPurchaseReturnStatuses, getPurchaseReturnItems } from "@/lib/services";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import type { PurchaseReturn } from "@/lib/types";
 import { CreatePurchaseReturnDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
@@ -176,13 +177,14 @@ const columns: ColumnDef<PurchaseReturn, unknown>[] = [
 
 export default function TraHangNhapPage() {
   const { toast } = useToast();
-  const { activeBranchId, currentBranch } = useBranchFilter();
-  const { hasAny, isLoading: permissionsLoading } = usePermissions();
+  const { activeBranchId, isReady: branchReady } = useBranchFilter();
+  const { isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("purchase_return");
   const [data, setData] = useState<PurchaseReturn[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(20);
   const [createOpen, setCreateOpen] = useState(false);
@@ -195,20 +197,13 @@ export default function TraHangNhapPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
-  const [viewAllBranches, setViewAllBranches] = useState(false);
-  const [otherBranchCount, setOtherBranchCount] = useState(0);
-  const duocXemToanChuoi = hasAny(["reports.view_all_branches", "system.manage_branches"]);
-  // Đổi chi nhánh ở global switcher → về lại chế độ lọc theo chi nhánh.
-  useEffect(() => {
-    setViewAllBranches(false);
-  }, [activeBranchId]);
-  useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
+  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, totalValue: 0 });
 
   const fetchData = useCallback(async () => {
-    if (permissionsLoading) return;
-    if (!activeBranchId && !duocXemToanChuoi) { setData([]); setTotal(0); setOtherBranchCount(0); setLoading(false); return; }
+    if (!branchReady || permissionsLoading) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -219,36 +214,13 @@ export default function TraHangNhapPage() {
     // Lọc chung (không kèm chi nhánh) — dùng lại cho cả lời gọi chính lẫn probe
     // "đếm phiếu ở chi nhánh khác". Service này nhận chi nhánh qua filters.branchId,
     // falsy/"all" → tất cả chi nhánh.
-    const commonFilters = {
-      ...(statusFilter !== "all" && { status: statusFilter }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-    };
-    const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getPurchaseReturns({
-      page,
-      pageSize,
-      search,
-      filters: {
-        ...commonFilters,
-        ...(branchScope && { branchId: branchScope }),
-      },
-    });
+    const result = await getSupplierReturnListWorkspace({ page, pageSize, search, searchField,
+      status: statusFilter, dateFrom: effectiveDateFrom, dateTo: effectiveDateTo,
+      amountMin: amountMin ? Number(amountMin) : undefined,
+      amountMax: amountMax ? Number(amountMax) : undefined, branchId: activeBranchId });
     setData(result.data);
     setTotal(result.total);
-    // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
-    // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
-    if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getPurchaseReturns({
-        page: 0,
-        pageSize: 1,
-        search,
-        filters: commonFilters,
-      });
-      setOtherBranchCount(all.total);
-    } else {
-      setOtherBranchCount(0);
-    }
+    setSummary(result.summary);
     } catch (e) {
       toast({
         variant: "error",
@@ -258,7 +230,7 @@ export default function TraHangNhapPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [activeBranchId, amountMax, amountMin, branchReady, dateFrom, datePreset, dateTo, page, pageSize, permissionsLoading, search, searchField, statusFilter, toast]);
 
   useEffect(() => {
     fetchData();
@@ -267,43 +239,70 @@ export default function TraHangNhapPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, statusFilter, activeBranchId, datePreset, dateFrom, dateTo]);
-
-  const pageCompleted = data.filter((row) => row.status === "completed").length;
-  const pageDraft = data.filter((row) => row.status === "draft").length;
-  const pageValue = data.reduce((sum, row) => sum + (row.totalAmount ?? 0), 0);
+  }, [search, searchField, statusFilter, activeBranchId, datePreset, dateFrom, dateTo, amountMin, amountMax]);
   const datePresetLabel = useMemo(() => {
     if (datePreset === "all") return "Tất cả thời gian";
     if (datePreset === "custom") return !dateFrom && !dateTo ? "Tùy chỉnh" : `${dateFrom || "..."} đến ${dateTo || "..."}`;
     return STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
   }, [dateFrom, datePreset, dateTo]);
-  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); }, []);
+  const clearListFilters = useCallback(() => { setStatusFilter("all"); setDatePreset("all"); setDateFrom(""); setDateTo(""); setAmountMin(""); setAmountMax(""); }, []);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
     if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (statusFilter !== "all") chips.push({ key: "status", label: "Trạng thái", value: statusOptions.find((item) => item.value === statusFilter)?.label ?? statusFilter, onClear: () => setStatusFilter("all") });
+    if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} - ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
-  }, [datePreset, datePresetLabel, statusFilter]);
+  }, [amountMax, amountMin, datePreset, datePresetLabel, statusFilter]);
 
   return (
     <ListPageLayout sidebar={null}>
       <PageHeader
         title="Trả hàng nhập"
         density="compact"
-        searchPlaceholder="Theo mã phiếu"
+        searchPlaceholder="Theo mã phiếu, mã nhập, NCC, ghi chú"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={[
+          { value: "all", label: "Tất cả" }, { value: "code", label: "Mã phiếu trả" },
+          { value: "import_code", label: "Mã nhập hàng" }, { value: "supplier", label: "Nhà cung cấp" },
+          { value: "note", label: "Ghi chú" },
+        ]}
+        searchField={searchField}
+        onSearchFieldChange={(value) => { setSearchField(value); setPage(0); }}
+        onExport={{
+          excel: async () => {
+            const range = computeListPresetRange(datePreset);
+            const rows = await getSupplierReturnsForExport({ search, searchField, status: statusFilter,
+              dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to,
+              amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: activeBranchId });
+            exportToExcel(rows, [
+              { header: "Mã phiếu trả", key: "code", width: 16 }, { header: "Mã nhập hàng", key: "importCode", width: 16 },
+              { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "Chi nhánh", key: "branchName", width: 22 }, { header: "Mã NCC", key: "supplierCode", width: 16 },
+              { header: "Nhà cung cấp", key: "supplierName", width: 28 }, { header: "Tổng tiền trả", key: "totalAmount", width: 18 },
+              { header: "Trạng thái", key: "statusName", width: 16 }, { header: "Người tạo", key: "createdByName", width: 20 },
+              { header: "Ghi chú", key: "note", width: 30 },
+            ], "tra-hang-nhap");
+          },
+          csv: async () => {
+            const range = computeListPresetRange(datePreset);
+            const rows = await getSupplierReturnsForExport({ search, searchField, status: statusFilter,
+              dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to,
+              amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: activeBranchId });
+            exportToCsv(rows, [
+              { header: "Mã phiếu trả", key: "code", width: 16 }, { header: "Mã nhập hàng", key: "importCode", width: 16 },
+              { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+              { header: "Chi nhánh", key: "branchName", width: 22 }, { header: "Mã NCC", key: "supplierCode", width: 16 },
+              { header: "Nhà cung cấp", key: "supplierName", width: 28 }, { header: "Tổng tiền trả", key: "totalAmount", width: 18 },
+              { header: "Trạng thái", key: "statusName", width: 16 }, { header: "Người tạo", key: "createdByName", width: 20 },
+              { header: "Ghi chú", key: "note", width: 30 },
+            ], "tra-hang-nhap");
+          },
+        }}
         actions={[
           { label: "Tạo phiếu trả", icon: <Icon name="add" size={16} />, variant: "default", onClick: () => setCreateOpen(true) },
         ]}
       />
-
-      {viewAllBranches && (
-        <AllBranchesBanner
-          branchName={currentBranch?.name}
-          onBackToBranch={() => setViewAllBranches(false)}
-        />
-      )}
 
       <DataTable
         columns={columns}
@@ -312,14 +311,9 @@ export default function TraHangNhapPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="undo" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị trang này" value={formatCurrency(pageValue)} hint="Chỉ tính các dòng đang hiển thị" /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="undo" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.draftCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Tổng giá trị trả" value={formatCurrency(summary.totalValue)} hint="Toàn bộ kết quả lọc" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
-        emptyBranchHint={duocXemToanChuoi ? {
-          otherBranchCount,
-          onViewAllBranches: () => setViewAllBranches(true),
-          entityLabel: "phiếu trả hàng",
-        } : undefined}
         pageIndex={page}
         pageSize={pageSize}
         pageCount={Math.ceil(total / pageSize)}
@@ -361,6 +355,7 @@ export default function TraHangNhapPage() {
       <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc trả hàng nhập">
         <FilterGroup label="Trạng thái" activeHint={statusFilter !== "all" ? statusOptions.find((item) => item.value === statusFilter)?.label : undefined}><SelectFilter options={statusOptions} value={statusFilter} onChange={setStatusFilter} placeholder="Tất cả" /></FilterGroup>
         <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
+        <FilterGroup label="Giá trị phiếu" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Số tiền tối thiểu" toPlaceholder="Số tiền tối đa" /></FilterGroup>
       </FilterPanel>
 
       <CreatePurchaseReturnDialog
