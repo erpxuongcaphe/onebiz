@@ -2148,6 +2148,7 @@
   "get_platform_commission_report",
   "get_platform_commission_report_unsecured_legacy",
   "get_pos_invoice_integrity_report",
+  "get_product_lot_list_workspace",
   "get_production_order_list_workspace",
   "get_products_with_branch_stock",
   "get_profit_and_loss_report",
@@ -2349,5 +2350,5 @@
  ],
  "soBang": 137,
  "soCot": 1737,
- "soRpc": 333
+ "soRpc": 334
 }
