@@ -192,6 +192,8 @@ export interface InventoryCheck {
   note?: string;
   createdBy: string;
   createdByName?: string;
+  branchId?: string;
+  branchName?: string;
 }
 
 // Lệnh sản xuất
@@ -235,11 +237,13 @@ export interface InternalExport {
   date: string;
   totalProducts: number;
   totalAmount: number;
-  status: "completed" | "draft";
+  status: "completed" | "draft" | "cancelled";
   statusName: string;
   note?: string;
   createdBy: string;
   createdByName?: string;
   /** Chi nhánh của phiếu — resolve mẫu in theo chi nhánh (CEO 05/07). */
   branchId?: string;
+  branchName?: string;
+  department?: string;
 }

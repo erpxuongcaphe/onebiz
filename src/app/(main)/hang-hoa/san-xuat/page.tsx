@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -14,7 +14,12 @@ import {
   FilterPanel,
   FilterGroup,
   CheckboxFilter,
+  DatePresetFilter,
+  PersonFilter,
+  RangeFilter,
+  type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
+import { computeListPresetRange, STANDARD_LIST_PRESETS_WITH_ALL } from "@/lib/utils/list-date-preset-range";
 import {
   InlineDetailPanel,
   DetailTabs,
@@ -36,9 +41,12 @@ import { useToast, useBranchFilter } from "@/lib/contexts";
 import { usePermissions } from "@/lib/permissions/use-permission";
 import { printDocumentWithTemplate } from "@/lib/print-apply-template";
 import { buildProductionOrderPrintData } from "@/lib/print-templates";
-import { formatCurrency, formatDate, formatNumber, formatDateInputValue } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import {
-  getProductionOrders,
+  getProductionOrderListWorkspace,
+  getProductionOrdersForExport,
+  getProfilesForPersonFilter,
   getProductionOrderById,
   updateProductionStatus,
   cancelProductionOrder,
@@ -48,6 +56,16 @@ import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 type ViewMode = "list" | "kanban";
+
+const SEARCH_FIELDS = [
+  { value: "all", label: "Tất cả" },
+  { value: "code", label: "Mã lệnh" },
+  { value: "product_code", label: "Mã thành phẩm" },
+  { value: "product_name", label: "Tên thành phẩm" },
+  { value: "lot_number", label: "Số lô" },
+  { value: "creator", label: "Người tạo" },
+  { value: "note", label: "Ghi chú" },
+];
 
 const STATUS_META: Record<
   ProductionOrderStatus,
@@ -236,6 +254,7 @@ export default function SanXuatPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
@@ -247,6 +266,14 @@ export default function SanXuatPage() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [creatorFilter, setCreatorFilter] = useState("");
+  const [qtyMin, setQtyMin] = useState("");
+  const [qtyMax, setQtyMax] = useState("");
+  const [creatorOptions, setCreatorOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [summary, setSummary] = useState({ inProgressCount: 0, completedTodayCount: 0, cancelledCount: 0, totalCogs: 0 });
   // Sprint UX-1 Stage 4: Audit log shortcut
   const [auditDialogTarget, setAuditDialogTarget] = useState<ProductionOrder | null>(null);
 
@@ -267,6 +294,7 @@ export default function SanXuatPage() {
     setViewAllBranches(false);
   }, [activeBranchId]);
   useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
+  useEffect(() => { getProfilesForPersonFilter().then(setCreatorOptions).catch(() => setCreatorOptions([])); }, []);
 
   const fetchData = useCallback(async () => {
     if (permissionsLoading) return;
@@ -277,29 +305,19 @@ export default function SanXuatPage() {
       // (Xưởng rang → coffee orders, Kho tổng → yaourt/siro orders).
       // viewAllBranches (cục bộ) → bỏ lọc chi nhánh, xem tất cả.
       const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId || undefined;
-      const result = await getProductionOrders({
-        limit: 200,
-        branchId: branchScope,
-      });
-      setData(result.data);
+      const range = datePreset === "custom" ? { from: dateFrom || undefined, to: dateTo || undefined } : computeListPresetRange(datePreset);
+      const query = { search, searchField, statuses: statusFilters, dateFrom: range.from, dateTo: range.to, createdBy: creatorFilter || undefined, qtyMin: qtyMin ? Number(qtyMin) : undefined, qtyMax: qtyMax ? Number(qtyMax) : undefined, branchId: branchScope };
+      const result = await getProductionOrderListWorkspace({ page, pageSize, ...query });
+      const visibleRows = viewMode === "kanban" ? await getProductionOrdersForExport(query) : result.data;
+      setData(visibleRows);
       setTotal(result.total);
+      setSummary(result.summary);
       // Danh sách lọc client-side (search + trạng thái). Nếu SAU khi lọc mà rỗng
       // vì đang bó theo 1 chi nhánh → đếm lệnh khớp bộ lọc ở các chi nhánh khác.
       if (duocXemToanChuoi && !viewAllBranches && activeBranchId) {
-        const q = search.trim().toLowerCase();
-        const matchesLocalFilters = (o: ProductionOrder) => {
-          if (statusFilters.length > 0 && !statusFilters.includes(o.status)) return false;
-          if (!q) return true;
-          return (
-            (o.code?.toLowerCase().includes(q) ?? false) ||
-            (o.productName?.toLowerCase().includes(q) ?? false) ||
-            (o.productCode?.toLowerCase().includes(q) ?? false)
-          );
-        };
-        const visibleCount = result.data.filter(matchesLocalFilters).length;
-        if (visibleCount === 0) {
-          const all = await getProductionOrders({ limit: 200, branchId: undefined });
-          setOtherBranchCount(all.data.filter(matchesLocalFilters).length);
+        if (result.total === 0) {
+          const all = await getProductionOrderListWorkspace({ page: 0, pageSize: 1, ...query, branchId: undefined });
+          setOtherBranchCount(all.total);
         } else {
           setOtherBranchCount(0);
         }
@@ -315,40 +333,25 @@ export default function SanXuatPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast, activeBranchId, viewAllBranches, search, statusFilters, duocXemToanChuoi, permissionsLoading]);
+  }, [toast, activeBranchId, viewAllBranches, search, searchField, statusFilters, datePreset, dateFrom, dateTo, creatorFilter, qtyMin, qtyMax, page, pageSize, viewMode, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const filtered = data.filter((o) => {
-    if (statusFilters.length > 0 && !statusFilters.includes(o.status)) return false;
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (
-      o.code?.toLowerCase().includes(q) ||
-      o.productName?.toLowerCase().includes(q) ||
-      o.productCode?.toLowerCase().includes(q)
-    );
-  });
+  useEffect(() => { setPage(0); setExpandedRow(null); }, [search, searchField, statusFilters, datePreset, dateFrom, dateTo, creatorFilter, qtyMin, qtyMax]);
 
-  const pagedData = filtered.slice(page * pageSize, (page + 1) * pageSize);
-
-  // KPI stats — tính từ toàn bộ data (chưa filter) để luôn đồng nhất
-  const statsToday = formatDateInputValue(new Date());
-  const kpi = {
-    total: data.length,
-    inProgress: data.filter(
-      (o) => o.status === "in_production" || o.status === "quality_check",
-    ).length,
-    completedToday: data.filter(
-      (o) => o.status === "completed" && (o.actualEnd ?? "").startsWith(statsToday),
-    ).length,
-    totalCogs: data.reduce((sum, o) => sum + (o.cogsAmount ?? 0), 0),
-  };
+  const filtered = data;
+  const pagedData = data;
   const allStatuses = Object.keys(STATUS_META);
-  const filterChips: ListFilterChip[] =
-    statusFilters.length === allStatuses.length
+  const datePresetLabel = datePreset === "custom"
+    ? `${dateFrom || "..."} đến ${dateTo || "..."}`
+    : STANDARD_LIST_PRESETS_WITH_ALL.find((item) => item.value === datePreset)?.label ?? "Thời gian";
+  const filterChips: ListFilterChip[] = [
+    ...(datePreset !== "all" ? [{ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } }] : []),
+    ...(creatorFilter ? [{ key: "creator", label: "Người tạo", value: creatorOptions.find((item) => item.value === creatorFilter)?.label ?? "Đã chọn", onClear: () => setCreatorFilter("") }] : []),
+    ...(qtyMin || qtyMax ? [{ key: "quantity", label: "SL kế hoạch", value: `${qtyMin || "0"} đến ${qtyMax || "không giới hạn"}`, onClear: () => { setQtyMin(""); setQtyMax(""); } }] : []),
+    ...(statusFilters.length === allStatuses.length
       ? []
       : [
           {
@@ -360,7 +363,32 @@ export default function SanXuatPage() {
                 : statusFilters.map((status) => STATUS_META[status as ProductionOrderStatus]?.label ?? status).join(", "),
             onClear: () => setStatusFilters(allStatuses),
           },
-        ];
+        ]),
+  ];
+
+  const clearListFilters = () => { setStatusFilters(allStatuses); setDatePreset("all"); setDateFrom(""); setDateTo(""); setCreatorFilter(""); setQtyMin(""); setQtyMax(""); };
+
+  const handleExport = async (type: "excel" | "csv") => {
+    const range = datePreset === "custom" ? { from: dateFrom || undefined, to: dateTo || undefined } : computeListPresetRange(datePreset);
+    const rows = await getProductionOrdersForExport({
+      search, searchField, statuses: statusFilters, dateFrom: range.from, dateTo: range.to, createdBy: creatorFilter || undefined, qtyMin: qtyMin ? Number(qtyMin) : undefined, qtyMax: qtyMax ? Number(qtyMax) : undefined,
+      branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId || undefined,
+    });
+    const exportColumns = [
+      { header: "Mã lệnh", key: "code", width: 16 },
+      { header: "Chi nhánh", key: "branchName", width: 24 },
+      { header: "Mã thành phẩm", key: "productCode", width: 18 },
+      { header: "Tên thành phẩm", key: "productName", width: 28 },
+      { header: "Số lô", key: "lotNumber", width: 18 },
+      { header: "SL kế hoạch", key: "plannedQty", width: 14 },
+      { header: "SL thực tế", key: "actualQty", width: 14 },
+      { header: "Giá vốn", key: "cogsAmount", width: 16 },
+      { header: "Trạng thái", key: "status", width: 18, format: (value: ProductionOrderStatus) => STATUS_META[value]?.label ?? value },
+      { header: "Ngày tạo", key: "createdAt", width: 18, format: (value: string) => formatDate(value) },
+      { header: "Ghi chú", key: "notes", width: 28 },
+    ];
+    if (type === "excel") exportToExcel(rows, exportColumns, "lenh-san-xuat"); else exportToCsv(rows, exportColumns, "lenh-san-xuat");
+  };
 
   // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
   const kanbanColumns: KanbanColumn<ProductionOrder>[] = (
@@ -467,6 +495,10 @@ export default function SanXuatPage() {
           searchPlaceholder="Theo mã phiếu, sản phẩm..."
           searchValue={search}
           onSearchChange={setSearch}
+          searchFields={SEARCH_FIELDS}
+          searchField={searchField}
+          onSearchFieldChange={setSearchField}
+          onExport={{ excel: () => handleExport("excel"), csv: () => handleExport("csv") }}
           density="compact"
           actions={[
             {
@@ -493,10 +525,10 @@ export default function SanXuatPage() {
         <ListStrip
           metrics={
             <>
-              <ListMetric label="Tổng lệnh SX" value={formatNumber(kpi.total)} icon={<Icon name="factory" size={15} />} />
-              <ListMetric label="Đang sản xuất" value={formatNumber(kpi.inProgress)} tone={kpi.inProgress > 0 ? "primary" : "default"} icon={<Icon name="precision_manufacturing" size={15} />} />
-              <ListMetric label="Hoàn thành hôm nay" value={formatNumber(kpi.completedToday)} icon={<Icon name="check_circle" size={15} />} />
-              <ListMetric label="Tổng giá vốn SX" value={formatCurrency(kpi.totalCogs)} icon={<Icon name="payments" size={15} />} />
+              <ListMetric label="Tổng lệnh SX" value={formatNumber(total)} hint="Toàn bộ kết quả lọc" icon={<Icon name="factory" size={15} />} />
+              <ListMetric label="Đang sản xuất" value={formatNumber(summary.inProgressCount)} tone={summary.inProgressCount > 0 ? "primary" : "default"} icon={<Icon name="precision_manufacturing" size={15} />} />
+              <ListMetric label="Hoàn thành hôm nay" value={formatNumber(summary.completedTodayCount)} hint={`${summary.cancelledCount} lệnh đã hủy`} icon={<Icon name="check_circle" size={15} />} />
+              <ListMetric label="Tổng giá vốn SX" value={formatCurrency(summary.totalCogs)} hint="Toàn bộ kết quả lọc" icon={<Icon name="payments" size={15} />} />
             </>
           }
           tools={
@@ -518,7 +550,7 @@ export default function SanXuatPage() {
           }
         />
         {filterChips.length > 0 && (
-          <FilterChips filters={filterChips} onClearAll={() => setStatusFilters(allStatuses)} />
+          <FilterChips filters={filterChips} onClearAll={clearListFilters} />
         )}
 
         {viewAllBranches && (
@@ -583,7 +615,7 @@ export default function SanXuatPage() {
             data={pagedData}
             loading={loading}
             density="compact"
-            total={filtered.length}
+            total={total}
             emptyBranchHint={duocXemToanChuoi ? {
               otherBranchCount,
               onViewAllBranches: () => setViewAllBranches(true),
@@ -591,7 +623,7 @@ export default function SanXuatPage() {
             } : undefined}
             pageIndex={page}
             pageSize={pageSize}
-            pageCount={Math.ceil(filtered.length / pageSize)}
+            pageCount={Math.ceil(total / pageSize)}
             onPageChange={setPage}
             onPageSizeChange={(size) => {
               setPageSize(size);
@@ -664,7 +696,7 @@ export default function SanXuatPage() {
           open={filterOpen}
           onOpenChange={setFilterOpen}
           activeCount={filterChips.length}
-          onClearAll={() => setStatusFilters(allStatuses)}
+          onClearAll={clearListFilters}
           title="Bộ lọc lệnh sản xuất"
         >
           <FilterGroup label="Trạng thái">
@@ -677,6 +709,11 @@ export default function SanXuatPage() {
               onChange={setStatusFilters}
             />
           </FilterGroup>
+          <FilterGroup label="Ngày tạo">
+            <DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} />
+          </FilterGroup>
+          <FilterGroup label="Người tạo" activeHint={creatorOptions.find((item) => item.value === creatorFilter)?.label}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={creatorOptions} /></FilterGroup>
+          <FilterGroup label="Số lượng kế hoạch" activeHint={qtyMin || qtyMax ? "Đang lọc" : undefined}><RangeFilter fromValue={qtyMin} toValue={qtyMax} onFromChange={setQtyMin} onToChange={setQtyMax} fromPlaceholder="Tối thiểu" toPlaceholder="Tối đa" /></FilterGroup>
         </FilterPanel>
       </ListPageLayout>
 

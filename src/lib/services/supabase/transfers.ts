@@ -24,7 +24,7 @@ import {
   handleError,
 } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { applyCreatedAtRangeFilter, normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -275,18 +275,42 @@ export async function getStockTransfers(
   return { data: transfers, total: count ?? 0 };
 }
 
+function mapStockTransferWorkspace(row:any):StockTransfer{return{id:row.id,code:row.code,fromBranchId:row.from_branch_id,fromBranchCode:row.from_branch?.code??"",fromBranchName:row.from_branch?.name??"—",toBranchId:row.to_branch_id,toBranchCode:row.to_branch?.code??"",toBranchName:row.to_branch?.name??"—",status:row.status,totalItems:Number(row.total_items??0),note:row.note??"",createdBy:row.created_by??"",createdByName:row.creator?.full_name??"",createdAt:row.created_at,updatedAt:row.updated_at,completedAt:row.completed_at??null};}
+export interface StockTransferListWorkspaceParams {page:number;pageSize:number;search?:string;searchField?:string;statuses?:string[];dateFrom?:string;dateTo?:string;fromBranchId?:string;toBranchId?:string;createdBy?:string;itemCountMin?:number;itemCountMax?:number;branchId?:string}
+export interface StockTransferListWorkspaceResult extends QueryResult<StockTransfer>{summary:{inTransitCount:number;completedCount:number;cancelledCount:number;totalItems:number}}
+export async function getStockTransferListWorkspace(params:StockTransferListWorkspaceParams):Promise<StockTransferListWorkspaceResult>{
+ const supabase=getClient();const{from,toExclusive}=normalizeCreatedAtRange({dateFrom:params.dateFrom,dateTo:params.dateTo});
+ const{data,error}=await(supabase.rpc as any)("get_stock_transfer_list_workspace",{p_page:params.page,p_page_size:params.pageSize,p_search:params.search?.trim()||null,p_search_field:params.searchField??"all",p_statuses:params.statuses?.length?params.statuses:null,p_date_from:from??null,p_date_to_exclusive:toExclusive??null,p_from_branch_id:params.fromBranchId||null,p_to_branch_id:params.toBranchId||null,p_created_by:params.createdBy||null,p_item_count_min:Number.isFinite(params.itemCountMin)?params.itemCountMin:null,p_item_count_max:Number.isFinite(params.itemCountMax)?params.itemCountMax:null,p_branch_id:params.branchId??null});
+ if(error)handleError(error,"getStockTransferListWorkspace");const payload=(data??{})as Record<string,any>;const summary=(payload.summary??{})as Record<string,unknown>;
+ return{data:Array.isArray(payload.items)?payload.items.map(mapStockTransferWorkspace):[],total:Number(payload.total??0),summary:{inTransitCount:Number(summary.inTransitCount??0),completedCount:Number(summary.completedCount??0),cancelledCount:Number(summary.cancelledCount??0),totalItems:Number(summary.totalItems??0)}};
+}
+
 export async function getStockTransfersForExport(
   params: Omit<QueryParams, "page" | "pageSize">,
 ): Promise<StockTransferExportRow[]> {
   const supabase = getClient();
   const headers: StockTransfer[] = [];
-  const batchSize = 500;
+  const batchSize = 200;
 
   for (let page = 0; ; page += 1) {
-    const result = await getStockTransfers({
-      ...params,
+    const result = await getStockTransferListWorkspace({
       page,
       pageSize: batchSize,
+      search: params.search,
+      searchField: params.searchField,
+      statuses: Array.isArray(params.filters?.status)
+        ? params.filters.status
+        : params.filters?.status && params.filters.status !== "all"
+          ? [String(params.filters.status)]
+          : undefined,
+      dateFrom: String(params.filters?.dateFrom ?? "") || undefined,
+      dateTo: String(params.filters?.dateTo ?? "") || undefined,
+      fromBranchId: String(params.filters?.fromBranchId ?? "") || undefined,
+      toBranchId: String(params.filters?.toBranchId ?? "") || undefined,
+      createdBy: String(params.filters?.createdBy ?? "") || undefined,
+      itemCountMin: Number(params.filters?.itemCountMin),
+      itemCountMax: Number(params.filters?.itemCountMax),
+      branchId: params.branchId,
     });
     headers.push(...result.data);
     if (headers.length >= result.total || result.data.length < batchSize) break;

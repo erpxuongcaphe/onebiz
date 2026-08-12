@@ -28,7 +28,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInventoryChecks, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems } from "@/lib/services";
+import { getInventoryCheckListWorkspace, getInventoryChecksForExport, getInventoryCheckStatuses, applyInventoryCheck, cancelInventoryCheck, getInventoryCheckItems, getProfilesForPersonFilter } from "@/lib/services";
 import type { InventoryCheckItemRow } from "@/lib/services";
 import type { InventoryCheck } from "@/lib/types";
 import { CreateInventoryCheckDialog, ConfirmDialog } from "@/components/shared/dialogs";
@@ -52,6 +52,13 @@ const statusMap: Record<
   balanced: { label: "Đã cân bằng kho", variant: "default" },
   unbalanced: { label: "Đã hủy", variant: "destructive" },
 };
+const SEARCH_FIELDS = [
+  { value: "all", label: "Tất cả" },
+  { value: "code", label: "Mã phiếu" },
+  { value: "product", label: "Mã, tên hàng" },
+  { value: "creator", label: "Người tạo" },
+  { value: "note", label: "Ghi chú" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Starred set                                                        */
@@ -428,6 +435,9 @@ export default function KiemKhoPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  const [searchField, setSearchField] = useState("all");
+  const [creatorOptions, setCreatorOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [summary, setSummary] = useState({ processingCount: 0, balancedCount: 0, cancelledCount: 0, netVariance: 0 });
   const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -440,6 +450,7 @@ export default function KiemKhoPage() {
   useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
 
   const statuses = getInventoryCheckStatuses();
+  useEffect(() => { getProfilesForPersonFilter().then(setCreatorOptions).catch(() => setCreatorOptions([])); }, []);
 
   /* ---- Columns ---- */
   const columns: ColumnDef<InventoryCheck, unknown>[] = [
@@ -469,6 +480,12 @@ export default function KiemKhoPage() {
       header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 170,
+      cell: ({ row }) => row.original.branchName ?? "—",
     },
     {
       id: "balanceDate",
@@ -536,32 +553,16 @@ export default function KiemKhoPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const commonFilters = {
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-      ...(creatorFilter && { createdBy: creatorFilter }),
-    };
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getInventoryChecks({
-      page,
-      pageSize,
-      search,
-      branchId: branchScope,
-      filters: commonFilters,
-    });
+    const query = { search, searchField, statuses: selectedStatuses, dateFrom: effectiveDateFrom, dateTo: effectiveDateTo, createdBy: creatorFilter, branchId: branchScope };
+    const result = await getInventoryCheckListWorkspace({ page, pageSize, ...query });
     setData(result.data);
     setTotal(result.total);
+    setSummary(result.summary);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
     if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getInventoryChecks({
-        page: 0,
-        pageSize: 1,
-        search,
-        branchId: undefined,
-        filters: commonFilters,
-      });
+      const all = await getInventoryCheckListWorkspace({ page: 0, pageSize: 1, ...query, branchId: undefined });
       setOtherBranchCount(all.total);
     } else {
       setOtherBranchCount(0);
@@ -575,7 +576,7 @@ export default function KiemKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [page, pageSize, search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -584,22 +585,26 @@ export default function KiemKhoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter]);
+  }, [search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter]);
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
+  const handleExport = async (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã kiểm kho", key: "code", width: 15 },
       { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Chi nhánh", key: "branchName", width: 24 },
+      { header: "Người tạo", key: "createdByName", width: 22 },
       { header: "Trạng thái", key: "status", width: 15, format: (v: InventoryCheck["status"]) => statusMap[v]?.label ?? v },
       { header: "Tổng SP", key: "totalProducts", width: 10 },
       { header: "SL lệch tăng", key: "increaseQty", width: 12 },
       { header: "SL lệch giảm", key: "decreaseQty", width: 12 },
       { header: "GT tăng", key: "increaseAmount", width: 15, format: (v: number) => v },
       { header: "GT giảm", key: "decreaseAmount", width: 15, format: (v: number) => v },
+      { header: "Ghi chú", key: "note", width: 30 },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "phieu-kiem-kho");
-    else exportToCsv(data, exportColumns, "phieu-kiem-kho");
+    const range = computeListPresetRange(datePreset);
+    const rows = await getInventoryChecksForExport({ search, searchField, statuses: selectedStatuses, dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to, createdBy: creatorFilter, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
+    if (type === "excel") exportToExcel(rows, exportColumns, "phieu-kiem-kho"); else exportToCsv(rows, exportColumns, "phieu-kiem-kho");
   };
 
   /* ---- Apply inventory check (G7) ---- */
@@ -673,6 +678,9 @@ export default function KiemKhoPage() {
         searchPlaceholder="Theo mã phiếu kiểm kho"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={SEARCH_FIELDS}
+        searchField={searchField}
+        onSearchFieldChange={setSearchField}
         onExport={{
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
@@ -701,7 +709,7 @@ export default function KiemKhoPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={kpi.total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Phiếu tạm trang này" value={kpi.processing.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={kpi.processing > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Cân bằng trang này" value={kpi.balanced.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name={kpi.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch trang này" value={formatCurrency(kpi.netVariance)} hint="Chỉ tính các dòng đang hiển thị" tone={kpi.netVariance < 0 ? "danger" : "default"} /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="pending_actions" size={15} />} label="Đang xử lý" value={summary.processingCount.toString()} hint="Toàn bộ kết quả lọc" tone={summary.processingCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Đã cân bằng" value={summary.balancedCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} /><ListMetric icon={<Icon name={summary.netVariance >= 0 ? "trending_up" : "trending_down"} size={15} />} label="Chênh lệch ròng" value={formatCurrency(summary.netVariance)} hint="Toàn bộ kết quả lọc" tone={summary.netVariance < 0 ? "danger" : "default"} /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyBranchHint={duocXemToanChuoi ? {
@@ -901,7 +909,7 @@ export default function KiemKhoPage() {
       <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc kiểm kho">
         <FilterGroup label="Ngày tạo" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS_WITH_ALL} /></FilterGroup>
         <FilterGroup label="Trạng thái" activeHint={selectedStatuses.length ? `${selectedStatuses.length} lựa chọn` : undefined}><CheckboxFilter options={statuses} selected={selectedStatuses} onChange={setSelectedStatuses} /></FilterGroup>
-        <FilterGroup label="Người tạo" activeHint={creatorFilter || undefined}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} /></FilterGroup>
+        <FilterGroup label="Người tạo" activeHint={creatorOptions.find((item) => item.value === creatorFilter)?.label}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={creatorOptions} /></FilterGroup>
       </FilterPanel>
     </ListPageLayout>
 

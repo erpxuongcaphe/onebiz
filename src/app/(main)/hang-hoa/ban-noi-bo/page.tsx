@@ -38,9 +38,9 @@ import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/form
 import {
   phamViBanNoiBo,
   getInternalSalesTheoPhamVi,
-  demBanNoiBoChiNhanhKhac,
   getInternalSaleById,
   getInternalSalesForExport,
+  getInternalSaleListWorkspace,
   cancelInternalSale,
   getBranches,
   getProfilesForPersonFilter,
@@ -337,6 +337,7 @@ export default function InternalSalePage() {
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const requestSequence = useRef(0);
+  const [summary, setSummary] = useState({ completedCount: 0, cancelledCount: 0, totalValue: 0, completedValue: 0, taxValue: 0 });
 
   const duocXemToanChuoi = hasAny([
     "reports.view_all_branches",
@@ -419,25 +420,35 @@ export default function InternalSalePage() {
     const requestId = ++requestSequence.current;
     setLoading(true);
     try {
-      const result = await getInternalSalesTheoPhamVi(phamVi, {
-        page: page + 1,
-        pageSize,
-        search: debouncedSearch || undefined,
-        searchField,
-        filters: commonFilters,
+      const result = phamVi.mode === "none" ? { data: [], total: 0, summary: { completedCount: 0, cancelledCount: 0, totalValue: 0, completedValue: 0, taxValue: 0 } } : await getInternalSaleListWorkspace({
+        page, pageSize, search: debouncedSearch || undefined, searchField, statuses: statusFilter,
+        dateFrom: dateRange.from, dateTo: dateRange.to,
+        fromBranchId: fromBranchId !== "all" ? fromBranchId : undefined,
+        toBranchId: toBranchId !== "all" ? toBranchId : undefined, createdBy: createdBy || undefined,
+        amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined,
+        branchId: phamVi.mode === "branch" ? phamVi.branchId : undefined,
       });
       if (requestId !== requestSequence.current) return;
       setData(result.data as InternalSaleRow[]);
       setTotal(result.total);
+      setSummary(result.summary);
 
-      const count =
-        result.data.length === 0
-          ? await demBanNoiBoChiNhanhKhac(phamVi, {
-              search: debouncedSearch || undefined,
-              searchField,
-              filters: commonFilters,
-            })
-          : 0;
+      const count = result.data.length === 0 && phamVi.mode === "branch" && duocXemToanChuoi
+        ? Math.max(0, (await getInternalSaleListWorkspace({
+            page: 0,
+            pageSize: 1,
+            search: debouncedSearch || undefined,
+            searchField,
+            statuses: statusFilter,
+            dateFrom: dateRange.from,
+            dateTo: dateRange.to,
+            fromBranchId: fromBranchId !== "all" ? fromBranchId : undefined,
+            toBranchId: toBranchId !== "all" ? toBranchId : undefined,
+            createdBy: createdBy || undefined,
+            amountMin: amountMin ? Number(amountMin) : undefined,
+            amountMax: amountMax ? Number(amountMax) : undefined,
+          })).total - result.total)
+        : 0;
       if (requestId === requestSequence.current) setOtherBranchCount(count);
     } catch (error) {
       if (requestId !== requestSequence.current) return;
@@ -792,22 +803,22 @@ export default function InternalSalePage() {
               />
               <ListMetric
                 icon={<Icon name="receipt_long" size={15} />}
-                label="Giá trị trang này"
-                value={formatCurrency(pageTotalAmount)}
-                hint={`Tổng của ${data.length} dòng đang hiển thị`}
+                label="Tổng giá trị"
+                value={formatCurrency(summary.totalValue)}
+                hint="Toàn bộ kết quả lọc"
                 tone="primary"
               />
               <ListMetric
                 icon={<Icon name="task_alt" size={15} />}
-                label="Hoàn thành trang này"
-                value={`${formatNumber(pageCompletedCount)} · ${formatCurrency(pageCompletedAmount)}`}
-                hint="Chỉ tính các dòng hoàn thành trên trang hiện tại"
+                label="Hoàn thành"
+                value={`${formatNumber(summary.completedCount)} · ${formatCurrency(summary.completedValue)}`}
+                hint={`${summary.cancelledCount} phiếu đã hủy`}
               />
               <ListMetric
                 icon={<Icon name="percent" size={15} />}
-                label="VAT trang này"
-                value={formatCurrency(pageTaxAmount)}
-                hint={`Tổng VAT của ${data.length} dòng đang hiển thị`}
+                label="Tổng VAT"
+                value={formatCurrency(summary.taxValue)}
+                hint="Toàn bộ kết quả lọc"
               />
             </>
           }

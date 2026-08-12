@@ -15,6 +15,7 @@ import {
   CheckboxFilter,
   DatePresetFilter,
   PersonFilter,
+  RangeFilter,
   type DatePresetValue,
 } from "@/components/shared/filter-sidebar";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ import {
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
-import { getInternalExports, getInternalExportStatuses, cancelInternalExport } from "@/lib/services";
+import { getInternalExportListWorkspace, getInternalExportsForExport, getInternalExportStatuses, cancelInternalExport, getProfilesForPersonFilter } from "@/lib/services";
 import type { InternalExport } from "@/lib/types";
 import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
@@ -50,7 +51,13 @@ const statusMap: Record<
 > = {
   draft: { label: "Phiếu tạm", variant: "secondary" },
   completed: { label: "Hoàn thành", variant: "default" },
+  cancelled: { label: "Đã hủy", variant: "secondary" },
 };
+const SEARCH_FIELDS = [
+  { value: "all", label: "Tất cả" }, { value: "code", label: "Mã phiếu" },
+  { value: "product", label: "Mã, tên hàng" }, { value: "department", label: "Bộ phận sử dụng" },
+  { value: "creator", label: "Người tạo" }, { value: "note", label: "Ghi chú" },
+];
 
 /* ------------------------------------------------------------------ */
 /*  Starred set                                                        */
@@ -186,6 +193,11 @@ export default function XuatDungNoiBoPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [creatorFilter, setCreatorFilter] = useState("");
+  const [amountMin, setAmountMin] = useState("");
+  const [amountMax, setAmountMax] = useState("");
+  const [creatorOptions, setCreatorOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [searchField, setSearchField] = useState("all");
+  const [summary, setSummary] = useState({ completedCount: 0, draftCount: 0, cancelledCount: 0, completedValue: 0 });
   const [filterOpen, setFilterOpen] = useState(false);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
@@ -198,6 +210,7 @@ export default function XuatDungNoiBoPage() {
   useEffect(() => { if (!duocXemToanChuoi) setViewAllBranches(false); }, [duocXemToanChuoi]);
 
   const statuses = getInternalExportStatuses();
+  useEffect(() => { getProfilesForPersonFilter().then(setCreatorOptions).catch(() => setCreatorOptions([])); }, []);
 
   /* ---- Columns ---- */
   const columns: ColumnDef<InternalExport, unknown>[] = [
@@ -227,6 +240,18 @@ export default function XuatDungNoiBoPage() {
       header: "Thời gian",
       size: 150,
       cell: ({ row }) => formatDate(row.original.date),
+    },
+    {
+      accessorKey: "branchName",
+      header: "Chi nhánh",
+      size: 170,
+      cell: ({ row }) => row.original.branchName ?? "—",
+    },
+    {
+      accessorKey: "department",
+      header: "Bộ phận sử dụng",
+      size: 170,
+      cell: ({ row }) => row.original.department ?? "—",
     },
     {
       accessorKey: "createdBy",
@@ -266,32 +291,16 @@ export default function XuatDungNoiBoPage() {
     const presetRange = computeListPresetRange(datePreset);
     const effectiveDateFrom = datePreset === "custom" ? dateFrom : presetRange.from;
     const effectiveDateTo = datePreset === "custom" ? dateTo : presetRange.to;
-    const commonFilters = {
-      ...(selectedStatuses.length > 0 && { status: selectedStatuses }),
-      ...(effectiveDateFrom && { dateFrom: effectiveDateFrom }),
-      ...(effectiveDateTo && { dateTo: effectiveDateTo }),
-      ...(creatorFilter && { createdBy: creatorFilter }),
-    };
     const branchScope = duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId;
-    const result = await getInternalExports({
-      page,
-      pageSize,
-      search,
-      branchId: branchScope,
-      filters: commonFilters,
-    });
+    const query = { search, searchField, statuses: selectedStatuses, dateFrom: effectiveDateFrom, dateTo: effectiveDateTo, createdBy: creatorFilter, amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: branchScope };
+    const result = await getInternalExportListWorkspace({ page, pageSize, ...query });
     setData(result.data);
     setTotal(result.total);
+    setSummary(result.summary);
     // Bảng trống vì lọc chi nhánh? Đếm phiếu ở chi nhánh khác để gợi ý (cùng bộ
     // lọc, bỏ branch). Chỉ khi đang lọc theo 1 chi nhánh cụ thể.
     if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
-      const all = await getInternalExports({
-        page: 0,
-        pageSize: 1,
-        search,
-        branchId: undefined,
-        filters: commonFilters,
-      });
+      const all = await getInternalExportListWorkspace({ page: 0, pageSize: 1, ...query, branchId: undefined });
       setOtherBranchCount(all.total);
     } else {
       setOtherBranchCount(0);
@@ -305,7 +314,7 @@ export default function XuatDungNoiBoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
+  }, [page, pageSize, search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, amountMin, amountMax, activeBranchId, viewAllBranches, toast, duocXemToanChuoi, permissionsLoading]);
 
   useEffect(() => {
     fetchData();
@@ -314,19 +323,23 @@ export default function XuatDungNoiBoPage() {
   useEffect(() => {
     setPage(0);
     setExpandedRow(null);
-  }, [search, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter]);
+  }, [search, searchField, selectedStatuses, datePreset, dateFrom, dateTo, creatorFilter, amountMin, amountMax]);
 
   /* ---- Export ---- */
-  const handleExport = (type: "excel" | "csv") => {
+  const handleExport = async (type: "excel" | "csv") => {
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
       { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
-      { header: "Người tạo", key: "createdBy", width: 15 },
+      { header: "Chi nhánh", key: "branchName", width: 24 },
+      { header: "Bộ phận sử dụng", key: "department", width: 24 },
+      { header: "Người tạo", key: "createdByName", width: 22 },
       { header: "Tổng giá trị", key: "totalAmount", width: 15, format: (v: number) => v },
       { header: "Trạng thái", key: "status", width: 15, format: (v: InternalExport["status"]) => statusMap[v]?.label ?? v },
+      { header: "Ghi chú", key: "note", width: 30 },
     ];
-    if (type === "excel") exportToExcel(data, exportColumns, "xuat-dung-noi-bo");
-    else exportToCsv(data, exportColumns, "xuat-dung-noi-bo");
+    const range = computeListPresetRange(datePreset);
+    const rows = await getInternalExportsForExport({ search, searchField, statuses: selectedStatuses, dateFrom: datePreset === "custom" ? dateFrom : range.from, dateTo: datePreset === "custom" ? dateTo : range.to, createdBy: creatorFilter, amountMin: amountMin ? Number(amountMin) : undefined, amountMax: amountMax ? Number(amountMax) : undefined, branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId });
+    if (type === "excel") exportToExcel(rows, exportColumns, "xuat-dung-noi-bo"); else exportToCsv(rows, exportColumns, "xuat-dung-noi-bo");
   };
 
   /* ---- Inline detail renderer ---- */
@@ -334,8 +347,6 @@ export default function XuatDungNoiBoPage() {
     <InternalExportDetail item={item} onClose={onClose} />
   );
 
-  const pageCompleted = data.filter((row) => row.status === "completed").length;
-  const pageDraft = data.filter((row) => row.status === "draft").length;
   const datePresetLabel = useMemo(() => {
     if (datePreset === "custom") {
       if (!dateFrom && !dateTo) return "Tùy chỉnh";
@@ -349,14 +360,17 @@ export default function XuatDungNoiBoPage() {
     setDateFrom("");
     setDateTo("");
     setCreatorFilter("");
+    setAmountMin("");
+    setAmountMax("");
   }, []);
   const filterChips = useMemo<ListFilterChip[]>(() => {
     const chips: ListFilterChip[] = [];
     if (datePreset !== "all") chips.push({ key: "date", label: "Thời gian", value: datePresetLabel, onClear: () => { setDatePreset("all"); setDateFrom(""); setDateTo(""); } });
     if (selectedStatuses.length) chips.push({ key: "status", label: "Trạng thái", value: selectedStatuses.map((value) => statusMap[value as InternalExport["status"]]?.label ?? value).join(", "), onClear: () => setSelectedStatuses([]) });
     if (creatorFilter) chips.push({ key: "creator", label: "Người tạo", value: creatorFilter, onClear: () => setCreatorFilter("") });
+    if (amountMin || amountMax) chips.push({ key: "amount", label: "Giá trị", value: `${amountMin ? formatCurrency(Number(amountMin)) : "0 ₫"} đến ${amountMax ? formatCurrency(Number(amountMax)) : "không giới hạn"}`, onClear: () => { setAmountMin(""); setAmountMax(""); } });
     return chips;
-  }, [creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
+  }, [amountMax, amountMin, creatorFilter, datePreset, datePresetLabel, selectedStatuses]);
 
   /* ---- Render ---- */
   return (
@@ -367,6 +381,9 @@ export default function XuatDungNoiBoPage() {
         searchPlaceholder="Theo mã phiếu xuất nội bộ"
         searchValue={search}
         onSearchChange={setSearch}
+        searchFields={SEARCH_FIELDS}
+        searchField={searchField}
+        onSearchFieldChange={setSearchField}
         onExport={{
           excel: () => handleExport("excel"),
           csv: () => handleExport("csv"),
@@ -395,7 +412,7 @@ export default function XuatDungNoiBoPage() {
         total={total}
         density="compact"
         columnToggle
-        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Tổng số phiếu theo bộ lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành trang này" value={pageCompleted.toString()} hint="Chỉ tính các dòng đang hiển thị" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm trang này" value={pageDraft.toString()} hint="Chỉ tính các dòng đang hiển thị" tone={pageDraft > 0 ? "danger" : "default"} /></>}
+        toolbarMetrics={<><ListMetric icon={<Icon name="inventory_2" size={15} />} label="Kết quả" value={total.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="check_circle" size={15} />} label="Hoàn thành" value={summary.completedCount.toString()} hint="Toàn bộ kết quả lọc" /><ListMetric icon={<Icon name="edit_note" size={15} />} label="Phiếu tạm" value={summary.draftCount.toString()} hint={`${summary.cancelledCount} phiếu đã hủy`} tone={summary.draftCount > 0 ? "danger" : "default"} /><ListMetric icon={<Icon name="payments" size={15} />} label="Giá trị đã xuất" value={formatCurrency(summary.completedValue)} hint="Chỉ tính phiếu hoàn thành" /></>}
         toolbarActions={<><Button type="button" variant="ghost" size="sm" className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)}><Icon name="calendar_today" size={15} /><span className="hidden sm:inline">{datePresetLabel}</span></Button><Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={() => setFilterOpen(true)} aria-label={`Mở bộ lọc${filterChips.length ? `, ${filterChips.length} điều kiện` : ""}`}><Icon name="filter_alt" size={15} /><span className="hidden sm:inline">Bộ lọc</span>{filterChips.length > 0 && <span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{filterChips.length}</span>}</Button></>}
         toolbarFooter={<FilterChips filters={filterChips} onClearAll={filterChips.length > 1 ? clearListFilters : undefined} />}
         emptyBranchHint={duocXemToanChuoi ? {
@@ -536,7 +553,8 @@ export default function XuatDungNoiBoPage() {
       <FilterPanel open={filterOpen} onOpenChange={setFilterOpen} activeCount={filterChips.length} onClearAll={clearListFilters} title="Bộ lọc xuất dùng nội bộ">
         <FilterGroup label="Trạng thái" activeHint={selectedStatuses.length ? `${selectedStatuses.length} lựa chọn` : undefined}><CheckboxFilter options={statuses} selected={selectedStatuses} onChange={setSelectedStatuses} /></FilterGroup>
         <FilterGroup label="Thời gian" activeHint={datePresetLabel}><DatePresetFilter value={datePreset} onChange={setDatePreset} from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} presets={STANDARD_LIST_PRESETS} /></FilterGroup>
-        <FilterGroup label="Người tạo" activeHint={creatorFilter || undefined}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={[{ label: "Admin", value: "admin" }, { label: "Cao Thị Huyền Trang", value: "trang" }]} /></FilterGroup>
+        <FilterGroup label="Người tạo" activeHint={creatorOptions.find((item) => item.value === creatorFilter)?.label}><PersonFilter value={creatorFilter} onChange={setCreatorFilter} placeholder="Chọn người tạo" suggestions={creatorOptions} /></FilterGroup>
+        <FilterGroup label="Tổng giá trị" activeHint={amountMin || amountMax ? "Đang lọc" : undefined}><RangeFilter fromValue={amountMin} toValue={amountMax} onFromChange={setAmountMin} onToChange={setAmountMax} fromPlaceholder="Tối thiểu" toPlaceholder="Tối đa" /></FilterGroup>
       </FilterPanel>
 
       {auditDialogTarget && (

@@ -12,7 +12,7 @@
 
 import type { InternalSaleImportRow } from "@/lib/excel/schemas";
 import { getClient, getCurrentContext, handleError } from "./base";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { applyCreatedAtRangeFilter, normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 
 // ────────────────────────────────────────────
 // Types
@@ -228,6 +228,15 @@ export async function getInternalSales(
   };
 }
 
+export interface InternalSaleListWorkspaceParams {page:number;pageSize:number;search?:string;searchField?:string;statuses?:string[];dateFrom?:string;dateTo?:string;fromBranchId?:string;toBranchId?:string;createdBy?:string;amountMin?:number;amountMax?:number;branchId?:string}
+export interface InternalSaleListWorkspaceResult {data:InternalSaleListRow[];total:number;summary:{completedCount:number;cancelledCount:number;totalValue:number;completedValue:number;taxValue:number}}
+export async function getInternalSaleListWorkspace(params:InternalSaleListWorkspaceParams):Promise<InternalSaleListWorkspaceResult>{
+ const supabase=getClient();const{from,toExclusive}=normalizeCreatedAtRange({dateFrom:params.dateFrom,dateTo:params.dateTo});
+ const{data,error}=await(supabase.rpc as any)("get_internal_sale_list_workspace",{p_page:params.page,p_page_size:params.pageSize,p_search:params.search?.trim()||null,p_search_field:params.searchField??"all",p_statuses:params.statuses?.length?params.statuses:null,p_date_from:from??null,p_date_to_exclusive:toExclusive??null,p_from_branch_id:params.fromBranchId||null,p_to_branch_id:params.toBranchId||null,p_created_by:params.createdBy||null,p_amount_min:Number.isFinite(params.amountMin)?params.amountMin:null,p_amount_max:Number.isFinite(params.amountMax)?params.amountMax:null,p_branch_id:params.branchId??null});
+ if(error)handleError(error,"getInternalSaleListWorkspace");const payload=(data??{})as Record<string,any>;const summary=(payload.summary??{})as Record<string,unknown>;
+ return{data:Array.isArray(payload.items)?payload.items.map(mapInternalSale):[],total:Number(payload.total??0),summary:{completedCount:Number(summary.completedCount??0),cancelledCount:Number(summary.cancelledCount??0),totalValue:Number(summary.totalValue??0),completedValue:Number(summary.completedValue??0),taxValue:Number(summary.taxValue??0)}};
+}
+
 export async function getInternalSaleById(id: string) {
   const supabase = getClient();
 
@@ -279,12 +288,26 @@ export async function getInternalSalesForExport(
 ): Promise<InternalSaleImportRow[]> {
   const supabase = getClient();
   const headerList: InternalSaleListRow[] = [];
-  const batchSize = 500;
-  for (let page = 1; ; page += 1) {
-    const result = await getInternalSales({
-      ...params,
+  const batchSize = 200;
+  for (let page = 0; ; page += 1) {
+    const result = await getInternalSaleListWorkspace({
       page,
       pageSize: batchSize,
+      search: params.search,
+      searchField: params.searchField,
+      statuses: Array.isArray(params.filters?.status)
+        ? params.filters.status
+        : params.filters?.status && params.filters.status !== "all"
+          ? [String(params.filters.status)]
+          : undefined,
+      dateFrom: String(params.filters?.dateFrom ?? "") || undefined,
+      dateTo: String(params.filters?.dateTo ?? "") || undefined,
+      fromBranchId: String(params.filters?.fromBranchId ?? "") || undefined,
+      toBranchId: String(params.filters?.toBranchId ?? "") || undefined,
+      createdBy: String(params.filters?.createdBy ?? "") || undefined,
+      amountMin: Number(params.filters?.amountMin),
+      amountMax: Number(params.filters?.amountMax),
+      branchId: params.branchId,
     });
     headerList.push(...result.data);
     if (headerList.length >= result.total || result.data.length < batchSize) break;
