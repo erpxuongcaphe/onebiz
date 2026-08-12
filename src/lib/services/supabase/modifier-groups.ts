@@ -20,6 +20,9 @@ export interface ModifierGroup {
   rule: ModifierRule;
   channel: ModifierChannel;
   sortOrder: number;
+  /** Giới hạn chỉ áp dụng cho nhóm chọn nhiều. 0/null giữ hành vi cũ. */
+  minSelect: number;
+  maxSelect: number | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -49,6 +52,8 @@ export interface ModifierGroupInput {
   rule: ModifierRule;
   channel?: ModifierChannel;
   sortOrder?: number;
+  minSelect?: number;
+  maxSelect?: number | null;
 }
 
 export interface ModifierOptionInput {
@@ -107,6 +112,8 @@ export async function createModifierGroup(input: ModifierGroupInput): Promise<Mo
         rule: input.rule,
         channel: input.channel ?? "fnb",
         sort_order: input.sortOrder ?? 0,
+        min_select: input.rule === "multi" ? (input.minSelect ?? 0) : 0,
+        max_select: input.rule === "multi" ? (input.maxSelect ?? null) : null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
@@ -124,6 +131,8 @@ export async function createModifierGroup(input: ModifierGroupInput): Promise<Mo
       rule: input.rule,
       channel: input.channel ?? "fnb",
       sort_order: input.sortOrder ?? 0,
+      min_select: input.rule === "multi" ? (input.minSelect ?? 0) : 0,
+      max_select: input.rule === "multi" ? (input.maxSelect ?? null) : null,
     })
     .select("*")
     .single();
@@ -142,6 +151,13 @@ export async function updateModifierGroup(
   if (input.rule !== undefined) patch.rule = input.rule;
   if (input.channel !== undefined) patch.channel = input.channel;
   if (input.sortOrder !== undefined) patch.sort_order = input.sortOrder;
+  if (input.rule !== undefined && input.rule !== "multi") {
+    patch.min_select = 0;
+    patch.max_select = null;
+  } else {
+    if (input.minSelect !== undefined) patch.min_select = input.minSelect;
+    if (input.maxSelect !== undefined) patch.max_select = input.maxSelect;
+  }
   const { data, error } = await supabase
     .from("modifier_groups")
     .update(patch)
@@ -646,6 +662,8 @@ interface RawGroup {
   rule: ModifierRule;
   channel: ModifierChannel;
   sort_order: number;
+  min_select: number;
+  max_select: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -673,6 +691,11 @@ function mapGroup(row: RawGroup): ModifierGroup {
     rule: row.rule,
     channel: row.channel,
     sortOrder: row.sort_order,
+    minSelect: Number(row.min_select ?? 0),
+    maxSelect:
+      row.max_select === null || row.max_select === undefined
+        ? null
+        : Number(row.max_select),
     isActive: row.is_active,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

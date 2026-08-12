@@ -245,6 +245,8 @@
    "created_at",
    "id",
    "is_active",
+   "max_select",
+   "min_select",
    "name",
    "rule",
    "sort_order",
@@ -2349,6 +2351,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 137,
- "soCot": 1737,
+ "soCot": 1739,
  "soRpc": 334
 }

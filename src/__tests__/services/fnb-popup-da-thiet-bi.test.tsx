@@ -24,6 +24,7 @@ function nhom(
   name: string,
   rule: ModifierGroup["rule"],
   sortOrder = 0,
+  limits: { minSelect?: number; maxSelect?: number | null } = {},
 ): ModifierGroup {
   return {
     id,
@@ -32,9 +33,21 @@ function nhom(
     rule,
     channel: "fnb",
     sortOrder,
+    minSelect: limits.minSelect ?? 0,
+    maxSelect: limits.maxSelect ?? null,
     isActive: true,
     createdAt: "",
     updatedAt: "",
+  };
+}
+
+function duLieuChonNhieu(minSelect: number, maxSelect: number | null): DynamicModifierData {
+  const g = nhom("g-topping", "Topping", "multi", 0, { minSelect, maxSelect });
+  return {
+    groups: [g],
+    optionsByGroup: new Map([
+      [g.id, [opt("o-1", g.id, "Trân châu"), opt("o-2", g.id, "Thạch"), opt("o-3", g.id, "Kem")]],
+    ]),
   };
 }
 
@@ -103,11 +116,36 @@ describe("PR-B · ba trạng thái của nhóm tuỳ chọn", () => {
 
   it("chọn đủ mục bắt buộc → hết cảnh báo, nút thêm mở khoá", () => {
     moPopup();
-    expect(screen.getByText(/BẮT BUỘC chưa chọn/)).toBeTruthy();
+    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/)).toBeTruthy();
     fireEvent.click(screen.getByText("Vừa"));
     expect(screen.queryByText("Chưa chọn — bắt buộc")).toBeNull();
     const nut = screen.getByText(/Thêm vào đơn/).closest("button")!;
     expect(nut.disabled).toBe(false);
+  });
+});
+
+describe("Giới hạn nhóm chọn nhiều", () => {
+  it("chưa đạt tối thiểu thì chặn xác nhận và nói rõ số cần chọn", () => {
+    moPopup({ dynamicModifiers: duLieuChonNhieu(2, 3) });
+    expect(screen.getByText("Topping")).toBeTruthy();
+    expect(screen.getByText(/Chọn từ 2 đến 3/)).toBeTruthy();
+    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/).closest("button")?.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Trân châu"));
+    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/).closest("button")?.disabled).toBe(true);
+    fireEvent.click(screen.getByText("Thạch"));
+    expect(screen.getByText(/Thêm vào đơn/).closest("button")?.disabled).toBe(false);
+  });
+
+  it("đạt tối đa thì không nhận thêm lựa chọn nhưng vẫn cho bỏ mục đã chọn", () => {
+    moPopup({ dynamicModifiers: duLieuChonNhieu(0, 2) });
+    fireEvent.click(screen.getByText("Trân châu"));
+    fireEvent.click(screen.getByText("Thạch"));
+    const kem = screen.getByText("Kem").closest("button")!;
+    expect(kem.getAttribute("aria-disabled")).toBe("true");
+    fireEvent.click(kem);
+    expect(kem.getAttribute("aria-pressed")).toBe("false");
+    fireEvent.click(screen.getByText("Thạch"));
+    expect(kem.getAttribute("aria-disabled")).toBe("false");
   });
 });
 

@@ -81,6 +81,8 @@ const NHOM = (id: string, name: string, rule: string, sort: number, channel = "f
   rule,
   channel,
   sort_order: sort,
+  min_select: 0,
+  max_select: null,
   is_active: true,
   created_at: "",
   updated_at: "",
