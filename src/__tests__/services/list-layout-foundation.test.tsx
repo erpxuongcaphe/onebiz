@@ -178,4 +178,33 @@ describe("nền bố cục danh sách", () => {
     expect(screen.getAllByText("Hiển thị cột")).toHaveLength(1);
     expect(screen.getByLabelText("Đang lọc 1 điều kiện")).toBeTruthy();
   });
+
+  it("DataTable dùng cùng nội dung trạng thái trống trên desktop và mobile", () => {
+    type Row = { code: string };
+    const columns: ColumnDef<Row>[] = [
+      { accessorKey: "code", header: "Mã", cell: ({ row }) => row.original.code },
+    ];
+    const { rerender } = render(
+      <DataTable columns={columns} data={[]} emptyState="no-results" />,
+    );
+
+    expect(screen.getAllByText("Không tìm thấy kết quả")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Thử thay đổi từ khóa, thời gian hoặc bỏ bớt bộ lọc."),
+    ).toHaveLength(2);
+
+    rerender(
+      <DataTable
+        columns={columns}
+        data={[]}
+        emptyState="no-data"
+        emptyTitle="Chưa có hóa đơn"
+        emptyDescription="Hóa đơn mới sẽ hiển thị tại đây sau khi được tạo."
+      />,
+    );
+    expect(screen.getAllByText("Chưa có hóa đơn")).toHaveLength(2);
+    expect(
+      screen.getAllByText("Hóa đơn mới sẽ hiển thị tại đây sau khi được tạo."),
+    ).toHaveLength(2);
+  });
 });

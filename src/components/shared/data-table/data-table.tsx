@@ -34,6 +34,30 @@ import { cn } from "@/lib/utils";
 import { DataTablePagination } from "./pagination";
 import { Icon } from "@/components/ui/icon";
 import { ListStrip } from "@/components/shared/list-strip";
+import { EmptyState } from "@/components/shared/empty-state";
+
+export type DataTableEmptyState = "no-data" | "no-results" | "no-scope";
+
+const EMPTY_STATE_DEFAULTS: Record<
+  DataTableEmptyState,
+  { title: string; description: string; icon: string }
+> = {
+  "no-data": {
+    title: "Chưa có dữ liệu",
+    description: "Dữ liệu mới sẽ hiển thị tại đây.",
+    icon: "inventory_2",
+  },
+  "no-results": {
+    title: "Không tìm thấy kết quả",
+    description: "Thử thay đổi từ khóa, thời gian hoặc bỏ bớt bộ lọc.",
+    icon: "filter_alt_off",
+  },
+  "no-scope": {
+    title: "Chưa có phạm vi làm việc",
+    description: "Hãy chọn chi nhánh phù hợp để xem dữ liệu.",
+    icon: "apartment",
+  },
+};
 
 export interface RowAction {
   label: string;
@@ -135,6 +159,8 @@ interface DataTableProps<TData, TValue> {
   emptyTitle?: string;
   emptyDescription?: string;
   emptyIcon?: string;
+  /** Phân biệt chưa có dữ liệu, bộ lọc không có kết quả và chưa có phạm vi. */
+  emptyState?: DataTableEmptyState;
   /**
    * CEO 08/07/2026: Khi bảng TRỐNG vì đang lọc theo 1 chi nhánh, nhưng chi
    * nhánh KHÁC vẫn có phiếu → báo rõ + nút "Xem tất cả chi nhánh" (thay vì để
@@ -174,6 +200,34 @@ function EmptyBranchHintBlock({ hint }: { hint: EmptyBranchHint }) {
         Xem tất cả chi nhánh
       </button>
     </div>
+  );
+}
+
+function DataTableEmptyContent({
+  state = "no-data",
+  title,
+  description,
+  icon,
+  branchHint,
+}: {
+  state?: DataTableEmptyState;
+  title?: string;
+  description?: string;
+  icon?: string;
+  branchHint?: EmptyBranchHint;
+}) {
+  const defaults = EMPTY_STATE_DEFAULTS[state];
+  const hasBranchHint = Boolean(branchHint && branchHint.otherBranchCount > 0);
+
+  return (
+    <EmptyState
+      compact
+      icon={icon ?? defaults.icon}
+      title={title ?? defaults.title}
+      description={hasBranchHint ? undefined : (description ?? defaults.description)}
+      action={hasBranchHint ? <EmptyBranchHintBlock hint={branchHint!} /> : undefined}
+      className="py-8"
+    />
   );
 }
 
@@ -294,6 +348,7 @@ export function DataTable<TData, TValue>({
   emptyTitle,
   emptyDescription,
   emptyIcon,
+  emptyState,
   emptyBranchHint,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -712,25 +767,13 @@ export function DataTable<TData, TValue>({
                   colSpan={totalColSpan}
                   className="h-32 text-center text-muted-foreground"
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
-                      <Icon
-                        name={emptyIcon ?? "inventory_2"}
-                        size={28}
-                        className="text-primary/60"
-                      />
-                    </div>
-                    <p className="font-medium">
-                      {emptyTitle ?? "Chưa có dữ liệu"}
-                    </p>
-                    {emptyBranchHint && emptyBranchHint.otherBranchCount > 0 ? (
-                      <EmptyBranchHintBlock hint={emptyBranchHint} />
-                    ) : (
-                      <p className="text-xs">
-                        {emptyDescription ?? "Hãy thêm mới hoặc thử bỏ bộ lọc."}
-                      </p>
-                    )}
-                  </div>
+                  <DataTableEmptyContent
+                    state={emptyState}
+                    title={emptyTitle}
+                    description={emptyDescription}
+                    icon={emptyIcon}
+                    branchHint={emptyBranchHint}
+                  />
                 </TableCell>
               </TableRow>
             ) : (
@@ -797,27 +840,13 @@ export function DataTable<TData, TValue>({
             </div>
           ))
         ) : data.length === 0 ? (
-          <div className="text-center text-muted-foreground py-12">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-16 w-16 rounded-full bg-primary-fixed flex items-center justify-center">
-                <Icon
-                  name={emptyIcon ?? "inventory_2"}
-                  size={28}
-                  className="text-primary/60"
-                />
-              </div>
-              <p className="font-medium">
-                {emptyTitle ?? "Chưa có dữ liệu"}
-              </p>
-              {emptyBranchHint && emptyBranchHint.otherBranchCount > 0 ? (
-                <EmptyBranchHintBlock hint={emptyBranchHint} />
-              ) : (
-                emptyDescription && (
-                  <p className="text-xs">{emptyDescription}</p>
-                )
-              )}
-            </div>
-          </div>
+          <DataTableEmptyContent
+            state={emptyState}
+            title={emptyTitle}
+            description={emptyDescription}
+            icon={emptyIcon}
+            branchHint={emptyBranchHint}
+          />
         ) : (
           table.getRowModel().rows.map((row, rowIndex) => (
             <Fragment key={row.id}>
