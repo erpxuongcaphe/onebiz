@@ -623,6 +623,8 @@ export default function NhaCungCapPage() {
     totalBuyFrom,
     totalBuyTo,
   ]);
+  const emptyState =
+    search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -795,6 +797,18 @@ export default function NhaCungCapPage() {
               onClearAll={filterChips.length > 1 ? clearListFilters : undefined}
             />
           }
+          emptyState={emptyState}
+          emptyTitle={
+            emptyState === "no-results"
+              ? "Không tìm thấy nhà cung cấp"
+              : "Chưa có nhà cung cấp"
+          }
+          emptyDescription={
+            emptyState === "no-results"
+              ? "Thử thay đổi tổng mua, thời gian, công nợ, tỉnh thành, trạng thái hoặc nội dung tìm kiếm."
+              : 'Bấm "Tạo mới" để thêm nhà cung cấp hoặc dùng "Nhập Excel" để nhập danh sách.'
+          }
+          emptyIcon="local_shipping"
           pageIndex={page}
           pageSize={pageSize}
           pageCount={Math.ceil(total / pageSize)}

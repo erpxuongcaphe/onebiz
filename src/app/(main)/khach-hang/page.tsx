@@ -522,6 +522,8 @@ export default function KhachHangPage() {
     selectedTags,
     typeFilter,
   ]);
+  const emptyState =
+    search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   /* ---- Export ---- */
   const handleExport = (type: "excel" | "csv") => {
@@ -740,10 +742,17 @@ export default function KhachHangPage() {
             setPage(0);
           }}
           // CEO 22/05/2026 (UX P0 #1): empty state context-aware
+          emptyState={emptyState}
           emptyIcon="person_add"
-          emptyTitle="Chưa có khách hàng nào"
+          emptyTitle={
+            emptyState === "no-results"
+              ? "Không tìm thấy khách hàng"
+              : "Chưa có khách hàng nào"
+          }
           emptyDescription={
-            'Bấm "Tạo mới" để thêm khách, hoặc dùng "Nhập Excel" để import danh sách.'
+            emptyState === "no-results"
+              ? "Thử thay đổi nhóm, loại khách, giới tính, công nợ, doanh số, số lần mua, thời gian hoặc nội dung tìm kiếm."
+              : 'Bấm "Tạo mới" để thêm khách hoặc dùng "Nhập Excel" để nhập danh sách.'
           }
           selectable
           bulkActions={[
