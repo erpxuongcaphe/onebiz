@@ -94,6 +94,22 @@ interface InlineVariant {
   sortOrder: number;
 }
 
+interface InlineUomConversion {
+  key: string;
+  id: string | null;
+  relatedUnit: string;
+  factor: string;
+  mainUnitRole: "small" | "large";
+}
+
+const newInlineUomConversion = (): InlineUomConversion => ({
+  key: crypto.randomUUID(),
+  id: null,
+  relatedUnit: "",
+  factor: "",
+  mainUnitRole: "small",
+});
+
 /** Item trong bảng BOM inline (gắn với SKU đang tạo/sửa) */
 interface InlineBomItem {
   materialId: string;
@@ -201,10 +217,8 @@ export function CreateProductDialog({
   const [stockUnit, setStockUnit] = useState("");
   // Day 19/05/2026 (CEO UOM Smart Hybrid): quy đổi đơn vị inline trong form
   // tạo SP — đỡ phải save → vào tab "ĐVT quy đổi" → thêm. Cặp 2 ô optional.
-  const [bulkUnit, setBulkUnit] = useState("");
-  const [bulkFactor, setBulkFactor] = useState("");
-  const [mainUnitRole, setMainUnitRole] = useState<"small" | "large">("small");
-  const [existingConversionId, setExistingConversionId] = useState<string | null>(null);
+  const [uomConversions, setUomConversions] = useState<InlineUomConversion[]>([]);
+  const [originalConversionIds, setOriginalConversionIds] = useState<string[]>([]);
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
@@ -323,10 +337,8 @@ export function CreateProductDialog({
       setStockUnit(initialData.stockUnit || initialData.unit || "");
       setSellUnit(initialData.sellUnit || "");
       // Reset quy đổi — sẽ load qua getUOMConversions ở effect riêng
-      setBulkUnit("");
-      setBulkFactor("");
-      setMainUnitRole("small");
-      setExistingConversionId(null);
+      setUomConversions([]);
+      setOriginalConversionIds([]);
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
       setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
       setHasBom(!!initialData.hasBom);
@@ -363,10 +375,8 @@ export function CreateProductDialog({
       setPurchaseUnit("");
       setStockUnit("");
       setSellUnit("");
-      setBulkUnit("");
-      setBulkFactor("");
-      setMainUnitRole("small");
-      setExistingConversionId(null);
+      setUomConversions([]);
+      setOriginalConversionIds([]);
       setShelfLifeDays("");
       setShelfLifeUnit("day");
       setHasBom(false);
@@ -451,16 +461,22 @@ export function CreateProductDialog({
         if (cancelled) return;
         const productUnit =
           initialData.stockUnit || initialData.unit || "";
-        const match = convs.find(
+        const matches = convs.filter(
           (c) => c.toUnit === productUnit || c.fromUnit === productUnit,
         );
-        if (match) {
-          const mainIsLarge = match.fromUnit === productUnit;
-          setMainUnitRole(mainIsLarge ? "large" : "small");
-          setBulkUnit(mainIsLarge ? match.toUnit : match.fromUnit);
-          setBulkFactor(String(match.factor));
-          setExistingConversionId(match.id);
-        }
+        setUomConversions(
+          matches.map((match) => {
+            const mainIsLarge = match.fromUnit === productUnit;
+            return {
+              key: match.id,
+              id: match.id,
+              relatedUnit: mainIsLarge ? match.toUnit : match.fromUnit,
+              factor: String(match.factor),
+              mainUnitRole: mainIsLarge ? "large" : "small",
+            };
+          }),
+        );
+        setOriginalConversionIds(matches.map((match) => match.id));
       } catch {
         // fail silent
       }
@@ -971,19 +987,36 @@ export function CreateProductDialog({
 
       // Day 19/05/2026 (CEO UOM Smart Hybrid): chuẩn hoá data quy đổi
       // trước khi save. Validate client-side cặp ô.
-      const bulkUnitTrim = bulkUnit.trim();
-      const bulkFactorNum = Number(bulkFactor);
-      const hasBulkInput = bulkUnitTrim.length > 0 || bulkFactor.trim().length > 0;
-      const bulkValid =
-        bulkUnitTrim.length > 0 &&
-        bulkFactorNum > 0 &&
-        bulkUnitTrim !== (commonPayload.unit ?? "");
-      if (hasBulkInput && !bulkValid) {
+      const mainUnit = (commonPayload.unit ?? "").trim();
+      const normalizedConversions = uomConversions.map((item) => ({
+        ...item,
+        relatedUnit: item.relatedUnit.trim(),
+        factorNumber: Number(item.factor),
+      }));
+      const invalidConversion = normalizedConversions.some(
+        (item) =>
+          !item.relatedUnit ||
+          !Number.isFinite(item.factorNumber) ||
+          item.factorNumber <= 0 ||
+          item.relatedUnit.toLocaleLowerCase("vi") === mainUnit.toLocaleLowerCase("vi"),
+      );
+      const duplicateConversion = normalizedConversions.some(
+        (item, index) =>
+          normalizedConversions.findIndex(
+            (candidate) =>
+              candidate.relatedUnit.toLocaleLowerCase("vi") ===
+                item.relatedUnit.toLocaleLowerCase("vi") &&
+              candidate.mainUnitRole === item.mainUnitRole,
+          ) !== index,
+      );
+      if (invalidConversion || duplicateConversion) {
         toast({
           variant: "error",
           title: "Quy đổi đơn vị không hợp lệ",
           description:
-            "Cần điền cả 'Đơn vị quy đổi' và 'Hệ số quy đổi' (≥ 1), và không trùng 'Đơn vị tính'.",
+            duplicateConversion
+              ? "Có hai dòng quy đổi trùng đơn vị và cùng chiều."
+              : "Mỗi dòng cần đủ đơn vị, hệ số lớn hơn 0 và không trùng đơn vị chính.",
         });
         setSaving(false);
         return;
@@ -999,33 +1032,36 @@ export function CreateProductDialog({
 
         // Day 19/05/2026 (CEO UOM): sync quy đổi đơn vị (CRUD UOMConversion)
         try {
-          if (bulkValid) {
+          for (const item of normalizedConversions) {
             const conversion = buildUomConversion(
-              commonPayload.unit ?? "",
-              bulkUnitTrim,
-              bulkFactorNum,
-              mainUnitRole,
+              mainUnit,
+              item.relatedUnit,
+              item.factorNumber,
+              item.mainUnitRole,
             );
-            if (existingConversionId) {
-              // Update conversion hiện có
-              await updateUOMConversion(existingConversionId, {
+            if (item.id) {
+              await updateUOMConversion(item.id, {
                 fromUnit: conversion.fromUnit,
                 toUnit: conversion.toUnit,
-                factor: bulkFactorNum,
+                factor: item.factorNumber,
               });
             } else {
-              // Tạo mới
               await createUOMConversion({
                 productId: initialData.id,
                 fromUnit: conversion.fromUnit,
                 toUnit: conversion.toUnit,
-                factor: bulkFactorNum,
+                factor: item.factorNumber,
               });
             }
-          } else if (!hasBulkInput && existingConversionId) {
-            // User xoá cả 2 ô → xoá conversion (soft delete is_active=false)
-            await deleteUOMConversion(existingConversionId);
           }
+          const retainedIds = new Set(
+            normalizedConversions.flatMap((item) => (item.id ? [item.id] : [])),
+          );
+          await Promise.all(
+            originalConversionIds
+              .filter((id) => !retainedIds.has(id))
+              .map((id) => deleteUOMConversion(id)),
+          );
         } catch (convErr) {
           console.warn("[create-product-dialog] sync UOM conversion fail:", convErr);
         }
@@ -1214,20 +1250,24 @@ export function CreateProductDialog({
 
       // Day 19/05/2026 (CEO UOM): tạo conversion nếu user khai 2 ô.
       // Tách try/catch riêng — conversion fail KHÔNG rollback SP.
-      if (created?.id && bulkValid) {
+      if (created?.id && normalizedConversions.length > 0) {
         try {
-          const conversion = buildUomConversion(
-            commonPayload.unit ?? "",
-            bulkUnitTrim,
-            bulkFactorNum,
-            mainUnitRole,
+          await Promise.all(
+            normalizedConversions.map((item) => {
+              const conversion = buildUomConversion(
+                mainUnit,
+                item.relatedUnit,
+                item.factorNumber,
+                item.mainUnitRole,
+              );
+              return createUOMConversion({
+                productId: created.id,
+                fromUnit: conversion.fromUnit,
+                toUnit: conversion.toUnit,
+                factor: item.factorNumber,
+              });
+            }),
           );
-          await createUOMConversion({
-            productId: created.id,
-            fromUnit: conversion.fromUnit,
-            toUnit: conversion.toUnit,
-            factor: bulkFactorNum,
-          });
         } catch (convErr) {
           console.warn(
             "[create-product-dialog] tạo UOM conversion fail:",
@@ -1601,9 +1641,6 @@ export function CreateProductDialog({
               </p>
             </div>
 
-            {/* Day 19/05/2026 (CEO UOM Smart Hybrid): 2 ô quy đổi optional.
-                Khi điền cả 2 → save xong tự tạo UOM conversion → tồn kho hiện
-                "24 hộp · 2 thùng". 1 ô trống = không có quy đổi. */}
             <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">
@@ -1612,106 +1649,136 @@ export function CreateProductDialog({
                     · tuỳ chọn
                   </span>
                 </div>
-                {(bulkUnit || bulkFactor) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setBulkUnit("");
-                      setBulkFactor("");
-                      setMainUnitRole("small");
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
-                  >
-                    <Icon name="close" size={12} />
-                    Xoá quy đổi
-                  </button>
-                )}
-              </div>
-              <div className="grid w-full grid-cols-1 rounded-md border bg-background p-1 sm:grid-cols-2">
-                <button
+                <Button
                   type="button"
-                  onClick={() => setMainUnitRole("small")}
-                  aria-pressed={mainUnitRole === "small"}
-                  className={`rounded px-3 py-1.5 text-xs ${
-                    mainUnitRole === "small"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setUomConversions((current) => [
+                      ...current,
+                      newInlineUomConversion(),
+                    ])
+                  }
                 >
-                  Đơn vị chính là đơn vị nhỏ
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMainUnitRole("large")}
-                  aria-pressed={mainUnitRole === "large"}
-                  className={`rounded px-3 py-1.5 text-xs ${
-                    mainUnitRole === "large"
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Đơn vị chính là đơn vị lớn
-                </button>
+                  <Icon name="add" size={14} className="mr-1" />
+                  Thêm quy đổi
+                </Button>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">
-                    {mainUnitRole === "small" ? "Đơn vị lớn" : "Đơn vị nhỏ"}
-                  </label>
-                  <Input
-                    value={bulkUnit}
-                    onChange={(e) => setBulkUnit(e.target.value)}
-                    placeholder="VD: Thùng, Bao, Lốc"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs text-muted-foreground">
-                    Hệ số quy đổi
-                  </label>
-                  <Input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={bulkFactor}
-                    onChange={(e) => setBulkFactor(e.target.value)}
-                    placeholder="VD: 12"
-                  />
-                </div>
-              </div>
-              {bulkUnit.trim() &&
-              bulkFactor.trim() &&
-              Number(bulkFactor) > 0 &&
-              stockUnit.trim() &&
-              bulkUnit.trim() !== stockUnit.trim() ? (
-                <p className="text-xs text-primary">
-                  <Icon
-                    name="check_circle"
-                    size={12}
-                    className="inline-block mr-1 align-text-bottom"
-                  />
-                  1 {mainUnitRole === "small" ? bulkUnit.trim() : stockUnit.trim()} ={" "}
-                  {formatNumber(Number(bulkFactor))}{" "}
-                  {mainUnitRole === "small" ? stockUnit.trim() : bulkUnit.trim()}
-                </p>
-              ) : (bulkUnit || bulkFactor) ? (
-                <p className="text-xs text-status-warning">
-                  <Icon
-                    name="warning"
-                    size={12}
-                    className="inline-block mr-1 align-text-bottom"
-                  />
-                  {!bulkUnit.trim()
-                    ? "Thiếu Đơn vị quy đổi"
-                    : !bulkFactor.trim() || Number(bulkFactor) <= 0
-                      ? "Thiếu Hệ số quy đổi (số nguyên ≥ 1)"
-                      : bulkUnit.trim() === stockUnit.trim()
-                        ? "Đơn vị quy đổi không được trùng Đơn vị tính"
-                        : ""}
+              {uomConversions.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  Có thể thêm nhiều quy đổi, ví dụ 1 Túi = 15 Trái và 1 Thùng = 12 Túi.
                 </p>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  Chọn vai trò của đơn vị chính, rồi nhập đơn vị còn lại và hệ số.
-                </p>
+                <div className="space-y-2">
+                  {uomConversions.map((item) => {
+                    const mainIsLarge = item.mainUnitRole === "large";
+                    const valid =
+                      item.relatedUnit.trim() &&
+                      Number(item.factor) > 0 &&
+                      item.relatedUnit.trim().toLocaleLowerCase("vi") !==
+                        stockUnit.trim().toLocaleLowerCase("vi");
+                    return (
+                      <div
+                        key={item.key}
+                        className="rounded-md border bg-background p-2"
+                      >
+                        <div className="grid grid-cols-[minmax(0,1fr)_8rem_8rem_2.25rem] items-end gap-2 max-sm:grid-cols-[minmax(0,1fr)_2.25rem]"
+                        >
+                          <div className="space-y-1">
+                            <label className="text-xs text-muted-foreground">
+                              Đơn vị quy đổi
+                            </label>
+                            <Input
+                              value={item.relatedUnit}
+                              onChange={(event) =>
+                                setUomConversions((current) =>
+                                  current.map((conversion) =>
+                                    conversion.key === item.key
+                                      ? { ...conversion, relatedUnit: event.target.value }
+                                      : conversion,
+                                  ),
+                                )
+                              }
+                              placeholder={mainIsLarge ? "VD: Hộp" : "VD: Thùng"}
+                            />
+                          </div>
+                          <div className="space-y-1 max-sm:col-start-1">
+                            <label className="text-xs text-muted-foreground">
+                              Chiều quy đổi
+                            </label>
+                            <Select
+                              value={item.mainUnitRole}
+                              onValueChange={(value) =>
+                                setUomConversions((current) =>
+                                  current.map((conversion) =>
+                                    conversion.key === item.key
+                                      ? {
+                                          ...conversion,
+                                          mainUnitRole: value as "small" | "large",
+                                        }
+                                      : conversion,
+                                  ),
+                                )
+                              }
+                            >
+                              <SelectTrigger className="h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="small">ĐVT chính nhỏ</SelectItem>
+                                <SelectItem value="large">ĐVT chính lớn</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1 max-sm:col-start-1">
+                            <label className="text-xs text-muted-foreground">
+                              Hệ số
+                            </label>
+                            <Input
+                              type="number"
+                              min={0.000001}
+                              step="any"
+                              value={item.factor}
+                              onChange={(event) =>
+                                setUomConversions((current) =>
+                                  current.map((conversion) =>
+                                    conversion.key === item.key
+                                      ? { ...conversion, factor: event.target.value }
+                                      : conversion,
+                                  ),
+                                )
+                              }
+                              placeholder="VD: 12"
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title="Xóa dòng quy đổi"
+                            aria-label="Xóa dòng quy đổi"
+                            onClick={() =>
+                              setUomConversions((current) =>
+                                current.filter(
+                                  (conversion) => conversion.key !== item.key,
+                                ),
+                              )
+                            }
+                          >
+                            <Icon name="delete" size={16} />
+                          </Button>
+                        </div>
+                        {valid && (
+                          <p className="mt-1.5 text-xs text-primary">
+                            1 {mainIsLarge ? stockUnit.trim() : item.relatedUnit.trim()} ={" "}
+                            {formatNumber(Number(item.factor))}{" "}
+                            {mainIsLarge ? item.relatedUnit.trim() : stockUnit.trim()}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               )}
             </div>
 

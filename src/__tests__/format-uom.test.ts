@@ -179,4 +179,14 @@ describe("buildUomConversion — đơn vị chính ở hai phía", () => {
       factor: 12,
     });
   });
+
+  it("một đơn vị chính có thể nối với đơn vị nhỏ và lớn cùng lúc", () => {
+    expect([
+      buildUomConversion("túi", "trái", 15, "large"),
+      buildUomConversion("túi", "thùng", 12, "small"),
+    ]).toEqual([
+      { fromUnit: "túi", toUnit: "trái", factor: 15 },
+      { fromUnit: "thùng", toUnit: "túi", factor: 12 },
+    ]);
+  });
 });
