@@ -997,7 +997,7 @@ export function CreateProductDialog({
         (item) =>
           !item.relatedUnit ||
           !Number.isFinite(item.factorNumber) ||
-          item.factorNumber <= 0 ||
+          item.factorNumber < 0.0001 ||
           item.relatedUnit.toLocaleLowerCase("vi") === mainUnit.toLocaleLowerCase("vi"),
       );
       const duplicateConversion = normalizedConversions.some(
@@ -1005,8 +1005,7 @@ export function CreateProductDialog({
           normalizedConversions.findIndex(
             (candidate) =>
               candidate.relatedUnit.toLocaleLowerCase("vi") ===
-                item.relatedUnit.toLocaleLowerCase("vi") &&
-              candidate.mainUnitRole === item.mainUnitRole,
+              item.relatedUnit.toLocaleLowerCase("vi"),
           ) !== index,
       );
       if (invalidConversion || duplicateConversion) {
@@ -1015,8 +1014,8 @@ export function CreateProductDialog({
           title: "Quy đổi đơn vị không hợp lệ",
           description:
             duplicateConversion
-              ? "Có hai dòng quy đổi trùng đơn vị và cùng chiều."
-              : "Mỗi dòng cần đủ đơn vị, hệ số lớn hơn 0 và không trùng đơn vị chính.",
+              ? "Có hai dòng cùng đơn vị quy đổi."
+              : "Mỗi dòng cần đủ đơn vị, hệ số từ 0,0001 và không trùng đơn vị chính.",
         });
         setSaving(false);
         return;
@@ -1637,7 +1636,7 @@ export function CreateProductDialog({
                 </p>
               )}
               <p className="text-xs text-muted-foreground">
-                Đơn vị nhỏ nhất khi bán lẻ (vd: 1 lon, 1 kg, 1 ly).
+                Đơn vị hệ thống dùng để quản lý tồn của sản phẩm.
               </p>
             </div>
 
@@ -1722,7 +1721,9 @@ export function CreateProductDialog({
                               }
                             >
                               <SelectTrigger className="h-9">
-                                <SelectValue />
+                                <SelectValue>
+                                  {mainIsLarge ? "ĐVT chính lớn" : "ĐVT chính nhỏ"}
+                                </SelectValue>
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="small">ĐVT chính nhỏ</SelectItem>
@@ -1736,7 +1737,7 @@ export function CreateProductDialog({
                             </label>
                             <Input
                               type="number"
-                              min={0.000001}
+                              min={0.0001}
                               step="any"
                               value={item.factor}
                               onChange={(event) =>
