@@ -28,6 +28,9 @@ import {
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { getFnbReadiness, type FnbReadiness } from "@/lib/services/supabase/fnb-readiness";
+import { FnbReadinessBand } from "./fnb-readiness-band";
 import {
   listModifierGroups,
   createModifierGroup,
@@ -68,7 +71,10 @@ const RULE_BADGE: Record<ModifierRule, string> = {
 
 export default function ModifierFnbPage() {
   const { toast } = useToast();
+  const { tenant, activeBranchId, currentBranch } = useAuth();
   const [groups, setGroups] = useState<ModifierGroup[]>([]);
+  const [readiness, setReadiness] = useState<FnbReadiness | null>(null);
+  const [readinessError, setReadinessError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [optionsByGroup, setOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
@@ -87,9 +93,20 @@ export default function ModifierFnbPage() {
   // ── Load groups ──
   const refresh = useCallback(async () => {
     setLoading(true);
+    setReadinessError(false);
     try {
-      const list = await listModifierGroups();
+      const readinessPromise = tenant?.id
+        ? getFnbReadiness(tenant.id, activeBranchId).catch(() => {
+            setReadinessError(true);
+            return null;
+          })
+        : Promise.resolve(null);
+      const [list, nextReadiness] = await Promise.all([
+        listModifierGroups(),
+        readinessPromise,
+      ]);
       setGroups(list);
+      setReadiness(nextReadiness);
     } catch (err) {
       toast({
         variant: "error",
@@ -99,7 +116,7 @@ export default function ModifierFnbPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [activeBranchId, tenant?.id, toast]);
 
   useEffect(() => {
     void refresh();
@@ -242,6 +259,13 @@ export default function ModifierFnbPage() {
             onClick: openCreateGroup,
           },
         ]}
+      />
+
+      <FnbReadinessBand
+        readiness={readiness}
+        loading={loading}
+        error={readinessError}
+        branchName={currentBranch?.name}
       />
 
       {/* Empty state hint — gợi ý click preset */}
