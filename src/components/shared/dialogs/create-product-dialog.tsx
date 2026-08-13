@@ -1341,7 +1341,7 @@ export function CreateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Sửa hàng hóa ${initialData?.code ?? ""}` : "Thêm hàng hóa mới"}</DialogTitle>
           <DialogDescription>
@@ -1451,7 +1451,7 @@ export function CreateProductDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
@@ -1521,7 +1521,7 @@ export function CreateProductDialog({
           </div>
 
           {/* Thương hiệu + NCC — optional cho NVL, dùng nhiều cho filter + báo cáo */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Thương hiệu</label>
               <Input
@@ -1668,7 +1668,7 @@ export function CreateProductDialog({
                       >
                         <div className="grid grid-cols-[minmax(0,1fr)_8rem_8rem_2.25rem] items-end gap-2 max-sm:grid-cols-[minmax(0,1fr)_2.25rem]"
                         >
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-sm:col-span-2">
                             <label className="text-xs text-muted-foreground">
                               Đơn vị quy đổi
                             </label>
