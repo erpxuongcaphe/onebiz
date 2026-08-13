@@ -1164,6 +1164,7 @@
    "cod_amount",
    "cod_collected_at",
    "code",
+   "collection_mode",
    "created_at",
    "id",
    "invoice_id",
@@ -1171,6 +1172,7 @@
    "partner_fee",
    "partner_id",
    "receiver_address",
+   "receiver_customer_id",
    "receiver_name",
    "receiver_phone",
    "settlement_id",
@@ -2056,6 +2058,7 @@
   "assert_report_access",
   "assign_delivery_staff_to_order",
   "attach_invoice_shipment_atomic",
+  "attach_invoice_shipment_atomic_v2",
   "bom_unit_cost",
   "bulk_cleanup_test_products_atomic",
   "bulk_create_adjustment_lots_atomic",
@@ -2311,6 +2314,7 @@
   "save_purchase_order_atomic",
   "save_role_atomic",
   "save_sales_order_atomic",
+  "save_sales_order_atomic_v2",
   "seed_default_agents",
   "seed_demo_products",
   "seed_internal_entities",
@@ -2351,6 +2355,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 137,
- "soCot": 1739,
- "soRpc": 334
+ "soCot": 1741,
+ "soRpc": 336
 }
