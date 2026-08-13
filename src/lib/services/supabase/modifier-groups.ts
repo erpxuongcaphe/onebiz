@@ -65,6 +65,16 @@ export interface ModifierOptionInput {
   sortOrder?: number;
 }
 
+export function getModifierStockConfigError(input: {
+  scaleFactor?: number | null;
+  linkedProductId?: string | null;
+}): string | null {
+  if (input.scaleFactor !== null && input.scaleFactor !== undefined && input.linkedProductId) {
+    return "Chỉ chọn một cách trừ kho: dùng hệ số công thức hoặc trừ thẳng mã hàng.";
+  }
+  return null;
+}
+
 // ────────────────────────────────────────────────────────────
 // GROUPS
 // ────────────────────────────────────────────────────────────
@@ -201,6 +211,8 @@ export async function createModifierOption(
   groupId: string,
   input: ModifierOptionInput,
 ): Promise<ModifierOption> {
+  const configError = getModifierStockConfigError(input);
+  if (configError) throw new Error(configError);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const { data, error } = await supabase
@@ -224,6 +236,8 @@ export async function updateModifierOption(
   id: string,
   input: Partial<ModifierOptionInput>,
 ): Promise<ModifierOption> {
+  const configError = getModifierStockConfigError(input);
+  if (configError) throw new Error(configError);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };

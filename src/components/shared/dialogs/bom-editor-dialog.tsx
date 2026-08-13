@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +78,7 @@ export function BOMEditorDialog({
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMaterialId, setPickerMaterialId] = useState("");
+  const [pickerSearch, setPickerSearch] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [costPreview, setCostPreview] = useState<BOMCostBreakdown | null>(null);
@@ -267,6 +268,18 @@ export function BOMEditorDialog({
   }
 
   const selectedSku = skuOptions.find((p) => p.id === productId);
+  const pickerOptions = useMemo(() => {
+    const query = pickerSearch.trim().toLocaleLowerCase("vi");
+    return nvlOptions
+      .filter((product) => product.id !== productId)
+      .filter((product) => !items.some((item) => item.materialId === product.id))
+      .filter(
+        (product) =>
+          !query ||
+          product.code.toLocaleLowerCase("vi").includes(query) ||
+          product.name.toLocaleLowerCase("vi").includes(query),
+      );
+  }, [items, nvlOptions, pickerSearch, productId]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -549,36 +562,68 @@ export function BOMEditorDialog({
       </DialogContent>
 
       {/* Material picker mini-dialog */}
-      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog
+        open={pickerOpen}
+        onOpenChange={(nextOpen) => {
+          setPickerOpen(nextOpen);
+          if (!nextOpen) {
+            setPickerSearch("");
+            setPickerMaterialId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Chọn thành phần (NVL hoặc SKU)</DialogTitle>
           </DialogHeader>
           <div className="space-y-2">
-            <Select
-              value={pickerMaterialId || null}
-              onValueChange={(v) => setPickerMaterialId(v ?? "")}
-              items={nvlOptions.map((p) => ({
-                value: p.id,
-                label: `${p.code} — ${p.name}`,
-              }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn thành phần từ danh mục...">
-                  {(v) => {
-                    const match = nvlOptions.find((p) => p.id === v);
-                    return match ? `${match.code} — ${match.name}` : "Chọn thành phần từ danh mục...";
-                  }}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {nvlOptions.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.code} — {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="relative">
+              <Icon
+                name="search"
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                autoFocus
+                value={pickerSearch}
+                onChange={(event) => setPickerSearch(event.target.value)}
+                placeholder="Nhập mã hoặc tên thành phần..."
+                className="pl-9"
+              />
+            </div>
+            <div className="max-h-72 overflow-y-auto rounded-md border">
+              {pickerOptions.length === 0 ? (
+                <p className="p-6 text-center text-sm text-muted-foreground">
+                  Không tìm thấy thành phần phù hợp.
+                </p>
+              ) : (
+                pickerOptions.map((product) => {
+                  const selected = pickerMaterialId === product.id;
+                  return (
+                    <button
+                      key={product.id}
+                      type="button"
+                      onClick={() => setPickerMaterialId(product.id)}
+                      className={`flex w-full items-center gap-3 border-b px-3 py-2 text-left last:border-b-0 ${
+                        selected ? "bg-primary/10" : "hover:bg-muted/50"
+                      }`}
+                    >
+                      <Icon
+                        name={selected ? "radio_button_checked" : "radio_button_unchecked"}
+                        size={18}
+                        className={selected ? "text-primary" : "text-muted-foreground"}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{product.name}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {product.code} · {product.stockUnit || product.unit || "Chưa có ĐVT"}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPickerOpen(false)}>

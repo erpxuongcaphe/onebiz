@@ -70,7 +70,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant-1",
 }));
 
-const { getEffectiveModifierGroupsForProduct } = await import(
+const { getEffectiveModifierGroupsForProduct, getModifierStockConfigError } = await import(
   "@/lib/services/supabase/modifier-groups"
 );
 
@@ -91,6 +91,30 @@ const NHOM = (id: string, name: string, rule: string, sort: number, channel = "f
 beforeEach(() => {
   nhatKy.length = 0;
   duLieu = {};
+});
+
+describe("Cấu hình trừ kho của một lựa chọn", () => {
+  it("chặn dùng đồng thời hệ số công thức và mã hàng trừ trực tiếp", () => {
+    expect(
+      getModifierStockConfigError({ scaleFactor: 0.8, linkedProductId: "nvl-duong" }),
+    ).toContain("Chỉ chọn một cách trừ kho");
+  });
+
+  it("cho phép từng cách riêng biệt", () => {
+    expect(getModifierStockConfigError({ scaleFactor: 0.8, linkedProductId: null })).toBeNull();
+    expect(getModifierStockConfigError({ scaleFactor: null, linkedProductId: "nvl-topping" })).toBeNull();
+    expect(getModifierStockConfigError({ scaleFactor: null, linkedProductId: null })).toBeNull();
+  });
+
+  it("tra mã hàng phải khóa theo tenant hiện tại", () => {
+    const page = readFileSync("src/app/(main)/hang-hoa/tuy-chon-fnb/page.tsx", "utf8");
+    const lookup = page.slice(
+      page.indexOf("const tenantId = await getCurrentTenantId()"),
+      page.indexOf("const parsedScale"),
+    );
+    expect(lookup).toContain('.eq("tenant_id", tenantId)');
+    expect(lookup).toContain('.eq("code", linkedCode.trim())');
+  });
 });
 
 describe("P0.2 — rule_override cấp món phải được áp vào kết quả", () => {
