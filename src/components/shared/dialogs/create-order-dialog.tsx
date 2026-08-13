@@ -133,7 +133,9 @@ export function CreateOrderDialog({
   // CEO 23/07: ngành hàng bán được tại CN đang chọn (Kho Tổng→retail, quán→fnb,
   // "Tất cả chi nhánh"→null = không lọc). Chặn NVL + món F&B lọt vào đơn Retail.
   const { activeBranchId } = useBranchFilter();
-  const [salesChannel, setSalesChannel] = useState<BranchSalesChannel>(null);
+  const [salesChannel, setSalesChannel] = useState<
+    BranchSalesChannel | undefined
+  >(undefined);
   const [items, setItems] = useState<OrderLineItem[]>([]);
   const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartner[]>([]);
   const [selectedPartner, setSelectedPartner] = useState("");
@@ -249,9 +251,10 @@ export function CreateOrderDialog({
   // Nạp ngành hàng theo chi nhánh đang chọn (1 lần mỗi lần đổi CN).
   useEffect(() => {
     let cancelled = false;
+    setSalesChannel(undefined);
     getBranchSalesChannel(activeBranchId)
       .then((ch) => !cancelled && setSalesChannel(ch))
-      .catch(() => !cancelled && setSalesChannel(null));
+      .catch(() => !cancelled && setSalesChannel(undefined));
     return () => {
       cancelled = true;
     };
@@ -259,6 +262,13 @@ export function CreateOrderDialog({
 
   useEffect(() => {
     if (!productSearch || productSearch.length < 1) {
+      setFilteredProducts([]);
+      return;
+    }
+
+    // Chưa xác định được kênh chi nhánh thì không tìm SKU. Không được mở
+    // rộng thành cả Retail + FnB khi lỗi mạng hoặc cấu hình chi nhánh sai.
+    if (!salesChannel) {
       setFilteredProducts([]);
       return;
     }
@@ -278,7 +288,7 @@ export function CreateOrderDialog({
         .eq("product_type", "sku");
       if (salesChannel === "fnb") {
         query = query.eq("channel", "fnb");
-      } else if (salesChannel === "retail") {
+      } else {
         query = query.or("channel.is.null,channel.neq.fnb");
       }
       const { data } = await query.limit(10);
