@@ -14,6 +14,17 @@
 
 import type { UOMConversion } from "@/lib/types";
 
+export function buildUomConversion(
+  mainUnit: string,
+  relatedUnit: string,
+  factor: number,
+  mainUnitRole: "small" | "large",
+): Pick<UOMConversion, "fromUnit" | "toUnit" | "factor"> {
+  return mainUnitRole === "large"
+    ? { fromUnit: mainUnit, toUnit: relatedUnit, factor }
+    : { fromUnit: relatedUnit, toUnit: mainUnit, factor };
+}
+
 /**
  * Tìm conversion phù hợp nhất để hiển thị qty (đơn vị `unit`) qua đơn vị lớn.
  *
@@ -74,6 +85,21 @@ export function getConversionText(
   conversions: UOMConversion[] | null | undefined,
 ): string | null {
   const conv = pickBestConversion(unit, conversions);
-  if (!conv) return null;
-  return formatStockConversion(qty, conv);
+  if (conv) return formatStockConversion(qty, conv);
+
+  // Đơn vị chính có thể là đơn vị lớn. Ví dụ tồn được lưu theo Thùng và
+  // conversion là 1 Thùng = 12 Hộp thì 2 Thùng hiển thị thêm 24 Hộp.
+  const reverse = conversions
+    ?.filter((c) => c.fromUnit === unit && c.isActive !== false && c.factor > 0)
+    .reduce<UOMConversion | null>(
+      (best, current) =>
+        !best || current.factor > best.factor ? current : best,
+      null,
+    );
+  if (!reverse || !Number.isFinite(qty) || qty <= 0) return null;
+  const converted = qty * reverse.factor;
+  const convertedText = Number.isInteger(converted)
+    ? String(converted)
+    : converted.toFixed(2).replace(/\.?0+$/, "");
+  return `${convertedText} ${reverse.toUnit}`;
 }

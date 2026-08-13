@@ -3,6 +3,7 @@ import {
   formatStockConversion,
   pickBestConversion,
   getConversionText,
+  buildUomConversion,
 } from "@/lib/format-uom";
 import type { UOMConversion } from "@/lib/types";
 
@@ -87,9 +88,7 @@ describe("formatStockConversion — phép chia có dư (Euclidean)", () => {
   });
 
   it("số thập phân lẻ: 12.5 hộp → 1 thùng 0.5 lẻ", () => {
-    expect(formatStockConversion(12.5, CONV_THUNG_HOP)).toBe(
-      "1 thùng 0.5 lẻ",
-    );
+    expect(formatStockConversion(12.5, CONV_THUNG_HOP)).toBe("1 thùng 0.5 lẻ");
   });
 
   it("NaN/Infinity → null", () => {
@@ -139,9 +138,7 @@ describe("getConversionText — full pipeline", () => {
   });
 
   it("25 hộp → '2 thùng 1 lẻ'", () => {
-    expect(getConversionText(25, "hộp", [CONV_THUNG_HOP])).toBe(
-      "2 thùng 1 lẻ",
-    );
+    expect(getConversionText(25, "hộp", [CONV_THUNG_HOP])).toBe("2 thùng 1 lẻ");
   });
 
   it("11 hộp (chưa đủ) → null", () => {
@@ -155,5 +152,31 @@ describe("getConversionText — full pipeline", () => {
 
   it("unit không match toUnit → null", () => {
     expect(getConversionText(24, "kg", [CONV_THUNG_HOP])).toBeNull();
+  });
+
+  it("đơn vị chính là thùng: 2 thùng → 24 hộp", () => {
+    expect(getConversionText(2, "thùng", [CONV_THUNG_HOP])).toBe("24 hộp");
+  });
+
+  it("đơn vị chính là thùng: hỗ trợ số lẻ và không đổi số gốc", () => {
+    expect(getConversionText(1.5, "thùng", [CONV_THUNG_HOP])).toBe("18 hộp");
+  });
+});
+
+describe("buildUomConversion — đơn vị chính ở hai phía", () => {
+  it("đơn vị chính là hộp: 1 thùng = 12 hộp", () => {
+    expect(buildUomConversion("hộp", "thùng", 12, "small")).toEqual({
+      fromUnit: "thùng",
+      toUnit: "hộp",
+      factor: 12,
+    });
+  });
+
+  it("đơn vị chính là thùng: 1 thùng = 12 hộp", () => {
+    expect(buildUomConversion("thùng", "hộp", 12, "large")).toEqual({
+      fromUnit: "thùng",
+      toUnit: "hộp",
+      factor: 12,
+    });
   });
 });
