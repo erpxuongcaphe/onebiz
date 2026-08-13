@@ -170,6 +170,8 @@ export default function DonViTinhPage() {
     setHealthFilter("all");
     setUsageFilter("all");
   }, []);
+  const emptyState =
+    search.trim() || activeFilters.length > 0 ? "no-results" : "no-data";
 
   // ─────────── Handlers ───────────
   function openRename(unit: string) {
@@ -438,6 +440,18 @@ export default function DonViTinhPage() {
           columns={columns}
           data={filtered}
           loading={loading}
+          emptyState={emptyState}
+          emptyTitle={
+            emptyState === "no-results"
+              ? "Không tìm thấy đơn vị tính"
+              : "Chưa có đơn vị tính"
+          }
+          emptyDescription={
+            emptyState === "no-results"
+              ? "Thử thay đổi tình trạng chuẩn hóa, tình trạng sử dụng hoặc nội dung tìm kiếm."
+              : "Đơn vị tính sẽ tự xuất hiện khi được sử dụng trên sản phẩm."
+          }
+          emptyIcon="straighten"
           getRowId={(row) => row.unit}
         />
       </div>
