@@ -57,7 +57,7 @@ describe("Shipping order creation goes through the atomic RPC", () => {
   });
 
   it("service layer exposes the atomic path used by the dialog", () => {
-    expect(shippingService).toContain('"attach_invoice_shipment_atomic"');
+    expect(shippingService).toContain('"attach_invoice_shipment_atomic_v2"');
     expect(shippingService).toContain("export async function createShipmentForInvoice");
   });
 });
@@ -84,7 +84,7 @@ describe("Van don list shows real filters and whole-dataset KPIs", () => {
 
   it("shows the money columns that were missing", () => {
     expect(vanDonPage).toContain('header: "Phí giao"');
-    expect(vanDonPage).toContain('header: "Thu hộ (COD)"');
+    expect(vanDonPage).toContain('header: "Thu khi giao"');
     expect(vanDonPage).toContain('header: "Địa chỉ giao"');
   });
 });
@@ -160,11 +160,13 @@ describe("POS delivery hands the partner to the shipment", () => {
     expect(posState).toMatch(/partnerId\?: string/);
   });
 
-  it("COD option is real: Thu COD khi giao vs Khách đã thanh toán trước", () => {
+  it("collection option is real: Thu khi giao vs Không thu", () => {
     // CEO 04/08: từ ô tick trang trí → lựa chọn thật, phải có đủ 2 trạng thái
-    expect(posPage).toContain("Thu COD khi giao");
-    expect(posPage).toContain("Khách đã thanh toán trước");
+    expect(posPage).toContain("Thu khi giao");
+    expect(posPage).toContain("Không thu");
     expect(posPage).toContain('update("codEnabled"');
+    expect(posPage).toContain('collectionMode: di.codEnabled ? "cod" : "none"');
+    expect(posPage).toContain("Giống người mua");
   });
 
   it("chosen COD-on-delivery suppresses the forgot-to-type-money warning", () => {

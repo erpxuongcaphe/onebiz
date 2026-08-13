@@ -276,7 +276,7 @@ function InvoiceDetail({
                         Phí giao hàng: <strong>{formatCurrency(shipment.fee ?? 0)}</strong>
                       </div>
                       <div>
-                        Thu hộ (COD): <strong>{formatCurrency(shipment.cod ?? 0)}</strong>
+                        Thu khi giao: <strong>{formatCurrency(shipment.cod ?? 0)}</strong>
                       </div>
                     </div>
                   </div>
@@ -300,6 +300,8 @@ function InvoiceDetail({
                   invoiceCode={invoice.code}
                   defaultReceiverName={invoice.customerName}
                   defaultReceiverPhone={invoice.customerPhone}
+                  defaultReceiverAddress={invoice.customerAddress}
+                  buyerCustomerId={invoice.customerId || null}
                   currentTotal={invoice.totalAmount}
                   currentFee={invoice.shippingFee}
                   onSuccess={() => {

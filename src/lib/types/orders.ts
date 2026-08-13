@@ -161,6 +161,7 @@ export interface SalesOrder {
   invoiceCode?: string;
   date: string;
   customerName: string;
+  customerId?: string;
   customerPhone: string;
   totalAmount: number;
   /**

@@ -9,6 +9,10 @@ const service = readFileSync(
   "src/lib/services/supabase/shipping.ts",
   "utf8",
 );
+const collectionMigration = readFileSync(
+  "supabase/migrations/00319_shipping_collection_and_receiver.sql",
+  "utf8",
+);
 
 describe("Invoice shipping atomic hardening", () => {
   it("derives tenant, actor, invoice totals and debt on the server", () => {
@@ -28,7 +32,7 @@ describe("Invoice shipping atomic hardening", () => {
   });
 
   it("removes client-side multi-step shipping writes", () => {
-    expect(service).toContain('"attach_invoice_shipment_atomic"');
+    expect(service).toContain('"attach_invoice_shipment_atomic_v2"');
     expect(service).not.toMatch(
       /\.from\("invoices"\)[\s\S]{0,500}\.update\(/,
     );
@@ -36,5 +40,13 @@ describe("Invoice shipping atomic hardening", () => {
       /\.from\("shipping_orders"\)[\s\S]{0,500}\.insert\(/,
     );
     expect(service).not.toContain(".from(\"customers\")");
+  });
+
+  it("keeps buyer debt separate from courier collection without rewriting legacy rows", () => {
+    expect(collectionMigration).toContain("collection_mode in ('cod', 'none')");
+    expect(collectionMigration).toContain("Existing shipments keep collection_mode = NULL");
+    expect(collectionMigration).not.toMatch(/update public\.shipping_orders[\s\S]{0,120}where collection_mode is null/i);
+    expect(collectionMigration).toContain("case when p_collection_mode = 'cod' then v_debt else 0 end");
+    expect(collectionMigration).toContain("guard_shipping_collection_00319");
   });
 });

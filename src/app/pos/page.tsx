@@ -107,6 +107,7 @@ import { Button } from "@/components/ui/button";
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
+import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
 import { VariantPickerDialog } from "./components/variant-picker-dialog";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
@@ -1266,10 +1267,13 @@ function PosPageInner() {
   useEffect(() => {
     if (state.sellingMode !== "delivery" || !state.customer) return;
     const di = state.deliveryInfo;
-    // Only auto-fill if fields are empty (don't overwrite manual edits)
-    if (!di.recipientName && !di.recipientPhone) {
+    // Keep receiver synchronized while "Giống người mua" is active. Manual
+    // receiver edits turn that flag off, so they are never overwritten.
+    if (di.sameAsBuyer || (!di.recipientName && !di.recipientPhone)) {
       state.setDeliveryInfo({
         ...di,
+        sameAsBuyer: true,
+        receiverCustomerId: state.customer.id,
         recipientName: state.customer.name || "",
         recipientPhone: state.customer.phone || "",
         address: state.customer.address || di.address,
@@ -2390,11 +2394,15 @@ function PosPageInner() {
               // 04/08: gán đối tác giao hàng vào vận đơn (trước luôn rỗng)
               partnerId: di.partnerId || null,
               note: di.deliveryNote || null,
+              collectionMode: di.codEnabled ? "cod" : "none",
+              receiverCustomerId: di.receiverCustomerId || null,
             });
             if (r.shipmentCode) {
               toast({
                 title: `Đã tạo vận đơn ${r.shipmentCode}`,
-                description: `Phí giao ${formatCurrency(state.shippingFee)} · thu hộ ${formatCurrency(Math.max(0, state.total - paid))}`,
+                description: di.codEnabled
+                  ? `Phí giao ${formatCurrency(state.shippingFee)} · thu khi giao ${formatCurrency(Math.max(0, state.total - paid))}`
+                  : `Phí giao ${formatCurrency(state.shippingFee)} · không thu`,
                 variant: "success",
               });
             }
@@ -3356,6 +3364,7 @@ function PosPageInner() {
             <DeliveryForm
               value={state.deliveryInfo}
               onChange={state.setDeliveryInfo}
+              buyer={state.customer}
             />
           )}
 
@@ -4918,12 +4927,37 @@ function SellingModeTab({
 function DeliveryForm({
   value,
   onChange,
+  buyer,
 }: {
   value: DeliveryInfo;
   onChange: (d: DeliveryInfo) => void;
+  buyer: { id: string; name: string; phone: string; address?: string } | null;
 }) {
-  const update = (field: keyof DeliveryInfo, val: string | number | boolean) =>
-    onChange({ ...value, [field]: val });
+  const update = (field: keyof DeliveryInfo, val: string | number | boolean) => {
+    const receiverEdited = ["recipientName", "recipientPhone", "address", "ward", "district"].includes(field);
+    onChange({
+      ...value,
+      [field]: val,
+      ...(receiverEdited ? { sameAsBuyer: false, receiverCustomerId: "" } : {}),
+    });
+  };
+
+  const setSameAsBuyer = (checked: boolean) => {
+    onChange({
+      ...value,
+      sameAsBuyer: checked,
+      receiverCustomerId: checked ? (buyer?.id ?? "") : "",
+      ...(checked && buyer
+        ? {
+            recipientName: buyer.name || "",
+            recipientPhone: buyer.phone || "",
+            address: buyer.address || "",
+            ward: "",
+            district: "",
+          }
+        : {}),
+    });
+  };
 
   // 04/08: ô chọn đối tác giao hàng — trước đây POS không truyền partnerId nên
   // MỌI vận đơn từ POS đều không biết ai giao. Chỉ tải khi form mở (bán giao
@@ -4948,6 +4982,14 @@ function DeliveryForm({
       <div className="flex items-center gap-2 text-[11px] font-semibold text-status-warning">
         <Icon name="local_shipping" size={14} />
         Thông tin giao hàng
+        <label className="ml-auto flex cursor-pointer items-center gap-1.5 font-normal text-foreground">
+          <input
+            type="checkbox"
+            checked={value.sameAsBuyer}
+            onChange={(e) => setSameAsBuyer(e.target.checked)}
+          />
+          Giống người mua
+        </label>
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div className="relative">
@@ -4973,6 +5015,23 @@ function DeliveryForm({
           <Icon name="call" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
       </div>
+      {!value.sameAsBuyer && (
+        <ReceiverCustomerSelect
+          compact
+          onSelect={(customer) => {
+            onChange({
+              ...value,
+              sameAsBuyer: false,
+              receiverCustomerId: customer.id,
+              recipientName: customer.name,
+              recipientPhone: customer.phone,
+              address: customer.address ?? "",
+              ward: customer.ward ?? "",
+              district: customer.province ?? "",
+            });
+          }}
+        />
+      )}
       <div className="relative">
         <input
           type="text"
@@ -5034,11 +5093,11 @@ function DeliveryForm({
           onChange={(e) => update("codEnabled", e.target.value === "cod")}
           className="h-7 flex-1 rounded border border-border px-1.5 text-[11px] outline-none focus:border-primary bg-white"
         >
-          <option value="cod">Thu COD khi giao (khách trả lúc nhận hàng)</option>
-          <option value="prepaid">Khách đã thanh toán trước</option>
+          <option value="cod">Thu khi giao</option>
+          <option value="prepaid">Không thu</option>
         </select>
         <span className="whitespace-nowrap text-[10px] text-muted-foreground">
-          {value.codEnabled ? "thu hộ = tổng − tiền đưa trước" : "thu đủ tại quầy"}
+          {value.codEnabled ? "Người nhận trả" : "Người mua trả sau/đã trả"}
         </span>
       </div>
       <input

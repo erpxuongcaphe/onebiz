@@ -281,9 +281,9 @@ function ShippingOrderDetail({
                 fields={[
                   { label: "Mã HD", value: order.invoiceCode },
                   { label: "Đối tác giao hàng", value: order.deliveryPartner },
-                  { label: "Khách hàng", value: order.customerName },
+                  { label: "Người nhận", value: order.customerName },
                   { label: "Phí giao", value: formatCurrency(order.fee) },
-                  { label: "COD", value: formatCurrency(order.cod) },
+                  { label: "Thu khi giao", value: formatCurrency(order.cod) },
                 ]}
               />
             ),
@@ -496,12 +496,12 @@ export default function VanDonPage() {
       { header: "Mã vận đơn", key: "code", width: 15 },
       { header: "Thời gian tạo", key: "createdAt", width: 18, format: (v: string) => formatDate(v) },
       { header: "Mã hóa đơn", key: "invoiceCode", width: 15 },
-      { header: "Khách hàng", key: "customerName", width: 25 },
+      { header: "Người nhận", key: "customerName", width: 25 },
       { header: "SĐT người nhận", key: "customerPhone", width: 15 },
       { header: "Địa chỉ giao", key: "address", width: 35 },
       { header: "Đối tác giao hàng", key: "deliveryPartner", width: 20 },
       { header: "Phí giao", key: "fee", width: 12 },
-      { header: "Thu hộ (COD)", key: "cod", width: 15 },
+      { header: "Thu khi giao", key: "cod", width: 15 },
       {
         header: "Trạng thái",
         key: "status",
@@ -597,7 +597,7 @@ export default function VanDonPage() {
     },
     {
       accessorKey: "cod",
-      header: "Thu hộ (COD)",
+      header: "Thu khi giao",
       size: 130,
       cell: ({ row }) =>
         row.original.cod > 0 ? (

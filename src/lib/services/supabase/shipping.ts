@@ -152,6 +152,8 @@ export async function getShippingOrderByInvoice(
 export interface CreateShipmentInput {
   invoiceId: string;
   fee: number; // phí giao hàng thu khách
+  collectionMode: "cod" | "none";
+  receiverCustomerId?: string | null;
   receiverName: string;
   receiverPhone: string;
   receiverAddress: string;
@@ -186,11 +188,13 @@ async function attachInvoiceShipmentAtomic(input: {
   receiverAddress?: string | null;
   partnerId?: string | null;
   note?: string | null;
+  collectionMode: "cod" | "none";
+  receiverCustomerId?: string | null;
 }): Promise<AttachShipmentRpcResult> {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "attach_invoice_shipment_atomic",
+    "attach_invoice_shipment_atomic_v2",
     {
       p_invoice_id: input.invoiceId,
       p_delivery_fee: Math.max(0, Number(input.fee) || 0),
@@ -199,6 +203,8 @@ async function attachInvoiceShipmentAtomic(input: {
       p_receiver_address: input.receiverAddress ?? null,
       p_partner_id: input.partnerId ?? null,
       p_note: input.note ?? null,
+      p_collection_mode: input.collectionMode,
+      p_receiver_customer_id: input.receiverCustomerId ?? null,
     },
   );
   if (error) handleError(error, "attachInvoiceShipmentAtomic.rpc");
@@ -225,6 +231,8 @@ export async function createShipmentForInvoice(
     receiverAddress: input.receiverAddress,
     partnerId: input.partnerId,
     note: input.note,
+    collectionMode: input.collectionMode,
+    receiverCustomerId: input.receiverCustomerId,
   });
   if (!result.shipment_id) {
     throw new Error("Phản hồi tạo vận đơn thiếu mã vận đơn");
@@ -255,6 +263,8 @@ export interface AttachDeliveryInput {
   receiverAddress?: string;
   partnerId?: string | null;
   note?: string | null;
+  collectionMode: "cod" | "none";
+  receiverCustomerId?: string | null;
 }
 
 /**
@@ -282,6 +292,8 @@ export async function attachDeliveryToInvoice(
     receiverAddress: input.receiverAddress,
     partnerId: input.partnerId,
     note: input.note,
+    collectionMode: input.collectionMode,
+    receiverCustomerId: input.receiverCustomerId,
   });
   return { shipmentCode: result.shipment_code ?? null };
 }
