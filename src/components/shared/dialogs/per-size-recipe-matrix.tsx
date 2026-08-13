@@ -11,7 +11,7 @@
  * từng size (nhận số lẻ), và GIÁ VỐN tự tính theo size (Σ lượng × giá vốn NVL).
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -61,6 +61,88 @@ interface Props {
   materials: Product[];
   groups: ModifierGroup[];
   loading?: boolean;
+}
+
+function MaterialSearchCell({
+  value,
+  materials,
+  onSelect,
+}: {
+  value: string;
+  materials: Product[];
+  onSelect: (product: Product) => void;
+}) {
+  const selected = materials.find((product) => product.id === value);
+  const [query, setQuery] = useState(selected ? `${selected.code} · ${selected.name}` : "");
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) setQuery(selected ? `${selected.code} · ${selected.name}` : "");
+  }, [open, selected]);
+
+  const results = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("vi");
+    return materials
+      .filter(
+        (product) =>
+          !normalized ||
+          product.code.toLocaleLowerCase("vi").includes(normalized) ||
+          product.name.toLocaleLowerCase("vi").includes(normalized),
+      )
+      .slice(0, 40);
+  }, [materials, query]);
+
+  return (
+    <div className="min-w-[230px]">
+      <Input
+        value={query}
+        onFocus={() => {
+          setOpen(true);
+          if (selected) setQuery("");
+        }}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && results[0]) {
+            event.preventDefault();
+            onSelect(results[0]);
+            setOpen(false);
+          }
+          if (event.key === "Escape") setOpen(false);
+        }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        placeholder="Nhập mã hoặc tên nguyên liệu..."
+        className="h-10"
+      />
+      {open && (
+        <div className="mt-1 max-h-48 min-w-[280px] overflow-y-auto rounded-md border bg-popover shadow-sm">
+          {results.length === 0 ? (
+            <p className="p-3 text-xs text-muted-foreground">Không tìm thấy nguyên liệu.</p>
+          ) : (
+            results.map((product) => (
+              <button
+                key={product.id}
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => {
+                  onSelect(product);
+                  setOpen(false);
+                }}
+                className="block w-full border-b px-3 py-2 text-left last:border-b-0 hover:bg-muted/60"
+              >
+                <span className="block truncate text-sm font-medium">{product.name}</span>
+                <span className="block truncate text-xs text-muted-foreground">
+                  {product.code} · {product.stockUnit || product.unit || "Chưa có ĐVT"}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function PerSizeRecipeMatrix({
@@ -203,42 +285,20 @@ export function PerSizeRecipeMatrix({
               return (
                 <tr key={row.key} className="border-t border-border">
                   <td className="px-2 py-1.5">
-                    <Select
-                      value={row.materialId || null}
-                      onValueChange={(v) => {
-                        const id = v ?? "";
-                        const m = matById.get(id);
+                    <MaterialSearchCell
+                      value={row.materialId}
+                      materials={materials.filter(
+                        (material) =>
+                          material.id === row.materialId ||
+                          !rows.some((other) => other.key !== row.key && other.materialId === material.id),
+                      )}
+                      onSelect={(material) =>
                         patch(row.key, {
-                          materialId: id,
-                          unit:
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (m as any)?.stockUnit ||
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            (m as any)?.unit ||
-                            row.unit,
-                        });
-                      }}
-                      items={materials.map((m) => ({
-                        value: m.id,
-                        label: `${m.code} · ${m.name}`,
-                      }))}
-                    >
-                      <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="— Tìm / chọn nguyên liệu —">
-                          {(v) => {
-                            const m = matById.get(v as string);
-                            return m ? `${m.code} · ${m.name}` : "— Tìm / chọn nguyên liệu —";
-                          }}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {materials.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            {m.code} · {m.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          materialId: material.id,
+                          unit: material.stockUnit || material.unit || row.unit,
+                        })
+                      }
+                    />
                   </td>
                   <td className="px-2 py-1.5">
                     <Select

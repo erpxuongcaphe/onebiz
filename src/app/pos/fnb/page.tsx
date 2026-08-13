@@ -365,7 +365,10 @@ function FnbPosPageInner() {
           if (cached.products.length > 0) {
             setCategories(cached.categories);
             setProducts(cached.products);
-            setToppingProducts(cached.toppings);
+            // Cờ topping SKU đang tắt thì không đưa cache SKU-TPP vào state.
+            // Luồng hiện tại vẫn dùng nhóm tuỳ chọn legacy; đọc cache mới ở đây
+            // vừa thừa vừa dễ làm người bảo trì hiểu nhầm hai cơ chế cùng chạy.
+            setToppingProducts(CHE_DO_TOPPING_SKU ? cached.toppings : []);
             setLoading(false); // Show cached data immediately
             // 06/08: cache đã đủ để DÙNG, nhưng chưa chắc là mới nhất.
             // `loading` tắt ở đây chính là lý do KHÔNG được dùng
@@ -415,12 +418,12 @@ function FnbPosPageInner() {
           // dụng ĐÚNG chi nhánh — nên KHÔNG nấp sau cổng stale 30 phút của
           // menu: đổi chi nhánh là topping phải khác ngay dù menu chưa stale.
           // Lỗi mạng → null: GIỮ topping đang hiện, không xoá thành rỗng.
-          const toppingsPromise = getToppingPhanHopLe(tenantId, branchId).catch(
-            (err) => {
-              console.warn("[FnB] tải topping thất bại:", err);
-              return null;
-            },
-          );
+          const toppingsPromise = CHE_DO_TOPPING_SKU
+            ? getToppingPhanHopLe(tenantId, branchId).catch((err) => {
+                console.warn("[FnB] tải topping thất bại:", err);
+                return null;
+              })
+            : Promise.resolve(null);
 
           const tablesPromise = branchId
             ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])

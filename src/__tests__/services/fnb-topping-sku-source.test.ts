@@ -134,6 +134,15 @@ describe("Khoá nguồn topping — một cửa fnb-toppings.ts", () => {
     expect(trang).toContain("getToppingPhanHopLe(tenantId, branchId)");
   });
 
+  it("cờ topping SKU tắt thì không đọc cache SKU và không gọi Supabase", () => {
+    expect(trang).toContain(
+      "setToppingProducts(CHE_DO_TOPPING_SKU ? cached.toppings : [])",
+    );
+    expect(trang).toMatch(
+      /const toppingsPromise = CHE_DO_TOPPING_SKU\s*\? getToppingPhanHopLe/,
+    );
+  });
+
   it("topping KHÔNG nấp sau cổng stale 30 phút của menu", () => {
     // Đổi chi nhánh trong cửa 30 phút: menu chưa stale nhưng topping đã
     // khác. Nếu topping nằm trong catalogPromise (gated needsRefresh) thì

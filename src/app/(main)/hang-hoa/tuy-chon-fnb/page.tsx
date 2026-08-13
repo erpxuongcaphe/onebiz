@@ -42,6 +42,7 @@ import {
   type ModifierOption,
   type ModifierRule,
   type ModifierChannel,
+  getModifierStockConfigError,
 } from "@/lib/services/supabase/modifier-groups";
 
 const RULE_LABEL: Record<ModifierRule, string> = {
@@ -115,7 +116,7 @@ export default function ModifierFnbPage() {
       } catch (err) {
         toast({
           variant: "error",
-          title: "Lỗi tải options",
+          title: "Lỗi tải lựa chọn",
           description: err instanceof Error ? err.message : "Vui lòng thử lại",
         });
       } finally {
@@ -294,7 +295,7 @@ export default function ModifierFnbPage() {
                           {moTaQuyTac(g).split(" — ")[0]}
                         </span>
                         <span className="text-xs text-muted-foreground">
-                          {g.optionCount ?? 0} option{(g.optionCount ?? 0) !== 1 ? "s" : ""}
+                          {g.optionCount ?? 0} lựa chọn
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground">{moTaQuyTac(g)}</p>
@@ -313,17 +314,17 @@ export default function ModifierFnbPage() {
                 {expanded && (
                   <div className="border-t bg-muted/30 px-4 py-3">
                     <div className="mb-2 flex items-center justify-between">
-                      <h4 className="text-sm font-medium">Options trong "{g.name}"</h4>
+                      <h4 className="text-sm font-medium">Lựa chọn trong "{g.name}"</h4>
                       <Button size="sm" onClick={() => openCreateOption(g.id)}>
                         <Icon name="add" size={14} className="mr-1" />
-                        Thêm option
+                        Thêm lựa chọn
                       </Button>
                     </div>
                     {loadingOpts ? (
-                      <p className="py-2 text-xs text-muted-foreground">Đang tải options...</p>
+                      <p className="py-2 text-xs text-muted-foreground">Đang tải lựa chọn...</p>
                     ) : opts.length === 0 ? (
                       <p className="py-3 text-center text-xs text-muted-foreground">
-                        Chưa có option nào. Bấm "Thêm option" để thêm.
+                        Chưa có lựa chọn nào. Bấm "Thêm lựa chọn" để thêm.
                       </p>
                     ) : (
                       <div className="space-y-1">
@@ -341,10 +342,15 @@ export default function ModifierFnbPage() {
                                   <span className="text-xs text-status-success">+{formatCurrency(o.priceDelta)}</span>
                                 )}
                                 {o.scaleFactor !== null && (
-                                  <span className="text-xs text-status-info">scale × {o.scaleFactor}</span>
+                                  <span className="text-xs text-status-info">hệ số × {o.scaleFactor}</span>
                                 )}
                                 {o.linkedProductName && (
                                   <span className="text-xs text-muted-foreground">→ {o.linkedProductCode} {o.linkedProductName}</span>
+                                )}
+                                {o.scaleFactor !== null && o.linkedProductId && (
+                                  <span className="text-xs font-medium text-status-error">
+                                    Cấu hình trừ kho bị trùng
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -608,14 +614,16 @@ function OptionDialog({
     }
     setSaving(true);
     try {
-      // Resolve linkedProductId từ linkedCode (lookup products by code)
+      // Resolve linkedProductId theo đúng tenant hiện tại.
       let linkedProductId: string | null | undefined = undefined;
       if (linkedCode.trim()) {
-        const { getClient } = await import("@/lib/services/supabase/base");
+        const { getClient, getCurrentTenantId } = await import("@/lib/services/supabase/base");
         const supabase = getClient();
+        const tenantId = await getCurrentTenantId();
         const { data } = await supabase
           .from("products")
           .select("id")
+          .eq("tenant_id", tenantId)
           .eq("code", linkedCode.trim())
           .maybeSingle();
         if (!data) {
@@ -641,6 +649,15 @@ function OptionDialog({
         isDefault,
         sortOrder,
       };
+      const configError = getModifierStockConfigError(input);
+      if (configError) {
+        toast({
+          variant: "warning",
+          title: "Cách trừ kho chưa đúng",
+          description: configError,
+        });
+        return;
+      }
       if (editing) {
         await updateModifierOption(editing.id, input);
         toast({ variant: "success", title: "Đã lưu", description: `Cập nhật "${label}".` });
@@ -653,7 +670,7 @@ function OptionDialog({
     } catch (err) {
       toast({
         variant: "error",
-        title: "Lỗi lưu option",
+        title: "Lỗi lưu lựa chọn",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
       });
     } finally {
@@ -665,14 +682,14 @@ function OptionDialog({
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{editing ? "Sửa option" : "Thêm option"}</DialogTitle>
+          <DialogTitle>{editing ? "Sửa lựa chọn" : "Thêm lựa chọn"}</DialogTitle>
           <DialogDescription>
-            Vd: "70%" (scale 0.7 cho Mức đường), "Trân châu đen" (+7,000, link NVL-TPV-001).
+            Dùng hệ số cho thành phần đã có trong công thức, hoặc trừ thẳng một mã hàng. Không dùng cả hai.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
           <div>
-            <Label>Tên option *</Label>
+            <Label>Tên lựa chọn *</Label>
             <Input
               autoFocus
               value={label}
@@ -695,7 +712,7 @@ function OptionDialog({
               />
             </div>
             <div>
-              <Label>Scale BOM (×)</Label>
+              <Label>Hệ số công thức (×)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -706,14 +723,14 @@ function OptionDialog({
             </div>
           </div>
           <div>
-            <Label>Mã SP liên kết (NVL/topping)</Label>
+            <Label>Mã hàng trừ trực tiếp</Label>
             <Input
               value={linkedCode}
               onChange={(e) => setLinkedCode(e.target.value)}
               placeholder="VD: NVL-TPV-001"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Topping cần điền — POS sẽ trừ tồn của mã này khi cashier chọn.
+              Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Không điền cho mức đường/đá dùng hệ số công thức.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-3">

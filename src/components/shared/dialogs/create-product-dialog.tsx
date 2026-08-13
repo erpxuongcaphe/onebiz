@@ -2768,10 +2768,17 @@ export function CreateProductDialog({
                                       : "hover:bg-muted/40"
                                   }`}
                                 >
-                                  <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={() => {}}
-                                  />
+                                  <span
+                                    aria-hidden
+                                    data-selected={isSelected ? "true" : "false"}
+                                    className={`grid size-4 shrink-0 place-items-center rounded-[4px] border ${
+                                      isSelected
+                                        ? "border-primary bg-primary text-primary-foreground"
+                                        : "border-input"
+                                    }`}
+                                  >
+                                    {isSelected && <Icon name="check" size={14} />}
+                                  </span>
                                   <span className="font-mono text-[11px] text-muted-foreground min-w-[80px]">
                                     {p.code}
                                   </span>
