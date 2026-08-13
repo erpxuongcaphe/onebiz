@@ -513,6 +513,9 @@ export default function ThietLapGiaPage() {
     setPriorityFilter("all");
   }
 
+  const emptyState =
+    search.trim() || activeFilters.length > 0 ? "no-results" : "no-data";
+
   const columns: ColumnDef<PriceTier, unknown>[] = [
     {
       accessorKey: "code",
@@ -660,66 +663,43 @@ export default function ThietLapGiaPage() {
         onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
       />
 
-      {!loading && filtered.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground">
-          <Icon name="sell" size={48} className="mb-3 opacity-30" />
-          <p className="text-sm">
-            {data.length === 0
-              ? "Chưa có bảng giá nào"
-              : "Không có bảng giá phù hợp điều kiện tìm kiếm"}
-          </p>
-          {data.length === 0 ? (
-            <Button
-              size="sm"
-              className="mt-3"
-              onClick={() => {
-                setEditingTier(null);
-                setCreateOpen(true);
-              }}
-            >
-              <Icon name="add" size={16} className="mr-1" />
-              Tạo bảng giá đầu tiên
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              variant="outline"
-              className="mt-3"
-              onClick={() => {
-                setSearch("");
-                clearFilters();
-              }}
-            >
-              Xóa điều kiện tìm kiếm
-            </Button>
+      <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+        <DataTable
+          columns={columns}
+          data={pagedData}
+          loading={loading}
+          total={filtered.length}
+          emptyState={emptyState}
+          emptyTitle={
+            emptyState === "no-results"
+              ? "Không tìm thấy bảng giá"
+              : "Chưa có bảng giá"
+          }
+          emptyDescription={
+            emptyState === "no-results"
+              ? "Thử thay đổi kênh áp dụng, tình trạng sản phẩm, mức ưu tiên hoặc nội dung tìm kiếm."
+              : 'Bấm "Tạo bảng giá" để thiết lập chính sách giá đầu tiên.'
+          }
+          emptyIcon="sell"
+          pageIndex={page}
+          pageSize={pageSize}
+          pageCount={Math.ceil(filtered.length / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          getRowId={(row) => row.id}
+          renderDetail={(tier, onClose) => (
+            <PriceTierDetail
+              tier={tier}
+              onClose={onClose}
+              onChange={fetchData}
+            />
           )}
-        </div>
-      ) : (
-        <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
-          <DataTable
-            columns={columns}
-            data={pagedData}
-            loading={loading}
-            total={filtered.length}
-            pageIndex={page}
-            pageSize={pageSize}
-            pageCount={Math.ceil(filtered.length / pageSize)}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(0);
-            }}
-            expandedRow={expandedRow}
-            onExpandedRowChange={setExpandedRow}
-            getRowId={(row) => row.id}
-            renderDetail={(tier, onClose) => (
-              <PriceTierDetail
-                tier={tier}
-                onClose={onClose}
-                onChange={fetchData}
-              />
-            )}
-            rowActions={(row) => [
+          rowActions={(row) => [
               {
                 label: "Sửa",
                 icon: <Icon name="edit" size={16} />,
@@ -740,10 +720,9 @@ export default function ThietLapGiaPage() {
                 variant: "destructive",
                 separator: true,
               },
-            ]}
-          />
-        </div>
-      )}
+          ]}
+        />
+      </div>
 
       <FilterPanel
         open={filterOpen}
