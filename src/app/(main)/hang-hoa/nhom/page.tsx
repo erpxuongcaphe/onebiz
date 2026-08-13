@@ -43,6 +43,7 @@ import { formatDate, formatCurrency } from "@/lib/format";
 import {
   getCategoriesWithCounts,
   getCategoriesWithChannelBreakdown,
+  scopeCategoriesByChannel,
   type CategoryWithChannelBreakdown,
   createCategory,
   updateCategory,
@@ -52,7 +53,7 @@ import {
   suggestCategoryCode,
   previewProductCodeFromGroup,
 } from "@/lib/services";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import type { ProductCategory } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 // Day 22/05/2026 (CEO V3): Excel import/export categories
@@ -68,6 +69,10 @@ import {
   setCategoryModifierGroups,
   type ModifierGroup,
 } from "@/lib/services/supabase/modifier-groups";
+import {
+  getBranchSalesChannel,
+  type BranchSalesChannel,
+} from "@/lib/services/supabase/products";
 
 type CategoryScope = "nvl" | "sku";
 type CategoryUsageFilter = "all" | "used" | "empty";
@@ -88,7 +93,13 @@ const USAGE_OPTIONS = [
 // Inline panel — list SP trong nhóm (CEO bấm nhóm "Cà phê" → thấy ngay
 // 12 SP). Tối giản: chỉ mã + tên + tồn + link.
 // ============================================================
-function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
+function CategoryProductsPanel({
+  categoryId,
+  channel,
+}: {
+  categoryId: string;
+  channel: BranchSalesChannel;
+}) {
   const [items, setItems] = useState<
     Array<{
       id: string;
@@ -105,7 +116,7 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    getProductsByCategoryId(categoryId, 100)
+    getProductsByCategoryId(categoryId, 100, channel)
       .then((rows) => {
         if (!cancelled) setItems(rows);
       })
@@ -119,7 +130,7 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [categoryId]);
+  }, [categoryId, channel]);
 
   if (loading) {
     return (
@@ -204,6 +215,11 @@ function CategoryProductsPanel({ categoryId }: { categoryId: string }) {
 // ============================================================
 export default function NhomHangPage() {
   const { toast } = useToast();
+  const { activeBranchId, isReady: branchReady } = useBranchFilter();
+  const [branchChannel, setBranchChannel] = useState<
+    BranchSalesChannel | undefined
+  >(undefined);
+  const [branchChannelFailed, setBranchChannelFailed] = useState(false);
   const [scope, setScope] = useState<CategoryScope>("nvl");
   const [data, setData] = useState<ProductCategory[]>([]);
   // Day 20/05/2026 (CEO Fix #3): track channel breakdown cho SKU categories
@@ -275,6 +291,44 @@ export default function NhomHangPage() {
     Set<string>
   >(new Set());
   const [loadingModifiers, setLoadingModifiers] = useState(false);
+
+  // Nhóm SKU phải theo đúng kênh bán của chi nhánh đang chọn. `undefined`
+  // là trạng thái đang xác định kênh; trong lúc đó bảng được giữ loading để
+  // không nháy dữ liệu FnB ở chi nhánh Retail (hoặc ngược lại).
+  useEffect(() => {
+    if (!branchReady) return;
+    if (!activeBranchId) {
+      setBranchChannel(null);
+      setBranchChannelFailed(false);
+      setChannelFilter("all");
+      return;
+    }
+
+    let cancelled = false;
+    setBranchChannel(undefined);
+    setBranchChannelFailed(false);
+    getBranchSalesChannel(activeBranchId)
+      .then((channel) => {
+        if (cancelled) return;
+        setBranchChannel(channel);
+        setBranchChannelFailed(false);
+        if (channel) setChannelFilter(channel);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fail closed: không mở rộng thành cả Retail + FnB khi lỗi mạng.
+        setBranchChannel(undefined);
+        setBranchChannelFailed(true);
+        toast({
+          variant: "error",
+          title: "Không xác định được kênh của chi nhánh",
+        });
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId, branchReady, toast]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -360,9 +414,24 @@ export default function NhomHangPage() {
   }
 
   // Filter by debouncedSearch + channelFilter (Day 20/05/2026 CEO Fix #3)
+  const effectiveChannel: BranchSalesChannel | undefined = activeBranchId
+    ? branchChannel
+    : channelFilter === "all"
+      ? null
+      : channelFilter;
+
+  const scopedData = useMemo(() => {
+    if (scope !== "sku") return data;
+    if (effectiveChannel === undefined) return [];
+    return scopeCategoriesByChannel(
+      data as CategoryWithChannelBreakdown[],
+      effectiveChannel,
+    );
+  }, [data, effectiveChannel, scope]);
+
   const filtered = useMemo(
     () =>
-      data
+      scopedData
         .filter((category) => {
           const normalizedSearch = debouncedSearch.trim().toLowerCase();
           if (!normalizedSearch) return true;
@@ -377,28 +446,15 @@ export default function NhomHangPage() {
           if (usageFilter === "empty" && (category.productCount ?? 0) > 0)
             return false;
           return true;
-        })
-        .filter((c) => {
-          if (scope !== "sku" || channelFilter === "all") return true;
-          const slot = channelBreakdown.get(c.id);
-          if (!slot) return false;
-          return channelFilter === "fnb" ? slot.fnb > 0 : slot.retail > 0;
         }),
-    [
-      channelBreakdown,
-      channelFilter,
-      data,
-      debouncedSearch,
-      scope,
-      usageFilter,
-    ],
+    [debouncedSearch, scopedData, usageFilter],
   );
 
-  const totalProducts = data.reduce(
+  const totalProducts = scopedData.reduce(
     (sum, category) => sum + (category.productCount ?? 0),
     0,
   );
-  const emptyGroups = data.filter(
+  const emptyGroups = scopedData.filter(
     (category) => (category.productCount ?? 0) <= 0,
   ).length;
   const fnbGroups = Array.from(channelBreakdown.values()).filter(
@@ -407,7 +463,7 @@ export default function NhomHangPage() {
 
   const activeFilters = useMemo(() => {
     const filters = [];
-    if (scope === "sku" && channelFilter !== "all") {
+    if (!activeBranchId && scope === "sku" && channelFilter !== "all") {
       filters.push({
         key: "channel",
         label: "Kênh",
@@ -428,12 +484,12 @@ export default function NhomHangPage() {
       });
     }
     return filters;
-  }, [channelFilter, scope, usageFilter]);
+  }, [activeBranchId, channelFilter, scope, usageFilter]);
 
   const clearFilters = useCallback(() => {
-    setChannelFilter("all");
+    setChannelFilter(branchChannel ?? "all");
     setUsageFilter("all");
-  }, []);
+  }, [branchChannel]);
 
   // -----------------------------------------------------------------------
   // Create / Edit handlers
@@ -445,7 +501,9 @@ export default function NhomHangPage() {
     // Day 22/05/2026: default channel theo filter hiện tại — nếu user đang
     // xem tab "FnB" → mặc định fnb, ngược lại retail. UX hợp lý: thường
     // user tạo nhóm cùng channel với tab đang xem.
-    setCategoryChannel(channelFilter === "retail" ? "retail" : "fnb");
+    setCategoryChannel(
+      effectiveChannel === "retail" ? "retail" : "fnb",
+    );
     codeManuallyEditedRef.current = false;
     setErrors({});
     setDialogOpen(true);
@@ -481,13 +539,15 @@ export default function NhomHangPage() {
     setErrors({});
     setSaving(true);
     try {
+      const channelForSave =
+        activeBranchId && branchChannel ? branchChannel : categoryChannel;
       let savedCategoryId: string | null = null;
       if (editingCategory) {
         await updateCategory(editingCategory.id, {
           name: trimmedName,
           code: trimmedCode,
           // CEO 22/05/2026: cập nhật channel nếu là SKU
-          ...(scope === "sku" ? { channel: categoryChannel } : {}),
+          ...(scope === "sku" ? { channel: channelForSave } : {}),
         });
         savedCategoryId = editingCategory.id;
         toast({
@@ -501,7 +561,7 @@ export default function NhomHangPage() {
           code: trimmedCode,
           scope,
           // CEO 22/05/2026: channel chỉ truyền khi scope=sku
-          ...(scope === "sku" ? { channel: categoryChannel } : {}),
+          ...(scope === "sku" ? { channel: channelForSave } : {}),
         });
         savedCategoryId = created.id;
         toast({
@@ -513,7 +573,7 @@ export default function NhomHangPage() {
 
       // CEO 01/06/2026 — Sprint 2.2c: Lưu modifier groups gán cho nhóm FnB.
       // Pattern Toast: gán 1 lần ở nhóm, mọi SP trong nhóm tự thừa kế.
-      if (savedCategoryId && scope === "sku" && categoryChannel === "fnb") {
+      if (savedCategoryId && scope === "sku" && channelForSave === "fnb") {
         try {
           await setCategoryModifierGroups(
             savedCategoryId,
@@ -874,30 +934,56 @@ export default function NhomHangPage() {
         >
           <ListMetric
             label="Nhóm hàng"
-            value={data.length.toString()}
+            value={scopedData.length.toString()}
             hint={`${filtered.length} đang hiển thị`}
             icon={<Icon name="category" size={16} />}
-            loading={loading}
+            loading={
+              loading ||
+              (scope === "sku" &&
+                branchChannel === undefined &&
+                !branchChannelFailed)
+            }
           />
           <ListMetric
             label="Sản phẩm"
             value={totalProducts.toString()}
             icon={<Icon name="inventory_2" size={16} />}
-            loading={loading}
+            loading={
+              loading ||
+              (scope === "sku" &&
+                branchChannel === undefined &&
+                !branchChannelFailed)
+            }
           />
           <ListMetric
             label="Nhóm trống"
             value={emptyGroups.toString()}
             icon={<Icon name="folder_off" size={16} />}
             tone={emptyGroups > 0 ? "danger" : "default"}
-            loading={loading}
+            loading={
+              loading ||
+              (scope === "sku" &&
+                branchChannel === undefined &&
+                !branchChannelFailed)
+            }
           />
           {scope === "sku" && (
             <ListMetric
-              label="Nhóm FnB"
-              value={fnbGroups.toString()}
-              icon={<Icon name="restaurant" size={16} />}
-              loading={loading}
+              label={branchChannel === "retail" ? "Nhóm Retail" : "Nhóm FnB"}
+              value={
+                branchChannel
+                  ? scopedData.length.toString()
+                  : fnbGroups.toString()
+              }
+              icon={
+                <Icon
+                  name={branchChannel === "retail" ? "storefront" : "restaurant"}
+                  size={16}
+                />
+              }
+              loading={
+                loading || (branchChannel === undefined && !branchChannelFailed)
+              }
             />
           )}
           <Button
@@ -927,7 +1013,12 @@ export default function NhomHangPage() {
           <DataTable
             columns={columns}
             data={filtered}
-            loading={loading}
+            loading={
+              loading ||
+              (scope === "sku" &&
+                branchChannel === undefined &&
+                !branchChannelFailed)
+            }
             total={filtered.length}
             emptyState={emptyState}
             emptyTitle={
@@ -945,7 +1036,10 @@ export default function NhomHangPage() {
             expandedRow={expandedRow}
             onExpandedRowChange={setExpandedRow}
             renderDetail={(cat) => (
-              <CategoryProductsPanel categoryId={cat.id} />
+              <CategoryProductsPanel
+                categoryId={cat.id}
+                channel={scope === "sku" ? (effectiveChannel ?? null) : null}
+              />
             )}
           />
         </div>
@@ -957,7 +1051,7 @@ export default function NhomHangPage() {
           onClearAll={clearFilters}
           title="Bộ lọc nhóm hàng"
         >
-          {scope === "sku" && (
+          {scope === "sku" && !activeBranchId && (
             <FilterGroup
               label="Kênh áp dụng"
               activeHint={
@@ -1092,6 +1186,7 @@ export default function NhomHangPage() {
                   <button
                     type="button"
                     onClick={() => setCategoryChannel("fnb")}
+                    disabled={!!activeBranchId && branchChannel !== "fnb"}
                     className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                       categoryChannel === "fnb"
                         ? "border-status-warning bg-status-warning/10 text-status-warning"
@@ -1104,6 +1199,7 @@ export default function NhomHangPage() {
                   <button
                     type="button"
                     onClick={() => setCategoryChannel("retail")}
+                    disabled={!!activeBranchId && branchChannel !== "retail"}
                     className={`flex-1 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                       categoryChannel === "retail"
                         ? "border-status-info bg-status-info/10 text-status-info"
@@ -1114,6 +1210,11 @@ export default function NhomHangPage() {
                     <span>Retail (bán lẻ đóng gói)</span>
                   </button>
                 </div>
+                {activeBranchId && branchChannel && (
+                  <p className="text-xs text-muted-foreground">
+                    Kênh được chọn theo chi nhánh đang làm việc.
+                  </p>
+                )}
                 {errors.channel && (
                   <p className="text-xs text-destructive">{errors.channel}</p>
                 )}

@@ -213,6 +213,7 @@ export async function moveCategorySortOrder(
 export async function getProductsByCategoryId(
   categoryId: string,
   limit = 100,
+  channel?: "retail" | "fnb" | null,
 ): Promise<
   Array<{
     id: string;
@@ -225,7 +226,7 @@ export async function getProductsByCategoryId(
   // Filter tenant_id — RLS dev disable nên cần tự filter để không leak
   // products của tenant khác.
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  let query = supabase
     .from("products")
     .select("id, code, name, stock, unit")
     .eq("tenant_id", tenantId)
@@ -233,6 +234,10 @@ export async function getProductsByCategoryId(
     .eq("is_active", true)
     .order("code")
     .limit(limit);
+
+  if (channel) query = query.eq("channel", channel);
+
+  const { data, error } = await query;
 
   if (error) throw error;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -340,6 +345,30 @@ export async function getCategoriesWithCounts(
 export interface CategoryWithChannelBreakdown extends ProductCategory {
   retailCount: number;
   fnbCount: number;
+}
+
+/**
+ * Thu hẹp nhóm SKU theo kênh của chi nhánh và đổi số lượng sản phẩm về đúng
+ * kênh đang xem. Không sửa dữ liệu gốc; `null` nghĩa là xem toàn hệ thống.
+ */
+export function scopeCategoriesByChannel(
+  categories: CategoryWithChannelBreakdown[],
+  channel: "retail" | "fnb" | null,
+): CategoryWithChannelBreakdown[] {
+  if (!channel) return categories;
+
+  return categories
+    .filter((category) => {
+      if (category.channel) return category.channel === channel;
+      return channel === "fnb"
+        ? category.fnbCount > 0
+        : category.retailCount > 0;
+    })
+    .map((category) => ({
+      ...category,
+      productCount:
+        channel === "fnb" ? category.fnbCount : category.retailCount,
+    }));
 }
 
 export async function getCategoriesWithChannelBreakdown(): Promise<
