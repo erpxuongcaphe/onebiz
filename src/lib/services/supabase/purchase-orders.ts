@@ -43,6 +43,7 @@ interface ReceivePurchaseItemsRpcResponse {
 
 export interface SavePurchaseOrderItemInput {
   productId: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
   discount: number;
@@ -118,7 +119,7 @@ export async function savePurchaseOrderAtomic(
 ): Promise<SavePurchaseOrderResult> {
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
-    "save_purchase_order_atomic",
+    "save_purchase_order_with_uom_atomic",
     {
       p_purchase_order_id: input.orderId ?? null,
       p_requested_code: input.requestedCode ?? null,
@@ -134,6 +135,7 @@ export async function savePurchaseOrderAtomic(
       p_receive_now: Boolean(input.receiveNow),
       p_items: input.items.map((item) => ({
         product_id: item.productId,
+        unit: item.unit ?? null,
         quantity: Number(item.quantity),
         unit_price: Number(item.unitPrice),
         discount: Number(item.discount ?? 0),
@@ -298,6 +300,8 @@ export interface PurchaseOrderItemRow {
   receivedQuantity: number;
   remaining: number;
   unitPrice: number;
+  /** Stock units represented by one displayed transaction unit. */
+  conversionFactor: number;
   lineTotal: number;
   /** Day 18/05/2026 (CEO): HSD nhập tại phiếu nhập (migration 00102) */
   expiryDate?: string | null;
@@ -315,7 +319,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, expiry_date, lot_number, products(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, lot_number, products(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });
@@ -332,23 +336,32 @@ export async function getPurchaseOrderItems(
     discount: number | string | null;
     vat_rate: number | string | null;
     unit: string | null;
+    transaction_quantity: number | string | null;
+    transaction_unit: string | null;
+    transaction_unit_price: number | string | null;
+    conversion_factor: number | string | null;
     expiry_date: string | null;
     lot_number: string | null;
     products: { code: string } | null;
   }>).map((row) => {
-    const qty = Number(row.quantity ?? 0);
-    const received = Number(row.received_quantity ?? 0);
-    const price = Number(row.unit_price ?? 0);
+    const stockQty = Number(row.quantity ?? 0);
+    const stockReceived = Number(row.received_quantity ?? 0);
+    const factor = Math.max(0.000001, Number(row.conversion_factor ?? 1));
+    const qty = Number(row.transaction_quantity ?? stockQty);
+    const receivedRaw = row.transaction_quantity == null ? stockReceived : stockReceived / factor;
+    const received = Math.min(qty, Math.round(receivedRaw * 10_000) / 10_000);
+    const price = Number(row.transaction_unit_price ?? row.unit_price ?? 0);
     return {
       id: row.id,
       productId: row.product_id,
       productCode: row.products?.code ?? "",
       productName: row.product_name ?? "",
-      unit: row.unit ?? "cái",
+      unit: row.transaction_unit ?? row.unit ?? "cái",
       quantity: qty,
       receivedQuantity: received,
-      remaining: Math.max(0, qty - received),
+      remaining: Math.max(0, Math.round((qty - received) * 10_000) / 10_000),
       unitPrice: price,
+      conversionFactor: factor,
       lineTotal: qty * price,
       expiryDate: row.expiry_date,
       lotNumber: row.lot_number,
@@ -364,7 +377,7 @@ export async function getPurchaseOrderItems(
 
 export interface PartialReceiveLine {
   itemId: string;
-  receiveQty: number; // 0 = skip, > remaining = clamped
+  receiveQty: number; // quantity in the supplier-document unit
 }
 
 /**
@@ -397,7 +410,7 @@ export async function receivePurchaseOrderPartial(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "receive_purchase_items_atomic",
+    "receive_purchase_items_with_uom_atomic",
     {
       p_order_id: orderId,
       p_lines: payload,
@@ -473,7 +486,7 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "receive_purchase_items_atomic",
+    "receive_purchase_items_with_uom_atomic",
     {
       p_order_id: orderId,
       p_lines: null, // null = "nhận toàn bộ remaining"
@@ -638,7 +651,7 @@ export async function suaGiaPhieuNhap(input: {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "update_purchase_order_prices",
+    "update_purchase_order_prices_with_uom",
     {
       p_order_id: input.orderId,
       p_items: input.items.map((i) => ({
@@ -732,8 +745,9 @@ export async function duplicatePurchaseOrder(
     receiveNow: false,
     items: sourceItems.map((item) => ({
       productId: String(item.product_id),
-      quantity: Number(item.quantity ?? 0),
-      unitPrice: Number(item.unit_price ?? 0),
+      quantity: Number(item.transaction_quantity ?? item.quantity ?? 0),
+      unit: item.transaction_unit ? String(item.transaction_unit) : String(item.unit ?? ""),
+      unitPrice: Number(item.transaction_unit_price ?? item.unit_price ?? 0),
       discount: Number(item.discount ?? 0),
       vatRate: Number(item.vat_rate ?? 0),
       expiryDate: item.expiry_date ? String(item.expiry_date) : null,

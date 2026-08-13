@@ -746,6 +746,7 @@ export async function bulkImportPurchaseOrders(
         return {
           productId: product.id,
           quantity: r.quantity,
+          unit: r.unit?.trim() || product.unit || undefined,
           unitPrice: r.unitPrice,
           discount: r.discount ?? 0,
           vatRate: r.vatRate ?? 0,

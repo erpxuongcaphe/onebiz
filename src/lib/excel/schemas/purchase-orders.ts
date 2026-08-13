@@ -27,6 +27,8 @@ export interface PurchaseOrderImportRow {
   productCode: string;
   /** Số lượng đặt */
   quantity: number;
+  /** Đơn vị trên chứng từ nhà cung cấp; bỏ trống dùng đơn vị tồn kho. */
+  unit?: string;
   /** Đơn giá nhập */
   unitPrice: number;
   /** Chiết khấu dòng (VND). Bỏ trống = 0 */
@@ -86,6 +88,15 @@ export const purchaseOrderExcelSchema: ExcelSchema<PurchaseOrderImportRow> = {
       required: true,
       min: 0,
       example: 100,
+      width: 12,
+    },
+    {
+      key: "unit",
+      header: "Đơn vị",
+      type: "string",
+      maxLength: 50,
+      example: "Thùng",
+      description: "Đơn vị mua; phải có quy đổi trực tiếp về đơn vị tồn kho của sản phẩm",
       width: 12,
     },
     {

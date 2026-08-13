@@ -227,7 +227,7 @@ export async function getPurchaseOrdersForExport(params: {
   const { data: items, error: iErr } = await supabase
     .from("purchase_order_items")
     .select(
-      "purchase_order_id, quantity, unit_price, discount, vat_rate, product:products(code)"
+      "purchase_order_id, quantity, unit_price, transaction_quantity, transaction_unit, transaction_unit_price, discount, vat_rate, product:products(code)"
     )
     .in("purchase_order_id", poIds);
   if (iErr) handleError(iErr, "getPurchaseOrdersForExport.items");
@@ -247,8 +247,9 @@ export async function getPurchaseOrdersForExport(params: {
       branchCode: (h.branch?.code ?? "") as string,
       note: (h.note ?? "") as string,
       productCode: (it.product?.code ?? "") as string,
-      quantity: Number(it.quantity ?? 0),
-      unitPrice: Number(it.unit_price ?? 0),
+      quantity: Number(it.transaction_quantity ?? it.quantity ?? 0),
+      unit: (it.transaction_unit ?? "") as string,
+      unitPrice: Number(it.transaction_unit_price ?? it.unit_price ?? 0),
       discount: Number(it.discount ?? 0),
       vatRate: Number(it.vat_rate ?? 0),
     });
@@ -435,18 +436,18 @@ export async function getInputInvoiceItems(invoiceId: string): Promise<PrintItem
 
   const { data, error } = await sb
     .from("purchase_order_items")
-    .select("product_name, quantity, unit_price, unit, products(code)")
+    .select("product_name, quantity, unit_price, unit, transaction_quantity, transaction_unit, transaction_unit_price, products(code)")
     .eq("purchase_order_id", poId)
     .order("id", { ascending: true });
   if (error) handleError(error, "getInputInvoiceItems:items");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return ((data ?? []) as any[]).map((r) => {
-    const qty = Number(r.quantity ?? 0);
-    const price = Number(r.unit_price ?? 0);
+    const qty = Number(r.transaction_quantity ?? r.quantity ?? 0);
+    const price = Number(r.transaction_unit_price ?? r.unit_price ?? 0);
     return {
       productCode: r.products?.code ?? "",
       productName: r.product_name ?? "",
-      unit: r.unit ?? undefined,
+      unit: r.transaction_unit ?? r.unit ?? undefined,
       quantity: qty,
       unitPrice: price,
       total: qty * price,

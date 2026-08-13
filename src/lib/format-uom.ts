@@ -14,6 +14,49 @@
 
 import type { UOMConversion } from "@/lib/types";
 
+/** Units that can be converted directly to the product stock unit. */
+export function getDirectConvertibleUnits(
+  stockUnit: string,
+  conversions: UOMConversion[] | null | undefined,
+): string[] {
+  const normalizedStock = stockUnit.trim().toLocaleLowerCase("vi");
+  const result = new Map<string, string>();
+  if (stockUnit.trim()) result.set(normalizedStock, stockUnit.trim());
+  for (const conversion of conversions ?? []) {
+    if (conversion.isActive === false || conversion.factor <= 0) continue;
+    const from = conversion.fromUnit.trim();
+    const to = conversion.toUnit.trim();
+    if (to.toLocaleLowerCase("vi") === normalizedStock && from) {
+      result.set(from.toLocaleLowerCase("vi"), from);
+    }
+    if (from.toLocaleLowerCase("vi") === normalizedStock && to) {
+      result.set(to.toLocaleLowerCase("vi"), to);
+    }
+  }
+  return Array.from(result.values());
+}
+
+/** Stock-unit quantity represented by one input unit. */
+export function getDirectConversionFactor(
+  stockUnit: string,
+  inputUnit: string,
+  conversions: UOMConversion[] | null | undefined,
+): number | null {
+  const stock = stockUnit.trim().toLocaleLowerCase("vi");
+  const input = inputUnit.trim().toLocaleLowerCase("vi");
+  if (!stock || !input) return null;
+  if (stock === input) return 1;
+  const matches: number[] = [];
+  for (const conversion of conversions ?? []) {
+    if (conversion.isActive === false || conversion.factor <= 0) continue;
+    const from = conversion.fromUnit.trim().toLocaleLowerCase("vi");
+    const to = conversion.toUnit.trim().toLocaleLowerCase("vi");
+    if (from === input && to === stock) matches.push(conversion.factor);
+    if (to === input && from === stock) matches.push(1 / conversion.factor);
+  }
+  return matches.length === 1 ? matches[0] : null;
+}
+
 export function buildUomConversion(
   mainUnit: string,
   relatedUnit: string,

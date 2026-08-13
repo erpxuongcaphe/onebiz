@@ -35,7 +35,7 @@ describe("Input invoice data flow hardening", () => {
     expect(dialog).toContain(
       'paymentMethod === "bank_transfer" ? "transfer" : "cash"',
     );
-    expect(purchaseService).toContain('"save_purchase_order_atomic"');
+    expect(purchaseService).toContain('"save_purchase_order_with_uom_atomic"');
     expect(purchaseService).toContain("p_payment_method");
     expect(migration).toContain("public.receive_purchase_items_atomic(");
     expect(migration).toContain("public.record_purchase_payment(");

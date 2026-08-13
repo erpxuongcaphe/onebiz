@@ -145,7 +145,10 @@ export function PartialReceiveDialog({
     if (!orderId) return;
     const payload = lines
       .filter((l) => l.checked && l.receiveQty > 0)
-      .map((l) => ({ itemId: l.id, receiveQty: l.receiveQty }));
+      .map((l) => ({
+        itemId: l.id,
+        receiveQty: l.receiveQty,
+      }));
 
     if (payload.length === 0) {
       toast({ title: "Chọn ít nhất 1 dòng để nhập", variant: "warning" });

@@ -55,61 +55,27 @@ export async function getUOMConversionsByProductIds(
   return result;
 }
 
-export async function createUOMConversion(conversion: {
-  productId: string;
-  fromUnit: string;
-  toUnit: string;
-  factor: number;
-}): Promise<UOMConversion> {
-  const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("uom_conversions")
-    .insert({
-      tenant_id: tenantId,
-      product_id: conversion.productId,
-      from_unit: conversion.fromUnit,
-      to_unit: conversion.toUnit,
-      factor: conversion.factor,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return mapConversion(data);
-}
-
-export async function updateUOMConversion(
-  id: string,
-  updates: Partial<{
+export async function replaceProductUOMConversions(
+  productId: string,
+  stockUnit: string,
+  conversions: Array<{
     fromUnit: string;
     toUnit: string;
     factor: number;
-    isActive: boolean;
-  }>
-) {
-  const tenantId = await getCurrentTenantId();
-  const updateObj: Record<string, unknown> = {};
-  if (updates.fromUnit !== undefined) updateObj.from_unit = updates.fromUnit;
-  if (updates.toUnit !== undefined) updateObj.to_unit = updates.toUnit;
-  if (updates.factor !== undefined) updateObj.factor = updates.factor;
-  if (updates.isActive !== undefined) updateObj.is_active = updates.isActive;
-
-  const { error } = await supabase
-    .from("uom_conversions")
-    .update(updateObj)
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
-
-  if (error) throw error;
-}
-
-export async function deleteUOMConversion(id: string) {
-  const tenantId = await getCurrentTenantId();
-  const { error } = await supabase
-    .from("uom_conversions")
-    .update({ is_active: false })
-    .eq("tenant_id", tenantId)
-    .eq("id", id);
+  }>,
+): Promise<void> {
+  const { error } = await supabase.rpc(
+    "replace_product_uom_conversions_atomic" as never,
+    {
+      p_product_id: productId,
+      p_stock_unit: stockUnit.trim(),
+      p_conversions: conversions.map((conversion) => ({
+        from_unit: conversion.fromUnit.trim(),
+        to_unit: conversion.toUnit.trim(),
+        factor: conversion.factor,
+      })),
+    } as never,
+  );
 
   if (error) throw error;
 }

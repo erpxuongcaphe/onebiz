@@ -10,8 +10,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/lib/contexts";
 import {
   getUOMConversions,
-  createUOMConversion,
-  deleteUOMConversion,
+  replaceProductUOMConversions,
 } from "@/lib/services";
 import type { UOMConversion, Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
@@ -85,6 +84,18 @@ export function ProductUomConversionsTab({ product }: Props) {
       });
       return;
     }
+    const stockUnit = (product.stockUnit ?? product.unit ?? "").trim();
+    if (
+      fromUnit.trim().toLocaleLowerCase("vi") !== stockUnit.toLocaleLowerCase("vi") &&
+      toUnit.trim().toLocaleLowerCase("vi") !== stockUnit.toLocaleLowerCase("vi")
+    ) {
+      toast({
+        title: "Quy đổi không nối với đơn vị kho",
+        description: `Một đầu quy đổi phải là ${stockUnit}.`,
+        variant: "error",
+      });
+      return;
+    }
     const f = Number(factor);
     if (isNaN(f) || f <= 0) {
       toast({
@@ -97,12 +108,14 @@ export function ProductUomConversionsTab({ product }: Props) {
 
     setSaving(true);
     try {
-      await createUOMConversion({
-        productId: product.id,
-        fromUnit: fromUnit.trim(),
-        toUnit: toUnit.trim(),
-        factor: f,
-      });
+      await replaceProductUOMConversions(product.id, stockUnit, [
+        ...items.map((item) => ({
+          fromUnit: item.fromUnit,
+          toUnit: item.toUnit,
+          factor: item.factor,
+        })),
+        { fromUnit: fromUnit.trim(), toUnit: toUnit.trim(), factor: f },
+      ]);
       toast({ title: "Đã thêm quy đổi", variant: "success" });
       resetForm();
       load();
@@ -119,7 +132,17 @@ export function ProductUomConversionsTab({ product }: Props) {
 
   async function handleDelete(id: string) {
     try {
-      await deleteUOMConversion(id);
+      await replaceProductUOMConversions(
+        product.id,
+        product.stockUnit ?? product.unit ?? "",
+        items
+          .filter((item) => item.id !== id)
+          .map((item) => ({
+            fromUnit: item.fromUnit,
+            toUnit: item.toUnit,
+            factor: item.factor,
+          })),
+      );
       toast({ title: "Đã xóa quy đổi", variant: "success" });
       load();
     } catch (err) {

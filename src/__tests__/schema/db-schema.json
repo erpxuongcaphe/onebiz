@@ -144,6 +144,7 @@
    "updated_at"
   ],
   "purchase_order_items": [
+   "conversion_factor",
    "discount",
    "expiry_date",
    "id",
@@ -154,6 +155,9 @@
    "quantity",
    "received_quantity",
    "total",
+   "transaction_quantity",
+   "transaction_unit",
+   "transaction_unit_price",
    "unit",
    "unit_price",
    "vat_amount",
@@ -722,7 +726,10 @@
   ],
   "bom_items": [
    "bom_id",
+   "conversion_factor",
    "id",
+   "input_quantity",
+   "input_unit",
    "material_id",
    "modifier_scale_target",
    "note",
@@ -2290,6 +2297,7 @@
   "pos_prepare_retail_checkout",
   "recalculate_bom_cost_cache",
   "receive_purchase_items_atomic",
+  "receive_purchase_items_with_uom_atomic",
   "recompute_all_customer_debts",
   "recompute_all_supplier_debts",
   "recompute_customer_debt",
@@ -2301,8 +2309,10 @@
   "record_purchase_payment",
   "redeem_loyalty_points",
   "remove_user_pos_pin",
+  "replace_product_uom_conversions_atomic",
   "report_cogs_by_bom",
   "report_nvl_consumption_by_branch",
+  "resolve_product_uom_factor",
   "restore_bom_for_return",
   "restore_product_atomic",
   "revert_production_materials",
@@ -2312,6 +2322,7 @@
   "save_pos_draft_atomic_v2",
   "save_pos_draft_atomic_v3",
   "save_purchase_order_atomic",
+  "save_purchase_order_with_uom_atomic",
   "save_role_atomic",
   "save_sales_order_atomic",
   "save_sales_order_atomic_v2",
@@ -2338,6 +2349,7 @@
   "update_managed_user_atomic",
   "update_own_profile_atomic",
   "update_purchase_order_prices",
+  "update_purchase_order_prices_with_uom",
   "update_received_purchase_order_atomic",
   "update_shipping_order_status_atomic",
   "upsert_branch_stock",
@@ -2355,6 +2367,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 137,
- "soCot": 1741,
- "soRpc": 336
+ "soCot": 1748,
+ "soRpc": 341
 }

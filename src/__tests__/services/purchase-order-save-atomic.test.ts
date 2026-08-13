@@ -96,7 +96,7 @@ describe("atomic purchase-order save", () => {
       status: "completed",
     });
     expect(rpc).toHaveBeenCalledWith(
-      "save_purchase_order_atomic",
+      "save_purchase_order_with_uom_atomic",
       expect.objectContaining({
         p_requested_code: "PO-IMPORT-001",
         p_branch_id: "branch-1",

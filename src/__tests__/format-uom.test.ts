@@ -1,10 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
+  getDirectConvertibleUnits,
+  getDirectConversionFactor,
   formatStockConversion,
   pickBestConversion,
   getConversionText,
   buildUomConversion,
 } from "@/lib/format-uom";
+
 import type { UOMConversion } from "@/lib/types";
 
 const CONV_THUNG_HOP: UOMConversion = {
@@ -17,6 +20,27 @@ const CONV_THUNG_HOP: UOMConversion = {
   isActive: true,
   createdAt: "",
 };
+
+describe("getDirectConvertibleUnits", () => {
+  it("chỉ trả đơn vị nối trực tiếp với đơn vị tồn", () => {
+    const conversions: UOMConversion[] = [
+      CONV_THUNG_HOP,
+      { ...CONV_THUNG_HOP, id: "c2", fromUnit: "hộp", toUnit: "cái", factor: 6 },
+      { ...CONV_THUNG_HOP, id: "c3", fromUnit: "pallet", toUnit: "kiện", factor: 10 },
+    ];
+    expect(getDirectConvertibleUnits("hộp", conversions)).toEqual(["hộp", "thùng", "cái"]);
+  });
+});
+
+describe("getDirectConversionFactor", () => {
+  it("đổi đơn vị lớn sang lượng tồn chuẩn", () => {
+    expect(getDirectConversionFactor("hộp", "thùng", [CONV_THUNG_HOP])).toBe(12);
+  });
+
+  it("đổi ngược đơn vị nhỏ sang lượng tồn chuẩn", () => {
+    expect(getDirectConversionFactor("thùng", "hộp", [CONV_THUNG_HOP])).toBeCloseTo(1 / 12);
+  });
+});
 
 const CONV_BAO_KG: UOMConversion = {
   id: "c2",
