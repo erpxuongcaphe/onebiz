@@ -62,6 +62,7 @@ import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
+import { buildUomConversion } from "@/lib/format-uom";
 // CEO 01/06/2026 — Sprint 2.2d: tab "Tuỳ chọn FnB" trong form SP.
 import {
   listModifierGroups,
@@ -202,6 +203,7 @@ export function CreateProductDialog({
   // tạo SP — đỡ phải save → vào tab "ĐVT quy đổi" → thêm. Cặp 2 ô optional.
   const [bulkUnit, setBulkUnit] = useState("");
   const [bulkFactor, setBulkFactor] = useState("");
+  const [mainUnitRole, setMainUnitRole] = useState<"small" | "large">("small");
   const [existingConversionId, setExistingConversionId] = useState<string | null>(null);
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
@@ -323,6 +325,7 @@ export function CreateProductDialog({
       // Reset quy đổi — sẽ load qua getUOMConversions ở effect riêng
       setBulkUnit("");
       setBulkFactor("");
+      setMainUnitRole("small");
       setExistingConversionId(null);
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
       setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
@@ -362,6 +365,7 @@ export function CreateProductDialog({
       setSellUnit("");
       setBulkUnit("");
       setBulkFactor("");
+      setMainUnitRole("small");
       setExistingConversionId(null);
       setShelfLifeDays("");
       setShelfLifeUnit("day");
@@ -447,10 +451,13 @@ export function CreateProductDialog({
         if (cancelled) return;
         const productUnit =
           initialData.stockUnit || initialData.unit || "";
-        // Lấy conversion đầu tiên match toUnit === unit chính của SP
-        const match = convs.find((c) => c.toUnit === productUnit);
+        const match = convs.find(
+          (c) => c.toUnit === productUnit || c.fromUnit === productUnit,
+        );
         if (match) {
-          setBulkUnit(match.fromUnit);
+          const mainIsLarge = match.fromUnit === productUnit;
+          setMainUnitRole(mainIsLarge ? "large" : "small");
+          setBulkUnit(mainIsLarge ? match.toUnit : match.fromUnit);
           setBulkFactor(String(match.factor));
           setExistingConversionId(match.id);
         }
@@ -976,7 +983,7 @@ export function CreateProductDialog({
           variant: "error",
           title: "Quy đổi đơn vị không hợp lệ",
           description:
-            "Cần điền cả 'Đóng gói' và 'Hệ số quy đổi' (≥ 1), và không trùng 'Đơn vị tính'.",
+            "Cần điền cả 'Đơn vị quy đổi' và 'Hệ số quy đổi' (≥ 1), và không trùng 'Đơn vị tính'.",
         });
         setSaving(false);
         return;
@@ -993,19 +1000,25 @@ export function CreateProductDialog({
         // Day 19/05/2026 (CEO UOM): sync quy đổi đơn vị (CRUD UOMConversion)
         try {
           if (bulkValid) {
+            const conversion = buildUomConversion(
+              commonPayload.unit ?? "",
+              bulkUnitTrim,
+              bulkFactorNum,
+              mainUnitRole,
+            );
             if (existingConversionId) {
               // Update conversion hiện có
               await updateUOMConversion(existingConversionId, {
-                fromUnit: bulkUnitTrim,
-                toUnit: commonPayload.unit ?? "",
+                fromUnit: conversion.fromUnit,
+                toUnit: conversion.toUnit,
                 factor: bulkFactorNum,
               });
             } else {
               // Tạo mới
               await createUOMConversion({
                 productId: initialData.id,
-                fromUnit: bulkUnitTrim,
-                toUnit: commonPayload.unit ?? "",
+                fromUnit: conversion.fromUnit,
+                toUnit: conversion.toUnit,
                 factor: bulkFactorNum,
               });
             }
@@ -1203,10 +1216,16 @@ export function CreateProductDialog({
       // Tách try/catch riêng — conversion fail KHÔNG rollback SP.
       if (created?.id && bulkValid) {
         try {
+          const conversion = buildUomConversion(
+            commonPayload.unit ?? "",
+            bulkUnitTrim,
+            bulkFactorNum,
+            mainUnitRole,
+          );
           await createUOMConversion({
             productId: created.id,
-            fromUnit: bulkUnitTrim,
-            toUnit: commonPayload.unit ?? "",
+            fromUnit: conversion.fromUnit,
+            toUnit: conversion.toUnit,
             factor: bulkFactorNum,
           });
         } catch (convErr) {
@@ -1599,6 +1618,7 @@ export function CreateProductDialog({
                     onClick={() => {
                       setBulkUnit("");
                       setBulkFactor("");
+                      setMainUnitRole("small");
                     }}
                     className="text-xs text-muted-foreground hover:text-foreground inline-flex items-center gap-1"
                   >
@@ -1607,10 +1627,36 @@ export function CreateProductDialog({
                   </button>
                 )}
               </div>
+              <div className="grid w-full grid-cols-1 rounded-md border bg-background p-1 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => setMainUnitRole("small")}
+                  aria-pressed={mainUnitRole === "small"}
+                  className={`rounded px-3 py-1.5 text-xs ${
+                    mainUnitRole === "small"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Đơn vị chính là đơn vị nhỏ
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMainUnitRole("large")}
+                  aria-pressed={mainUnitRole === "large"}
+                  className={`rounded px-3 py-1.5 text-xs ${
+                    mainUnitRole === "large"
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Đơn vị chính là đơn vị lớn
+                </button>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-xs text-muted-foreground">
-                    Đóng gói (ĐVT lớn)
+                    {mainUnitRole === "small" ? "Đơn vị lớn" : "Đơn vị nhỏ"}
                   </label>
                   <Input
                     value={bulkUnit}
@@ -1643,7 +1689,9 @@ export function CreateProductDialog({
                     size={12}
                     className="inline-block mr-1 align-text-bottom"
                   />
-                  1 {bulkUnit.trim()} = {formatNumber(Number(bulkFactor))} {stockUnit.trim()}
+                  1 {mainUnitRole === "small" ? bulkUnit.trim() : stockUnit.trim()} ={" "}
+                  {formatNumber(Number(bulkFactor))}{" "}
+                  {mainUnitRole === "small" ? stockUnit.trim() : bulkUnit.trim()}
                 </p>
               ) : (bulkUnit || bulkFactor) ? (
                 <p className="text-xs text-status-warning">
@@ -1653,16 +1701,16 @@ export function CreateProductDialog({
                     className="inline-block mr-1 align-text-bottom"
                   />
                   {!bulkUnit.trim()
-                    ? "Thiếu Đóng gói (ĐVT lớn)"
+                    ? "Thiếu Đơn vị quy đổi"
                     : !bulkFactor.trim() || Number(bulkFactor) <= 0
                       ? "Thiếu Hệ số quy đổi (số nguyên ≥ 1)"
                       : bulkUnit.trim() === stockUnit.trim()
-                        ? "Đóng gói không được trùng Đơn vị tính"
+                        ? "Đơn vị quy đổi không được trùng Đơn vị tính"
                         : ""}
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  Chỉ điền nếu muốn xem tồn kho theo đơn vị lớn (vd &quot;24 hộp · 2 thùng&quot;).
+                  Chọn vai trò của đơn vị chính, rồi nhập đơn vị còn lại và hệ số.
                 </p>
               )}
             </div>

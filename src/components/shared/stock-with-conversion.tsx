@@ -64,7 +64,12 @@ export function StockWithConversion(props: Props) {
 
   if (variant === "block") {
     const primarySize = (props as BlockProps).primarySize ?? "text-2xl";
-    const conv = pickBestConversion(unit, conversions ?? null);
+    const conv =
+      pickBestConversion(unit, conversions ?? null) ??
+      conversions?.find(
+        (item) => item.fromUnit === unit && item.isActive !== false,
+      ) ??
+      null;
     return (
       <div className={className}>
         <div className={`${primarySize} font-semibold tabular-nums`}>
@@ -75,8 +80,7 @@ export function StockWithConversion(props: Props) {
         </div>
         {convText && conv && (
           <div className="text-xs text-muted-foreground mt-0.5">
-            ={" "}
-            <b className="text-foreground tabular-nums">{convText}</b>{" "}
+            = <b className="text-foreground tabular-nums">{convText}</b>{" "}
             <span className="opacity-70">
               (1 {conv.fromUnit} = {formatNumber(conv.factor)} {conv.toUnit})
             </span>
