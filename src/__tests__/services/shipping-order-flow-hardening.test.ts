@@ -84,7 +84,7 @@ describe("Van don list shows real filters and whole-dataset KPIs", () => {
 
   it("shows the money columns that were missing", () => {
     expect(vanDonPage).toContain('header: "Phí giao"');
-    expect(vanDonPage).toContain('header: "Thu hộ (COD)"');
+    expect(vanDonPage).toContain('header: "Thu khi giao"');
     expect(vanDonPage).toContain('header: "Địa chỉ giao"');
   });
 });
