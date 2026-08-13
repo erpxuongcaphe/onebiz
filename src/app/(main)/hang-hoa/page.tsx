@@ -1657,6 +1657,12 @@ export default function HangHoaPage() {
     setCreatedDateTo("");
     setSupplierFilter("");
   };
+  const hasActiveListFilters =
+    search.trim().length > 0 ||
+    filterChips.length > 0 ||
+    expectedOutDate !== "all" ||
+    supplierFilter.trim().length > 0;
+  const emptyState = hasActiveListFilters ? "no-results" : "no-data";
 
   return (
     <>
@@ -1827,16 +1833,23 @@ export default function HangHoaPage() {
             />
           }
           // CEO 22/05/2026 (UX P0 #1): empty state context-aware
+          emptyState={emptyState}
           emptyIcon={scope === "nvl" ? "inventory_2" : "shopping_bag"}
           emptyTitle={
-            scope === "nvl"
-              ? "Chưa có nguyên vật liệu nào"
-              : "Chưa có sản phẩm bán nào"
+            emptyState === "no-results"
+              ? scope === "nvl"
+                ? "Không tìm thấy nguyên vật liệu"
+                : "Không tìm thấy sản phẩm bán"
+              : scope === "nvl"
+                ? "Chưa có nguyên vật liệu nào"
+                : "Chưa có sản phẩm bán nào"
           }
           emptyDescription={
-            scope === "nvl"
-              ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để import batch.'
-              : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để import batch.'
+            emptyState === "no-results"
+              ? "Thử thay đổi nhóm hàng, thương hiệu, tồn kho, trạng thái, thời gian, nhà cung cấp hoặc nội dung tìm kiếm."
+              : scope === "nvl"
+                ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để nhập danh sách.'
+                : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để nhập danh sách.'
           }
           // Branch-scope: bảng trống vì lọc CN → gợi ý xem toàn chuỗi.
           emptyBranchHint={
