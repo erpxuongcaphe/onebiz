@@ -42,6 +42,7 @@ import {
 } from "@/lib/services";
 import type { Coupon } from "@/lib/types";
 import { ConfirmDialog } from "@/components/shared/dialogs";
+import { EmptyState } from "@/components/shared/empty-state";
 
 function toDateInput(iso: string | null): string {
   if (!iso) return "";
@@ -490,25 +491,31 @@ export default function CouponSettingsPage() {
                 Đang tải...
               </div>
             ) : coupons.length === 0 ? (
-              <div className="py-12 text-center space-y-2">
-                <Icon
-                  name="confirmation_number"
-                  size={32}
-                  className="mx-auto text-muted-foreground/40"
-                />
-                <div className="text-sm text-muted-foreground">
-                  Chưa có coupon nào
-                </div>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setEditing(null);
-                    setDialogOpen(true);
-                  }}
-                >
-                  Tạo coupon đầu tiên
-                </Button>
-              </div>
+              <EmptyState
+                compact
+                icon="confirmation_number"
+                title={
+                  search.trim()
+                    ? "Không tìm thấy mã giảm giá"
+                    : "Chưa có mã giảm giá"
+                }
+                description={
+                  search.trim()
+                    ? "Thử nhập mã hoặc tên khác."
+                    : 'Bấm "Tạo coupon" để thêm mã giảm giá đầu tiên.'
+                }
+                action={
+                  search.trim() ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setSearch("")}
+                    >
+                      Xóa từ khóa
+                    </Button>
+                  ) : undefined
+                }
+              />
             ) : (
               <div className="space-y-2">
                 {coupons.map((c) => {

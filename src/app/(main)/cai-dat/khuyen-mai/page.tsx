@@ -18,6 +18,7 @@ import {
 import type { Promotion, PromotionSettings } from "@/lib/types";
 import { useToast } from "@/lib/contexts";
 import { ConfirmDialog } from "@/components/shared/dialogs";
+import { EmptyState } from "@/components/shared/empty-state";
 // PERF (CEO 23/05/2026): Lazy-load CreatePromotionDialog (752 dòng).
 import dynamic from "next/dynamic";
 const CreatePromotionDialog = dynamic(
@@ -299,15 +300,18 @@ export default function PromotionSettingsPage() {
                 Đang tải danh sách khuyến mãi...
               </div>
             ) : promotions.length === 0 ? (
-              <div className="py-8 text-center space-y-3">
-                <div className="text-sm text-muted-foreground">
-                  Chưa có chương trình khuyến mãi nào
-                </div>
-                <Button onClick={() => setCreateOpen(true)}>
-                  <Icon name="add" size={16} className="mr-1" />
-                  Tạo chương trình đầu tiên
-                </Button>
-              </div>
+              <EmptyState
+                compact
+                icon="redeem"
+                title="Chưa có chương trình khuyến mãi"
+                description="Tạo chương trình đầu tiên để áp dụng ưu đãi tự động tại POS."
+                action={
+                  <Button onClick={() => setCreateOpen(true)}>
+                    <Icon name="add" size={16} className="mr-1" />
+                    Tạo chương trình đầu tiên
+                  </Button>
+                }
+              />
             ) : (
               <div className="space-y-4">
                 {promotions.map((promo) => {
