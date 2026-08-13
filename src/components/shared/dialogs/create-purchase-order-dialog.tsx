@@ -19,6 +19,7 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { getDirectConvertibleUnits } from "@/lib/format-uom";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
@@ -26,6 +27,8 @@ import {
   savePurchaseOrderAtomic,
   updateReceivedPurchaseOrderAtomic,
 } from "@/lib/services/supabase/purchase-orders";
+import { getUOMConversions } from "@/lib/services/supabase/uom";
+import type { UOMConversion } from "@/lib/types";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { Icon } from "@/components/ui/icon";
 
@@ -60,6 +63,8 @@ interface LineItem {
   productCode?: string;
   productName: string;
   unit: string;
+  stockUnit: string;
+  conversions: UOMConversion[];
   quantity: number;
   price: number;
   vatRate: number;
@@ -277,33 +282,36 @@ export function CreatePurchaseOrderDialog({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data } = await (supabase as any)
           .from("purchase_order_items")
-          .select("product_id, product_name, unit, quantity, unit_price, discount, vat_rate, expiry_date, lot_number, products(code)")
+          .select("*, products(code)")
           .eq("purchase_order_id", editingPO.id);
 
         if (!data) return;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const rows = data as any[];
-        const mappedItems: LineItem[] = rows.map((d) => {
+        const mappedItems: LineItem[] = await Promise.all(rows.map(async (d) => {
           const qty = Number(d.quantity ?? 0);
+          const transactionQty = Number(d.transaction_quantity ?? qty);
           const discTotal = Number(d.discount ?? 0);
           // DB chỉ lưu số tiền chiết khấu tổng dòng — quy về amount/đơn vị
           // (mặc định discountType = "amount" khi reload, user đổi sang %
           // nếu muốn). qty=0 thì discount = 0.
-          const discPerUnit = qty > 0 ? discTotal / qty : 0;
+          const discPerUnit = transactionQty > 0 ? discTotal / transactionQty : 0;
           return {
             id: d.product_id,
             productCode: getProductCode(d.products),
             productName: d.product_name,
-            unit: d.unit || "Cái",
-            quantity: qty,
-            price: Number(d.unit_price ?? 0),
+            unit: d.transaction_unit || d.unit || "Cái",
+            stockUnit: d.unit || "Cái",
+            conversions: await getUOMConversions(d.product_id).catch(() => []),
+            quantity: transactionQty,
+            price: Number(d.transaction_unit_price ?? d.unit_price ?? 0),
             vatRate: Number(d.vat_rate ?? 0),
             discount: discPerUnit > 0 ? discPerUnit : undefined,
             discountType: discPerUnit > 0 ? "amount" : undefined,
             expiryDate: d.expiry_date ?? undefined,
             lotNumber: d.lot_number ?? undefined,
           };
-        });
+        }));
         setItems(mappedItems);
 
         // CEO 14/07/2026: reload chiết khấu cả đơn (cột order_discount, 00187).
@@ -410,7 +418,7 @@ export function CreatePurchaseOrderDialog({
     return () => clearTimeout(timer);
   }, [productSearch, currentTenantId]);
 
-  function addProduct(product: SearchProduct) {
+  async function addProduct(product: SearchProduct) {
     const existing = items.find((item) => item.id === product.id);
     if (existing) {
       setItems(
@@ -419,6 +427,12 @@ export function CreatePurchaseOrderDialog({
         ),
       );
     } else {
+      let conversions: UOMConversion[] = [];
+      try {
+        conversions = await getUOMConversions(product.id);
+      } catch {
+        conversions = [];
+      }
       setItems([
         ...items,
         {
@@ -426,6 +440,8 @@ export function CreatePurchaseOrderDialog({
           productCode: product.code,
           productName: product.name,
           unit: product.unit || "Cái",
+          stockUnit: product.unit || "Cái",
+          conversions,
           quantity: 1,
           price: product.price,
           vatRate: product.vatRate,
@@ -532,6 +548,7 @@ export function CreatePurchaseOrderDialog({
         receiveNow: mode === "receive",
         items: items.map((item) => ({
           productId: item.id,
+          unit: item.unit,
           quantity: item.quantity,
           unitPrice: item.price,
           discount: lineDiscountTotal(item),
@@ -799,9 +816,21 @@ export function CreatePurchaseOrderDialog({
                         )}
                       </div>
                       <div className="flex justify-center">
-                        <span className="min-w-[64px] rounded-md bg-muted/50 px-2 py-1 text-center text-xs font-semibold text-muted-foreground">
-                          {item.unit || "Cái"}
-                        </span>
+                        <Select
+                          value={item.unit}
+                          onValueChange={(value) => {
+                            if (value) updateItem(item.id, "unit", value);
+                          }}
+                        >
+                          <SelectTrigger className="h-8 min-w-[78px] text-xs">
+                            <SelectValue>{item.unit || "Cái"}</SelectValue>
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getDirectConvertibleUnits(item.stockUnit, item.conversions).map((unit) => (
+                              <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <NumericInput
                         value={item.quantity}

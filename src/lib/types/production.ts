@@ -35,6 +35,10 @@ export interface BOMItem {
   materialId: string;
   quantity: number;
   unit: string;
+  /** Quantity/unit originally entered; present for UOM-aware formulas. */
+  inputQuantity?: number;
+  inputUnit?: string;
+  conversionFactor?: number;
   wastePercent: number;
   sortOrder: number;
   note?: string;

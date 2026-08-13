@@ -26,9 +26,11 @@ import {
   getBOMById,
   getProducts,
   calculateBOMCost,
+  getUOMConversions,
 } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
-import type { Product, BOMCostBreakdown } from "@/lib/types";
+import { getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
+import type { Product, BOMCostBreakdown, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 interface BOMEditorDialogProps {
@@ -48,6 +50,8 @@ interface MaterialLine {
   costPrice: number;
   quantity: string;
   unit: string;
+  stockUnit: string;
+  conversions: UOMConversion[];
   wastePercent: string;
 }
 
@@ -134,29 +138,33 @@ export function BOMEditorDialog({
       setYieldQty(String(bom.yieldQty));
       setYieldUnit(bom.yieldUnit);
       setNote(bom.note ?? "");
-      setItems(
-        (bom.items ?? []).map((it) => ({
+      const loadedItems = await Promise.all(
+        (bom.items ?? []).map(async (it) => ({
           materialId: it.materialId,
           materialName: it.materialName ?? "",
           materialCode: it.materialCode ?? "",
           costPrice: it.materialCostPrice ?? 0,
-          quantity: String(it.quantity),
-          unit: it.unit,
+          quantity: String(it.inputQuantity ?? it.quantity),
+          unit: it.inputUnit ?? it.unit,
+          stockUnit: it.unit,
+          conversions: await getUOMConversions(it.materialId).catch(() => []),
           wastePercent: String(it.wastePercent ?? 0),
         }))
       );
+      setItems(loadedItems);
     })();
   }, [open, bomId, initialProductId]);
 
   // Compute live preview cost (client-side)
   const previewTotal = items.reduce((sum, it) => {
     const qty = Number(it.quantity) || 0;
+    const factor = getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0;
     const waste = Number(it.wastePercent) || 0;
-    const effectiveQty = qty * (1 + waste / 100);
+    const effectiveQty = qty * factor * (1 + waste / 100);
     return sum + effectiveQty * (it.costPrice ?? 0);
   }, 0);
 
-  const addMaterial = useCallback(() => {
+  const addMaterial = useCallback(async () => {
     if (!pickerMaterialId) return;
     const mat = nvlOptions.find((p) => p.id === pickerMaterialId);
     if (!mat) return;
@@ -167,6 +175,7 @@ export function BOMEditorDialog({
       });
       return;
     }
+    const conversions = await getUOMConversions(mat.id).catch(() => []);
     setItems((prev) => [
       ...prev,
       {
@@ -176,6 +185,8 @@ export function BOMEditorDialog({
         costPrice: mat.costPrice,
         quantity: "1",
         unit: mat.stockUnit ?? mat.unit ?? "",
+        stockUnit: mat.stockUnit ?? mat.unit ?? "",
+        conversions,
         wastePercent: "0",
       },
     ]);
@@ -452,13 +463,14 @@ export function BOMEditorDialog({
                     {items.map((it, idx) => {
                       const qty = Number(it.quantity) || 0;
                       const waste = Number(it.wastePercent) || 0;
-                      const lineCost = qty * (1 + waste / 100) * (it.costPrice ?? 0);
+                      const factor = getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0;
+                      const lineCost = qty * factor * (1 + waste / 100) * (it.costPrice ?? 0);
                       return (
                         <tr key={`${it.materialId}-${idx}`} className="border-t">
                           <td className="p-2">
                             <div className="font-medium">{it.materialName}</div>
                             <div className="text-xs text-muted-foreground">
-                              {it.materialCode} · {formatCurrency(it.costPrice)}/{it.unit}
+                              {it.materialCode} · {formatCurrency(it.costPrice)}/{it.stockUnit}
                             </div>
                           </td>
                           <td className="p-2">
@@ -472,11 +484,21 @@ export function BOMEditorDialog({
                             />
                           </td>
                           <td className="p-2">
-                            <Input
+                            <Select
                               value={it.unit}
-                              onChange={(e) => updateItem(idx, { unit: e.target.value })}
-                              className="h-8"
-                            />
+                              onValueChange={(value) => {
+                                if (value) updateItem(idx, { unit: value });
+                              }}
+                            >
+                              <SelectTrigger className="h-8 min-w-[82px] text-xs">
+                                <SelectValue>{it.unit}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {getDirectConvertibleUnits(it.stockUnit, it.conversions).map((unit) => (
+                                  <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </td>
                           <td className="p-2">
                             <Input

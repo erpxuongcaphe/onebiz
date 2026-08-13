@@ -690,7 +690,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
-      if (fn === "receive_purchase_items_atomic") {
+      if (
+        fn === "receive_purchase_items_atomic" ||
+        fn === "receive_purchase_items_with_uom_atomic"
+      ) {
         return simulateReceivePurchaseItemsAtomic(params);
       }
       if (fn === "pos_complete_checkout_atomic_v3") {

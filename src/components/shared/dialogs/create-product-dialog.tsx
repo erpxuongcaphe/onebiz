@@ -47,9 +47,7 @@ import {
   updateBOM,
   deleteBOM,
   getUOMConversions,
-  createUOMConversion,
-  updateUOMConversion,
-  deleteUOMConversion,
+  replaceProductUOMConversions,
 } from "@/lib/services";
 // CEO 01/06/2026 — Sprint 2.4a
 import {
@@ -218,7 +216,6 @@ export function CreateProductDialog({
   // Day 19/05/2026 (CEO UOM Smart Hybrid): quy đổi đơn vị inline trong form
   // tạo SP — đỡ phải save → vào tab "ĐVT quy đổi" → thêm. Cặp 2 ô optional.
   const [uomConversions, setUomConversions] = useState<InlineUomConversion[]>([]);
-  const [originalConversionIds, setOriginalConversionIds] = useState<string[]>([]);
   const [sellUnit, setSellUnit] = useState("");
   const [shelfLifeDays, setShelfLifeDays] = useState("");
   const [shelfLifeUnit, setShelfLifeUnit] = useState<ShelfLifeUnit>("day");
@@ -338,7 +335,6 @@ export function CreateProductDialog({
       setSellUnit(initialData.sellUnit || "");
       // Reset quy đổi — sẽ load qua getUOMConversions ở effect riêng
       setUomConversions([]);
-      setOriginalConversionIds([]);
       setShelfLifeDays(initialData.shelfLifeDays ? String(initialData.shelfLifeDays) : "");
       setShelfLifeUnit((initialData.shelfLifeUnit as ShelfLifeUnit) || "day");
       setHasBom(!!initialData.hasBom);
@@ -376,7 +372,6 @@ export function CreateProductDialog({
       setStockUnit("");
       setSellUnit("");
       setUomConversions([]);
-      setOriginalConversionIds([]);
       setShelfLifeDays("");
       setShelfLifeUnit("day");
       setHasBom(false);
@@ -476,7 +471,6 @@ export function CreateProductDialog({
             };
           }),
         );
-        setOriginalConversionIds(matches.map((match) => match.id));
       } catch {
         // fail silent
       }
@@ -1022,48 +1016,31 @@ export function CreateProductDialog({
       }
 
       if (isEdit && initialData) {
+        const nonUnitPayload: Partial<typeof commonPayload> = { ...commonPayload };
+        delete nonUnitPayload.unit;
+        delete nonUnitPayload.purchaseUnit;
+        delete nonUnitPayload.stockUnit;
+        delete nonUnitPayload.sellUnit;
         // EDIT — giữ nguyên code/productType, không đổi groupCode.
         await updateProduct(initialData.id, {
-          ...commonPayload,
+          ...nonUnitPayload,
           // Day 18/05/2026: cho phép user TẮT hasBom trong edit — phải sync DB
           hasBom: scope === "sku" ? hasBom : false,
         });
 
         // Day 19/05/2026 (CEO UOM): sync quy đổi đơn vị (CRUD UOMConversion)
-        try {
-          for (const item of normalizedConversions) {
-            const conversion = buildUomConversion(
+        await replaceProductUOMConversions(
+          initialData.id,
+          mainUnit,
+          normalizedConversions.map((item) =>
+            buildUomConversion(
               mainUnit,
               item.relatedUnit,
               item.factorNumber,
               item.mainUnitRole,
-            );
-            if (item.id) {
-              await updateUOMConversion(item.id, {
-                fromUnit: conversion.fromUnit,
-                toUnit: conversion.toUnit,
-                factor: item.factorNumber,
-              });
-            } else {
-              await createUOMConversion({
-                productId: initialData.id,
-                fromUnit: conversion.fromUnit,
-                toUnit: conversion.toUnit,
-                factor: item.factorNumber,
-              });
-            }
-          }
-          const retainedIds = new Set(
-            normalizedConversions.flatMap((item) => (item.id ? [item.id] : [])),
-          );
-          await Promise.all(
-            originalConversionIds
-              .filter((id) => !retainedIds.has(id))
-              .map((id) => deleteUOMConversion(id)),
-          );
-        } catch (convErr) {
-          console.warn("[create-product-dialog] sync UOM conversion fail:", convErr);
-        }
+            ),
+          ),
+        );
 
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
@@ -1251,27 +1228,35 @@ export function CreateProductDialog({
       // Tách try/catch riêng — conversion fail KHÔNG rollback SP.
       if (created?.id && normalizedConversions.length > 0) {
         try {
-          await Promise.all(
-            normalizedConversions.map((item) => {
-              const conversion = buildUomConversion(
+          await replaceProductUOMConversions(
+            created.id,
+            mainUnit,
+            normalizedConversions.map((item) =>
+              buildUomConversion(
                 mainUnit,
                 item.relatedUnit,
                 item.factorNumber,
                 item.mainUnitRole,
-              );
-              return createUOMConversion({
-                productId: created.id,
-                fromUnit: conversion.fromUnit,
-                toUnit: conversion.toUnit,
-                factor: item.factorNumber,
-              });
-            }),
+              ),
+            ),
           );
         } catch (convErr) {
           console.warn(
             "[create-product-dialog] tạo UOM conversion fail:",
             convErr,
           );
+          toast({
+            variant: "warning",
+            title: "Sản phẩm đã tạo, quy đổi chưa được lưu",
+            description:
+              convErr instanceof Error
+                ? convErr.message
+                : "Kiểm tra lại quyền và các dòng quy đổi.",
+            duration: 10000,
+          });
+          onOpenChange(false);
+          onSuccess?.();
+          return;
         }
       }
 
@@ -1356,7 +1341,7 @@ export function CreateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-x-hidden overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Sửa hàng hóa ${initialData?.code ?? ""}` : "Thêm hàng hóa mới"}</DialogTitle>
           <DialogDescription>
@@ -1466,7 +1451,7 @@ export function CreateProductDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
@@ -1536,7 +1521,7 @@ export function CreateProductDialog({
           </div>
 
           {/* Thương hiệu + NCC — optional cho NVL, dùng nhiều cho filter + báo cáo */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">Thương hiệu</label>
               <Input
@@ -1683,7 +1668,7 @@ export function CreateProductDialog({
                       >
                         <div className="grid grid-cols-[minmax(0,1fr)_8rem_8rem_2.25rem] items-end gap-2 max-sm:grid-cols-[minmax(0,1fr)_2.25rem]"
                         >
-                          <div className="space-y-1">
+                          <div className="space-y-1 max-sm:col-span-2">
                             <label className="text-xs text-muted-foreground">
                               Đơn vị quy đổi
                             </label>
