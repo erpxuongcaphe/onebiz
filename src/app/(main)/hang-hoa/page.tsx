@@ -342,6 +342,14 @@ export default function HangHoaPage() {
   const debouncedSearch = useDebounce(search, 300);
   // CEO 04/07: ô "Tìm theo" — "all" = tìm gộp mã+tên như cũ.
   const [searchField, setSearchField] = useState("all");
+
+  // Cho các màn kiểm tra cấu hình FnB mở thẳng đúng SKU đang thiếu.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("scope") === "sku") setScope("sku");
+    const requestedSearch = params.get("search")?.trim();
+    if (requestedSearch) setSearch(requestedSearch);
+  }, []);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);

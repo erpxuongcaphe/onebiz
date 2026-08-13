@@ -44,6 +44,9 @@ describe("danhGiaFnbReadiness", () => {
       toppingMissingBom: 1,
       toppingSkuEnabled: false,
     });
+    expect(result.toppingIssues).toEqual([
+      expect.objectContaining({ code: "SKU-TPP-002", missingPrice: true, missingBom: true }),
+    ]);
   });
 
   it("không tính BOM riêng của chi nhánh khác", () => {
@@ -72,24 +75,27 @@ describe("danhGiaFnbReadiness", () => {
       products: [],
       boms: [],
       groups: [
-        { id: "sugar", rule: "single" },
-        { id: "legacy", rule: "multi" },
+        { id: "sugar", name: "Mức đường", rule: "single" },
+        { id: "legacy", name: "Topping", rule: "multi" },
       ],
       options: [
         {
           group_id: "sugar",
+          label: "Không đường",
           is_default: true,
           scale_factor: 0,
           linked_product_id: null,
         },
         {
           group_id: "sugar",
+          label: "100%",
           is_default: true,
           scale_factor: 1,
           linked_product_id: null,
         },
         {
           group_id: "legacy",
+          label: "Cốm xào",
           is_default: false,
           scale_factor: 1,
           linked_product_id: "nvl-1",
@@ -100,5 +106,14 @@ describe("danhGiaFnbReadiness", () => {
     expect(result.singleGroupsWithManyDefaults).toBe(1);
     expect(result.conflictingStockOptions).toBe(1);
     expect(result.legacyToppingGroups).toBe(1);
+    expect(result.configurationIssues).toEqual([
+      { type: "many_defaults", groupName: "Mức đường" },
+      { type: "legacy_topping", groupName: "Topping" },
+      {
+        type: "stock_conflict",
+        groupName: "Topping",
+        optionLabel: "Cốm xào",
+      },
+    ]);
   });
 });

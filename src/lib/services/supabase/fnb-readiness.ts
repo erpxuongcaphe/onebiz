@@ -16,14 +16,30 @@ interface SanPhamTopping {
 
 interface NhomTuyChon {
   id: string;
+  name: string;
   rule: string;
 }
 
 interface LuaChonTuyChon {
   group_id: string;
+  label: string;
   is_default: boolean;
   scale_factor: number | null;
   linked_product_id: string | null;
+}
+
+export interface FnbToppingIssue {
+  id: string;
+  code: string;
+  name: string;
+  missingPrice: boolean;
+  missingBom: boolean;
+}
+
+export interface FnbConfigurationIssue {
+  type: "many_defaults" | "stock_conflict" | "legacy_topping";
+  groupName: string;
+  optionLabel?: string;
 }
 
 export interface FnbReadiness {
@@ -35,6 +51,8 @@ export interface FnbReadiness {
   conflictingStockOptions: number;
   legacyToppingGroups: number;
   toppingSkuEnabled: boolean;
+  toppingIssues: FnbToppingIssue[];
+  configurationIssues: FnbConfigurationIssue[];
 }
 
 function coBomApDung(
@@ -74,6 +92,49 @@ export function danhGiaFnbReadiness(input: {
     input.boms,
     input.branchId,
   ).length;
+  const groupById = new Map(input.groups.map((group) => [group.id, group]));
+  const toppingIssues = input.products
+    .map((product) => ({
+      id: product.id,
+      code: product.code,
+      name: product.name,
+      missingPrice: (product.sell_price ?? 0) <= 0,
+      missingBom: !coBomApDung(product, input.boms, input.branchId),
+    }))
+    .filter((product) => product.missingPrice || product.missingBom)
+    .sort((a, b) => a.code.localeCompare(b.code, "vi"));
+
+  const configurationIssues: FnbConfigurationIssue[] = [];
+  for (const group of input.groups) {
+    const options = optionsByGroup.get(group.id) ?? [];
+    if (
+      group.rule !== "multi" &&
+      options.filter((option) => option.is_default).length > 1
+    ) {
+      configurationIssues.push({
+        type: "many_defaults",
+        groupName: group.name,
+      });
+    }
+    if (
+      group.rule === "multi" &&
+      options.some((option) => !!option.linked_product_id)
+    ) {
+      configurationIssues.push({
+        type: "legacy_topping",
+        groupName: group.name,
+      });
+    }
+  }
+  for (const option of input.options) {
+    if (option.scale_factor !== null && !!option.linked_product_id) {
+      configurationIssues.push({
+        type: "stock_conflict",
+        groupName: groupById.get(option.group_id)?.name ?? "Nhóm không xác định",
+        optionLabel: option.label,
+      });
+    }
+  }
 
   return {
     toppingTotal: input.products.length,
@@ -102,6 +163,8 @@ export function danhGiaFnbReadiness(input: {
       );
     }).length,
     toppingSkuEnabled: input.toppingSkuEnabled ?? CHE_DO_TOPPING_SKU,
+    toppingIssues,
+    configurationIssues,
   };
 }
 
@@ -128,7 +191,7 @@ export async function getFnbReadiness(
       .limit(500),
     supabase
       .from("modifier_groups")
-      .select("id, rule")
+      .select("id, name, rule")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .in("channel", ["fnb", "all"])
@@ -167,7 +230,7 @@ export async function getFnbReadiness(
   const optionsPromise = groupIds.length
     ? supabase
         .from("modifier_options")
-        .select("group_id, is_default, scale_factor, linked_product_id")
+        .select("group_id, label, is_default, scale_factor, linked_product_id")
         .in("group_id", groupIds)
         .eq("is_active", true)
         .limit(1000)
