@@ -2042,12 +2042,18 @@ export async function getBranchSalesChannel(
   if (!branchId) return null;
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("branches")
     .select("cascade_mode")
     .eq("tenant_id", tenantId)
     .eq("id", branchId)
     .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("BRANCH_CHANNEL_NOT_FOUND");
+
   const mode = (data as { cascade_mode?: string | null } | null)?.cascade_mode;
-  return mode === "outlet" ? "fnb" : "retail";
+  if (mode === "outlet") return "fnb";
+  if (mode === "production") return "retail";
+  throw new Error("BRANCH_CHANNEL_INVALID");
 }

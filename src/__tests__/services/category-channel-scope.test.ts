@@ -13,6 +13,14 @@ const serviceSource = readFileSync(
   "src/lib/services/supabase/categories.ts",
   "utf8",
 );
+const productServiceSource = readFileSync(
+  "src/lib/services/supabase/products.ts",
+  "utf8",
+);
+const orderDialogSource = readFileSync(
+  "src/components/shared/dialogs/create-order-dialog.tsx",
+  "utf8",
+);
 
 const categories: CategoryWithChannelBreakdown[] = [
   {
@@ -77,6 +85,20 @@ describe("phạm vi nhóm SKU theo kênh chi nhánh", () => {
   it("dịch vụ thêm điều kiện channel vào truy vấn sản phẩm con", () => {
     expect(serviceSource).toContain(
       'if (channel) query = query.eq("channel", channel)',
+    );
+  });
+
+  it("không mặc định Retail khi không đọc được loại chi nhánh", () => {
+    expect(productServiceSource).toContain("if (error) throw error");
+    expect(productServiceSource).toContain("BRANCH_CHANNEL_NOT_FOUND");
+    expect(productServiceSource).toContain("BRANCH_CHANNEL_INVALID");
+  });
+
+  it("màn tạo đơn không tìm lẫn SKU khi chưa xác định được kênh", () => {
+    expect(orderDialogSource).toContain("if (!salesChannel)");
+    expect(orderDialogSource).toContain("setFilteredProducts([])");
+    expect(orderDialogSource).not.toContain(
+      ".catch(() => !cancelled && setSalesChannel(null))",
     );
   });
 });
