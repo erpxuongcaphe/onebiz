@@ -29,6 +29,7 @@ import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createShipmentForInvoice } from "@/lib/services/supabase/shipping";
 import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
 
 interface CreateShippingOrderDialogProps {
   open: boolean;
@@ -40,6 +41,9 @@ interface SearchInvoice {
   id: string;
   code: string;
   customerName: string;
+  customerId: string | null;
+  customerPhone: string;
+  customerAddress: string;
   /** Tổng hiện tại (đã gồm phí giao cũ nếu có) */
   total: number;
   paid: number;
@@ -68,6 +72,9 @@ export function CreateShippingOrderDialog({
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [shippingFee, setShippingFee] = useState(0);
+  const [sameAsBuyer, setSameAsBuyer] = useState(true);
+  const [receiverCustomerId, setReceiverCustomerId] = useState<string | null>(null);
+  const [collectionMode, setCollectionMode] = useState<"cod" | "none">("cod");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -83,6 +90,9 @@ export function CreateShippingOrderDialog({
       setReceiverPhone("");
       setReceiverAddress("");
       setShippingFee(0);
+      setSameAsBuyer(true);
+      setReceiverCustomerId(null);
+      setCollectionMode("cod");
       setNotes("");
       setErrors({});
       setSaving(false);
@@ -114,20 +124,26 @@ export function CreateShippingOrderDialog({
       const ctx = await getCurrentContext();
       const { data } = await supabase
         .from("invoices")
-        .select("id, code, customer_name, total, paid, delivery_fee")
+        .select("id, code, customer_id, customer_name, total, paid, delivery_fee, customers(phone, address)")
         .ilike("code", `%${invoiceSearch}%`)
         .eq("tenant_id", ctx.tenantId)
         .neq("status", "cancelled")
         .limit(8);
       setFilteredInvoices(
-        (data ?? []).map((inv) => ({
+        (data ?? []).map((inv) => {
+          const customer = inv.customers as { phone?: string | null; address?: string | null } | null;
+          return {
           id: inv.id,
           code: inv.code,
+          customerId: inv.customer_id ?? null,
           customerName: inv.customer_name,
+          customerPhone: customer?.phone ?? "",
+          customerAddress: customer?.address ?? "",
           total: Number(inv.total ?? 0),
           paid: Number(inv.paid ?? 0),
           deliveryFee: Number(inv.delivery_fee ?? 0),
-        }))
+          };
+        })
       );
     }, 300);
     return () => clearTimeout(timer);
@@ -135,7 +151,7 @@ export function CreateShippingOrderDialog({
 
   // COD xem trước, đúng công thức RPC: tổng mới = tổng cũ + (phí mới − phí cũ);
   // COD = tổng mới − đã thanh toán. Số chốt vẫn do máy chủ tính.
-  const codPreview = selectedInvoice
+  const codPreview = selectedInvoice && collectionMode === "cod"
     ? Math.max(
         0,
         selectedInvoice.total +
@@ -166,6 +182,8 @@ export function CreateShippingOrderDialog({
         receiverAddress: receiverAddress.trim(),
         partnerId: selectedPartnerId || null,
         note: notes || null,
+        collectionMode,
+        receiverCustomerId,
       });
 
       onOpenChange(false);
@@ -192,8 +210,7 @@ export function CreateShippingOrderDialog({
         <DialogHeader>
           <DialogTitle>Tạo vận đơn</DialogTitle>
           <DialogDescription>
-            Chọn hóa đơn cần giao — mã vận đơn do hệ thống cấp khi lưu, tiền thu
-            hộ (COD) tự tính theo hóa đơn.
+            Chọn hóa đơn, người nhận và cách thu tiền.
           </DialogDescription>
         </DialogHeader>
 
@@ -236,7 +253,12 @@ export function CreateShippingOrderDialog({
                           setInvoiceSearch(inv.code);
                           setShowInvoiceDropdown(false);
                           if (inv.deliveryFee > 0) setShippingFee(inv.deliveryFee);
-                          if (!receiverName) setReceiverName(inv.customerName);
+                          if (sameAsBuyer) {
+                            setReceiverCustomerId(inv.customerId);
+                            setReceiverName(inv.customerName);
+                            setReceiverPhone(inv.customerPhone);
+                            setReceiverAddress(inv.customerAddress);
+                          }
                         }}
                       >
                         <span className="font-medium">{inv.code}</span>
@@ -281,6 +303,36 @@ export function CreateShippingOrderDialog({
           </div>
 
           {/* Receiver info */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">Người nhận</span>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={sameAsBuyer}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setSameAsBuyer(checked);
+                  setReceiverCustomerId(checked ? selectedInvoice?.customerId ?? null : null);
+                  if (checked && selectedInvoice) {
+                    setReceiverName(selectedInvoice.customerName);
+                    setReceiverPhone(selectedInvoice.customerPhone);
+                    setReceiverAddress(selectedInvoice.customerAddress);
+                  }
+                }}
+              />
+              Giống người mua
+            </label>
+          </div>
+          {!sameAsBuyer && (
+            <ReceiverCustomerSelect
+              onSelect={(customer) => {
+                setReceiverCustomerId(customer.id);
+                setReceiverName(customer.name);
+                setReceiverPhone(customer.phone);
+                setReceiverAddress(customer.address ?? "");
+              }}
+            />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -288,7 +340,7 @@ export function CreateShippingOrderDialog({
               </label>
               <Input
                 value={receiverName}
-                onChange={(e) => setReceiverName(e.target.value)}
+                onChange={(e) => { setReceiverName(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
                 placeholder="Tên người nhận"
                 aria-invalid={!!errors.receiverName}
               />
@@ -302,7 +354,7 @@ export function CreateShippingOrderDialog({
               </label>
               <Input
                 value={receiverPhone}
-                onChange={(e) => setReceiverPhone(e.target.value)}
+                onChange={(e) => { setReceiverPhone(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
                 placeholder="Số điện thoại"
                 aria-invalid={!!errors.receiverPhone}
               />
@@ -319,7 +371,7 @@ export function CreateShippingOrderDialog({
             </label>
             <Input
               value={receiverAddress}
-              onChange={(e) => setReceiverAddress(e.target.value)}
+              onChange={(e) => { setReceiverAddress(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
               placeholder="Địa chỉ giao hàng"
               aria-invalid={!!errors.receiverAddress}
             />
@@ -344,7 +396,15 @@ export function CreateShippingOrderDialog({
               </p>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Thu hộ (COD) — tự tính</label>
+              <label className="text-sm font-medium">Thu tiền</label>
+              <select
+                value={collectionMode}
+                onChange={(e) => setCollectionMode(e.target.value as "cod" | "none")}
+                className="mb-2 flex h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+              >
+                <option value="cod">Thu khi giao</option>
+                <option value="none">Không thu</option>
+              </select>
               <div className="flex h-8 w-full items-center rounded-lg border border-input bg-muted/50 px-3 text-sm tabular-nums">
                 {selectedInvoice ? formatCurrency(codPreview) : "Chọn hóa đơn trước"}
               </div>

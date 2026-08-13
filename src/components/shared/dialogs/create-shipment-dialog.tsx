@@ -21,6 +21,7 @@ import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createShipmentForInvoice } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
+import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
 
 /**
  * CEO 08/07/2026: Tạo VẬN ĐƠN cho hóa đơn/đơn đặt hàng CÓ SẴN (như KiotViet)
@@ -35,6 +36,8 @@ export function CreateShipmentDialog({
   /** Prefill người nhận từ khách trên hóa đơn (sửa được). */
   defaultReceiverName,
   defaultReceiverPhone,
+  defaultReceiverAddress,
+  buyerCustomerId,
   /** Tổng hiện tại của đơn — hiện gợi ý "Khách cần trả sau khi thêm phí". */
   currentTotal,
   currentFee,
@@ -46,6 +49,8 @@ export function CreateShipmentDialog({
   invoiceCode: string;
   defaultReceiverName?: string;
   defaultReceiverPhone?: string;
+  defaultReceiverAddress?: string;
+  buyerCustomerId?: string | null;
   currentTotal?: number;
   currentFee?: number;
   onSuccess?: () => void;
@@ -56,6 +61,9 @@ export function CreateShipmentDialog({
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
   const [partnerId, setPartnerId] = useState("");
+  const [sameAsBuyer, setSameAsBuyer] = useState(true);
+  const [receiverCustomerId, setReceiverCustomerId] = useState<string | null>(null);
+  const [collectionMode, setCollectionMode] = useState<"cod" | "none">("cod");
   const [partners, setPartners] = useState<{ id: string; name: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -64,7 +72,10 @@ export function CreateShipmentDialog({
     setFee(currentFee ?? 0);
     setReceiverName(defaultReceiverName ?? "");
     setReceiverPhone(defaultReceiverPhone ?? "");
-    setReceiverAddress("");
+    setReceiverAddress(defaultReceiverAddress ?? "");
+    setSameAsBuyer(true);
+    setReceiverCustomerId(buyerCustomerId ?? null);
+    setCollectionMode("cod");
     setPartnerId("");
     setSaving(false);
     (async () => {
@@ -78,7 +89,7 @@ export function CreateShipmentDialog({
         .limit(20);
       setPartners((data ?? []).map((d) => ({ id: d.id, name: d.name })));
     })();
-  }, [open, currentFee, defaultReceiverName, defaultReceiverPhone]);
+  }, [open, currentFee, defaultReceiverName, defaultReceiverPhone, defaultReceiverAddress]);
 
   // Khách cần trả sau khi áp phí mới = tổng hiện tại − phí cũ + phí mới
   const newTotal =
@@ -102,11 +113,15 @@ export function CreateShipmentDialog({
         receiverPhone,
         receiverAddress,
         partnerId: partnerId || null,
+        collectionMode,
+        receiverCustomerId,
       });
       onOpenChange(false);
       toast({
         title: `Đã tạo vận đơn ${ship.code}`,
-        description: `Gắn vào ${invoiceCode} — phí giao ${formatCurrency(fee)}, thu hộ ${formatCurrency(ship.cod ?? 0)}`,
+        description: collectionMode === "cod"
+          ? `Gắn vào ${invoiceCode} · thu khi giao ${formatCurrency(ship.cod ?? 0)}`
+          : `Gắn vào ${invoiceCode} · không thu`,
         variant: "success",
       });
       onSuccess?.();
@@ -128,23 +143,53 @@ export function CreateShipmentDialog({
           <DialogTitle>Tạo vận đơn — {invoiceCode}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm font-medium">Người nhận</span>
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={sameAsBuyer}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  setSameAsBuyer(checked);
+                  setReceiverCustomerId(checked ? buyerCustomerId ?? null : null);
+                  if (checked) {
+                    setReceiverName(defaultReceiverName ?? "");
+                    setReceiverPhone(defaultReceiverPhone ?? "");
+                    setReceiverAddress(defaultReceiverAddress ?? "");
+                  }
+                }}
+              />
+              Giống người mua
+            </label>
+          </div>
+          {!sameAsBuyer && (
+            <ReceiverCustomerSelect
+              onSelect={(customer) => {
+                setReceiverCustomerId(customer.id);
+                setReceiverName(customer.name);
+                setReceiverPhone(customer.phone);
+                setReceiverAddress(customer.address ?? "");
+              }}
+            />
+          )}
           <div className="grid grid-cols-2 gap-2">
             <Input
               value={receiverName}
-              onChange={(e) => setReceiverName(e.target.value)}
+              onChange={(e) => { setReceiverName(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
               placeholder="Người nhận"
               aria-label="Người nhận"
             />
             <Input
               value={receiverPhone}
-              onChange={(e) => setReceiverPhone(e.target.value)}
+              onChange={(e) => { setReceiverPhone(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
               placeholder="SĐT người nhận"
               aria-label="SĐT người nhận"
             />
           </div>
           <Input
             value={receiverAddress}
-            onChange={(e) => setReceiverAddress(e.target.value)}
+            onChange={(e) => { setReceiverAddress(e.target.value); setSameAsBuyer(false); setReceiverCustomerId(null); }}
             placeholder="Địa chỉ giao hàng"
             aria-label="Địa chỉ giao hàng"
           />
@@ -179,6 +224,19 @@ export function CreateShipmentDialog({
               placeholder="0"
               aria-label="Phí giao hàng"
             />
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Thu tiền
+            </label>
+            <select
+              value={collectionMode}
+              onChange={(e) => setCollectionMode(e.target.value as "cod" | "none")}
+              className="flex h-8 w-full rounded-lg border border-input bg-transparent px-3 text-sm"
+            >
+              <option value="cod">Thu khi giao</option>
+              <option value="none">Không thu</option>
+            </select>
           </div>
           {newTotal != null && (
             <p className="text-sm text-muted-foreground">

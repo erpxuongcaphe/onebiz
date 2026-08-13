@@ -239,6 +239,7 @@ export async function getOrders(
       invoiceCode: row.order_code ? row.code : undefined,
       date: row.created_at,
       customerName: row.customer_name ?? "",
+      customerId: row.customer_id ?? undefined,
       customerPhone: customer?.phone ?? "",
       totalAmount: row.total ?? 0,
       // Phí giao = cột delivery_fee (invoices KHÔNG có shipping_fee).
@@ -659,6 +660,8 @@ export interface SaveSalesOrderInput {
   receiverName?: string | null;
   receiverPhone?: string | null;
   receiverAddress?: string | null;
+  collectionMode: "cod" | "none";
+  receiverCustomerId?: string | null;
   items: SaveSalesOrderItemInput[];
 }
 
@@ -676,7 +679,7 @@ export async function saveSalesOrderAtomic(
 ): Promise<SaveSalesOrderResult> {
   const supabase = getClient();
   const { data, error } = await (supabase.rpc as any)(
-    "save_sales_order_atomic",
+    "save_sales_order_atomic_v2",
     {
       p_order_id: input.orderId ?? null,
       p_requested_code: input.requestedCode ?? null,
@@ -694,6 +697,8 @@ export async function saveSalesOrderAtomic(
       p_receiver_name: input.receiverName ?? null,
       p_receiver_phone: input.receiverPhone ?? null,
       p_receiver_address: input.receiverAddress ?? null,
+      p_collection_mode: input.collectionMode,
+      p_receiver_customer_id: input.receiverCustomerId ?? null,
     },
   );
   if (error) handleError(error, "saveSalesOrderAtomic");

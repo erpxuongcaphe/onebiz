@@ -28,6 +28,7 @@ import {
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { saveSalesOrderAtomic } from "@/lib/services/supabase/orders";
 import { Icon } from "@/components/ui/icon";
+import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
 import {
   getSalesOrderSaveErrorMessage,
   normalizeSalesOrderReceiver,
@@ -142,6 +143,9 @@ export function CreateOrderDialog({
   const [receiverName, setReceiverName] = useState("");
   const [receiverPhone, setReceiverPhone] = useState("");
   const [receiverAddress, setReceiverAddress] = useState("");
+  const [sameAsBuyer, setSameAsBuyer] = useState(true);
+  const [receiverCustomerId, setReceiverCustomerId] = useState<string | null>(null);
+  const [collectionMode, setCollectionMode] = useState<"cod" | "none">("cod");
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -159,6 +163,9 @@ export function CreateOrderDialog({
     setReceiverName("");
     setReceiverPhone("");
     setReceiverAddress("");
+    setSameAsBuyer(true);
+    setReceiverCustomerId(null);
+    setCollectionMode("cod");
     setErrors({});
     setSaving(false);
 
@@ -434,6 +441,8 @@ export function CreateOrderDialog({
         receiverName: wantShipment ? receiver.name : null,
         receiverPhone: wantShipment ? receiver.phone : null,
         receiverAddress: wantShipment ? receiver.address : null,
+        collectionMode,
+        receiverCustomerId,
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -484,6 +493,8 @@ export function CreateOrderDialog({
         receiverName: receiver.isComplete ? receiver.name : null,
         receiverPhone: receiver.isComplete ? receiver.phone : null,
         receiverAddress: receiver.isComplete ? receiver.address : null,
+        collectionMode,
+        receiverCustomerId,
         items: items.map((item) => ({
           productId: item.id,
           quantity: item.quantity,
@@ -579,9 +590,12 @@ export function CreateOrderDialog({
                               setShowCustomerDropdown(false);
                               // Chỉ tự điền khi hồ sơ khách có đủ thông tin giao hàng.
                               if (c.phone.trim() && c.address.trim()) {
-                                setReceiverName((v) => v || c.name);
-                                setReceiverPhone((v) => v || c.phone);
-                                setReceiverAddress((v) => v || c.address);
+                                if (sameAsBuyer) {
+                                  setReceiverCustomerId(c.id);
+                                  setReceiverName(c.name);
+                                  setReceiverPhone(c.phone);
+                                  setReceiverAddress(c.address);
+                                }
                                 setErrors((current) => ({ ...current, receiver: "" }));
                               }
                             }}
@@ -646,7 +660,41 @@ export function CreateOrderDialog({
               </section>
 
               <section className="rounded-xl border bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-sm font-semibold">Giao hàng</h3>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Giao hàng</h3>
+                  <label className="flex cursor-pointer items-center gap-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={sameAsBuyer}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setSameAsBuyer(checked);
+                        setReceiverCustomerId(checked ? selectedCustomer?.id ?? null : null);
+                        if (checked) {
+                          const buyer = filteredCustomers.find((c) => c.id === selectedCustomer?.id);
+                          if (buyer) {
+                            setReceiverName(buyer.name);
+                            setReceiverPhone(buyer.phone);
+                            setReceiverAddress(buyer.address);
+                          }
+                        }
+                      }}
+                    />
+                    Giống người mua
+                  </label>
+                </div>
+                {!sameAsBuyer && (
+                  <div className="mt-2">
+                    <ReceiverCustomerSelect
+                      onSelect={(customer) => {
+                        setReceiverCustomerId(customer.id);
+                        setReceiverName(customer.name);
+                        setReceiverPhone(customer.phone);
+                        setReceiverAddress(customer.address ?? "");
+                      }}
+                    />
+                  </div>
+                )}
                 <Select
                   value={selectedPartner || null}
                   onValueChange={(value) => setSelectedPartner(value ?? "")}
@@ -691,6 +739,8 @@ export function CreateOrderDialog({
                     value={receiverName}
                     onChange={(e) => {
                       setReceiverName(e.target.value);
+                      setSameAsBuyer(false);
+                      setReceiverCustomerId(null);
                       setErrors((current) => ({ ...current, receiver: "" }));
                     }}
                     placeholder="Người nhận"
@@ -700,6 +750,8 @@ export function CreateOrderDialog({
                     value={receiverPhone}
                     onChange={(e) => {
                       setReceiverPhone(e.target.value);
+                      setSameAsBuyer(false);
+                      setReceiverCustomerId(null);
                       setErrors((current) => ({ ...current, receiver: "" }));
                     }}
                     placeholder="SĐT người nhận"
@@ -711,6 +763,8 @@ export function CreateOrderDialog({
                     value={receiverAddress}
                     onChange={(e) => {
                       setReceiverAddress(e.target.value);
+                      setSameAsBuyer(false);
+                      setReceiverCustomerId(null);
                       setErrors((current) => ({ ...current, receiver: "" }));
                     }}
                     placeholder="Địa chỉ giao hàng"
@@ -720,6 +774,17 @@ export function CreateOrderDialog({
                 {errors.receiver && (
                   <p className="mt-1.5 text-xs text-destructive">{errors.receiver}</p>
                 )}
+                <div className="mt-2">
+                  <label className="mb-1 block text-xs font-medium text-muted-foreground">Thu tiền</label>
+                  <select
+                    value={collectionMode}
+                    onChange={(e) => setCollectionMode(e.target.value as "cod" | "none")}
+                    className="h-8 w-full rounded-lg border border-input bg-white px-2 text-sm"
+                  >
+                    <option value="cod">Thu khi giao</option>
+                    <option value="none">Không thu</option>
+                  </select>
+                </div>
                 <p className="mt-1.5 text-[11px] text-muted-foreground">
                   Điền đủ người nhận + SĐT + địa chỉ → hệ thống tự tạo vận đơn
                   kèm đơn này.

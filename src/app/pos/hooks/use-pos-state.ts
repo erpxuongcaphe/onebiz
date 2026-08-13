@@ -105,6 +105,9 @@ export type PaymentMethod = "cash" | "transfer" | "card" | "mixed";
 export type SellingMode = "fast" | "normal" | "delivery";
 
 export interface DeliveryInfo {
+  /** Khách hàng được liên kết với người nhận; null khi nhập tay. */
+  receiverCustomerId?: string;
+  sameAsBuyer?: boolean;
   recipientName: string;
   recipientPhone: string;
   address: string;
@@ -221,6 +224,7 @@ export function usePosState() {
     shippingFee: 0,
     deliveryNote: "",
     codEnabled: true,
+    sameAsBuyer: true,
     partnerId: "",
   });
 
@@ -381,6 +385,7 @@ export function usePosState() {
       shippingFee: 0,
       deliveryNote: "",
       codEnabled: true,
+      sameAsBuyer: true,
     });
   }, []);
 
@@ -463,6 +468,7 @@ export function usePosState() {
       shippingFee: deliveryFee,
       deliveryNote: "",
       codEnabled: true,
+      sameAsBuyer: true,
     });
   }, []);
 

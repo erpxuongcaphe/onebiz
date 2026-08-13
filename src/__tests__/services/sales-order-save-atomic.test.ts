@@ -14,16 +14,29 @@ const receiverValidationFix = readFileSync(
   "supabase/migrations/00294_fix_sales_order_receiver_validation.sql",
   "utf8",
 );
+const collectionMigration = readFileSync(
+  "supabase/migrations/00319_shipping_collection_and_receiver.sql",
+  "utf8",
+);
 
 describe("atomic sales-order draft save", () => {
   it("keeps actor and tenant derivation on the server", () => {
-    expect(service).toContain('"save_sales_order_atomic"');
+    expect(service).toContain('"save_sales_order_atomic_v2"');
     expect(service).toContain("p_order_id: input.orderId ?? null");
     expect(service).not.toContain("p_actor_id: input");
     expect(service).not.toContain("p_tenant_id: input");
     expect(migration).toContain("auth.uid()");
     expect(migration).toContain("user_has_permission(v_actor, 'orders.create')");
     expect(migration).toContain("user_has_branch_access(v_actor, v_branch_id)");
+  });
+
+  it("saves explicit collection mode and optional receiver customer link", () => {
+    expect(service).toContain("p_collection_mode: input.collectionMode");
+    expect(service).toContain("p_receiver_customer_id: input.receiverCustomerId ?? null");
+    expect(dialog).toContain("Giống người mua");
+    expect(dialog).toContain("Thu khi giao");
+    expect(dialog).toContain("Không thu");
+    expect(collectionMigration).toContain("save_sales_order_atomic_v2");
   });
 
   it("locks edits and validates all linked entities before writing", () => {
