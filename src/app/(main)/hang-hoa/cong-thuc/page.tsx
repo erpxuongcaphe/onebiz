@@ -397,6 +397,8 @@ export default function CongThucPage() {
             onClear: () => setBranchFilter("all"),
           },
         ];
+  const emptyState =
+    search.trim() || filterChips.length > 0 ? "no-results" : "no-data";
 
   const handleDelete = useCallback(
     async (id: string, name: string) => {
@@ -628,51 +630,36 @@ export default function CongThucPage() {
           <FilterChips filters={filterChips} onClearAll={() => setBranchFilter("all")} />
         )}
 
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-muted-foreground">
-            Đang tải...
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <Icon name="science" size={48} className="mb-3 opacity-30" />
-            <p className="text-sm">
-              {branchFilter !== "all"
-                ? "Chi nhánh này chưa dùng công thức nào."
-                : "Chưa có công thức nào"}
-            </p>
-            {branchFilter === "all" && (
-              <Button
-                size="sm"
-                className="mt-3"
-                onClick={() => {
-                  setEditingId(undefined);
-                  setEditorOpen(true);
-                }}
-              >
-                <Icon name="add" size={16} className="mr-1" />
-                Tạo công thức đầu tiên
-              </Button>
-            )}
-          </div>
-        ) : (
-          <DataTable
-            columns={columns}
-            data={pagedData}
-            loading={false}
-            density="compact"
-            total={filtered.length}
-            pageIndex={page}
-            pageSize={pageSize}
-            pageCount={Math.ceil(filtered.length / pageSize)}
-            onPageChange={setPage}
-            onPageSizeChange={(size) => {
-              setPageSize(size);
-              setPage(0);
-            }}
-            getRowId={(row) => row.id}
-            expandedRow={expandedRow}
-            onExpandedRowChange={setExpandedRow}
-            renderDetail={(row, onClose) => (
+        <DataTable
+          columns={columns}
+          data={pagedData}
+          loading={loading}
+          density="compact"
+          total={filtered.length}
+          emptyState={emptyState}
+          emptyTitle={
+            emptyState === "no-results"
+              ? "Không tìm thấy công thức"
+              : "Chưa có công thức"
+          }
+          emptyDescription={
+            emptyState === "no-results"
+              ? "Thử thay đổi chi nhánh sử dụng hoặc nội dung tìm kiếm."
+              : 'Bấm "Tạo công thức" để thiết lập định mức nguyên liệu đầu tiên.'
+          }
+          emptyIcon="science"
+          pageIndex={page}
+          pageSize={pageSize}
+          pageCount={Math.ceil(filtered.length / pageSize)}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => {
+            setPageSize(size);
+            setPage(0);
+          }}
+          getRowId={(row) => row.id}
+          expandedRow={expandedRow}
+          onExpandedRowChange={setExpandedRow}
+          renderDetail={(row, onClose) => (
               <BOMDetail
                 bomId={row.id}
                 onClose={onClose}
@@ -682,8 +669,8 @@ export default function CongThucPage() {
                 }}
                 onDelete={() => handleDelete(row.id, row.name)}
               />
-            )}
-            rowActions={(row) => {
+          )}
+          rowActions={(row) => {
               // Day 18/05/2026 (CEO): row action "Tạo BOM riêng cho quán"
               // chỉ hiển thị khi BOM hiện tại là global (branchId = null) và
               // còn ít nhất 1 chi nhánh chưa có BOM riêng cho SP đó.
@@ -717,9 +704,8 @@ export default function CongThucPage() {
                   separator: true,
                 },
               ];
-            }}
-          />
-        )}
+          }}
+        />
 
         <FilterPanel
           open={filterOpen}

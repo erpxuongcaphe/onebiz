@@ -788,7 +788,10 @@ export default function NhomHangPage() {
   // -----------------------------------------------------------------------
   // Render
   // -----------------------------------------------------------------------
-  const isEmpty = !loading && data.length === 0;
+  const emptyState =
+    debouncedSearch.trim() || activeFilters.length > 0
+      ? "no-results"
+      : "no-data";
 
   return (
     <>
@@ -920,45 +923,32 @@ export default function NhomHangPage() {
           onClearAll={activeFilters.length > 1 ? clearFilters : undefined}
         />
 
-        {isEmpty ? (
-          <div className="flex flex-1 flex-col items-center justify-center text-center px-6 py-12">
-            <Icon
-              name="category"
-              size={56}
-              className="text-muted-foreground/30 mb-4"
-            />
-            <h3 className="text-base font-medium mb-1">
-              Chưa có nhóm hàng nào trong {scope === "nvl" ? "NVL" : "Hàng bán"}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4 max-w-md">
-              Nhóm hàng giúp anh tổ chức sản phẩm theo loại (Cà phê, Sữa,
-              Syrup…) và tự sinh mã SP đẹp như{" "}
-              <span className="font-mono">
-                {scope === "nvl" ? "NVL-CFE-001" : "SKU-RXA-001"}
-              </span>
-              .
-            </p>
-            <Button onClick={openCreate}>
-              <Icon name="add" size={16} className="mr-1" />
-              Tạo nhóm đầu tiên
-            </Button>
-          </div>
-        ) : (
-          <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
-            <DataTable
-              columns={columns}
-              data={filtered}
-              loading={loading}
-              total={filtered.length}
-              getRowId={(row) => row.id}
-              expandedRow={expandedRow}
-              onExpandedRowChange={setExpandedRow}
-              renderDetail={(cat) => (
-                <CategoryProductsPanel categoryId={cat.id} />
-              )}
-            />
-          </div>
-        )}
+        <div className="min-h-0 flex-1 px-3 pb-3 pt-2">
+          <DataTable
+            columns={columns}
+            data={filtered}
+            loading={loading}
+            total={filtered.length}
+            emptyState={emptyState}
+            emptyTitle={
+              emptyState === "no-results"
+                ? "Không tìm thấy nhóm hàng"
+                : `Chưa có nhóm hàng ${scope === "nvl" ? "nguyên vật liệu" : "hàng bán"}`
+            }
+            emptyDescription={
+              emptyState === "no-results"
+                ? "Thử thay đổi kênh áp dụng, tình trạng sử dụng hoặc nội dung tìm kiếm."
+                : "Nhóm hàng mới sẽ hiển thị tại đây sau khi được tạo."
+            }
+            emptyIcon="category"
+            getRowId={(row) => row.id}
+            expandedRow={expandedRow}
+            onExpandedRowChange={setExpandedRow}
+            renderDetail={(cat) => (
+              <CategoryProductsPanel categoryId={cat.id} />
+            )}
+          />
+        </div>
 
         <FilterPanel
           open={filterOpen}
