@@ -482,16 +482,14 @@ export type {
 // Kitchen Orders
 export {
   getKitchenOrders, getKitchenOrderById,
-  createKitchenOrder, addItemsToOrder,
+  addItemsToOrder,
   updateKitchenOrderStatus, updateKitchenItemStatus,
-  linkInvoiceToOrder,
-  updateOrderItemQty, removeOrderItem,
-  cancelKitchenOrder, cancelUnpaidKitchenOrder, transferTable, mergeKitchenOrders,
-  applyOrderDiscount, setDeliveryPlatform,
+  cancelUnpaidKitchenOrder, transferTable, mergeKitchenOrders,
+  setDeliveryPlatform,
   // Day 21/05/2026 (CEO): delivery staff tracking + tier picker
   assignDeliveryStaff, unassignDeliveryStaff, completeDelivery, setDeliveryDistanceTier,
 } from "./kitchen-orders";
-export type { CreateKitchenOrderInput, CancelUnpaidKitchenOrderInput } from "./kitchen-orders";
+export type { CancelUnpaidKitchenOrderInput } from "./kitchen-orders";
 
 // F&B Delivery Fee Tiers (CEO 21/05/2026 — policy phí theo km)
 export {
