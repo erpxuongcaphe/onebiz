@@ -24,7 +24,7 @@ function table(status: CanvasTable["status"], unpaidOrders = 0): CanvasTable {
 }
 
 describe("Sơ đồ bàn FnB chỉ hiện hành động đã có luồng an toàn", () => {
-  it("bàn có đơn cho xem đơn và chuyển bàn qua callback thật", () => {
+  it("bàn có đơn chỉ hiện các hành động đã được cấp quyền", () => {
     const onAction = vi.fn();
     render(
       <TableActionSheet
@@ -37,8 +37,24 @@ describe("Sơ đồ bàn FnB chỉ hiện hành động đã có luồng an toà
 
     fireEvent.click(screen.getByRole("button", { name: "Chuyển bàn" }));
     expect(onAction).toHaveBeenCalledWith("transfer", expect.objectContaining({ id: "table-1" }));
-    expect(screen.queryByRole("button", { name: "Gộp bàn" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Gộp đơn" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Hủy đặt" })).not.toBeInTheDocument();
+  });
+
+  it("bàn có đơn gọi đúng hành động gộp khi đã được cấp quyền", () => {
+    const onAction = vi.fn();
+    render(
+      <TableActionSheet
+        table={table("occupied", 1)}
+        onAction={onAction}
+        onClose={vi.fn()}
+        canMerge
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Gộp đơn" }));
+    expect(onAction).toHaveBeenCalledWith("merge", expect.objectContaining({ id: "table-1" }));
+    expect(screen.queryByRole("button", { name: "Chuyển bàn" })).not.toBeInTheDocument();
   });
 
   it("bàn đang dọn hiển thị đúng hành động thay vì nói mở đơn mới", () => {

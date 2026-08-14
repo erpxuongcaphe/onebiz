@@ -16,7 +16,8 @@ import type { CanvasTable } from "./floor-plan-canvas";
 
 export type TableActionKind =
   | "open"      // Mở đơn (bàn trống → đơn mới · bàn có khách → xem đơn hiện tại)
-  | "transfer"; // Chuyển khách sang bàn khác
+  | "transfer"  // Chuyển khách sang bàn khác
+  | "merge";    // Gộp đơn của bàn này vào một bàn đang phục vụ khác
 
 interface TableActionSheetProps {
   table: CanvasTable | null;
@@ -24,6 +25,7 @@ interface TableActionSheetProps {
   onAction: (kind: TableActionKind, table: CanvasTable) => void;
   onClose: () => void;
   canTransfer?: boolean;
+  canMerge?: boolean;
 }
 
 export function TableActionSheet({
@@ -32,6 +34,7 @@ export function TableActionSheet({
   onAction,
   onClose,
   canTransfer = false,
+  canMerge = false,
 }: TableActionSheetProps) {
   if (!table) return null;
 
@@ -115,6 +118,13 @@ export function TableActionSheet({
               icon="swap_horiz"
               label="Chuyển bàn"
               onClick={() => onAction("transfer", table)}
+            />
+          )}
+          {hasActiveOrder && canMerge && (
+            <ActionButton
+              icon="call_merge"
+              label="Gộp đơn"
+              onClick={() => onAction("merge", table)}
             />
           )}
         </div>
