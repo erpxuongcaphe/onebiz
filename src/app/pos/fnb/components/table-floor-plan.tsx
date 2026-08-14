@@ -32,6 +32,7 @@ const FloorPlanCanvas = dynamic(
 interface TableFloorPlanProps {
   tables: RestaurantTable[];
   onSelectTable: (table: RestaurantTable) => void;
+  onTransferTable?: (table: RestaurantTable) => void;
   orderTimestamps?: Record<string, string>;
 }
 
@@ -49,6 +50,7 @@ function elapsedMinutes(iso: string): number {
 export function TableFloorPlan({
   tables,
   onSelectTable,
+  onTransferTable,
   orderTimestamps,
 }: TableFloorPlanProps) {
   const { currentBranch } = useAuth();
@@ -68,18 +70,7 @@ export function TableFloorPlan({
       onSelectTable(original);
       return;
     }
-    // Chuyển/Gộp/Hủy đặt — UI scaffold, backend wire sẽ build sau
-    const labels: Record<Exclude<TableActionKind, "open">, string> = {
-      transfer: "Chuyển bàn",
-      merge: "Gộp bàn",
-      "cancel-reservation": "Hủy đặt trước",
-    };
-    toast({
-      title: `${labels[kind as Exclude<TableActionKind, "open">]} — đang phát triển`,
-      description:
-        "Em sẽ build dialog chọn bàn đích + cập nhật đơn ở phiên sau. Tạm thời anh thao tác ở dialog Đơn hiện tại nhé.",
-      variant: "info",
-    });
+    onTransferTable?.(original);
   };
 
   // Load zones (fallback gracefully nếu chưa setup)
@@ -251,6 +242,7 @@ export function TableFloorPlan({
         }
         onAction={handleAction}
         onClose={() => setActionTable(null)}
+        canTransfer={Boolean(onTransferTable)}
       />
     </div>
   );

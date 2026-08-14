@@ -101,6 +101,29 @@ describe("useFnbPosState", () => {
     expect(result.current.activeTab!.customerName).toBe("Nguyễn Văn A");
   });
 
+  it("updateTabMeta — đồng bộ bàn và nhãn tab sau khi chuyển bàn", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    let tabId = "";
+
+    act(() => {
+      tabId = result.current.createTab("Bàn 3", "dine_in", "table-3");
+      result.current.updateTabMeta(tabId, { kitchenOrderId: "order-1" });
+    });
+    act(() => {
+      result.current.updateTabMeta(tabId, {
+        tableId: "table-7",
+        label: "Bàn 7",
+      });
+    });
+
+    expect(result.current.activeTab).toMatchObject({
+      id: tabId,
+      kitchenOrderId: "order-1",
+      tableId: "table-7",
+      label: "Bàn 7",
+    });
+  });
+
   // ── Cart lines ──
 
   it("thêm 1 món → subtotal = unitPrice * qty", () => {
