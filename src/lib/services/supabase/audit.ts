@@ -109,6 +109,7 @@ const ACTION_LABELS: Record<string, string> = {
   fnb_complete_payment_atomic: "Hoàn tất thanh toán FnB",
   fnb_split_bill: "Tách hóa đơn FnB",
   fnb_transfer_table: "Chuyển bàn FnB",
+  fnb_merge_orders: "Gộp đơn FnB",
   fnb_table_available: "Trả bàn về trạng thái trống",
   fnb_kitchen_item_status: "Đổi trạng thái món bếp",
   fnb_kitchen_order_served: "Hoàn tất phục vụ món",

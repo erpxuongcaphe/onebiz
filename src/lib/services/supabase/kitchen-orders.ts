@@ -694,6 +694,61 @@ export async function transferTable(
 // Gộp đơn (Merge orders)
 // ============================================================
 
+const MERGE_ORDER_ERROR_MESSAGES: ReadonlyArray<{
+  codes: readonly string[];
+  message: string;
+}> = [
+  {
+    codes: [
+      "FNB_MERGE_SELECTION_REQUIRED",
+      "FNB_MERGE_TARGET_IN_SOURCES",
+      "FNB_MERGE_DUPLICATE_SOURCE",
+    ],
+    message: "Vui lòng chọn ít nhất một đơn khác để gộp.",
+  },
+  {
+    codes: ["FNB_MERGE_TARGET_TABLE_STALE", "FNB_MERGE_SOURCE_TABLE_STALE"],
+    message: "Bàn hoặc đơn vừa thay đổi. Vui lòng tải lại sơ đồ bàn.",
+  },
+  {
+    codes: ["FNB_MERGE_TARGET_NOT_FOUND"],
+    message: "Không tìm thấy đơn nhận. Vui lòng tải lại sơ đồ bàn.",
+  },
+  {
+    codes: [
+      "FNB_MERGE_TARGET_NOT_ELIGIBLE",
+      "FNB_MERGE_SOURCE_NOT_ELIGIBLE",
+      "FNB_MERGE_SOURCE_EMPTY",
+    ],
+    message: "Chỉ gộp được các đơn tại quán chưa thanh toán và còn món.",
+  },
+  {
+    codes: [
+      "FNB_MERGE_AUTH_REQUIRED",
+      "FNB_MERGE_ACTIVE_PROFILE_REQUIRED",
+      "FNB_MERGE_PERMISSION_REQUIRED",
+      "FNB_MERGE_BRANCH_DENIED",
+    ],
+    message: "Anh/chị không có quyền gộp các đơn này.",
+  },
+];
+
+export function getMergeOrderErrorMessage(error: unknown): string | null {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  for (const item of MERGE_ORDER_ERROR_MESSAGES) {
+    if (item.codes.some((code) => rawMessage.includes(code))) {
+      return item.message;
+    }
+  }
+  return null;
+}
+
 /**
  * Merge source orders into target order.
  * Moves all items from source orders to target, marks sources as cancelled.
@@ -704,45 +759,30 @@ export async function mergeKitchenOrders(
   sourceOrderIds: string[]
 ): Promise<void> {
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
 
-  for (const sourceId of sourceOrderIds) {
-    // 1. Move items: update kitchen_order_id to target — scope qua kitchen_order_id (parent đã verify tenant ở step 2)
-    const { error: moveErr } = await supabase
-      .from("kitchen_order_items")
-      .update({ kitchen_order_id: targetOrderId })
-      .eq("kitchen_order_id", sourceId);
+  // Browser-side multi-step updates can leave items, orders and table status
+  // split when one request fails. Merge therefore fails closed without RPC.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "merge_kitchen_orders_atomic",
+    {
+      p_target_order_id: targetOrderId,
+      p_source_order_ids: sourceOrderIds,
+    },
+  );
 
-    if (moveErr) handleError(moveErr, `mergeKitchenOrders:moveItems:${sourceId}`);
-
-    // 2. Mark source as cancelled + set merged_into_id
-    const { error: cancelErr } = await supabase
-      .from("kitchen_orders")
-      .update({
-        status: "cancelled" as const,
-        merged_into_id: targetOrderId,
-      })
-      .eq("tenant_id", tenantId)
-      .eq("id", sourceId);
-
-    if (cancelErr) handleError(cancelErr, `mergeKitchenOrders:cancel:${sourceId}`);
-
-    // 3. Release source table if any
-    const { data: srcOrder } = await supabase
-      .from("kitchen_orders")
-      .select("table_id")
-      .eq("tenant_id", tenantId)
-      .eq("id", sourceId)
-      .single();
-
-    if (srcOrder?.table_id) {
-      await supabase
-        .from("restaurant_tables")
-        .update({ status: "available" as const, current_order_id: null })
-        .eq("tenant_id", tenantId)
-        .eq("id", srcOrder.table_id)
-        .eq("current_order_id", sourceId);
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chức năng gộp đơn chưa được cài đặt an toàn. Vui lòng liên hệ quản trị viên.",
+      );
     }
+    const friendlyMessage = getMergeOrderErrorMessage(error);
+    if (friendlyMessage) throw new Error(friendlyMessage);
+    handleError(error, "mergeKitchenOrders:atomic_rpc");
+  }
+  if (!(data as { success?: boolean } | null)?.success) {
+    throw new Error("Server không trả kết quả gộp đơn hợp lệ.");
   }
 }
 
