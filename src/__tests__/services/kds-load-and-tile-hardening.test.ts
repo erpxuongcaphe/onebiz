@@ -82,6 +82,22 @@ describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {
   });
 });
 
+describe("KDS hien thi dung tren dien thoai va tablet", () => {
+  it("dung dynamic viewport cho moi trang thai", () => {
+    expect(kds).not.toContain("h-screen");
+    expect(kds.match(/h-dvh/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("van doi duoc quan khi bo chon desktop dang an", () => {
+    expect(kds).toContain(
+      'className="flex shrink-0 items-center border-b border-border bg-card px-3 py-2 lg:hidden"',
+    );
+    expect(kds).toMatch(
+      /lg:hidden[\s\S]{0,240}<PosBranchSelector[\s\S]{0,160}filter=\{\["store"\]\}/,
+    );
+  });
+});
+
 describe("Ô món POS FnB không cắt mất tên", () => {
   it("ảnh co được, không còn khung vuông cứng", () => {
     expect(tile).not.toContain("aspect-square overflow-hidden relative p-2 flex-shrink-0");

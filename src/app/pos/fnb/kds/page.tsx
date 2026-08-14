@@ -710,8 +710,8 @@ function KdsPageInner() {
   // CEO chưa chọn chi nhánh
   if (!branchId) {
     return (
-      <div className="flex h-screen flex-col bg-background text-foreground">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6">
+      <div className="flex h-dvh flex-col bg-background text-foreground">
+        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-3 py-2 sm:px-6">
           <Link
             href={fnbPath("/pos/fnb")}
             className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
@@ -721,8 +721,8 @@ function KdsPageInner() {
           </Link>
           <PosBranchSelector variant="light" filter={["store"]} showCode />
           <div className="flex-1" />
-          <Icon name="soup_kitchen" size={20} className="text-muted-foreground" />
-          <span className="font-heading text-base font-bold text-foreground">
+          <Icon name="soup_kitchen" size={20} className="hidden text-muted-foreground sm:block" />
+          <span className="hidden font-heading text-base font-bold text-foreground sm:inline">
             KDS Bếp
           </span>
         </header>
@@ -748,8 +748,8 @@ function KdsPageInner() {
 
   if (!isStoreBranch) {
     return (
-      <div className="flex h-screen flex-col bg-background text-foreground">
-        <header className="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-card px-6">
+      <div className="flex h-dvh flex-col bg-background text-foreground">
+        <header className="flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-border bg-card px-3 py-2 sm:px-6">
           <Link
             href={fnbPath("/pos/fnb")}
             className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
@@ -805,7 +805,7 @@ function KdsPageInner() {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
+      <div className="flex h-dvh items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
           <Icon
             name="progress_activity"
@@ -819,7 +819,7 @@ function KdsPageInner() {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
       <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 shadow-sm md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           {/* Left: title + status */}
@@ -946,6 +946,17 @@ function KdsPageInner() {
           </div>
         </div>
       </header>
+
+      {/* Dien thoai va tablet van phai doi duoc dung quan. Desktop da co bo chon
+          trong header; hang rieng nay tranh chen dong ho va bo loc bep. */}
+      <div className="flex shrink-0 items-center border-b border-border bg-card px-3 py-2 lg:hidden">
+        <PosBranchSelector
+          variant="light"
+          filter={["store"]}
+          showCode
+          className="w-full justify-start sm:w-auto"
+        />
+      </div>
 
       {/* Offline / connection alert banner — hiện khi fetch lỗi hoặc stale data > 90s
           Để bếp biết ngay không cần check header nhỏ. Khi online lại thì biến mất. */}
