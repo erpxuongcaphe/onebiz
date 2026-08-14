@@ -232,6 +232,19 @@ describe("PR-D · trang POS FnB dùng đúng nguồn chung", () => {
     expect(than).not.toContain("requestPayment");
   });
 
+  it("gửi bếp có khoá chống bấm lặp và luôn mở khoá sau khi xong", () => {
+    expect(ma).toContain("if (fnbKitchenSubmitLockRef.current)");
+    expect(ma).toContain("fnbKitchenSubmitLockRef.current = true");
+    expect(ma).toContain("fnbKitchenSubmitLockRef.current = false");
+    expect(ma).toContain("setKitchenSubmitting(true)");
+    expect(ma).toContain("setKitchenSubmitting(false)");
+  });
+
+  it("giỏ mobile chỉ đóng sau khi gửi bếp thành công", () => {
+    expect(ma).toContain("const kitchenOrderId = await handleSendToKitchen()");
+    expect(ma).toContain("if (kitchenOrderId) setMobileCartOpen(false)");
+  });
+
   it("giữ nguyên chuỗi markOverdueShiftsForBranch → getOpenShift", () => {
     const viTriMark = ma.indexOf("markOverdueShiftsForBranch(branchId)");
     const viTriGet = ma.indexOf("getOpenShift(branchId, userId)");

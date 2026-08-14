@@ -152,6 +152,10 @@ type ShiftState =
   | { status: "none" }
   | { status: "error" };
 
+// Quản lý có thể cập nhật tuỳ chọn món trong lúc quầy vẫn mở. Sau một phút,
+// lần mở món kế tiếp phải đọc lại thay vì giữ cấu hình cũ suốt cả phiên.
+const MODIFIER_CACHE_TTL_MS = 60_000;
+
 function FnbPosPageInner() {
   const { user, tenant, currentBranch, branches, isLoading: authLoading, hasPermission } = useAuth();
   const { toast } = useToast();
@@ -188,7 +192,10 @@ function FnbPosPageInner() {
   const [itemModifierData, setItemModifierData] = useState<
     DynamicModifierData | undefined
   >(undefined);
+  // Chỉ lượt mở món mới nhất được phép cập nhật popup/giỏ hàng.
+  const itemLoadRequestRef = useRef(0);
   const [toppingProducts, setToppingProducts] = useState<{ id: string; name: string; price: number }[]>([]);
+  const [kitchenSubmitting, setKitchenSubmitting] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
@@ -932,15 +939,38 @@ function FnbPosPageInner() {
   // (category-level). Cùng SP → cùng modifier (đến khi setup thay đổi).
   // Empty array (no groups) cũng cache để tránh re-fetch SP không có modifier.
   const modifierCacheRef = useMemo(
-    () => new Map<string, DynamicModifierData>(),
+    () => new Map<string, { data: DynamicModifierData; loadedAt: number }>(),
     []
   );
+
+  const readModifierCache = useCallback(
+    (productId: string) => {
+      const entry = modifierCacheRef.get(productId);
+      if (!entry) return undefined;
+      if (Date.now() - entry.loadedAt >= MODIFIER_CACHE_TTL_MS) {
+        modifierCacheRef.delete(productId);
+        return undefined;
+      }
+      return entry.data;
+    },
+    [modifierCacheRef],
+  );
+
+  // Xoá bản chụp tuỳ chọn khi đổi phạm vi. Đồng thời đóng popup đang mở để
+  // món của quán trước không thể được thêm vào quán mới.
+  useEffect(() => {
+    modifierCacheRef.clear();
+    itemLoadRequestRef.current += 1;
+    setItemModifierData(undefined);
+    setItemDialogOpen(false);
+    setEditingLineId(null);
+  }, [tenantId, branchId, modifierCacheRef]);
 
   // Helper: load modifier groups + options effective cho SP.
   // CACHE-FIRST: kiểm cache trước, miss thì fetch + lưu cache.
   const loadModifierForProduct = useCallback(
     async (productId: string, categoryId: string | null) => {
-      const cached = modifierCacheRef.get(productId);
+      const cached = readModifierCache(productId);
       if (cached) return cached;
       try {
         const groups = await getEffectiveModifierGroupsForProduct(
@@ -955,7 +985,7 @@ function FnbPosPageInner() {
           }),
         );
         const data: DynamicModifierData = { groups, optionsByGroup };
-        modifierCacheRef.set(productId, data);
+        modifierCacheRef.set(productId, { data, loadedAt: Date.now() });
         return data;
       } catch (err) {
         // 06/08: KHÔNG cache khi lỗi. Bản cũ cache `groups: []` → mạng chớp
@@ -968,7 +998,7 @@ function FnbPosPageInner() {
         } satisfies DynamicModifierData;
       }
     },
-    [modifierCacheRef],
+    [modifierCacheRef, readModifierCache],
   );
 
   // ── Warm variant cache từ IndexedDB ngay khi mount (cache-first).
@@ -1133,10 +1163,12 @@ function FnbPosPageInner() {
   const handleSelectProduct = useCallback(
     async (product: FnbProduct) => {
       hapticTap();
+      const requestId = ++itemLoadRequestRef.current;
       // Phase 1A.2: clear edit-mode trước khi mở dialog cho add mới,
       // tránh confirm rơi nhầm nhánh updateLine.
       setEditingLineId(null);
       setSelectedProduct(product);
+      setItemModifierData(undefined);
 
       // Helper: quick-add với product price chuẩn (không variant, không topping)
       // CEO 13/05: resolve giá theo tab.deliveryPlatform — nếu có override
@@ -1150,6 +1182,7 @@ function FnbPosPageInner() {
       const resolvedPrice = override !== undefined ? override : product.sell_price;
 
       const quickAdd = () => {
+        if (itemLoadRequestRef.current !== requestId) return;
         pos.addLine({
           productId: product.id,
           productName: product.name,
@@ -1170,9 +1203,15 @@ function FnbPosPageInner() {
 
       // CEO 01/06/2026 — Sprint 2.2e: load modifier groups song song với variants.
       // Cache-first → instant response cho SP đã mở trước. Cache miss thì fetch.
-      void loadModifierForProduct(product.id, product.category_id).then(
+      const modifierPromise = loadModifierForProduct(
+        product.id,
+        product.category_id,
+      );
+      void modifierPromise.then(
         (data) => {
-          setItemModifierData(data);
+          if (itemLoadRequestRef.current === requestId) {
+            setItemModifierData(data);
+          }
         },
       );
 
@@ -1180,10 +1219,13 @@ function FnbPosPageInner() {
       const cached = variantCacheRef.get(product.id);
       if (cached) {
         if (cached.length === 0) {
-          // SP không có biến thể NHƯNG có thể có modifier → check modifier cache
-          const modCached = modifierCacheRef.get(product.id);
-          if (modCached && modCached.groups.length > 0) {
-            // Có modifier → mở dialog dù không có size
+          // SP không có biến thể nhưng vẫn có thể có Đường/Đá/Topping.
+          // Nếu cache modifier chưa có/hết hạn thì PHẢI chờ lần đọc đang chạy;
+          // không được đoán "không có" rồi quick-add bỏ qua tuỳ chọn bắt buộc.
+          const modData = readModifierCache(product.id) ?? await modifierPromise;
+          if (itemLoadRequestRef.current !== requestId) return;
+          setItemModifierData(modData);
+          if (modData.groups.length > 0 || modData.failed) {
             setItemVariants([]);
             setItemDialogOpen(true);
             return;
@@ -1213,13 +1255,13 @@ function FnbPosPageInner() {
         }));
         variantCacheRef.set(product.id, mapped);
 
+        if (itemLoadRequestRef.current !== requestId) return;
+
         if (mapped.length === 0) {
           // Không có variant — chờ modifier load xong rồi quyết định:
           // có modifier groups → giữ dialog mở; không có → quick-add.
-          const modData = await loadModifierForProduct(
-            product.id,
-            product.category_id,
-          );
+          const modData = await modifierPromise;
+          if (itemLoadRequestRef.current !== requestId) return;
           setItemModifierData(modData);
           // 06/08 — CHỖ NGUY HIỂM NHẤT của lỗi cũ: khi tải tuỳ chọn LỖI,
           // modData.groups rỗng → code cũ quick-add THẲNG vào giỏ, bỏ qua
@@ -1234,6 +1276,7 @@ function FnbPosPageInner() {
         setItemVariants(mapped);
       } catch (err) {
         console.error("getVariantsByProduct error:", err);
+        if (itemLoadRequestRef.current !== requestId) return;
         setItemVariants([]);
         toast({
           title: "Không tải được size/biến thể",
@@ -1241,10 +1284,12 @@ function FnbPosPageInner() {
           variant: "warning",
         });
       } finally {
-        setItemVariantsLoading(false);
+        if (itemLoadRequestRef.current === requestId) {
+          setItemVariantsLoading(false);
+        }
       }
     },
-    [toast, variantCacheRef, modifierCacheRef, loadModifierForProduct, pos],
+    [toast, variantCacheRef, readModifierCache, loadModifierForProduct, pos, platformPriceMap],
   );
 
   // ── Add to cart from item dialog ──
@@ -1294,6 +1339,7 @@ function FnbPosPageInner() {
   const handleEditLine = useCallback(
     async (line: FnbOrderLine) => {
       hapticTap();
+      const requestId = ++itemLoadRequestRef.current;
       const product = products.find((p) => p.id === line.productId);
       if (!product) {
         toast({
@@ -1305,11 +1351,14 @@ function FnbPosPageInner() {
       }
       setEditingLineId(line.id);
       setSelectedProduct(product);
+      setItemModifierData(undefined);
 
       // CEO 01/06/2026 — Sprint 2.2e: load modifier khi sửa dòng giỏ.
       void loadModifierForProduct(product.id, product.category_id).then(
         (data) => {
-          setItemModifierData(data);
+          if (itemLoadRequestRef.current === requestId) {
+            setItemModifierData(data);
+          }
         },
       );
 
@@ -1330,11 +1379,15 @@ function FnbPosPageInner() {
           sell_price: v.sellPrice,
         }));
         variantCacheRef.set(line.productId, mapped);
-        setItemVariants(mapped);
+        if (itemLoadRequestRef.current === requestId) {
+          setItemVariants(mapped);
+        }
       } catch (err) {
         console.error("getVariantsByProduct error (edit):", err);
       } finally {
-        setItemVariantsLoading(false);
+        if (itemLoadRequestRef.current === requestId) {
+          setItemVariantsLoading(false);
+        }
       }
     },
     [products, toast, variantCacheRef, loadModifierForProduct]
@@ -1358,9 +1411,20 @@ function FnbPosPageInner() {
   // ── Send to kitchen (offline-aware) ──
   // - Nếu tab chưa có kitchenOrderId → tạo đơn bếp mới (sendToKitchen)
   // - Nếu tab đã có kitchenOrderId → gửi bổ sung (addItemsToExistingOrder)
+  const fnbKitchenSubmitLockRef = useRef(false);
   const handleSendToKitchen = useCallback(async (): Promise<string | null> => {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return null;
+    if (fnbKitchenSubmitLockRef.current) {
+      toast({
+        title: "Đang gửi bếp...",
+        description: "Vui lòng đợi đơn hiện tại gửi xong.",
+        variant: "info",
+      });
+      return null;
+    }
+    fnbKitchenSubmitLockRef.current = true;
+    setKitchenSubmitting(true);
 
     const mappedItems = tab.lines.map((l) => ({
       productId: l.productId,
@@ -1572,6 +1636,9 @@ function FnbPosPageInner() {
         variant: "error",
       });
       return null;
+    } finally {
+      fnbKitchenSubmitLockRef.current = false;
+      setKitchenSubmitting(false);
     }
   }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
 
@@ -1796,6 +1863,9 @@ function FnbPosPageInner() {
         quantity: l.quantity,
         unitPrice: l.unitPrice,
         toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+        modifierLabels: l.modifierSelections?.map(
+          (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+        ),
         note: l.note,
       })),
       subtotal: pos.subtotal,
@@ -1950,6 +2020,9 @@ function FnbPosPageInner() {
                   quantity: t.quantity,
                   price: t.price,
                 })),
+                modifierLabels: l.modifierSelections?.map(
+                  (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+                ),
                 note: l.note,
               })),
               subtotal: pos.subtotal,
@@ -1979,6 +2052,9 @@ function FnbPosPageInner() {
                 quantity: l.quantity,
                 unitPrice: l.unitPrice,
                 toppings: l.toppings.map((t) => ({ name: t.name, quantity: t.quantity, price: t.price })),
+                modifierLabels: l.modifierSelections?.map(
+                  (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+                ),
                 note: l.note,
               })),
               subtotal: pos.subtotal,
@@ -2084,7 +2160,7 @@ function FnbPosPageInner() {
         fnbSubmitLockRef.current = false;
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied]
   );
 
   // ── Table select (from floor plan) ──
@@ -3028,6 +3104,7 @@ function FnbPosPageInner() {
           removeLine={pos.removeLine}
           onEditLine={handleEditLine}
           onSendToKitchen={handleSendToKitchen}
+          kitchenSubmitting={kitchenSubmitting}
           onPayment={requestPayment}
           onSplitBill={handleOpenSplitBill}
           onChangeOrderType={pos.setActiveTabOrderType}
@@ -3063,6 +3140,7 @@ function FnbPosPageInner() {
               setItemDialogOpen(o);
               // Phase 1A.2: đóng dialog → clear edit-mode để add tiếp đúng nhánh.
               if (!o) {
+                itemLoadRequestRef.current += 1;
                 setEditingLineId(null);
                 setItemModifierData(undefined);
               }
@@ -3220,7 +3298,11 @@ function FnbPosPageInner() {
               updateLineQty={pos.updateLineQty}
               removeLine={pos.removeLine}
               onEditLine={handleEditLine}
-              onSendToKitchen={() => { handleSendToKitchen(); setMobileCartOpen(false); }}
+              onSendToKitchen={async () => {
+                const kitchenOrderId = await handleSendToKitchen();
+                if (kitchenOrderId) setMobileCartOpen(false);
+              }}
+              kitchenSubmitting={kitchenSubmitting}
               onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
               onSplitBill={handleOpenSplitBill}
               onChangeOrderType={pos.setActiveTabOrderType}

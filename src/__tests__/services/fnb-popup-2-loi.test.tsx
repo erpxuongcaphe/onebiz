@@ -114,6 +114,35 @@ describe("LỖI 1 — tải tuỳ chọn hỏng phải NÓI THẬT, không giả
     // điều kiện quick-add phải kèm !modData.failed
     expect(src).toContain("modData.groups.length === 0 && !modData.failed");
   });
+
+  it("variant cache rỗng nhưng modifier cache chưa có thì phải chờ máy chủ", () => {
+    const src = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
+    const nhanhVariantDaCache = src.slice(
+      src.indexOf("if (cached.length === 0)"),
+      src.indexOf("// SP có ≥1 biến thể"),
+    );
+    expect(nhanhVariantDaCache).toContain("await modifierPromise");
+    expect(nhanhVariantDaCache).toContain("modData.groups.length > 0 || modData.failed");
+    expect(nhanhVariantDaCache.indexOf("await modifierPromise")).toBeLessThan(
+      nhanhVariantDaCache.indexOf("quickAdd()"),
+    );
+  });
+
+  it("cache tuỳ chọn có hạn dùng và bị xoá khi đổi chi nhánh", () => {
+    const src = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
+    expect(src).toContain("const MODIFIER_CACHE_TTL_MS = 60_000");
+    expect(src).toContain("Date.now() - entry.loadedAt >= MODIFIER_CACHE_TTL_MS");
+    expect(src).toContain("modifierCacheRef.clear()");
+    expect(src).toContain("[tenantId, branchId, modifierCacheRef]");
+  });
+
+  it("phản hồi món cũ không được ghi đè popup món mới", () => {
+    const src = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
+    expect(src).toContain("const requestId = ++itemLoadRequestRef.current");
+    expect(src).toContain("itemLoadRequestRef.current !== requestId");
+    expect(src).toContain("itemLoadRequestRef.current === requestId");
+    expect(src).toContain("itemLoadRequestRef.current += 1");
+  });
 });
 
 describe("LỖI 2 — chống bấm xác nhận 2 lần", () => {

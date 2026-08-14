@@ -41,6 +41,7 @@ interface FnbCartProps {
   updateLineQty: (lineId: string, qty: number) => void;
   removeLine: (lineId: string) => void;
   onSendToKitchen: () => void;
+  kitchenSubmitting?: boolean;
   onPayment: () => void;
   onSplitBill?: () => void;
   onCustomerClick?: () => void;
@@ -122,6 +123,7 @@ export function FnbCart({
   updateLineQty,
   removeLine,
   onSendToKitchen,
+  kitchenSubmitting = false,
   onPayment,
   onSplitBill,
   onCustomerClick,
@@ -766,7 +768,7 @@ export function FnbCart({
           <button
             type="button"
             onClick={onSendToKitchen}
-            disabled={isEmpty}
+            disabled={isEmpty || kitchenSubmitting}
             className={cn(
               "flex-[0.4] h-14 rounded-lg font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               activeTab?.kitchenOrderId
@@ -774,9 +776,17 @@ export function FnbCart({
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
-            <Icon name={activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"} size={18} />
+            <Icon
+              name={kitchenSubmitting ? "progress_activity" : activeTab?.kitchenOrderId ? "add_circle" : "notifications_active"}
+              size={18}
+              className={kitchenSubmitting ? "animate-spin" : undefined}
+            />
             <span className="text-sm font-semibold leading-tight">
-              {activeTab?.kitchenOrderId ? "Gửi thêm (F10)" : "Bếp (F10)"}
+              {kitchenSubmitting
+                ? "Đang gửi..."
+                : activeTab?.kitchenOrderId
+                  ? "Gửi thêm (F10)"
+                  : "Bếp (F10)"}
             </span>
           </button>
           <button

@@ -343,8 +343,8 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   } as Record<string, string>)[data.deliveryPlatform ?? ""] ?? "Sàn";
 
   // Minimal: no item details, just total
-  // Standard: items + prices
-  // Full: items + toppings + notes + barcode/QR
+  // Standard: items + prices + mọi chi tiết ảnh hưởng cách pha/tiền món
+  // Full: như Standard + phần trình bày mở rộng, barcode/QR
 
   let itemsHtml = "";
   if (style !== "minimal") {
@@ -355,7 +355,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
         <td class="right">${formatCurrency(itemTotal)}</td>
       </tr>`;
 
-      if (style === "full" && item.toppings && item.toppings.length > 0) {
+      if (item.toppings && item.toppings.length > 0) {
         for (const t of item.toppings) {
           if (t.quantity <= 0) continue;
           const tTotal = t.quantity * item.quantity * t.price;
@@ -363,12 +363,12 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
             <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
         }
       }
-      // Sprint 2.4b: receipt full style → modifier choices
-      if (style === "full" && item.modifierLabels && item.modifierLabels.length > 0) {
+      // Mọi hoá đơn có danh sách món đều phải nói rõ lựa chọn pha chế.
+      if (item.modifierLabels && item.modifierLabels.length > 0) {
         const label = item.modifierLabels.join(" • ");
         html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
       }
-      if (style === "full" && item.note) {
+      if (item.note) {
         html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${item.note}</td></tr>`;
       }
       return html;
