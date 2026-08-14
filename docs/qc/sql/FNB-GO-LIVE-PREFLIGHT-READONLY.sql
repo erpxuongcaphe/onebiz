@@ -30,15 +30,13 @@ with function_defs as (
 ), configuration as (
   select
     count(*) filter (
-      where p.deleted_at is null
-        and p.is_active = true
+      where p.is_active = true
         and p.product_type = 'sku'
         and p.channel = 'fnb'
         and p.code ilike 'SKU-TPP%'
     ) as topping_total,
     count(*) filter (
-      where p.deleted_at is null
-        and p.is_active = true
+      where p.is_active = true
         and p.product_type = 'sku'
         and p.channel = 'fnb'
         and p.code ilike 'SKU-TPP%'
