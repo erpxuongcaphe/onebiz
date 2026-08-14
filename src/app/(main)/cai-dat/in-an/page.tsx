@@ -128,9 +128,9 @@ const templates = [
 
 // ── Kitchen ticket styles ──
 const kitchenStyles = [
-  { id: "compact" as const, label: "Gọn", desc: "Chỉ tên món + số lượng" },
-  { id: "standard" as const, label: "Tiêu chuẩn", desc: "Tên + topping + ghi chú" },
-  { id: "detailed" as const, label: "Chi tiết", desc: "Đầy đủ + giá + variant" },
+  { id: "compact" as const, label: "Gọn", desc: "Đủ thông tin pha chế, ít khoảng cách" },
+  { id: "standard" as const, label: "Tiêu chuẩn", desc: "Đủ thông tin pha chế, dễ đọc" },
+  { id: "detailed" as const, label: "Chi tiết", desc: "Đủ thông tin pha chế và giá" },
 ];
 
 // ── Receipt styles ──

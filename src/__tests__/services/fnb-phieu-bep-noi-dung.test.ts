@@ -1,4 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 /**
  * KIỂM CHỨNG PHIẾU BẾP — dựng phiếu bằng ĐÚNG HÀM IN THẬT, dữ liệu giả.
@@ -90,6 +92,18 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
     expect(gon).toContain("Mức đá: Ít đá");
     expect(gon).toContain("Không ống hút");
     expect(gon).not.toContain('class="price"');
+  });
+});
+
+describe("C. Cài đặt in mô tả đúng nội dung phiếu bếp", () => {
+  it("không còn nói kiểu Gọn chỉ in tên món và số lượng", () => {
+    const page = readFileSync(
+      resolve(process.cwd(), "src/app/(main)/cai-dat/in-an/page.tsx"),
+      "utf8",
+    );
+
+    expect(page).not.toContain("Chỉ tên món + số lượng");
+    expect(page).toContain("Đủ thông tin pha chế, ít khoảng cách");
   });
 });
 
