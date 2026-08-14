@@ -30,6 +30,7 @@ export interface FnbBillTemplatePayload {
     quantity: number;
     unitPrice: number;
     toppings?: { name: string; quantity: number; price: number }[];
+    modifierLabels?: string[];
     note?: string;
   }[];
   subtotal: number;
@@ -72,14 +73,15 @@ export async function printFnbBillWithTemplate(
     // Mỗi topping là 1 dòng riêng (giữ đúng số học: tổng dòng = tạm tính).
     const items: NonNullable<DocumentPrintData["items"]> = [];
     for (const it of p.items) {
+      const itemNote = [...(it.modifierLabels ?? []), ...(it.note ? [it.note] : [])]
+        .filter(Boolean)
+        .join(" • ");
       items.push({
-        name:
-          it.name +
-          (it.variant ? ` (${it.variant})` : "") +
-          (it.note ? ` — ${it.note}` : ""),
+        name: it.name + (it.variant ? ` (${it.variant})` : ""),
         quantity: it.quantity,
         unitPrice: it.unitPrice,
         total: it.quantity * it.unitPrice,
+        note: itemNote || undefined,
       });
       for (const t of it.toppings ?? []) {
         items.push({

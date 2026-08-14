@@ -33,6 +33,7 @@ describe("F&B checkout benefits atomic hardening", () => {
     expect(page).toContain("customerId: tab?.customerId ?? null");
     expect(page).toContain("promotionId: appliedPromotion?.promotion.id");
     expect(page).toContain("couponCode: couponApplied?.code");
+    expect(page).toContain("appliedPromotion, couponApplied]");
   });
 
   it("removes post-payment benefit writes from the page", () => {

@@ -16,7 +16,9 @@ import { resolve } from "node:path";
  */
 
 import {
+  buildFnbReceiptHtml,
   buildKitchenTicketHtml,
+  buildPreBillHtml,
   type KitchenTicketDataV2,
   type FnbPrintItem,
 } from "@/lib/print-fnb";
@@ -92,6 +94,49 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
     expect(gon).toContain("Mức đá: Ít đá");
     expect(gon).toContain("Không ống hút");
     expect(gon).not.toContain('class="price"');
+  });
+});
+
+describe("D. Phiếu tạm tính và hoá đơn khách giữ đủ tuỳ chọn món", () => {
+  const duLieuChung = {
+    orderNumber: "BILL-TEST-001",
+    tableName: "Bàn 5",
+    orderType: "dine_in" as const,
+    items: [MON],
+    subtotal: 106_000,
+    discountAmount: 0,
+    deliveryFee: 0,
+    total: 106_000,
+    createdAt: "2026-08-08T03:15:00.000Z",
+    paperSize: "80mm" as const,
+  };
+
+  it("phiếu tạm tính có Size, topping, Đường/Đá và ghi chú", () => {
+    const html = buildPreBillHtml(duLieuChung);
+    expect(html).toContain("(Size L)");
+    expect(html).toContain("Trân châu trắng x2");
+    expect(html).toContain("Mức đường: 50% • Mức đá: Ít đá");
+    expect(html).toContain("Không ống hút");
+  });
+
+  it("hoá đơn thanh toán có Size, topping, Đường/Đá và ghi chú", () => {
+    const html = buildFnbReceiptHtml({
+      ...duLieuChung,
+      invoiceCode: "HD-TEST-001",
+      paymentMethod: "cash",
+      paid: 106_000,
+      change: 0,
+    });
+    expect(html).toContain("(Size L)");
+    expect(html).toContain("Trân châu trắng x2");
+    expect(html).toContain("Mức đường: 50% • Mức đá: Ít đá");
+    expect(html).toContain("Không ống hút");
+  });
+
+  it("đường gọi in trên POS truyền tuỳ chọn cho cả ba loại phiếu", () => {
+    const page = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
+    expect(page.match(/modifierLabels: l\.modifierSelections\?\.map/g)?.length ?? 0)
+      .toBeGreaterThanOrEqual(5);
   });
 });
 
