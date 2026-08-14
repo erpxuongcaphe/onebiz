@@ -50,6 +50,36 @@ describe("KDS không tải máy chủ vô ích", () => {
       /table: "kitchen_orders"[\s\S]{0,80}filter: `branch_id=eq\.\$\{branchId\}`/,
     );
   });
+
+  it("kết quả tải cũ không đè danh sách mới hoặc chi nhánh mới", () => {
+    expect(kds).toContain("fetchRequestIdRef");
+    expect(kds).toContain("activeBranchIdRef.current !== requestedBranchId");
+    expect(kds).toContain("requestId !== fetchRequestIdRef.current");
+  });
+});
+
+describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {
+  it("khóa ngay theo món và theo đơn trước khi gọi máy chủ", () => {
+    expect(kds).toContain("pendingItemIdsRef.current.has(item.id)");
+    expect(kds).toContain("pendingOrderIdsRef.current.has(item.kitchenOrderId)");
+    expect(kds).toContain("pendingOrderIdsRef.current.has(orderId)");
+    expect(kds).toContain("setItemsPending([item.id], true)");
+    expect(kds).toContain("setOrderPending(orderId, true)");
+  });
+
+  it("chờ toàn bộ cập nhật hàng loạt kết thúc rồi mới đồng bộ lại", () => {
+    expect(kds).toContain("await Promise.allSettled(");
+    expect(kds).not.toContain("await Promise.all(\n          toMark.map");
+    expect(kds).toContain("result is PromiseRejectedResult");
+  });
+
+  it("nút món và nút đơn hiển thị trạng thái bận, không cho bấm tiếp", () => {
+    expect(kds).toContain("isPending={isOrderPending || pendingItemIds.has(item.id)}");
+    expect(kds).toContain("disabled={isPending}");
+    expect(kds).toContain("disabled={isOrderPending}");
+    expect(kds).toContain("disabled={!allReady || isOrderPending}");
+    expect(kds).toContain('aria-busy={isOrderPending}');
+  });
 });
 
 describe("Ô món POS FnB không cắt mất tên", () => {

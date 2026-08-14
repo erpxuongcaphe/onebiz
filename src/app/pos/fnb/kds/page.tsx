@@ -216,6 +216,34 @@ function KdsPageInner() {
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
   const overdueAlertedRef = useRef<Set<string>>(new Set());
   const fetchErrorShownRef = useRef(false);
+  const fetchRequestIdRef = useRef(0);
+  const activeBranchIdRef = useRef(branchId);
+  activeBranchIdRef.current = branchId;
+  const pendingItemIdsRef = useRef<Set<string>>(new Set());
+  const pendingOrderIdsRef = useRef<Set<string>>(new Set());
+  const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(new Set());
+  const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
+
+  const setItemsPending = useCallback((ids: string[], pending: boolean) => {
+    for (const id of ids) {
+      if (pending) pendingItemIdsRef.current.add(id);
+      else pendingItemIdsRef.current.delete(id);
+    }
+    setPendingItemIds(new Set(pendingItemIdsRef.current));
+  }, []);
+
+  const setOrderPending = useCallback((id: string, pending: boolean) => {
+    if (pending) pendingOrderIdsRef.current.add(id);
+    else pendingOrderIdsRef.current.delete(id);
+    setPendingOrderIds(new Set(pendingOrderIdsRef.current));
+  }, []);
+
+  useEffect(() => {
+    pendingItemIdsRef.current.clear();
+    pendingOrderIdsRef.current.clear();
+    setPendingItemIds(new Set());
+    setPendingOrderIds(new Set());
+  }, [branchId]);
 
   // KDS thường treo tường, nhân viên hiếm khi chạm → trình duyệt chặn Web Audio
   // tới khi có user gesture đầu tiên (autoplay policy). "Mồi" AudioContext ngay
@@ -265,6 +293,8 @@ function KdsPageInner() {
 
   // ── Poll orders ──
   const fetchOrders = useCallback(async () => {
+    const requestId = ++fetchRequestIdRef.current;
+    const requestedBranchId = branchId;
     if (!branchId || !isStoreBranch) {
       setOrders([]);
       setFetchError(null);
@@ -274,6 +304,10 @@ function KdsPageInner() {
     }
     try {
       const enriched = await getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES);
+      if (
+        requestId !== fetchRequestIdRef.current ||
+        activeBranchIdRef.current !== requestedBranchId
+      ) return;
 
       const newIds = new Set(enriched.map((o) => o.id));
       if (prevOrderIdsRef.current.size > 0 && soundOn) {
@@ -312,6 +346,10 @@ function KdsPageInner() {
       setFetchError(null);
       setLastFetchAt(Date.now());
     } catch (err) {
+      if (
+        requestId !== fetchRequestIdRef.current ||
+        activeBranchIdRef.current !== requestedBranchId
+      ) return;
       console.error("KDS fetchOrders error:", err);
       const msg = getKitchenLoadMessage(err);
       setFetchError(msg);
@@ -325,7 +363,10 @@ function KdsPageInner() {
         });
       }
     } finally {
-      setLoading(false);
+      if (
+        requestId === fetchRequestIdRef.current &&
+        activeBranchIdRef.current === requestedBranchId
+      ) setLoading(false);
     }
   }, [branchId, isStoreBranch, soundOn, toast]);
 
@@ -437,6 +478,11 @@ function KdsPageInner() {
   // ── Item status toggle ──
   const handleItemToggle = useCallback(
     async (item: KitchenOrderItem) => {
+      if (
+        pendingItemIdsRef.current.has(item.id) ||
+        pendingOrderIdsRef.current.has(item.kitchenOrderId)
+      ) return;
+
       const nextStatus: Record<KitchenItemStatus, KitchenItemStatus> = {
         pending: "preparing",
         preparing: "ready",
@@ -445,6 +491,7 @@ function KdsPageInner() {
       const next = nextStatus[item.status];
       if (next === item.status) return;
 
+      setItemsPending([item.id], true);
       hapticTap();
       // Optimistic UI trước cho phản hồi tức thì.
       setOrders((prev) =>
@@ -464,19 +511,23 @@ function KdsPageInner() {
       try {
         await updateKitchenItemStatus(item.id, next);
       } catch (err) {
-        fetchOrders(); // rollback về đúng trạng thái server
+        await fetchOrders(); // rollback về đúng trạng thái server
         toast({
           title: "Không cập nhật được món",
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+      } finally {
+        setItemsPending([item.id], false);
       }
     },
-    [fetchOrders, toast]
+    [fetchOrders, setItemsPending, toast]
   );
 
   // ── Mark order served ──
   const handleServed = useCallback(async (orderId: string) => {
+    if (pendingOrderIdsRef.current.has(orderId)) return;
+    setOrderPending(orderId, true);
     hapticSuccess();
     // Optimistic UI trước.
     setOrders((prev) =>
@@ -488,24 +539,30 @@ function KdsPageInner() {
     try {
       await updateKitchenOrderStatus(orderId, "served");
     } catch (err) {
-      fetchOrders();
+      await fetchOrders();
       toast({
         title: "Không đánh dấu phục vụ được",
         description: err instanceof Error ? err.message : "Lỗi không xác định",
         variant: "error",
       });
+    } finally {
+      setOrderPending(orderId, false);
     }
-  }, [fetchOrders, toast]);
+  }, [fetchOrders, setOrderPending, toast]);
 
   // ── Mark all items in an order as ready (bulk action) ──
   const handleMarkAllReady = useCallback(
     async (orderId: string) => {
+      if (pendingOrderIdsRef.current.has(orderId)) return;
       const order = orders.find((o) => o.id === orderId);
       if (!order) return;
 
       const toMark = order.items.filter((i) => i.status !== "ready");
       if (toMark.length === 0) return;
 
+      const itemIds = toMark.map((item) => item.id);
+      setOrderPending(orderId, true);
+      setItemsPending(itemIds, true);
       hapticTap();
 
       // Optimistic UI: update locally first
@@ -523,27 +580,43 @@ function KdsPageInner() {
       );
 
       try {
-        // Run in parallel for speed
-        await Promise.all(
+        // Wait for every request before refreshing. Promise.all would reject early while
+        // the remaining updates were still running, which could render a stale rollback.
+        const results = await Promise.allSettled(
           toMark.map((i) => updateKitchenItemStatus(i.id, "ready"))
         );
-        hapticSuccess();
-      } catch (err) {
-        // Rollback + toast
-        fetchOrders();
-        toast({
-          title: "Không đánh dấu được",
-          description: err instanceof Error ? err.message : "Lỗi không xác định",
-          variant: "error",
-        });
+        const failed = results.find(
+          (result): result is PromiseRejectedResult => result.status === "rejected"
+        );
+        if (failed) {
+          await fetchOrders();
+          toast({
+            title: "Không đánh dấu được",
+            description:
+              failed.reason instanceof Error
+                ? failed.reason.message
+                : "Lỗi không xác định",
+            variant: "error",
+          });
+        } else {
+          hapticSuccess();
+        }
+      } finally {
+        setItemsPending(itemIds, false);
+        setOrderPending(orderId, false);
       }
     },
-    [orders, fetchOrders, toast]
+    [orders, fetchOrders, setItemsPending, setOrderPending, toast]
   );
 
   // ── Recall item: ready → preparing (lỡ tay đánh dấu xong) ──
   const handleItemRecall = useCallback(async (item: KitchenOrderItem) => {
     if (item.status !== "ready") return;
+    if (
+      pendingItemIdsRef.current.has(item.id) ||
+      pendingOrderIdsRef.current.has(item.kitchenOrderId)
+    ) return;
+    setItemsPending([item.id], true);
     hapticTap();
     try {
       await updateKitchenItemStatus(item.id, "preparing");
@@ -565,8 +638,10 @@ function KdsPageInner() {
         description: err instanceof Error ? err.message : "Lỗi không xác định",
         variant: "error",
       });
+    } finally {
+      setItemsPending([item.id], false);
     }
-  }, [toast]);
+  }, [setItemsPending, toast]);
 
   // ── Print kitchen ticket again (reprint) ──
   const handlePrintTicket = useCallback(
@@ -992,6 +1067,8 @@ function KdsPageInner() {
                 accentClass={lane.accentClass}
                 orders={laneOrders(lane.key)}
                 now={now}
+                pendingItemIds={pendingItemIds}
+                pendingOrderIds={pendingOrderIds}
                 onItemToggle={handleItemToggle}
                 onItemRecall={handleItemRecall}
                 onPrintTicket={handlePrintTicket}
@@ -1009,6 +1086,8 @@ function KdsPageInner() {
             orders={filtered}
             now={now}
             wide
+            pendingItemIds={pendingItemIds}
+            pendingOrderIds={pendingOrderIds}
             onItemToggle={handleItemToggle}
             onItemRecall={handleItemRecall}
             onPrintTicket={handlePrintTicket}
@@ -1032,6 +1111,8 @@ function KdsLane({
   accentClass,
   orders,
   now,
+  pendingItemIds,
+  pendingOrderIds,
   wide = false,
   onItemToggle,
   onItemRecall,
@@ -1045,6 +1126,8 @@ function KdsLane({
   accentClass: string;
   orders: KdsOrder[];
   now: number;
+  pendingItemIds: ReadonlySet<string>;
+  pendingOrderIds: ReadonlySet<string>;
   wide?: boolean;
   onItemToggle: (item: KitchenOrderItem) => void;
   onItemRecall: (item: KitchenOrderItem) => void;
@@ -1094,6 +1177,8 @@ function KdsLane({
               key={order.id}
               order={order}
               now={now}
+              pendingItemIds={pendingItemIds}
+              isOrderPending={pendingOrderIds.has(order.id)}
               onItemToggle={onItemToggle}
               onItemRecall={onItemRecall}
               onPrintTicket={() => onPrintTicket(order)}
@@ -1114,6 +1199,8 @@ function KdsLane({
 function KdsOrderCard({
   order,
   now: _now,
+  pendingItemIds,
+  isOrderPending,
   onItemToggle,
   onItemRecall,
   onPrintTicket,
@@ -1122,6 +1209,8 @@ function KdsOrderCard({
 }: {
   order: KdsOrder;
   now: number;
+  pendingItemIds: ReadonlySet<string>;
+  isOrderPending: boolean;
   onItemToggle: (item: KitchenOrderItem) => void;
   onItemRecall: (item: KitchenOrderItem) => void;
   onPrintTicket: () => void;
@@ -1230,6 +1319,7 @@ function KdsOrderCard({
           <KdsItemRow
             key={item.id}
             item={item}
+            isPending={isOrderPending || pendingItemIds.has(item.id)}
             onToggle={() => onItemToggle(item)}
             onRecall={() => onItemRecall(item)}
           />
@@ -1243,13 +1333,19 @@ function KdsOrderCard({
           <button
             type="button"
             onClick={onMarkAllReady}
+            disabled={isOrderPending}
+            aria-busy={isOrderPending}
             className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle py-3 text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm"
+              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle py-3 text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm disabled:cursor-wait disabled:opacity-70"
             )}
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
           >
-            <Icon name="done_all" size={14} />
-            Sẵn sàng hết ({pendingCount})
+            <Icon
+              name={isOrderPending ? "progress_activity" : "done_all"}
+              size={14}
+              className={isOrderPending ? "animate-spin" : undefined}
+            />
+            {isOrderPending ? "Đang cập nhật..." : `Sẵn sàng hết (${pendingCount})`}
           </button>
         )}
 
@@ -1262,19 +1358,22 @@ function KdsOrderCard({
           <button
             type="button"
             onClick={onServed}
-            disabled={!allReady}
+            disabled={!allReady || isOrderPending}
+            aria-busy={isOrderPending}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-lg py-4 text-base font-bold transition-all press-scale-sm",
-              allReady
+              allReady && !isOrderPending
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
-                : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75"
+                : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75",
+              isOrderPending && "cursor-wait"
             )}
           >
             <Icon
-              name={allReady ? "check_circle" : "pending_actions"}
+              name={isOrderPending ? "progress_activity" : allReady ? "check_circle" : "pending_actions"}
               size={18}
+              className={isOrderPending ? "animate-spin" : undefined}
             />
-            {allReady ? "Xong" : `Còn ${pendingCount} món`}
+            {isOrderPending ? "Đang cập nhật..." : allReady ? "Xong" : `Còn ${pendingCount} món`}
           </button>
         )}
       </div>
@@ -1288,10 +1387,12 @@ function KdsOrderCard({
 
 function KdsItemRow({
   item,
+  isPending,
   onToggle,
   onRecall,
 }: {
   item: KitchenOrderItem;
+  isPending: boolean;
   onToggle: () => void;
   onRecall: () => void;
 }) {
@@ -1359,13 +1460,19 @@ function KdsItemRow({
         <button
           type="button"
           onClick={onRecall}
+          disabled={isPending}
+          aria-busy={isPending}
           className={cn(
-            "flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-status-warning/10 hover:text-status-warning press-scale-sm"
+            "flex size-7 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-status-warning/10 hover:text-status-warning press-scale-sm disabled:cursor-wait disabled:opacity-60"
           )}
           title="Hoàn tác - đánh dấu lại đang pha"
           aria-label="Hoàn tác món"
         >
-          <Icon name="undo" size={14} />
+          <Icon
+            name={isPending ? "progress_activity" : "undo"}
+            size={14}
+            className={isPending ? "animate-spin" : undefined}
+          />
         </button>
       </div>
     );
@@ -1375,8 +1482,10 @@ function KdsItemRow({
     <button
       type="button"
       onClick={onToggle}
+      disabled={isPending}
+      aria-busy={isPending}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors press-scale-sm",
+        "flex w-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors press-scale-sm disabled:cursor-wait disabled:opacity-70",
         isPreparing
           ? "border-status-warning/30 bg-status-warning/10 hover:bg-status-warning/15"
           : "border-border bg-card hover:bg-surface-container"
