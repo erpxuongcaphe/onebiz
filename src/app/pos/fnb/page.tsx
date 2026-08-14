@@ -2515,6 +2515,10 @@ function FnbPosPageInner() {
       try {
         await transferTableService(tab.kitchenOrderId, tab.tableId, toTableId);
         const newTable = tables.find((t) => t.id === toTableId);
+        pos.updateTabMeta(tab.id, {
+          tableId: toTableId,
+          label: newTable ? `Bàn ${newTable.tableNumber}` : tab.label,
+        });
         hapticSuccess();
         toast({
           title: "Đã chuyển bàn",
@@ -3053,6 +3057,10 @@ function FnbPosPageInner() {
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
+                onTransferTable={(table) => {
+                  handleTableSelect(table);
+                  setTransferTableOpen(true);
+                }}
                 orderTimestamps={orderTimestamps}
               />
             </Suspense>

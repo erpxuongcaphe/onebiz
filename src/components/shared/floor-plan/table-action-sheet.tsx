@@ -16,15 +16,14 @@ import type { CanvasTable } from "./floor-plan-canvas";
 
 export type TableActionKind =
   | "open"      // Mở đơn (bàn trống → đơn mới · bàn có khách → xem đơn hiện tại)
-  | "merge"     // Gộp 2 bàn cùng đoàn
-  | "transfer"  // Chuyển khách sang bàn khác
-  | "cancel-reservation"; // Hủy đặt trước
+  | "transfer"; // Chuyển khách sang bàn khác
 
 interface TableActionSheetProps {
   table: CanvasTable | null;
   zoneName?: string;
   onAction: (kind: TableActionKind, table: CanvasTable) => void;
   onClose: () => void;
+  canTransfer?: boolean;
 }
 
 export function TableActionSheet({
@@ -32,12 +31,14 @@ export function TableActionSheet({
   zoneName,
   onAction,
   onClose,
+  canTransfer = false,
 }: TableActionSheetProps) {
   if (!table) return null;
 
   const status = table.status ?? "available";
-  const isFree = status === "available" || status === "cleaning";
-  const isReserved = status === "reserved";
+  const isAvailable = status === "available";
+  const isCleaning = status === "cleaning";
+  const hasActiveOrder = status === "occupied" && (table.unpaidOrders ?? 0) > 0;
 
   return (
     <>
@@ -88,33 +89,32 @@ export function TableActionSheet({
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          <ActionButton
-            primary
-            icon={isFree ? "add_shopping_cart" : "receipt_long"}
-            label={isFree ? "Mở đơn mới" : "Xem đơn"}
-            onClick={() => onAction("open", table)}
-          />
-          {!isFree && (
-            <>
-              <ActionButton
-                icon="swap_horiz"
-                label="Chuyển bàn"
-                onClick={() => onAction("transfer", table)}
-              />
-              <ActionButton
-                icon="merge_type"
-                label="Gộp bàn"
-                onClick={() => onAction("merge", table)}
-              />
-            </>
-          )}
-          {isReserved && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {(isAvailable || isCleaning || hasActiveOrder) && (
             <ActionButton
-              icon="event_busy"
-              label="Hủy đặt"
-              danger
-              onClick={() => onAction("cancel-reservation", table)}
+              primary
+              icon={
+                isAvailable
+                  ? "add_shopping_cart"
+                  : isCleaning
+                    ? "cleaning_services"
+                    : "receipt_long"
+              }
+              label={
+                isAvailable
+                  ? "Mở đơn mới"
+                  : isCleaning
+                    ? "Xác nhận đã dọn"
+                    : "Xem đơn"
+              }
+              onClick={() => onAction("open", table)}
+            />
+          )}
+          {hasActiveOrder && canTransfer && (
+            <ActionButton
+              icon="swap_horiz"
+              label="Chuyển bàn"
+              onClick={() => onAction("transfer", table)}
             />
           )}
         </div>
@@ -127,13 +127,11 @@ export function TableActionSheet({
 
 function ActionButton({
   primary,
-  danger,
   icon,
   label,
   onClick,
 }: {
   primary?: boolean;
-  danger?: boolean;
   icon: string;
   label: string;
   onClick: () => void;
@@ -147,9 +145,7 @@ function ActionButton({
         "min-h-[64px]",
         primary
           ? "bg-primary text-primary-foreground border-primary hover:opacity-90 shadow-sm"
-          : danger
-            ? "border-status-error/30 text-status-error hover:bg-status-error/5"
-            : "border-border hover:border-primary hover:bg-primary/5",
+          : "border-border hover:border-primary hover:bg-primary/5",
       )}
     >
       <Icon name={icon} size={22} />
