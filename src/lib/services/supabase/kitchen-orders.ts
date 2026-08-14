@@ -600,6 +600,56 @@ export async function cancelUnpaidKitchenOrder(
 // Chuyển bàn (Transfer table)
 // ============================================================
 
+const TRANSFER_TABLE_ERROR_MESSAGES: ReadonlyArray<{
+  codes: readonly string[];
+  message: string;
+}> = [
+  { codes: ["FNB_TRANSFER_SAME_TABLE"], message: "Vui lòng chọn một bàn khác." },
+  {
+    codes: ["FNB_TRANSFER_SOURCE_STALE"],
+    message: "Đơn đã chuyển hoặc bàn nguồn vừa thay đổi. Vui lòng tải lại sơ đồ bàn.",
+  },
+  {
+    codes: ["FNB_TRANSFER_DESTINATION_UNAVAILABLE"],
+    message: "Bàn đích vừa có khách hoặc không còn trống. Vui lòng chọn bàn khác.",
+  },
+  {
+    codes: ["FNB_TRANSFER_ORDER_NOT_ELIGIBLE"],
+    message: "Chỉ chuyển được đơn tại quán chưa thanh toán.",
+  },
+  {
+    codes: ["FNB_TRANSFER_ORDER_NOT_FOUND", "FNB_TRANSFER_TABLE_NOT_FOUND"],
+    message: "Không tìm thấy đơn hoặc bàn. Vui lòng tải lại sơ đồ bàn.",
+  },
+  {
+    codes: [
+      "FNB_TRANSFER_AUTH_REQUIRED",
+      "FNB_TRANSFER_ACTIVE_PROFILE_REQUIRED",
+      "FNB_TRANSFER_TENANT_DENIED",
+      "FNB_TRANSFER_PERMISSION_REQUIRED",
+      "FNB_TRANSFER_BRANCH_DENIED",
+      "FNB_TRANSFER_TABLE_SCOPE_DENIED",
+    ],
+    message: "Anh/chị không có quyền chuyển đơn sang bàn này.",
+  },
+];
+
+export function getTransferTableErrorMessage(error: unknown): string | null {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  for (const item of TRANSFER_TABLE_ERROR_MESSAGES) {
+    if (item.codes.some((code) => rawMessage.includes(code))) {
+      return item.message;
+    }
+  }
+  return null;
+}
+
 /**
  * Move a kitchen order from one table to another.
  * Releases source table, claims destination table.
@@ -632,6 +682,8 @@ export async function transferTable(
     if (isRpcUnavailable(atomicError)) {
       throw new Error("Chưa có RPC fnb_transfer_table_atomic. Vui lòng chạy migration POS/FnB atomic trước khi chuyển bàn.");
     }
+    const friendlyMessage = getTransferTableErrorMessage(atomicError);
+    if (friendlyMessage) throw new Error(friendlyMessage);
     handleError(atomicError, "transferTable:atomic_rpc");
   }
 
