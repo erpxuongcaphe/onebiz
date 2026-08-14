@@ -4,9 +4,15 @@ import { describe, expect, it } from "vitest";
 
 const sqlPath = resolve(
   process.cwd(),
-  "docs/PREFLIGHT-FNB-GO-LIVE-2026-08-13.sql",
+  "docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql",
 );
 const sql = readFileSync(sqlPath, "utf8");
+const dbSchema = JSON.parse(
+  readFileSync(
+    resolve(process.cwd(), "src/__tests__/schema/db-schema.json"),
+    "utf8",
+  ),
+) as { bang: Record<string, string[]> };
 const executableSql = sql
   .replace(/--.*$/gm, "")
   .replace(/\/\*[\s\S]*?\*\//g, "");
@@ -16,6 +22,13 @@ describe("Hậu kiểm trước vận hành FnB", () => {
     expect(executableSql).not.toMatch(
       /\b(insert|update|delete|merge|alter|create|drop|truncate|grant|revoke)\b/i,
     );
+  });
+
+  it("chỉ dùng trạng thái đang có thật trên bảng sản phẩm", () => {
+    expect(dbSchema.bang.products).toContain("is_active");
+    expect(dbSchema.bang.products).not.toContain("deleted_at");
+    expect(sql).toContain("p.is_active = true");
+    expect(sql).not.toContain("p.deleted_at");
   });
 
   it("kiểm đủ giá topping, giới hạn lựa chọn và công thức theo Size", () => {
