@@ -2867,7 +2867,7 @@ function FnbPosPageInner() {
     }
     // Có branch nhưng currentBranch null — render header với chip để user chọn
     return (
-      <div className="flex flex-col h-screen bg-surface-container-low">
+      <div className="flex h-dvh flex-col bg-surface-container-low">
         <FnbHeader
           tabs={[]}
           activeTabId=""
@@ -2919,7 +2919,7 @@ function FnbPosPageInner() {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-surface-container-low">
+    <div className="flex h-dvh flex-col bg-surface-container-low">
       <ConnectionStatusBar
         status={networkStatus}
         onClick={() => setSyncDrawerOpen(true)}
@@ -3047,7 +3047,7 @@ function FnbPosPageInner() {
         )}
 
         {/* Left panel: menu grid OR floor plan */}
-        <div className="flex-1 flex flex-col min-w-0 pb-24 lg:pb-0">
+        <div className="flex min-w-0 flex-1 flex-col pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
@@ -3272,7 +3272,7 @@ function FnbPosPageInner() {
             aria-label="Đóng giỏ hàng"
             onClick={() => setMobileCartOpen(false)}
           />
-          <div className="relative z-10 flex h-full w-full flex-col bg-background shadow-2xl md:max-w-[460px]">
+          <div className="relative z-10 flex h-dvh w-full flex-col bg-background pb-[env(safe-area-inset-bottom)] shadow-2xl md:max-w-[460px]">
           <div className="flex items-center justify-between px-4 py-3 border-b bg-surface-container-low">
             <div className="min-w-0">
               <span className="block text-sm font-semibold">Giỏ hàng</span>
@@ -3343,7 +3343,7 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed inset-x-3 bottom-3 z-30 lg:hidden flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest lg:hidden"
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(pos.subtotal ?? 0)}đ`}
         >
           <span className="flex min-w-0 items-center gap-2">

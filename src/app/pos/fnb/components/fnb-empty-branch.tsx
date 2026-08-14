@@ -23,7 +23,7 @@ interface FnbEmptyBranchProps {
 
 export function FnbEmptyBranch({ onMenuClick, onSearch }: FnbEmptyBranchProps) {
   return (
-    <div className="flex flex-col h-screen bg-surface-container-low">
+    <div className="flex h-dvh flex-col bg-surface-container-low">
       <FnbHeader
         tabs={[]}
         activeTabId=""

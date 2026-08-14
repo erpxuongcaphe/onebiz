@@ -39,9 +39,9 @@ export function FnbLoadingSkeleton({
   const showRecovery = elapsedMs >= 8_000;
 
   return (
-    <div className="flex flex-col h-screen bg-surface-container-low">
+    <div className="flex h-dvh flex-col bg-surface-container-low">
       {/* Header skeleton — match đúng h-16 + light theme thật */}
-      <header className="min-h-14 bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 flex flex-wrap md:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 md:h-16 md:py-0 shrink-0">
+      <header className="min-h-14 bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0">
         {/* ☰ button */}
         <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-surface-container animate-pulse" />
         {/* Logo placeholder */}
@@ -121,7 +121,7 @@ export function FnbLoadingSkeleton({
       )}
 
       {/* Body 3 cột — sidebar + menu grid + cart */}
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* Categories sidebar 200px (lg) — ẩn trên mobile */}
         <aside className="hidden lg:flex w-50 shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex-col p-1.5 gap-1.5">
           {Array.from({ length: 8 }).map((_, i) => (
