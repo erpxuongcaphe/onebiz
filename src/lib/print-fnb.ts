@@ -429,7 +429,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
 .invoice-code{font-size:14px;margin:2px 0}
 </style></head><body>
 
-${data.isOffline ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● PENDING SYNC ●</div>` : ""}
+${data.isOffline ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● CHỜ ĐỒNG BỘ ●</div>` : ""}
 ${data.storeName ? `<div class="center bold" style="font-size:14px">${data.storeName}</div>` : ""}
 ${data.storeAddress ? `<div class="center" style="font-size:10px;color:#666">${data.storeAddress}</div>` : ""}
 ${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: ${data.storePhone}</div>` : ""}
@@ -583,11 +583,11 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
     : "";
 
   const offlineBanner = data.isOffline
-    ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● PENDING SYNC ●</div>`
+    ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● CHỜ ĐỒNG BỘ ●</div>`
     : "";
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Kitchen ${data.orderNumber}</title>
+<html><head><meta charset="utf-8"><title>Phiếu bếp ${data.orderNumber}</title>
 <style>${baseStyles(width, pageSize)}
 .order-number{font-size:${style === "compact" ? "24px" : "28px"};font-weight:bold;letter-spacing:2px}
 .table-label{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin:4px 0}
