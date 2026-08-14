@@ -95,6 +95,13 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
     expect(gon).toContain("Không ống hút");
     expect(gon).not.toContain('class="price"');
   });
+
+  it("phiếu offline dùng nhãn tiếng Việt và tiêu đề phiếu bếp", () => {
+    const offline = buildKitchenTicketHtml({ ...PHIEU, isOffline: true });
+    expect(offline).toContain("CHỜ ĐỒNG BỘ");
+    expect(offline).not.toContain("PENDING SYNC");
+    expect(offline).toContain(`<title>Phiếu bếp ${PHIEU.orderNumber}</title>`);
+  });
 });
 
 describe("D. Phiếu tạm tính và hoá đơn khách giữ đủ tuỳ chọn món", () => {
@@ -131,6 +138,19 @@ describe("D. Phiếu tạm tính và hoá đơn khách giữ đủ tuỳ chọn 
     expect(html).toContain("Trân châu trắng x2");
     expect(html).toContain("Mức đường: 50% • Mức đá: Ít đá");
     expect(html).toContain("Không ống hút");
+  });
+
+  it("hoá đơn offline dùng nhãn tiếng Việt", () => {
+    const html = buildFnbReceiptHtml({
+      ...duLieuChung,
+      invoiceCode: "HD-OFFLINE-001",
+      paymentMethod: "cash",
+      paid: 106_000,
+      change: 0,
+      isOffline: true,
+    });
+    expect(html).toContain("CHỜ ĐỒNG BỘ");
+    expect(html).not.toContain("PENDING SYNC");
   });
 
   it("đường gọi in trên POS truyền tuỳ chọn cho cả ba loại phiếu", () => {
