@@ -126,6 +126,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
         );
         return { data: { success: true }, error: null };
       }
+      if (fn === "merge_kitchen_orders_atomic") {
+        return { data: { success: true }, error: null };
+      }
       if (fn === "fnb_void_invoice_atomic") {
         const mockedItems = mockFromHandler("invoice_items").maybeSingle?.()?.data;
         const rows: Array<{ product_id: string; product_name: string; quantity: number }> = Array.isArray(mockedItems)
@@ -975,10 +978,13 @@ describe("E3. Gộp đơn — merge orders", () => {
 
       await mergeKitchenOrders(`ko-${s.id}`, [`ko-${s.id + 1000}`]);
 
-      const mergeUpdates = updateCalls.filter(
-        c => (c.data as Record<string, unknown>)?.merged_into_id === `ko-${s.id}`
-      );
-      expect(mergeUpdates.length).toBe(1);
+      expect(rpcCalls).toContainEqual({
+        fn: "merge_kitchen_orders_atomic",
+        args: {
+          p_target_order_id: `ko-${s.id}`,
+          p_source_order_ids: [`ko-${s.id + 1000}`],
+        },
+      });
     }
   );
 });

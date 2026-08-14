@@ -110,6 +110,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
         );
         return { data: { success: true }, error: null };
       }
+      if (fn === "merge_kitchen_orders_atomic") {
+        return { data: { success: true }, error: null };
+      }
       if (fn === "fnb_void_invoice_atomic") {
         const invoice = mockFromHandler("invoices").maybeSingle?.();
         if (invoice?.data?.status === "cancelled") {
@@ -418,17 +421,13 @@ describe("Scenario: Gộp đơn (Bàn 5 + Bàn 6 → 1 hoá đơn)", () => {
 
     await mergeKitchenOrders("ko-1", ["ko-2"]);
 
-    // Items moved (kitchen_order_id updated to ko-1)
-    const itemMoves = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.kitchen_order_id === "ko-1"
-    );
-    expect(itemMoves.length).toBeGreaterThanOrEqual(1);
-
-    // Source cancelled with merged_into_id
-    const cancels = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.merged_into_id === "ko-1"
-    );
-    expect(cancels.length).toBeGreaterThanOrEqual(1);
+    expect(rpcCalls).toContainEqual({
+      fn: "merge_kitchen_orders_atomic",
+      args: {
+        p_target_order_id: "ko-1",
+        p_source_order_ids: ["ko-2"],
+      },
+    });
   });
 
   it("merges 3 orders into 1", async () => {
@@ -441,11 +440,13 @@ describe("Scenario: Gộp đơn (Bàn 5 + Bàn 6 → 1 hoá đơn)", () => {
 
     await mergeKitchenOrders("ko-1", ["ko-2", "ko-3", "ko-4"]);
 
-    // 3 sources cancelled
-    const mergedCalls = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.merged_into_id === "ko-1"
-    );
-    expect(mergedCalls.length).toBe(3);
+    expect(rpcCalls).toContainEqual({
+      fn: "merge_kitchen_orders_atomic",
+      args: {
+        p_target_order_id: "ko-1",
+        p_source_order_ids: ["ko-2", "ko-3", "ko-4"],
+      },
+    });
   });
 });
 
@@ -901,10 +902,13 @@ describe("Scenario: Khách chuyển bàn rồi gộp đơn", () => {
 
     await mergeKitchenOrders("ko-1", ["ko-2"]);
 
-    const merges = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.merged_into_id === "ko-1"
-    );
-    expect(merges.length).toBe(1);
+    expect(rpcCalls).toContainEqual({
+      fn: "merge_kitchen_orders_atomic",
+      args: {
+        p_target_order_id: "ko-1",
+        p_source_order_ids: ["ko-2"],
+      },
+    });
   });
 });
 

@@ -168,6 +168,9 @@ vi.mock("@/lib/services/supabase/base", () => ({
         });
         return { data: { success: true }, error: null };
       }
+      if (fn === "merge_kitchen_orders_atomic") {
+        return { data: { success: true }, error: null };
+      }
       if (fn === "fnb_void_invoice_atomic") {
         let invoice: Record<string, unknown> | null = null;
         let items: Array<Record<string, unknown>> = [];
@@ -838,13 +841,13 @@ describe("Part 2: Gộp đơn — Merge tables 3+5 into table 3", () => {
 
     await mergeKitchenOrders("ko-target", ["ko-source-1"]);
 
-    // Source items should be moved (kitchen_order_id updated)
-    const itemMoves = updateCalls.filter((c) => (c.data as Record<string, unknown>).kitchen_order_id === "ko-target");
-    expect(itemMoves.length).toBeGreaterThanOrEqual(1);
-
-    // Source orders should be cancelled
-    const cancels = updateCalls.filter((c) => (c.data as Record<string, unknown>).status === "cancelled");
-    expect(cancels.length).toBeGreaterThanOrEqual(1);
+    expect(rpcCalls).toContainEqual({
+      fn: "merge_kitchen_orders_atomic",
+      args: {
+        p_target_order_id: "ko-target",
+        p_source_order_ids: ["ko-source-1"],
+      },
+    });
   });
 });
 
