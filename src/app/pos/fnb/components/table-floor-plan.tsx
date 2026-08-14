@@ -33,6 +33,7 @@ interface TableFloorPlanProps {
   tables: RestaurantTable[];
   onSelectTable: (table: RestaurantTable) => void;
   onTransferTable?: (table: RestaurantTable) => void;
+  onMergeTable?: (table: RestaurantTable) => void;
   orderTimestamps?: Record<string, string>;
 }
 
@@ -51,6 +52,7 @@ export function TableFloorPlan({
   tables,
   onSelectTable,
   onTransferTable,
+  onMergeTable,
   orderTimestamps,
 }: TableFloorPlanProps) {
   const { currentBranch } = useAuth();
@@ -70,7 +72,11 @@ export function TableFloorPlan({
       onSelectTable(original);
       return;
     }
-    onTransferTable?.(original);
+    if (kind === "transfer") {
+      onTransferTable?.(original);
+      return;
+    }
+    onMergeTable?.(original);
   };
 
   // Load zones (fallback gracefully nếu chưa setup)
@@ -243,6 +249,15 @@ export function TableFloorPlan({
         onAction={handleAction}
         onClose={() => setActionTable(null)}
         canTransfer={Boolean(onTransferTable)}
+        canMerge={
+          Boolean(onMergeTable) &&
+          tables.some(
+            (table) =>
+              table.id !== actionTable?.id &&
+              table.status === "occupied" &&
+              Boolean(table.currentOrderId),
+          )
+        }
       />
     </div>
   );

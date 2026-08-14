@@ -41,6 +41,7 @@ import {
   getKitchenOrders,
   cancelUnpaidKitchenOrder,
   transferTable as transferTableService,
+  mergeKitchenOrders,
   setDeliveryPlatform as setDeliveryPlatformService,
   assignDeliveryStaff as assignDeliveryStaffService,
   unassignDeliveryStaff as unassignDeliveryStaffService,
@@ -90,6 +91,7 @@ import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
@@ -234,6 +236,9 @@ function FnbPosPageInner() {
     tableId?: string | null;
   } | null>(null);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
+  const [mergeSourceTable, setMergeSourceTable] = useState<RestaurantTable | null>(null);
+  const [mergeTargetTableId, setMergeTargetTableId] = useState("");
+  const [mergeInProgress, setMergeInProgress] = useState(false);
   // Sprint A — CEO 06/05: Sidenav drawer trigger từ ☰ button trong header.
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
@@ -353,6 +358,7 @@ function FnbPosPageInner() {
   // Day 1 16/05: Tách permission void bill ĐÃ thanh toán riêng — không gộp với
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
+  const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -2539,6 +2545,98 @@ function FnbPosPageInner() {
     [pos, tables, branchId, networkStatus.isOnline, toast]
   );
 
+  // ── Merge orders (gộp đơn) ──
+  const handleMergeOrders = useCallback(async () => {
+    if (mergeInProgress) return;
+    if (!canManageTables) {
+      toast({
+        title: "Không có quyền gộp đơn",
+        description: "Cần quyền Quản lý bàn để thực hiện thao tác này.",
+        variant: "warning",
+      });
+      return;
+    }
+    if (!networkStatus.isOnline) {
+      hapticError();
+      toast({
+        title: "Cần kết nối mạng",
+        description: "Gộp đơn không khả dụng khi ngoại tuyến.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const source = tables.find((table) => table.id === mergeSourceTable?.id);
+    const target = tables.find((table) => table.id === mergeTargetTableId);
+    if (!source?.currentOrderId || !target?.currentOrderId || source.id === target.id) {
+      toast({
+        title: "Bàn hoặc đơn vừa thay đổi",
+        description: "Vui lòng tải lại sơ đồ bàn rồi chọn lại.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    const sourceTab = pos.tabs.find((tab) => tab.tableId === source.id);
+    if (sourceTab && sourceTab.lines.length > 0) {
+      toast({
+        title: "Bàn nguồn còn món chưa gửi bếp",
+        description: "Hãy gửi bếp hoặc bỏ các món đang chờ trước khi gộp đơn.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setMergeInProgress(true);
+    try {
+      await mergeKitchenOrders(target.currentOrderId, [source.currentOrderId]);
+
+      const targetTab = pos.tabs.find((tab) => tab.tableId === target.id);
+      let targetTabId = targetTab?.id;
+      if (!targetTabId) {
+        targetTabId = pos.createTab(`Bàn ${target.tableNumber}`, "dine_in", target.id);
+        pos.updateTabMeta(targetTabId, { kitchenOrderId: target.currentOrderId });
+      }
+      if (sourceTab) pos.closeTab(sourceTab.id);
+      pos.switchTab(targetTabId);
+
+      setMergeSourceTable(null);
+      setMergeTargetTableId("");
+      setShowFloorPlan(false);
+      hapticSuccess();
+      toast({
+        title: "Đã gộp đơn",
+        description: `Đơn Bàn ${source.tableNumber} đã gộp vào Bàn ${target.tableNumber}.`,
+        variant: "success",
+      });
+
+      if (branchId) {
+        getTablesByBranch(branchId)
+          .then(setTables)
+          .catch((err) => console.error("[FnB] refresh tables failed:", err));
+      }
+    } catch (err) {
+      hapticError();
+      toast({
+        title: "Gộp đơn thất bại",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại.",
+        variant: "error",
+      });
+    } finally {
+      setMergeInProgress(false);
+    }
+  }, [
+    branchId,
+    canManageTables,
+    mergeInProgress,
+    mergeSourceTable?.id,
+    mergeTargetTableId,
+    networkStatus.isOnline,
+    pos,
+    tables,
+    toast,
+  ]);
+
   // ── Customer selection ──
   const handleCustomerSelect = useCallback(
     (customer: Customer | null) => {
@@ -3057,10 +3155,22 @@ function FnbPosPageInner() {
               <TableFloorPlan
                 tables={tables}
                 onSelectTable={handleTableSelect}
-                onTransferTable={(table) => {
-                  handleTableSelect(table);
-                  setTransferTableOpen(true);
-                }}
+                onTransferTable={
+                  canTransferTables
+                    ? (table) => {
+                        handleTableSelect(table);
+                        setTransferTableOpen(true);
+                      }
+                    : undefined
+                }
+                onMergeTable={
+                  canManageTables && networkStatus.isOnline
+                    ? (table) => {
+                        setMergeSourceTable(table);
+                        setMergeTargetTableId("");
+                      }
+                    : undefined
+                }
                 orderTimestamps={orderTimestamps}
               />
             </Suspense>
@@ -3586,6 +3696,79 @@ function FnbPosPageInner() {
                 Không có bàn trống
               </p>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge order dialog */}
+      <Dialog
+        open={Boolean(mergeSourceTable)}
+        onOpenChange={(open) => {
+          if (mergeInProgress) return;
+          if (!open) {
+            setMergeSourceTable(null);
+            setMergeTargetTableId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Icon name="call_merge" size={16} /> Gộp đơn
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              Chọn bàn đích. Toàn bộ món của <b>Bàn {mergeSourceTable?.tableNumber}</b>{" "}
+              sẽ chuyển vào đơn của bàn đích.
+            </p>
+            <div className="grid max-h-[320px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
+              {tables
+                .filter(
+                  (table) =>
+                    table.id !== mergeSourceTable?.id &&
+                    table.status === "occupied" &&
+                    Boolean(table.currentOrderId),
+                )
+                .map((table) => {
+                  const selected = mergeTargetTableId === table.id;
+                  return (
+                    <button
+                      key={table.id}
+                      type="button"
+                      aria-pressed={selected}
+                      onClick={() => setMergeTargetTableId(table.id)}
+                      className={cn(
+                        "flex h-14 flex-col items-center justify-center rounded-lg border font-semibold transition-colors",
+                        selected
+                          ? "border-primary bg-primary text-primary-foreground"
+                          : "border-border bg-card hover:border-primary hover:bg-primary/5",
+                      )}
+                    >
+                      <span className="text-xs opacity-70">Bàn đích</span>
+                      <span className="text-lg">{table.tableNumber}</span>
+                    </button>
+                  );
+                })}
+            </div>
+            {tables.filter(
+              (table) =>
+                table.id !== mergeSourceTable?.id &&
+                table.status === "occupied" &&
+                Boolean(table.currentOrderId),
+            ).length === 0 && (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Không có bàn đang phục vụ khác để gộp
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={!mergeTargetTableId || mergeInProgress}
+              onClick={() => void handleMergeOrders()}
+              className="h-11 w-full rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {mergeInProgress ? "Đang gộp..." : "Xác nhận gộp đơn"}
+            </button>
           </div>
         </DialogContent>
       </Dialog>
