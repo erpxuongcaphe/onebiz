@@ -1,6 +1,12 @@
 /**
  * Sơ đồ bàn — CRUD khu vực + cập nhật vị trí bàn.
  * CEO 04/06/2026 — Sprint 5 Phase A.
+ *
+ * F1a 15/08/2026: TOÀN BỘ đường ghi chuyển sang RPC 00323
+ * (`fnb_floor_zone_config_atomic` + `fnb_floor_layout_update_atomic`) —
+ * quyền floor_plan.edit_global/edit_branch chốt phía máy chủ. Đọc giữ nguyên.
+ * `bulkSaveTableLayouts` (vòng lặp không nguyên tử, 0 caller) đã gỡ — dùng
+ * `updateTableLayouts` (lô, một giao dịch) khi cần lưu nhiều bàn.
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
@@ -67,6 +73,25 @@ export async function getFloorPlanZones(
   return (data ?? []).map(mapZone) as FloorPlanZone[];
 }
 
+/** Gọi RPC cấu hình khu sơ đồ — một cửa cho mọi thao tác ghi zone. */
+async function goiCauHinhKhuSoDo(
+  action: string,
+  branchId: string,
+  payload: Record<string, unknown>,
+  context: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase.rpc("fnb_floor_zone_config_atomic", {
+    p_action: action,
+    p_branch_id: branchId,
+    p_payload: payload,
+  });
+  if (error) handleError(error, context);
+  return data;
+}
+
 export async function createFloorPlanZone(input: {
   branchId: string;
   name: string;
@@ -74,66 +99,41 @@ export async function createFloorPlanZone(input: {
   canvasHeight?: number;
   floorLevel?: number;
 }): Promise<FloorPlanZone> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("floor_plan_zones")
-    .insert({
-      tenant_id: ctx.tenantId,
-      branch_id: input.branchId,
-      name: input.name,
-      canvas_width: input.canvasWidth ?? 1024,
-      canvas_height: input.canvasHeight ?? 720,
-      floor_level: input.floorLevel ?? 1,
-    })
-    .select("*")
-    .single();
-  if (error) handleError(error, "createZone");
-  return mapZone(data);
+  const payload: Record<string, unknown> = { name: input.name };
+  if (input.canvasWidth !== undefined) payload.canvas_width = input.canvasWidth;
+  if (input.canvasHeight !== undefined) payload.canvas_height = input.canvasHeight;
+  if (input.floorLevel !== undefined) payload.floor_level = input.floorLevel;
+  const data = await goiCauHinhKhuSoDo("create", input.branchId, payload, "createZone");
+  return mapZone(data?.zone ?? {});
 }
 
 export async function updateFloorPlanZone(
+  branchId: string,
   id: string,
   patch: Partial<
-    Omit<FloorPlanZone, "id" | "tenantId" | "branchId" | "createdAt" | "updatedAt">
+    Omit<FloorPlanZone, "id" | "tenantId" | "branchId" | "isActive" | "createdAt" | "updatedAt">
   >,
 ): Promise<void> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  const updateObj: Record<string, unknown> = {};
-  if (patch.name !== undefined) updateObj.name = patch.name;
-  if (patch.sortOrder !== undefined) updateObj.sort_order = patch.sortOrder;
-  if (patch.canvasWidth !== undefined) updateObj.canvas_width = patch.canvasWidth;
-  if (patch.canvasHeight !== undefined) updateObj.canvas_height = patch.canvasHeight;
-  if (patch.backgroundUrl !== undefined) updateObj.background_url = patch.backgroundUrl;
+  const payload: Record<string, unknown> = { zone_id: id };
+  if (patch.name !== undefined) payload.name = patch.name;
+  if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
+  if (patch.canvasWidth !== undefined) payload.canvas_width = patch.canvasWidth;
+  if (patch.canvasHeight !== undefined) payload.canvas_height = patch.canvasHeight;
+  if (patch.backgroundUrl !== undefined) payload.background_url = patch.backgroundUrl ?? "";
   if (patch.backgroundOpacity !== undefined)
-    updateObj.background_opacity = patch.backgroundOpacity;
-  if (patch.gridSize !== undefined) updateObj.grid_size = patch.gridSize;
-  if (patch.overlayColor !== undefined) updateObj.overlay_color = patch.overlayColor;
-  if (patch.floorLevel !== undefined) updateObj.floor_level = patch.floorLevel;
-  if (patch.isActive !== undefined) updateObj.is_active = patch.isActive;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("floor_plan_zones")
-    .update(updateObj)
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", id);
-  if (error) handleError(error, "updateZone");
+    payload.background_opacity = patch.backgroundOpacity;
+  if (patch.gridSize !== undefined) payload.grid_size = patch.gridSize;
+  if (patch.overlayColor !== undefined) payload.overlay_color = patch.overlayColor ?? "";
+  if (patch.floorLevel !== undefined) payload.floor_level = patch.floorLevel;
+  await goiCauHinhKhuSoDo("update", branchId, payload, "updateZone");
 }
 
-export async function deleteFloorPlanZone(id: string): Promise<void> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  // Soft delete: set is_active = false
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("floor_plan_zones")
-    .update({ is_active: false })
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", id);
-  if (error) handleError(error, "deleteZone");
+/**
+ * Xoá mềm khu sơ đồ. Khu còn bàn → máy chủ CHẶN: "Chuyển bàn sang khu khác
+ * trước khi xoá" (trước đây xoá được và để bàn mồ côi khu đã ẩn).
+ */
+export async function deleteFloorPlanZone(branchId: string, id: string): Promise<void> {
+  await goiCauHinhKhuSoDo("delete", branchId, { zone_id: id }, "deleteZone");
 }
 
 // ─── Tables (layout-focused) ───
@@ -166,47 +166,52 @@ export async function getTablesByZone(zoneId: string): Promise<TableLayout[]> {
   }));
 }
 
-/** Cập nhật vị trí + kích thước + xoay 1 bàn (debounced ở UI). */
-export async function updateTableLayout(
-  tableId: string,
-  patch: Partial<
-    Pick<
-      TableLayout,
-      "shape" | "width" | "height" | "rotation" | "positionX" | "positionY" | "color" | "locked" | "zoneId"
-    >
-  >,
-): Promise<void> {
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-  const updateObj: Record<string, unknown> = {};
-  if (patch.shape !== undefined) updateObj.shape = patch.shape;
-  if (patch.width !== undefined) updateObj.width = Math.round(patch.width);
-  if (patch.height !== undefined) updateObj.height = Math.round(patch.height);
-  if (patch.rotation !== undefined)
-    updateObj.rotation = Math.round(patch.rotation) % 360;
-  if (patch.positionX !== undefined) updateObj.position_x = Math.round(patch.positionX);
-  if (patch.positionY !== undefined) updateObj.position_y = Math.round(patch.positionY);
-  if (patch.color !== undefined) updateObj.color = patch.color;
-  if (patch.locked !== undefined) updateObj.locked = patch.locked;
-  if (patch.zoneId !== undefined) updateObj.zone_id = patch.zoneId;
+type LayoutPatch = Partial<
+  Pick<
+    TableLayout,
+    "shape" | "width" | "height" | "rotation" | "positionX" | "positionY" | "color" | "locked" | "zoneId"
+  >
+>;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
-    .from("restaurant_tables")
-    .update(updateObj)
-    .eq("tenant_id", ctx.tenantId)
-    .eq("id", tableId);
-  if (error) handleError(error, "updateTableLayout");
+function toLayoutItem(tableId: string, patch: LayoutPatch): Record<string, unknown> {
+  const item: Record<string, unknown> = { table_id: tableId };
+  if (patch.shape !== undefined) item.shape = patch.shape;
+  if (patch.width !== undefined) item.width = Math.round(patch.width);
+  if (patch.height !== undefined) item.height = Math.round(patch.height);
+  if (patch.rotation !== undefined) item.rotation = Math.round(patch.rotation);
+  if (patch.positionX !== undefined) item.position_x = Math.round(patch.positionX);
+  if (patch.positionY !== undefined) item.position_y = Math.round(patch.positionY);
+  if (patch.color !== undefined) item.color = patch.color ?? "";
+  if (patch.locked !== undefined) item.locked = patch.locked;
+  if (patch.zoneId !== undefined) item.zone_id = patch.zoneId;
+  return item;
 }
 
-/** Bulk save toàn bộ vị trí trong 1 zone (dùng khi user bấm "Lưu sơ đồ"). */
-export async function bulkSaveTableLayouts(
-  layouts: Array<Pick<TableLayout, "id"> & Partial<TableLayout>>,
+/**
+ * Cập nhật layout MỘT bàn (debounced ở UI — giữ nguyên trải nghiệm kéo-thả
+ * từng thao tác). Đi qua RPC lô với 1 phần tử.
+ */
+export async function updateTableLayout(
+  tableId: string,
+  patch: LayoutPatch,
 ): Promise<void> {
-  for (const l of layouts) {
-    const { id, ...rest } = l;
-    await updateTableLayout(id, rest);
-  }
+  await updateTableLayouts([{ id: tableId, ...patch }]);
+}
+
+/**
+ * Cập nhật layout NHIỀU bàn trong MỘT giao dịch (thay cho vòng lặp
+ * bulkSaveTableLayouts cũ — lỗi giữa chừng là hỏng nửa sơ đồ).
+ */
+export async function updateTableLayouts(
+  layouts: Array<Pick<TableLayout, "id"> & LayoutPatch>,
+): Promise<void> {
+  if (layouts.length === 0) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { error } = await supabase.rpc("fnb_floor_layout_update_atomic", {
+    p_items: layouts.map(({ id, ...patch }) => toLayoutItem(id, patch)),
+  });
+  if (error) handleError(error, "updateTableLayout");
 }
 
 // ─── Mappers ───

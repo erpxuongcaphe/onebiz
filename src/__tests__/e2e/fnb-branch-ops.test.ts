@@ -459,26 +459,17 @@ vi.mock("@/lib/services/supabase/fnb-tables", () => ({
   markTableAvailable: vi.fn(),
   getTablesByBranch: vi.fn(async () => []),
   createTable: vi.fn(async (input: Record<string, unknown>) => ({
-    id: "t-new", tenantId: input.tenantId, branchId: input.branchId,
+    id: "t-new", tenantId: "t1", branchId: input.branchId,
     tableNumber: input.tableNumber, name: input.name, zone: input.zone,
     capacity: input.capacity ?? 4, status: "available", currentOrderId: null,
     positionX: 0, positionY: 0, sortOrder: 0, isActive: true, createdAt: new Date().toISOString(),
   })),
-  updateTable: vi.fn(async (_id: string, input: Record<string, unknown>) => ({
+  updateTable: vi.fn(async (_branchId: string, _id: string, input: Record<string, unknown>) => ({
     id: _id, name: input.name ?? "Bàn", capacity: input.capacity ?? 4,
     zone: input.zone ?? null, ...input,
   })),
   deleteTable: vi.fn(async () => {}),
-  bulkCreateTables: vi.fn(async (input: Record<string, unknown>) => {
-    const count = (input.count as number) ?? 0;
-    return Array.from({ length: count }, (_, i) => ({
-      id: `t-${i}`, tenantId: input.tenantId, branchId: input.branchId,
-      tableNumber: (input.startNumber as number) + i, name: `Bàn ${(input.startNumber as number) + i}`,
-      zone: input.zone, capacity: input.capacity ?? 4, status: "available",
-      currentOrderId: null, positionX: 0, positionY: 0, sortOrder: i, isActive: true,
-      createdAt: new Date().toISOString(),
-    }));
-  }),
+  bulkCreateTables: vi.fn(async () => {}),
   renameZone: vi.fn(async () => {}),
   deleteZone: vi.fn(async () => {}),
   getZonesByBranch: vi.fn(async () => []),
@@ -591,7 +582,6 @@ beforeEach(() => {
 describe("Part 1: Table & Zone Setup per Branch", () => {
   it("createTable is called with correct branch_id and zone", async () => {
     const table = await createTable({
-      tenantId: BRANCH_A.tenantId,
       branchId: BRANCH_A.branchId,
       tableNumber: 1,
       name: "Bàn 1",
@@ -605,31 +595,30 @@ describe("Part 1: Table & Zone Setup per Branch", () => {
     expect(table.zone).toBe("Tầng 1");
   });
 
-  it("bulkCreateTables creates N tables in same zone", async () => {
-    const tables = await bulkCreateTables({
-      tenantId: BRANCH_A.tenantId,
+  it("bulkCreateTables gửi đúng chi nhánh + khu (RPC trả void)", async () => {
+    await bulkCreateTables({
       branchId: BRANCH_A.branchId,
       zone: "Tầng 1",
       count: 6,
       startNumber: 1,
       capacity: 4,
     });
-    expect(tables).toHaveLength(6);
-    for (const t of tables) {
-      expect(t.zone).toBe("Tầng 1");
-      expect(t.branchId).toBe(BRANCH_A.branchId);
-    }
+    expect(bulkCreateTables).toHaveBeenCalledWith(expect.objectContaining({
+      branchId: BRANCH_A.branchId,
+      zone: "Tầng 1",
+      count: 6,
+    }));
   });
 
   it("updateTable changes name and capacity", async () => {
-    const updated = await updateTable("t1", { name: "VIP 1", capacity: 8, zone: "VIP" });
-    expect(updateTable).toHaveBeenCalledWith("t1", expect.objectContaining({ name: "VIP 1", capacity: 8 }));
+    const updated = await updateTable(BRANCH_A.branchId, "t1", { name: "VIP 1", capacity: 8, zone: "VIP" });
+    expect(updateTable).toHaveBeenCalledWith(BRANCH_A.branchId, "t1", expect.objectContaining({ name: "VIP 1", capacity: 8 }));
     expect(updated.name).toBe("VIP 1");
   });
 
   it("deleteTable calls mock", async () => {
-    await deleteTable("t1");
-    expect(deleteTable).toHaveBeenCalledWith("t1");
+    await deleteTable(BRANCH_A.branchId, "t1");
+    expect(deleteTable).toHaveBeenCalledWith(BRANCH_A.branchId, "t1");
   });
 
   it("renameZone calls mock with correct args", async () => {

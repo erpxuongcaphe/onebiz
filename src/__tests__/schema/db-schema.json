@@ -2118,9 +2118,13 @@
   "fnb_cancel_unpaid_order_atomic",
   "fnb_complete_payment_atomic",
   "fnb_complete_payment_atomic_v2",
+  "fnb_floor_decoration_config_atomic",
+  "fnb_floor_layout_update_atomic",
+  "fnb_floor_zone_config_atomic",
   "fnb_send_to_kitchen_atomic",
   "fnb_send_to_kitchen_atomic_v2",
   "fnb_set_delivery_pricing_v2",
+  "fnb_table_config_atomic",
   "fnb_transfer_table_atomic",
   "fnb_update_kitchen_item_status_v2",
   "fnb_update_kitchen_order_status_v2",
@@ -2201,6 +2205,7 @@
   "list_pos_pin_users",
   "mark_fnb_table_available_atomic",
   "mark_overdue_shifts_for_branch",
+  "merge_kitchen_orders_atomic",
   "mkt_accept_task",
   "mkt_add_readiness_item",
   "mkt_approve_task_review",
@@ -2368,5 +2373,5 @@
  ],
  "soBang": 137,
  "soCot": 1748,
- "soRpc": 341
+ "soRpc": 346
 }

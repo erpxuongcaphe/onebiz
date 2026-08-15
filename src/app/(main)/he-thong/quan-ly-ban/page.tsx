@@ -230,7 +230,6 @@ function QuanLyBanPage() {
         0
       ) + 1;
       await createTable({
-        tenantId,
         branchId: activeBranchId,
         tableNumber: nextNum,
         name: `Bàn ${nextNum}`,
@@ -250,7 +249,6 @@ function QuanLyBanPage() {
     if (!activeBranchId || !tableForm.zone) return;
     try {
       await createTable({
-        tenantId,
         branchId: activeBranchId,
         tableNumber: tableForm.tableNumber,
         name: tableForm.name || `Bàn ${tableForm.tableNumber}`,
@@ -268,7 +266,8 @@ function QuanLyBanPage() {
   const handleEditTable = async () => {
     if (!editingTable) return;
     try {
-      await updateTable(editingTable.id, {
+      if (!activeBranchId) return;
+      await updateTable(activeBranchId, editingTable.id, {
         name: tableForm.name,
         capacity: tableForm.capacity,
         zone: tableForm.zone || undefined,
@@ -296,7 +295,8 @@ function QuanLyBanPage() {
     if (!deletingTable) return;
     setDeleteBusy(true);
     try {
-      await deleteTable(deletingTable.id);
+      if (!activeBranchId) return;
+      await deleteTable(activeBranchId, deletingTable.id);
       toast({ title: "Đã xoá", description: deletingTable.name });
       setDeletingTable(null);
       loadTables();
@@ -311,7 +311,6 @@ function QuanLyBanPage() {
     if (!activeBranchId || !bulkForm.zone) return;
     try {
       await bulkCreateTables({
-        tenantId,
         branchId: activeBranchId,
         zone: bulkForm.zone,
         count: bulkForm.count,
@@ -1010,7 +1009,7 @@ function QuanLyBanPage() {
         title="Xoá bàn?"
         description={
           deletingTable
-            ? `Xoá bàn "${deletingTable.name}" khỏi chi nhánh này. Thao tác không thể hoàn tác.`
+            ? `Xoá bàn "${deletingTable.name}" khỏi chi nhánh này (xoá mềm). Bàn đang phục vụ hoặc còn đơn sẽ bị hệ thống chặn.`
             : ""
         }
         confirmLabel="Xoá bàn"
@@ -1028,7 +1027,7 @@ function QuanLyBanPage() {
         title="Xoá khu vực?"
         description={
           deletingZone
-            ? `Xoá khu vực "${deletingZone}". Các bàn thuộc khu vực sẽ chuyển sang "Chưa phân khu". Thao tác không thể hoàn tác.`
+            ? `Xoá khu vực "${deletingZone}" và TOÀN BỘ bàn trong khu (xoá mềm). Nếu còn bàn đang phục vụ hoặc còn đơn, hệ thống sẽ chặn toàn bộ thao tác.`
             : ""
         }
         confirmLabel="Xoá khu vực"

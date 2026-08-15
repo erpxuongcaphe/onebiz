@@ -40,6 +40,15 @@ export function isAscending(params: QueryParams): boolean {
  * Throws a descriptive error if the query failed.
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
+  // F1b (CEO 15/08): khi grant ghi trực tiếp bị thu hồi, tab chạy bundle CŨ
+  // còn ghi thẳng bảng sẽ nhận 42501 "permission denied for table ..." —
+  // báo bằng lời người dùng hiểu được thay vì mã lỗi thô.
+  if (
+    error?.code === "42501" &&
+    /permission denied for table/i.test(error.message ?? "")
+  ) {
+    throw new Error("Phiên bản đã cũ, vui lòng tải lại trang.");
+  }
   throw new Error(`[${context}] ${error.message} (code: ${error.code ?? "unknown"})`);
 }
 

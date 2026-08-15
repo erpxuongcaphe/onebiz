@@ -190,22 +190,21 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const handleAddShape = async (preset: ShapePreset) => {
     if (!activeZone || !tenant?.id) return;
     try {
+      // RPC 00323: tạo bàn gán LUÔN khu + hình + vị trí trong một giao dịch
       const next = await createTableSvc({
-        tenantId: tenant.id,
         branchId,
         tableNumber: tables.length + 1,
         name: `Bàn ${tables.length + 1}`,
         capacity: preset.seats,
         zone: activeZone.name,
-      });
-      // Sau khi tạo, cập nhật shape + position + zone_id qua updateTableLayout
-      await updateTableLayout(next.id, {
-        shape: preset.shape,
-        width: preset.width,
-        height: preset.height,
         zoneId: activeZone.id,
+        shape: preset.shape,
         positionX: Math.round(activeZone.canvasWidth / 2 - preset.width / 2),
         positionY: Math.round(activeZone.canvasHeight / 2 - preset.height / 2),
+      });
+      await updateTableLayout(next.id, {
+        width: preset.width,
+        height: preset.height,
       });
       // Refetch
       const fresh = await getTablesByZone(activeZone.id);
@@ -266,10 +265,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   // ─── Xoá zone ───
   const handleDeleteZone = async () => {
     if (!activeZone) return;
-    if (!confirm(`Xoá khu vực "${activeZone.name}"? Các bàn sẽ bị gỡ khỏi sơ đồ nhưng không xoá.`))
+    if (!confirm(`Xoá khu vực "${activeZone.name}"? Nếu khu còn bàn, hãy chuyển bàn sang khu khác trước — hệ thống sẽ chặn.`))
       return;
     try {
-      await deleteFloorPlanZone(activeZone.id);
+      await deleteFloorPlanZone(branchId, activeZone.id);
       const remain = zones.filter((z) => z.id !== activeZone.id);
       setZones(remain);
       setActiveZoneId(remain[0]?.id ?? null);
@@ -339,7 +338,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     setUploadingBg(true);
     try {
       const url = await uploadFloorPlanBackground(branchId, activeZone.id, file);
-      await updateFloorPlanZone(activeZone.id, { backgroundUrl: url });
+      await updateFloorPlanZone(branchId, activeZone.id, { backgroundUrl: url });
       setZones((prev) =>
         prev.map((z) =>
           z.id === activeZone.id ? { ...z, backgroundUrl: url } : z,
@@ -360,7 +359,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const handleRemoveBg = async () => {
     if (!activeZone) return;
     await removeFloorPlanBackground(branchId, activeZone.id);
-    await updateFloorPlanZone(activeZone.id, { backgroundUrl: null });
+    await updateFloorPlanZone(branchId, activeZone.id, { backgroundUrl: null });
     setZones((prev) =>
       prev.map((z) => (z.id === activeZone.id ? { ...z, backgroundUrl: null } : z)),
     );
@@ -374,13 +373,13 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         z.id === activeZone.id ? { ...z, backgroundOpacity: val } : z,
       ),
     );
-    await updateFloorPlanZone(activeZone.id, { backgroundOpacity: val });
+    await updateFloorPlanZone(branchId, activeZone.id, { backgroundOpacity: val });
   };
 
   // ─── Đổi grid snap ───
   const handleGridChange = async (size: number) => {
     if (!activeZone) return;
-    await updateFloorPlanZone(activeZone.id, { gridSize: size });
+    await updateFloorPlanZone(branchId, activeZone.id, { gridSize: size });
     setZones((prev) =>
       prev.map((z) => (z.id === activeZone.id ? { ...z, gridSize: size } : z)),
     );
@@ -389,7 +388,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   // ─── Đổi tầng cho zone ───
   const handleFloorChange = async (level: number) => {
     if (!activeZone) return;
-    await updateFloorPlanZone(activeZone.id, { floorLevel: level });
+    await updateFloorPlanZone(branchId, activeZone.id, { floorLevel: level });
     setZones((prev) =>
       prev.map((z) => (z.id === activeZone.id ? { ...z, floorLevel: level } : z)),
     );
@@ -398,7 +397,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   // ─── Đổi màu phủ ───
   const handleOverlayColorChange = async (color: string | null) => {
     if (!activeZone) return;
-    await updateFloorPlanZone(activeZone.id, { overlayColor: color });
+    await updateFloorPlanZone(branchId, activeZone.id, { overlayColor: color });
     setZones((prev) =>
       prev.map((z) => (z.id === activeZone.id ? { ...z, overlayColor: color } : z)),
     );
