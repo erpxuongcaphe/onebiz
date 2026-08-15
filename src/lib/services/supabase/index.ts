@@ -443,9 +443,11 @@ export type { DebtAgingReport, AgingBucket, DebtorDetail } from "./debt";
 // ============================================================
 
 // Restaurant Tables
+// F1a 15/08: updateTableStatus/claimTable/releaseTable đã gỡ (0 caller —
+// thao tác trạng thái bàn đi qua RPC vận hành 00275/00321/00322).
 export {
   getTablesByBranch, createTable, updateTable, deleteTable,
-  updateTableStatus, claimTable, releaseTable, markTableAvailable,
+  markTableAvailable,
   getZonesByBranch, bulkCreateTables, renameZone, deleteZone,
 } from "./fnb-tables";
 
@@ -457,7 +459,7 @@ export {
   deleteFloorPlanZone,
   getTablesByZone,
   updateTableLayout,
-  bulkSaveTableLayouts,
+  updateTableLayouts,
 } from "./floor-plan";
 export type {
   FloorPlanZone,

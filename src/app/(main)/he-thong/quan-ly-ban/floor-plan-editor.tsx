@@ -183,7 +183,12 @@ export function FloorPlanEditor({ tables, onSaved }: FloorPlanEditorProps) {
       setSavingId(tableId);
 
       try {
-        await updateTable(tableId, { positionX: snappedX, positionY: snappedY });
+        const banDangKeo = tables.find((t) => t.id === tableId);
+        if (!banDangKeo) throw new Error("Không tìm thấy bàn đang kéo.");
+        await updateTable(banDangKeo.branchId, tableId, {
+          positionX: snappedX,
+          positionY: snappedY,
+        });
         // Save thành công → clear local override (DB sẽ là source of truth).
         // Onsaved callback reload từ DB để consistency.
         setLocalPos((prev) => {

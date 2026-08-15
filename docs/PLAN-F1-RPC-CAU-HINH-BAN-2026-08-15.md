@@ -42,9 +42,29 @@ Lập 15/08/2026, theo `docs/BAN-GIAO-CLAUDE-TIEP-TUC-ONEBIZ-2026-08-15.md` mụ
 5. Lưu sơ đồ N lệnh rời — mất mạng giữa chừng là nửa sơ đồ mới nửa cũ.
 6. Hai hệ "khu vực" song song (TEXT `zone` vs `floor_plan_zones`) — F1 **không hợp nhất** (đổi nghiệp vụ), chỉ RPC hoá đúng hành vi hiện tại; đo độ lệch bằng preflight F6 để CEO quyết sau.
 
-## 3. Thiết kế RPC đề xuất — 3 hàm theo cụm
+## 3. Thiết kế RPC — 4 hàm theo hành động (BẢN CHỐT theo duyệt CEO 15/08)
 
-Một migration `003xx_fnb_table_config_rpcs.sql` (+ rollback). Khuôn chung theo mẫu 00196/00275/00277/00321/00322 đã chạy ổn:
+> CEO chốt: **KHÔNG** làm RPC "Lưu tất cả" thay editor — editor tự lưu từng
+> thao tác nên RPC theo từng hành động + một RPC lô cho layout (đơn hoặc
+> nhiều bàn, 1 giao dịch). Bảng cũ 3 hàm bên dưới đã được thay bằng 4 hàm
+> trong `00323_fnb_table_config_rpcs.sql`:
+>
+> 1. `fnb_table_config_atomic(p_action, p_branch_id, p_payload)` — create /
+>    update / delete / bulk_create / zone_rename / zone_delete; quyền
+>    `system.manage_branches`; create nhận luôn `zone_id/shape/position_x/y`
+>    (tạo bàn từ sơ đồ trong 1 transaction); zone_rename đồng bộ tên khu sơ
+>    đồ trùng tên.
+> 2. `fnb_floor_zone_config_atomic(p_action, p_branch_id, p_payload)` —
+>    create / update / delete khu sơ đồ; quyền `floor_plan.edit_global`
+>    (mọi chi nhánh trong tenant) HOẶC `floor_plan.edit_branch` (+
+>    `user_has_branch_access`); đổi tên → sync `restaurant_tables.zone`;
+>    delete chặn khi khu còn bàn.
+> 3. `fnb_floor_layout_update_atomic(p_items)` — layout 1–200 bàn, 1 giao
+>    dịch, FOR UPDATE từng bàn, quyền per-branch như trên.
+> 4. `fnb_floor_decoration_config_atomic(p_action, p_payload)` — trang trí;
+>    chi nhánh suy từ zone; delete giữ XOÁ CỨNG nhưng audit TRƯỚC khi xoá.
+
+Khuôn chung theo mẫu 00196/00275/00277/00321/00322 đã chạy ổn:
 
 - `SECURITY DEFINER` + `SET search_path = ''`, tên bảng đầy đủ `public.*`;
 - `v_actor := auth.uid()` — null → `42501 CONFIG_AUTH_REQUIRED`;
