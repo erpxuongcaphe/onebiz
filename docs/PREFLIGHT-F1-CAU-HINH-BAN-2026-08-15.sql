@@ -73,15 +73,16 @@ WHERE rp.permission_code IN (
   'floor_plan.view','floor_plan.edit_branch','floor_plan.edit_global')
 ORDER BY rp.permission_code, r.name;
 
--- Ghi đè theo người dùng (cấp riêng / thu hồi riêng) cho các mã trên
+-- Ghi đè theo người dùng cho các mã trên. Cột thật là override_type (không
+-- phải granted) — gom theo giá trị thật để không đoán 'grant'/'revoke'.
 SELECT 'F4b. Ghi đè cá nhân' AS muc, upo.permission_code,
-       count(*) AS so_nguoi, count(*) FILTER (WHERE upo.granted) AS cap_rieng,
-       count(*) FILTER (WHERE NOT upo.granted) AS thu_hoi_rieng
+       upo.override_type, count(*) AS so_nguoi
 FROM public.user_permission_overrides upo
 WHERE upo.permission_code IN (
   'pos_fnb.manage_tables','system.manage_branches',
   'floor_plan.view','floor_plan.edit_branch','floor_plan.edit_global')
-GROUP BY upo.permission_code ORDER BY 2;
+GROUP BY upo.permission_code, upo.override_type
+ORDER BY 2, 3;
 
 -- ── F5. Hiện trạng dữ liệu bàn (khoá theo tenant OneBiz) ───────────────────
 -- Migration KHÔNG được đổi dữ liệu — chụp lại để hậu kiểm so sánh y nguyên.
