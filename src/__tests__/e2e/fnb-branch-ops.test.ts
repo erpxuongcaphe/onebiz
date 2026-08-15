@@ -477,7 +477,6 @@ vi.mock("@/lib/services/supabase/fnb-tables", () => ({
 
 import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "@/lib/services/supabase/fnb-checkout";
 import {
-  cancelKitchenOrder,
   transferTable,
   mergeKitchenOrders,
   applyOrderDiscount,
@@ -935,41 +934,9 @@ describe("Part 2: Ghi nợ — Partial payment (pay 20k on 45k order)", () => {
   });
 });
 
-describe("Part 2: Huỷ đơn — Cancel order before payment", () => {
-  it("cancels order and releases table via supabase", async () => {
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({ data: { id: "ko-cancel", status: "pending", table_id: "table-5" }, error: null });
-      }
-      if (table === "restaurant_tables") {
-        return createChain({ data: null, error: null });
-      }
-      return createChain();
-    };
-
-    await cancelKitchenOrder("ko-cancel");
-
-    // Order status → cancelled
-    const cancel = updateCalls.find((c) => (c.data as Record<string, unknown>).status === "cancelled");
-    expect(cancel).toBeDefined();
-    // Table released (status: available via supabase update)
-    const tableRelease = updateCalls.find((c) =>
-      (c.data as Record<string, unknown>).status === "available" &&
-      (c.data as Record<string, unknown>).current_order_id === null
-    );
-    expect(tableRelease).toBeDefined();
-  });
-
-  it("rejects cancel on completed order", async () => {
-    mockFromHandler = () => createChain({ data: { id: "ko-1", status: "completed", table_id: null }, error: null });
-    await expect(cancelKitchenOrder("ko-done")).rejects.toThrow("thanh toán");
-  });
-
-  it("rejects cancel on already cancelled order", async () => {
-    mockFromHandler = () => createChain({ data: { id: "ko-1", status: "cancelled", table_id: null }, error: null });
-    await expect(cancelKitchenOrder("ko-dup")).rejects.toThrow("huỷ trước");
-  });
-});
+// Huỷ đơn bếp trước thanh toán: bộ kiểm cũ gọi `cancelKitchenOrder` — hàm đã
+// gỡ (0 caller, ghi thẳng restaurant_tables). Luồng thật nay đi qua
+// `cancelUnpaidKitchenOrder` (RPC, máy chủ kiểm quyền + OTP quản lý).
 
 // ============================================================
 // PART 3: STOCK & INVENTORY VERIFICATION
