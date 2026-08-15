@@ -61,10 +61,23 @@ Một migration `003xx_fnb_table_config_rpcs.sql` (+ rollback). Khuôn chung the
 | `fnb_floor_zone_config_atomic(p_action text, p_branch_id uuid, p_payload jsonb)` | `create` · `update` · `delete` | `delete`: nếu còn bàn active gắn `zone_id` → RAISE "Chuyển bàn sang khu khác trước khi xoá" (đổi từ hành vi mồ côi hiện tại — cần CEO gật) |
 | `fnb_floor_layout_save_atomic(p_zone_id uuid, p_tables jsonb, p_decorations jsonb, p_deleted_decoration_ids uuid[])` | lưu TOÀN BỘ sơ đồ một giao dịch | thay N lệnh rời; mọi bàn/trang trí trong payload phải thuộc đúng tenant + chi nhánh của zone; decoration xoá qua đây (có audit) thay cho DELETE cứng từ client |
 
-**Mã quyền — cần CEO chốt (đề xuất của em):**
+**Mã quyền — CẬP NHẬT sau preflight 15/08 (F4 đo thật):**
 
-- `fnb_table_config_atomic`: `pos_fnb.manage_tables` **hoặc** `system.manage_branches` (đúng mẫu 00277 đang dùng).
-- Hai hàm sơ đồ: thêm `floor_plan.edit_branch`/`floor_plan.edit_global` vào tập chấp nhận, vì màn Sơ đồ bàn đang phân quyền bằng họ mã này; nếu chỉ nhận `pos_fnb.manage_tables` thì người đang được cấp `floor_plan.edit_*` sẽ gãy. Preflight F4 cho biết thực tế vai trò nào giữ mã nào — chốt sau khi có số.
+Số đo: `pos_fnb.manage_tables` thuộc Admin + Chủ cửa hàng + Quản lý **+ PHỤC VỤ**
+(vì mã này dùng cho thao tác vận hành: chuyển/gộp/nhả bàn). Nếu dùng nó cho RPC
+CẤU HÌNH như văn bản bàn giao đề nghị thì **phục vụ tạo/xoá được bàn** — rộng
+hơn UI hiện tại (trang cấu hình đang khoá `system.manage_branches` = Admin +
+Chủ cửa hàng).
+
+Đề xuất chốt (giữ ĐÚNG phạm vi quyền như UI hôm nay, không nới):
+
+- `fnb_table_config_atomic`: **`system.manage_branches`** (khớp gate trang
+  Bàn & Khu vực).
+- `fnb_floor_zone_config_atomic` + `fnb_floor_layout_save_atomic`:
+  **`floor_plan.edit_branch` hoặc `floor_plan.edit_global`** (khớp gate trang
+  Sơ đồ bàn: Admin + Chủ cửa hàng + Quản lý), kèm `user_has_branch_access`.
+- `pos_fnb.manage_tables` GIỮ NGUYÊN cho nhóm RPC vận hành (00275/00321/00322),
+  không dùng cho cấu hình.
 
 ## 4. Thứ tự triển khai — 3 bước, 2 PR + 1 migration chờ
 
@@ -80,6 +93,25 @@ Không gộp bất kỳ phần nào của F2 (đặt bàn) vào đây.
 
 - PR F1a: revert commit squash → service quay lại ghi trực tiếp (vẫn chạy vì F1b chưa revoke). RPC nằm im vô hại; muốn gỡ hẳn chạy rollback migration (`DROP FUNCTION` đủ chữ ký).
 - F1b: rollback = GRANT lại đúng các quyền đã revoke (ghi rõ trong tệp rollback).
+
+## 5b. Kết quả preflight 15/08 — đã có số thật
+
+- **RLS BẬT trên cả 3 bảng** (khác `invoices`): `restaurant_tables` 3 policy
+  INSERT/SELECT/UPDATE (KHÔNG có DELETE → xoá cứng bàn đã bị chặn sẵn);
+  `floor_plan_zones`/`floor_plan_decorations` mỗi bảng 1 policy ALL
+  tenant-isolation (→ xoá cứng decoration được). Policy chỉ cô lập tenant,
+  KHÔNG kiểm quyền → **mọi nhân viên trong tenant ghi được cấu hình**, đây là
+  lỗ RPC phải đóng. Cross-tenant đã bị chặn.
+- **Grant**: `authenticated` đủ 7 quyền kể cả TRUNCATE trên cả 3 bảng.
+  TRUNCATE không đi qua RLS nhưng PostgREST không expose nên không khai thác
+  được qua API — vẫn thu hồi trong F1b cho sạch. `anon` = 0 grant (00239 đứng).
+- **`audit_log`**: `authenticated` có cả DELETE/UPDATE/TRUNCATE → nhật ký
+  sửa/xoá được. F1b thu hồi 3 quyền này (giữ INSERT + SELECT vì client còn ghi
+  audit trực tiếp và tab Lịch sử cần đọc).
+- **Dữ liệu**: tenant OneBiz hiện có **0 bàn**, 1 khu sơ đồ (Xưởng Đồng Xoài),
+  0 trang trí, 0 ghi đè quyền cá nhân → thời điểm tốt nhất để khoá: migration
+  không phải bảo toàn dữ liệu nào, hậu kiểm trước/sau tầm thường.
+- Hàm nền đủ 6/6, đúng chữ ký.
 
 ## 6. Cần CEO trước khi em viết migration
 
