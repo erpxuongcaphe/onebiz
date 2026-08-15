@@ -138,3 +138,39 @@ Không gộp bất kỳ phần nào của F2 (đặt bàn) vào đây.
 1. Chạy `docs/PREFLIGHT-F1-CAU-HINH-BAN-2026-08-15.sql` (chỉ đọc) và gửi kết quả — quan trọng nhất là **F2 (grant)** và **F4 (vai trò giữ mã quyền nào)**.
 2. Chốt tập mã quyền cho 2 hàm sơ đồ (mục 3).
 3. Gật/chỉnh 2 chỗ **đổi hành vi có chủ đích**: xoá bàn/khu đang bận → báo lỗi rõ thay vì im lặng; xoá khu sơ đồ còn bàn → chặn.
+
+---
+
+## 7. Nhật ký thực hiện (cập nhật 15/08/2026)
+
+### F1a — XONG, đã lên production
+- PR #218 merged → `main` `a1cbe99`; migration **00323** (4 RPC) + **00324** (vá quyền) CEO đã chạy.
+- **Lỗi bắt được trước khi merge (00324):** trang Sơ đồ bàn mở cho `floor_plan.edit_*`,
+  nhưng nút thêm bàn trong đó gọi `createTable` vốn đòi `system.manage_branches`.
+  Vai trò **Quản lý** của OneBiz có `edit_branch` mà không có `manage_branches`
+  → sẽ mất chức năng đang dùng được. Vá: nhánh create **có `zone_id`** (chỉ
+  editor sơ đồ gửi kèm) chấp nhận thêm quyền floor_plan; các action khác giữ
+  nguyên. Bài học: **đối chiếu `role_permissions` thật trước khi khoá quyền.**
+- Hậu kiểm sau deploy: dữ liệu nguyên vẹn, anon gọi RPC → 401, gọi không có
+  người dùng → "Bạn cần đăng nhập".
+
+### F1b — chưa chạy, chờ 24–48h theo dõi + CEO gật
+Đã quét lại toàn bộ mã nguồn: chỉ còn **một** đường ghi thẳng 3 bảng, ở
+`kitchen-orders.ts:533` trong `cancelKitchenOrder` — hàm **0 caller, không
+export ở barrel** (đã gỡ từ PR #217) → thu hồi quyền sẽ không làm chết màn nào.
+Muốn triệt để thì dọn hàm chết + 4 tệp test còn tham chiếu nó.
+
+### F1c — ảnh nền sơ đồ (migration 00325)
+Preflight 15/08 đo được:
+- Bucket `floor-plans`: công khai, **không giới hạn dung lượng, không giới hạn
+  loại tệp**, đang **rỗng 0 tệp**.
+- 3 policy riêng của bucket chỉ kiểm "đã đăng nhập" → nhân viên công ty A ghi
+  đè / xoá được ảnh nền của công ty B.
+- **Thiếu hẳn policy UPDATE**, trong khi mã nguồn upload ở chế độ ghi đè →
+  **đổi ảnh nền lần thứ hai cho cùng một khu sẽ bị chặn**. Chưa ai vấp vì
+  bucket còn rỗng. 00325 sửa luôn.
+
+00325 làm: 4 policy theo `{tenant}/{branch}/{zone}` + quyền `floor_plan.edit_*`
+(edit_branch phải kèm quyền chi nhánh), giới hạn bucket 5MB + chỉ ảnh, hậu kiểm
+ngay trong migration để bảo đảm **không đụng policy của `product-images`**.
+Đọc ảnh qua đường dẫn công khai không đổi → sơ đồ vẫn hiển thị như cũ.
