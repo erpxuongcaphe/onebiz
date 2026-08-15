@@ -17,6 +17,10 @@ const ROLLBACK = fs.readFileSync(
   path.join(process.cwd(), "supabase/migrations/00323_rollback_fnb_table_config_rpcs.sql"),
   "utf8",
 );
+const PATCH_324 = fs.readFileSync(
+  path.join(process.cwd(), "supabase/migrations/00324_fnb_table_create_from_floor_plan.sql"),
+  "utf8",
+);
 
 const FN_SIGNATURES = [
   "fnb_table_config_atomic(text, uuid, jsonb)",
@@ -84,6 +88,41 @@ describe("00323 rollback — gỡ đủ, không đụng bảng", () => {
   it("không DROP TABLE / không đụng dữ liệu", () => {
     expect(ROLLBACK).not.toMatch(/drop table/i);
     expect(ROLLBACK).not.toMatch(/\b(delete from|update |truncate)\b/i);
+  });
+});
+
+describe("00324 — tạo bàn từ sơ đồ không mất quyền của vai trò Quản lý", () => {
+  it("giữ nguyên khuôn an toàn của 00323", () => {
+    expect(PATCH_324).toContain("security definer");
+    expect(PATCH_324).toContain("set search_path = ''");
+    expect(PATCH_324).toContain("auth.uid()");
+    expect(PATCH_324).not.toMatch(/p_tenant/i);
+    expect(PATCH_324).toMatch(/for update/i);
+    expect(PATCH_324).toContain(
+      "revoke all on function public.fnb_table_config_atomic(text, uuid, jsonb) from public, anon;",
+    );
+  });
+
+  it("lối sơ đồ CHỈ mở khi payload có zone_id, và phải kèm branch access", () => {
+    expect(PATCH_324).toMatch(/v_plan_ok\s*:=\s*p_action\s*=\s*'create'/);
+    expect(PATCH_324).toContain("(p_payload ? 'zone_id')");
+    expect(PATCH_324).toContain("'floor_plan.edit_global'");
+    expect(PATCH_324).toContain("user_has_branch_access(v_actor, p_branch_id)");
+  });
+
+  it("các action còn lại vẫn bắt buộc system.manage_branches", () => {
+    // Sau nhánh create phải có chốt chặn thứ hai chỉ chấp nhận v_manage.
+    const sauCreate = PATCH_324.slice(PATCH_324.indexOf("Mọi action còn lại"));
+    expect(sauCreate).toMatch(/if not v_manage then\s*\n\s*raise exception/);
+    expect(PATCH_324).toContain("'system.manage_branches'");
+    expect(PATCH_324).not.toMatch(/user_has_permission\([^)]*pos_fnb\.manage_tables/);
+  });
+
+  it("giữ đủ guard nghiệp vụ đã có (xoá bàn bận, khu còn bàn, whitelist)", () => {
+    expect(PATCH_324).toContain("đang phục vụ hoặc còn đơn");
+    expect(PATCH_324).toContain("đang phục vụ hoặc còn đơn — không thể xoá khu.");
+    expect(PATCH_324.match(/jsonb_object_keys/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+    expect(PATCH_324).toContain("Số bàn % đã tồn tại trong chi nhánh.");
   });
 });
 
