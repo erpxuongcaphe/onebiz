@@ -2,13 +2,13 @@
 -- PREFLIGHT — chuỗi Size theo QUY CÁCH (variant). CHỈ ĐỌC, KHÔNG GHI GÌ.
 --
 -- CÁCH CHẠY (Supabase SQL Editor):
---   1. Thay CHÍNH XÁC MỘT chỗ: chuỗi PASTE_TENANT_ID_HERE ở dòng CTE đầu tiên.
---   2. Bôi đen toàn bộ tệp → Run.
+--   Mã tenant OneBiz ĐÃ DÁN SẴN ở CTE đầu tiên — chỉ cần bôi đen toàn bộ tệp
+--   rồi bấm Run. (Muốn chạy cho tenant khác thì thay mã ở dòng đó.)
 --
 --   Toàn bộ tệp là MỘT câu SELECT duy nhất nên SQL Editor hiện đủ kết quả.
 --   Không dùng lệnh psql (\set), không transaction, không set_config.
---   Nếu quên dán mã tenant, Postgres báo lỗi ép kiểu uuid ngay và dừng —
---   đó là chủ đích, không phải sự cố.
+--   Nếu ai đó xoá mã tenant, Postgres báo lỗi ép kiểu uuid và dừng — đó là
+--   chủ đích, tránh chạy nhầm trên toàn database.
 --
 -- Chuỗi cần chứng minh:
 --   POS gửi variantId
@@ -22,9 +22,8 @@
 -- ============================================================================
 
 with t as (
-  -- ↓↓↓ DÁN MÃ TENANT ONEBIZ VÀO ĐÂY (chỉ một chỗ duy nhất) ↓↓↓
-  select 'PASTE_TENANT_ID_HERE'::uuid as id
-  -- ↑↑↑ ------------------------------------------------- ↑↑↑
+  -- Mã tenant OneBiz (đổi chỗ này nếu cần chạy cho tenant khác)
+  select '148e8ac5-b891-4de3-9055-cfa41f39ddb0'::uuid as id
 ),
 ham as (
   -- Liệt kê MỌI bản (kể cả trùng tên khác tham số) — không dùng limit 1
