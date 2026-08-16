@@ -114,6 +114,10 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
     .select("id, expiry_date, current_qty")
     .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
+    // CEO 16/08/2026: chỉ tính lô còn TỒN VẬT LÝ. Lô 'cancelled' (phiếu nhập
+    // bị huỷ) và 'consumed'/'disposed' vẫn giữ current_qty làm dấu vết lịch sử
+    // → cộng vào là báo thừa hàng không có thật.
+    .in("status", ["active", "expired"])
     .not("expiry_date", "is", null)
     .lte("expiry_date", thirtyDaysLater);
   if (branchId) lotsQuery = lotsQuery.eq("branch_id", branchId);

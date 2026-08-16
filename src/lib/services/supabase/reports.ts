@@ -534,6 +534,10 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
     .select("id, lot_number, product_id, expiry_date, current_qty, products(name)")
     .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
+    // CEO 16/08/2026: chỉ tính lô còn TỒN VẬT LÝ. Lô 'cancelled' (phiếu nhập
+    // bị huỷ) và 'consumed'/'disposed' vẫn giữ current_qty làm dấu vết lịch sử
+    // → cộng vào là báo thừa hàng không có thật.
+    .in("status", ["active", "expired"])
     .not("expiry_date", "is", null)
     .order("expiry_date", { ascending: true })
     .limit(20);
