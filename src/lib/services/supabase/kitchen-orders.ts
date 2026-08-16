@@ -474,71 +474,16 @@ export async function removeOrderItem(itemId: string): Promise<void> {
 // ============================================================
 
 /**
- * Cancel a kitchen order. Releases table if dine_in.
- * Cannot cancel completed/already-cancelled orders.
+ * F1b 15/08/2026: `cancelKitchenOrder` đã gỡ.
  *
- * @param orderId — kitchen_orders.id
- * @param reason — lý do bắt buộc cho audit (vd "khách đổi ý", "hết NL").
- *   Lưu vào `note` (append "[Hủy: <reason>]") + audit log để loss prevention.
+ * Hàm này ghi thẳng `restaurant_tables` để nhả bàn — đường ghi trực tiếp
+ * cuối cùng còn sót vào nhóm bảng cấu hình bàn. Nó không còn caller nào và
+ * đã bị gỡ khỏi barrel từ PR #217. Xoá hẳn để migration F1b thu hồi quyền
+ * ghi thẳng không để lại đoạn mã chết chắc chắn gãy.
+ *
+ * Huỷ đơn bếp chưa thanh toán dùng `cancelUnpaidKitchenOrder` ngay bên dưới
+ * (đi qua RPC, máy chủ kiểm quyền + OTP quản lý).
  */
-export async function cancelKitchenOrder(
-  orderId: string,
-  reason?: string,
-): Promise<void> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-
-  // Load order to check status + get table_id + existing note
-  const { data: order, error: fetchErr } = await supabase
-    .from("kitchen_orders")
-    .select("id, status, table_id, note")
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId)
-    .single();
-
-  if (fetchErr) handleError(fetchErr, "cancelKitchenOrder:fetch");
-  if (!order) throw new Error("Không tìm thấy đơn bếp");
-
-  if (order.status === "completed") {
-    throw new Error("Đơn đã thanh toán, không thể huỷ. Hãy dùng chức năng hoàn trả.");
-  }
-  if (order.status === "cancelled") {
-    throw new Error("Đơn đã huỷ trước đó.");
-  }
-
-  // Append cancel reason vào note để hiện ở report sau này.
-  const reasonTag = reason?.trim() ? ` [Hủy: ${reason.trim()}]` : "";
-  const newNote = (order.note ?? "") + reasonTag;
-
-  // Cancel the order
-  const { error: updateErr } = await supabase
-    .from("kitchen_orders")
-    .update({ status: "cancelled" as const, note: newNote })
-    .eq("tenant_id", tenantId)
-    .eq("id", orderId);
-
-  if (updateErr) handleError(updateErr, "cancelKitchenOrder:update");
-
-  // Audit log để báo cáo loss prevention.
-  void recordAuditLog({
-    entityType: "kitchen_order",
-    entityId: orderId,
-    action: "cancel",
-    newData: { reason: reason ?? null, releasedTable: !!order.table_id },
-  });
-
-  // Release table if occupied
-  if (order.table_id) {
-    const { error: tableErr } = await supabase
-      .from("restaurant_tables")
-      .update({ status: "available" as const, current_order_id: null })
-      .eq("tenant_id", tenantId)
-      .eq("id", order.table_id)
-      .eq("current_order_id", orderId);
-
-    if (tableErr) handleError(tableErr, "cancelKitchenOrder:releaseTable");
-  }
-}
 
 export interface CancelUnpaidKitchenOrderInput {
   orderId: string;

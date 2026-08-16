@@ -234,7 +234,6 @@ vi.mock("@/lib/services/supabase/fnb-tables", () => ({
 
 import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "@/lib/services/supabase/fnb-checkout";
 import {
-  cancelKitchenOrder,
   transferTable,
   mergeKitchenOrders,
   applyOrderDiscount,
@@ -1039,37 +1038,10 @@ describe("E5. Tách bill — split equally", () => {
   );
 });
 
-describe("E6. Huỷ đơn — cancel before payment", () => {
-  const cancelScenarios = ALL_SCENARIOS.filter(s => s.specialOp === "cancel");
-
-  it.each(cancelScenarios.map(s => [s.id, s] as const))(
-    "Scenario #%d — cancel order, no stock impact",
-    async (id, s) => {
-      resetMocks();
-      mockFromHandler = (table: string) => {
-        if (table === "kitchen_orders") {
-          return createChain({
-            data: { id: `ko-${s.id}`, status: "preparing", table_id: s.tableId },
-            error: null,
-          });
-        }
-        return createChain({ data: null, error: null });
-      };
-
-      await cancelKitchenOrder(`ko-${s.id}`);
-
-      // Order cancelled
-      const cancelUpdates = updateCalls.filter(
-        c => (c.data as Record<string, unknown>)?.status === "cancelled"
-      );
-      expect(cancelUpdates.length).toBeGreaterThanOrEqual(1);
-
-      // No stock movements
-      const stockOuts = insertCalls.filter(c => (c.data as Record<string, unknown>)?.type === "out");
-      expect(stockOuts.length).toBe(0);
-    }
-  );
-});
+// E6. Huỷ đơn trước thanh toán — bộ kiểm cũ gọi `cancelKitchenOrder`, hàm đã
+// gỡ ở PR dọn mã chết (0 caller, ghi thẳng restaurant_tables). Luồng huỷ đơn
+// bếp chưa thanh toán hiện đi qua `cancelUnpaidKitchenOrder` (RPC, máy chủ
+// kiểm quyền + OTP quản lý) và đã có bộ kiểm riêng.
 
 describe("E7. Void — hoàn trả sau thanh toán", () => {
   const voidScenarios = ALL_SCENARIOS.filter(s => s.specialOp === "void");

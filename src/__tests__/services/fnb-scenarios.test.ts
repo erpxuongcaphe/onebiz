@@ -165,7 +165,6 @@ vi.mock("@/lib/services/supabase/fnb-tables", () => ({
 
 import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } from "@/lib/services/supabase/fnb-checkout";
 import {
-  cancelKitchenOrder,
   transferTable,
   mergeKitchenOrders,
   applyOrderDiscount,
@@ -454,60 +453,9 @@ describe("Scenario: Gộp đơn (Bàn 5 + Bàn 6 → 1 hoá đơn)", () => {
 // 5. HUỶ ĐƠN — Cancel order
 // ============================================================
 
-describe("Scenario: Huỷ đơn (khách đổi ý)", () => {
-  it("cancels order and releases table", async () => {
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({
-          data: { id: "ko-1", status: "pending", table_id: "table-3" },
-          error: null,
-        });
-      }
-      if (table === "restaurant_tables") {
-        return createChain({ data: null, error: null });
-      }
-      return createChain();
-    };
-
-    await cancelKitchenOrder("ko-1");
-
-    // Order cancelled
-    const cancelUpdates = updateCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.status === "cancelled"
-    );
-    expect(cancelUpdates.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("rejects cancel on completed order", async () => {
-    mockFromHandler = () =>
-      createChain({ data: { id: "ko-1", status: "completed", table_id: null }, error: null });
-
-    await expect(cancelKitchenOrder("ko-1")).rejects.toThrow("thanh toán");
-  });
-
-  it("rejects cancel on already cancelled order", async () => {
-    mockFromHandler = () =>
-      createChain({ data: { id: "ko-1", status: "cancelled", table_id: null }, error: null });
-
-    await expect(cancelKitchenOrder("ko-1")).rejects.toThrow("huỷ trước đó");
-  });
-
-  it("does not affect stock (no stock movement created)", async () => {
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({ data: { id: "ko-1", status: "preparing", table_id: null }, error: null });
-      }
-      return createChain({ data: null, error: null });
-    };
-
-    await cancelKitchenOrder("ko-1");
-
-    const stockInserts = insertCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.type === "out"
-    );
-    expect(stockInserts.length).toBe(0);
-  });
-});
+// Huỷ đơn bếp trước thanh toán: bộ kiểm cũ gọi `cancelKitchenOrder` — hàm đã
+// gỡ (0 caller, ghi thẳng restaurant_tables). Luồng thật nay đi qua
+// `cancelUnpaidKitchenOrder` (RPC, máy chủ kiểm quyền + OTP quản lý).
 
 // ============================================================
 // 6. GIẢM GIÁ / CHIẾT KHẤU — Discount
