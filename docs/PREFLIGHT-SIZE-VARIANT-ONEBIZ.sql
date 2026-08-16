@@ -1,154 +1,179 @@
 -- ============================================================================
--- PREFLIGHT — chuỗi Size theo QUY CÁCH (variant). CHỈ ĐỌC.
+-- PREFLIGHT — chuỗi Size theo QUY CÁCH (variant). CHỈ ĐỌC, KHÔNG GHI GÌ.
 --
--- Khác bản trước: KHÔNG dò từ khoá bằng LIKE. Kiểm chữ ký hàm bằng
--- to_regprocedure + pg_get_function_identity_arguments, và trích ĐÚNG đoạn gọi
--- bằng regexp để chứng minh tham số variant thật sự được truyền suốt chuỗi:
+-- CÁCH CHẠY (Supabase SQL Editor):
+--   1. Thay CHÍNH XÁC MỘT chỗ: chuỗi PASTE_TENANT_ID_HERE ở dòng CTE đầu tiên.
+--   2. Bôi đen toàn bộ tệp → Run.
 --
+--   Toàn bộ tệp là MỘT câu SELECT duy nhất nên SQL Editor hiện đủ kết quả.
+--   Không dùng lệnh psql (\set), không transaction, không set_config.
+--   Nếu quên dán mã tenant, Postgres báo lỗi ép kiểu uuid ngay và dừng —
+--   đó là chủ đích, không phải sự cố.
+--
+-- Chuỗi cần chứng minh:
 --   POS gửi variantId
 --     → kitchen_order_items.variant_id
 --     → consume_bom_for_sale(..., p_variant_id)
 --     → get_active_bom_for_branch(product, branch, variant)
---     → restore_bom_for_return(..., p_variant_id) khi HUỶ HOÁ ĐƠN ĐÃ HOÀN THÀNH / TRẢ HÀNG
---
--- Huỷ đơn CHƯA thanh toán không trừ kho nên KHÔNG yêu cầu hoàn kho — kiểm riêng.
---
--- ⚠️ DÁN MÃ TENANT VÀO DÒNG DƯỚI TRƯỚC KHI CHẠY. Chưa dán thì script tự dừng.
+--     → khi HUỶ HOÁ ĐƠN ĐÃ HOÀN THÀNH: fnb_void_invoice_atomic → restore_bom_for_return(..., p_variant_id)
+--     → khi TRẢ HÀNG: create_sales_return_atomic (lớp bọc)
+--                      → _create_sales_return_auth_impl_00244 → restore_bom_for_return(..., p_variant_id)
+--   Huỷ đơn CHƯA thanh toán: chưa trừ kho nên KHÔNG cần hoàn kho — kiểm riêng, kỳ vọng false.
 -- ============================================================================
 
-\set ON_ERROR_STOP on
-
-do $$
-declare
-  v_tenant uuid;
-begin
-  -- ↓↓↓ DÁN MÃ TENANT ONEBIZ VÀO ĐÂY ↓↓↓
-  v_tenant := nullif('PASTE_TENANT_ID_HERE', 'PASTE_TENANT_ID_HERE')::uuid;
-  -- ↑↑↑ ------------------------------ ↑↑↑
-
-  if v_tenant is null then
-    raise exception 'CHUA DAN MA TENANT: mo tep, thay PASTE_TENANT_ID_HERE bang ma tenant OneBiz roi chay lai';
-  end if;
-  if not exists (select 1 from public.tenants t where t.id = v_tenant) then
-    raise exception 'MA TENANT KHONG TON TAI: %', v_tenant;
-  end if;
-  raise notice 'Tenant hop le, tiep tuc doc du lieu.';
-end $$;
-
--- ── PHẦN 1: CHỮ KÝ HÀM (không phụ thuộc tenant) ─────────────────────────────
-select * from (
-
-  -- A. Chữ ký THẬT của từng hàm trong chuỗi
-  select 1 as stt, 'A. CHỮ KÝ THẬT' as muc,
-         p.proname || '(' || pg_get_function_identity_arguments(p.oid) || ')' as ket_qua
-  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+with t as (
+  -- ↓↓↓ DÁN MÃ TENANT ONEBIZ VÀO ĐÂY (chỉ một chỗ duy nhất) ↓↓↓
+  select 'PASTE_TENANT_ID_HERE'::uuid as id
+  -- ↑↑↑ ------------------------------------------------- ↑↑↑
+),
+ham as (
+  -- Liệt kê MỌI bản (kể cả trùng tên khác tham số) — không dùng limit 1
+  select p.oid, p.proname,
+         pg_get_function_identity_arguments(p.oid) as args,
+         pg_get_functiondef(p.oid) as def
+  from pg_proc p
+  join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public'
     and p.proname in ('fnb_send_to_kitchen_atomic_v2','_fnb_complete_payment_impl_00230',
                       'consume_bom_for_sale','get_active_bom_for_branch',
                       'restore_bom_for_return','fnb_void_invoice_atomic',
-                      'fnb_cancel_unpaid_order_atomic')
+                      'fnb_cancel_unpaid_order_atomic',
+                      'create_sales_return_atomic','_create_sales_return_auth_impl_00244')
+)
 
+-- ── 0. Tenant có hợp lệ không ────────────────────────────────────────────────
+select 0 as stt, '0. TENANT' as muc,
+       case when exists (select 1 from public.tenants x, t where x.id = t.id)
+            then 'Hợp lệ: ' || (select id::text from t)
+            else '❌ MÃ TENANT KHÔNG TỒN TẠI — dừng lại, dán đúng mã rồi chạy lại'
+       end as ket_qua
+from t
+
+-- ── A. Chữ ký thật của MỌI bản hàm trong chuỗi ──────────────────────────────
+union all
+select 1, 'A. CHỮ KÝ THẬT (mọi bản)',
+       h.proname || '(' || h.args || ')'
+    || case when h.args ~ 'p_variant_id' then '  ✔ có p_variant_id' else '' end
+from ham h
+
+-- ── B. Chữ ký kỳ vọng có tồn tại đúng như vậy không (to_regprocedure) ───────
+union all
+select 2, 'B. KHỚP CHỮ KÝ KỲ VỌNG', x.ket_qua
+from (
+  select 'get_active_bom_for_branch(uuid,uuid,uuid) → '
+      || coalesce(to_regprocedure('public.get_active_bom_for_branch(uuid,uuid,uuid)')::text,
+                  '❌ KHÔNG CÓ') as ket_qua
   union all
-  -- B. Chữ ký KỲ VỌNG có tồn tại đúng như vậy không (to_regprocedure = null là KHÔNG có)
-  select 2, 'B. KHỚP CHỮ KÝ KỲ VỌNG',
-         'get_active_bom_for_branch(uuid,uuid,uuid) = '
-         || coalesce(to_regprocedure('public.get_active_bom_for_branch(uuid,uuid,uuid)')::text, 'KHÔNG CÓ')
-
+  select 'consume_bom_for_sale — số bản có p_variant_id: '
+      || (select count(*)::text from ham where proname='consume_bom_for_sale' and args ~ 'p_variant_id')
+      || ' / tổng ' || (select count(*)::text from ham where proname='consume_bom_for_sale')
   union all
-  select 2, 'B. KHỚP CHỮ KÝ KỲ VỌNG',
-         'consume_bom_for_sale có tham số p_variant_id = '
-         || (pg_get_function_identity_arguments(
-               (select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-                where n.nspname='public' and p.proname='consume_bom_for_sale' limit 1)
-             ) ~ 'p_variant_id')::text
-
+  select 'restore_bom_for_return — số bản có p_variant_id: '
+      || (select count(*)::text from ham where proname='restore_bom_for_return' and args ~ 'p_variant_id')
+      || ' / tổng ' || (select count(*)::text from ham where proname='restore_bom_for_return')
   union all
-  select 2, 'B. KHỚP CHỮ KÝ KỲ VỌNG',
-         'restore_bom_for_return có tham số p_variant_id = '
-         || (pg_get_function_identity_arguments(
-               (select p.oid from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-                where n.nspname='public' and p.proname='restore_bom_for_return' limit 1)
-             ) ~ 'p_variant_id')::text
-
+  select 'create_sales_return_atomic tồn tại: '
+      || (select count(*)::text from ham where proname='create_sales_return_atomic') || ' bản'
   union all
-  -- C. Trích ĐÚNG đoạn gọi consume_bom_for_sale trong hàm thanh toán (không dò từ khoá)
-  select 3, 'C. THANH TOÁN GỌI TRỪ KHO',
-         coalesce(
-           (select substring(pg_get_functiondef(p.oid)
-                   from 'consume_bom_for_sale\s*\(([^;]{0,400})')
-            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname='public' and p.proname='_fnb_complete_payment_impl_00230'),
-           'KHÔNG THẤY LỜI GỌI')
+  select '_create_sales_return_auth_impl_00244 tồn tại: '
+      || (select count(*)::text from ham where proname='_create_sales_return_auth_impl_00244') || ' bản'
+) x
 
-  union all
-  -- D. Đoạn ghi variant_id vào dòng đơn bếp, trong hàm gửi bếp
-  select 4, 'D. GỬI BẾP GHI variant_id',
-         coalesce(
-           (select substring(pg_get_functiondef(p.oid)
-                   from '(variant_id[^;]{0,200})')
-            from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-            where n.nspname='public' and p.proname='fnb_send_to_kitchen_atomic_v2'),
-           'KHÔNG THẤY')
+-- ── C. Thanh toán gọi trừ kho: trích ĐÚNG đoạn gọi ─────────────────────────
+union all
+select 3, 'C. THANH TOÁN → consume_bom_for_sale',
+       coalesce(substring(h.def from 'consume_bom_for_sale\s*\(([^;]{0,400})'),
+                '❌ KHÔNG THẤY LỜI GỌI')
+from ham h where h.proname = '_fnb_complete_payment_impl_00230'
 
-  union all
-  -- E1. HUỶ HOÁ ĐƠN ĐÃ HOÀN THÀNH / TRẢ HÀNG → phải truyền variant_id vào restore
-  select 5, 'E1. HUỶ HĐ ĐÃ HOÀN THÀNH → hoàn kho',
-         p.proname || ' | đoạn gọi restore: ' ||
-         coalesce(substring(pg_get_functiondef(p.oid) from 'restore_bom_for_return\s*\(([^;]{0,300})'),
-                  'KHÔNG GỌI restore_bom_for_return')
-  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname='public' and p.proname = 'fnb_void_invoice_atomic'
+-- ── D. Gửi bếp ghi variant_id vào dòng đơn ─────────────────────────────────
+union all
+select 4, 'D. GỬI BẾP ghi variant_id',
+       coalesce(substring(h.def from '(variant_id[^;]{0,200})'), '❌ KHÔNG THẤY')
+from ham h where h.proname = 'fnb_send_to_kitchen_atomic_v2'
 
-  union all
-  -- E2. HUỶ ĐƠN CHƯA THANH TOÁN → chưa trừ kho nên KHÔNG cần hoàn kho (chỉ ghi nhận)
-  select 6, 'E2. HUỶ ĐƠN CHƯA THANH TOÁN (không cần hoàn kho)',
-         p.proname || ' | có gọi restore_bom_for_return = '
-         || (pg_get_functiondef(p.oid) ~ 'restore_bom_for_return')::text
-         || ' — kỳ vọng false vì chưa trừ kho'
-  from pg_proc p join pg_namespace n on n.oid = p.pronamespace
-  where n.nspname='public' and p.proname = 'fnb_cancel_unpaid_order_atomic'
+-- ── E1. Huỷ HOÁ ĐƠN ĐÃ HOÀN THÀNH → phải hoàn kho theo variant ─────────────
+union all
+select 5, 'E1. HUỶ HĐ ĐÃ HOÀN THÀNH → restore',
+       h.proname || ' → ' ||
+       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,300})'),
+                '❌ KHÔNG GỌI restore_bom_for_return')
+from ham h where h.proname = 'fnb_void_invoice_atomic'
 
-  union all
-  -- F. Hàm chọn BOM có cho variant thiếu bom_code kế thừa BOM món cha không?
-  select 7, 'F. KẾ THỪA BOM CHA (23 món Size KHÔNG được phép)',
-         coalesce(
-           (select substring(pg_get_functiondef(p.oid) from '(variant_id is null[^;]{0,300})')
-            from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-            where n.nspname='public' and p.proname='get_active_bom_for_branch'),
-           'không thấy nhánh variant_id is null — đọc thêm mục A')
+-- ── E2. TRẢ HÀNG: lớp bọc phải gọi impl 00244 ─────────────────────────────
+union all
+select 6, 'E2. TRẢ HÀNG — lớp bọc gọi impl',
+       h.proname || ' → gọi _create_sales_return_auth_impl_00244: '
+    || (h.def ~ '_create_sales_return_auth_impl_00244')::text
+from ham h where h.proname = 'create_sales_return_atomic'
 
-) t order by stt, ket_qua;
+-- ── E3. TRẢ HÀNG: trong impl, restore có truyền variant_id không ──────────
+union all
+select 7, 'E3. TRẢ HÀNG — impl truyền variant',
+       h.proname || ' → ' ||
+       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,300})'),
+                '❌ KHÔNG GỌI restore_bom_for_return')
+from ham h where h.proname = '_create_sales_return_auth_impl_00244'
 
--- ── PHẦN 2: DỮ LIỆU — KHOÁ ĐÚNG TENANT ─────────────────────────────────────
--- Dán lại mã tenant vào cả 3 chỗ :tenant bên dưới (thay chuỗi trong ngoặc nháy).
-with t as (select 'PASTE_TENANT_ID_HERE'::uuid as id)
-select * from (
+-- ── E4. Huỷ đơn CHƯA thanh toán: kỳ vọng KHÔNG hoàn kho ───────────────────
+union all
+select 8, 'E4. HUỶ ĐƠN CHƯA THANH TOÁN (kỳ vọng false)',
+       h.proname || ' → có gọi restore_bom_for_return: '
+    || (h.def ~ 'restore_bom_for_return')::text
+    || '  (chưa trừ kho nên không cần hoàn)'
+from ham h where h.proname = 'fnb_cancel_unpaid_order_atomic'
 
-  select 8 as stt, 'G. QUY CÁCH CỦA TENANT NÀY' as muc,
-         'tổng=' || count(*)::text
-      || ' | đang bật=' || count(*) filter (where pv.is_active)::text
-      || ' | giá > 0=' || count(*) filter (where coalesce(pv.sell_price,0) > 0)::text
-      || ' | có mã công thức=' || count(pv.bom_code)::text
-      || ' | đánh dấu mặc định=' || count(*) filter (where pv.is_default)::text as ket_qua
-  from public.product_variants pv, t
-  where pv.tenant_id = t.id
+-- ── F. Chọn BOM: nhánh theo variant VÀ đoạn rơi về BOM món cha ────────────
+union all
+select 9, 'F1. CHỌN BOM — nhánh theo variant',
+       coalesce(substring(h.def from '(p_variant_id is not null[^;]{0,400})'),
+                '❌ không thấy nhánh p_variant_id is not null')
+from ham h where h.proname = 'get_active_bom_for_branch'
 
-  union all
-  select 9, 'H. MÓN CÓ NHIỀU HƠN MỘT MẶC ĐỊNH (phải rỗng)',
-         coalesce((select string_agg(p.code, ', ')
-                   from (select pv.product_id from public.product_variants pv, t
-                         where pv.tenant_id = t.id and pv.is_default and pv.is_active
-                         group by pv.product_id having count(*) > 1) x
-                   join public.products p on p.id = x.product_id),
-                  'KHÔNG CÓ — an toàn')
+union all
+select 10, 'F2. CHỌN BOM — đoạn rơi về BOM món cha (23 món Size KHÔNG được phép)',
+       coalesce(substring(h.def from '(variant_id is null[^;]{0,400})'),
+                coalesce(substring(h.def from '(b\.product_id = p_product_id[^;]{0,300})'),
+                         '❌ không trích được — xem chữ ký ở mục A rồi đọc tay'))
+from ham h where h.proname = 'get_active_bom_for_branch'
 
-  union all
-  select 10, 'I. QUY CÁCH THIẾU ĐIỀU KIỆN (giá 0 hoặc chưa có công thức)',
-         coalesce((select string_agg(p.code || '/' || pv.name, ', ')
-                   from public.product_variants pv, t
-                   join public.products p on p.id = pv.product_id
-                   where pv.tenant_id = t.id and pv.is_active
-                     and (coalesce(pv.sell_price,0) <= 0 or pv.bom_code is null)),
-                  'KHÔNG CÓ')
+-- ── G. Dữ liệu quy cách — khoá đúng tenant ────────────────────────────────
+union all
+select 11, 'G. QUY CÁCH CỦA TENANT NÀY',
+       'tổng=' || count(*)::text
+    || ' | đang bật=' || count(*) filter (where pv.is_active)::text
+    || ' | giá > 0=' || count(*) filter (where coalesce(pv.sell_price,0) > 0)::text
+    || ' | có mã công thức=' || count(pv.bom_code)::text
+    || ' | đánh dấu mặc định=' || count(*) filter (where pv.is_default)::text
+from public.product_variants pv
+cross join t
+where pv.tenant_id = t.id
 
-) u order by stt, ket_qua;
+-- ── H. Món có nhiều hơn một mặc định (phải rỗng) ─────────────────────────
+union all
+select 12, 'H. TRÙNG MẶC ĐỊNH (phải rỗng)',
+       coalesce(
+         (select string_agg(p2.code, ', ')
+          from (select pv.product_id
+                from public.product_variants pv
+                cross join t
+                where pv.tenant_id = t.id and pv.is_default and pv.is_active
+                group by pv.product_id
+                having count(*) > 1) x
+          join public.products p2 on p2.id = x.product_id),
+         'KHÔNG CÓ — an toàn')
+
+-- ── I. Quy cách thiếu điều kiện (JOIN đúng theo yêu cầu) ─────────────────
+union all
+select 13, 'I. QUY CÁCH THIẾU GIÁ HOẶC THIẾU CÔNG THỨC',
+       coalesce(string_agg(p.code || '/' || pv.name, ', '), 'KHÔNG CÓ')
+from public.product_variants pv
+join public.products p
+  on p.id = pv.product_id
+ and p.tenant_id = pv.tenant_id
+cross join t
+where pv.tenant_id = t.id
+  and pv.is_active
+  and (coalesce(pv.sell_price, 0) <= 0 or pv.bom_code is null)
+
+order by 1, 3;
