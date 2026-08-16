@@ -81,7 +81,7 @@ from (
 -- ── C. Thanh toán gọi trừ kho: trích ĐÚNG đoạn gọi ─────────────────────────
 union all
 select 3, 'C. THANH TOÁN → consume_bom_for_sale',
-       coalesce(substring(h.def from 'consume_bom_for_sale\s*\(([^;]{0,400})'),
+       coalesce(substring(h.def from 'consume_bom_for_sale\s*\(([^;]{0,250})'),
                 '❌ KHÔNG THẤY LỜI GỌI')
 from ham h where h.proname = '_fnb_complete_payment_impl_00230'
 
@@ -95,7 +95,7 @@ from ham h where h.proname = 'fnb_send_to_kitchen_atomic_v2'
 union all
 select 5, 'E1. HUỶ HĐ ĐÃ HOÀN THÀNH → restore',
        h.proname || ' → ' ||
-       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,300})'),
+       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,250})'),
                 '❌ KHÔNG GỌI restore_bom_for_return')
 from ham h where h.proname = 'fnb_void_invoice_atomic'
 
@@ -110,7 +110,7 @@ from ham h where h.proname = 'create_sales_return_atomic'
 union all
 select 7, 'E3. TRẢ HÀNG — impl truyền variant',
        h.proname || ' → ' ||
-       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,300})'),
+       coalesce(substring(h.def from 'restore_bom_for_return\s*\(([^;]{0,250})'),
                 '❌ KHÔNG GỌI restore_bom_for_return')
 from ham h where h.proname = '_create_sales_return_auth_impl_00244'
 
@@ -125,14 +125,14 @@ from ham h where h.proname = 'fnb_cancel_unpaid_order_atomic'
 -- ── F. Chọn BOM: nhánh theo variant VÀ đoạn rơi về BOM món cha ────────────
 union all
 select 9, 'F1. CHỌN BOM — nhánh theo variant',
-       coalesce(substring(h.def from '(p_variant_id is not null[^;]{0,400})'),
+       coalesce(substring(h.def from '(p_variant_id is not null[^;]{0,250})'),
                 '❌ không thấy nhánh p_variant_id is not null')
 from ham h where h.proname = 'get_active_bom_for_branch'
 
 union all
 select 10, 'F2. CHỌN BOM — đoạn rơi về BOM món cha (23 món Size KHÔNG được phép)',
-       coalesce(substring(h.def from '(variant_id is null[^;]{0,400})'),
-                coalesce(substring(h.def from '(b\.product_id = p_product_id[^;]{0,300})'),
+       coalesce(substring(h.def from '(variant_id is null[^;]{0,250})'),
+                coalesce(substring(h.def from '(b\.product_id = p_product_id[^;]{0,250})'),
                          '❌ không trích được — xem chữ ký ở mục A rồi đọc tay'))
 from ham h where h.proname = 'get_active_bom_for_branch'
 
