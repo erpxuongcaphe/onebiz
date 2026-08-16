@@ -261,6 +261,8 @@ export interface VariantLite {
   id: string;
   label: string;
   sell_price: number;
+  /** Guard Size: POS phải chọn đúng quy cách mặc định, không lấy phần tử đầu. */
+  is_default?: boolean;
 }
 
 /** Ghi 1 batch variants vào IndexedDB. Mỗi entry map = 1 record. */

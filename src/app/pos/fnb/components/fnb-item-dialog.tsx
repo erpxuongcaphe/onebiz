@@ -17,7 +17,7 @@ import type {
 
 // ── Types ──
 
-interface Variant { id: string; label: string; sell_price: number }
+interface Variant { id: string; label: string; sell_price: number; is_default?: boolean }
 interface Topping { id: string; name: string; price: number }
 interface Product { id: string; name: string; sell_price: number }
 
@@ -311,7 +311,12 @@ export function FnbItemDialog({
       if (initialSelection?.variantId) {
         initVariant = variants?.find((v) => v.id === initialSelection.variantId) ?? null;
       }
-      if (!initVariant) initVariant = variants?.[0] ?? null;
+      // Guard Size: chọn đúng quy cách được đánh dấu mặc định. Trước đây lấy
+      // phần tử đầu danh sách — sai khi thứ tự đổi, và mặc định M không được
+      // tôn trọng. Không có cái nào đánh dấu thì để TRỐNG, buộc người bán chọn.
+      if (!initVariant) {
+        initVariant = variants?.find((v) => v.is_default) ?? null;
+      }
       setSelectedVariant(initVariant);
 
       setQuantity(Math.max(1, initialSelection?.quantity ?? 1));
@@ -498,8 +503,22 @@ export function FnbItemDialog({
 
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
+  // Guard Size (3 tầng — tầng giao diện):
+  //  · món có quy cách đang bật thì BẮT BUỘC chọn cỡ, không mặc định bừa;
+  //  · giá của dòng phải > 0 — bán 0đ do quên nhập giá là mất tiền thật.
+  const coQuyCach = (variants?.length ?? 0) > 0;
+  const thieuQuyCach = coQuyCach && !selectedVariant;
+  const giaKhongHopLe = !variantsLoading && !thieuQuyCach && unitPrice <= 0;
+
   const canConfirm =
-    invalidModifierGroupIds.size === 0 && !modifiersLoading && !modifiersFailed;
+    invalidModifierGroupIds.size === 0 && !modifiersLoading && !modifiersFailed
+    && !thieuQuyCach && !giaKhongHopLe;
+
+  const lyDoChan = thieuQuyCach
+    ? "Vui lòng chọn cỡ trước khi thêm món."
+    : giaKhongHopLe
+      ? "Món này chưa có giá bán. Báo quản lý nhập giá rồi bán lại."
+      : null;
 
   const handleConfirm = () => {
     // Lớp 1 — khoá tức thì: chặn cú bấm thứ 2 trong CÙNG nhịp render.
@@ -974,9 +993,11 @@ export function FnbItemDialog({
                 ? "Chưa tải được tuỳ chọn — bấm Thử lại ở trên"
                 : modifiersLoading
                   ? "Đang tải tuỳ chọn của món"
-                  : !canConfirm
-                    ? "Vui lòng chọn các mục bắt buộc trước khi thêm"
-                    : undefined
+                  : lyDoChan
+                    ? lyDoChan
+                    : !canConfirm
+                      ? "Vui lòng chọn các mục bắt buộc trước khi thêm"
+                      : undefined
             }
           >
             {modifiersFailed
@@ -985,7 +1006,9 @@ export function FnbItemDialog({
                 ? "Đang tải tuỳ chọn…"
                 : invalidModifierGroupIds.size > 0
                   ? `Còn ${invalidModifierGroupIds.size} nhóm tuỳ chọn chưa hợp lệ`
-                  : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
+                  : lyDoChan
+                    ? lyDoChan
+                    : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}
           </Button>
         </DialogFooter>
       </DialogContent>

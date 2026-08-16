@@ -185,7 +185,7 @@ function FnbPosPageInner() {
   // Confirm sẽ updateLine thay vì addLine. Reset khi đóng dialog hoặc
   // khi bắt đầu add mới (handleSelectProduct).
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
-  const [itemVariants, setItemVariants] = useState<{ id: string; label: string; sell_price: number }[]>([]);
+  const [itemVariants, setItemVariants] = useState<{ id: string; label: string; sell_price: number; is_default?: boolean }[]>([]);
   // POS-FIX-C3: track loading state cho variant dialog — khi cache miss
   // mà network đang fetch, hiện skeleton thay vì empty (UX "tưởng đơ").
   const [itemVariantsLoading, setItemVariantsLoading] = useState(false);
@@ -1077,6 +1077,7 @@ function FnbPosPageInner() {
               id: v.id,
               label: v.name,
               sell_price: v.sellPrice,
+              is_default: v.isDefault,
             }))
           );
         });
@@ -1085,7 +1086,7 @@ function FnbPosPageInner() {
         // chỉ cần đọc cache là có full variants, không cần hit network.
         const toPersist = new Map<
           string,
-          { id: string; label: string; sell_price: number }[]
+          { id: string; label: string; sell_price: number; is_default?: boolean }[]
         >();
         variantMap.forEach((variants, pid) => {
           toPersist.set(
@@ -1094,6 +1095,7 @@ function FnbPosPageInner() {
               id: v.id,
               label: v.name,
               sell_price: v.sellPrice,
+              is_default: v.isDefault,
             }))
           );
         });
@@ -1258,6 +1260,7 @@ function FnbPosPageInner() {
           id: v.id,
           label: v.name,
           sell_price: v.sellPrice,
+          is_default: v.isDefault,
         }));
         variantCacheRef.set(product.id, mapped);
 
@@ -1383,6 +1386,7 @@ function FnbPosPageInner() {
           id: v.id,
           label: v.name,
           sell_price: v.sellPrice,
+          is_default: v.isDefault,
         }));
         variantCacheRef.set(line.productId, mapped);
         if (itemLoadRequestRef.current === requestId) {
