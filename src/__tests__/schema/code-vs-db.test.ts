@@ -46,10 +46,10 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["create_child_sale_from_order", "00331"],
+  // (trống — 00331 đã chạy trên prod 17/08/2026, dump 350 RPC đã có)
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
-  ["invoices.source_order_id", "00331"],
+  // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */

@@ -1276,6 +1276,7 @@
    "promotion_id",
    "shift_id",
    "source",
+   "source_order_id",
    "status",
    "subtotal",
    "tax_amount",
@@ -2040,6 +2041,8 @@
   "_current_caller_tenant",
   "_finalize_shift_atomic_00298",
   "_fnb_complete_payment_impl_00230",
+  "_fnb_send_to_kitchen_impl_00303",
+  "_fnb_void_invoice_impl_00165",
   "_receive_purchase_items_atomic_impl_00102",
   "_reconcile_product_lots_to_branch_00284",
   "_resolve_report_tenant",
@@ -2099,6 +2102,7 @@
   "consume_bom_for_sale",
   "consume_production_materials",
   "create_and_apply_inventory_check_atomic",
+  "create_child_sale_from_order",
   "create_disposal_export_atomic",
   "create_internal_export_atomic",
   "create_internal_sale_atomic",
@@ -2120,6 +2124,7 @@
   "fnb_complete_payment_atomic_v2",
   "fnb_floor_decoration_config_atomic",
   "fnb_floor_layout_update_atomic",
+  "fnb_floor_plan_object_writable",
   "fnb_floor_zone_config_atomic",
   "fnb_send_to_kitchen_atomic",
   "fnb_send_to_kitchen_atomic_v2",
@@ -2372,6 +2377,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 137,
- "soCot": 1748,
- "soRpc": 346
+ "soCot": 1749,
+ "soRpc": 350
 }
