@@ -1211,3 +1211,223 @@ export async function duplicateInvoice(
     invoiceCode: String(result.invoice_code),
   };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Đơn bán con từ đơn đặt hàng (00331) — CEO 17/08/2026
+//
+// Mô hình: một đơn đặt hàng gốc (source='order') → KHÔNG GIỚI HẠN đơn bán
+// con. Đơn con là nháp POS bình thường (id/mã/session riêng), chỉ tham chiếu
+// về gốc qua invoices.source_order_id. Đơn gốc bất khả xâm phạm: tạo / sửa /
+// xoá / thanh toán đơn con không đụng đơn gốc.
+//
+// ⚠️ TƯƠNG THÍCH: các hàm dưới đây là ĐƯỜNG MỚI, chưa màn nào gọi cho tới
+// PR3/PR4. Khi máy chủ CHƯA chạy 00331 (thiếu cột/RPC) thì trả null hoặc báo
+// lỗi tiếng Việt rõ ràng — không làm hỏng luồng cũ.
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface ChildSaleCreated {
+  childId: string;
+  childCode: string;
+  clientSessionId: string;
+  draftRevision: number;
+  itemCount: number;
+  sourceOrderId: string;
+  sourceOrderCode: string;
+}
+
+export interface ChildSaleInfo {
+  id: string;
+  code: string;
+  status: string;
+  total: number;
+  paid: number;
+  createdAt: string;
+}
+
+/** Máy chủ chưa chạy 00331: cột/RPC chưa tồn tại. */
+const MA_LOI_CHUA_CO_COT = "42703";
+const MA_LOI_CHUA_CO_RPC = new Set(["42883", "PGRST202"]);
+
+/**
+ * Tạo MỘT đơn bán con mới từ đơn đặt hàng gốc. Mỗi lần gọi là một bản ghi
+ * mới (mã NH mới, client session mới, chép mặt hàng) — thu ngân muốn bao
+ * nhiêu đơn con cũng được, RPC không giới hạn.
+ */
+export async function createChildSaleFromOrder(
+  orderId: string,
+): Promise<ChildSaleCreated> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "create_child_sale_from_order",
+    { p_order_id: orderId },
+  );
+  if (error) {
+    if (MA_LOI_CHUA_CO_RPC.has(error.code ?? "")) {
+      throw new Error(
+        "Máy chủ chưa bật tính năng đơn bán con (migration 00331 chưa chạy).",
+      );
+    }
+    handleError(error, "createChildSaleFromOrder");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = data as any;
+  return {
+    childId: String(r.child_id),
+    childCode: String(r.child_code),
+    clientSessionId: String(r.client_session_id),
+    draftRevision: Number(r.draft_revision ?? 0),
+    itemCount: Number(r.item_count ?? 0),
+    sourceOrderId: String(r.source_order_id),
+    sourceOrderCode: String(r.source_order_code ?? ""),
+  };
+}
+
+/**
+ * Danh sách đơn bán con của một đơn gốc (mã + trạng thái + tiền), mới nhất
+ * trên cùng. Trả `null` khi máy chủ CHƯA chạy 00331 — màn gọi phải phân biệt
+ * "chưa bật tính năng" với "chưa có đơn con nào" ([]).
+ */
+export async function listChildSales(
+  orderId: string,
+): Promise<ChildSaleInfo[] | null> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("invoices")
+    .select("id, code, status, total, paid, created_at")
+    .eq("tenant_id", tenantId)
+    .eq("source_order_id", orderId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false });
+  if (error) {
+    if (error.code === MA_LOI_CHUA_CO_COT) return null;
+    handleError(error, "listChildSales");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return ((data ?? []) as any[]).map((row) => ({
+    id: String(row.id),
+    code: String(row.code ?? ""),
+    status: String(row.status ?? "draft"),
+    total: Number(row.total ?? 0),
+    paid: Number(row.paid ?? 0),
+    createdAt: String(row.created_at ?? ""),
+  }));
+}
+
+export interface OrderReconRow {
+  productId: string;
+  variantId: string | null;
+  productName: string;
+  unit: string;
+  /** Số lượng trên đơn đặt hàng gốc. */
+  qtyOrdered: number;
+  /** Số lượng đã bán THẬT — chỉ cộng đơn con status='completed'. */
+  qtySold: number;
+  /** Dương = bán vượt số đặt (bình thường, chỉ cảnh báo nhẹ — không chặn). */
+  delta: number;
+}
+
+interface ReconItemInput {
+  productId: string;
+  variantId?: string | null;
+  productName: string;
+  unit?: string | null;
+  quantity: number;
+}
+
+/**
+ * Toán đối chiếu thuần — tách riêng để test thẳng không cần giả lập mạng.
+ * Khoá gộp = productId + variantId (hai cỡ khác nhau là hai dòng khác nhau).
+ * Mặt hàng chỉ có ở đơn con (thu ngân bán thêm) vẫn phải hiện: qtyOrdered=0.
+ */
+export function tinhDoiChieuDatBan(
+  hangDat: ReconItemInput[],
+  hangBanCompleted: ReconItemInput[],
+): OrderReconRow[] {
+  const khoa = (i: ReconItemInput) => `${i.productId}::${i.variantId ?? ""}`;
+  const bang = new Map<string, OrderReconRow>();
+  for (const item of hangDat) {
+    const k = khoa(item);
+    const dong = bang.get(k) ?? {
+      productId: item.productId,
+      variantId: item.variantId ?? null,
+      productName: item.productName,
+      unit: item.unit ?? "",
+      qtyOrdered: 0,
+      qtySold: 0,
+      delta: 0,
+    };
+    dong.qtyOrdered += Number(item.quantity) || 0;
+    bang.set(k, dong);
+  }
+  for (const item of hangBanCompleted) {
+    const k = khoa(item);
+    const dong = bang.get(k) ?? {
+      productId: item.productId,
+      variantId: item.variantId ?? null,
+      productName: item.productName,
+      unit: item.unit ?? "",
+      qtyOrdered: 0,
+      qtySold: 0,
+      delta: 0,
+    };
+    dong.qtySold += Number(item.quantity) || 0;
+    bang.set(k, dong);
+  }
+  for (const dong of bang.values()) {
+    dong.delta = dong.qtySold - dong.qtyOrdered;
+  }
+  return Array.from(bang.values());
+}
+
+/**
+ * Đối chiếu đầy đủ cho màn đơn gốc: danh sách đơn con + bảng đặt/bán/chênh
+ * theo mặt hàng. Trả `null` khi máy chủ chưa chạy 00331.
+ */
+export async function getOrderReconciliation(orderId: string): Promise<{
+  children: ChildSaleInfo[];
+  rows: OrderReconRow[];
+} | null> {
+  const children = await listChildSales(orderId);
+  if (children === null) return null;
+
+  const supabase = getClient();
+  // Mặt hàng đơn gốc.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: hangDat, error: loiDat } = await (supabase as any)
+    .from("invoice_items")
+    .select("product_id, variant_id, product_name, unit, quantity")
+    .eq("invoice_id", orderId);
+  if (loiDat) handleError(loiDat, "getOrderReconciliation.parent");
+
+  // Mặt hàng các đơn con ĐÃ THANH TOÁN — nháp/đã huỷ không tính là "đã bán".
+  const idsCompleted = children
+    .filter((c) => c.status === "completed")
+    .map((c) => c.id);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let hangBan: any[] = [];
+  if (idsCompleted.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoice_items")
+      .select("product_id, variant_id, product_name, unit, quantity")
+      .in("invoice_id", idsCompleted);
+    if (error) handleError(error, "getOrderReconciliation.children");
+    hangBan = data ?? [];
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const doi = (r: any): ReconItemInput => ({
+    productId: String(r.product_id),
+    variantId: r.variant_id ?? null,
+    productName: String(r.product_name ?? ""),
+    unit: r.unit ?? "",
+    quantity: Number(r.quantity ?? 0),
+  });
+  return {
+    children,
+    rows: tinhDoiChieuDatBan((hangDat ?? []).map(doi), hangBan.map(doi)),
+  };
+}
