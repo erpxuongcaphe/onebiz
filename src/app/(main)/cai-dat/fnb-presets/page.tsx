@@ -9,12 +9,13 @@
  *   - Khuyến mãi nhanh (discount presets): list CRUD để cart dropdown chọn.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/lib/contexts";
 import { HelpTip } from "@/components/shared/help-tip";
@@ -69,28 +70,40 @@ export default function FnbPresetsPage() {
   );
   const [presets, setPresets] = useState<DiscountPreset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [savingPlatforms, setSavingPlatforms] = useState(false);
   const [savingPresets, setSavingPresets] = useState(false);
 
-  // Load on mount
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([getDeliveryPlatformSettings(), getDiscountPresets()])
-      .then(([p, pr]) => {
-        if (cancelled) return;
-        setPlatforms(p);
-        setPresets(pr);
-      })
-      .catch(() => {
-        // Silent — defaults
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+  // CEO 16/08/2026: chống kết quả cũ đè kết quả mới. Đổi chi nhánh / bấm Thử
+  // lại nhiều lần thì lượt tải trước có thể về sau lượt sau — chỉ lượt mới nhất
+  // được phép ghi vào state.
+  const loadRequestIdRef = useRef(0);
+
+  const loadSettings = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const [p, pr] = await Promise.all([
+        getDeliveryPlatformSettings(),
+        getDiscountPresets(),
+      ]);
+      if (requestId !== loadRequestIdRef.current) return;
+      setPlatforms(p);
+      setPresets(pr);
+    } catch (err) {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoadError(
+        err instanceof Error ? err.message : "Không tải được cấu hình POS F&B.",
+      );
+    } finally {
+      if (requestId === loadRequestIdRef.current) setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   const handleSavePlatforms = useCallback(async () => {
     setSavingPlatforms(true);
@@ -167,6 +180,24 @@ export default function FnbPresetsPage() {
     return (
       <div className="p-6 flex items-center justify-center">
         <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-4 p-4 md:p-6">
+        <div>
+          <h1 className="text-2xl font-bold">Cài đặt POS FnB nâng cao</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Sàn giao đồ ăn và khuyến mãi nhanh
+          </p>
+        </div>
+        <LoadErrorState
+          title="Không tải được cấu hình POS F&B"
+          description={`${loadError} Chức năng lưu tạm khóa để tránh ghi đè cấu hình hiện tại.`}
+          onRetry={() => void loadSettings()}
+        />
       </div>
     );
   }
