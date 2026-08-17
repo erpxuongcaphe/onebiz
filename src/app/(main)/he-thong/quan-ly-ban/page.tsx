@@ -195,6 +195,38 @@ function QuanLyBanPage() {
     });
   }, [zones, zoneOrder]);
 
+  // CEO 16/08/2026 (mục B): tìm bàn theo số bàn, tên bàn hoặc tên khu vực.
+  // 3 quán × vài chục bàn thì cuộn tay rất mất công.
+  const [timBan, setTimBan] = useState("");
+
+  const zonesHienThi = useMemo(() => {
+    const tu = timBan.trim().toLowerCase();
+    if (tu === "") return orderedZones;
+    return orderedZones
+      .map((zone) => {
+        // Khớp tên khu → giữ nguyên cả khu; ngược lại lọc từng bàn.
+        if (zone.name.toLowerCase().includes(tu)) return zone;
+        return {
+          ...zone,
+          tables: zone.tables.filter(
+            (t) =>
+              String(t.tableNumber).toLowerCase().includes(tu) ||
+              (t.name ?? "").toLowerCase().includes(tu),
+          ),
+        };
+      })
+      .filter((zone) => zone.tables.length > 0);
+  }, [orderedZones, timBan]);
+
+  const soBanKhop = useMemo(
+    () => zonesHienThi.reduce((s, z) => s + z.tables.length, 0),
+    [zonesHienThi],
+  );
+  const tongSoBan = useMemo(
+    () => zones.reduce((s, z) => s + z.tables.length, 0),
+    [zones],
+  );
+
   // Sprint E: Move zone trong order (up/down). Save vào branch settings.
   const moveZone = useCallback(
     async (zoneName: string, direction: "up" | "down") => {
@@ -656,6 +688,42 @@ function QuanLyBanPage() {
         </Card>
       )}
 
+      {/* ── Ô tìm bàn (chỉ ở chế độ danh sách, khi đã có bàn) ── */}
+      {viewMode === "list" && zones.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-56 flex-1 sm:max-w-sm">
+            <Icon
+              name="search"
+              size={16}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              value={timBan}
+              onChange={(e) => setTimBan(e.target.value)}
+              placeholder="Tìm theo số bàn, tên bàn hoặc khu vực..."
+              className="pl-9"
+              aria-label="Tìm bàn"
+            />
+          </div>
+          {timBan.trim() !== "" && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {soBanKhop}/{tongSoBan} bàn
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setTimBan("")}
+              >
+                <Icon name="filter_alt_off" size={14} className="mr-1" />
+                Xoá tìm kiếm
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Zone sections (List view) ── */}
       {viewMode === "list" && zones.length === 0 && (
         <Card>
@@ -669,7 +737,31 @@ function QuanLyBanPage() {
         </Card>
       )}
 
-      {viewMode === "list" && orderedZones.map((zone) => (
+      {viewMode === "list" && zones.length > 0 && zonesHienThi.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Icon name="search_off" className="size-12 text-muted-foreground mx-auto mb-3" />
+            <p className="text-lg font-medium text-muted-foreground">
+              Không có bàn nào khớp
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              Chi nhánh đang có {tongSoBan} bàn, nhưng không bàn nào khớp từ khoá.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={() => setTimBan("")}
+            >
+              <Icon name="filter_alt_off" size={14} className="mr-1" />
+              Xoá tìm kiếm
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {viewMode === "list" && zonesHienThi.map((zone) => (
         <Card key={zone.name}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">

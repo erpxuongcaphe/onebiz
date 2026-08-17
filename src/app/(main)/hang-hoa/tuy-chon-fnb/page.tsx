@@ -11,7 +11,7 @@
  * để xem/sửa options.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +55,20 @@ const RULE_LABEL: Record<ModifierRule, string> = {
   multi: "Chọn nhiều (vd Topping)",
 };
 
+const CHANNEL_LABEL: Record<ModifierChannel, string> = {
+  fnb: "F&B",
+  retail: "Bán lẻ",
+  all: "Dùng chung",
+};
+
+/** Bộ lọc kênh trên thanh công cụ. */
+const BO_LOC_KENH: { value: "all_channels" | ModifierChannel; label: string }[] = [
+  { value: "all_channels", label: "Tất cả kênh" },
+  { value: "fnb", label: "F&B" },
+  { value: "retail", label: "Bán lẻ" },
+  { value: "all", label: "Dùng chung" },
+];
+
 function moTaQuyTac(g: ModifierGroup): string {
   if (g.rule !== "multi") return RULE_LABEL[g.rule];
   if (g.minSelect > 0 && g.maxSelect !== null) {
@@ -82,6 +96,28 @@ export default function ModifierFnbPage() {
   const [optionsByGroup, setOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
   const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
   const [optionErrors, setOptionErrors] = useState<Record<string, string>>({});
+
+  // CEO 16/08/2026 (mục B): tìm theo tên nhóm + lọc theo kênh. Trang tên
+  // "Tuỳ chọn món FnB" nhưng danh sách gồm cả nhóm Bán lẻ và Dùng chung.
+  const [tuKhoa, setTuKhoa] = useState("");
+  const [locKenh, setLocKenh] = useState<"all_channels" | ModifierChannel>(
+    "all_channels",
+  );
+  const dangLoc = tuKhoa.trim() !== "" || locKenh !== "all_channels";
+
+  const groupsHienThi = useMemo(() => {
+    const tu = tuKhoa.trim().toLowerCase();
+    return groups.filter((g) => {
+      if (locKenh !== "all_channels" && g.channel !== locKenh) return false;
+      if (tu === "") return true;
+      return g.name.toLowerCase().includes(tu);
+    });
+  }, [groups, tuKhoa, locKenh]);
+
+  const xoaBoLoc = useCallback(() => {
+    setTuKhoa("");
+    setLocKenh("all_channels");
+  }, []);
 
   const [groupDialog, setGroupDialog] = useState<{
     open: boolean;
@@ -267,6 +303,9 @@ export default function ModifierFnbPage() {
       <PageHeader
         title="Tuỳ chọn món FnB"
         subtitle="Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá, Topping...) — gắn vào nhóm SP hoặc SP riêng để hiện trên POS FnB."
+        searchPlaceholder="Tìm theo tên nhóm tuỳ chọn..."
+        searchValue={tuKhoa}
+        onSearchChange={setTuKhoa}
         actions={[
           {
             label: seeding ? "Đang tạo..." : "Tạo bộ tuỳ chọn mẫu",
@@ -306,6 +345,40 @@ export default function ModifierFnbPage() {
         </div>
       )}
 
+      {/* Thanh lọc — chỉ hiện khi đã tải xong và có dữ liệu để lọc */}
+      {!loading && !loadError && groups.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground">Kênh:</span>
+          {BO_LOC_KENH.map((muc) => (
+            <button
+              key={muc.value}
+              type="button"
+              onClick={() => setLocKenh(muc.value)}
+              aria-pressed={locKenh === muc.value}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs transition-colors",
+                locKenh === muc.value
+                  ? "border-primary bg-primary/10 font-medium text-primary"
+                  : "border-outline-variant/40 text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {muc.label}
+            </button>
+          ))}
+          {dangLoc && (
+            <>
+              <span className="text-xs text-muted-foreground">
+                {groupsHienThi.length}/{groups.length} nhóm
+              </span>
+              <Button type="button" variant="ghost" size="sm" onClick={xoaBoLoc}>
+                <Icon name="filter_alt_off" size={14} className="mr-1" />
+                Xoá bộ lọc
+              </Button>
+            </>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <div className="flex h-64 items-center justify-center text-muted-foreground">
           <Icon name="progress_activity" size={24} className="mr-2 animate-spin" />
@@ -325,9 +398,23 @@ export default function ModifierFnbPage() {
             Bấm "Tạo nhóm tuỳ chọn" để thêm Size, Mức đường, Topping...
           </p>
         </div>
+      ) : groupsHienThi.length === 0 ? (
+        // Không khớp bộ lọc KHÁC hẳn chưa có dữ liệu — nói rõ để người dùng
+        // biết phải xoá bộ lọc chứ không tưởng là mất dữ liệu.
+        <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center">
+          <Icon name="search_off" size={36} className="text-muted-foreground" />
+          <p className="text-sm font-medium">Không có nhóm nào khớp bộ lọc</p>
+          <p className="text-xs text-muted-foreground">
+            Đang có {groups.length} nhóm, nhưng không nhóm nào khớp điều kiện đang chọn.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={xoaBoLoc}>
+            <Icon name="filter_alt_off" size={14} className="mr-1" />
+            Xoá bộ lọc
+          </Button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {groups.map((g) => {
+          {groupsHienThi.map((g) => {
             const expanded = expandedId === g.id;
             const opts = optionsByGroup[g.id] ?? [];
             const loadingOpts = loadingOptions[g.id];
@@ -346,6 +433,11 @@ export default function ModifierFnbPage() {
                         <h3 className="font-semibold">{g.name}</h3>
                         <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", RULE_BADGE[g.rule])}>
                           {moTaQuyTac(g).split(" — ")[0]}
+                        </span>
+                        {/* Kênh: trang này liệt kê cả nhóm Bán lẻ và Dùng
+                            chung, nên phải nói rõ nhóm nào thuộc kênh nào. */}
+                        <span className="inline-flex items-center rounded-full border border-outline-variant/40 px-2 py-0.5 text-xs text-muted-foreground">
+                          {CHANNEL_LABEL[g.channel]}
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {g.optionCount ?? 0} lựa chọn
