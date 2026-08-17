@@ -26,6 +26,7 @@ import {
   getDraftOrderById,
   getOrders,
   adoptDraftSession,
+  createChildSaleFromOrder,
   deleteDraftOrder,
   completeDraftOrder,
   findDraftIdBySession,
@@ -3965,14 +3966,23 @@ function PosPageInner() {
         onClose={() => setProcessOrderOpen(false)}
         branchId={currentBranch?.id ?? null}
         onPick={async (orderId) => {
+          // CEO 17/08/2026 — mô hình đơn con (00331): TRƯỚC ĐÂY nạp thẳng đơn
+          // gốc vào giỏ → thanh toán biến đơn gốc thành hóa đơn, 2 tab mở cùng
+          // đơn dùng chung session đè nhau. NAY mỗi lần chọn là máy chủ tạo
+          // MỘT ĐƠN BÁN CON mới (id/mã NH/session riêng, chép mặt hàng) và
+          // POS nạp ĐƠN CON — đơn gốc giữ nguyên để đối chiếu, muốn bán bao
+          // nhiêu đợt thì bấm bấy nhiêu lần.
           const token = beginCartLoad();
           try {
-            const detail = await getDraftOrderById(orderId);
+            const child = await createChildSaleFromOrder(orderId);
+            if (!isCartLoadCurrent(token)) return;
+
+            const detail = await getDraftOrderById(child.childId);
             if (!isCartLoadCurrent(token)) return;
             if (!detail) {
               toast({
-                title: "Không mở được đơn",
-                description: "Đơn có thể đã bị xóa hoặc đổi trạng thái.",
+                title: "Không mở được đơn bán",
+                description: "Đơn bán vừa tạo không đọc lại được — thử lại.",
                 variant: "error",
               });
               return;
@@ -3983,14 +3993,15 @@ function PosPageInner() {
 
             setProcessOrderOpen(false);
             toast({
-              title: "Đã nạp đơn " + (detail.code || ""),
-              description: "Kiểm tra giỏ hàng rồi thanh toán.",
+              title: `Đã tạo đơn bán ${child.childCode}`,
+              description: `Từ đơn đặt ${child.sourceOrderCode} — sửa giỏ thoải mái rồi thanh toán. Đơn đặt gốc giữ nguyên.`,
               variant: "success",
             });
           } catch (err) {
             if (!isCartLoadCurrent(token)) return;
+            // KHÔNG rơi về nạp đơn gốc — đường cũ chính là lỗi đang sửa.
             toast({
-              title: "Không mở được đơn",
+              title: "Không tạo được đơn bán",
               description: err instanceof Error ? err.message : "Lỗi",
               variant: "error",
             });

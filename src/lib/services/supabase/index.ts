@@ -76,6 +76,11 @@ export {
   cancelSalesOrder,
   getSalesOrderItems,
   getDraftOrderItems,
+  // Đơn bán con từ đơn đặt hàng (00331)
+  createChildSaleFromOrder,
+  listChildSales,
+  getOrderReconciliation,
+  tinhDoiChieuDatBan,
 } from "./orders";
 export type {
   SalesOrderListSummary,
@@ -86,6 +91,9 @@ export type {
   SaveSalesOrderItemInput,
   SaveSalesOrderInput,
   SaveSalesOrderResult,
+  ChildSaleCreated,
+  ChildSaleInfo,
+  OrderReconRow,
 } from "./orders";
 export {
   phamViDonDatHang,
