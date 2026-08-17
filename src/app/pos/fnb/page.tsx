@@ -1404,6 +1404,23 @@ function FnbPosPageInner() {
   );
 
   // Compute initial selection for dialog when editing.
+  /**
+   * CEO 16/08/2026 (mục C): trước đây prop này là object literal dựng ngay
+   * trong JSX → mỗi lần POS render lại là một object mới → popup chọn món
+   * tưởng bộ tuỳ chọn đã đổi và reset sạch lựa chọn đang dở. Ghim lại theo
+   * dữ liệu thật để tham chiếu chỉ đổi khi dữ liệu đổi.
+   */
+  const duLieuTuyChonPopup = useMemo(() => {
+    if (!itemModifierData) return itemModifierData;
+    return {
+      ...itemModifierData,
+      groups: locNhomTheoCheDoTopping(
+        itemModifierData.groups,
+        itemModifierData.optionsByGroup,
+      ),
+    };
+  }, [itemModifierData]);
+
   const dialogInitialSelection: FnbItemInitialSelection | undefined = useMemo(() => {
     if (!editingLineId) return undefined;
     const line = pos.activeTab?.lines.find((l) => l.id === editingLineId);
@@ -3283,17 +3300,7 @@ function FnbPosPageInner() {
             initialSelection={dialogInitialSelection}
             confirmLabel={editingLineId ? "Cập nhật" : undefined}
             // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options
-            dynamicModifiers={
-              itemModifierData
-                ? {
-                    ...itemModifierData,
-                    groups: locNhomTheoCheDoTopping(
-                      itemModifierData.groups,
-                      itemModifierData.optionsByGroup,
-                    ),
-                  }
-                : itemModifierData
-            }
+            dynamicModifiers={duLieuTuyChonPopup}
             // 06/08: tải tuỳ chọn hỏng → dialog hiện lỗi + nút này
             onRetryModifiers={handleRetryModifiers}
           />
