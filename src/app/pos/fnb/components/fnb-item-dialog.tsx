@@ -303,6 +303,30 @@ export function FnbItemDialog({
     });
   }, []);
 
+  /**
+   * CEO 16/08/2026 (mục C) — KHOÁ NỘI DUNG của bộ tuỳ chọn.
+   *
+   * Trước đây effect khởi tạo bên dưới để thẳng `dynamicModifiers` trong danh
+   * sách phụ thuộc. Nhưng `pos/fnb/page.tsx` dựng prop đó bằng object literal
+   * MỚI mỗi lần render, nên POS render lại vì bất cứ lý do gì (đồng hồ, trạng
+   * thái kết nối, hàng đợi đồng bộ, realtime bàn) là toàn bộ Size / đường /
+   * đá / topping / ghi chú người bán vừa chọn bị xoá sạch giữa lúc bán.
+   *
+   * Khoá này chỉ đổi khi DANH SÁCH nhóm / lựa chọn thật sự khác, nên khởi tạo
+   * vẫn chạy đúng lúc cần (mở popup, đổi món, tuỳ chọn tải xong) mà không
+   * chạy oan khi cha chỉ dựng lại object y hệt.
+   */
+  const khoaTuyChon = useMemo(() => {
+    if (!dynamicModifiers) return "chua-co";
+    const phanNhom = dynamicModifiers.groups
+      .map((g) => {
+        const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
+        return `${g.id}:${opts.map((o) => o.id).join("+")}`;
+      })
+      .join("|");
+    return `${dynamicModifiers.failed ? "loi" : "ok"}#${phanNhom}`;
+  }, [dynamicModifiers]);
+
   useEffect(() => {
     if (open) {
       // Phase 1A.2: pre-fill từ initialSelection (chế độ Sửa). Nếu undefined
@@ -392,7 +416,8 @@ export function FnbItemDialog({
       // mà nhóm vẫn thu gọn theo món trước.
       setNhomThuGon(new Set());
     }
-  }, [open, variants, initialSelection, dynamicModifiers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- xem khoaTuyChon
+  }, [open, variants, initialSelection, khoaTuyChon]);
 
   // CEO 01/06/2026 — Sprint 2.2e: toggle 1 option theo rule của group.
   function toggleDynamicChoice(
