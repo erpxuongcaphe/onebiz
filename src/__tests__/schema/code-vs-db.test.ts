@@ -46,7 +46,7 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  // (trống — 00331 đã chạy trên prod 17/08/2026, dump 350 RPC đã có)
+  ["mark_order_processed", "00332"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)

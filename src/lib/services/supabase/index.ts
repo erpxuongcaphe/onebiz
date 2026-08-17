@@ -81,6 +81,7 @@ export {
   listChildSales,
   getOrderReconciliation,
   tinhDoiChieuDatBan,
+  markOrderProcessed,
 } from "./orders";
 export type {
   SalesOrderListSummary,
