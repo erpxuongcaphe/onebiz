@@ -191,8 +191,16 @@ export function FnbHeader({
       {/* Filler giữa search và right actions — đẩy KDS/settings sang phải */}
       <div className="hidden md:block flex-1" />
 
-      {/* Right: KDS + settings. Tablet portrait keeps these in the drawer to avoid header overflow. */}
-      <div className="order-22 hidden items-center gap-1 shrink-0 lg:flex md:order-none">
+      {/*
+        Right: KDS + settings.
+        CEO 16/08/2026 (mục D) — đo trên production, khung 1024x768 (tablet
+        ngang, thiết bị chính của quán): khối này nằm ở left=978 → right=1080,
+        tức TRÀN RA NGOÀI 56px và bị cắt, nút "Màn bếp" bấm không tới. Mốc `lg`
+        của Tailwind đúng bằng 1024 nên vừa bật hiện là đã hết chỗ.
+        Dời lên `xl` (1280px): tablet ngang và dọc đều vào Màn bếp qua ngăn kéo
+        (fnb-sidenav-drawer.tsx:46), không mất đường đi nào.
+      */}
+      <div className="order-22 hidden items-center gap-1 shrink-0 xl:flex md:order-none">
         <Link href={fnbPath("/pos/fnb/kds")}>
           <Button
             variant="ghost"
@@ -200,7 +208,7 @@ export function FnbHeader({
             className="h-9 px-3 text-on-surface-variant hover:text-foreground hover:bg-surface-container"
           >
             <Icon name="restaurant_menu" size={16} className="mr-1.5" />
-            <span className="hidden lg:inline text-xs font-semibold">Màn bếp</span>
+            <span className="hidden xl:inline text-xs font-semibold">Màn bếp</span>
           </Button>
         </Link>
         {!isFnb && (
