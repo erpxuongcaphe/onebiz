@@ -36,6 +36,7 @@ import {
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
 // === Tooltips ===
@@ -76,6 +77,8 @@ export default function FnbAnalyticsPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [kpis, setKpis] = useState<FnbKpis | null>(null);
   const [menuItems, setMenuItems] = useState<MenuItemRevenue[]>([]);
   const [tables, setTables] = useState<TableRevenue[]>([]);
@@ -90,6 +93,7 @@ export default function FnbAnalyticsPage() {
     const requestId = ++requestIdRef.current;
     (async () => {
       setLoading(true);
+      setLoadError(null);
       try {
         // P1-3B-R1 12/06/2026: truyền range vào 4 panel (top món, top bàn,
         // theo giờ, cashier) — trước đây all-time mạo danh "kỳ này".
@@ -106,14 +110,14 @@ export default function FnbAnalyticsPage() {
         setTables(t);
         setHourly(h);
         setCashiers(c);
-      } catch {
+      } catch (err) {
         if (requestId !== requestIdRef.current) return;
-        // silent
+        setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo F&B.");
       } finally {
         if (requestId === requestIdRef.current) setLoading(false);
       }
     })();
-  }, [activeBranchId, range, isReady]);
+  }, [activeBranchId, range, isReady, reloadToken]);
 
   // CEO 13/05: Export Excel — 2 mode (view: 1 sheet, full: 4 sheet)
   const handleExportView = useCallback(() => {
@@ -277,6 +281,31 @@ export default function FnbAnalyticsPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <Icon name="progress_activity" size={32} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div>
+        <ReportPageHeader
+          title="Báo cáo F&B"
+          subtitle="Doanh thu theo món, bàn, giờ, nhân viên"
+          preset={preset}
+          range={range}
+          onPresetChange={setPreset}
+          onCustomRangeChange={setCustomRange}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          exportDisabled
+        />
+        <div className="p-4">
+          <LoadErrorState
+            title="Không tải được báo cáo F&B"
+            description={`${loadError} Không hiển thị số 0 thay cho dữ liệu chưa tải được.`}
+            onRetry={() => setReloadToken((value) => value + 1)}
+          />
+        </div>
       </div>
     );
   }

@@ -11,12 +11,13 @@
  * để xem/sửa options.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import {
   Dialog,
   DialogContent,
@@ -76,9 +77,11 @@ export default function ModifierFnbPage() {
   const [readiness, setReadiness] = useState<FnbReadiness | null>(null);
   const [readinessError, setReadinessError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [optionsByGroup, setOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
   const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
+  const [optionErrors, setOptionErrors] = useState<Record<string, string>>({});
 
   const [groupDialog, setGroupDialog] = useState<{
     open: boolean;
@@ -91,13 +94,20 @@ export default function ModifierFnbPage() {
   }>({ open: false, groupId: null, editing: null });
 
   // ── Load groups ──
+  // CEO 16/08/2026: chống kết quả cũ đè kết quả mới. Đổi chi nhánh / bấm Thử
+  // lại nhiều lần thì lượt tải trước có thể về sau lượt sau — chỉ lượt mới nhất
+  // được phép ghi vào state.
+  const loadRequestIdRef = useRef(0);
+
   const refresh = useCallback(async () => {
+    const requestId = ++loadRequestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     setReadinessError(false);
     try {
       const readinessPromise = tenant?.id
         ? getFnbReadiness(tenant.id, activeBranchId).catch(() => {
-            setReadinessError(true);
+            if (requestId === loadRequestIdRef.current) setReadinessError(true);
             return null;
           })
         : Promise.resolve(null);
@@ -105,16 +115,19 @@ export default function ModifierFnbPage() {
         listModifierGroups(),
         readinessPromise,
       ]);
+      if (requestId !== loadRequestIdRef.current) return;
       setGroups(list);
       setReadiness(nextReadiness);
     } catch (err) {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoadError(err instanceof Error ? err.message : "Không tải được nhóm tuỳ chọn.");
       toast({
         variant: "error",
         title: "Lỗi tải nhóm tuỳ chọn",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
       });
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, tenant?.id, toast]);
 
@@ -127,10 +140,19 @@ export default function ModifierFnbPage() {
     async (groupId: string) => {
       if (optionsByGroup[groupId]) return; // cached
       setLoadingOptions((prev) => ({ ...prev, [groupId]: true }));
+      setOptionErrors((prev) => {
+        const next = { ...prev };
+        delete next[groupId];
+        return next;
+      });
       try {
         const list = await listModifierOptions(groupId);
         setOptionsByGroup((prev) => ({ ...prev, [groupId]: list }));
       } catch (err) {
+        setOptionErrors((prev) => ({
+          ...prev,
+          [groupId]: err instanceof Error ? err.message : "Không tải được lựa chọn.",
+        }));
         toast({
           variant: "error",
           title: "Lỗi tải lựa chọn",
@@ -251,12 +273,13 @@ export default function ModifierFnbPage() {
             icon: <Icon name="auto_awesome" size={18} />,
             variant: "outline",
             onClick: handleSeedPreset,
-            disabled: seeding,
+            disabled: seeding || Boolean(loadError),
           },
           {
             label: "Tạo nhóm tuỳ chọn",
             icon: <Icon name="add" size={18} />,
             onClick: openCreateGroup,
+            disabled: Boolean(loadError),
           },
         ]}
       />
@@ -269,7 +292,7 @@ export default function ModifierFnbPage() {
       />
 
       {/* Empty state hint — gợi ý click preset */}
-      {!loading && groups.length === 0 && (
+      {!loading && !loadError && groups.length === 0 && (
         <div className="rounded-lg border border-status-info/30 bg-status-info/5 p-3 text-sm">
           <div className="flex items-start gap-2">
             <Icon name="lightbulb" size={18} className="text-status-info shrink-0 mt-0.5" />
@@ -288,6 +311,12 @@ export default function ModifierFnbPage() {
           <Icon name="progress_activity" size={24} className="mr-2 animate-spin" />
           Đang tải...
         </div>
+      ) : loadError ? (
+        <LoadErrorState
+          title="Không tải được nhóm tuỳ chọn"
+          description={`${loadError} Không thể chỉnh sửa cho tới khi tải lại thành công.`}
+          onRetry={() => void refresh()}
+        />
       ) : groups.length === 0 ? (
         <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center">
           <Icon name="tune" size={36} className="text-muted-foreground" />
@@ -346,6 +375,21 @@ export default function ModifierFnbPage() {
                     </div>
                     {loadingOpts ? (
                       <p className="py-2 text-xs text-muted-foreground">Đang tải lựa chọn...</p>
+                    ) : optionErrors[g.id] ? (
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-status-error/30 bg-status-error/5 p-3">
+                        <p className="text-xs text-status-error">
+                          Không tải được lựa chọn. Dữ liệu hiện có không bị thay đổi.
+                        </p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void loadOptions(g.id)}
+                        >
+                          <Icon name="refresh" size={14} className="mr-1" />
+                          Thử lại
+                        </Button>
+                      </div>
                     ) : opts.length === 0 ? (
                       <p className="py-3 text-center text-xs text-muted-foreground">
                         Chưa có lựa chọn nào. Bấm "Thêm lựa chọn" để thêm.

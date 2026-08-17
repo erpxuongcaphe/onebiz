@@ -27,6 +27,7 @@ import {
   buildMetricSummarySheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import { cn } from "@/lib/utils";
 
 export default function FnbModifierReportPage() {
@@ -37,6 +38,7 @@ export default function FnbModifierReportPage() {
     defaultViewMode: "table",
   });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [stats, setStats] = useState<ModifierStatRow[]>([]);
   const requestIdRef = useRef(0);
 
@@ -44,6 +46,7 @@ export default function FnbModifierReportPage() {
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const list = await getModifierStats(activeBranchId, range);
       if (requestId !== requestIdRef.current) return;
@@ -51,6 +54,7 @@ export default function FnbModifierReportPage() {
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch modifier stats:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo tuỳ chọn.");
       toast({
         title: "Lỗi tải báo cáo",
         description: err instanceof Error ? err.message : "",
@@ -189,6 +193,12 @@ export default function FnbModifierReportPage() {
           <Icon name="progress_activity" size={20} className="mr-2 inline animate-spin" />
           Đang tải...
         </div>
+      ) : loadError ? (
+        <LoadErrorState
+          title="Không tải được báo cáo tuỳ chọn"
+          description={`${loadError} Không hiển thị dữ liệu rỗng khi yêu cầu tải thất bại.`}
+          onRetry={() => void fetchData()}
+        />
       ) : stats.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed p-10 text-center">
           <Icon name="insights" size={36} className="mx-auto mb-2 text-muted-foreground/40" />

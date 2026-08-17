@@ -32,6 +32,7 @@ import {
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 import { cn } from "@/lib/utils";
 
 function formatDuration(seconds: number): string {
@@ -57,6 +58,7 @@ export default function FnbShipperReportPage() {
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [shippers, setShippers] = useState<DeliveryStaffPerformance[]>([]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
@@ -69,6 +71,7 @@ export default function FnbShipperReportPage() {
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const list = await getDeliveryStaffPerformance(activeBranchId, range);
       if (requestId !== requestIdRef.current) return;
@@ -84,6 +87,7 @@ export default function FnbShipperReportPage() {
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch shipper data:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo giao hàng.");
       toast({
         title: "Lỗi tải báo cáo",
         description: err instanceof Error ? err.message : "",
@@ -315,6 +319,21 @@ export default function FnbShipperReportPage() {
           <Icon
             name="progress_activity"
             className="size-8 animate-spin text-muted-foreground"
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex h-[calc(100vh-4rem)] flex-col">
+        {reportHeader}
+        <div className="flex-1 p-4 md:p-6">
+          <LoadErrorState
+            title="Không tải được báo cáo giao hàng"
+            description={`${loadError} Không hiển thị số 0 thay cho dữ liệu chưa tải được.`}
+            onRetry={() => void fetchData()}
           />
         </div>
       </div>

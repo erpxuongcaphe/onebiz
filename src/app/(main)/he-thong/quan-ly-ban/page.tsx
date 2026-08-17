@@ -7,7 +7,7 @@
  * Each branch has its own layout. Tables are grouped by zone.
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,6 +49,7 @@ import { Icon } from "@/components/ui/icon";
 import { FloorPlanEditor } from "./floor-plan-editor";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 
 // ── Types ──
 
@@ -76,6 +77,7 @@ function QuanLyBanPage() {
 
   const [zones, setZones] = useState<ZoneGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Dialogs
   const [addZoneOpen, setAddZoneOpen] = useState(false);
@@ -119,11 +121,19 @@ function QuanLyBanPage() {
 
   // ── Load tables ──
 
+  // CEO 16/08/2026: chống kết quả cũ đè kết quả mới. Đổi chi nhánh / bấm Thử
+  // lại nhiều lần thì lượt tải trước có thể về sau lượt sau — chỉ lượt mới nhất
+  // được phép ghi vào state.
+  const loadRequestIdRef = useRef(0);
+
   const loadTables = useCallback(async () => {
     if (!activeBranchId) return;
+    const requestId = ++loadRequestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const tables = await getTablesByBranch(activeBranchId);
+      if (requestId !== loadRequestIdRef.current) return;
       // Group by zone
       const map = new Map<string, RestaurantTable[]>();
       for (const t of tables) {
@@ -142,10 +152,12 @@ function QuanLyBanPage() {
           expanded: true,
         }))
       );
-    } catch {
+    } catch (err) {
+      if (requestId !== loadRequestIdRef.current) return;
+      setLoadError(err instanceof Error ? err.message : "Không tải được danh sách bàn.");
       toast({ title: "Lỗi", description: "Không tải được danh sách bàn", variant: "error" });
     } finally {
-      setLoading(false);
+      if (requestId === loadRequestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, toast]);
 
@@ -430,6 +442,24 @@ function QuanLyBanPage() {
     return (
       <div className="flex items-center justify-center h-64">
         <Icon name="progress_activity" className="size-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold">Quản lý Bàn &amp; Khu vực</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Thiết lập khu vực và sơ đồ bàn cho chi nhánh
+          </p>
+        </div>
+        <LoadErrorState
+          title="Không tải được danh sách bàn"
+          description={`${loadError} Chức năng chỉnh sửa tạm khóa để tránh thao tác trên dữ liệu chưa đầy đủ.`}
+          onRetry={() => void loadTables()}
+        />
       </div>
     );
   }
