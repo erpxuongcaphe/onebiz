@@ -36,6 +36,22 @@ const COT = new Map<string, Set<string>>(
 );
 const RPC = new Set(schema.rpc as string[]);
 
+/**
+ * ĐANG CHỜ CEO chạy migration — khai TƯỜNG MINH kèm số migration.
+ *
+ * Quy trình dự án: code tách PR nhỏ đi trước, CEO chạy SQL sau. Trong khoảng
+ * đó schema dump (ảnh chụp prod) chưa có cột/RPC mới — không được nắn dump
+ * bằng tay (tự lừa), cũng không được để test đỏ. Khai ở đây thì phép kiểm
+ * chính bỏ qua ĐÚNG các tên này, và phép kiểm "danh sách chờ phải sạch" bên
+ * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
+ */
+const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["create_child_sale_from_order", "00331"],
+]);
+const COT_CHO_MIGRATION = new Map<string, string>([
+  ["invoices.source_order_id", "00331"],
+]);
+
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */
 function xoaGhiChu(s: string): string {
   let r = "";
@@ -103,6 +119,7 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
     );
 
     for (const m of src.matchAll(/\.rpc\(\s*["'`]([A-Za-z0-9_]+)["'`]/g)) {
+      if (RPC_CHO_MIGRATION.has(m[1])) continue; // chờ CEO chạy migration
       if (!RPC.has(m[1])) {
         loiRpc.push({ file: rel, dong: soDong(m.index!), mo_ta: `hàm RPC "${m[1]}" không có trong database` });
       }
@@ -128,6 +145,7 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
         return;
       }
       if (!c || BO_QUA.has(c) || COT.get(bang)!.has(c)) return;
+      if (COT_CHO_MIGRATION.has(`${bang}.${c}`)) return; // chờ CEO chạy migration
       if (!/^[a-z_][a-z0-9_]*$/.test(c)) return;
       loiCot.push({ file: rel, dong: soDong(idx), mo_ta: `${bang}.${c} không tồn tại (${kieu})` });
     };
@@ -240,5 +258,22 @@ describe("code gọi đúng schema database", () => {
 
   it("không truy vấn bảng nào không tồn tại", () => {
     expect(kq.bang.length, `Bảng không có trong database:${in_(kq.bang)}`).toBe(0);
+  });
+});
+
+describe("danh sách chờ migration phải sạch", () => {
+  it("RPC/cột đã có trong schema dump thì PHẢI xoá khỏi danh sách chờ", () => {
+    const daCoRpc = [...RPC_CHO_MIGRATION.entries()].filter(([ten]) => RPC.has(ten));
+    const daCoCot = [...COT_CHO_MIGRATION.entries()].filter(([duongDan]) => {
+      const [bang, cot] = duongDan.split(".");
+      return COT.get(bang)?.has(cot) ?? false;
+    });
+    const nhac = [...daCoRpc, ...daCoCot]
+      .map(([ten, mig]) => `  ${ten} (migration ${mig} đã chạy — xoá dòng chờ)`)
+      .join("\n");
+    expect(
+      daCoRpc.length + daCoCot.length,
+      `Schema dump ĐÃ có các tên sau, dọn danh sách chờ trong test này:\n${nhac}`,
+    ).toBe(0);
   });
 });
