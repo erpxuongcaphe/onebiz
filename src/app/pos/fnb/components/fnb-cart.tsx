@@ -171,12 +171,12 @@ export function FnbCart({
         // Sprint B (CEO 06/05): cart fixed right CHỈ hiện trên lg+ (tablet
         // landscape + desktop). Tablet portrait (md) chuyển sang FAB + drawer
         // giống mobile để menu zone tận full width 624px.
-        // Breakpoints sau Sprint B:
+        // C1 (CEO 18/08): bỏ card nổi (rounded/shadow/margin) — giỏ là CỘT
+        // liền khối full-height, ranh giới = 1px border-l + nền trắng lowest
+        // khác nền khu món (container-low). Bề rộng vào dải 390–440.
         //   md (768-1023, portrait) → hidden, FAB hiển thị
-        //   lg (1024+, landscape/desktop) → 320px width
-        //   xl (1280+) → 400px width
-        //   2xl (1536+) → 440px width
-        : "w-[320px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex rounded-lg ambient-shadow border border-outline-variant/20 my-3 mr-3"
+        //   lg (1024+) 390px · xl (1280+) 400px · 2xl (1536+) 440px
+        : "w-[390px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex border-l border-outline-variant/30"
     )}>
       {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0">
