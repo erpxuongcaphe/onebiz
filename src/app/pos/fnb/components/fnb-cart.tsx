@@ -165,7 +165,10 @@ export function FnbCart({
   // - Footer: summary + 2 primary buttons (Bếp F10 / Thanh toán F9)
   return (
     <div className={cn(
-      "flex flex-col bg-surface-container-lowest h-full overflow-hidden",
+      // C1: màn quá thấp (bàn phím điện thoại mở → còn ~500px) thì phần cố
+      // định của giỏ (đầu + footer ≈ 600px) không thể lọt hết — cho cột giỏ
+      // cuộn dự phòng để nút Bếp/Thanh toán luôn với tới được.
+      "flex flex-col bg-surface-container-lowest h-full overflow-hidden [@media(max-height:620px)]:overflow-y-auto",
       mobile
         ? "w-full"
         // Sprint B (CEO 06/05): cart fixed right CHỈ hiện trên lg+ (tablet
