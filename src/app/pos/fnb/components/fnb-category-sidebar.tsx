@@ -69,10 +69,12 @@ export function FnbCategorySidebar({
   return (
     <aside
       className={cn(
-        "shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex flex-col overflow-hidden",
-        compact ? "w-36" : "w-50",
+        // C1 (CEO 18/08): danh mục nền trung tính nhạt (container) — khác khu
+        // món (container-low) và giỏ (container-lowest); ranh giới 1px rõ hơn.
+        "shrink-0 bg-surface-container border-r border-outline-variant/30 flex flex-col overflow-hidden",
+        compact ? "w-36" : "w-[220px]",
       )}
-      style={{ width: compact ? 144 : 200 }}
+      style={{ width: compact ? 144 : 220 }}
       aria-label="Danh mục"
     >
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
@@ -132,7 +134,7 @@ function CategoryButton({
         compact ? "px-2 py-2 text-xs" : "px-3 py-2.5 text-sm",
         active
           ? "bg-primary-fixed text-primary font-bold ambient-shadow"
-          : "text-on-surface-variant hover:bg-surface-container hover:text-foreground",
+          : "text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
       )}
       title={label}
     >
@@ -150,7 +152,7 @@ function CategoryButton({
           "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
           active
             ? "bg-primary text-on-primary"
-            : "bg-surface-container text-on-surface-variant",
+            : "bg-surface-container-high text-on-surface-variant",
         )}
       >
         {count}

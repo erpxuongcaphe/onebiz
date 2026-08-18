@@ -165,18 +165,21 @@ export function FnbCart({
   // - Footer: summary + 2 primary buttons (Bếp F10 / Thanh toán F9)
   return (
     <div className={cn(
-      "flex flex-col bg-surface-container-lowest h-full overflow-hidden",
+      // C1: màn quá thấp (bàn phím điện thoại mở → còn ~500px) thì phần cố
+      // định của giỏ (đầu + footer ≈ 600px) không thể lọt hết — cho cột giỏ
+      // cuộn dự phòng để nút Bếp/Thanh toán luôn với tới được.
+      "flex flex-col bg-surface-container-lowest h-full overflow-hidden [@media(max-height:620px)]:overflow-y-auto",
       mobile
         ? "w-full"
         // Sprint B (CEO 06/05): cart fixed right CHỈ hiện trên lg+ (tablet
         // landscape + desktop). Tablet portrait (md) chuyển sang FAB + drawer
         // giống mobile để menu zone tận full width 624px.
-        // Breakpoints sau Sprint B:
+        // C1 (CEO 18/08): bỏ card nổi (rounded/shadow/margin) — giỏ là CỘT
+        // liền khối full-height, ranh giới = 1px border-l + nền trắng lowest
+        // khác nền khu món (container-low). Bề rộng vào dải 390–440.
         //   md (768-1023, portrait) → hidden, FAB hiển thị
-        //   lg (1024+, landscape/desktop) → 320px width
-        //   xl (1280+) → 400px width
-        //   2xl (1536+) → 440px width
-        : "w-[320px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex rounded-lg ambient-shadow border border-outline-variant/20 my-3 mr-3"
+        //   lg (1024+) 390px · xl (1280+) 400px · 2xl (1536+) 440px
+        : "w-[390px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex border-l border-outline-variant/30"
     )}>
       {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
       <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0">
@@ -580,7 +583,10 @@ export function FnbCart({
           </div>
         </div>
       ) : (
-        <ScrollArea className="flex-1">
+        // C1 (đo preview 18/08): min-h-0 BẮT BUỘC — thiếu thì flexbox không
+        // cho danh sách co dưới chiều cao nội dung, giỏ nhiều món đẩy footer
+        // (Bếp/Thanh toán) tràn khỏi màn (điện thoại 812px hụt 126px).
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-3 flex flex-col gap-2">
             {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
                 data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}

@@ -3146,7 +3146,7 @@ function FnbPosPageInner() {
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
             có empty state "Chưa có danh mục".
             Ẩn trên mobile (<768px) để tận hết width — mobile dùng grid 4-col.
-            md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 200px. */}
+            md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 220px (C1). */}
         {!showFloorPlan && (
           <>
             <div className="hidden lg:block">
