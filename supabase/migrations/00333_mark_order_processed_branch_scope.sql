@@ -1,22 +1,20 @@
 -- ============================================================================
--- 00332 — Hoàn tất / mở lại xử lý đơn đặt hàng (nút bấm CHỦ ĐỘNG trên màn đơn)
+-- 00333 — BỔ SUNG cho 00332 đã chạy trên prod: kiểm PHẠM VI CHI NHÁNH
 --
--- Bối cảnh: 00331 cho một đơn đặt hàng sinh nhiều đơn bán con; đơn gốc KHÔNG
--- tự đóng sau bất kỳ lần lưu/thanh toán nào (CEO chốt). "Hoàn tất xử lý" là
--- thao tác người dùng bấm rõ ràng: gắn fulfilled_by_id → đơn hiện "Đã xuất
--- hóa đơn", rời danh sách chờ ở POS (cơ chế 00188 sẵn có, không đổi báo cáo:
--- status giữ nguyên 'draft' nên không đội doanh thu). "Mở lại" = gỡ gắn.
+-- Bản 00332 chạy trên prod 18/08/2026 thiếu 2 lớp (CEO chỉ ra):
+--   1. Người gọi phải có quyền tại CHI NHÁNH của đơn (user_has_branch_access
+--      — đúng chuẩn 00265; admin toàn chuỗi do helper xử lý).
+--   2. Hoá đơn con gắn vào phải ĐÚNG CHI NHÁNH của đơn gốc (00331 chép
+--      branch_id của gốc sang con, nên cùng-chi-nhánh là bất biến hệ thống).
 --
--- Đây là NGOẠI LỆ CÓ CHỦ ĐÍCH của nguyên tắc "đơn gốc bất khả xâm phạm":
--- RPC tạo đơn con (00331) không được đụng đơn gốc; còn hàm này là hành động
--- người có quyền bấm trực tiếp, và CHỈ được ghi đúng MỘT cột fulfilled_by_id
--- — không đổi status, không đổi tiền, không đổi gì khác.
+-- 4 tình huống phải đúng sau khi chạy:
+--   · Admin toàn chuỗi        → thao tác được mọi đơn (helper trả true)
+--   · Nhân viên ĐÚNG chi nhánh → thao tác được
+--   · Nhân viên KHÁC chi nhánh → chặn 42501 kèm thông báo tiếng Việt
+--   · UUID khác công ty        → "Khong tim thay don dat hang" (lọc tenant)
 --
--- Quyền: orders.create + user_has_branch_access với CHI NHÁNH của đơn
--- (đúng chuẩn 00265 — admin toàn chuỗi do helper xử lý).
--- ⚠️ Prod đã chạy bản đầu (thiếu kiểm chi nhánh) — 00333 áp cùng nội dung
--- này lên prod. Tệp 00332 giữ bản ĐỦ để cài mới không bị thiếu.
--- Chạy lặp an toàn. Rollback: 00332_rollback_mark_order_processed.sql
+-- create or replace cùng chữ ký — chạy lặp an toàn, không đổi quyền đã cấp.
+-- Cuối tệp tự nhả cache schema của lớp API.
 -- ============================================================================
 
 create or replace function public.mark_order_processed(

@@ -169,14 +169,21 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
   });
 });
 
-describe("SQL 00332 — bất biến", () => {
-  const SQL = readFileSync(
-    "supabase/migrations/00332_mark_order_processed.sql",
-    "utf8",
-  ).replace(/\r\n/g, "\n");
-  const THAN = SQL.split("\n").filter((d) => !d.trim().startsWith("--")).join("\n");
+describe("SQL 00332 + 00333 — bất biến (kèm phạm vi chi nhánh)", () => {
+  const docSql = (p: string) =>
+    readFileSync(p, "utf8")
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .filter((d) => !d.trim().startsWith("--"))
+      .join("\n");
+  // 00332 (bản cài mới) và 00333 (bản bổ sung cho prod đã chạy bản thiếu)
+  // phải CÙNG một thân hàm — kiểm cả hai để không lệch nhau.
+  const CAC_BAN: Array<[string, string]> = [
+    ["00332", docSql("supabase/migrations/00332_mark_order_processed.sql")],
+    ["00333", docSql("supabase/migrations/00333_mark_order_processed_branch_scope.sql")],
+  ];
 
-  it("chỉ ghi đúng MỘT cột fulfilled_by_id, không đụng status/tiền", () => {
+  it.each(CAC_BAN)("%s: chỉ ghi đúng MỘT cột fulfilled_by_id, không đụng status/tiền", (_ten, THAN) => {
     expect(THAN).toContain("set fulfilled_by_id = p_invoice_id");
     const doanUpdate = THAN.slice(THAN.indexOf("update public.invoices"));
     const cauUpdate = doanUpdate.slice(0, doanUpdate.indexOf(";"));
@@ -185,9 +192,26 @@ describe("SQL 00332 — bất biến", () => {
     expect(cauUpdate).not.toMatch(/paid\s*=/);
   });
 
-  it("gắn hoá đơn phải là ĐƠN CON của chính đơn này + đòi quyền orders.create", () => {
+  it.each(CAC_BAN)("%s: 4 tình huống phạm vi — admin chuỗi / đúng CN / khác CN / khác tenant", (_ten, THAN) => {
+    // Admin toàn chuỗi + nhân viên đúng/khác chi nhánh: cùng helper chuẩn
+    // 00265 (đã chứng minh admin qua được, khác chi nhánh bị chặn 42501).
+    expect(THAN).toContain("public.user_has_branch_access(v_actor, v_don.branch_id)");
+    expect(THAN).toContain("chi nhanh cua don nay");
+    // UUID khác tenant: lọc tenant ngay trong SELECT đơn gốc → not found.
+    expect(THAN).toMatch(/where i\.id = p_order_id and i\.tenant_id = v_tenant/);
+    // Hoá đơn con gắn vào phải ĐÚNG chi nhánh của đơn gốc.
+    expect(THAN).toContain("c.branch_id = v_don.branch_id");
+  });
+
+  it.each(CAC_BAN)("%s: đơn con đúng nguồn gốc + quyền orders.create + chặn anon", (_ten, THAN) => {
     expect(THAN).toContain("c.source_order_id = p_order_id");
     expect(THAN).toContain("user_has_permission(v_actor, 'orders.create')");
     expect(THAN).toMatch(/revoke all on function public\.mark_order_processed/);
+  });
+
+  it.each(CAC_BAN)("%s: hậu kiểm trong migration tự bắt thiếu kiểm chi nhánh", (_ten, THAN) => {
+    const hauKiem = THAN.slice(THAN.indexOf("do $$"));
+    expect(hauKiem).toContain("user_has_branch_access");
+    expect(hauKiem).toContain("pg_get_functiondef");
   });
 });
