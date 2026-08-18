@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
  *   • CartLineItem CHỈ RENDER giá trị có sẵn (unitPrice/quantity/lineTotal)
  *     — không được tự tính/làm tròn trong component trình bày.
  *   • Tên món tối đa 2 dòng; tuỳ chọn/topping/ghi chú ở dòng phụ riêng.
- *   • Số tiền tabular-nums + nowrap; ô số lượng min-w (chứa "5,17").
+ *   • Số tiền tabular-nums + nowrap; ô số lượng min-w (chứa "5.17" — format.ts en-US).
  *   • Footer thu gọn ở màn thấp nhưng GIỮ tổng + nút hành động chính.
  *   • Nút −/+/sửa/xoá có aria-label; chạm 44px trên mobile (size-11).
  *
@@ -55,20 +55,29 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
   });
 });
 
-describe("C3 — footer thu gọn khi màn thấp, giữ tổng + nút", () => {
-  it("nhóm hàng phụ ẩn ở max-height 620px; tổng Khách cần trả nằm NGOÀI nhóm ẩn", () => {
+describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng (CEO 18/08)", () => {
+  it("nhóm hàng phụ chỉ ẩn KHI CHƯA MỞ (!moPhanPhu) — xoay ngang/bàn phím vẫn mở lại được", () => {
     const footer = CART.slice(CART.indexOf("Footer: totals + discount + actions"));
-    const nhomAn = footer.indexOf('space-y-3 [@media(max-height:620px)]:hidden');
-    const tong = footer.indexOf("Khách cần trả");
-    const dongNhom = footer.indexOf("</div>\n\n        {(() => {");
-    expect(nhomAn).toBeGreaterThan(-1);
-    expect(dongNhom).toBeGreaterThan(nhomAn);
-    expect(tong).toBeGreaterThan(dongNhom); // tổng ở ngoài nhóm ẩn
+    // Ẩn phải là ĐIỀU KIỆN theo state, không phải class cứng.
+    expect(footer).toContain('!moPhanPhu && "[@media(max-height:620px)]:hidden"');
+    // Cấm ẩn cứng quay lại (chuỗi class liền không qua cn điều kiện).
+    expect(footer).not.toContain('"space-y-3 [@media(max-height:620px)]:hidden"');
+    expect(footer).not.toContain('"flex gap-2 [@media(max-height:620px)]:hidden"');
   });
 
-  it("footer bó padding khi màn thấp + hàng nút phụ cũng ẩn", () => {
+  it("có nút thu gọn với aria-expanded + tóm tắt ưu đãi luôn hiện khi có", () => {
+    expect(CART).toContain("aria-expanded={moPhanPhu}");
+    expect(CART).toContain("Ưu đãi &amp; thêm");
+    expect(CART).toMatch(/coUuDai =\s*\n?\s*orderDiscountAmount > 0 \|\| !!appliedCouponCode/);
+  });
+
+  it("tổng Khách cần trả nằm NGOÀI nhóm thu gọn + footer bó padding màn thấp", () => {
+    const footer = CART.slice(CART.indexOf("Footer: totals + discount + actions"));
+    const dongNhom = footer.indexOf("</div>\n\n        {(() => {");
+    const tong = footer.indexOf("Khách cần trả");
+    expect(dongNhom).toBeGreaterThan(-1);
+    expect(tong).toBeGreaterThan(dongNhom);
     expect(CART).toContain("[@media(max-height:620px)]:p-2.5");
-    expect(CART).toContain('flex gap-2 [@media(max-height:620px)]:hidden');
   });
 
   it("nút Bếp/Thanh toán KHÔNG bị ẩn theo media màn thấp", () => {
