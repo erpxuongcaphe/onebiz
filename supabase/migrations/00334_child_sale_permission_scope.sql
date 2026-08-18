@@ -1,51 +1,23 @@
 -- ============================================================================
--- 00331 — Đơn bán con từ đơn đặt hàng: quan hệ MỘT-NHIỀU + RPC tạo đơn con
+-- 00334 — BỔ SUNG cho 00331 đã chạy trên prod: QUYỀN NGHIỆP VỤ + CHI NHÁNH
 --
--- HIỆN TRẠNG (đọc mã + schema prod 17/08/2026):
---   • POS "Xử lý đặt hàng" nạp THẲNG đơn gốc vào giỏ (pos/page.tsx:253
---     applyDraftToActiveTab → state.loadDraft(detail) với detail.id = đơn gốc).
---   • Thanh toán (complete_draft_atomic_v5) UPDATE chính bản ghi đang mở
---     → đơn đặt hàng gốc BIẾN THÀNH hóa đơn, không giữ lại để đối chiếu.
---   • fulfilled_by_id (00188) là 1 cột uuid → chỉ trỏ được MỘT hóa đơn.
---   • 2 tab mở cùng đơn dùng chung client_session_id → lưu sau đè lưu trước.
+-- Bản 00331 chạy prod 17/08/2026 thiếu (CEO chỉ ra 18/08): mọi authenticated
+-- user cùng công ty gọi thẳng RPC tạo đơn con được. Bổ sung 2 lớp:
+--   1. Quyền nghiệp vụ: pos_retail.checkout HOẶC orders.create — một RPC
+--      phục vụ hai cửa (POS + màn quản lý đơn), có một trong hai là đủ.
+--      (Ma trận 00115: checkout và save_draft seed cùng vai trò — không có
+--      vai trò nào lọt khe giữa hai quyền POS.)
+--   2. Phạm vi chi nhánh: user_has_branch_access với branch_id của ĐƠN GỐC
+--      (chuẩn 00265; helper 00050 = owner / branch_id khớp / user_branches).
+--   3. "Không tồn tại" và "khác công ty" gộp thành MỘT lỗi mờ 42501 — không
+--      cho dò id chéo công ty.
 --
--- 00331 làm (THÊM MỚI, không sửa hành vi cũ):
---   1. Cột invoices.source_order_id — đơn bán con trỏ về đơn đặt hàng gốc.
---      Quan hệ một-nhiều: một đơn gốc → không giới hạn đơn con.
---   2. RPC create_child_sale_from_order — TẠO BẢN GHI MỚI (id mới, mã NH mới,
---      client_session_id mới, chép mặt hàng) và KHÔNG đụng một byte nào của
---      đơn gốc. Không update, không đổi status, không ghi fulfilled_by_id.
---
--- CHỦ ĐÍCH KHÔNG chặn (CEO chốt 17/08):
---   • KHÔNG giới hạn số đơn con.
---   • KHÔNG so số lượng bán với số lượng đặt (bán vượt là nghiệp vụ bình thường).
---   • KHÔNG chặn khi đơn gốc đã có fulfilled_by_id hay đã "hoàn tất xử lý"
---     — thực tế phát sinh thì tạo thêm.
---   Chỉ chặn: đơn gốc không tồn tại / sai công ty / không phải đơn đặt hàng
---   (source <> 'order') / đã hủy / đã xóa mềm.
---
--- Quyền (bổ sung 18/08, CEO chỉ ra bản đầu thiếu): pos_retail.checkout HOẶC
--- orders.create (một RPC hai cửa gọi: POS + màn quản lý đơn), VÀ bắt buộc
--- user_has_branch_access với CHI NHÁNH của đơn gốc. Prod đã chạy bản đầu —
--- 00334 áp cùng nội dung; tệp này giữ bản ĐỦ cho cài mới.
--- Tương thích ngược: cột nullable, dữ liệu cũ không có source_order_id chạy y
--- như trước; fulfilled_by_id giữ nguyên, không nắn dữ liệu lịch sử.
--- Chạy lặp an toàn. Rollback: 00331_rollback_child_sales_source_order.sql
+-- Hậu kiểm bắt buộc: thân hàm có đủ 2 gate; authenticated giữ EXECUTE;
+-- anon/PUBLIC không có. Không đổi dữ liệu. create or replace cùng chữ ký —
+-- chạy lặp an toàn. Cuối tệp tự nhả cache schema của lớp API.
 -- ============================================================================
 
--- ── 1. Cột quan hệ một-nhiều ──
-alter table public.invoices
-  add column if not exists source_order_id uuid references public.invoices(id);
-
-comment on column public.invoices.source_order_id is
-  '00331: don ban con tro ve don dat hang goc (source=order). Mot don goc -> nhieu don con. Null = hoa don thuong.';
-
--- Chỉ mục một phía (đa số hóa đơn không phải đơn con) để đối chiếu nhanh.
-create index if not exists idx_invoices_source_order_id
-  on public.invoices (source_order_id)
-  where source_order_id is not null;
-
--- ── 2. RPC tạo đơn bán con ──
+-- ── RPC tạo đơn bán con (create or replace, cùng chữ ký) ──
 create or replace function public.create_child_sale_from_order(
   p_order_id uuid
 ) returns jsonb
@@ -183,11 +155,11 @@ begin
     where table_schema = 'public' and table_name = 'invoices'
       and column_name = 'source_order_id'
   ) then
-    raise exception '00331 that bai: chua co cot source_order_id';
+    raise exception '00334 that bai: chua co cot source_order_id';
   end if;
 
   if to_regprocedure('public.create_child_sale_from_order(uuid)') is null then
-    raise exception '00331 that bai: chua co RPC create_child_sale_from_order';
+    raise exception '00334 that bai: chua co RPC create_child_sale_from_order';
   end if;
 
   -- Thân hàm KHÔNG được UPDATE/DELETE invoices — đơn gốc bất khả xâm phạm.
@@ -197,7 +169,7 @@ begin
     and (pg_get_functiondef(p.oid) ~* 'update\s+public\.invoices'
       or pg_get_functiondef(p.oid) ~* 'delete\s+from\s+public\.invoices');
   if v_n <> 0 then
-    raise exception '00331 that bai: RPC dang sua/xoa invoices - cam';
+    raise exception '00334 that bai: RPC dang sua/xoa invoices - cam';
   end if;
 
   select count(*) into v_n
@@ -207,7 +179,7 @@ begin
     and pg_get_functiondef(p.oid) ~* 'orders\.create'
     and pg_get_functiondef(p.oid) ~* 'user_has_branch_access';
   if v_n <> 1 then
-    raise exception '00331 that bai: thieu gate quyen nghiep vu hoac pham vi chi nhanh';
+    raise exception '00334 that bai: thieu gate quyen nghiep vu hoac pham vi chi nhanh';
   end if;
 
   select count(*) into v_n
@@ -216,10 +188,28 @@ begin
     and routine_name = 'create_child_sale_from_order'
     and grantee = 'anon';
   if v_n <> 0 then
-    raise exception '00331 that bai: anon van goi duoc RPC';
+    raise exception '00334 that bai: anon van goi duoc RPC';
   end if;
 
-  raise notice '00331: OK - cot source_order_id + RPC tao don con da san sang';
+
+  -- authenticated PHẢI còn EXECUTE; PUBLIC không được có.
+  select count(*) into v_n
+  from information_schema.role_routine_grants
+  where routine_schema = 'public'
+    and routine_name = 'create_child_sale_from_order'
+    and grantee = 'authenticated' and privilege_type = 'EXECUTE';
+  if v_n < 1 then
+    raise exception '00334 that bai: authenticated mat quyen EXECUTE';
+  end if;
+  select count(*) into v_n
+  from information_schema.role_routine_grants
+  where routine_schema = 'public'
+    and routine_name = 'create_child_sale_from_order'
+    and grantee = 'PUBLIC';
+  if v_n <> 0 then
+    raise exception '00334 that bai: PUBLIC van goi duoc';
+  end if;
+  raise notice '00334: OK - cot source_order_id + RPC tao don con da san sang';
 end $$;
 
 -- ── Nhả cache schema của lớp API ──
