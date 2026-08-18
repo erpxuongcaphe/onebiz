@@ -1431,3 +1431,29 @@ export async function getOrderReconciliation(orderId: string): Promise<{
     rows: tinhDoiChieuDatBan((hangDat ?? []).map(doi), hangBan.map(doi)),
   };
 }
+
+/**
+ * "Hoàn tất xử lý" đơn đặt hàng — thao tác CHỦ ĐỘNG trên màn đơn gốc (00332).
+ * Gắn fulfilled_by_id vào một đơn con → đơn hiện "Đã xuất hóa đơn", rời danh
+ * sách chờ ở POS. Truyền null để MỞ LẠI. Chỉ ghi đúng một cột, không đụng
+ * status/tiền — báo cáo không đổi.
+ */
+export async function markOrderProcessed(
+  orderId: string,
+  childInvoiceId: string | null,
+): Promise<void> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).rpc("mark_order_processed", {
+    p_order_id: orderId,
+    p_invoice_id: childInvoiceId,
+  });
+  if (error) {
+    if (MA_LOI_CHUA_CO_RPC.has(error.code ?? "")) {
+      throw new Error(
+        "Máy chủ chưa bật nút hoàn tất xử lý (migration 00332 chưa chạy).",
+      );
+    }
+    handleError(error, "markOrderProcessed");
+  }
+}

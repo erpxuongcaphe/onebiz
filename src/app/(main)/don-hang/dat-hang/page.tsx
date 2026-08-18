@@ -76,6 +76,7 @@ const CreateOrderDialog = dynamic(
   { ssr: false },
 );
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
+import { ChildSalesBlock } from "./child-sales-block";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
@@ -392,6 +393,14 @@ function OrderDetail({
                     Chỉ hiển thị — muốn sửa ghi chú dùng nút "Sửa đơn"
                     (CreateOrderDialog chế độ editOrder đã có ô ghi chú). */}
                 <DocumentNoteBox note={order.note} />
+
+                {/* CEO 17/08 (00331): đơn con + đối chiếu đặt/bán + Hoàn tất
+                    xử lý. Máy chủ chưa bật thì khối tự ẩn. */}
+                <ChildSalesBlock
+                  orderId={order.id}
+                  fulfilledById={order.fulfilledById}
+                  onDataChanged={onDataChanged}
+                />
               </div>
             ),
           },
