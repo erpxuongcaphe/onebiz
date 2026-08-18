@@ -84,15 +84,44 @@ describe("00331 — RPC tạo đơn con: đơn gốc bất khả xâm phạm", (
     expect(danhSachCot).not.toContain("tenant_id");
   });
 
-  it("chỉ 4 lý do chặn: không thấy / sai source / đã xoá / đã huỷ — không chặn gì thêm", () => {
+  it("8 lý do chặn — thêm quyền nghiệp vụ + chi nhánh (CEO 18/08), vẫn KHÔNG giới hạn số đơn con", () => {
     const dauHam = THAN.indexOf("create or replace function");
     const cuoiHam = THAN.indexOf("end $$;", dauHam);
     const thanHam = THAN.slice(dauHam, cuoiHam);
     const soRaise = (thanHam.match(/raise exception/g) ?? []).length;
-    // 2 chặn xác thực (chưa đăng nhập, chưa gắn công ty) + 4 chặn nghiệp vụ.
-    expect(soRaise).toBe(6);
+    // 2 xác thực + 1 quyền nghiệp vụ + 4 nghiệp vụ (mờ not-found/sai công ty,
+    // sai source, đã xoá, đã huỷ) + 1 phạm vi chi nhánh.
+    expect(soRaise).toBe(8);
+    // Gate quyền: MỘT trong hai cửa; và bắt buộc chi nhánh của đơn gốc.
+    expect(thanHam).toContain("user_has_permission(v_actor, 'pos_retail.checkout')");
+    expect(thanHam).toContain("user_has_permission(v_actor, 'orders.create')");
+    expect(thanHam).toContain(
+      "public.user_has_branch_access(v_actor, v_parent.branch_id)",
+    );
     // Tuyệt đối không giới hạn số đơn con.
     expect(THAN).not.toMatch(/count\(\*\)[^;]*source_order_id/);
+  });
+
+  it("00334 (bản bổ sung cho prod) CÙNG thân hàm với 00331 — không lệch nhau", () => {
+    const b334 = doc("supabase/migrations/00334_child_sale_permission_scope.sql")
+      .split("\n")
+      .filter((d) => !d.trim().startsWith("--"))
+      .join("\n");
+    for (const chot of [
+      "user_has_permission(v_actor, 'pos_retail.checkout')",
+      "user_has_permission(v_actor, 'orders.create')",
+      "public.user_has_branch_access(v_actor, v_parent.branch_id)",
+      "for share",
+      "gen_random_uuid()",
+      "v_actor, v_session_id, false,",
+    ]) {
+      expect(b334).toContain(chot);
+    }
+    expect(b334).not.toMatch(/update\s+public\.invoices/i);
+    expect(b334).not.toContain("fulfilled_by_id");
+    // Hậu kiểm 00334 kiểm đủ: authenticated EXECUTE + anon + PUBLIC.
+    expect(b334).toContain("grantee = 'authenticated' and privilege_type = 'EXECUTE'");
+    expect(b334).toContain("grantee = 'PUBLIC'");
   });
 
   it("quyền: thu hồi anon, cấp authenticated", () => {
