@@ -580,7 +580,10 @@ export function FnbCart({
           </div>
         </div>
       ) : (
-        <ScrollArea className="flex-1">
+        {/* C1 (đo preview 18/08): min-h-0 BẮT BUỘC — thiếu thì flexbox không
+            cho danh sách co dưới chiều cao nội dung, giỏ nhiều món đẩy footer
+            (Bếp/Thanh toán) tràn khỏi màn (điện thoại 812px hụt 126px). */}
+        <ScrollArea className="flex-1 min-h-0">
           <div className="p-3 flex flex-col gap-2">
             {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
                 data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}
