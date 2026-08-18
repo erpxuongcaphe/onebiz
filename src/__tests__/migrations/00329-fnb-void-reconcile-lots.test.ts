@@ -10,7 +10,10 @@ import path from "node:path";
  * Retail, không đụng luồng trả hàng, không sửa dữ liệu.
  */
 
-const doc = (f: string) => fs.readFileSync(path.join(process.cwd(), f), "utf8");
+// Chuẩn hoá CRLF→LF: bản checkout Windows ra CRLF làm phép dò chuỗi kết thúc
+// bằng "(\n" hỏng oan (test đỏ trên Windows, xanh trên CI Linux — 17-18/08).
+const doc = (f: string) =>
+  fs.readFileSync(path.join(process.cwd(), f), "utf8").replace(/\r\n/g, "\n");
 
 const M = doc("supabase/migrations/00329_fnb_void_reconcile_lots.sql");
 const R = doc("supabase/migrations/00329_rollback_fnb_void_reconcile_lots.sql");
