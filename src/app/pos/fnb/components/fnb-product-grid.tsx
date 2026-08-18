@@ -53,15 +53,18 @@ const ROW_PADDING = 12; // px — p-3 wrapper
 // 1536-220-440-24 ≈ 852 → 5 cột (ô ~161px); 1920 → ~1236 → 6 cột (ô ~194px);
 // tablet ngang 1180 → ~546 → 3 cột; tablet dọc 820 (không giỏ) → ~660 → 4 cột;
 // điện thoại 375 → ~351 → 2 cột. Ô hẹp nhất ~153px vẫn đủ tên 2 dòng + giá.
+// Ngưỡng có DỰ PHÒNG ~30px cho thanh cuộn dọc (10-17px tuỳ máy) + sai số:
+// đo preview 18/08 desktop 1536 → contentRect thật 842px (không phải 852 trên
+// giấy) vì scrollbar ăn vào — ngưỡng 850 làm rơi oan xuống 4 cột.
 const COLS_BREAKPOINTS = [
-  { minWidth: 1100, cols: 6 },
-  { minWidth: 850, cols: 5 },
-  { minWidth: 640, cols: 4 },
+  { minWidth: 1080, cols: 6 },
+  { minWidth: 820, cols: 5 },
+  { minWidth: 620, cols: 4 },
   { minWidth: 460, cols: 3 },
   { minWidth: 0, cols: 2 },
 ] as const;
 
-function getColsForWidth(width: number): number {
+export function getColsForWidth(width: number): number {
   for (const bp of COLS_BREAKPOINTS) {
     if (width >= bp.minWidth) return bp.cols;
   }

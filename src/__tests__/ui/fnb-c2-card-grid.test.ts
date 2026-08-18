@@ -57,9 +57,17 @@ describe("C2 — thẻ món: ảnh → tên 2 dòng → giá dòng riêng", () =
     expect(GRID).toContain("min-h-[2.1em]");
   });
 
-  it("mật độ: có bậc 6 cột và bậc 5 cột từ 850px container", () => {
-    expect(GRID).toMatch(/minWidth: 1100, cols: 6/);
-    expect(GRID).toMatch(/minWidth: 850, cols: 5/);
+  it("mật độ: số cột đúng với CONTAINER THẬT đo trên preview (kể cả scrollbar)", async () => {
+    const { getColsForWidth } = await import(
+      "../../app/pos/fnb/components/fnb-product-grid"
+    );
+    // Số đo thật 18/08: desktop 1536 → contentRect 842 (scrollbar 10px ăn vào)
+    expect(getColsForWidth(842)).toBe(5);
+    expect(getColsForWidth(1226)).toBe(6); // desktop 1920
+    expect(getColsForWidth(536)).toBe(3); // tablet ngang 1180
+    expect(getColsForWidth(642)).toBe(4); // tablet dọc 820 (scrollbar 10)
+    expect(getColsForWidth(635)).toBe(4); // tablet dọc 820 scrollbar Windows 17px
+    expect(getColsForWidth(341)).toBe(2); // điện thoại 375
   });
 });
 
