@@ -38,6 +38,19 @@ describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () =
     const cardClass = GRID.slice(GRID.indexOf("group relative flex flex-col"));
     expect(cardClass.slice(0, 200)).toContain("h-full");
   });
+
+  it("hình học dọc: ảnh co (flex-1 min-h-0) đứng TRƯỚC khối chữ cố định — không cắt tên/giá", () => {
+    // Đo thật preview 18/08 (thẻ 158px cao): ảnh 1→98, tên 102→130, giá
+    // 130→149 ≤ 158. Bất biến làm nên hình học đó: thứ tự + lớp co/cố định.
+    const iAnh = GRID.indexOf("relative min-h-0 flex-1 overflow-hidden p-2");
+    const iChu = GRID.indexOf("flex-shrink-0 px-2.5");
+    expect(iAnh).toBeGreaterThan(-1);
+    expect(iChu).toBeGreaterThan(iAnh);
+    // Cấm ảnh vuông/chiều cao cứng quay lại — nó từng đẩy tên ra ngoài.
+    expect(GRID).not.toContain("aspect-square");
+    // Ô hàng = CARD_HEIGHT có paddingBottom GRID_GAP → thẻ thật 158px.
+    expect(GRID).toContain("paddingBottom: `${GRID_GAP}px`");
+  });
 });
 
 describe("C2 — thẻ món: ảnh → tên 2 dòng → giá dòng riêng", () => {

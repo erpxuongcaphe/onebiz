@@ -38,9 +38,12 @@ interface FnbProductGridProps {
 }
 
 // Grid config — responsive column count + fixed row height cho virtualizer.
-// Row height = card image (aspect-square) + name/status block + padding.
-// Card width tính theo cols; card height cố định 220px để virtualizer không cần
-// measure (fast path, zero layout thrash).
+// CARD_HEIGHT = chiều cao Ô HÀNG (gồm paddingBottom GRID_GAP ở đáy ô);
+// thẻ thật (h-full) = CARD_HEIGHT − GRID_GAP = 158px. Ảnh KHÔNG vuông —
+// flex-1 min-h-0 co theo chiều cao còn lại nên bề rộng thẻ (147–200px tuỳ
+// số cột) không ảnh hưởng hình học dọc; khối tên+giá flex-shrink-0 cố định.
+// Đo thật trên preview 18/08 (thẻ 201×158): ảnh 1→98, tên 102→130,
+// giá 130→149 ≤ 158 — không chồng, không cắt.
 // C2 (CEO 18/08): thu thẻ 220→170px để tăng mật độ. Khối chữ dưới CỐ ĐỊNH
 // (tên 2 dòng + giá dòng riêng ≈ 64px), ảnh chiếm phần còn lại (min-h-0 co
 // được). ⚠️ Đổi chiều cao thẻ PHẢI đổi hằng số này (bộ cuộn ảo tính vị trí
@@ -207,12 +210,11 @@ function ProductCard({
         outOfStock && "opacity-50 pointer-events-none",
       )}
     >
-      {/* Ảnh — 04/08: BỎ aspect-square + flex-shrink-0.
-          Ô cao cứng 220px (CARD_HEIGHT) nhưng ảnh vuông lấy chiều cao = chiều
-          rộng ô; ô rộng hơn ~170px là ảnh ăn hết 220px, khối tên bị đẩy ra
-          ngoài rồi overflow-hidden cắt mất. Đo trên máy thật: ô kết thúc
-          y=324 mà tên món nằm y=323–340 → thu ngân chỉ thấy cái cốc.
-          Giờ ảnh co được (min-h-0), khối tên giữ chỗ cố định. */}
+      {/* Ảnh — 04/08 BỎ tỉ lệ vuông cố định (ảnh vuông từng ăn hết ô, đẩy
+          tên ra ngoài overflow-hidden); C2 giữ nguyên cấu trúc: ảnh flex-1
+          min-h-0 co theo chiều cao còn lại, khối tên+giá bên dưới giữ chỗ
+          cố định. CẤM đưa tỉ lệ vuông/chiều cao cứng trở lại — test
+          kds-tile + fnb-c2-card-grid khoá. */}
       <div className="relative min-h-0 flex-1 overflow-hidden p-2">
         {product.image_url && !imageError ? (
           <>
