@@ -3,12 +3,12 @@
 --
 -- Bản 00332 chạy trên prod 18/08/2026 thiếu 2 lớp (CEO chỉ ra):
 --   1. Người gọi phải có quyền tại CHI NHÁNH của đơn (user_has_branch_access
---      — đúng chuẩn 00265; admin toàn chuỗi do helper xử lý).
+--      — đúng chuẩn 00265; owner qua được nhờ helper; role khác PHẢI được gán chi nhánh).
 --   2. Hoá đơn con gắn vào phải ĐÚNG CHI NHÁNH của đơn gốc (00331 chép
 --      branch_id của gốc sang con, nên cùng-chi-nhánh là bất biến hệ thống).
 --
 -- 4 tình huống phải đúng sau khi chạy:
---   · Admin toàn chuỗi        → thao tác được mọi đơn (helper trả true)
+--   · Owner (role=owner)       → thao tác được mọi đơn (helper trả true)
 --   · Nhân viên ĐÚNG chi nhánh → thao tác được
 --   · Nhân viên KHÁC chi nhánh → chặn 42501 kèm thông báo tiếng Việt
 --   · UUID khác công ty        → "Khong tim thay don dat hang" (lọc tenant)
@@ -64,7 +64,7 @@ begin
   end if;
 
   -- Phạm vi chi nhánh (chuẩn 00265): nhân viên chỉ thao tác đơn thuộc chi
-  -- nhánh mình được gán; admin toàn chuỗi qua được nhờ user_has_branch_access.
+  -- nhánh mình được gán; owner qua được nhờ user_has_branch_access (00050: owner / branch_id khớp / user_branches).
   if not public.user_has_branch_access(v_actor, v_don.branch_id) then
     raise exception using errcode = '42501',
       message = 'Ban khong co quyen thao tac tai chi nhanh cua don nay.';

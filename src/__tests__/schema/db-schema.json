@@ -2209,6 +2209,7 @@
   "issue_manager_otp",
   "list_pos_pin_users",
   "mark_fnb_table_available_atomic",
+  "mark_order_processed",
   "mark_overdue_shifts_for_branch",
   "merge_kitchen_orders_atomic",
   "mkt_accept_task",
@@ -2378,5 +2379,5 @@
  ],
  "soBang": 137,
  "soCot": 1749,
- "soRpc": 350
+ "soRpc": 351
 }

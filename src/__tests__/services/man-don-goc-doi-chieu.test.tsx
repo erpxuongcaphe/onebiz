@@ -192,9 +192,10 @@ describe("SQL 00332 + 00333 — bất biến (kèm phạm vi chi nhánh)", () =>
     expect(cauUpdate).not.toMatch(/paid\s*=/);
   });
 
-  it.each(CAC_BAN)("%s: 4 tình huống phạm vi — admin chuỗi / đúng CN / khác CN / khác tenant", (_ten, THAN) => {
-    // Admin toàn chuỗi + nhân viên đúng/khác chi nhánh: cùng helper chuẩn
-    // 00265 (đã chứng minh admin qua được, khác chi nhánh bị chặn 42501).
+  it.each(CAC_BAN)("%s: 4 tình huống phạm vi — owner / đúng CN / khác CN / khác tenant", (_ten, THAN) => {
+    // Owner + nhân viên đúng/khác chi nhánh: cùng helper chuẩn 00265.
+    // Định nghĩa thật (00050): TRUE khi role='owner' HOẶC branch_id khớp
+    // HOẶC có dòng user_branches — role 'admin' KHÔNG tự qua.
     expect(THAN).toContain("public.user_has_branch_access(v_actor, v_don.branch_id)");
     expect(THAN).toContain("chi nhanh cua don nay");
     // UUID khác tenant: lọc tenant ngay trong SELECT đơn gốc → not found.

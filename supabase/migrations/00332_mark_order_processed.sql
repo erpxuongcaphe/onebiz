@@ -13,7 +13,7 @@
 -- — không đổi status, không đổi tiền, không đổi gì khác.
 --
 -- Quyền: orders.create + user_has_branch_access với CHI NHÁNH của đơn
--- (đúng chuẩn 00265 — admin toàn chuỗi do helper xử lý).
+-- (đúng chuẩn 00265 — owner qua được nhờ helper; role khác PHẢI được gán chi nhánh).
 -- ⚠️ Prod đã chạy bản đầu (thiếu kiểm chi nhánh) — 00333 áp cùng nội dung
 -- này lên prod. Tệp 00332 giữ bản ĐỦ để cài mới không bị thiếu.
 -- Chạy lặp an toàn. Rollback: 00332_rollback_mark_order_processed.sql
@@ -66,7 +66,7 @@ begin
   end if;
 
   -- Phạm vi chi nhánh (chuẩn 00265): nhân viên chỉ thao tác đơn thuộc chi
-  -- nhánh mình được gán; admin toàn chuỗi qua được nhờ user_has_branch_access.
+  -- nhánh mình được gán; owner qua được nhờ user_has_branch_access (00050: owner / branch_id khớp / user_branches).
   if not public.user_has_branch_access(v_actor, v_don.branch_id) then
     raise exception using errcode = '42501',
       message = 'Ban khong co quyen thao tac tai chi nhanh cua don nay.';
