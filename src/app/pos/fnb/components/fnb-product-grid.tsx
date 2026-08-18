@@ -107,7 +107,9 @@ export function FnbProductGrid({
   const rowVirtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => CARD_HEIGHT + GRID_GAP,
+    // CARD_HEIGHT là TOÀN BỘ bước hàng (đã gồm đệm đáy GRID_GAP trong ô) —
+    // cộng thêm GRID_GAP ở đây là đúp khoảng cách dọc thành 24px (CEO bắt 18/08).
+    estimateSize: () => CARD_HEIGHT,
     overscan: 3, // render trước/sau 3 hàng để scroll mượt
   });
 

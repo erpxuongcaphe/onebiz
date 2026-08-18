@@ -27,7 +27,10 @@ describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () =
   });
 
   it("virtualizer + chiều cao hàng đều đọc từ CARD_HEIGHT, không hardcode", () => {
-    expect(GRID).toContain("estimateSize: () => CARD_HEIGHT + GRID_GAP");
+    // CARD_HEIGHT = toàn bộ bước hàng (gồm đệm đáy). Cộng GRID_GAP vào
+    // estimateSize = đúp khoảng dọc 24px trong khi ngang 12px (CEO bắt 18/08).
+    expect(GRID).toContain("estimateSize: () => CARD_HEIGHT,");
+    expect(GRID).not.toContain("CARD_HEIGHT + GRID_GAP");
     expect(GRID).toContain("height: `${CARD_HEIGHT}px`");
     // Không được có height px hardcode nào khác trong style hàng/thẻ.
     const hardcoded = GRID.match(/height: `\d+px`/g) ?? [];
