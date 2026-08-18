@@ -38,29 +38,36 @@ interface FnbProductGridProps {
 }
 
 // Grid config — responsive column count + fixed row height cho virtualizer.
-// Row height = card image (aspect-square) + name/status block + padding.
-// Card width tính theo cols; card height cố định 220px để virtualizer không cần
-// measure (fast path, zero layout thrash).
-const CARD_HEIGHT = 220; // px — aspect-square image ~ 160px + padding + 2 dòng text
+// CARD_HEIGHT = chiều cao Ô HÀNG (gồm paddingBottom GRID_GAP ở đáy ô);
+// thẻ thật (h-full) = CARD_HEIGHT − GRID_GAP = 158px. Ảnh KHÔNG vuông —
+// flex-1 min-h-0 co theo chiều cao còn lại nên bề rộng thẻ (147–200px tuỳ
+// số cột) không ảnh hưởng hình học dọc; khối tên+giá flex-shrink-0 cố định.
+// Đo thật trên preview 18/08 (thẻ 201×158): ảnh 1→98, tên 102→130,
+// giá 130→149 ≤ 158 — không chồng, không cắt.
+// C2 (CEO 18/08): thu thẻ 220→170px để tăng mật độ. Khối chữ dưới CỐ ĐỊNH
+// (tên 2 dòng + giá dòng riêng ≈ 64px), ảnh chiếm phần còn lại (min-h-0 co
+// được). ⚠️ Đổi chiều cao thẻ PHẢI đổi hằng số này (bộ cuộn ảo tính vị trí
+// hàng theo nó) — có test khoá fnb-c2-card-grid.test.ts.
+const CARD_HEIGHT = 170; // px — ảnh co giãn (~90-100px) + tên 2 dòng + giá
 const GRID_GAP = 12; // px — tương ứng gap-3 Tailwind
 const ROW_PADDING = 12; // px — p-3 wrapper
-// Container width breakpoints (KHÔNG phải viewport — đã tính cart width).
-// iPad portrait 768px - cart 280px = 488px container → 3 cols.
-// iPad landscape 1024px - cart 340px = 684px container → 4 cols.
-// Desktop 1440px - cart 360px = 1080px container → 5 cols.
-// Responsive Sprint B1 (CEO 25/05/2026): giảm breakpoint 720→680 vì
-// iPad landscape có container 684px (24-1024 - cart 340) bị fall xuống
-// 3 cols thay vì 4. Bây giờ 680+ = 4 cols → iPad landscape OK.
+// Container width breakpoints (KHÔNG phải viewport — đã trừ sidebar + giỏ).
+// C2: hạ ngưỡng để desktop đạt 5-6 món/hàng. Sau C1: desktop 1536 → container
+// 1536-220-440-24 ≈ 852 → 5 cột (ô ~161px); 1920 → ~1236 → 6 cột (ô ~194px);
+// tablet ngang 1180 → ~546 → 3 cột; tablet dọc 820 (không giỏ) → ~660 → 4 cột;
+// điện thoại 375 → ~351 → 2 cột. Ô hẹp nhất ~153px vẫn đủ tên 2 dòng + giá.
+// Ngưỡng có DỰ PHÒNG ~30px cho thanh cuộn dọc (10-17px tuỳ máy) + sai số:
+// đo preview 18/08 desktop 1536 → contentRect thật 842px (không phải 852 trên
+// giấy) vì scrollbar ăn vào — ngưỡng 850 làm rơi oan xuống 4 cột.
 const COLS_BREAKPOINTS = [
-  { minWidth: 1280, cols: 6 }, // 1080+ container: 6 cột
-  { minWidth: 1024, cols: 5 }, // 850+: 5 cột
-  { minWidth: 680, cols: 4 },  // 680+: 4 cột (iPad landscape với cart)
-  { minWidth: 480, cols: 3 },  // 480+: 3 cột (iPad portrait với cart)
-  { minWidth: 320, cols: 2 },  // mobile: 2 cột
-  { minWidth: 0, cols: 1 },    // very narrow: 1 cột
+  { minWidth: 1080, cols: 6 },
+  { minWidth: 820, cols: 5 },
+  { minWidth: 620, cols: 4 },
+  { minWidth: 460, cols: 3 },
+  { minWidth: 0, cols: 2 },
 ] as const;
 
-function getColsForWidth(width: number): number {
+export function getColsForWidth(width: number): number {
   for (const bp of COLS_BREAKPOINTS) {
     if (width >= bp.minWidth) return bp.cols;
   }
@@ -100,7 +107,9 @@ export function FnbProductGrid({
   const rowVirtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => CARD_HEIGHT + GRID_GAP,
+    // CARD_HEIGHT là TOÀN BỘ bước hàng (đã gồm đệm đáy GRID_GAP trong ô) —
+    // cộng thêm GRID_GAP ở đây là đúp khoảng cách dọc thành 24px (CEO bắt 18/08).
+    estimateSize: () => CARD_HEIGHT,
     overscan: 3, // render trước/sau 3 hàng để scroll mượt
   });
 
@@ -203,12 +212,11 @@ function ProductCard({
         outOfStock && "opacity-50 pointer-events-none",
       )}
     >
-      {/* Ảnh — 04/08: BỎ aspect-square + flex-shrink-0.
-          Ô cao cứng 220px (CARD_HEIGHT) nhưng ảnh vuông lấy chiều cao = chiều
-          rộng ô; ô rộng hơn ~170px là ảnh ăn hết 220px, khối tên bị đẩy ra
-          ngoài rồi overflow-hidden cắt mất. Đo trên máy thật: ô kết thúc
-          y=324 mà tên món nằm y=323–340 → thu ngân chỉ thấy cái cốc.
-          Giờ ảnh co được (min-h-0), khối tên giữ chỗ cố định. */}
+      {/* Ảnh — 04/08 BỎ tỉ lệ vuông cố định (ảnh vuông từng ăn hết ô, đẩy
+          tên ra ngoài overflow-hidden); C2 giữ nguyên cấu trúc: ảnh flex-1
+          min-h-0 co theo chiều cao còn lại, khối tên+giá bên dưới giữ chỗ
+          cố định. CẤM đưa tỉ lệ vuông/chiều cao cứng trở lại — test
+          kds-tile + fnb-c2-card-grid khoá. */}
       <div className="relative min-h-0 flex-1 overflow-hidden p-2">
         {product.image_url && !imageError ? (
           <>
@@ -237,11 +245,6 @@ function ProductCard({
           </div>
         )}
 
-        {/* Price badge — Stitch glass style top-right */}
-        <div className="absolute top-3 right-3 bg-primary/90 backdrop-blur-[20px] text-on-primary text-[11px] font-bold px-3 py-1 rounded-full ambient-shadow">
-          {formatCurrency(product.sell_price)}
-        </div>
-
         {/* Qty-in-cart badge — top-left khi món đã trong giỏ. Giúp
             cashier thấy ngay món nào đã chọn bao nhiêu (KiotViet/Toast
             pattern). Pure additive, không đổi flow. */}
@@ -264,16 +267,23 @@ function ProductCard({
         )}
       </div>
 
-      {/* Tên món — flex-shrink-0 để LUÔN có chỗ, không bị ảnh đẩy ra ngoài */}
-      <div className="flex-shrink-0 px-3 pb-3 pt-1">
-        <h3 className="font-heading font-semibold text-sm text-foreground line-clamp-2 leading-tight mb-0.5">
+      {/* C2 — thứ tự CEO chốt: ảnh → tên → GIÁ → còn/hết. Giá bỏ badge đè
+          ảnh, xuống dòng riêng dưới tên: luôn thấy, không bị che, không "...".
+          flex-shrink-0 để khối chữ LUÔN có chỗ, không bị ảnh đẩy ra ngoài. */}
+      <div className="flex-shrink-0 px-2.5 pb-2 pt-1">
+        <h3 className="font-heading font-semibold text-[13px] text-foreground line-clamp-2 leading-tight min-h-[2.1em]">
           {product.name}
         </h3>
-        {enforceStock && (
-          <p className="text-[11px] text-muted-foreground">
-            {outOfStock ? "Hết hàng" : "Sẵn sàng"}
-          </p>
-        )}
+        <div className="flex items-baseline justify-between gap-1">
+          <span className="text-[13px] font-bold text-primary tabular-nums whitespace-nowrap">
+            {formatCurrency(product.sell_price)}đ
+          </span>
+          {enforceStock && (
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              {outOfStock ? "Hết hàng" : "Sẵn sàng"}
+            </span>
+          )}
+        </div>
       </div>
     </button>
   );

@@ -105,8 +105,10 @@ describe("Ô món POS FnB không cắt mất tên", () => {
   });
 
   it("khối tên món luôn được giữ chỗ", () => {
-    expect(tile).toContain("flex-shrink-0 px-3 pb-3 pt-1");
-    expect(tile).not.toContain("px-3 pb-3 pt-1 flex-1 min-h-0");
+    // C2 18/08 đổi padding (px-2.5 pb-2) — bất biến là flex-shrink-0 trên
+    // khối chữ (không bị ảnh đẩy ra ngoài), không phải chuỗi padding cụ thể.
+    expect(tile).toMatch(/flex-shrink-0 px-[\d.]+ pb-[\d.]+ pt-1/);
+    expect(tile).not.toMatch(/px-[\d.]+ pb-[\d.]+ pt-1 flex-1 min-h-0/);
   });
 
   it("vẫn hiển thị giá món", () => {

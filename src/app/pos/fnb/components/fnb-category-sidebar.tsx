@@ -130,14 +130,22 @@ function CategoryButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-2 rounded-lg text-left transition-colors press-scale-sm",
-        compact ? "px-2 py-2 text-xs" : "px-3 py-2.5 text-sm",
+        // C2 (CEO 18/08): vùng chạm ≥44px (min-h-11) + vạch chỉ báo trái khi
+        // đang chọn (relative để đặt vạch absolute).
+        "relative w-full flex items-center gap-2 rounded-lg text-left transition-colors press-scale-sm min-h-11",
+        compact ? "px-2 py-2 text-xs" : "px-3 py-2 text-sm",
         active
           ? "bg-primary-fixed text-primary font-bold ambient-shadow"
           : "text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
       )}
       title={label}
     >
+      {active && (
+        <span
+          aria-hidden
+          className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-primary"
+        />
+      )}
       <Icon
         name={icon}
         size={compact ? 16 : 18}
@@ -146,7 +154,8 @@ function CategoryButton({
           active ? "text-primary" : "text-on-surface-variant",
         )}
       />
-      <span className="flex-1 min-w-0 truncate font-medium">{label}</span>
+      {/* C2: tên dài xuống tối đa 2 dòng thay vì cắt "..." khó hiểu */}
+      <span className="flex-1 min-w-0 line-clamp-2 leading-snug font-medium">{label}</span>
       <span
         className={cn(
           "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
