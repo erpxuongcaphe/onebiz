@@ -603,8 +603,12 @@ export function FnbCart({
         </ScrollArea>
       )}
 
-      {/* ── Footer: totals + discount + actions ── */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3">
+      {/* ── Footer: totals + discount + actions ──
+          C3: màn thấp (bàn phím mở, còn ~500px) → ẩn nhóm hàng phụ bên dưới
+          (tặng kèm/tạm tính/giảm giá/mã KM) + bó padding; GIỮ tổng "Khách cần
+          trả" và nút Bếp/Thanh toán luôn thấy. Chỉ CSS, không remount. */}
+      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:620px)]:p-2.5 [@media(max-height:620px)]:space-y-2">
+        <div className="space-y-3 [@media(max-height:620px)]:hidden">
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
@@ -675,6 +679,7 @@ export function FnbCart({
             onRemove={onRemoveCoupon}
           />
         )}
+        </div>
 
         {(() => {
           // CEO 13/05 (Migration 00070): tách 2 số rõ ràng cho đơn online sàn.
@@ -745,7 +750,7 @@ export function FnbCart({
         })()}
 
         {!isEmpty && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 [@media(max-height:620px)]:hidden">
             {onPrintPreBill && (
               <Button
                 variant="outline"
@@ -1033,9 +1038,9 @@ function CartLineItem({
   return (
     <div className="group relative bg-surface-container-low rounded-lg p-3 hover:bg-surface-container transition-colors">
       <div className="flex items-start justify-between gap-2">
-        {/* Name + variant */}
+        {/* Name + variant — C3: tên tối đa 2 dòng, tuỳ chọn ở dòng phụ riêng */}
         <div className="flex-1 min-w-0">
-          <p className="font-heading text-sm font-semibold text-foreground leading-tight">
+          <p className="font-heading text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words">
             {line.productName}
           </p>
           {line.variantLabel && (
@@ -1045,10 +1050,17 @@ function CartLineItem({
           )}
         </div>
 
-        {/* Line total — primary color per Stitch */}
-        <span className="text-sm font-bold text-primary shrink-0 tabular-nums">
-          {formatCurrency(line.lineTotal)}
-        </span>
+        {/* C3: cột số bên phải — thành tiền (đậm) + đơn giá × SL (dòng phụ).
+            CHỈ render giá trị có sẵn (unitPrice/quantity/lineTotal từ state),
+            không tự tính lại; tabular-nums + nowrap để không cắt/không giật. */}
+        <div className="shrink-0 text-right">
+          <span className="block text-sm font-bold text-primary tabular-nums whitespace-nowrap">
+            {formatCurrency(line.lineTotal)}
+          </span>
+          <span className="block text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+            {formatCurrency(line.unitPrice)} × {formatNumber(line.quantity)}
+          </span>
+        </div>
       </div>
 
       {/* Toppings */}
@@ -1083,7 +1095,9 @@ function CartLineItem({
           >
             <Icon name="remove" size={16} />
           </button>
-          <span className="text-sm font-semibold w-7 text-center tabular-nums text-foreground">
+          {/* C3: min-w thay w cứng — số thập phân "5,17" không tràn, 1 chữ
+              số không giật nhờ tabular-nums + min-w giữ bề rộng tối thiểu. */}
+          <span className="text-sm font-semibold min-w-9 px-1 text-center tabular-nums whitespace-nowrap text-foreground">
             {formatNumber(line.quantity)}
           </span>
           <button
