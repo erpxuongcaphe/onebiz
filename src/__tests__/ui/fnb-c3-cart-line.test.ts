@@ -40,6 +40,8 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
   it("số tiền tabular-nums + nowrap (không cắt, không giật)", () => {
     const cotSo = LINE.slice(LINE.indexOf("shrink-0 text-right"), LINE.indexOf("Toppings"));
     expect((cotSo.match(/tabular-nums whitespace-nowrap/g) ?? []).length).toBe(2);
+    // CEO 19/08: dòng "đơn giá × SL" tối thiểu 12px — cấm text-[11px] trong cột số.
+    expect(cotSo).not.toContain("text-[11px]");
   });
 
   it("ô số lượng min-w thay w cứng — chứa 5,17 không tràn", () => {
@@ -69,6 +71,8 @@ describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng
     expect(CART).toContain("aria-expanded={moPhanPhu}");
     expect(CART).toContain("Ưu đãi &amp; thêm");
     expect(CART).toMatch(/coUuDai =\s*\n?\s*orderDiscountAmount > 0 \|\| !!appliedCouponCode/);
+    // CEO 19/08: nút thu gọn vùng chạm ≥44px (min-h-11).
+    expect(CART).toMatch(/aria-expanded=\{moPhanPhu\}[\s\S]{0,220}min-h-11/);
   });
 
   it("tổng Khách cần trả nằm NGOÀI nhóm thu gọn + footer bó padding màn thấp", () => {

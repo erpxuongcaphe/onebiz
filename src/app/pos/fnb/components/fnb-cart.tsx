@@ -622,7 +622,7 @@ export function FnbCart({
           type="button"
           onClick={() => setMoPhanPhu((v) => !v)}
           aria-expanded={moPhanPhu}
-          className="hidden [@media(max-height:620px)]:flex w-full min-h-9 items-center justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+          className="hidden [@media(max-height:620px)]:flex w-full min-h-11 items-center justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Icon name="sell" size={13} className="shrink-0" />
@@ -1088,7 +1088,7 @@ function CartLineItem({
           <span className="block text-sm font-bold text-primary tabular-nums whitespace-nowrap">
             {formatCurrency(line.lineTotal)}
           </span>
-          <span className="block text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+          <span className="block text-xs text-muted-foreground tabular-nums whitespace-nowrap">
             {formatCurrency(line.unitPrice)} × {formatNumber(line.quantity)}
           </span>
         </div>
