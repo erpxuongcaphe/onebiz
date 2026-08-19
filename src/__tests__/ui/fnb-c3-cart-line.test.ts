@@ -61,10 +61,19 @@ describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng
   it("nhóm hàng phụ chỉ ẩn KHI CHƯA MỞ (!moPhanPhu) — xoay ngang/bàn phím vẫn mở lại được", () => {
     const footer = CART.slice(CART.indexOf("Footer: totals + discount + actions"));
     // Ẩn phải là ĐIỀU KIỆN theo state, không phải class cứng.
-    expect(footer).toContain('!moPhanPhu && "[@media(max-height:620px)]:hidden"');
-    // Cấm ẩn cứng quay lại (chuỗi class liền không qua cn điều kiện).
-    expect(footer).not.toContain('"space-y-3 [@media(max-height:620px)]:hidden"');
-    expect(footer).not.toContain('"flex gap-2 [@media(max-height:620px)]:hidden"');
+    expect(footer).toContain('!moPhanPhu && "[@media(max-height:540px)]:hidden"');
+    // Cấm ẩn cứng quay lại (chuỗi class liền không qua cn điều kiện), mọi ngưỡng.
+    expect(footer).not.toMatch(/"space-y-3 \[@media\(max-height:\d+px\)\]:hidden"/);
+    expect(footer).not.toMatch(/"flex gap-2 \[@media\(max-height:\d+px\)\]:hidden"/);
+  });
+
+  it("C3.1: HAI ngưỡng đúng vai — 540 thu gọn (5 chỗ), 620 CHỈ cuộn dự phòng", () => {
+    // 4 class thu gọn cùng ngưỡng 540: p-2.5 + space-y-2 + toggle flex + 2× hidden.
+    expect((CART.match(/max-height:540px/g) ?? []).length).toBe(5);
+    // 620 còn lại DUY NHẤT ở cuộn dự phòng container (C1) — 541–620px hiện
+    // đầy đủ thì nội dung dài hơn màn, phải cuộn tới được Bếp/Thanh toán.
+    expect((CART.match(/max-height:620px/g) ?? []).length).toBe(1);
+    expect(CART).toContain("[@media(max-height:620px)]:overflow-y-auto");
   });
 
   it("có nút thu gọn với aria-expanded + tóm tắt ưu đãi luôn hiện khi có", () => {
@@ -81,7 +90,7 @@ describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng
     const tong = footer.indexOf("Khách cần trả");
     expect(dongNhom).toBeGreaterThan(-1);
     expect(tong).toBeGreaterThan(dongNhom);
-    expect(CART).toContain("[@media(max-height:620px)]:p-2.5");
+    expect(CART).toContain("[@media(max-height:540px)]:p-2.5");
   });
 
   it("nút Bếp/Thanh toán KHÔNG bị ẩn theo media màn thấp", () => {

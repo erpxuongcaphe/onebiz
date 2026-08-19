@@ -158,6 +158,13 @@ export function FnbCart({
   // được ẨN CỨNG nhóm ưu đãi — chỉ THU GỌN, có nút mở lại. State đổi class,
   // không remount → ô coupon đang gõ giữ nguyên focus + nội dung khi bàn
   // phím mở làm màn thấp đi.
+  // C3.1 (CEO 19/08): HAI ngưỡng khác nhau, đừng "đồng bộ" chúng:
+  //   • 540px = THU GỌN (4 class p-2.5/space-y-2/toggle/hidden) — chỉ khi bàn
+  //     phím mở (~380–500px) hoặc xoay ngang (~390px). Điện thoại DỌC bình
+  //     thường (~550–620px khả dụng sau thanh trình duyệt) phải hiện ĐẦY ĐỦ
+  //     — ngưỡng 620 cũ từng gập nhầm ở đó, CEO bắt trên máy thật.
+  //   • 620px = CUỘN DỰ PHÒNG (overflow-y-auto ở container) — vùng 541–620px
+  //     hiện đầy đủ thì nội dung dài hơn màn, phải cuộn được tới Bếp/TT.
   const [moPhanPhu, setMoPhanPhu] = useState(false);
   const coUuDai =
     orderDiscountAmount > 0 || !!appliedCouponCode || (freeItems?.length ?? 0) > 0;
@@ -616,13 +623,13 @@ export function FnbCart({
           giảm giá/coupon/quà thì tóm tắt LUÔN hiện trên nút. Tổng "Khách cần
           trả" + Bếp/Thanh toán luôn thấy. State chỉ đổi class, không remount
           → ô coupon giữ focus + nội dung khi bàn phím mở. */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:620px)]:p-2.5 [@media(max-height:620px)]:space-y-2">
+      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:540px)]:p-2.5 [@media(max-height:540px)]:space-y-2">
         {/* Nút thu gọn — CHỈ hiện ở màn thấp (media), toggle vùng phụ */}
         <button
           type="button"
           onClick={() => setMoPhanPhu((v) => !v)}
           aria-expanded={moPhanPhu}
-          className="hidden [@media(max-height:620px)]:flex w-full min-h-11 items-center justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+          className="hidden [@media(max-height:540px)]:flex w-full min-h-11 items-center justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Icon name="sell" size={13} className="shrink-0" />
@@ -639,7 +646,7 @@ export function FnbCart({
           <Icon name={moPhanPhu ? "expand_less" : "expand_more"} size={16} className="shrink-0" />
         </button>
 
-        <div className={cn("space-y-3", !moPhanPhu && "[@media(max-height:620px)]:hidden")}>
+        <div className={cn("space-y-3", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
@@ -781,7 +788,7 @@ export function FnbCart({
         })()}
 
         {!isEmpty && (
-          <div className={cn("flex gap-2", !moPhanPhu && "[@media(max-height:620px)]:hidden")}>
+          <div className={cn("flex gap-2", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
             {onPrintPreBill && (
               <Button
                 variant="outline"
