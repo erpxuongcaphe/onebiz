@@ -115,12 +115,12 @@ describe("C3 hành vi — thu gọn màn thấp KHÔNG ẩn cứng chức năng"
     expect(nut).toHaveAttribute("aria-expanded", "false");
     const inputTruoc = screen.getByPlaceholderText("Nhập mã khuyến mãi");
     const nhom = inputTruoc.closest('div[class*="space-y-3"]')!;
-    expect(nhom.className).toContain("[@media(max-height:620px)]:hidden");
+    expect(nhom.className).toContain("[@media(max-height:540px)]:hidden");
 
     fireEvent.click(nut);
     expect(nut).toHaveAttribute("aria-expanded", "true");
     // Class ẩn được gỡ → bàn phím mở (màn thấp) vẫn thấy ô đang nhập.
-    expect(nhom.className).not.toContain("[@media(max-height:620px)]:hidden");
+    expect(nhom.className).not.toContain("[@media(max-height:540px)]:hidden");
     // KHÔNG remount: vẫn đúng node input cũ, nội dung gõ dở giữ nguyên.
     fireEvent.change(inputTruoc, { target: { value: "GIAM10" } });
     expect(screen.getByPlaceholderText("Nhập mã khuyến mãi")).toBe(inputTruoc);
