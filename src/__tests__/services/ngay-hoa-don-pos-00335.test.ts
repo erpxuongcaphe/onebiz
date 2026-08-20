@@ -78,6 +78,16 @@ describe("00335 POS — màn hình", () => {
     expect(khoi).toContain('setLyDoNgayHoaDon("")');
   });
 
+  it("KHÔNG đọc đồng hồ lúc dựng — tránh lệch hydrate (#418 nổ prod 20/08)", () => {
+    // Trạng thái khởi tạo phải là null, đồng hồ chỉ đọc trong useEffect.
+    expect(row).toContain("useState<string | null>(null)");
+    expect(row).not.toMatch(/useState\(\(\)\s*=>\s*new Date\(\)/);
+    const i = row.indexOf("useEffect(() => {");
+    expect(row.slice(i, i + 220)).toContain("setGioHienTai(new Date().toISOString())");
+    // Lần dựng đầu hiển thị chuỗi CỐ ĐỊNH, không phụ thuộc giờ máy
+    expect(row).toContain('gioHienTai ? hienThi(gioHienTai) : "—"');
+  });
+
   it("hộp thoại bắt buộc lý do + chặn tương lai + trong tháng", () => {
     expect(row).toContain("Bắt buộc nhập lý do");
     expect(row).toContain("tương lai quá 5 phút");

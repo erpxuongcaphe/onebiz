@@ -51,21 +51,29 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
   const [nhapNgay, setNhapNgay] = useState("");
   const [nhapLyDo, setNhapLyDo] = useState("");
   const [loi, setLoi] = useState<string | null>(null);
-  // Đồng hồ hiển thị khi ĐANG ở chế độ tự động — cập nhật mỗi phút để thu ngân
-  // luôn thấy đúng giờ hoá đơn sắp mang.
-  const [gioHienTai, setGioHienTai] = useState(() => new Date().toISOString());
+  // Đồng hồ hiển thị khi ĐANG ở chế độ tự động — cập nhật mỗi 30 giây để thu
+  // ngân luôn thấy đúng giờ hoá đơn sắp mang.
+  //
+  // ⚠️ KHỞI TẠO null, KHÔNG lấy new Date() ngay: trang POS được dựng sẵn trên
+  // máy chủ rồi mới hydrate ở trình duyệt — giờ hai lần dựng khác nhau sẽ làm
+  // React báo lệch hydrate (#418, đã nổ thật trên production 20/08). Chỉ đọc
+  // đồng hồ SAU khi đã mount.
+  const [gioHienTai, setGioHienTai] = useState<string | null>(null);
 
   useEffect(() => {
+    setGioHienTai(new Date().toISOString());
     if (value) return;
     const t = setInterval(() => setGioHienTai(new Date().toISOString()), 30_000);
     return () => clearInterval(t);
   }, [value]);
 
   const daChinh = value !== null;
-  const ngayHienThi = useMemo(
-    () => hienThi(daChinh ? value! : gioHienTai),
-    [daChinh, value, gioHienTai],
-  );
+  // Trước khi mount xong, phần giờ để trống — dựng trên máy chủ và hydrate ở
+  // trình duyệt ra CÙNG một chuỗi nên không lệch.
+  const ngayHienThi = useMemo(() => {
+    if (daChinh) return hienThi(value!);
+    return gioHienTai ? hienThi(gioHienTai) : "—";
+  }, [daChinh, value, gioHienTai]);
 
   function moDialog() {
     setNhapNgay(isoSangOInput(value ?? new Date().toISOString()));
