@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
+import { InvoiceDateRow } from "./components/invoice-date-row";
 import {
   saveDraftOrder,
   listDraftOrders,
@@ -203,7 +204,15 @@ function PosPageInner() {
     branches,
     switchBranch,
     logout,
+    hasPermission,
   } = useAuth();
+
+  // 00335 — NGÀY HOÁ ĐƠN. null = để máy chủ tự lấy giờ lúc thanh toán (đường
+  // thường của thu ngân). Khác null ⇒ người có quyền đã chủ động chỉnh, máy chủ
+  // sẽ kiểm lại quyền + lý do và ghi nhật ký.
+  const [ngayHoaDon, setNgayHoaDon] = useState<string | null>(null);
+  const [lyDoNgayHoaDon, setLyDoNgayHoaDon] = useState("");
+  const coQuyenChinhNgay = hasPermission("invoices.adjust_issued_at");
 
   // Multi-tab invoice management (KiotViet parity).
   // Cart/customer/payment and server auto-save session must move together.
@@ -2273,6 +2282,9 @@ function PosPageInner() {
           clientSessionId,
           expectedRevision: effectiveDraftRevision!,
           expectedTotal: state.total,
+          // 00335 — ngày hoá đơn khi hoàn tất nháp cũ
+          issuedAt: ngayHoaDon,
+          issuedReason: ngayHoaDon ? lyDoNgayHoaDon : null,
         });
         invoiceCode = result.invoiceCode;
         invoiceId = effectiveDraftId;
@@ -2295,6 +2307,10 @@ function PosPageInner() {
           shiftId: checkoutShift.id,
           // 00048 idempotency — chống duplicate khi cashier ấn Thanh toán 2 lần
           clientSessionId,
+          // 00335 — chỉ gửi khi người dùng CHỦ ĐỘNG chỉnh; null ⇒ máy chủ tự
+          // lấy giờ lúc thanh toán.
+          issuedAt: ngayHoaDon,
+          issuedReason: ngayHoaDon ? lyDoNgayHoaDon : null,
         };
         let result: Awaited<ReturnType<typeof offlinePosCheckout>>;
         try {
@@ -2326,6 +2342,8 @@ function PosPageInner() {
             clientSessionId,
             expectedRevision: recoveredDraft.revision,
             expectedTotal: state.total,
+            issuedAt: ngayHoaDon,
+            issuedReason: ngayHoaDon ? lyDoNgayHoaDon : null,
           });
           result = {
             invoiceId: draftId,
@@ -2582,6 +2600,10 @@ function PosPageInner() {
         notifyPosStockChanged(ctx.branchId);
       }
       state.clearCart();
+      // 00335: ngày chỉnh tay chỉ áp cho ĐÚNG hoá đơn vừa lập — trả về tự động
+      // để hoá đơn kế tiếp không vô tình mang ngày cũ.
+      setNgayHoaDon(null);
+      setLyDoNgayHoaDon("");
       setAppliedPromotion(null);
       setPromotionCleared(false);
       setAppliedRedeem(null);
@@ -3334,6 +3356,17 @@ function PosPageInner() {
                 </button>
               )}
             </div>
+            {/* 00335: NGÀY HOÁ ĐƠN — mặc định giờ máy chủ lúc thanh toán; chỉ
+                người có quyền mới thấy nút Sửa. */}
+            <InvoiceDateRow
+              value={ngayHoaDon}
+              reason={lyDoNgayHoaDon}
+              canEdit={coQuyenChinhNgay}
+              onChange={(iso, lyDo) => {
+                setNgayHoaDon(iso);
+                setLyDoNgayHoaDon(lyDo);
+              }}
+            />
             {state.customer && (
               <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
                 {state.customer.phone && (

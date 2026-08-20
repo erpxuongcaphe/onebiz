@@ -27,6 +27,7 @@ import {
   type PosCheckoutItem,
 } from "./pos-checkout";
 import { recordAuditLog } from "./audit";
+import { isRpcUnavailable } from "./rpc-utils";
 import {
   applyCreatedAtRangeFilter,
   normalizeCreatedAtRange,
@@ -1068,6 +1069,11 @@ export async function completeDraftOrder(
     clientSessionId: string;
     expectedRevision: number;
     expectedTotal: number;
+    /** 00335 — ngày hoá đơn người dùng chủ động chỉnh (cần quyền + lý do). */
+    issuedAt?: string | null;
+    issuedReason?: string | null;
+    /** 00335 — giờ bấm thanh toán khi mất mạng (tham khảo, không kế toán). */
+    checkoutClientAt?: string | null;
   },
 ): Promise<{
   invoiceCode: string;
@@ -1078,10 +1084,9 @@ export async function completeDraftOrder(
   discountAmount?: number;
 }> {
   const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)(
-    "complete_draft_atomic_v5",
-    {
+  // 00335: NGÀY HOÁ ĐƠN chỉ có ở v6 (bọc ngoài v5). Gọi v6 trước; máy chủ chưa
+  // chạy Pha B thì lùi về v5 — vẫn nguyên tử, chỉ mất khả năng chỉnh ngày.
+  const thamSoChung = {
       p_invoice_id: invoiceId,
       p_customer_id: payment.customerId ?? null,
       p_items: payment.items,
@@ -1104,8 +1109,28 @@ export async function completeDraftOrder(
       p_client_session_id: payment.clientSessionId,
       p_expected_revision: payment.expectedRevision,
       p_expected_total: payment.expectedTotal,
-    },
-  );
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let { data, error } = await (supabase.rpc as any)("complete_draft_atomic_v6", {
+    ...thamSoChung,
+    p_issued_at: payment.issuedAt ?? null,
+    p_issued_reason: payment.issuedReason ?? null,
+    p_checkout_client_at: payment.checkoutClientAt ?? null,
+  });
+
+  if (isRpcUnavailable(error)) {
+    if (payment.issuedAt) {
+      throw new Error(
+        "Máy chủ chưa bật tính năng chỉnh Ngày hoá đơn. Vui lòng bỏ trống ngày để thanh toán bình thường.",
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ data, error } = await (supabase.rpc as any)(
+      "complete_draft_atomic_v5",
+      thamSoChung,
+    ));
+  }
 
   if (error) {
     if (

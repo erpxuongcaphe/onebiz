@@ -234,6 +234,16 @@ export async function offlinePosCheckout(
   const localId = `local_retail_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const localInvoiceCode = await getNextLocalRetailInvoiceNumber();
 
+  // 00335: ĐÓNG DẤU giờ bấm thanh toán NGAY LÚC NÀY và nhét vào chính payload
+  // — sync-manager replay lại payload nguyên vẹn nên dấu này sống sót qua mọi
+  // lần thử lại. TUYỆT ĐỐI không sinh timestamp mới lúc đồng bộ.
+  // Lưu ý: đây chỉ là mốc ĐỐI CHIẾU. Ngày hoá đơn (issued_at) vẫn do MÁY CHỦ
+  // quyết lúc đồng bộ — không lấy giờ máy client làm ngày kế toán.
+  const payloadCoDauGio: PosCheckoutInput = {
+    ...input,
+    checkoutClientAt: input.checkoutClientAt ?? new Date().toISOString(),
+  };
+
   try {
     await withQuotaRecovery(async () => {
       const db = await getDb();
@@ -246,7 +256,7 @@ export async function offlinePosCheckout(
         items: input.items,
         note: input.note,
         status: "pending_retail_checkout",
-        paymentData: input,
+        paymentData: payloadCoDauGio,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
@@ -254,7 +264,7 @@ export async function offlinePosCheckout(
 
     await enqueue({
       action: "posCheckout",
-      payload: input,
+      payload: payloadCoDauGio,
       localId,
       createdAt: new Date().toISOString(),
     });
