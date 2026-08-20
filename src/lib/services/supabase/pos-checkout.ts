@@ -88,6 +88,20 @@ export interface PosCheckoutInput {
    * detect trùng session_id → return existing invoice thay vì tạo mới.
    */
   clientSessionId?: string | null;
+  /**
+   * 00335 — NGÀY HOÁ ĐƠN do người dùng CHỦ ĐỘNG chỉnh. Bỏ trống = máy chủ tự
+   * lấy giờ lúc thanh toán (đường thường). Có giá trị ⇒ máy chủ bắt buộc
+   * quyền `invoices.adjust_issued_at` + lý do + ghi audit.
+   */
+  issuedAt?: string | null;
+  /** Lý do chỉnh ngày — bắt buộc khi `issuedAt` có giá trị. */
+  issuedReason?: string | null;
+  /**
+   * 00335 — giờ bấm thanh toán trên máy khi MẤT MẠNG. Đóng dấu NGAY lúc đưa
+   * vào hàng đợi và giữ nguyên qua mọi lần đồng bộ lại. Chỉ để đối chiếu,
+   * KHÔNG dùng làm ngày kế toán (ngày hoá đơn = giờ máy chủ lúc đồng bộ).
+   */
+  checkoutClientAt?: string | null;
   /** Explicit cashier confirmation for BOM shortage only. */
   allowBomShortage?: boolean;
 }
@@ -150,34 +164,60 @@ export async function posCheckout(input: PosCheckoutInput): Promise<PosCheckoutR
 
   // Server-side transaction only. POS checkout must fail closed if the RPC is
   // missing; falling back to the legacy multi-step client flow can create drift.
+  // 00335: tham số NGÀY HOÁ ĐƠN chỉ có ở v4. Gọi v4 trước; môi trường chưa
+  // chạy Pha B (không có v4) thì lùi về v3 — vẫn là RPC nguyên tử, chỉ mất
+  // khả năng chỉnh ngày. KHÔNG lùi về luồng nhiều bước phía client.
+  const thamSoChung = {
+    p_branch_id: input.branchId,
+    p_customer_id: input.customerId ?? null,
+    p_items: input.items,
+    p_payment_method: input.paymentMethod,
+    p_payment_breakdown: input.paymentBreakdown ?? null,
+    p_paid: input.paid,
+    p_note: input.note ?? null,
+    p_source: input.source ?? "pos",
+    p_shift_id: input.shiftId ?? null,
+    p_promotion_id: input.promotionId ?? null,
+    p_coupon_code: input.couponCode ?? null,
+    p_loyalty_points: input.loyaltyPoints ?? 0,
+    p_discount_source: input.discountSource ?? null,
+    p_order_discount: input.orderDiscountAmount ?? 0,
+    p_discount_otp_id: input.discountOtpId ?? null,
+    p_discount_reason: input.discountReason ?? null,
+    p_shipping_fee: input.shippingFee ?? 0,
+    p_order_vat_rate: input.orderVatRate ?? 0,
+    p_client_session_id: input.clientSessionId ?? null,
+    p_allow_bom_shortage: input.allowBomShortage ?? false,
+    p_amount_tendered: input.amountTendered ?? input.paid,
+    p_customer_credit: input.customerCredit ?? 0,
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-    "pos_complete_checkout_atomic_v3",
+  let { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+    "pos_complete_checkout_atomic_v4",
     {
-      p_branch_id: input.branchId,
-      p_customer_id: input.customerId ?? null,
-      p_items: input.items,
-      p_payment_method: input.paymentMethod,
-      p_payment_breakdown: input.paymentBreakdown ?? null,
-      p_paid: input.paid,
-      p_note: input.note ?? null,
-      p_source: input.source ?? "pos",
-      p_shift_id: input.shiftId ?? null,
-      p_promotion_id: input.promotionId ?? null,
-      p_coupon_code: input.couponCode ?? null,
-      p_loyalty_points: input.loyaltyPoints ?? 0,
-      p_discount_source: input.discountSource ?? null,
-      p_order_discount: input.orderDiscountAmount ?? 0,
-      p_discount_otp_id: input.discountOtpId ?? null,
-      p_discount_reason: input.discountReason ?? null,
-      p_shipping_fee: input.shippingFee ?? 0,
-      p_order_vat_rate: input.orderVatRate ?? 0,
-      p_client_session_id: input.clientSessionId ?? null,
-      p_allow_bom_shortage: input.allowBomShortage ?? false,
-      p_amount_tendered: input.amountTendered ?? input.paid,
-      p_customer_credit: input.customerCredit ?? 0,
+      ...thamSoChung,
+      p_issued_at: input.issuedAt ?? null,
+      p_issued_reason: input.issuedReason ?? null,
+      p_checkout_client_at: input.checkoutClientAt ?? null,
     },
   );
+
+  if (isRpcUnavailable(atomicError)) {
+    // Chưa có v4 → dùng v3. Nếu người dùng ĐANG chỉnh ngày thì phải báo lỗi
+    // rõ, không im lặng bỏ qua ngày họ nhập.
+    if (input.issuedAt) {
+      throw new Error(
+        "Máy chủ chưa bật tính năng chỉnh Ngày hoá đơn. Vui lòng bỏ trống ngày để thanh toán bình thường.",
+      );
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ({ data: atomicData, error: atomicError } = await (supabase.rpc as any)(
+      "pos_complete_checkout_atomic_v3",
+      thamSoChung,
+    ));
+  }
+
 
   if (!atomicError && atomicData) {
     const result = atomicData as {

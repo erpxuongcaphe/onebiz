@@ -44,9 +44,13 @@ describe("retail POS checkout", () => {
     });
 
     expect(result.invoiceCode).toBe("HD00001");
+    // 00335: client gọi v4 (bọc ngoài v3) và kèm 3 tham số ngày hoá đơn.
     expect(rpc).toHaveBeenCalledWith(
-      "pos_complete_checkout_atomic_v3",
+      "pos_complete_checkout_atomic_v4",
       expect.objectContaining({
+        p_issued_at: null,
+        p_issued_reason: null,
+        p_checkout_client_at: null,
         p_branch_id: "b1",
         p_payment_method: "mixed",
         p_payment_breakdown: [
@@ -70,6 +74,12 @@ describe("retail POS checkout", () => {
   });
 
   it("fails closed when the atomic RPC is unavailable", async () => {
+    // 00335: thiếu v4 thì lùi v3. Nếu THIẾU CẢ HAI thì vẫn phải fail closed —
+    // tuyệt đối không quay về luồng nhiều bước phía client.
+    rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: "Could not find the function", code: "PGRST202" },
+    });
     rpc.mockResolvedValueOnce({
       data: null,
       error: { message: "Could not find the function", code: "PGRST202" },

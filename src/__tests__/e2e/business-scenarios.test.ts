@@ -696,10 +696,12 @@ vi.mock("@/lib/services/supabase/base", () => ({
       ) {
         return simulateReceivePurchaseItemsAtomic(params);
       }
-      if (fn === "pos_complete_checkout_atomic_v3") {
+      if ((fn === "pos_complete_checkout_atomic_v3" ||
+          fn === "pos_complete_checkout_atomic_v4")) {
         return simulatePosCompleteCheckoutAtomic(params);
       }
-      if (fn === "complete_draft_atomic_v5") {
+      if ((fn === "complete_draft_atomic_v5" ||
+          fn === "complete_draft_atomic_v6")) {
         return simulateCompleteDraftAtomicV3(params);
       }
       if (fn === "complete_stock_transfer_atomic") {

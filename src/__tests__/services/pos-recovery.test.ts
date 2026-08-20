@@ -168,7 +168,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
-      if (fn === "pos_complete_checkout_atomic_v3") {
+      if ((fn === "pos_complete_checkout_atomic_v3" ||
+          fn === "pos_complete_checkout_atomic_v4")) {
         const data = mockInsertResponse.data as Record<string, unknown> | undefined;
         return {
           data: {
@@ -328,7 +329,7 @@ describe("saveDraftOrder — atomic by client_session_id", () => {
 
 describe("posCheckout — idempotency by client_session_id", () => {
   it("Return existing khi sessionId đã có invoice 'completed'", async () => {
-    mockRpcResponse.set("pos_complete_checkout_atomic_v3", {
+    mockRpcResponse.set("pos_complete_checkout_atomic_v4", {
       data: {
         invoice_id: "inv-already",
         invoice_code: "HD-ALREADY",
@@ -348,11 +349,11 @@ describe("posCheckout — idempotency by client_session_id", () => {
     // KHÔNG insert invoice mới (idempotent)
     const invoiceInsert = insertCalls.find((c) => c.table === "invoices");
     expect(invoiceInsert).toBeUndefined();
-    expect(rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3")).toBeDefined();
+    expect(rpcCalls.find((c) => (c.fn === "pos_complete_checkout_atomic_v3" || c.fn === "pos_complete_checkout_atomic_v4"))).toBeDefined();
   });
 
   it("Throw khi sessionId đã có invoice 'draft' (chưa hoàn tất)", async () => {
-    mockRpcResponse.set("pos_complete_checkout_atomic_v3", {
+    mockRpcResponse.set("pos_complete_checkout_atomic_v4", {
       data: null,
       error: { message: "Invoice HD-DRAFT đang ở trạng thái nháp; Tiếp tục đơn" },
     });
@@ -382,7 +383,7 @@ describe("posCheckout — idempotency by client_session_id", () => {
 
     expect(result.invoiceId).toBe("inv-fresh-checkout");
     expect(result.invoiceCode).toBe("HD-00010");
-    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3");
+    const checkoutRpc = rpcCalls.find((c) => (c.fn === "pos_complete_checkout_atomic_v3" || c.fn === "pos_complete_checkout_atomic_v4"));
     expect(checkoutRpc?.args).toMatchObject({
       p_client_session_id: "sid-fresh",
     });
@@ -404,7 +405,7 @@ describe("posCheckout — idempotency by client_session_id", () => {
     expect(result.invoiceId).toBe("inv-legacy");
     // RPC find không được gọi
     expect(rpcCalls.find((c) => c.fn === "find_invoice_by_session_id")).toBeUndefined();
-    const checkoutRpc = rpcCalls.find((c) => c.fn === "pos_complete_checkout_atomic_v3");
+    const checkoutRpc = rpcCalls.find((c) => (c.fn === "pos_complete_checkout_atomic_v3" || c.fn === "pos_complete_checkout_atomic_v4"));
     expect(checkoutRpc?.args).toMatchObject({
       p_client_session_id: null,
     });
