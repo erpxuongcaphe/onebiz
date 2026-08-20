@@ -15,6 +15,14 @@ export interface QueryParams {
   filters?: Record<string, string | string[]>;
   /** Lọc theo chi nhánh — undefined = tất cả chi nhánh (CEO view) */
   branchId?: string;
+  /**
+   * 00335 — cột ngày dùng để lọc/sắp xếp danh sách hoá đơn.
+   * Bỏ trống = "ngay_chung_tu" (NGÀY CHỨNG TỪ, mặc định cho mọi màn nghiệp vụ).
+   * Truyền "created_at" khi cần lọc theo THỜI ĐIỂM THAO TÁC THẬT — ví dụ đơn
+   * trong ca: mốc so sánh là giờ mở ca, nếu lọc theo ngày chứng từ thì hoá đơn
+   * ghi lùi ngày sẽ lọt/rơi khỏi ca sai.
+   */
+  dateColumn?: "ngay_chung_tu" | "created_at";
 }
 
 export interface QueryResult<T> {

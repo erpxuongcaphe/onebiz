@@ -12,6 +12,11 @@
  *   - getPromotionDetailRows():     Bảng chi tiết per-promo: campaigns
  */
 
+// Ngày chứng từ (migration 00335): bảng `invoices` dùng cột sinh tự động
+// `ngay_chung_tu` = coalesce(issued_at, created_at). Bảng `promotions` giữ
+// nguyên mốc thời gian riêng — đó là thời gian giao dịch thật của bảng đó.
+// Generated types chưa khai báo cột này → cast tại chỗ đọc.
+
 import type { Promotion } from "@/lib/types";
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
@@ -139,8 +144,8 @@ export async function getPromotionKpis(params?: {
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("promotion_id", "is", null)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (params?.branchId) invQuery = invQuery.eq("branch_id", params.branchId);
 
   const now = new Date().toISOString();
@@ -154,7 +159,7 @@ export async function getPromotionKpis(params?: {
 
   const [invoiceRows, promoRes] = await Promise.all([
     fetchAllPromotionRows(
-      () => invQuery.order("created_at", { ascending: true }),
+      () => invQuery.order("ngay_chung_tu", { ascending: true }),
       "getPromotionKpis:invoices",
     ),
     promoQuery,
@@ -225,10 +230,10 @@ export async function getPromotionDetailRows(params?: {
           .eq("tenant_id", tenantId)
           .eq("status", "completed")
           .not("promotion_id", "is", null)
-          .gte("created_at", range.start)
-          .lt("created_at", range.end);
+          .gte("ngay_chung_tu", range.start)
+          .lt("ngay_chung_tu", range.end);
         if (params?.branchId) query = query.eq("branch_id", params.branchId);
-        return query.order("created_at", { ascending: true });
+        return query.order("ngay_chung_tu", { ascending: true });
       },
       "getPromotionDetailRows:invoices",
     ),
@@ -310,15 +315,15 @@ export async function getPromotionDailyTrend(params?: {
 
   let query = supabase
     .from("invoices")
-    .select("created_at, promotion_discount")
+    .select("ngay_chung_tu, promotion_discount")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("promotion_id", "is", null)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
 
-  const data = await fetchAllPromotionRows(() => query.order("created_at", { ascending: true }), "getPromotionDailyTrend");
+  const data = await fetchAllPromotionRows(() => query.order("ngay_chung_tu", { ascending: true }), "getPromotionDailyTrend");
 
   // Bucketize by date (local)
   const buckets = new Map<string, { usageCount: number; totalDiscount: number }>();
@@ -327,11 +332,11 @@ export async function getPromotionDailyTrend(params?: {
     buckets.set(key, { usageCount: 0, totalDiscount: 0 });
   }
 
-  for (const row of (data ?? []) as Array<{
-    created_at: string;
+  for (const row of (data ?? []) as unknown as Array<{
+    ngay_chung_tu: string;
     promotion_discount: number;
   }>) {
-    const d = new Date(row.created_at);
+    const d = new Date(row.ngay_chung_tu);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     const bucket = buckets.get(key);
     if (!bucket) continue;

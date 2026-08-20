@@ -3,7 +3,14 @@
  * Truy vấn tổng hợp cho trang Tổng quan (/)
  */
 
+// Ngày chứng từ (migration 00335): bảng `invoices` dùng cột sinh tự động
+// `ngay_chung_tu` = coalesce(issued_at, created_at). Các bảng khác (customers,
+// cash_transactions, audit_log) giữ `created_at` — thời gian giao dịch thật.
+// Generated types chưa khai báo cột này → cast `InvoiceDocRow` tại chỗ đọc.
+
 import { getClient, handleError, getCurrentTenantId } from "./base";
+
+type InvoiceDocRow = { ngay_chung_tu: string; total: number | null; status: string };
 
 // === Types ===
 
@@ -109,14 +116,14 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .from("invoices")
       .select("total, delivery_fee, discount_amount, status")
       .eq("tenant_id", tenantId)
-      .gte("created_at", today.start)
-      .lt("created_at", today.end)),
+      .gte("ngay_chung_tu", today.start)
+      .lt("ngay_chung_tu", today.end)),
     bq(supabase
       .from("invoices")
       .select("total, delivery_fee, discount_amount, status")
       .eq("tenant_id", tenantId)
-      .gte("created_at", yesterday.start)
-      .lt("created_at", yesterday.end)),
+      .gte("ngay_chung_tu", yesterday.start)
+      .lt("ngay_chung_tu", yesterday.end)),
     supabase
       .from("customers")
       .select("id", { count: "exact", head: true })
@@ -253,12 +260,12 @@ export async function getRevenueByDay(days: number = 7, branchId?: string): Prom
 
   let query = supabase
     .from("invoices")
-    .select("created_at, total, status")
+    .select("ngay_chung_tu, total, status")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end)
-    .order("created_at", { ascending: true });
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end)
+    .order("ngay_chung_tu", { ascending: true });
   if (branchId) query = query.eq("branch_id", branchId);
 
   const { data, error } = await query;
@@ -275,8 +282,8 @@ export async function getRevenueByDay(days: number = 7, branchId?: string): Prom
     grouped.set(key, 0);
   }
 
-  (data ?? []).forEach((inv) => {
-    const d = new Date(inv.created_at);
+  ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
+    const d = new Date(inv.ngay_chung_tu);
     const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, (grouped.get(key) ?? 0) + (inv.total ?? 0));
   });
@@ -291,11 +298,11 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
 
   let query = supabase
     .from("invoices")
-    .select("created_at, total")
+    .select("ngay_chung_tu, total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", today.start)
-    .lt("created_at", today.end);
+    .gte("ngay_chung_tu", today.start)
+    .lt("ngay_chung_tu", today.end);
   if (branchId) query = query.eq("branch_id", branchId);
 
   const { data, error } = await query;
@@ -306,8 +313,8 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
   // bán sau 21h hay trước 7h thì doanh thu đó biến mất khỏi biểu đồ.
   // Giờ lấy đúng khoảng giờ CÓ phát sinh doanh thu trong ngày.
   const byHour = new Array<number>(24).fill(0);
-  for (const inv of data ?? []) {
-    const h = new Date(inv.created_at).getHours();
+  for (const inv of (data ?? []) as unknown as InvoiceDocRow[]) {
+    const h = new Date(inv.ngay_chung_tu).getHours();
     if (h >= 0 && h <= 23) byHour[h] += inv.total ?? 0;
   }
 
@@ -334,11 +341,11 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
 
   let query = supabase
     .from("invoices")
-    .select("created_at, total")
+    .select("ngay_chung_tu, total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
 
   const { data, error } = await query;
@@ -349,8 +356,8 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
   const grouped = new Map<number, number>();
   for (let i = 0; i < 7; i++) grouped.set(i, 0);
 
-  (data ?? []).forEach((inv) => {
-    const day = new Date(inv.created_at).getDay();
+  ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
+    const day = new Date(inv.ngay_chung_tu).getDay();
     grouped.set(day, (grouped.get(day) ?? 0) + (inv.total ?? 0));
   });
 
@@ -370,10 +377,10 @@ export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartP
 
   let query = supabase
     .from("invoices")
-    .select("created_at, status")
+    .select("ngay_chung_tu, status")
     .eq("tenant_id", tenantId)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
 
   const { data, error } = await query;
@@ -385,8 +392,8 @@ export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartP
   const cancelled = new Map<number, number>();
   for (let i = 0; i < 7; i++) { completed.set(i, 0); cancelled.set(i, 0); }
 
-  (data ?? []).forEach((inv) => {
-    const day = new Date(inv.created_at).getDay();
+  ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
+    const day = new Date(inv.ngay_chung_tu).getDay();
     if (inv.status === "completed") completed.set(day, (completed.get(day) ?? 0) + 1);
     else if (inv.status === "cancelled") cancelled.set(day, (cancelled.get(day) ?? 0) + 1);
   });
@@ -408,9 +415,9 @@ export async function getTopProducts(limit: number = 10, branchId?: string): Pro
   // invoice_items không có tenant_id riêng — scope qua invoices.tenant_id
   let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
+    .select("product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", range.start)
+    .gte("invoices.ngay_chung_tu", range.start)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
 

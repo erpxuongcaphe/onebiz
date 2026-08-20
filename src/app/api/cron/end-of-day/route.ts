@@ -54,8 +54,9 @@ export async function GET(req: NextRequest) {
         .select("total")
         .eq("tenant_id", tenant.id)
         .eq("status", "completed")
-        .gte("created_at", dayStart)
-        .lte("created_at", dayEnd);
+        // 00335: doanh thu chốt theo NGÀY CHỨNG TỪ
+        .gte("ngay_chung_tu", dayStart)
+        .lte("ngay_chung_tu", dayEnd);
       const totalRevenue = (revenueRow ?? []).reduce(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (sum: number, row: any) => sum + Number(row.total ?? 0),

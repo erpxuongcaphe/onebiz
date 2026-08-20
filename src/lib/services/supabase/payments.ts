@@ -128,7 +128,7 @@ export async function getOpenInvoicesByCustomer(
 
   let query = supabase
     .from("invoices")
-    .select("id, code, created_at, total, paid, debt, status")
+    .select("id, code, ngay_chung_tu, total, paid, debt, status")
     .eq("tenant_id", ctx.tenantId)
     .eq("customer_id", customerId)
     .gt("debt", 0)
@@ -137,18 +137,18 @@ export async function getOpenInvoicesByCustomer(
     .eq("status", "completed");
 
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query.order("created_at", { ascending: true });
+  const { data, error } = await query.order("ngay_chung_tu", { ascending: true });
 
   if (error) handleError(error, "getOpenInvoicesByCustomer");
 
   const now = Date.now();
   return (data ?? []).map((row) => {
-    const created = new Date(row.created_at as string).getTime();
+    const created = new Date(row.ngay_chung_tu as string).getTime();
     const ageDays = Math.max(0, Math.floor((now - created) / 86400000));
     return {
       id: row.id as string,
       code: row.code as string,
-      date: row.created_at as string,
+      date: row.ngay_chung_tu as string,
       total: Number(row.total ?? 0),
       paid: Number(row.paid ?? 0),
       debt: Number(row.debt ?? 0),
