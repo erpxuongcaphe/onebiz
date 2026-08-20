@@ -274,8 +274,9 @@ async function getBranchRevenueWeights(
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .in("branch_id", branchIds)
-    .gte("created_at", start.toISOString())
-    .lte("created_at", end.toISOString());
+    // 00335: doanh thu theo NGÀY CHỨNG TỪ
+    .gte("ngay_chung_tu", start.toISOString())
+    .lte("ngay_chung_tu", end.toISOString());
   if (error) handleError(error, "getBranchRevenueWeights");
 
   const revByBranch = new Map<string, number>();
@@ -589,8 +590,9 @@ async function computeActualForKpi(
       .select("total, customer_id")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso);
+      // 00335: KPI theo NGÀY CHỨNG TỪ
+      .gte("ngay_chung_tu", startIso)
+      .lt("ngay_chung_tu", endIso);
     if (branchId) q = q.eq("branch_id", branchId);
     const { data, error } = await q;
     if (error) throw new Error(error.message);
@@ -614,8 +616,9 @@ async function computeActualForKpi(
       .select("id, total")
       .eq("tenant_id", tenantId)
       .eq("status", "completed")
-      .gte("created_at", startIso)
-      .lt("created_at", endIso);
+      // 00335: KPI theo NGÀY CHỨNG TỪ
+      .gte("ngay_chung_tu", startIso)
+      .lt("ngay_chung_tu", endIso);
     if (branchId) invQ = invQ.eq("branch_id", branchId);
     const { data: invs, error: invErr } = await invQ;
     if (invErr) throw new Error(invErr.message);

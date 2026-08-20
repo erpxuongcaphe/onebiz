@@ -3,9 +3,17 @@
  * Filters on invoices.source = 'fnb' and joins kitchen_orders + kitchen_order_items.
  */
 
+// Ngày chứng từ (migration 00335): bảng `invoices` dùng cột sinh tự động
+// `ngay_chung_tu` = coalesce(issued_at, created_at). Toàn bộ `kitchen_orders`
+// giữ `created_at` — đó là thời gian vận hành/giao dịch thật của đơn bếp.
+// Generated types chưa khai báo cột này → cast `InvoiceDocRow` tại chỗ đọc.
+
 import { getClient, getCurrentTenantId, handleError } from "./base";
 import { formatShortDate } from "@/lib/format";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
+
+type InvoiceDocRow = { ngay_chung_tu: string; total: number | null };
+
 const FNB_REPORT_PAGE_SIZE = 1000;
 
 interface FnbPagedQuery<T> {
@@ -89,18 +97,18 @@ export async function getFnbKpis(
 
   let query = supabase
     .from("invoices")
-    .select("id, total, created_at")
+    .select("id, total, ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
 
   if (branchId) query = query.eq("branch_id", branchId);
   if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
   }
 
   const invoices = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[getFnbKpis.invoices]");
-  const rows = invoices ?? [];
+  const rows = (invoices ?? []) as unknown as InvoiceDocRow[];
 
   const totalRevenue = rows.reduce((s, r) => s + Number(r.total ?? 0), 0);
   const totalOrders = rows.length;
@@ -248,13 +256,13 @@ export async function getRevenueByHourFnb(
 
   let query = supabase
     .from("invoices")
-    .select("total, created_at")
+    .select("total, ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
   if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
   }
 
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
@@ -264,8 +272,8 @@ export async function getRevenueByHourFnb(
     hourMap.set(h, { revenue: 0, orders: 0 });
   }
 
-  for (const row of rows ?? []) {
-    const hour = new Date(row.created_at).getHours();
+  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
+    const hour = new Date(row.ngay_chung_tu).getHours();
     const prev = hourMap.get(hour)!;
     prev.revenue += Number(row.total ?? 0);
     prev.orders += 1;
@@ -300,7 +308,7 @@ export async function getCashierPerformance(
     .not("status", "eq", "cancelled");
   if (branchId) query = query.eq("branch_id", branchId);
   if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
   }
 
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
@@ -504,18 +512,18 @@ export async function getDailyRevenueFnb(
 
   let query = supabase
     .from("invoices")
-    .select("total, created_at")
+    .select("total, ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled")
-    .gte("created_at", since.toISOString());
+    .gte("ngay_chung_tu", since.toISOString());
   if (branchId) query = query.eq("branch_id", branchId);
 
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { revenue: number; orders: number }>();
-  for (const row of rows ?? []) {
-    const date = formatShortDate(row.created_at);
+  for (const row of (rows ?? []) as unknown as InvoiceDocRow[]) {
+    const date = formatShortDate(row.ngay_chung_tu);
     const prev = map.get(date) ?? { revenue: 0, orders: 0 };
     prev.revenue += Number(row.total ?? 0);
     prev.orders += 1;

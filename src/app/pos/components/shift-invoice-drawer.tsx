@@ -9,7 +9,8 @@
  *
  * Filter:
  * - branch_id = current branch
- * - created_at >= shift.openedAt
+ * - created_at >= shift.openedAt (THỜI ĐIỂM THAO TÁC THẬT — cố ý KHÔNG dùng
+ *   ngay_chung_tu của 00335, xem dateColumn bên dưới)
  * - status = completed (loại nháp + huỷ)
  *
  * Refresh khi mở (không live update — open lại để refresh).
@@ -62,6 +63,9 @@ export function ShiftInvoiceDrawer({
         pageSize: 50,
         branchId,
         filters,
+        // 00335: đơn TRONG CA lọc theo THỜI ĐIỂM THAO TÁC THẬT, không theo ngày
+        // chứng từ — hoá đơn ghi lùi ngày không được lọt/rơi khỏi ca.
+        dateColumn: "created_at",
       });
       setInvoices(result.data);
     } catch (err) {

@@ -61,7 +61,7 @@ interface AbcItemQueryRow {
   product_name: string;
   quantity: number;
   total: number;
-  invoices: { created_at: string };
+  invoices: { ngay_chung_tu: string };
 }
 
 export type AbcClass = "A" | "B" | "C" | "slow";
@@ -139,12 +139,13 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   let itemsQuery = (supabase as any)
     .from("invoice_items")
     .select(
-      "product_id, product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)",
+      "product_id, product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
     )
     .eq("invoices.tenant_id", tenantId)
     .eq("invoices.status", "completed")
-    .gte("invoices.created_at", rangeWindow.start)
-    .lt("invoices.created_at", rangeWindow.end);
+    // 00335: lọc theo NGÀY CHỨNG TỪ của hoá đơn
+    .gte("invoices.ngay_chung_tu", rangeWindow.start)
+    .lt("invoices.ngay_chung_tu", rangeWindow.end);
   if (branchId) itemsQuery = itemsQuery.eq("invoices.branch_id", branchId);
   const items = await fetchAllAbcRows<AbcItemQueryRow>(() => itemsQuery.order("id", { ascending: true }), "getAbcReport.items");
 
@@ -155,7 +156,7 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   >();
   for (const item of items ?? []) {
     const pid = item.product_id as string;
-    const inv = item.invoices as { created_at: string };
+    const inv = item.invoices as { ngay_chung_tu: string };
     const existing = aggMap.get(pid) ?? {
       qty: 0,
       revenue: 0,
@@ -165,9 +166,9 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
     existing.revenue += Number(item.total ?? 0);
     if (
       !existing.lastSoldAt ||
-      new Date(inv.created_at) > new Date(existing.lastSoldAt)
+      new Date(inv.ngay_chung_tu) > new Date(existing.lastSoldAt)
     ) {
-      existing.lastSoldAt = inv.created_at;
+      existing.lastSoldAt = inv.ngay_chung_tu;
     }
     aggMap.set(pid, existing);
   }

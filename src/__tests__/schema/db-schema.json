@@ -1248,6 +1248,7 @@
    "cancel_reason",
    "cancelled_at",
    "cancelled_by",
+   "checkout_client_at",
    "client_session_id",
    "code",
    "created_at",
@@ -1265,6 +1266,8 @@
    "draft_revision",
    "fulfilled_by_id",
    "id",
+   "issued_at",
+   "ngay_chung_tu",
    "note",
    "order_code",
    "paid",
@@ -2378,6 +2381,6 @@
   "void_internal_export_atomic"
  ],
  "soBang": 137,
- "soCot": 1749,
+ "soCot": 1752,
  "soRpc": 351
 }

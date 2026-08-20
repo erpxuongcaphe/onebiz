@@ -1,10 +1,16 @@
 /**
  * Supabase service: Invoices
+ *
+ * 00335 — NGÀY CHỨNG TỪ: hoá đơn lọc/sắp xếp/hiển thị theo cột sinh
+ * `ngay_chung_tu` = coalesce(issued_at, created_at). Hoá đơn đã phát hành lấy
+ * ngày hoá đơn, nháp chưa phát hành lấy ngày tạo. `created_at` chỉ còn là dấu
+ * vết tạo bản ghi; các bảng khác (sales_returns…) vẫn giữ created_at vì đó là
+ * thời điểm giao dịch thật.
  */
 
 import type { Invoice, QueryParams, QueryResult } from "@/lib/types";
 import {
-  applyCreatedAtRangeFilter,
+  applyDateRangeFilter,
   normalizeCreatedAtRange,
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
@@ -67,7 +73,11 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
       query = query.eq("status", params.filters.status as any);
     }
   }
-  query = applyCreatedAtRangeFilter(query, params.filters);
+  // 00335: mặc định lọc theo NGÀY CHỨNG TỪ để khớp KPI đầu trang (RPC
+  // get_invoice_list_summary dùng cùng công thức coalesce). Nơi cần thời điểm
+  // thao tác thật (đơn trong ca) truyền dateColumn="created_at".
+  const cotNgay = params.dateColumn ?? "ngay_chung_tu";
+  query = applyDateRangeFilter(query, cotNgay, params.filters);
   // Anti-join chỉ đọc: giữ các hóa đơn không có vận đơn liên quan.
   // Nhánh "delivery" đã dùng !inner trong select nên tự loại hóa đơn không có vận đơn.
   if (shipmentPlan.requireNull) {
@@ -80,7 +90,7 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
 
   // Sort & paginate
   query = query
-    .order("created_at", { ascending: false })
+    .order(cotNgay, { ascending: false })
     .range(from, to);
 
   const { data, count, error } = await query;
@@ -167,7 +177,7 @@ export async function getInvoicesForCustomer(
     .select("*, profiles!invoices_created_by_fkey(full_name)")
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
-    .order("created_at", { ascending: false })
+    .order("ngay_chung_tu", { ascending: false })
     .limit(limit);
 
   if (error) handleError(error, "getInvoicesForCustomer");
@@ -250,13 +260,13 @@ export async function getFnbRecentInvoices(params: {
 
   let query = supabase
     .from("invoices")
-    .select("id, code, customer_name, total, paid, tip_amount, payment_method, created_at")
+    .select("id, code, customer_name, total, paid, tip_amount, payment_method, ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("branch_id", params.branchId)
     .eq("source", "fnb")
     .eq("status", "completed")
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false })
+    .gte("ngay_chung_tu", sinceIso)
+    .order("ngay_chung_tu", { ascending: false })
     .limit(params.limit ?? 50);
 
   if (params.search) {
@@ -305,7 +315,7 @@ export async function getFnbRecentInvoices(params: {
       paid: Number(row.paid ?? 0),
       tipAmount: Number(row.tip_amount ?? 0),
       paymentMethod: row.payment_method ?? "cash",
-      createdAt: row.created_at,
+      createdAt: row.ngay_chung_tu,
       kitchenOrderId: ko?.id ?? null,
       kitchenOrderNumber: ko?.orderNumber ?? null,
       tableName: ko?.tableName ?? null,
@@ -346,7 +356,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     // invoices có platform_commission (KHÔNG có platform_commission_amount —
     // cột đó thuộc kitchen_orders). Danh sách cột cũ copy nhầm nên select lỗi
     // 42703 → in lại hoá đơn F&B chết hoàn toàn.
-    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, created_at, platform_commission, platform_commission_percent")
+    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, ngay_chung_tu, platform_commission, platform_commission_percent")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
@@ -385,7 +395,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     tipAmount: Number(inv.tip_amount ?? 0),
     discountAmount: Number(inv.discount_amount ?? 0),
     paymentMethod: inv.payment_method ?? "cash",
-    createdAt: inv.created_at,
+    createdAt: inv.ngay_chung_tu,
     orderNumber: k?.order_number ?? inv.code,
     tableName: tableNumber ? `Bàn ${tableNumber}` : null,
     orderType: k?.order_type ?? "takeaway",
@@ -591,7 +601,9 @@ function mapInvoice(row: any): Invoice {
     code: row.code,
     // Mã đơn gốc DH/NH trước khi hoàn tất → HD (00169) — truy vết ở trang Hóa đơn.
     orderCode: row.order_code ?? undefined,
-    date: row.created_at,
+    // 00335: NGÀY HOÁ ĐƠN. Cột sinh ngay_chung_tu = coalesce(issued_at,
+    // created_at); giữ nhánh dự phòng cho nơi select thiếu cột.
+    date: row.ngay_chung_tu ?? row.created_at,
     customerId: row.customer_id ?? "",
     // Lấy mã KH từ join customers (trước hardcode "" → cột "Mã KH" UI
     // luôn hiện "—" dù KH có code thật).

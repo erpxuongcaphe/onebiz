@@ -549,6 +549,14 @@ export interface Database {
           promotion_id: string | null;
           promotion_discount: number;
           promotion_free_value: number;
+          // 00335 — NGÀY HOÁ ĐƠN. issued_at: ngày phát hành chứng từ bán
+          // (NULL = nháp/đơn đặt chưa bán). checkout_client_at: giờ bấm thanh
+          // toán trên máy khi mất mạng — THAM KHẢO, không dùng kế toán.
+          // ngay_chung_tu: cột SINH = coalesce(issued_at, created_at), CHỈ ĐỌC
+          // (không có trong Insert/Update) — dùng để lọc/sắp xếp/hiển thị.
+          issued_at: string | null;
+          checkout_client_at: string | null;
+          ngay_chung_tu: string;
         };
         Insert: {
           id?: string;

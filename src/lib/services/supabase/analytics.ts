@@ -1,6 +1,11 @@
 /**
  * Supabase service: Analytics aggregate queries
  * Truy vấn tổng hợp cho 9 trang Phân tích (/phan-tich/*)
+ *
+ * 00335 — NGÀY CHỨNG TỪ: bảng `invoices` lọc/sắp xếp/đọc theo cột sinh
+ * `ngay_chung_tu` = coalesce(issued_at, created_at). Các bảng khác (sales_returns,
+ * stock_movements, purchase_orders, cash_transactions…) giữ `created_at` vì là
+ * thời gian giao dịch thật.
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
@@ -369,9 +374,9 @@ export async function getOverviewKpis(
               .from("invoices")
               .select("status")
               .eq("tenant_id", tenantId)
-              .gte("created_at", current.start)
-              .lt("created_at", current.end),
-          ).order("created_at", { ascending: true }),
+              .gte("ngay_chung_tu", current.start)
+              .lt("ngay_chung_tu", current.end),
+          ).order("ngay_chung_tu", { ascending: true }),
         "[getOverviewKpis.currentInvoices]",
       ),
       fetchAllPostgrestRows(
@@ -381,9 +386,9 @@ export async function getOverviewKpis(
               .from("invoices")
               .select("status")
               .eq("tenant_id", tenantId)
-              .gte("created_at", previous.start)
-              .lt("created_at", previous.end),
-          ).order("created_at", { ascending: true }),
+              .gte("ngay_chung_tu", previous.start)
+              .lt("ngay_chung_tu", previous.end),
+          ).order("ngay_chung_tu", { ascending: true }),
         "[getOverviewKpis.previousInvoices]",
       ),
       getCustomerKpis(branchId, range),
@@ -418,15 +423,16 @@ export async function getDailyRevenue(
   const tenantId = await getCurrentTenantId();
   const range = toCreatedAtRangeWindow(customRange) ?? lastNDaysRange(days);
 
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
-    .select("created_at, total")
+    .select("ngay_chung_tu, total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getDailyRevenue]");
+  const data = await fetchAllPostgrestRows<{ ngay_chung_tu: string; total: number | null }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getDailyRevenue]");
 
   // P1-3B-R3 12/06/2026: seed days theo RANGE đã chọn (không phải `now`).
   // Trước đây nếu customRange = "Tháng trước" (vd 01/05-31/05), grouped vẫn
@@ -440,8 +446,8 @@ export async function getDailyRevenue(
     grouped.set(key, 0);
   }
 
-  (data ?? []).forEach((inv: { created_at: string; total: number | null }) => {
-    const d = new Date(inv.created_at);
+  (data ?? []).forEach((inv: { ngay_chung_tu: string; total: number | null }) => {
+    const d = new Date(inv.ngay_chung_tu);
     const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, (grouped.get(key) ?? 0) + (inv.total ?? 0));
   });
@@ -459,10 +465,10 @@ export async function getRevenueByCategory(
 
   let query = supabase
     .from("invoice_items")
-    .select("total, products!inner(category_id, categories(name)), invoices!inner(created_at, status, branch_id, tenant_id)")
+    .select("total, products!inner(category_id, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
+    .gte("invoices.ngay_chung_tu", r.start)
+    .lt("invoices.ngay_chung_tu", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const data = await fetchAllPostgrestRows(() => query.order("id", { ascending: true }), "[getRevenueByCategory]");
@@ -513,19 +519,19 @@ export async function getSalesKpis(
 
   const [thisInv, prevInv, thisItems, prevItems, thisReturns, prevReturns] = await Promise.all([
     fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("ngay_chung_tu", current.start).lt("ngay_chung_tu", current.end)).order("ngay_chung_tu", { ascending: true }),
       "[getSalesKpis.currentInvoices]",
     ),
     fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("created_at", prev.start).lt("created_at", prev.end)).order("created_at", { ascending: true }),
+      () => bq(supabase.from("invoices").select("total, delivery_fee, status").eq("tenant_id", tenantId).gte("ngay_chung_tu", prev.start).lt("ngay_chung_tu", prev.end)).order("ngay_chung_tu", { ascending: true }),
       "[getSalesKpis.previousInvoices]",
     ),
     fetchAllPostgrestRows(
-      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", current.start).lt("invoices.created_at", current.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", current.start).lt("invoices.ngay_chung_tu", current.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
       "[getSalesKpis.currentItems]",
     ),
     fetchAllPostgrestRows(
-      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(created_at, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.created_at", prev.start).lt("invoices.created_at", prev.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", prev.start).lt("invoices.ngay_chung_tu", prev.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
       "[getSalesKpis.previousItems]",
     ),
     fetchAllPostgrestRows(
@@ -586,18 +592,19 @@ export async function getRevenueByWeekday(
   // user đổi preset trên /phan-tich/ban-hang nhưng panel "Theo thứ" giữ nguyên.
   const r = resolveRange(range, lastNDaysRange(30));
 
-  let query = supabase
-    .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
-    .gte("created_at", r.start).lt("created_at", r.end);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("invoices").select("ngay_chung_tu, total").eq("tenant_id", tenantId).eq("status", "completed")
+    .gte("ngay_chung_tu", r.start).lt("ngay_chung_tu", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getRevenueByWeekday]");
+  const data = await fetchAllPostgrestRows<{ ngay_chung_tu: string; total: number | null }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getRevenueByWeekday]");
 
   const weekdays = ["CN", "T2", "T3", "T4", "T5", "T6", "T7"];
   const grouped = new Map<number, number>();
   for (let i = 0; i < 7; i++) grouped.set(i, 0);
 
   (data ?? []).forEach((inv) => {
-    const day = new Date(inv.created_at).getDay();
+    const day = new Date(inv.ngay_chung_tu).getDay();
     grouped.set(day, (grouped.get(day) ?? 0) + (inv.total ?? 0));
   });
 
@@ -612,15 +619,16 @@ export async function getRevenueByHour(
   const tenantId = await getCurrentTenantId();
   const r = toCreatedAtRangeWindow(range) ?? todayRange();
 
-  let query = supabase
-    .from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed")
-    .gte("created_at", r.start).lt("created_at", r.end);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
+    .from("invoices").select("ngay_chung_tu, total").eq("tenant_id", tenantId).eq("status", "completed")
+    .gte("ngay_chung_tu", r.start).lt("ngay_chung_tu", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getRevenueByHour]");
+  const data = await fetchAllPostgrestRows<{ ngay_chung_tu: string; total: number | null }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getRevenueByHour]");
 
   const hours: ChartPoint[] = [];
   for (let h = 0; h < 24; h++) {
-    const val = (data ?? []).filter(i => new Date(i.created_at).getHours() === h).reduce((s, i) => s + (i.total ?? 0), 0);
+    const val = (data ?? []).filter(i => new Date(i.ngay_chung_tu).getHours() === h).reduce((s, i) => s + (i.total ?? 0), 0);
     hours.push({ label: `${h}h`, value: val });
   }
   return hours;
@@ -636,13 +644,14 @@ export async function getTopInvoices(
   // P1-3B-R2: nhận range — trước đây hardcode thisMonthRange.
   const r = resolveRange(range, thisMonthRange());
 
-  let query = supabase
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (supabase as any)
     .from("invoices")
-    .select("code, total, created_at, customers(name)")
+    .select("code, total, ngay_chung_tu, customers(name)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", r.start)
-    .lt("created_at", r.end)
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end)
     .order("total", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -652,7 +661,7 @@ export async function getTopInvoices(
 
   return (data ?? []).map((inv: Record<string, unknown>) => {
     const customer = inv.customers as { name: string } | null;
-    const d = new Date(inv.created_at as string);
+    const d = new Date(inv.ngay_chung_tu as string);
     return {
       code: inv.code as string,
       customer: customer?.name ?? "Khách lẻ",
@@ -810,7 +819,10 @@ function mapSalesInvoiceExportRow(row: Record<string, unknown>): SalesInvoiceExp
     paid: number(row.paid),
     debt: number(row.debt),
     paymentMethod: String(row.payment_method ?? ""),
-    createdAt: String(row.created_at ?? ""),
+    // 00335: RPC get_sales_report_invoice_page trả về CẢ issued_at lẫn
+    // created_at. Xuất Excel lấy NGÀY CHỨNG TỪ; giữ nhánh dự phòng cho bản
+    // RPC cũ chưa có issued_at.
+    createdAt: String(row.issued_at ?? row.created_at ?? ""),
   };
 }
 
@@ -855,11 +867,11 @@ export async function getEndOfDayStats(
 
   const [todayInv, yesterdayInv, todayReturns] = await Promise.all([
     fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", current.start).lt("created_at", current.end)).order("created_at", { ascending: true }),
+      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("ngay_chung_tu", current.start).lt("ngay_chung_tu", current.end)).order("ngay_chung_tu", { ascending: true }),
       "[getEndOfDayStats.currentInvoices]",
     ),
     fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("created_at", previous.start).lt("created_at", previous.end)).order("created_at", { ascending: true }),
+      () => bq(supabase.from("invoices").select("total, status, payment_method").eq("tenant_id", tenantId).gte("ngay_chung_tu", previous.start).lt("ngay_chung_tu", previous.end)).order("ngay_chung_tu", { ascending: true }),
       "[getEndOfDayStats.previousInvoices]",
     ),
     fetchAllPostgrestRows(
@@ -908,10 +920,10 @@ export async function getTodayTopProducts(
 
   let query = supabase
     .from("invoice_items")
-    .select("product_name, quantity, invoices!inner(created_at, status, branch_id, tenant_id)")
+    .select("product_name, quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
+    .gte("invoices.ngay_chung_tu", r.start)
+    .lt("invoices.ngay_chung_tu", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const data = await fetchAllPostgrestRows(() => query.order("id", { ascending: true }), "[getTodayTopProducts]");
@@ -962,10 +974,10 @@ export async function getOrdersKpis(
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("created_at", { ascending: true }), "[getOrdersKpis]");
+  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getOrdersKpis]");
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prevQuery = (supabase as any)
@@ -974,8 +986,8 @@ export async function getOrdersKpis(
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
-    .gte("created_at", prev.start)
-    .lt("created_at", prev.end);
+    .gte("ngay_chung_tu", prev.start)
+    .lt("ngay_chung_tu", prev.end);
   if (branchId) prevQuery = prevQuery.eq("branch_id", branchId);
   const { count: prevTotal } = await prevQuery;
 
@@ -1006,14 +1018,14 @@ export async function getDailyOrderVolume(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
-    .select("created_at")
+    .select("ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("ngay_chung_tu", range.start)
+    .lt("ngay_chung_tu", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows<{ created_at: string }>(() => query.order("created_at", { ascending: true }), "[getDailyOrderVolume]");
+  const data = await fetchAllPostgrestRows<{ ngay_chung_tu: string }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getDailyOrderVolume]");
 
   const dayKeys = dayKeysForRange(customRange, days);
   const grouped = new Map(dayKeys.map((key) => [key, 0]));
@@ -1021,8 +1033,8 @@ export async function getDailyOrderVolume(
     customRange !== undefined &&
     customRange.from.slice(0, 4) !== customRange.to.slice(0, 4);
 
-  (data ?? []).forEach((inv: { created_at: string }) => {
-    const d = new Date(inv.created_at);
+  (data ?? []).forEach((inv: { ngay_chung_tu: string }) => {
+    const d = new Date(inv.ngay_chung_tu);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     if (!grouped.has(key)) return;
     grouped.set(key, (grouped.get(key) ?? 0) + 1);
@@ -1053,10 +1065,10 @@ export async function getOrderStatusDistribution(
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("created_at", { ascending: true }), "[getOrderStatusDistribution]");
+  const data = await fetchAllPostgrestRows<{ status: string }>(() => query.order("ngay_chung_tu", { ascending: true }), "[getOrderStatusDistribution]");
 
   const statusMap: Record<string, string> = {
     completed: "Hoàn thành",
@@ -1087,16 +1099,16 @@ export async function getRecentOrders(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
     .from("invoices")
-    .select("id, code, order_code, total, status, created_at, customers(name)")
+    .select("id, code, order_code, total, status, ngay_chung_tu, customers(name)")
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
-    .order("created_at", { ascending: false })
+    .order("ngay_chung_tu", { ascending: false })
     .limit(limit);
   if (branchId) query = query.eq("branch_id", branchId);
   if (range) {
     const r = resolveRange(range, thisMonthRange());
-    query = query.gte("created_at", r.start).lt("created_at", r.end);
+    query = query.gte("ngay_chung_tu", r.start).lt("ngay_chung_tu", r.end);
   }
   const { data, error } = await query;
 
@@ -1104,7 +1116,7 @@ export async function getRecentOrders(
 
   return (data ?? []).map((inv: Record<string, unknown>) => {
     const customer = inv.customers as { name: string } | null;
-    const d = new Date(inv.created_at as string);
+    const d = new Date(inv.ngay_chung_tu as string);
     const statusMap: Record<string, string> = {
       completed: "Hoàn thành",
       pending: "Chờ xử lý",
@@ -1155,10 +1167,10 @@ export async function getOrderProductBreakdown(
     .eq("source", "order")
     .neq("status", "cancelled")
     .is("deleted_at", null)
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end);
   if (branchId) invQuery = invQuery.eq("branch_id", branchId);
-  const invs = await fetchAllPostgrestRows(() => invQuery.order("created_at", { ascending: true }), "[getOrderProductBreakdown.invoices]");
+  const invs = await fetchAllPostgrestRows(() => invQuery.order("ngay_chung_tu", { ascending: true }), "[getOrderProductBreakdown.invoices]");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ids: string[] = (invs ?? []).map((x: any) => x.id);
   if (ids.length === 0) return [];
@@ -1262,10 +1274,10 @@ export async function getTopProductsByRevenue(
   while (true) {
     let query = supabase
       .from("invoice_items")
-      .select("product_name, quantity, total, invoices!inner(created_at, status, branch_id, tenant_id)")
+      .select("product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
       .eq("invoices.tenant_id", tenantId)
-      .gte("invoices.created_at", resolved.start)
-      .lt("invoices.created_at", resolved.end)
+      .gte("invoices.ngay_chung_tu", resolved.start)
+      .lt("invoices.ngay_chung_tu", resolved.end)
       .eq("invoices.status", "completed")
       .range(offset, offset + pageSize - 1);
     if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -1435,10 +1447,10 @@ export async function getChannelRevenue(
     .select("total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
-  const posData = await fetchAllPostgrestRows(() => posQuery.order("created_at", { ascending: true }), "[channel.pos]");
+  const posData = await fetchAllPostgrestRows(() => posQuery.order("ngay_chung_tu", { ascending: true }), "[channel.pos]");
 
   const posRevenue = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
 
@@ -1491,10 +1503,10 @@ export async function getChannelPerformance(
     .select("total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
+    .gte("ngay_chung_tu", r.start)
+    .lt("ngay_chung_tu", r.end);
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
-  const posData = await fetchAllPostgrestRows(() => posQuery.order("created_at", { ascending: true }), "[channel.pos]");
+  const posData = await fetchAllPostgrestRows(() => posQuery.order("ngay_chung_tu", { ascending: true }), "[channel.pos]");
 
   const posRev = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
   const posCount = posData?.length ?? 0;
@@ -1556,13 +1568,15 @@ export async function getCustomerKpis(
   const previous = previousRange(current);
   const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
-      let query = supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase as any)
         .from("invoices")
-        .select("customer_id, created_at, debt")
+        // Mốc "lần mua đầu tiên của khách" tính theo NGÀY CHỨNG TỪ (ngay_chung_tu).
+        .select("customer_id, ngay_chung_tu, debt")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .not("customer_id", "is", null)
-        .order("created_at", { ascending: true });
+        .order("ngay_chung_tu", { ascending: true });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
@@ -1574,7 +1588,8 @@ export async function getCustomerKpis(
   let totalDebt = 0;
   for (const invoice of invoices) {
     const customerId = String(invoice.customer_id ?? "");
-    const createdAt = String(invoice.created_at ?? "");
+    // Mốc "lần mua đầu tiên của khách" tính theo NGÀY CHỨNG TỪ (ngay_chung_tu).
+    const createdAt = String(invoice.ngay_chung_tu ?? "");
     if (!customerId || !createdAt) continue;
     if (!firstPurchase.has(customerId)) firstPurchase.set(customerId, createdAt);
     if (createdAt >= current.start && createdAt < current.end) {
@@ -1616,13 +1631,15 @@ export async function getNewCustomersMonthly(
   const window = lastNMonthsRange(months);
   const invoices = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
-      let query = supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let query = (supabase as any)
         .from("invoices")
-        .select("customer_id, created_at")
+        // Mốc "lần mua đầu tiên của khách" tính theo NGÀY CHỨNG TỪ (ngay_chung_tu).
+        .select("customer_id, ngay_chung_tu")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .not("customer_id", "is", null)
-        .order("created_at", { ascending: true });
+        .order("ngay_chung_tu", { ascending: true });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
@@ -1632,7 +1649,8 @@ export async function getNewCustomersMonthly(
   const firstPurchase = new Map<string, string>();
   for (const invoice of invoices) {
     const customerId = String(invoice.customer_id ?? "");
-    const createdAt = String(invoice.created_at ?? "");
+    // Mốc "lần mua đầu tiên của khách" tính theo NGÀY CHỨNG TỪ (ngay_chung_tu).
+    const createdAt = String(invoice.ngay_chung_tu ?? "");
     if (customerId && createdAt && !firstPurchase.has(customerId)) {
       firstPurchase.set(customerId, createdAt);
     }
@@ -1710,10 +1728,10 @@ export async function getTopCustomersByRevenue(
         .select("customer_id, total, customers(name)")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
-        .gte("created_at", resolved.start)
-        .lt("created_at", resolved.end)
+        .gte("ngay_chung_tu", resolved.start)
+        .lt("ngay_chung_tu", resolved.end)
         .not("customer_id", "is", null)
-        .order("created_at", { ascending: false });
+        .order("ngay_chung_tu", { ascending: false });
       if (branchId) query = query.eq("branch_id", branchId);
       return query;
     },
@@ -2071,11 +2089,11 @@ export async function getRevenueByCustomerAndCategory(
       let query = supabase
         .from("invoice_items")
         .select(
-          "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+          "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
         )
         .eq("invoices.tenant_id", tenantId)
-        .gte("invoices.created_at", r.start)
-        .lt("invoices.created_at", r.end)
+        .gte("invoices.ngay_chung_tu", r.start)
+        .lt("invoices.ngay_chung_tu", r.end)
         .eq("invoices.status", "completed")
         .not("invoices.customer_id", "is", null);
       if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -2166,11 +2184,11 @@ export async function getRevenueByCustomerAndProduct(
       let query = supabase
         .from("invoice_items")
         .select(
-          "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), created_at, status, branch_id, tenant_id)",
+          "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
         )
         .eq("invoices.tenant_id", tenantId)
-        .gte("invoices.created_at", r.start)
-        .lt("invoices.created_at", r.end)
+        .gte("invoices.ngay_chung_tu", r.start)
+        .lt("invoices.ngay_chung_tu", r.end)
         .eq("invoices.status", "completed")
         .not("invoices.customer_id", "is", null);
       if (branchId) query = query.eq("invoices.branch_id", branchId);
@@ -2646,8 +2664,9 @@ export async function getRevenueVsExpense(
   function bq<T>(query: T): T { return branchId ? (query as any).eq("branch_id", branchId) : query; }
 
   const [invData, cashData] = await Promise.all([
-    fetchAllPostgrestRows(
-      () => bq(supabase.from("invoices").select("created_at, total").eq("tenant_id", tenantId).eq("status", "completed").gte("created_at", range.start).lt("created_at", range.end)).order("created_at", { ascending: true }),
+    fetchAllPostgrestRows<{ ngay_chung_tu: string; total: number | null }>(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      () => bq((supabase as any).from("invoices").select("ngay_chung_tu, total").eq("tenant_id", tenantId).eq("status", "completed").gte("ngay_chung_tu", range.start).lt("ngay_chung_tu", range.end)).order("ngay_chung_tu", { ascending: true }),
       "[getRevenueVsExpense.invoices]",
     ),
     fetchAllPostgrestRows(
@@ -2665,7 +2684,7 @@ export async function getRevenueVsExpense(
   }
 
   invData.forEach(inv => {
-    const d = new Date(inv.created_at);
+    const d = new Date(inv.ngay_chung_tu);
     const key = `T${d.getMonth() + 1}/${d.getFullYear()}`;
     if (revMap.has(key)) revMap.set(key, (revMap.get(key) ?? 0) + (inv.total ?? 0));
   });
@@ -2915,11 +2934,11 @@ export async function getCrossChannelKpis(
     let query = supabase
       .from("invoice_items")
       .select(
-        "total, invoice_id, products!inner(channel), invoices!inner(status, created_at, branch_id, tenant_id)",
+        "total, invoice_id, products!inner(channel), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
       )
       .eq("invoices.tenant_id", tenantId)
-      .gte("invoices.created_at", r.start)
-      .lt("invoices.created_at", r.end)
+      .gte("invoices.ngay_chung_tu", r.start)
+      .lt("invoices.ngay_chung_tu", r.end)
       .eq("invoices.status", "completed");
     if (branchId) query = query.eq("invoices.branch_id", branchId);
     const data = await fetchAllPostgrestRows<Record<string, unknown>>(
@@ -2977,11 +2996,11 @@ export async function getCrossChannelTrend(
   let query = supabase
     .from("invoice_items")
     .select(
-      "total, products!inner(channel), invoices!inner(created_at, status, branch_id, tenant_id)",
+      "total, products!inner(channel), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
     )
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
+    .gte("invoices.ngay_chung_tu", r.start)
+    .lt("invoices.ngay_chung_tu", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const data = await fetchAllPostgrestRows<Record<string, unknown>>(
@@ -2992,12 +3011,12 @@ export async function getCrossChannelTrend(
   // Group by date (YYYY-MM-DD)
   const byDay = new Map<string, { retail: number; fnb: number }>();
   (data ?? []).forEach((row: Record<string, unknown>) => {
-    const inv = row.invoices as { created_at?: string } | null;
+    const inv = row.invoices as { ngay_chung_tu?: string } | null;
     const product = row.products as { channel?: string | null } | null;
-    if (!inv?.created_at) return;
+    if (!inv?.ngay_chung_tu) return;
     const ch = product?.channel ?? null;
     if (ch !== "retail" && ch !== "fnb") return;
-    const dayKey = inv.created_at.slice(0, 10);
+    const dayKey = inv.ngay_chung_tu.slice(0, 10);
     const existing = byDay.get(dayKey) ?? { retail: 0, fnb: 0 };
     if (ch === "retail") existing.retail += (row.total as number) ?? 0;
     else existing.fnb += (row.total as number) ?? 0;
@@ -3024,11 +3043,11 @@ export async function getCrossChannelTopProducts(
   let query = supabase
     .from("invoice_items")
     .select(
-      "product_id, product_name, quantity, total, products!inner(channel, name), invoices!inner(status, created_at, branch_id, tenant_id)",
+      "product_id, product_name, quantity, total, products!inner(channel, name), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
     )
     .eq("invoices.tenant_id", tenantId)
-    .gte("invoices.created_at", r.start)
-    .lt("invoices.created_at", r.end)
+    .gte("invoices.ngay_chung_tu", r.start)
+    .lt("invoices.ngay_chung_tu", r.end)
     .eq("invoices.status", "completed");
   if (branchId) query = query.eq("invoices.branch_id", branchId);
   const data = await fetchAllPostgrestRows<Record<string, unknown>>(

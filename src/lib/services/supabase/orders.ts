@@ -1296,11 +1296,14 @@ export async function listChildSales(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("invoices")
-    .select("id, code, status, total, paid, created_at")
+    // 00335: mỗi đơn bán con có NGÀY HOÁ ĐƠN riêng — hiện theo ngày chứng từ
+    // (đã bán = ngày phát hành; còn nháp = ngày tạo). Khác với danh sách ĐƠN
+    // ĐẶT HÀNG bên trên vẫn giữ created_at = ngày đặt.
+    .select("id, code, status, total, paid, ngay_chung_tu")
     .eq("tenant_id", tenantId)
     .eq("source_order_id", orderId)
     .is("deleted_at", null)
-    .order("created_at", { ascending: false });
+    .order("ngay_chung_tu", { ascending: false });
   if (error) {
     if (error.code === MA_LOI_CHUA_CO_COT) return null;
     handleError(error, "listChildSales");
@@ -1312,7 +1315,7 @@ export async function listChildSales(
     status: String(row.status ?? "draft"),
     total: Number(row.total ?? 0),
     paid: Number(row.paid ?? 0),
-    createdAt: String(row.created_at ?? ""),
+    createdAt: String(row.ngay_chung_tu ?? ""),
   }));
 }
 
