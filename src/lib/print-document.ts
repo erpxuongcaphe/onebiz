@@ -166,7 +166,14 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   const ps = getPageStyles(paperSize);
   const isThermal = paperSize === "80mm" || paperSize === "58mm";
   const isA5 = paperSize === "A5";
-  const money = (n: number) => `${fmtVnd(n)} đ`;
+  // CEO 20/08: khổ giấy A4/A5 BỎ ký hiệu "đ" ở từng ô cho đỡ chật, thay bằng
+  // dòng "Đơn vị tính: Đồng" phía trên bảng — chuẩn trình bày chứng từ kế toán.
+  // Bill nhiệt GIỮ NGUYÊN "đ": khổ hẹp không có chỗ đặt dòng đơn vị tính, và
+  // khách cầm tờ bill cần thấy rõ ký hiệu tiền.
+  const money = (n: number) => (isThermal ? `${fmtVnd(n)} đ` : fmtVnd(n));
+  // Khối tổng nhận CHUỖI đã format sẵn từ print-templates (không biết khổ
+  // giấy) → gỡ đuôi " đ" tại đây cho khớp bảng ở trên.
+  const boDuoiDong = (s: string) => (isThermal ? s : s.replace(/\s*đ\s*$/u, ""));
 
   // Cỡ chữ bảng mặt hàng: mặc định = cỡ hiện tại theo khổ giấy (ps.itemsFontSize).
   // "md" cũng giữ nguyên cỡ hiện tại. CHỈ "sm"/"lg" đè cứng. undefined → byte-identical.
@@ -203,7 +210,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
           : r.tone === "success"
             ? ' style="color:#1a7a43"'
             : "";
-      return `<tr class="${r.bold ? "bold" : ""}"${toneStyle}><td>${esc(r.label)}</td><td class="right tnum">${esc(r.value)}</td></tr>`;
+      return `<tr class="${r.bold ? "bold" : ""}"${toneStyle}><td>${esc(r.label)}</td><td class="right tnum">${esc(boDuoiDong(r.value))}</td></tr>`;
     })
     .join("");
 
@@ -224,6 +231,9 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 
   // 00208: cột "Ghi chú" chỉ khi ≥1 dòng có note (không có → bảng như cũ).
   const hasNoteCol = colHeaders.includes("Ghi chú");
+  // CEO 20/08: ĐVT (đơn vị tính của HÀNG HOÁ: Kg, Túi, Thùng...) là CỘT RIÊNG
+  // đứng ngay sau Tên hàng — không nhét chung vào ô Số lượng nữa.
+  const hasUomCol = colHeaders.includes("ĐVT");
 
   // Dòng hàng — thermal: 2 dòng/món (như bill); A4/A5: bảng sổ cái có cột.
   let itemsBlock = "";
@@ -249,16 +259,17 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
               ? `<col />`
               : h === "Mã hàng"
                 ? `<col class="c-code" />`
-                : h === "Ghi chú"
-                  ? `<col class="c-note" />`
-                  : `<col class="c-num" />`,
+                : h === "ĐVT"
+                  ? `<col class="c-uom" />`
+                  : h === "Ghi chú"
+                    ? `<col class="c-note" />`
+                    : `<col class="c-num" />`,
           )
           .join("");
+      // CEO 20/08: TIÊU ĐỀ cột luôn căn giữa (ô dữ liệu vẫn căn theo kiểu cột:
+      // số căn phải, chữ căn trái).
       const ths = colHeaders
-        .map(
-          (h) =>
-            `<th class="${NUMERIC.includes(h) ? "right" : ""}">${esc(h)}</th>`,
-        )
+        .map((h) => `<th class="center">${esc(h)}</th>`)
         .join("");
       const trs = d.items
         .map(
@@ -266,7 +277,8 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         <td class="center">${i + 1}</td>
         ${hasCode ? `<td>${esc(it.code ?? "")}</td>` : ""}
         <td>${esc(it.name)}</td>
-        <td class="right tnum">${formatNumber(it.quantity)}${it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
+        ${hasUomCol ? `<td class="center">${esc(it.unit ?? "")}</td>` : ""}
+        <td class="right tnum">${formatNumber(it.quantity)}${!hasUomCol && it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
         ${hasPriceCol ? `<td class="right tnum">${money(it.unitPrice ?? 0)}</td>` : ""}
         ${hasDiscountCol ? `<td class="right tnum">${it.discount && it.discount > 0 ? money(it.discount) : "0"}</td>` : ""}
         <td class="right tnum">${money(it.total)}</td>
@@ -274,7 +286,8 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
       </tr>`,
         )
         .join("");
-      itemsBlock = `<table class="items">
+      // CEO 20/08: bỏ "đ" ở từng ô → nêu đơn vị tính một lần phía trên bảng.
+      itemsBlock = `<div class="dvt">Đơn vị tiền tệ: Đồng</div><table class="items">
       <colgroup>${colgroup}</colgroup>
       <thead><tr><th class="center">STT</th>${ths}</tr></thead>
       <tbody>${trs}</tbody>
@@ -319,15 +332,26 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .meta td.label { width: ${isThermal ? "62px" : "150px"}; font-weight: 600; color: ${isThermal ? "#000" : "#555"}; }
 
   .items { width: 100%; border-collapse: collapse; margin: ${isThermal ? "8px 0" : "16px 0"}; table-layout: fixed; }
-  .items col.c-stt { width: 34px; }
-  .items col.c-code { width: 13%; }
-  .items col.c-num { width: 15%; }
-  .items col.c-note { width: 18%; }
+  .items col.c-stt { width: 30px; }
+  .items col.c-code { width: 12%; }
+  /* CEO 20/08: cân lại bề rộng sau khi tách cột ĐVT — cột số phải đủ rộng để
+     "1,663,200" nằm GỌN MỘT DÒNG, không bị ngắt làm hai hàng. */
+  .items col.c-num { width: 13%; }
+  .items col.c-uom { width: 7%; }
+  .items col.c-note { width: 13%; }
   .items td.note-cell { font-style: italic; color: #444; }
   .items th { border: 1px solid #bdbdbd; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; background: #f3f3f3; }
   .items td { border: 1px solid #bdbdbd; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
   .items th.right, .items td.right { text-align: right; }
   .items th.center, .items td.center { text-align: center; }
+  /* Số tiền / số lượng KHÔNG được ngắt dòng; ô chữ vẫn xuống dòng bình thường.
+     Ô số cũng thu padding ngang để dành chỗ cho chữ số. */
+  .items td.tnum, .items th { white-space: nowrap; }
+  .items td.tnum { padding-left: 4px; padding-right: 6px; }
+  .items td.center { white-space: nowrap; }
+  /* CEO 20/08: nêu đơn vị TIỀN một lần thay vì lặp "đ" ở từng ô.
+     Khác với cột ĐVT trong bảng — đó là đơn vị của HÀNG HOÁ. */
+  .dvt { text-align: right; font-style: italic; font-size: 0.92em; color: #555; margin: 0 0 3px; }
   .items tbody tr:nth-child(even) td { background: #fafafa; }
   .items td .unit { color: #888; font-weight: 400; }
 

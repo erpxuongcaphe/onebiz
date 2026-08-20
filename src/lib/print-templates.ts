@@ -17,15 +17,20 @@ import { formatCurrency as fmtNum, formatDate, formatNumber, formatUser } from "
  */
 const formatCurrency = (n: number | null | undefined) => `${fmtNum(n)} đ`;
 
-/** Cột bảng hàng chuẩn cho chứng từ bán/nhập (Mã · Tên · SL · Đơn giá · Thành tiền). */
-const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá", "Thành tiền"];
+/**
+ * Cột bảng hàng chuẩn cho chứng từ bán/nhập.
+ * CEO 20/08: ghi RÕ "Số lượng", không viết tắt "SL"; và tách "ĐVT" (đơn vị
+ * tính của HÀNG HOÁ) thành CỘT RIÊNG ngay sau Tên hàng, không nhét chung vào
+ * ô số lượng.
+ */
+const SALE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "ĐVT", "Số lượng", "Đơn giá", "Thành tiền"];
 // 00208 + CEO 20/07: cột "Ghi chú" LUÔN có trên phiếu bán — trống thì để ghi tay.
 const saleColumnsFor = (_items?: DocumentLineItem[]) => [
   ...SALE_ITEM_COLUMNS,
   "Ghi chú",
 ];
 // Phiếu phía MUA (nhập/đặt NCC/HĐ đầu vào/trả NCC): "Đơn giá nhập" cho rõ ngữ cảnh.
-const PURCHASE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "SL", "Đơn giá nhập", "Thành tiền"];
+const PURCHASE_ITEM_COLUMNS = ["Mã hàng", "Tên hàng", "ĐVT", "Số lượng", "Đơn giá nhập", "Thành tiền"];
 
 /**
  * Chuẩn hoá các dòng hàng (đã nạp từ service) → DocumentLineItem để in.
