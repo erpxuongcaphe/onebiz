@@ -17,7 +17,7 @@ const PHIEU: DocumentPrintData = {
   documentCode: "HD-TEST-001",
   date: "2026-08-17T06:12:00.000Z",
   headerFields: [{ label: "Khách hàng", value: "Xưởng Bửu Hòa" }],
-  itemColumns: ["Tên hàng", "Số lượng", "Đơn giá", "Thành tiền"],
+  itemColumns: ["Tên hàng", "ĐVT", "Số lượng", "Đơn giá", "Thành tiền"],
   items: [
     { name: "Xưởng Gu Việt - 1 kg/túi", quantity: 7, unit: "Kg", unitPrice: 237_600, total: 1_663_200 },
     { name: "Hồng Trà Toàn Phát", quantity: 2, unit: "Túi", unitPrice: 135_000, total: 270_000 },
@@ -56,9 +56,9 @@ describe("Chứng từ A4 — tiêu đề căn giữa, không viết tắt, có 
     expect(thead).not.toMatch(/>SL</);
   });
 
-  it("có dòng 'Đơn vị tính: Đồng' ngay trên bảng", () => {
-    expect(html).toContain("Đơn vị tính: Đồng");
-    expect(html.indexOf("Đơn vị tính: Đồng")).toBeLessThan(
+  it("có dòng 'Đơn vị tiền tệ: Đồng' ngay trên bảng", () => {
+    expect(html).toContain("Đơn vị tiền tệ: Đồng");
+    expect(html.indexOf("Đơn vị tiền tệ: Đồng")).toBeLessThan(
       html.indexOf('<table class="items">'),
     );
   });
@@ -78,9 +78,23 @@ describe("Chứng từ A4 — tiêu đề căn giữa, không viết tắt, có 
     expect(html).not.toMatch(/3,812,080\s*đ/);
   });
 
+  it("ĐVT là CỘT RIÊNG ngay sau Tên hàng, ô Số lượng chỉ còn con số", () => {
+    const t = bangHang();
+    const thead = t.slice(t.indexOf("<thead>"), t.indexOf("</thead>"));
+    // thứ tự tiêu đề: STT → Tên hàng → ĐVT → Số lượng
+    expect(thead.indexOf("Tên hàng")).toBeLessThan(thead.indexOf("ĐVT"));
+    expect(thead.indexOf("ĐVT")).toBeLessThan(thead.indexOf("Số lượng"));
+    const tbody = t.slice(t.indexOf("<tbody>"), t.indexOf("</tbody>"));
+    // đơn vị nằm ở ô riêng căn giữa
+    expect(tbody).toContain('<td class="center">Kg</td>');
+    expect(tbody).toContain('<td class="center">Túi</td>');
+    // KHÔNG còn dính đuôi đơn vị trong ô số lượng
+    expect(tbody).not.toContain('<span class="unit">');
+  });
+
   it("A5 áp dụng y như A4", () => {
     const a5 = generateDocumentHtml(PHIEU, "A5");
-    expect(a5).toContain("Đơn vị tính: Đồng");
+    expect(a5).toContain("Đơn vị tiền tệ: Đồng");
     expect(a5).not.toMatch(/2,632,080\s*đ/);
   });
 });
@@ -92,8 +106,12 @@ describe("Bill nhiệt — GIỮ NGUYÊN ký hiệu đ, không chèn dòng đơn
     expect(bill).toMatch(/237,600\s*đ/);
   });
 
-  it("không chèn dòng 'Đơn vị tính' vào khổ hẹp", () => {
-    expect(bill).not.toContain("Đơn vị tính");
+  it("không chèn dòng đơn vị tiền tệ vào khổ hẹp", () => {
+    expect(bill).not.toContain("Đơn vị tiền tệ");
+  });
+
+  it("bill nhiệt vẫn ghép đơn vị cạnh số lượng (không có bảng cột)", () => {
+    expect(bill).toMatch(/7\s*Kg/);
   });
 
   it("khối tổng của bill giữ nguyên đuôi đ", () => {

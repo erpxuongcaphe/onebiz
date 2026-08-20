@@ -231,6 +231,9 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 
   // 00208: cột "Ghi chú" chỉ khi ≥1 dòng có note (không có → bảng như cũ).
   const hasNoteCol = colHeaders.includes("Ghi chú");
+  // CEO 20/08: ĐVT (đơn vị tính của HÀNG HOÁ: Kg, Túi, Thùng...) là CỘT RIÊNG
+  // đứng ngay sau Tên hàng — không nhét chung vào ô Số lượng nữa.
+  const hasUomCol = colHeaders.includes("ĐVT");
 
   // Dòng hàng — thermal: 2 dòng/món (như bill); A4/A5: bảng sổ cái có cột.
   let itemsBlock = "";
@@ -256,9 +259,11 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
               ? `<col />`
               : h === "Mã hàng"
                 ? `<col class="c-code" />`
-                : h === "Ghi chú"
-                  ? `<col class="c-note" />`
-                  : `<col class="c-num" />`,
+                : h === "ĐVT"
+                  ? `<col class="c-uom" />`
+                  : h === "Ghi chú"
+                    ? `<col class="c-note" />`
+                    : `<col class="c-num" />`,
           )
           .join("");
       // CEO 20/08: TIÊU ĐỀ cột luôn căn giữa (ô dữ liệu vẫn căn theo kiểu cột:
@@ -272,7 +277,8 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         <td class="center">${i + 1}</td>
         ${hasCode ? `<td>${esc(it.code ?? "")}</td>` : ""}
         <td>${esc(it.name)}</td>
-        <td class="right tnum">${formatNumber(it.quantity)}${it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
+        ${hasUomCol ? `<td class="center">${esc(it.unit ?? "")}</td>` : ""}
+        <td class="right tnum">${formatNumber(it.quantity)}${!hasUomCol && it.unit ? `<span class="unit"> ${esc(it.unit)}</span>` : ""}</td>
         ${hasPriceCol ? `<td class="right tnum">${money(it.unitPrice ?? 0)}</td>` : ""}
         ${hasDiscountCol ? `<td class="right tnum">${it.discount && it.discount > 0 ? money(it.discount) : "0"}</td>` : ""}
         <td class="right tnum">${money(it.total)}</td>
@@ -281,7 +287,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
         )
         .join("");
       // CEO 20/08: bỏ "đ" ở từng ô → nêu đơn vị tính một lần phía trên bảng.
-      itemsBlock = `<div class="dvt">Đơn vị tính: Đồng</div><table class="items">
+      itemsBlock = `<div class="dvt">Đơn vị tiền tệ: Đồng</div><table class="items">
       <colgroup>${colgroup}</colgroup>
       <thead><tr><th class="center">STT</th>${ths}</tr></thead>
       <tbody>${trs}</tbody>
@@ -326,16 +332,25 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .meta td.label { width: ${isThermal ? "62px" : "150px"}; font-weight: 600; color: ${isThermal ? "#000" : "#555"}; }
 
   .items { width: 100%; border-collapse: collapse; margin: ${isThermal ? "8px 0" : "16px 0"}; table-layout: fixed; }
-  .items col.c-stt { width: 34px; }
-  .items col.c-code { width: 13%; }
-  .items col.c-num { width: 15%; }
-  .items col.c-note { width: 18%; }
+  .items col.c-stt { width: 30px; }
+  .items col.c-code { width: 12%; }
+  /* CEO 20/08: cân lại bề rộng sau khi tách cột ĐVT — cột số phải đủ rộng để
+     "1,663,200" nằm GỌN MỘT DÒNG, không bị ngắt làm hai hàng. */
+  .items col.c-num { width: 13%; }
+  .items col.c-uom { width: 7%; }
+  .items col.c-note { width: 13%; }
   .items td.note-cell { font-style: italic; color: #444; }
   .items th { border: 1px solid #bdbdbd; border-bottom: 2px solid #333; padding: ${isA5 ? "5px 7px" : "7px 10px"}; text-align: left; font-size: ${itemsFontSize}; font-weight: 700; line-height: 1.35; background: #f3f3f3; }
   .items td { border: 1px solid #bdbdbd; padding: ${isA5 ? "5px 7px" : "7px 10px"}; font-size: ${itemsFontSize}; line-height: 1.35; vertical-align: top; word-wrap: break-word; }
   .items th.right, .items td.right { text-align: right; }
   .items th.center, .items td.center { text-align: center; }
-  /* CEO 20/08: đơn vị tính nêu 1 lần thay vì lặp "đ" ở từng ô */
+  /* Số tiền / số lượng KHÔNG được ngắt dòng; ô chữ vẫn xuống dòng bình thường.
+     Ô số cũng thu padding ngang để dành chỗ cho chữ số. */
+  .items td.tnum, .items th { white-space: nowrap; }
+  .items td.tnum { padding-left: 4px; padding-right: 6px; }
+  .items td.center { white-space: nowrap; }
+  /* CEO 20/08: nêu đơn vị TIỀN một lần thay vì lặp "đ" ở từng ô.
+     Khác với cột ĐVT trong bảng — đó là đơn vị của HÀNG HOÁ. */
   .dvt { text-align: right; font-style: italic; font-size: 0.92em; color: #555; margin: 0 0 3px; }
   .items tbody tr:nth-child(even) td { background: #fafafa; }
   .items td .unit { color: #888; font-weight: 400; }
