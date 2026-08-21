@@ -1150,7 +1150,7 @@ export async function getSalesHistory(
     .from("invoice_items")
     .select(`
       id, quantity, unit_price, discount, total,
-      invoices!inner(id, code, created_at, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
+      invoices!inner(id, code, created_at, ngay_chung_tu, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
     `, { count: "exact" })
     .eq("product_id", productId)
     .order("id", { ascending: false })
@@ -1170,6 +1170,8 @@ export async function getSalesHistory(
       id: string;
       code: string;
       created_at: string;
+      /** 00335: coalesce(issued_at, created_at) — NGÀY CHỨNG TỪ. */
+      ngay_chung_tu?: string | null;
       customer_name: string;
       status: string;
       created_by: string;
@@ -1178,7 +1180,10 @@ export async function getSalesHistory(
     return {
       id: row.id,
       invoiceCode: inv.code,
-      date: inv.created_at,
+      // 00335: lịch sử bán của sản phẩm phải hiện ĐÚNG NGÀY HÓA ĐƠN như danh
+      // sách hóa đơn, nếu không cùng một hóa đơn ra hai ngày khác nhau ở hai
+      // màn. Giữ nhánh dự phòng cho máy chủ chưa có cột.
+      date: inv.ngay_chung_tu ?? inv.created_at,
       customerName: inv.customer_name,
       quantity: row.quantity,
       sellPrice: row.unit_price,
