@@ -106,6 +106,10 @@ export const PERMISSIONS = {
   INVOICES_VIEW: "invoices.view",
   INVOICES_PRINT: "invoices.print",
   INVOICES_EXPORT: "invoices.export",
+  // 00335 — chỉnh NGÀY HÓA ĐƠN trên POS trước khi thanh toán. Thu ngân KHÔNG
+  // có mặc định: vẫn thấy ngày nhưng không thấy nút sửa. Máy chủ kiểm lại
+  // quyền này, đòi lý do và ghi audit — phía web chỉ ẩn/hiện nút.
+  INVOICES_ADJUST_ISSUED_AT: "invoices.adjust_issued_at",
 
   // System
   SYSTEM_MANAGE_USERS: "system.manage_users",
@@ -288,6 +292,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { code: PERMISSIONS.INVOICES_VIEW, label: "Xem hóa đơn" },
       { code: PERMISSIONS.INVOICES_PRINT, label: "In hóa đơn" },
       { code: PERMISSIONS.INVOICES_EXPORT, label: "Xuất Excel" },
+      {
+        code: PERMISSIONS.INVOICES_ADJUST_ISSUED_AT,
+        label: "Sửa ngày hóa đơn trên POS",
+      },
     ],
   },
   {

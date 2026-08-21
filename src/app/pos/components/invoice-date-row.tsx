@@ -1,13 +1,13 @@
 "use client";
 
 /**
- * InvoiceDateRow — dòng "Ngày hoá đơn" trên POS Retail (00335 Pha B).
+ * InvoiceDateRow — dòng "Ngày hóa đơn" trên POS Retail (00335 Pha B).
  *
  * Mặc định: KHÔNG gửi ngày lên máy chủ → máy chủ tự lấy giờ lúc thanh toán.
- * Dòng này chỉ HIỂN THỊ giờ hiện tại kèm chữ "(tự động)" cho thu ngân biết
- * hoá đơn sẽ mang ngày nào.
+ * Dòng này chỉ HIỂN THỊ giờ mà hóa đơn sắp mang, không có nhãn trạng thái nào.
+ * Chỉ khi người dùng CHỦ ĐỘNG chỉnh mới hiện nhãn nhỏ "Đã chỉnh".
  *
- * Chỉnh tay: chỉ hiện nút Sửa khi có quyền `invoices.adjust_issued_at`.
+ * Chỉnh tay: chỉ hiện nút bút chì khi có quyền `invoices.adjust_issued_at`.
  * Máy chủ vẫn kiểm lại quyền + lý do + tháng hiện tại và ghi audit — phần
  * kiểm ở đây chỉ để báo lỗi sớm cho người dùng, KHÔNG phải lớp bảo vệ.
  */
@@ -50,9 +50,10 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
   const [moHop, setMoHop] = useState(false);
   const [nhapNgay, setNhapNgay] = useState("");
   const [nhapLyDo, setNhapLyDo] = useState("");
-  const [loi, setLoi] = useState<string | null>(null);
-  // Đồng hồ hiển thị khi ĐANG ở chế độ tự động — cập nhật mỗi 30 giây để thu
-  // ngân luôn thấy đúng giờ hoá đơn sắp mang.
+  const [loiNgay, setLoiNgay] = useState<string | null>(null);
+  const [loiLyDo, setLoiLyDo] = useState<string | null>(null);
+  // Đồng hồ hiển thị khi CHƯA chỉnh tay — cập nhật mỗi 30 giây để thu ngân
+  // luôn thấy đúng giờ hóa đơn sắp mang.
   //
   // ⚠️ KHỞI TẠO null, KHÔNG lấy new Date() ngay: trang POS được dựng sẵn trên
   // máy chủ rồi mới hydrate ở trình duyệt — giờ hai lần dựng khác nhau sẽ làm
@@ -78,77 +79,84 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
   function moDialog() {
     setNhapNgay(isoSangOInput(value ?? new Date().toISOString()));
     setNhapLyDo(reason);
-    setLoi(null);
+    setLoiNgay(null);
+    setLoiLyDo(null);
     setMoHop(true);
   }
 
   function xacNhan() {
+    setLoiNgay(null);
+    setLoiLyDo(null);
+
     if (!nhapNgay) {
-      setLoi("Chưa chọn ngày giờ.");
+      setLoiNgay("Chưa chọn ngày giờ.");
       return;
     }
     const chon = new Date(nhapNgay);
     if (Number.isNaN(chon.getTime())) {
-      setLoi("Ngày giờ không hợp lệ.");
+      setLoiNgay("Ngày giờ không hợp lệ.");
       return;
     }
     const now = new Date();
     if (chon.getTime() > now.getTime() + 5 * 60 * 1000) {
-      setLoi("Không được chọn thời điểm ở tương lai quá 5 phút.");
+      setLoiNgay("Không được chọn thời điểm ở tương lai quá 5 phút.");
       return;
     }
     if (
       chon.getMonth() !== now.getMonth() ||
       chon.getFullYear() !== now.getFullYear()
     ) {
-      setLoi("Chỉ được chỉnh trong tháng hiện tại.");
+      setLoiNgay("Chỉ được chỉnh trong tháng hiện tại.");
       return;
     }
     if (!nhapLyDo.trim()) {
-      setLoi("Bắt buộc nhập lý do chỉnh ngày.");
+      setLoiLyDo("Bắt buộc nhập lý do điều chỉnh.");
       return;
     }
     onChange(chon.toISOString(), nhapLyDo.trim());
     setMoHop(false);
   }
 
-  function veTuDong() {
+  function veGioHienTai() {
     onChange(null, "");
     setMoHop(false);
   }
 
   return (
     <>
-      <div className="flex items-center gap-2 mt-1.5 px-1 text-[11px]">
+      <div className="flex items-center gap-1.5 mt-1.5 px-1 text-xs">
         <Icon
           name="event"
-          size={13}
+          size={14}
           className={cn("shrink-0", daChinh ? "text-status-warning" : "text-muted-foreground")}
         />
-        <span className="text-muted-foreground shrink-0">Ngày hoá đơn:</span>
+        {/* Nhãn là phần DUY NHẤT được co lại — ngày giờ không bao giờ bị cắt. */}
+        <span className="text-muted-foreground min-w-0 truncate">Ngày hóa đơn</span>
         <span
           className={cn(
-            "font-semibold tabular-nums whitespace-nowrap",
+            "font-semibold tabular-nums whitespace-nowrap shrink-0",
             daChinh ? "text-status-warning" : "text-foreground",
           )}
         >
           {ngayHienThi}
         </span>
-        {daChinh ? (
-          <span className="text-status-warning/80 truncate" title={reason}>
-            (đã chỉnh)
+        {daChinh && (
+          <span
+            className="shrink-0 rounded px-1 py-px text-[11px] font-medium bg-status-warning/15 text-status-warning"
+            title={reason}
+          >
+            Đã chỉnh
           </span>
-        ) : (
-          <span className="text-muted-foreground/70">(tự động)</span>
         )}
         {canEdit && (
           <button
             type="button"
             onClick={moDialog}
-            className="ml-auto shrink-0 px-1.5 py-0.5 rounded text-primary hover:bg-primary-fixed transition-colors"
-            title="Chỉnh ngày hoá đơn"
+            title="Sửa ngày hóa đơn"
+            aria-label="Sửa ngày hóa đơn"
+            className="ml-auto shrink-0 grid place-items-center rounded size-8 pointer-coarse:size-11 text-primary hover:bg-primary-fixed transition-colors"
           >
-            Sửa
+            <Icon name="edit" size={16} />
           </button>
         )}
       </div>
@@ -156,13 +164,9 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
       <Dialog open={moHop} onOpenChange={setMoHop}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Chỉnh ngày hoá đơn</DialogTitle>
+            <DialogTitle>Sửa ngày hóa đơn</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Chỉ dùng khi cần ghi hoá đơn theo đúng ngày bán thực tế. Mọi lần
-              chỉnh đều được ghi nhật ký kèm người thực hiện và lý do.
-            </p>
             <div className="space-y-1">
               <label className="text-xs font-medium">Ngày và giờ</label>
               <input
@@ -171,31 +175,33 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
                 onChange={(e) => setNhapNgay(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm"
               />
+              {loiNgay && (
+                <p className="text-xs text-status-error font-medium">{loiNgay}</p>
+              )}
             </div>
             <div className="space-y-1">
               <label className="text-xs font-medium">
-                Lý do <span className="text-status-error">*</span>
+                Lý do điều chỉnh <span className="text-status-error">*</span>
               </label>
               <textarea
                 value={nhapLyDo}
                 onChange={(e) => setNhapLyDo(e.target.value)}
                 rows={2}
-                placeholder="Ví dụ: máy tính tiền treo, ghi lại hoá đơn bán chiều qua"
                 className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface-container-lowest text-sm resize-none"
               />
+              {loiLyDo && (
+                <p className="text-xs text-status-error font-medium">{loiLyDo}</p>
+              )}
             </div>
-            {loi && (
-              <p className="text-xs text-status-error font-medium">{loi}</p>
-            )}
           </div>
           <DialogFooter className="gap-2">
             {daChinh && (
-              <Button variant="ghost" onClick={veTuDong}>
-                Dùng giờ hệ thống
+              <Button variant="ghost" onClick={veGioHienTai}>
+                Về giờ hiện tại
               </Button>
             )}
             <Button variant="outline" onClick={() => setMoHop(false)}>
-              Huỷ
+              Hủy
             </Button>
             <Button onClick={xacNhan}>Áp dụng</Button>
           </DialogFooter>

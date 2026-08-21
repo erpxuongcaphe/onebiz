@@ -41,10 +41,15 @@ const propsMacDinh = {
 describe("InvoiceDateRow — không được lệch hydrate", () => {
   it("chế độ tự động: HTML máy chủ KHÔNG nhúng giờ", () => {
     const html = dungTrenMayChu(propsMacDinh);
-    expect(html).toContain("Ngày hoá đơn");
-    expect(html).toContain("(tự động)");
+    expect(html).toContain("Ngày hóa đơn");
     // Không được có dd/MM/yyyy HH:mm — đó chính là thứ gây lệch.
     expect(html).not.toMatch(/\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}/);
+  });
+
+  it("KHÔNG còn nhãn trạng thái '(tự động)' khi chưa chỉnh tay", () => {
+    const html = dungTrenMayChu(propsMacDinh);
+    expect(html).not.toContain("tự động");
+    expect(html).not.toContain("Đã chỉnh");
   });
 
   it("dựng hai lần cách nhau 10 phút vẫn ra CÙNG một chuỗi", () => {
@@ -63,7 +68,7 @@ describe("InvoiceDateRow — không được lệch hydrate", () => {
       value: "2026-08-17T06:12:00.000Z",
       reason: "Máy treo",
     });
-    expect(html).toContain("(đã chỉnh)");
+    expect(html).toContain("Đã chỉnh");
     expect(html).toMatch(/\d{2}\/\d{2}\/\d{4}/);
   });
 });
