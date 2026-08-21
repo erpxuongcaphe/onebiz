@@ -168,10 +168,26 @@ export async function getOrders(
   // ô "Thời gian" nhưng trước đây KHÔNG áp ngày; nay truyền dateFrom/dateTo.
   query = applyCreatedAtRangeFilter(query, params.filters);
 
-  if (fulfillmentState === "pending") {
-    query = query.is("fulfilled_by_id", null);
-  } else if (fulfillmentState === "fulfilled") {
+  // Ba mức xử lý (CEO 21/08). "pending" nay là CHỜ XỬ LÝ theo nghĩa chặt: chưa
+  // gắn hóa đơn VÀ chưa có đơn con nào đã thanh toán. Đơn đã có hóa đơn nhưng
+  // chưa gắn là "processing" — không được gọi là chờ xử lý nữa.
+  if (fulfillmentState === "fulfilled") {
     query = query.not("fulfilled_by_id", "is", null);
+  } else if (fulfillmentState === "pending" || fulfillmentState === "processing") {
+    query = query.is("fulfilled_by_id", null);
+    const coCon = await layIdDonCoConHoanTat(tenantId, params.branchId);
+    if (coCon !== null) {
+      if (fulfillmentState === "processing") {
+        // Không có đơn nào có hóa đơn ⇒ kết quả rỗng. `.in` với mảng rỗng bị
+        // PostgREST từ chối nên chặn bằng điều kiện không bao giờ đúng.
+        if (coCon.length === 0) query = query.eq("id", KHONG_BAO_GIO_KHOP);
+        else query = query.in("id", coCon);
+      } else if (coCon.length > 0) {
+        query = query.not("id", "in", `(${coCon.join(",")})`);
+      }
+    }
+    // coCon === null ⇒ máy chủ chưa có cột: "pending" giữ nghĩa cũ (chưa gắn),
+    // "processing" cũng ra cùng tập — đúng vì khi đó chưa có mô hình đơn con.
   }
 
   if (debtState === "outstanding") {
@@ -279,6 +295,20 @@ export async function getOrders(
     for (const o of orders) {
       if (o.fulfilledById) {
         o.fulfilledInvoiceCode = codeById.get(o.fulfilledById) ?? undefined;
+      }
+    }
+  }
+
+  // 00337 — ĐẾM ĐƠN BÁN CON ĐÃ THANH TOÁN cho các đơn chưa gắn hóa đơn, để
+  // phân biệt "Chờ xử lý" với "Đang xử lý". Đơn đã gắn thì đã là Hoàn tất, không
+  // cần đếm. Máy chủ chưa có cột ⇒ trả null ⇒ để undefined, màn quay về mô hình
+  // hai mức cũ thay vì đoán bừa.
+  const chuaGan = orders.filter((o) => !o.fulfilledById).map((o) => o.id);
+  if (chuaGan.length > 0) {
+    const dem = await demDonConHoanTat(chuaGan);
+    if (dem) {
+      for (const o of orders) {
+        if (!o.fulfilledById) o.completedChildCount = dem.get(o.id) ?? 0;
       }
     }
   }
@@ -1280,6 +1310,126 @@ export interface ChildSaleInfo {
 /** Đơn con có thực sự dùng được để "Hoàn tất xử lý" đơn gốc hay không. */
 export function donConDungDuoc(c: ChildSaleInfo): boolean {
   return c.status === "completed" && !c.voidedAt && !c.cancelledAt;
+}
+
+/**
+ * BA MỨC XỬ LÝ của một đơn đặt hàng (CEO 21/08/2026).
+ *
+ * Một đơn đặt hàng được phép tạo KHÔNG GIỚI HẠN đơn bán con, nên KHÔNG tự
+ * hoàn tất đơn ngay khi đơn con đầu tiên thanh toán xong. Ba mức:
+ *
+ *   cho_xu_ly   — chưa gắn hóa đơn VÀ chưa có đơn con nào đã thanh toán
+ *   dang_xu_ly  — đã có ≥1 đơn con đã thanh toán nhưng CHƯA gắn (còn bán tiếp)
+ *   hoan_tat    — đã gắn hóa đơn vào đơn gốc (fulfilled_by_id khác null)
+ *
+ * Nháp / đã huỷ / đã void KHÔNG được tính là hóa đơn hoàn tất — phần lọc đó
+ * nằm ở nơi đếm `completedChildCount`.
+ */
+export type TrangThaiXuLyDon = "cho_xu_ly" | "dang_xu_ly" | "hoan_tat";
+
+export function trangThaiXuLyDon(o: {
+  fulfilledById?: string | null;
+  completedChildCount?: number;
+}): TrangThaiXuLyDon {
+  if (o.fulfilledById) return "hoan_tat";
+  // undefined = máy chủ chưa trả số đếm ⇒ giữ nguyên hành vi cũ (chờ xử lý),
+  // không đoán bừa thành "đang xử lý".
+  if ((o.completedChildCount ?? 0) > 0) return "dang_xu_ly";
+  return "cho_xu_ly";
+}
+
+export const NHAN_TRANG_THAI_XU_LY: Record<
+  TrangThaiXuLyDon,
+  { nhan: string; mo_ta: string }
+> = {
+  cho_xu_ly: { nhan: "Chờ xử lý", mo_ta: "Chưa có hóa đơn nào đã thanh toán" },
+  dang_xu_ly: { nhan: "Đang xử lý", mo_ta: "Đã có hóa đơn, còn bán tiếp được" },
+  hoan_tat: { nhan: "Hoàn tất", mo_ta: "Đã gắn hóa đơn vào đơn đặt hàng" },
+};
+
+/** UUID không tồn tại — dùng để ép một truy vấn ra kết quả rỗng. */
+const KHONG_BAO_GIO_KHOP = "00000000-0000-0000-0000-000000000000";
+
+/**
+ * Trần số đơn gốc dùng cho bộ lọc ba mức. PostgREST nhận danh sách id qua URL
+ * nên không thể dài vô hạn. Vượt trần thì BÁO LỖI RÕ chứ không âm thầm cắt —
+ * cắt lặng lẽ sẽ ra danh sách thiếu mà người dùng tưởng là đủ.
+ */
+const TRAN_ID_LOC_BA_MUC = 2000;
+
+/**
+ * Id các đơn đặt hàng đã có ít nhất một đơn bán con ĐÃ THANH TOÁN còn hiệu lực.
+ * Trả `null` khi máy chủ chưa có cột (chưa chạy 00331/00335).
+ */
+async function layIdDonCoConHoanTat(
+  tenantId: string,
+  branchId?: string,
+): Promise<string[] | null> {
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = (supabase as any)
+    .from("invoices")
+    .select("source_order_id")
+    .eq("tenant_id", tenantId)
+    .not("source_order_id", "is", null)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .is("voided_at", null)
+    .is("cancelled_at", null)
+    .limit(TRAN_ID_LOC_BA_MUC + 1);
+  if (branchId) q = q.eq("branch_id", branchId);
+  const { data, error } = await q;
+  if (error) {
+    if (error.code === MA_LOI_CHUA_CO_COT) return null;
+    handleError(error, "layIdDonCoConHoanTat");
+  }
+  const ids = [
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...new Set(((data ?? []) as any[]).map((r) => String(r.source_order_id))),
+  ];
+  if (ids.length > TRAN_ID_LOC_BA_MUC) {
+    throw new Error(
+      `Có quá ${TRAN_ID_LOC_BA_MUC} đơn đặt hàng đã phát sinh hóa đơn — ` +
+        "bộ lọc Chờ xử lý / Đang xử lý cần thu hẹp bớt (chọn chi nhánh hoặc " +
+        "khoảng ngày) để kết quả đầy đủ.",
+    );
+  }
+  return ids;
+}
+
+/**
+ * Đếm đơn bán con ĐÃ THANH TOÁN và còn hiệu lực cho một loạt đơn gốc.
+ *
+ * Trả `null` khi máy chủ chưa có cột (chưa chạy 00331/00335) — nơi gọi phải
+ * hiểu là "không biết" chứ không phải "bằng 0".
+ */
+export async function demDonConHoanTat(
+  orderIds: string[],
+): Promise<Map<string, number> | null> {
+  if (orderIds.length === 0) return new Map();
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any)
+    .from("invoices")
+    .select("source_order_id")
+    .eq("tenant_id", tenantId)
+    .in("source_order_id", orderIds)
+    .eq("status", "completed")
+    .is("deleted_at", null)
+    .is("voided_at", null)
+    .is("cancelled_at", null);
+  if (error) {
+    if (error.code === MA_LOI_CHUA_CO_COT) return null;
+    handleError(error, "demDonConHoanTat");
+  }
+  const dem = new Map<string, number>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const row of (data ?? []) as any[]) {
+    const k = String(row.source_order_id);
+    dem.set(k, (dem.get(k) ?? 0) + 1);
+  }
+  return dem;
 }
 
 /** Máy chủ chưa chạy 00331: cột/RPC chưa tồn tại. */

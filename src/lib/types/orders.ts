@@ -183,6 +183,19 @@ export interface SalesOrder {
   fulfilledById?: string;
   /** Mã hóa đơn đã xuất (HD…) để hiện + đối chiếu. */
   fulfilledInvoiceCode?: string;
+  /**
+   * 00331/00337 — SỐ ĐƠN BÁN CON ĐÃ THANH TOÁN và còn hiệu lực (không nháp,
+   * không huỷ, không void, không xoá mềm).
+   *
+   * Vì sao cần: một đơn đặt hàng được phép tạo KHÔNG GIỚI HẠN đơn bán con, nên
+   * "đã có hóa đơn" và "đã hoàn tất xử lý" là hai việc khác nhau. Đơn có hóa
+   * đơn nhưng chưa gắn (fulfilled_by_id null) phải hiện "Đang xử lý", KHÔNG
+   * được gọi là "Chờ xử lý".
+   *
+   * `undefined` = máy chủ chưa trả (chưa chạy migration cột) ⇒ màn quay về mô
+   * hình hai mức cũ thay vì đoán bừa.
+   */
+  completedChildCount?: number;
   /** Ghi chú người bán (invoices.note) — in trên phiếu đặt hàng (CEO 08/07). */
   note?: string;
   createdBy: string;
