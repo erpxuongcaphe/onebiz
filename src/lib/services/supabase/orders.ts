@@ -1267,6 +1267,19 @@ export interface ChildSaleInfo {
   total: number;
   paid: number;
   createdAt: string;
+  /**
+   * Huỷ bỏ hóa đơn (void) là trạng thái RIÊNG, không nằm trong `status`. Một
+   * đơn con `completed` rồi bị void vẫn giữ status='completed' — nếu chỉ nhìn
+   * status thì màn đơn gốc tiếp tục trình bày "đã hoàn tất" trong khi tiền đã
+   * bị thu hồi. Phải đọc cả hai.
+   */
+  voidedAt: string | null;
+  cancelledAt: string | null;
+}
+
+/** Đơn con có thực sự dùng được để "Hoàn tất xử lý" đơn gốc hay không. */
+export function donConDungDuoc(c: ChildSaleInfo): boolean {
+  return c.status === "completed" && !c.voidedAt && !c.cancelledAt;
 }
 
 /** Máy chủ chưa chạy 00331: cột/RPC chưa tồn tại. */
@@ -1324,7 +1337,7 @@ export async function listChildSales(
     // 00335: mỗi đơn bán con có NGÀY HOÁ ĐƠN riêng — hiện theo ngày chứng từ
     // (đã bán = ngày phát hành; còn nháp = ngày tạo). Khác với danh sách ĐƠN
     // ĐẶT HÀNG bên trên vẫn giữ created_at = ngày đặt.
-    .select("id, code, status, total, paid, ngay_chung_tu")
+    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at")
     .eq("tenant_id", tenantId)
     .eq("source_order_id", orderId)
     .is("deleted_at", null)
@@ -1341,6 +1354,8 @@ export async function listChildSales(
     total: Number(row.total ?? 0),
     paid: Number(row.paid ?? 0),
     createdAt: String(row.ngay_chung_tu ?? ""),
+    voidedAt: row.voided_at ? String(row.voided_at) : null,
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
   }));
 }
 

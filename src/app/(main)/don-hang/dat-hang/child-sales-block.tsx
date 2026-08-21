@@ -26,6 +26,7 @@ import {
   createChildSaleFromOrder,
   getOrderReconciliation,
   markOrderProcessed,
+  donConDungDuoc,
   type ChildSaleInfo,
   type OrderReconRow,
 } from "@/lib/services/supabase";
@@ -34,6 +35,12 @@ const NHAN_TRANG_THAI: Record<string, { label: string; cls: string }> = {
   draft: { label: "Nháp", cls: "bg-muted text-muted-foreground" },
   completed: { label: "Đã thanh toán", cls: "bg-status-success/10 text-status-success" },
   cancelled: { label: "Đã huỷ", cls: "bg-status-error/10 text-status-error" },
+};
+
+/** Void đè lên mọi nhãn khác: hóa đơn đã thanh toán rồi bị thu hồi. */
+const NHAN_VOID = {
+  label: "Đã huỷ bỏ hóa đơn",
+  cls: "bg-status-error/10 text-status-error",
 };
 
 export function ChildSalesBlock({
@@ -102,9 +109,31 @@ export function ChildSalesBlock({
     }
   }, [orderId, taiDoiChieu, toast, onDataChanged]);
 
-  // Hoàn tất: gắn vào đơn con đã thanh toán mới nhất; chưa có thì đơn con mới nhất.
-  const donConGan =
-    children.find((c) => c.status === "completed") ?? children[0] ?? null;
+  // Hoàn tất: CHỈ gắn vào đơn con đã thanh toán và chưa bị huỷ/void.
+  //
+  // Trước đây rơi về `children[0]` khi không có đơn con nào completed — tức là
+  // gắn cả đơn NHÁP hoặc đơn ĐÃ HUỶ vào đơn gốc rồi báo "đã hoàn tất xử lý",
+  // trong khi chưa thu đồng nào. Không có đơn dùng được thì KHÔNG hoàn tất.
+  const donConGan = children.find(donConDungDuoc) ?? null;
+
+  // Đơn con đang được gắn ở đơn gốc — dùng để phát hiện trường hợp nó bị huỷ
+  // hoặc void SAU khi đã hoàn tất (D4). Không tìm thấy trong danh sách nghĩa là
+  // nó đã bị xoá mềm.
+  const donConDangGan = fulfilledById
+    ? children.find((c) => c.id === fulfilledById) ?? null
+    : null;
+  const canhBaoDonConGan =
+    fulfilledById && (!donConDangGan || !donConDungDuoc(donConDangGan))
+      ? donConDangGan
+        ? `Đơn bán ${donConDangGan.code} đang gắn vào đơn này ${
+            donConDangGan.voidedAt
+              ? "đã bị huỷ bỏ hóa đơn (void)"
+              : donConDangGan.cancelledAt || donConDangGan.status === "cancelled"
+                ? "đã bị huỷ"
+                : "chưa thanh toán"
+          } — đơn đặt hàng vẫn đang mang trạng thái đã hoàn tất. Hãy Mở lại xử lý rồi đối soát.`
+        : "Đơn bán đang gắn vào đơn này không còn tồn tại — đơn đặt hàng vẫn đang mang trạng thái đã hoàn tất. Hãy Mở lại xử lý rồi đối soát."
+      : null;
 
   const hoanTat = useCallback(async () => {
     if (!donConGan) return;
@@ -184,11 +213,13 @@ export function ChildSalesBlock({
               type="button"
               size="sm"
               onClick={() => setConfirmHoanTat(true)}
-              disabled={children.length === 0}
+              disabled={!donConGan}
               title={
-                children.length === 0
-                  ? "Chưa có đơn bán nào — nếu khách không mua, dùng Huỷ đơn."
-                  : undefined
+                donConGan
+                  ? undefined
+                  : children.length === 0
+                    ? "Chưa có đơn bán nào — nếu khách không mua, dùng Huỷ đơn."
+                    : "Chưa có đơn bán nào đã thanh toán và còn hiệu lực. Thanh toán đơn bán ở POS trước khi hoàn tất."
               }
             >
               <Icon name="task_alt" size={15} className="mr-1" />
@@ -197,6 +228,16 @@ export function ChildSalesBlock({
           )}
         </div>
       </div>
+
+      {canhBaoDonConGan && (
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-status-warning/40 bg-status-warning/5 p-3"
+        >
+          <Icon name="warning" size={18} className="mt-px shrink-0 text-status-warning" />
+          <p className="text-sm text-status-warning">{canhBaoDonConGan}</p>
+        </div>
+      )}
 
       {loading ? (
         <p className="py-2 text-sm text-muted-foreground">
@@ -220,10 +261,12 @@ export function ChildSalesBlock({
           ) : (
             <div className="space-y-1.5">
               {children.map((c) => {
-                const nhan = NHAN_TRANG_THAI[c.status] ?? {
-                  label: c.status,
-                  cls: "bg-muted text-muted-foreground",
-                };
+                const nhan = c.voidedAt
+                  ? NHAN_VOID
+                  : NHAN_TRANG_THAI[c.status] ?? {
+                      label: c.status,
+                      cls: "bg-muted text-muted-foreground",
+                    };
                 return (
                   <div
                     key={c.id}

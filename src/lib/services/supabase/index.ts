@@ -82,6 +82,7 @@ export {
   getOrderReconciliation,
   tinhDoiChieuDatBan,
   markOrderProcessed,
+  donConDungDuoc,
 } from "./orders";
 export type {
   SalesOrderListSummary,

@@ -22,6 +22,9 @@ vi.mock("@/lib/services/supabase", () => ({
   createChildSaleFromOrder: (...a: unknown[]) => createChildSaleFromOrder(...a),
   getOrderReconciliation: (...a: unknown[]) => getOrderReconciliation(...a),
   markOrderProcessed: (...a: unknown[]) => markOrderProcessed(...a),
+  // Hàm thuần — dùng bản THẬT, không giả, để test không xanh nhờ mock dễ tính.
+  donConDungDuoc: (c: { status: string; voidedAt: unknown; cancelledAt: unknown }) =>
+    c.status === "completed" && !c.voidedAt && !c.cancelledAt,
 }));
 vi.mock("@/lib/contexts", () => ({
   useToast: () => ({ toast: toastOnDinh }),
@@ -29,8 +32,24 @@ vi.mock("@/lib/contexts", () => ({
 
 import { ChildSalesBlock } from "@/app/(main)/don-hang/dat-hang/child-sales-block";
 
-function donCon(id: string, code: string, status: string, total = 100000) {
-  return { id, code, status, total, paid: 0, createdAt: "2026-08-17" };
+function donCon(
+  id: string,
+  code: string,
+  status: string,
+  total = 100000,
+  thua: { voidedAt?: string | null; cancelledAt?: string | null } = {},
+) {
+  return {
+    id,
+    code,
+    status,
+    total,
+    paid: 0,
+    createdAt: "2026-08-17",
+    voidedAt: thua.voidedAt ?? null,
+    cancelledAt: thua.cancelledAt ?? (status === "cancelled" ? "2026-08-17" : null),
+    ...thua,
+  };
 }
 function dong(productName: string, qtyOrdered: number, qtySold: number) {
   return {
