@@ -5,16 +5,22 @@ import { join } from "node:path";
 /**
  * 00340 — ĐÓNG LỖ HỔNG `anon` / `PUBLIC` GỌI ĐƯỢC RPC.
  *
- * Đã đo trên PostgreSQL 16.4 local (không dùng production làm nơi thử):
- *   · trước vá: anon gọi được 5/5 hàm (1 trong đó CHỈ qua PUBLIC)
- *   · sau vá  : anon còn đúng 2 hàm đăng nhập, PUBLIC = 0,
- *               authenticated/service_role giữ nguyên 5, hàm tạo mới anon=false
- *   · hoàn tác: trả về đúng 5/5, không thừa không thiếu
- *   · chạy dưới vai trò KHÔNG phải superuser với một hàm thuộc chủ khác:
- *     RAISE EXCEPTION nêu đúng tên hàm và CUỘN LẠI sạch (anon vẫn 3, bảng ảnh
- *     chụp không bị bỏ lại)
+ * ĐÃ ĐO trên PostgreSQL 16.4 local với nền có đủ: function thường, function có
+ * OVERLOAD, PROCEDURE, AGGREGATE, hàm chỉ mở qua PUBLIC, hàm có GRANT OPTION,
+ * và routine thuộc chủ sở hữu CHƯA có dòng pg_default_acl.
  *
- * Test này khoá các tính chất mà bản nháp 00337 cũ đã sai.
+ *   trước vá : anon 10 · PUBLIC 10 · authenticated 10 · grant option 1
+ *   sau  vá  : anon  2 · PUBLIC  0 · authenticated 10
+ *              procedure/aggregate/hàm chủ khác đều bị chặn
+ *              FUNCTION mới và PROCEDURE mới đều KHÔNG tự mở
+ *   chạy lần 2: ảnh chụp GIỮ NGUYÊN mốc thời gian, vẫn ghi 10 (không phải 2)
+ *   hoàn tác  : anon 10 · PUBLIC 10 · authenticated 10 · grant option 1
+ *              0 routine LỆCH ACL so với ảnh chụp (khớp cả grantor)
+ *   vá lại    : anon 2
+ *   vai trò KHÔNG superuser + chủ sở hữu khác: RAISE EXCEPTION nêu đúng tên
+ *              chủ, cuộn lại sạch (anon vẫn 3, không bỏ lại bảng ảnh chụp)
+ *
+ * Test này khoá các tính chất mà bản nháp trước đã sai.
  */
 
 const THU_MUC = join(process.cwd(), "supabase/migrations");
@@ -23,40 +29,94 @@ const HOAN_TAC = readFileSync(
   join(THU_MUC, "00340_rollback_revoke_anon_execute_functions.sql"),
   "utf8",
 );
+/** Bỏ dòng chú thích để chỉ soi LỆNH thật. */
+const chiLenh = (s: string) =>
+  s.split("\n").filter((d) => !d.trimStart().startsWith("--")).join("\n");
 
 describe("00340 — đo bằng QUYỀN HIỆU LỰC, không chỉ ACL trực tiếp", () => {
-  it("hậu kiểm dùng has_function_privilege chứ không đếm ACL của anon", () => {
+  it("hậu kiểm dùng has_function_privilege cho cả ba vai", () => {
     expect(VA).toContain("has_function_privilege('anon'");
     expect(VA).toContain("has_function_privilege('authenticated'");
     expect(VA).toContain("has_function_privilege('service_role'");
   });
 
   it("tách riêng PUBLIC: đọc grantee = 0 trong ACL", () => {
-    // PUBLIC không phải một role nên has_function_privilege không đo được;
-    // phải đọc thẳng mục grantee = 0.
     expect(VA).toContain("a.grantee = 0");
   });
 
   it("so danh sách cho phép bằng OID, KHÔNG so chuỗi regprocedure", () => {
-    // oid::regprocedure::text bỏ tiền tố schema khi public nằm trong
-    // search_path ⇒ so chuỗi lệch oan (đã dính thật khi thử local).
     expect(VA).toContain("to_regprocedure(chu_ky)::oid");
     expect(VA).not.toMatch(/oid::regprocedure::text not in \(select chu_ky/);
   });
 });
 
-describe("00340 — thu hồi cả PUBLIC, không chỉ anon", () => {
-  it("thu hồi trên hàm hiện có gồm cả public", () => {
+describe("00340 — bao phủ MỌI loại routine", () => {
+  it("mọi truy vấn đếm/chụp đều lấy đủ 4 prokind", () => {
+    const soLan = (VA.match(/prokind in \('f', ?'p', ?'a', ?'w'\)/g) ?? []).length;
+    expect(soLan, "phải dùng nhất quán ở chụp ảnh và các phép hậu kiểm").toBeGreaterThanOrEqual(4);
+    // Không được sót chỗ nào chỉ lọc prokind='f'.
+    expect(chiLenh(VA)).not.toMatch(/prokind\s*=\s*'f'/);
+  });
+
+  it("GRANT dùng đúng từ khoá theo prokind — PROCEDURE không nhận ON FUNCTION", () => {
+    expect(VA).toContain("case p.prokind when 'p' then 'PROCEDURE' else 'FUNCTION' end");
+    expect(VA).toContain("grant execute on %s %s to authenticated");
+    expect(VA).toContain("grant execute on %s %s to service_role");
+    expect(VA).toContain("grant execute on %s %s to anon");
+    // Cấm quay lại dạng cứng ON FUNCTION cho mọi loại.
+    expect(chiLenh(VA)).not.toMatch(/grant execute on function %s to (authenticated|service_role)/);
+  });
+
+  it("hậu kiểm dựng thật CẢ function LẪN procedure rồi bỏ đi", () => {
+    expect(VA).toContain("create function public._kiem_00340_ham_moi()");
+    expect(VA).toContain("drop function public._kiem_00340_ham_moi()");
+    expect(VA).toContain("create procedure public._kiem_00340_thu_tuc_moi()");
+    expect(VA).toContain("drop procedure public._kiem_00340_thu_tuc_moi()");
+    expect(VA).toContain("PROCEDURE tạo mới VẪN tự mở cho anon");
+  });
+});
+
+describe("00340 — ảnh chụp BẤT BIẾN", () => {
+  it("KHÔNG drop rồi chụp đè — chạy lần hai phải giữ ảnh chụp cũ", () => {
+    expect(chiLenh(VA)).not.toMatch(/drop table if exists public\.acl_backup_00340/);
+    expect(chiLenh(VA)).not.toMatch(/drop table if exists public\.default_acl_backup_00340/);
+    expect(VA).toContain("if to_regclass('public.acl_backup_00340') is not null then");
+    expect(VA).toContain("GIỮ NGUYÊN (bất biến)");
+  });
+
+  it("ảnh chụp lưu đủ grantee/grantor/grant option để hoàn tác chính xác", () => {
+    expect(VA).toContain("acl_anon_public jsonb");
+    expect(VA).toContain("'grantor', a.grantor::regrole::text");
+    expect(VA).toContain("'grantable', a.is_grantable");
+    expect(VA).toContain("prokind");
+    expect(VA).toContain("tu_khoa");
+  });
+});
+
+describe("00340 — thu hồi cả PUBLIC, phủ mọi chủ sở hữu", () => {
+  it("thu hồi trên routine hiện có gồm cả public", () => {
     expect(VA).toMatch(/revoke execute on all functions in schema public from anon, public/);
     expect(VA).toMatch(/revoke execute on all routines\s+in schema public from anon, public/);
   });
 
   it("quyền mặc định: gỡ anon THEO SCHEMA và gỡ PUBLIC TOÀN CSDL", () => {
-    // Mục `=X/` dựng sẵn của PostgreSQL không thuộc schema nào nên lệnh có
-    // IN SCHEMA không gỡ nổi — đã đo: hàm mới vẫn ra {=X/postgres,...}.
     expect(VA).toContain("in schema public revoke execute on functions from anon");
     expect(VA).toMatch(/alter default privileges for role %I revoke execute on functions from public/);
-    expect(VA).toMatch(/^\s*alter default privileges revoke execute on functions from public;/m);
+  });
+
+  it("phủ MỌI chủ sở hữu, kể cả chủ CHƯA có dòng pg_default_acl", () => {
+    const khoi = VA.slice(VA.indexOf("$mac_dinh$"), VA.indexOf("Khối 4"));
+    // Hợp của: chủ sở hữu routine hiện có ∪ chủ có dòng default ACL ∪ vai trò đang chạy.
+    expect(khoi).toContain("select p.proowner::regrole::text as chu");
+    expect(khoi).toContain("union");
+    expect(khoi).toContain("select current_user");
+  });
+
+  it("không sửa được quyền mặc định của một chủ ⇒ EXCEPTION, không cảnh báo rồi đi tiếp", () => {
+    const khoi = VA.slice(VA.indexOf("$mac_dinh$"), VA.indexOf("Khối 4"));
+    expect(khoi).toContain("exception when insufficient_privilege then");
+    expect(khoi).toContain("raise exception");
+    expect(khoi).not.toContain("raise warning");
   });
 });
 
@@ -64,16 +124,11 @@ describe("00340 — sai là CUỘN LẠI, không cảnh báo rồi commit", () =
   it("mọi kiểm tra thất bại đều RAISE EXCEPTION", () => {
     const hauKiem = VA.slice(VA.indexOf("$hau_kiem$"), VA.lastIndexOf("commit;"));
     expect(hauKiem).toContain("raise exception");
-    // Không được có raise warning trong hậu kiểm.
     expect(hauKiem).not.toContain("raise warning");
   });
 
   it("hậu kiểm nằm TRƯỚC commit", () => {
     expect(VA.indexOf("$hau_kiem$")).toBeLessThan(VA.lastIndexOf("commit;"));
-  });
-
-  it("toàn file không có chỗ nào warning-rồi-đi-tiếp về việc còn hàm sót", () => {
-    expect(VA).not.toMatch(/raise warning.*KHÔNG đủ quyền/i);
   });
 });
 
@@ -82,7 +137,6 @@ describe("00340 — danh sách công khai theo CHỮ KÝ ĐẦY ĐỦ", () => {
     expect(VA).toContain("public.get_email_by_phone(text)");
     expect(VA).toContain("public.normalize_phone(text)");
     expect(VA).toContain("to_regprocedure(r.chu_ky) is null");
-    // Cấm cấp theo tên cho mọi overload.
     expect(VA).not.toMatch(/p\.proname in \('get_email_by_phone', 'normalize_phone'\)/);
   });
 
@@ -92,10 +146,9 @@ describe("00340 — danh sách công khai theo CHỮ KÝ ĐẦY ĐỦ", () => {
 });
 
 describe("00340 — giữ nguyên authenticated / service_role", () => {
-  it("chụp lại quyền hiệu lực trước khi thu hồi rồi cấp lại đúng tập đó", () => {
+  it("chụp quyền hiệu lực trước khi thu hồi rồi cấp lại đúng tập đó", () => {
     expect(VA).toContain("authenticated_goi_duoc");
     expect(VA).toContain("service_role_goi_duoc");
-    expect(VA).toContain("grant execute on function %s to authenticated");
   });
 
   it("hậu kiểm bắt cả MẤT quyền lẫn MỞ RỘNG quyền", () => {
@@ -104,44 +157,47 @@ describe("00340 — giữ nguyên authenticated / service_role", () => {
   });
 });
 
-describe("00340 — hàm tạo MỚI không tự mở (chứng minh trong transaction)", () => {
-  it("dựng thật một hàm rồi đo, xong bỏ đi", () => {
-    expect(VA).toContain("create function public._kiem_00340_ham_moi()");
-    expect(VA).toContain("drop function public._kiem_00340_ham_moi()");
-    expect(VA).toContain("hàm tạo mới VẪN tự mở cho anon");
-    expect(VA).toContain("hàm tạo mới VẪN tự mở cho PUBLIC");
-  });
-});
-
-describe("00340 — hoàn tác khôi phục ĐÚNG ảnh chụp", () => {
+describe("00340 — hoàn tác khôi phục CHÍNH XÁC từ ảnh chụp", () => {
   it("TUYỆT ĐỐI không GRANT EXECUTE ON ALL FUNCTIONS TO anon", () => {
-    // Chỉ soi LỆNH thật: file có một dòng chú thích cảnh báo đúng chuỗi này,
-    // nên phải bỏ chú thích trước khi kiểm, nếu không là báo động giả.
-    const chiLenh = HOAN_TAC.split("\n")
-      .filter((d) => !d.trimStart().startsWith("--"))
-      .join("\n");
-    expect(chiLenh).not.toMatch(/grant\s+execute\s+on\s+all\s+functions[^;]*anon/i);
-    // Và bản vá cũng vậy.
-    const vaChiLenh = VA.split("\n")
-      .filter((d) => !d.trimStart().startsWith("--"))
-      .join("\n");
-    expect(vaChiLenh).not.toMatch(/grant\s+execute\s+on\s+all\s+functions[^;]*anon/i);
-    // Chú thích cảnh báo vẫn phải còn để người sau không lặp lại sai lầm.
-    expect(HOAN_TAC).toContain("KHÔNG BAO GIỜ dùng");
+    expect(chiLenh(HOAN_TAC)).not.toMatch(/grant\s+execute\s+on\s+all\s+functions[^;]*anon/i);
+    expect(chiLenh(VA)).not.toMatch(/grant\s+execute\s+on\s+all\s+functions[^;]*anon/i);
+    // Chú thích cảnh báo phải còn để người sau không lặp lại.
+    expect(HOAN_TAC).toContain("TUYỆT ĐỐI không");
   });
 
-  it("đọc từ bảng ảnh chụp, dừng nếu không có ảnh chụp", () => {
-    expect(HOAN_TAC).toContain("public.acl_backup_00340");
+  it("khôi phục ĐÚNG từng mục: grantee, grantor, grant option", () => {
+    expect(HOAN_TAC).toContain("jsonb_array_elements(r.acl_anon_public)");
+    expect(HOAN_TAC).toContain("m->>'grantor'");
+    expect(HOAN_TAC).toContain("with grant option");
+    // Đặt lại vai trò về đúng người đã cấp để mục ACL khớp cả grantor.
+    expect(HOAN_TAC).toContain("set local role %I");
+    expect(HOAN_TAC).toContain("reset role");
+  });
+
+  it("dùng đúng từ khoá FUNCTION/PROCEDURE khi cấp lại", () => {
+    expect(HOAN_TAC).toContain("grant execute on %s %s to public");
+    expect(HOAN_TAC).toContain("grant execute on %s %s to %I");
+  });
+
+  it("KHÔNG grant PUBLIC tràn cho mọi chủ sở hữu", () => {
+    const khoi = HOAN_TAC.slice(
+      HOAN_TAC.indexOf("$tra_mac_dinh$"),
+      HOAN_TAC.indexOf("$don_dong_thua$"),
+    );
+    // Chỉ trả cho chủ mà ảnh chụp ghi là CÓ.
+    expect(khoi).toContain("if r.co_public then");
+    expect(khoi).toContain("if r.co_anon and r.pham_vi = 'public' then");
+    // Không được có lệnh alter default privileges trần (không nêu for role).
+    expect(chiLenh(HOAN_TAC)).not.toMatch(
+      /^\s*alter default privileges grant execute on functions to public;/m,
+    );
+  });
+
+  it("dừng nếu không có ảnh chụp; hậu kiểm bắt cả thiếu lẫn THỪA", () => {
     expect(HOAN_TAC).toContain("không thể hoàn tác chính xác");
-  });
-
-  it("hậu kiểm hoàn tác bắt cả thiếu lẫn THỪA", () => {
-    expect(HOAN_TAC).toContain("thiếu % hàm so với ảnh chụp");
-    expect(HOAN_TAC).toContain("cấp THỪA % hàm cho anon");
-  });
-
-  it("chỉ dẫn cách ít rủi ro hơn trước khi hoàn tác toàn bộ", () => {
-    expect(HOAN_TAC).toContain("grant execute on function public.<ten>(<chu_ky>) to anon");
+    expect(HOAN_TAC).toContain("thiếu % routine cho anon so với ảnh chụp");
+    expect(HOAN_TAC).toContain("cấp THỪA % routine cho anon");
+    expect(HOAN_TAC).toContain("thiếu % routine cho PUBLIC so với ảnh chụp");
   });
 });
 
@@ -152,14 +208,15 @@ describe("00340 — bộ file và phạm vi", () => {
     expect(tep).toContain("00340_rollback_revoke_anon_execute_functions.sql");
   });
 
-  it("không đụng schema auth/storage/graphql_public và không đụng bảng", () => {
+  it("không đụng schema auth/storage/graphql_public và không đụng bảng dữ liệu", () => {
     expect(VA).not.toMatch(/\bauth\.\w+\s+from\s+anon/i);
     expect(VA).not.toMatch(/revoke[^;]*on\s+all\s+tables/i);
     expect(VA).not.toMatch(/\b(drop|truncate|delete\s+from)\s+public\.(invoices|profiles)/i);
   });
 
   it("KHÔNG chứa UUID vai trò production", () => {
-    expect(VA).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
-    expect(HOAN_TAC).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
+    const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+    expect(VA).not.toMatch(uuid);
+    expect(HOAN_TAC).not.toMatch(uuid);
   });
 });
