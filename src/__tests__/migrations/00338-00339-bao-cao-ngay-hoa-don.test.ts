@@ -59,10 +59,11 @@ describe("Tám RPC báo cáo đọc theo ngày hóa đơn phải nằm TRONG REP
   });
 
   it("mỗi migration đều có file hoàn tác", () => {
+    // Chỉ kiểm hai migration THUỘC PHẠM VI này. Hoàn tác của 00337 do PR đơn
+    // bán con tự khoá — không kiểm chéo để hai PR độc lập nhau.
     const tep = readdirSync(THU_MUC);
     expect(tep).toContain("00338_rollback_report_rpcs_issued_at.sql");
     expect(tep).toContain("00339_rollback_invoice_report_rpcs_issued_at.sql");
-    expect(tep).toContain("00337_rollback_mark_order_processed_completed_only.sql");
   });
 
   it("hậu kiểm nằm TRONG transaction — sai là rollback, không để nửa vời", () => {
