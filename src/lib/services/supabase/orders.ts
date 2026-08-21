@@ -118,10 +118,27 @@ export async function getOrders(
       : ", shipments:shipping_orders!shipping_orders_invoice_id_fkey!inner(id)"
     : "";
 
+  // BA MỨC XỬ LÝ — lọc bằng QUAN HỆ NHÚNG, không bằng danh sách id.
+  //
+  // Vì sao không dùng danh sách id: phải tải hết hóa đơn con rồi khử trùng mới
+  // ra tập đơn gốc; hễ có trần là một đơn nhiều hóa đơn con sẽ ăn hết quota và
+  // làm rơi mất đơn khác — danh sách thiếu mà người dùng tưởng là đủ. Nhúng
+  // quan hệ để MÁY CHỦ tự lọc, không giới hạn, giữ nguyên mọi bộ lọc khác.
+  //
+  // Cùng một mẫu trang này đã dùng cho vận đơn: `!inner` = phải có ít nhất một
+  // dòng khớp; không `!inner` + `.is(<quan hệ>, null)` = không có dòng nào khớp.
+  const locBaMuc =
+    fulfillmentState === "pending" || fulfillmentState === "processing";
+  const childRelation = locBaMuc
+    ? fulfillmentState === "processing"
+      ? ", con_hoan_tat:invoices!invoices_source_order_id_fkey!inner(id)"
+      : ", con_hoan_tat:invoices!invoices_source_order_id_fkey(id)"
+    : "";
+
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}${childRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -173,21 +190,20 @@ export async function getOrders(
   // chưa gắn là "processing" — không được gọi là chờ xử lý nữa.
   if (fulfillmentState === "fulfilled") {
     query = query.not("fulfilled_by_id", "is", null);
-  } else if (fulfillmentState === "pending" || fulfillmentState === "processing") {
+  } else if (locBaMuc) {
     query = query.is("fulfilled_by_id", null);
-    const coCon = await layIdDonCoConHoanTat(tenantId, params.branchId);
-    if (coCon !== null) {
-      if (fulfillmentState === "processing") {
-        // Không có đơn nào có hóa đơn ⇒ kết quả rỗng. `.in` với mảng rỗng bị
-        // PostgREST từ chối nên chặn bằng điều kiện không bao giờ đúng.
-        if (coCon.length === 0) query = query.eq("id", KHONG_BAO_GIO_KHOP);
-        else query = query.in("id", coCon);
-      } else if (coCon.length > 0) {
-        query = query.not("id", "in", `(${coCon.join(",")})`);
-      }
+    // Điều kiện "hóa đơn con còn hiệu lực" áp lên QUAN HỆ NHÚNG. Máy chủ tự
+    // lọc nên một đơn có bao nhiêu hóa đơn con cũng đúng.
+    query = query
+      .eq("con_hoan_tat.status", "completed")
+      .is("con_hoan_tat.deleted_at", null)
+      .is("con_hoan_tat.voided_at", null)
+      .is("con_hoan_tat.cancelled_at", null);
+    if (fulfillmentState === "pending") {
+      // Không có dòng con nào khớp ⇒ chưa có hóa đơn ⇒ CHỜ XỬ LÝ.
+      query = query.is("con_hoan_tat", null);
     }
-    // coCon === null ⇒ máy chủ chưa có cột: "pending" giữ nghĩa cũ (chưa gắn),
-    // "processing" cũng ra cùng tập — đúng vì khi đó chưa có mô hình đơn con.
+    // "processing" đã có `!inner` trong select nên chỉ giữ đơn CÓ dòng khớp.
   }
 
   if (debtState === "outstanding") {
@@ -1347,56 +1363,6 @@ export const NHAN_TRANG_THAI_XU_LY: Record<
   hoan_tat: { nhan: "Hoàn tất", mo_ta: "Đã gắn hóa đơn vào đơn đặt hàng" },
 };
 
-/** UUID không tồn tại — dùng để ép một truy vấn ra kết quả rỗng. */
-const KHONG_BAO_GIO_KHOP = "00000000-0000-0000-0000-000000000000";
-
-/**
- * Trần số đơn gốc dùng cho bộ lọc ba mức. PostgREST nhận danh sách id qua URL
- * nên không thể dài vô hạn. Vượt trần thì BÁO LỖI RÕ chứ không âm thầm cắt —
- * cắt lặng lẽ sẽ ra danh sách thiếu mà người dùng tưởng là đủ.
- */
-const TRAN_ID_LOC_BA_MUC = 2000;
-
-/**
- * Id các đơn đặt hàng đã có ít nhất một đơn bán con ĐÃ THANH TOÁN còn hiệu lực.
- * Trả `null` khi máy chủ chưa có cột (chưa chạy 00331/00335).
- */
-async function layIdDonCoConHoanTat(
-  tenantId: string,
-  branchId?: string,
-): Promise<string[] | null> {
-  const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let q = (supabase as any)
-    .from("invoices")
-    .select("source_order_id")
-    .eq("tenant_id", tenantId)
-    .not("source_order_id", "is", null)
-    .eq("status", "completed")
-    .is("deleted_at", null)
-    .is("voided_at", null)
-    .is("cancelled_at", null)
-    .limit(TRAN_ID_LOC_BA_MUC + 1);
-  if (branchId) q = q.eq("branch_id", branchId);
-  const { data, error } = await q;
-  if (error) {
-    if (error.code === MA_LOI_CHUA_CO_COT) return null;
-    handleError(error, "layIdDonCoConHoanTat");
-  }
-  const ids = [
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...new Set(((data ?? []) as any[]).map((r) => String(r.source_order_id))),
-  ];
-  if (ids.length > TRAN_ID_LOC_BA_MUC) {
-    throw new Error(
-      `Có quá ${TRAN_ID_LOC_BA_MUC} đơn đặt hàng đã phát sinh hóa đơn — ` +
-        "bộ lọc Chờ xử lý / Đang xử lý cần thu hẹp bớt (chọn chi nhánh hoặc " +
-        "khoảng ngày) để kết quả đầy đủ.",
-    );
-  }
-  return ids;
-}
-
 /**
  * Đếm đơn bán con ĐÃ THANH TOÁN và còn hiệu lực cho một loạt đơn gốc.
  *
@@ -1409,25 +1375,35 @@ export async function demDonConHoanTat(
   if (orderIds.length === 0) return new Map();
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from("invoices")
-    .select("source_order_id")
-    .eq("tenant_id", tenantId)
-    .in("source_order_id", orderIds)
-    .eq("status", "completed")
-    .is("deleted_at", null)
-    .is("voided_at", null)
-    .is("cancelled_at", null);
-  if (error) {
-    if (error.code === MA_LOI_CHUA_CO_COT) return null;
-    handleError(error, "demDonConHoanTat");
-  }
   const dem = new Map<string, number>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  for (const row of (data ?? []) as any[]) {
-    const k = String(row.source_order_id);
-    dem.set(k, (dem.get(k) ?? 0) + 1);
+  // Đọc theo TRANG cho tới hết. Không đặt trần rồi thôi: một đơn có rất nhiều
+  // hóa đơn con sẽ ăn hết quota và làm những đơn sau đếm thiếu — số đếm sai mà
+  // nhìn vẫn hợp lý là kiểu lỗi khó phát hiện nhất.
+  const CO_TRANG = 1000;
+  for (let tu = 0; ; tu += CO_TRANG) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoices")
+      .select("source_order_id")
+      .eq("tenant_id", tenantId)
+      .in("source_order_id", orderIds)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .is("voided_at", null)
+      .is("cancelled_at", null)
+      .order("id", { ascending: true })
+      .range(tu, tu + CO_TRANG - 1);
+    if (error) {
+      if (error.code === MA_LOI_CHUA_CO_COT) return null;
+      handleError(error, "demDonConHoanTat");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (data ?? []) as any[];
+    for (const row of rows) {
+      const k = String(row.source_order_id);
+      dem.set(k, (dem.get(k) ?? 0) + 1);
+    }
+    if (rows.length < CO_TRANG) break;
   }
   return dem;
 }

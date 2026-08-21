@@ -74,14 +74,17 @@ describe("Đếm đơn con chỉ tính hóa đơn CÒN HIỆU LỰC", () => {
     expect(ham).toContain("if (error.code === MA_LOI_CHUA_CO_COT) return null");
   });
 
-  it("giới hạn danh sách id có BÁO LỖI RÕ, không âm thầm cắt", () => {
-    const loc = svc.slice(
-      svc.indexOf("async function layIdDonCoConHoanTat"),
-      svc.indexOf("export async function demDonConHoanTat"),
-    );
-    expect(loc).toContain("TRAN_ID_LOC_BA_MUC");
-    expect(loc).toContain("throw new Error");
-    expect(loc).toContain("thu hẹp bớt");
+  it("đọc theo trang cho tới hết, KHÔNG đặt trần rồi thôi", () => {
+    // Một đơn có rất nhiều hóa đơn con sẽ ăn hết quota và làm những đơn sau
+    // đếm thiếu — số sai mà nhìn vẫn hợp lý là kiểu lỗi khó phát hiện nhất.
+    expect(ham).toContain("for (let tu = 0; ; tu += CO_TRANG)");
+    expect(ham).toContain("if (rows.length < CO_TRANG) break");
+  });
+
+  it("KHÔNG còn cách tải danh sách id rồi khử trùng", () => {
+    expect(svc).not.toContain("layIdDonCoConHoanTat");
+    expect(svc).not.toContain("TRAN_ID_LOC_BA_MUC");
+    expect(svc).not.toContain("KHONG_BAO_GIO_KHOP");
   });
 });
 
@@ -107,14 +110,51 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
     expect(khoi).not.toContain("Chưa xuất hóa đơn");
   });
 
-  it("máy chủ lọc đúng: pending loại đơn đã có hóa đơn, processing chỉ lấy đơn đó", () => {
+  it("lọc bằng QUAN HỆ NHÚNG, không truyền danh sách UUID qua URL", () => {
     const khoi = svc.slice(
       svc.indexOf('if (fulfillmentState === "fulfilled")'),
       svc.indexOf('if (debtState === "outstanding")'),
     );
-    expect(khoi).toContain("layIdDonCoConHoanTat");
-    expect(khoi).toContain('query.not("id", "in"');
-    expect(khoi).toContain('query.in("id", coCon)');
+    // processing = `!inner` (phải có dòng con khớp); pending = `.is(<quan hệ>, null)`
+    // (không có dòng nào khớp). Cùng mẫu trang này đã dùng cho vận đơn.
+    expect(svc).toContain("invoices!invoices_source_order_id_fkey!inner(id)");
+    expect(khoi).toContain('query.is("con_hoan_tat", null)');
+    expect(khoi).toContain('.eq("con_hoan_tat.status", "completed")');
+    expect(khoi).toContain('.is("con_hoan_tat.voided_at", null)');
+    expect(khoi).toContain('.is("con_hoan_tat.cancelled_at", null)');
+    // Tuyệt đối không quay lại cách truyền danh sách id.
+    expect(khoi).not.toMatch(/\.in\("id"/);
+    expect(khoi).not.toMatch(/\.not\("id", "in"/);
+  });
+
+  it("KPI và bảng dùng CHUNG điều kiện — RPC nhận đủ ba trạng thái", () => {
+    const rpc = readFileSync(
+      join(process.cwd(), "supabase/migrations/00341_order_summary_three_states.sql"),
+      "utf8",
+    );
+    expect(rpc).toContain("'processing'");
+    // Cùng bộ điều kiện "hóa đơn con còn hiệu lực" như phía client.
+    expect(rpc).toContain("c.status = ''completed''");
+    expect(rpc).toContain("c.deleted_at is null");
+    expect(rpc).toContain("c.voided_at is null");
+    expect(rpc).toContain("c.cancelled_at is null");
+    // EXISTS tương quan ⇒ đơn có bao nhiêu hóa đơn con cũng chỉ tính MỘT lần.
+    expect(rpc).toContain("exists (select 1 from public.invoices c");
+  });
+
+  it("fingerprint của 00341 khớp TỪNG DÒNG ĐƠN (thân hàm prod có CRLF)", () => {
+    const rpc = readFileSync(
+      join(process.cwd(), "supabase/migrations/00341_order_summary_three_states.sql"),
+      "utf8",
+    );
+    // Đã đo thật: pg_get_functiondef trên bản cài trả về CRLF, nên mọi chuỗi
+    // fingerprint bắc qua nhiều dòng đều trượt. Chỉ được khớp trong một dòng.
+    for (const bien of ["c_wl_cu", "c_loc_cu"]) {
+      const m = new RegExp(`${bien}\\s+constant text :=([^;]*);`).exec(rpc);
+      expect(m, `thiếu ${bien}`).not.toBeNull();
+      // Giá trị phải nằm gọn trên MỘT dòng với khai báo.
+      expect(m![1], `${bien} không được bắc qua nhiều dòng`).not.toContain("\n");
+    }
   });
 
   it("danh sách hiện 'Đang xử lý · N hóa đơn', không gọi là Chờ xử lý", () => {
