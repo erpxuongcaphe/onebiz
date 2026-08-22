@@ -81,9 +81,12 @@ begin
     public_goi_duoc        boolean not null,
     authenticated_goi_duoc boolean not null,
     service_role_goi_duoc  boolean not null,
-    -- Chi tiết từng mục ACL của anon và PUBLIC: grantee, grantor, grant option.
-    -- Hoàn tác dựng lại ĐÚNG từng mục, không cấp bừa.
-    acl_anon_public jsonb,
+    -- TOÀN BỘ mục EXECUTE của routine: grantee, grantor, grant option.
+    -- Phải lưu ĐỦ MỌI grantee (không chỉ anon/PUBLIC) vì migration còn CẤP
+    -- TRỰC TIẾP cho authenticated/service_role ở Khối 4 — hai vai này trước đó
+    -- có thể chỉ có quyền NHỜ PUBLIC, không có mục trực tiếp nào. Hoàn tác phải
+    -- gỡ luôn các mục do chính migration tạo ra thì ACL mới khớp ảnh chụp.
+    acl_execute jsonb,
     chup_luc     timestamptz not null default now()
   );
   comment on table public.acl_backup_00340 is
@@ -93,7 +96,7 @@ begin
   insert into public.acl_backup_00340
     (ham_oid, chu_ky, prokind, tu_khoa, chu_so_huu, proacl_truoc,
      anon_goi_duoc, public_goi_duoc, authenticated_goi_duoc, service_role_goi_duoc,
-     acl_anon_public)
+     acl_execute)
   select p.oid,
          p.oid::regprocedure::text,
          p.prokind,
@@ -108,20 +111,27 @@ begin
          (select jsonb_agg(jsonb_build_object(
                    'grantee', case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end,
                    'grantor', a.grantor::regrole::text,
-                   'grantable', a.is_grantable))
+                   'grantable', a.is_grantable)
+                 order by case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end)
           from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-          where a.privilege_type = 'EXECUTE'
-            and (a.grantee = 0 or a.grantee = 'anon'::regrole))
+          where a.privilege_type = 'EXECUTE')
   from pg_proc p
   join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind in ('f', 'p', 'a', 'w');
 
+  -- Lưu NGUYÊN VĂN acl + TỪNG MỤC (grantee/grantor/grant option). Không dùng
+  -- cờ có/không: cờ không đủ để dựng lại đúng người cấp và quyền uỷ quyền.
   create table public.default_acl_backup_00340 as
   select d.defaclrole::regrole::text        as chu_so_huu,
          coalesce(n.nspname, '(toan_csdl)') as pham_vi,
          d.defaclacl::text                  as acl_truoc,
-         d.defaclacl::text like '%anon=%'   as co_anon,
-         d.defaclacl::text ~ '[{,]=[a-zA-Z]' as co_public
+         (select jsonb_agg(jsonb_build_object(
+                   'grantee', case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end,
+                   'grantor', a.grantor::regrole::text,
+                   'grantable', a.is_grantable)
+                 order by case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end)
+          from aclexplode(d.defaclacl) a
+          where a.privilege_type = 'EXECUTE') as acl_items
   from pg_default_acl d
   left join pg_namespace n on n.oid = d.defaclnamespace
   where d.defaclobjtype = 'f'
@@ -306,6 +316,27 @@ begin
   where not has_function_privilege('anon', to_regprocedure(c.chu_ky)::oid, 'EXECUTE');
   if v_n <> 0 then
     raise exception '00340 THẤT BẠI: % routine công khai KHÔNG gọi được. CUỘN LẠI.', v_n;
+  end if;
+
+  -- K8. ACL TRỰC TIẾP của anon: chỉ được còn đúng danh sách công khai.
+  --     Đo riêng với quyền hiệu lực để bắt cả trường hợp mục trực tiếp còn sót
+  --     mà hiệu lực lại bị che (và ngược lại).
+  select count(*) into v_n
+  from pg_proc p join pg_namespace n on n.oid = p.pronamespace,
+  lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+  where n.nspname = 'public' and p.prokind in ('f','p','a','w')
+    and a.privilege_type = 'EXECUTE' and a.grantee = 'anon'::regrole
+    and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340);
+  if v_n <> 0 then
+    raise exception '00340 THẤT BẠI: còn % mục ACL TRỰC TIẾP của anon ngoài danh sách. CUỘN LẠI.', v_n;
+  end if;
+
+  -- K9. service_role KHÔNG được mở rộng thêm so với ảnh chụp (đối xứng với K5).
+  select count(*) into v_n from public.acl_backup_00340 b
+  where not b.service_role_goi_duoc and exists (select 1 from pg_proc where oid = b.ham_oid)
+    and has_function_privilege('service_role', b.ham_oid, 'EXECUTE');
+  if v_n <> 0 then
+    raise exception '00340 THẤT BẠI: service_role được mở rộng thêm % routine. CUỘN LẠI.', v_n;
   end if;
 
   raise notice '00340: ĐẠT — anon chỉ còn 2 routine đăng nhập, PUBLIC sạch, authenticated/service_role nguyên vẹn, routine mới không tự mở';

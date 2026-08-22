@@ -84,12 +84,24 @@ describe("00340 — ảnh chụp BẤT BIẾN", () => {
     expect(VA).toContain("GIỮ NGUYÊN (bất biến)");
   });
 
-  it("ảnh chụp lưu đủ grantee/grantor/grant option để hoàn tác chính xác", () => {
-    expect(VA).toContain("acl_anon_public jsonb");
+  it("ảnh chụp lưu TOÀN BỘ mục EXECUTE, không chỉ anon/PUBLIC", () => {
+    // Migration còn CẤP TRỰC TIẾP cho authenticated/service_role ở Khối 4;
+    // hai vai đó trước khi vá có thể chỉ có quyền NHỜ PUBLIC. Chụp thiếu thì
+    // hoàn tác không gỡ được các mục do chính migration tạo ra.
+    expect(VA).toContain("acl_execute jsonb");
+    expect(VA).not.toContain("acl_anon_public");
     expect(VA).toContain("'grantor', a.grantor::regrole::text");
     expect(VA).toContain("'grantable', a.is_grantable");
-    expect(VA).toContain("prokind");
-    expect(VA).toContain("tu_khoa");
+    // Không lọc grantee: phải lấy MỌI mục EXECUTE.
+    const khoi = VA.slice(VA.indexOf("acl_execute)"), VA.indexOf("create table public.default_acl_backup"));
+    expect(khoi).not.toMatch(/a\.grantee = 0 or a\.grantee = 'anon'/);
+  });
+
+  it("ảnh chụp quyền mặc định lưu TỪNG MỤC, không chỉ cờ có/không", () => {
+    expect(VA).toContain("acl_items");
+    expect(VA).toContain("from aclexplode(d.defaclacl) a");
+    expect(VA).not.toContain("as co_anon");
+    expect(VA).not.toContain("as co_public");
   });
 });
 
@@ -105,7 +117,7 @@ describe("00340 — thu hồi cả PUBLIC, phủ mọi chủ sở hữu", () => 
   });
 
   it("phủ MỌI chủ sở hữu, kể cả chủ CHƯA có dòng pg_default_acl", () => {
-    const khoi = VA.slice(VA.indexOf("$mac_dinh$"), VA.indexOf("Khối 4"));
+    const khoi = VA.slice(VA.indexOf("do $mac_dinh$"), VA.indexOf("end $mac_dinh$"));
     // Hợp của: chủ sở hữu routine hiện có ∪ chủ có dòng default ACL ∪ vai trò đang chạy.
     expect(khoi).toContain("select p.proowner::regrole::text as chu");
     expect(khoi).toContain("union");
@@ -113,7 +125,7 @@ describe("00340 — thu hồi cả PUBLIC, phủ mọi chủ sở hữu", () => 
   });
 
   it("không sửa được quyền mặc định của một chủ ⇒ EXCEPTION, không cảnh báo rồi đi tiếp", () => {
-    const khoi = VA.slice(VA.indexOf("$mac_dinh$"), VA.indexOf("Khối 4"));
+    const khoi = VA.slice(VA.indexOf("do $mac_dinh$"), VA.indexOf("end $mac_dinh$"));
     expect(khoi).toContain("exception when insufficient_privilege then");
     expect(khoi).toContain("raise exception");
     expect(khoi).not.toContain("raise warning");
@@ -151,9 +163,15 @@ describe("00340 — giữ nguyên authenticated / service_role", () => {
     expect(VA).toContain("service_role_goi_duoc");
   });
 
-  it("hậu kiểm bắt cả MẤT quyền lẫn MỞ RỘNG quyền", () => {
+  it("hậu kiểm bắt cả MẤT quyền lẫn MỞ RỘNG quyền, cho CẢ HAI vai", () => {
     expect(VA).toContain("authenticated mất quyền");
     expect(VA).toContain("authenticated được mở rộng thêm");
+    expect(VA).toContain("service_role mất quyền");
+    expect(VA).toContain("service_role được mở rộng thêm");
+  });
+
+  it("hậu kiểm đo CẢ ACL trực tiếp của anon, không chỉ quyền hiệu lực", () => {
+    expect(VA).toContain("mục ACL TRỰC TIẾP của anon ngoài danh sách");
   });
 });
 
@@ -165,13 +183,31 @@ describe("00340 — hoàn tác khôi phục CHÍNH XÁC từ ảnh chụp", () =
     expect(HOAN_TAC).toContain("TUYỆT ĐỐI không");
   });
 
-  it("khôi phục ĐÚNG từng mục: grantee, grantor, grant option", () => {
-    expect(HOAN_TAC).toContain("jsonb_array_elements(r.acl_anon_public)");
-    expect(HOAN_TAC).toContain("m->>'grantor'");
+  it("hội tụ HAI CHIỀU: gỡ mục thừa VÀ cấp mục thiếu", () => {
+    // Chiều gỡ là điểm mấu chốt: migration tạo grant trực tiếp cho
+    // authenticated/service_role mà trước đó không có.
+    expect(HOAN_TAC).toContain("GỠ mục đang có mà ảnh chụp không có");
+    expect(HOAN_TAC).toMatch(/revoke execute on %s %s from %I/);
+    expect(HOAN_TAC).toMatch(/revoke execute on %s %s from public/);
+    expect(HOAN_TAC).toContain("jsonb_array_elements(coalesce(r.acl_execute");
     expect(HOAN_TAC).toContain("with grant option");
-    // Đặt lại vai trò về đúng người đã cấp để mục ACL khớp cả grantor.
     expect(HOAN_TAC).toContain("set local role %I");
     expect(HOAN_TAC).toContain("reset role");
+  });
+
+  it("không SET ROLE được về grantor ⇒ RAISE EXCEPTION, KHÔNG warning rồi đi tiếp", () => {
+    const dv = HOAN_TAC.slice(HOAN_TAC.indexOf("pg_temp.dat_vai"), HOAN_TAC.indexOf("Khối 1."));
+    expect(dv).toContain("raise exception");
+    expect(dv).not.toContain("raise warning");
+  });
+
+  it("hậu kiểm kiểm CẢ ACL trực tiếp LẪN quyền hiệu lực của bốn vai", () => {
+    const hk = HOAN_TAC.slice(HOAN_TAC.indexOf("$hau_kiem$"));
+    expect(hk).toContain("ACL TRỰC TIẾP lệch ảnh chụp");
+    expect(hk).toContain("array['anon','authenticated','service_role']");
+    expect(hk).toContain("has_function_privilege");
+    expect(hk).toContain("PUBLIC lệch ảnh chụp");
+    expect(hk).toContain("dòng quyền mặc định lệch ảnh chụp");
   });
 
   it("dùng đúng từ khoá FUNCTION/PROCEDURE khi cấp lại", () => {
@@ -180,24 +216,19 @@ describe("00340 — hoàn tác khôi phục CHÍNH XÁC từ ảnh chụp", () =
   });
 
   it("KHÔNG grant PUBLIC tràn cho mọi chủ sở hữu", () => {
-    const khoi = HOAN_TAC.slice(
-      HOAN_TAC.indexOf("$tra_mac_dinh$"),
-      HOAN_TAC.indexOf("$don_dong_thua$"),
-    );
-    // Chỉ trả cho chủ mà ảnh chụp ghi là CÓ.
-    expect(khoi).toContain("if r.co_public then");
-    expect(khoi).toContain("if r.co_anon and r.pham_vi = 'public' then");
+    // Chỉ dựng lại đúng mục ảnh chụp ghi, và chỉ trả mặc định dựng sẵn cho chủ
+    // KHÔNG có trong ảnh chụp (tức chủ mà 00340 mới tạo dòng cho).
+    expect(HOAN_TAC).toContain("not exists (");
+    expect(HOAN_TAC).toContain("from public.default_acl_backup_00340 b");
     // Không được có lệnh alter default privileges trần (không nêu for role).
     expect(chiLenh(HOAN_TAC)).not.toMatch(
       /^\s*alter default privileges grant execute on functions to public;/m,
     );
   });
 
-  it("dừng nếu không có ảnh chụp; hậu kiểm bắt cả thiếu lẫn THỪA", () => {
+  it("dừng nếu thiếu bất kỳ bảng ảnh chụp nào", () => {
     expect(HOAN_TAC).toContain("không thể hoàn tác chính xác");
-    expect(HOAN_TAC).toContain("thiếu % routine cho anon so với ảnh chụp");
-    expect(HOAN_TAC).toContain("cấp THỪA % routine cho anon");
-    expect(HOAN_TAC).toContain("thiếu % routine cho PUBLIC so với ảnh chụp");
+    expect(HOAN_TAC).toContain("không có bảng ảnh chụp quyền mặc định");
   });
 });
 
