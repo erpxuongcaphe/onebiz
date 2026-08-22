@@ -26,7 +26,15 @@
 --
 -- Nền: giữ NGUYÊN thân hàm bản 00339 (marker ISSUED_AT_00335 còn nguyên để
 -- test 00338-00339 tiếp tục nhận diện), chỉ THÊM đúng một mệnh đề WHERE.
+--
+-- ⚠️ NGUYÊN TỬ: toàn bộ phần ghi nằm trong MỘT transaction. Thiếu BEGIN/COMMIT
+-- thì psql chạy autocommit từng lệnh — hậu kiểm ở cuối có nổ cũng KHÔNG cuộn
+-- lại được CREATE OR REPLACE và bảng chụp đã ghi trước đó. Đã đo thật trên
+-- PostgreSQL 16.4: bản thiếu BEGIN/COMMIT để lại hàm ĐÃ VÁ + bảng chụp 1 dòng
+-- sau khi hậu kiểm hỏng. Xem test src/__tests__/migrations/00342-*.test.ts.
 -- ============================================================================
+
+begin;
 
 -- ── Khối 0. Guard: hàm nền phải tồn tại và phải là bản 00339 ────────────────
 do $guard$
@@ -260,3 +268,10 @@ begin
 
   raise notice '00342: DAT — KPI hoa don da loai don dat hang, giu nguyen hoa don chuyen tai cho.';
 end $hau_kiem$;
+
+commit;
+
+-- Sau COMMIT: nạp lại lược đồ cho PostgREST. Chữ ký hàm KHÔNG đổi nên về lý
+-- thuyết không bắt buộc, nhưng đây là quy ước của 00339/00341 trong repo và
+-- đặt sau COMMIT thì không có đường phát nhầm khi transaction cuộn lại.
+notify pgrst, 'reload schema';

@@ -6,7 +6,13 @@
 -- tác vẫn về đúng trạng thái thực tế lúc chạy 00342.
 --
 -- KHÔNG đụng dữ liệu. Chỉ định nghĩa hàm.
+--
+-- ⚠️ NGUYÊN TỬ: khôi phục hàm và hậu kiểm nằm trong MỘT transaction. Không bọc
+-- thì một lỗi giữa chừng để lại RPC nửa cũ nửa mới — đúng thứ khó phát hiện
+-- nhất vì hàm vẫn chạy, chỉ cho số sai.
 -- ============================================================================
+
+begin;
 
 do $hoan_tac$
 declare
@@ -55,5 +61,9 @@ begin
 
   raise notice 'Hoan tac 00342: DAT — hàm trùng bản chụp, sạch marker.';
 end $kiem$;
+
+commit;
+
+notify pgrst, 'reload schema';
 
 -- Giữ lại bảng chụp (không DROP): là sử liệu, và cho phép chạy lại 00342.
