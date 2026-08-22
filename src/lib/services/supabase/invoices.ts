@@ -126,6 +126,35 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     }
   }
 
+  // 00332: lấy MÃ hóa đơn con cho các đơn đặt hàng đã gắn, để danh sách hiện
+  // "Đã xử lý · HD00xxxx" thay vì "Chưa hoàn tất" (đơn gốc giữ status draft là
+  // đúng — tiền nằm ở hóa đơn con). Một query gộp cho cả trang, fail-soft.
+  const idDaGan = [
+    ...new Set(invoices.map((i) => i.fulfilledById).filter(Boolean)),
+  ] as string[];
+  if (idDaGan.length > 0) {
+    const { data: conRows, error: conErr } = await supabase
+      .from("invoices")
+      .select("id, code")
+      .eq("tenant_id", tenantId)
+      .in("id", idDaGan);
+    if (conErr) {
+      console.warn("[getInvoices] lấy mã hóa đơn con:", conErr.message);
+    } else {
+      const maTheoId = new Map<string, string>(
+        (conRows ?? []).map((r) => [
+          String((r as { id: string }).id),
+          String((r as { code: string }).code ?? ""),
+        ]),
+      );
+      for (const inv of invoices) {
+        if (inv.fulfilledById) {
+          inv.fulfilledInvoiceCode = maTheoId.get(inv.fulfilledById) || undefined;
+        }
+      }
+    }
+  }
+
   return { data: invoices, total: count ?? 0 };
 }
 
@@ -623,6 +652,10 @@ function mapInvoice(row: any): Invoice {
     paid: Number(row.paid ?? 0),
     debt: Number(row.debt ?? 0),
     status: (statusMap[row.status] ?? row.status) as Invoice["status"],
+    // 00331/00332: đơn đặt hàng nằm chung bảng invoices. Hai trường này để màn
+    // danh sách phân biệt "nháp chưa bán" với "đơn gốc đã có hóa đơn con".
+    source: row.source ?? undefined,
+    fulfilledById: row.fulfilled_by_id ?? undefined,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,
     deliveryType:

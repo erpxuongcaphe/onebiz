@@ -37,6 +37,18 @@ export interface Invoice {
    * ngoài danh sách. undefined = chưa load / không có phiếu trả.
    */
   returnedAmount?: number;
+  /**
+   * 00331: 'order' = ĐƠN ĐẶT HÀNG (không phải một lần bán). Đơn đặt hàng nằm
+   * chung bảng `invoices` nên phải phân biệt khi trình bày trạng thái.
+   */
+  source?: string;
+  /**
+   * 00332: đơn đặt hàng gốc đã được gắn hóa đơn con nào. Có giá trị ⇒ đơn ĐÃ
+   * ĐƯỢC XỬ LÝ, tiền nằm ở hóa đơn con — KHÔNG được hiện "Chưa hoàn tất".
+   */
+  fulfilledById?: string;
+  /** Mã hóa đơn con đã gắn (HD…) để hiện kèm và đối chiếu. */
+  fulfilledInvoiceCode?: string;
   /** Tên chi nhánh ghi nhận hóa đơn (resolved từ branches.name). */
   branchName?: string;
   /** Branch UUID để filter / drill-down. */
