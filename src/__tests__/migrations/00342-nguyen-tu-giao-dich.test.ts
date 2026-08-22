@@ -20,9 +20,15 @@ import { join } from "node:path";
  *   file HOÀN TÁC có hậu kiểm hỏng → marker VẪN = t (không để RPC nửa cũ nửa
  *                               mới); chạy hoàn tác thật thì marker về f.
  *
+ * NOTIFY nằm TRONG transaction, ngay trước COMMIT (Codex 23/08): PostgreSQL chỉ
+ * GIAO notification khi COMMIT, nên hậu kiểm nổ ⇒ cuộn lại ⇒ KHÔNG reload nào
+ * được phát. Đặt SAU commit thì client bỏ qua lỗi và chạy tiếp vẫn phát reload
+ * dù bản vá đã cuộn lại. Đã đo bằng `LISTEN pgrst` trong cùng phiên psql:
+ *   hậu kiểm hỏng → 0 notification · chạy thành công → đúng 1 notification.
+ *
  * CI không có PostgreSQL nên tệp này KHÔNG chạy lại phép đo đó. Nó khoá các
  * BẤT BIẾN CẤU TRÚC khiến phép đo trên còn đúng: mọi lệnh GHI phải nằm giữa
- * `begin;` và `commit;`, và `notify` phải nằm SAU `commit;`.
+ * `begin;` và `commit;`, và thứ tự phải là begin → notify → commit.
  */
 
 const goc = join(process.cwd(), "supabase", "migrations");
@@ -74,14 +80,23 @@ describe.each(CAP_FILE)("%s — bọc trong MỘT transaction", (_ten, tep) => {
     expect(ngoaiVung).toEqual([]);
   });
 
-  it("`notify pgrst` nằm SAU `commit;` — không phát khi giao dịch cuộn lại", () => {
+  it("thứ tự phải là begin → notify → commit", () => {
+    // PostgreSQL chỉ GIAO notification khi COMMIT. Đặt notify TRONG transaction
+    // ⇒ hậu kiểm nổ thì không có reload nào được phát. Đặt SAU commit thì client
+    // bỏ qua lỗi và chạy tiếp vẫn phát reload dù bản vá đã cuộn lại.
     const dong = sql.split(/\r?\n/);
     const viTriNotify = dong
       .map((d, i) => ({ d, i }))
       .filter(({ d }) => /^\s*notify\s+pgrst/i.test(d))
       .map(({ i }) => i);
     expect(viTriNotify).toHaveLength(1);
-    expect(viTriNotify[0]).toBeGreaterThan(ketThuc[0]);
+    expect(viTriNotify[0]).toBeGreaterThan(moDau[0]);
+    expect(viTriNotify[0]).toBeLessThan(ketThuc[0]);
+  });
+
+  it("KHÔNG còn dòng notify nào nằm sau `commit;`", () => {
+    const sauCommit = sql.split(/\r?\n/).slice(ketThuc[0] + 1);
+    expect(sauCommit.filter((d) => /^\s*notify/i.test(d))).toEqual([]);
   });
 
   it("có hậu kiểm nổ bằng RAISE EXCEPTION (không chỉ cảnh báo rồi đi tiếp)", () => {

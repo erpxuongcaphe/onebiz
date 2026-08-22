@@ -62,8 +62,10 @@ begin
   raise notice 'Hoan tac 00342: DAT — hàm trùng bản chụp, sạch marker.';
 end $kiem$;
 
-commit;
-
+-- Nạp lại lược đồ — TRONG transaction, ngay trước COMMIT: hậu kiểm hoàn tác nổ
+-- thì không phát reload nào (xem giải thích ở bản vá).
 notify pgrst, 'reload schema';
+
+commit;
 
 -- Giữ lại bảng chụp (không DROP): là sử liệu, và cho phép chạy lại 00342.

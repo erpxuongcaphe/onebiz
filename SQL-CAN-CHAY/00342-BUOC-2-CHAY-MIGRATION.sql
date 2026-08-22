@@ -269,9 +269,12 @@ begin
   raise notice '00342: DAT — KPI hoa don da loai don dat hang, giu nguyen hoa don chuyen tai cho.';
 end $hau_kiem$;
 
-commit;
-
--- Sau COMMIT: nạp lại lược đồ cho PostgREST. Chữ ký hàm KHÔNG đổi nên về lý
--- thuyết không bắt buộc, nhưng đây là quy ước của 00339/00341 trong repo và
--- đặt sau COMMIT thì không có đường phát nhầm khi transaction cuộn lại.
+-- Nạp lại lược đồ cho PostgREST — ĐẶT TRONG TRANSACTION, ngay trước COMMIT.
+-- PostgreSQL chỉ GIAO notification khi COMMIT, nên:
+--   · hậu kiểm nổ → cuộn lại → KHÔNG có reload nào được phát;
+--   · commit xong → phát đúng một lần.
+-- Đặt SAU commit thì client nào bỏ qua lỗi và chạy tiếp (psql không bật
+-- ON_ERROR_STOP) vẫn phát reload dù bản vá đã cuộn lại.
 notify pgrst, 'reload schema';
+
+commit;
