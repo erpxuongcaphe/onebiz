@@ -64,8 +64,11 @@ describe("00335 POS — màn hình", () => {
     expect(pos).toContain("issuedReason: ngayHoaDon ? lyDoNgayHoaDon : null");
   });
 
-  it("nút Sửa gate theo quyền invoices.adjust_issued_at", () => {
-    expect(pos).toContain('hasPermission("invoices.adjust_issued_at")');
+  it("nút sửa gate theo quyền invoices.adjust_issued_at", () => {
+    // Quyền lấy từ danh mục chung, KHÔNG viết chuỗi rời — tránh gõ sai mã
+    // quyền mà vẫn xanh, và để quyền tồn tại cho tenant mới (không phụ thuộc
+    // bản seed role_id production).
+    expect(pos).toContain("PERMISSIONS.INVOICES_ADJUST_ISSUED_AT");
     expect(pos).toContain("canEdit={coQuyenChinhNgay}");
     expect(row).toContain("canEdit &&");
   });
@@ -73,9 +76,10 @@ describe("00335 POS — màn hình", () => {
   it("thanh toán xong TRẢ VỀ tự động", () => {
     const i = pos.indexOf("state.clearCart();\n      // 00335");
     expect(i).toBeGreaterThan(-1);
-    const khoi = pos.slice(i, i + 320);
-    expect(khoi).toContain("setNgayHoaDon(null)");
-    expect(khoi).toContain('setLyDoNgayHoaDon("")');
+    const khoi = pos.slice(i, i + 420);
+    // Phải đi qua datNgayHoaDon để ref của tab cũng sạch — nếu chỉ setState
+    // thì lần chuyển tab kế tiếp sẽ cất nhầm ngày đã dùng xong vào tab.
+    expect(khoi).toContain('datNgayHoaDon(null, "")');
   });
 
   it("KHÔNG đọc đồng hồ lúc dựng — tránh lệch hydrate (#418 nổ prod 20/08)", () => {

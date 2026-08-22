@@ -107,6 +107,7 @@ import {
 import { Button } from "@/components/ui/button";
 
 import { usePosState, type OrderLine, type DiscountInput, type SellingMode, type DeliveryInfo, type PosSnapshot } from "./hooks/use-pos-state";
+import { chuyenTab, themTab, dongTab, doiChiNhanh } from "./lib/pos-tab-transitions";
 import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
@@ -177,6 +178,18 @@ interface InvoiceTab {
   itemCount: number;
   /** Each invoice tab owns its own auto-save/idempotency session. */
   sessionId: string;
+  /**
+   * 00335 — NGÀY HÓA ĐƠN RIÊNG TỪNG TAB.
+   *
+   * Mỗi tab là một hóa đơn độc lập nên ngày phát hành cũng phải độc lập: tab A
+   * chỉnh ngày KHÔNG được kéo theo tab B. Theo đúng quy ước của `snapshot`,
+   * hai trường này chỉ có giá trị khi tab đang KHÔNG hoạt động; tab đang hoạt
+   * động thì nguồn sự thật là state `ngayHoaDon`/`lyDoNgayHoaDon` của trang.
+   *
+   * null = chưa chỉnh tay ⇒ máy chủ tự lấy giờ lúc thanh toán.
+   */
+  ngayHoaDon: string | null;
+  lyDoNgayHoaDon: string;
 }
 
 let tabCounter = 0;
@@ -207,12 +220,27 @@ function PosPageInner() {
     hasPermission,
   } = useAuth();
 
-  // 00335 — NGÀY HOÁ ĐƠN. null = để máy chủ tự lấy giờ lúc thanh toán (đường
-  // thường của thu ngân). Khác null ⇒ người có quyền đã chủ động chỉnh, máy chủ
-  // sẽ kiểm lại quyền + lý do và ghi nhật ký.
+  // 00335 — NGÀY HÓA ĐƠN của TAB ĐANG HOẠT ĐỘNG. null = để máy chủ tự lấy giờ
+  // lúc thanh toán (đường thường của thu ngân). Khác null ⇒ người có quyền đã
+  // chủ động chỉnh, máy chủ sẽ kiểm lại quyền + lý do và ghi nhật ký.
+  //
+  // Khi chuyển/đóng tab, giá trị này được cất vào `InvoiceTab` của tab đi ra và
+  // nạp lại từ `InvoiceTab` của tab đi vào — xem `datNgayHoaDon` bên dưới.
   const [ngayHoaDon, setNgayHoaDon] = useState<string | null>(null);
   const [lyDoNgayHoaDon, setLyDoNgayHoaDon] = useState("");
-  const coQuyenChinhNgay = hasPermission("invoices.adjust_issued_at");
+  // Ref song song với state: các callback quản lý tab (switchTab/addTab/
+  // closeTab) đọc giá trị HIỆN TẠI mà không phải khai vào dependency — tránh
+  // vừa tạo closure cũ vừa dựng lại callback mỗi lần đổi ngày.
+  const ngayHoaDonRef = useRef<{ iso: string | null; lyDo: string }>({
+    iso: null,
+    lyDo: "",
+  });
+  const datNgayHoaDon = useCallback((iso: string | null, lyDo: string) => {
+    ngayHoaDonRef.current = { iso, lyDo };
+    setNgayHoaDon(iso);
+    setLyDoNgayHoaDon(lyDo);
+  }, []);
+  const coQuyenChinhNgay = hasPermission(PERMISSIONS.INVOICES_ADJUST_ISSUED_AT);
 
   // Multi-tab invoice management (KiotViet parity).
   // Cart/customer/payment and server auto-save session must move together.
@@ -223,6 +251,8 @@ function PosPageInner() {
       snapshot: null,
       itemCount: 0,
       sessionId: nextClientSessionId(),
+      ngayHoaDon: null,
+      lyDoNgayHoaDon: "",
     },
   ]);
   const [activeTabId, setActiveTabId] = useState(() => tabs[0]?.id ?? "");
@@ -279,95 +309,95 @@ function PosPageInner() {
     if (!isCartLoadCurrent(token)) return false;
     setClientSessionId(sessionId);
     state.loadDraft(detail);
+    // 00335 — NGÀY BÁN LÀ HÔM NAY, KHÔNG KẾ THỪA NGÀY CỦA BẢN GHI ĐƯỢC NẠP.
+    // Đây là cửa duy nhất nạp nháp / đơn bán con vào tab đang hoạt động (mở
+    // nháp, ?draftId=, khôi phục sau sự cố, và "Xử lý đặt hàng" → đơn con).
+    // Nháp lưu hôm trước hay đơn đặt hàng lập tuần trước đều phải phát hành
+    // theo giờ máy chủ lúc thu tiền, nên trả ngày về null (= tự động).
+    datNgayHoaDon(null, "");
     return true;
-  }, [isCartLoadCurrent, setClientSessionId, state]);
+  }, [datNgayHoaDon, isCartLoadCurrent, setClientSessionId, state]);
 
   const switchTab = useCallback((tabId: string) => {
     const currentId = activeTabIdRef.current;
-    if (tabId === currentId) return;
-
     const currentTabs = tabsRef.current;
-    const target = currentTabs.find((tab) => tab.id === tabId);
-    if (!target) return;
 
-    const outgoingSnapshot = state.getSnapshot();
-    const next = currentTabs.map((tab) => {
-      if (tab.id === currentId) {
-        return { ...tab, snapshot: outgoingSnapshot, itemCount: state.itemCount };
-      }
-      if (tab.id === tabId) {
-        return { ...tab, snapshot: null };
-      }
-      return tab;
+    const ketQua = chuyenTab(currentTabs, currentId, tabId, {
+      snapshot: state.getSnapshot(),
+      itemCount: state.itemCount,
+      ngayHoaDon: ngayHoaDonRef.current.iso,
+      lyDoNgayHoaDon: ngayHoaDonRef.current.lyDo,
     });
+    if (!ketQua) return;
 
     cartLoadRequestRef.current += 1;
-    activeTabIdRef.current = tabId;
-    commitTabs(next);
-    setActiveTabId(tabId);
+    activeTabIdRef.current = ketQua.tabHoatDong;
+    commitTabs(ketQua.tabs);
+    setActiveTabId(ketQua.tabHoatDong);
 
-    if (target.snapshot) {
-      state.restoreSnapshot(target.snapshot);
+    if (ketQua.snapshotVao) {
+      state.restoreSnapshot(ketQua.snapshotVao as PosSnapshot);
     } else {
       state.clearCart();
     }
-  }, [commitTabs, state]);
+    datNgayHoaDon(ketQua.ngayHoaDon, ketQua.lyDoNgayHoaDon);
+  }, [commitTabs, datNgayHoaDon, state]);
 
   const addTab = useCallback(() => {
     const currentId = activeTabIdRef.current;
     const currentTabs = tabsRef.current;
-    const outgoingSnapshot = state.getSnapshot();
-    const newId = nextTabId();
-    const tabNum = currentTabs.length + 1;
-    const next = [
-      ...currentTabs.map((tab) =>
-        tab.id === currentId
-          ? { ...tab, snapshot: outgoingSnapshot, itemCount: state.itemCount }
-          : tab
-      ),
+    const ketQua = themTab(
+      currentTabs,
+      currentId,
       {
-        id: newId,
-        label: "Hoá đơn " + tabNum,
+        snapshot: state.getSnapshot(),
+        itemCount: state.itemCount,
+        ngayHoaDon: ngayHoaDonRef.current.iso,
+        lyDoNgayHoaDon: ngayHoaDonRef.current.lyDo,
+      },
+      {
+        id: nextTabId(),
+        label: "Hoá đơn " + (currentTabs.length + 1),
         snapshot: null,
         itemCount: 0,
         sessionId: nextClientSessionId(),
+        ngayHoaDon: null,
+        lyDoNgayHoaDon: "",
       },
-    ];
-
-    cartLoadRequestRef.current += 1;
-    activeTabIdRef.current = newId;
-    commitTabs(next);
-    setActiveTabId(newId);
-    state.clearCart();
-  }, [commitTabs, state]);
-
-  const closeTab = useCallback((tabId: string) => {
-    const currentTabs = tabsRef.current;
-    if (currentTabs.length <= 1) return;
-
-    const remaining = currentTabs.filter((tab) => tab.id !== tabId);
-    if (tabId !== activeTabIdRef.current) {
-      commitTabs(remaining);
-      return;
-    }
-
-    const closedIdx = currentTabs.findIndex((tab) => tab.id === tabId);
-    const nextTab = remaining[Math.min(closedIdx, remaining.length - 1)];
-    const next = remaining.map((tab) =>
-      tab.id === nextTab.id ? { ...tab, snapshot: null } : tab,
     );
 
     cartLoadRequestRef.current += 1;
-    activeTabIdRef.current = nextTab.id;
-    commitTabs(next);
-    setActiveTabId(nextTab.id);
+    activeTabIdRef.current = ketQua.tabHoatDong;
+    commitTabs(ketQua.tabs);
+    setActiveTabId(ketQua.tabHoatDong);
+    state.clearCart();
+    datNgayHoaDon(ketQua.ngayHoaDon, ketQua.lyDoNgayHoaDon);
+  }, [commitTabs, datNgayHoaDon, state]);
 
-    if (nextTab.snapshot) {
-      state.restoreSnapshot(nextTab.snapshot);
+  const closeTab = useCallback((tabId: string) => {
+    const ketQua = dongTab(tabsRef.current, tabId, activeTabIdRef.current);
+    if (!ketQua) return;
+
+    // Đóng tab KHÔNG hoạt động: chỉ bỏ khỏi danh sách, giỏ và ngày giữ nguyên.
+    if (!ketQua.doiTabHoatDong) {
+      commitTabs(ketQua.tabs);
+      return;
+    }
+
+    cartLoadRequestRef.current += 1;
+    activeTabIdRef.current = ketQua.tabHoatDong;
+    commitTabs(ketQua.tabs);
+    setActiveTabId(ketQua.tabHoatDong);
+
+    if (ketQua.snapshotVao) {
+      state.restoreSnapshot(ketQua.snapshotVao as PosSnapshot);
     } else {
       state.clearCart();
     }
-  }, [commitTabs, state]);
+    // Tab bị đóng biến mất cùng ngày hóa đơn của nó; tab tiếp quản lấy lại
+    // đúng ngày đã cất của chính mình.
+    datNgayHoaDon(ketQua.ngayHoaDon, ketQua.lyDoNgayHoaDon);
+  }, [commitTabs, datNgayHoaDon, state]);
   // Modals
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
   const [draftModalOpen, setDraftModalOpen] = useState(false);
@@ -616,14 +646,10 @@ function PosPageInner() {
       state.clearCart();
       cartLoadRequestRef.current += 1;
       // Giữ tab hiện tại, xóa snapshot cũ và cấp session mới theo chi nhánh.
-      commitTabs(
-        tabsRef.current.map((tab) => ({
-          ...tab,
-          snapshot: null,
-          itemCount: 0,
-          sessionId: nextClientSessionId(),
-        })),
-      );
+      // 00335: mọi giỏ đều bị làm trống ⇒ ngày hóa đơn đã chỉnh của TỪNG tab
+      // cũng phải trả về tự động, không để ngày của chi nhánh cũ đi theo.
+      commitTabs(doiChiNhanh(tabsRef.current, nextClientSessionId));
+      datNgayHoaDon(null, "");
       if (hadItems) {
         toast({
           title: "Đã làm trống giỏ hàng",
@@ -633,7 +659,7 @@ function PosPageInner() {
       }
     }
     branchIdRef.current = nextBranchId;
-  }, [commitTabs, currentBranch?.id, state, toast]);
+  }, [commitTabs, currentBranch?.id, datNgayHoaDon, state, toast]);
 
   // CEO 10/06/2026 — refresh badge số đếm nháp khi mount, đổi chi nhánh,
   // sau khi lưu/xoá nháp (qua draftCountTrigger), hoặc khi mở/đóng dialog.
@@ -2600,10 +2626,11 @@ function PosPageInner() {
         notifyPosStockChanged(ctx.branchId);
       }
       state.clearCart();
-      // 00335: ngày chỉnh tay chỉ áp cho ĐÚNG hoá đơn vừa lập — trả về tự động
-      // để hoá đơn kế tiếp không vô tình mang ngày cũ.
-      setNgayHoaDon(null);
-      setLyDoNgayHoaDon("");
+      // 00335: ngày chỉnh tay chỉ áp cho ĐÚNG hóa đơn vừa lập — trả về tự động
+      // để hóa đơn kế tiếp không vô tình mang ngày cũ. Đi qua `datNgayHoaDon`
+      // để ref của tab cũng sạch, nếu không lần chuyển tab kế tiếp sẽ cất
+      // nhầm ngày đã dùng xong vào tab.
+      datNgayHoaDon(null, "");
       setAppliedPromotion(null);
       setPromotionCleared(false);
       setAppliedRedeem(null);
@@ -3356,16 +3383,13 @@ function PosPageInner() {
                 </button>
               )}
             </div>
-            {/* 00335: NGÀY HOÁ ĐƠN — mặc định giờ máy chủ lúc thanh toán; chỉ
-                người có quyền mới thấy nút Sửa. */}
+            {/* 00335: NGÀY HÓA ĐƠN — mặc định giờ máy chủ lúc thanh toán; chỉ
+                người có quyền mới thấy nút bút chì. Ngày thuộc RIÊNG tab này. */}
             <InvoiceDateRow
               value={ngayHoaDon}
               reason={lyDoNgayHoaDon}
               canEdit={coQuyenChinhNgay}
-              onChange={(iso, lyDo) => {
-                setNgayHoaDon(iso);
-                setLyDoNgayHoaDon(lyDo);
-              }}
+              onChange={datNgayHoaDon}
             />
             {state.customer && (
               <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
