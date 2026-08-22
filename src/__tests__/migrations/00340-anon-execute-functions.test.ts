@@ -253,22 +253,27 @@ describe("00340 — bộ file và phạm vi", () => {
 });
 
 describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)", () => {
-  it("chốt theo BẢN CHẤT, không theo số lượng", () => {
-    // Prod 22/08 (BƯỚC 1B): cả 31 routine ngoài tầm đều thuộc extension pg_trgm,
-    // viết bằng C, KHÔNG phải SECURITY DEFINER, nhóm 4_ham_thuong. Chấp nhận
-    // được. Điều KHÔNG chấp nhận được là một hàm nguy hiểm lọt vào nhóm đó.
-    expect(VA).toContain("_ngoai_tam_00340");
-    expect(VA).toContain("extension is null or security_definer");
-    expect(VA).toContain("phai thuoc extension VA khong phai SECURITY DEFINER");
-    // Không được quay lại cách chốt bằng con số cứng.
+  it("whitelist ĐÍCH DANH pg_trgm — không nhận extension-nào-cũng-được, không đếm số", () => {
+    // Prod 22/08 (BƯỚC 1B): cả 31 routine ngoài tầm đều pg_trgm, C, invoker.
+    // "Extension + invoker" KHÔNG phải tính chất an toàn: http_get (pgsql-http)
+    // và dblink_connect (dblink) đều là invoker thuộc extension nhưng gọi mạng
+    // ra ngoài. Chỉ chấp nhận đúng những gì đã kiểm tận nơi.
+    expect(VA).toContain("_ext_cho_phep_00340");
+    expect(VA).toContain("values ('pg_trgm')");
+    expect(VA).toContain("t.ngon_ngu <> 'c'");
+    expect(VA).toContain("or t.security_definer");
+    expect(VA).toContain("http_get/dblink_connect");
+    // Cấm hai kiểu guard cũ: đếm số và "extension nào cũng được".
     expect(VA).not.toContain("c_ky_vong");
+    expect(VA).not.toContain("phai thuoc extension VA khong phai SECURITY DEFINER");
   });
 
-  it("bảng ngoài tầm ghi cả extension và cờ SECURITY DEFINER", () => {
-    const khoi = VA.slice(VA.indexOf("create temporary table _ngoai_tam_00340"), VA.indexOf("$chot_ngoai_tam$"));
+  it("bảng ngoài tầm ghi extension, ngôn ngữ và cờ SECURITY DEFINER", () => {
+    const khoi = VA.slice(VA.indexOf("create temporary table _ngoai_tam_00340"), VA.indexOf("_ext_cho_phep_00340"));
     expect(khoi).toContain("p.prosecdef");
     expect(khoi).toContain("pg_extension");
     expect(khoi).toContain("d.deptype = 'e'");
+    expect(khoi).toContain("l.lanname");
   });
 
   it("xác định bằng pg_has_role, không đoán theo tên chủ sở hữu", () => {
@@ -280,7 +285,7 @@ describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)"
   it("cảnh báo TO khi còn routine ngoài tầm, không im lặng", () => {
     expect(VA).toContain("raise warning");
     expect(VA).toContain("VAN mo cho anon");
-    expect(VA).toContain("Day la gioi han da biet, khong phai bo sot");
+    expect(VA).toContain("khong suy rong cho extension khac");
   });
 
   it("hậu kiểm chỉ đòi hỏi ở phần TRONG TẦM, nhưng vẫn chặt", () => {
@@ -295,5 +300,29 @@ describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)"
 
   it("thông báo cuối nói rõ đóng được bao nhiêu và còn dư bao nhiêu", () => {
     expect(VA).toContain("NGOAI TAM: % routine van mo cho anon");
+  });
+});
+
+describe("00340 — hoàn tác quyền mặc định cho owner/scope NGOÀI ảnh chụp", () => {
+  it("nhánh (b) xử lý CẢ HAI phạm vi: in schema public lẫn toàn CSDL", () => {
+    const b = HOAN_TAC.slice(
+      HOAN_TAC.indexOf("-- (b) Dòng (chủ sở hữu, phạm vi) KHÔNG có trong ảnh chụp"),
+      HOAN_TAC.indexOf("raise notice '00340 hoàn tác: dựng lại"),
+    );
+    expect(b.length).toBeGreaterThan(100);
+    // Phạm vi lấy từ chính dòng pg_default_acl, không ép cứng toàn CSDL.
+    expect(b).toContain("case when r.pham_vi = 'public' then ' in schema public' else '' end");
+    expect(b).not.toMatch(/if r\.pham_vi = '\(toan_csdl\)' then/);
+    // Hội tụ về MẶC ĐỊNH DỰNG SẴN acldefault: gỡ mục thừa VÀ cấp mục thiếu.
+    expect(b).toContain("acldefault('f', r.chu_oid)");
+    expect(b).toMatch(/revoke execute on functions from/);
+    expect(b).toMatch(/grant execute on functions to/);
+  });
+
+  it("HẬU KIỂM ÂM: còn dòng default ACL ngoài ảnh chụp là CUỘN LẠI", () => {
+    expect(HOAN_TAC).toContain("KHONG co trong anh chup");
+    expect(HOAN_TAC).toContain("chi co the do chinh 00340 tao ra. CUON LAI");
+    // Kiểm ngược đã chạy trên local: bỏ nhánh (b) đi thì hậu kiểm này nổ đúng
+    // với 2 dòng do 00340 tạo; bản đủ thì sạch.
   });
 });

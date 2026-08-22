@@ -52,27 +52,30 @@ select p.oid,
        p.oid::regprocedure::text     as chu_ky,
        p.proowner::regrole::text     as chu_so_huu,
        p.prosecdef                   as security_definer,
+       l.lanname                     as ngon_ngu,
        e.extname                     as extension
 from pg_proc p
 join pg_namespace n on n.oid = p.pronamespace
+join pg_language l on l.oid = p.prolang
 left join pg_depend d on d.objid = p.oid and d.deptype = 'e'
 left join pg_extension e on e.oid = d.refobjid
 where n.nspname = 'public' and p.prokind in ('f','p','a','w')
   and not pg_has_role(current_user, p.proowner, 'USAGE');
 
--- GUARD THEO BẢN CHẤT, không chỉ theo số lượng.
+-- GUARD THEO DANH SÁCH ĐÍCH DANH — không nhận "extension nào cũng được".
 --
 -- BƯỚC 1B chạy trên production 22/08 cho thấy cả 31 routine ngoài tầm đều:
---   · thuộc extension `pg_trgm` (hàm hỗ trợ chỉ mục/toán tử tìm gần đúng)
---   · viết bằng C, KHÔNG phải SECURITY DEFINER
---   · nằm ở nhóm `4_ham_thuong` — nhận text, trả số; không đọc/ghi bảng nào
--- Nên để chúng mở cho anon là chấp nhận được.
+--   · thuộc extension `pg_trgm`, viết bằng C, KHÔNG phải SECURITY DEFINER
+--   · nhóm `4_ham_thuong` — nhận text, trả số; không đọc/ghi bảng nào
+-- Riêng nhóm ĐÓ là chấp nhận được.
 --
--- Điều KHÔNG chấp nhận được là một hàm NGUY HIỂM lọt vào nhóm ngoài tầm mà ta
--- không hay. Vì thế guard dưới đây kiểm BẢN CHẤT chứ không đếm:
---   · mọi routine ngoài tầm PHẢI thuộc một extension
---   · và PHẢI không phải SECURITY DEFINER
--- Sai một điều kiện là DỪNG toàn bộ. Con số chỉ dùng để báo, không dùng để chốt.
+-- ⚠️ KHÔNG suy rộng thành "extension + invoker thì vô hại". Phản ví dụ có thật:
+-- `pgsql-http` có `http_get`, `dblink` có `dblink_connect` — đều là hàm invoker
+-- thuộc extension nhưng cho gọi mạng ra ngoài. Vì vậy chỉ chấp nhận ĐÚNG
+-- những gì đã kiểm tận nơi; extension khác hoặc routine mới là DỪNG để rà riêng.
+create temporary table _ext_cho_phep_00340(extname text) on commit drop;
+insert into _ext_cho_phep_00340(extname) values ('pg_trgm');
+
 do $chot_ngoai_tam$
 declare
   v_tong int;
@@ -86,25 +89,41 @@ begin
   select string_agg(distinct coalesce(extension, '(khong thuoc extension)'), ', ')
     into v_ext from _ngoai_tam_00340;
 
-  select count(*) into v_xau from _ngoai_tam_00340
-  where extension is null or security_definer;
+  -- Ba điều kiện, thiếu một là DỪNG:
+  --   1. thuộc extension nằm trong danh sách đã kiểm tận nơi
+  --   2. viết bằng C (pg_trgm xưa nay chỉ có hàm C; khác đi là biến động đáng soi)
+  --   3. không phải SECURITY DEFINER
+  select count(*) into v_xau from _ngoai_tam_00340 t
+  where t.extension is null
+     or t.extension not in (select extname from _ext_cho_phep_00340)
+     or t.ngon_ngu <> 'c'
+     or t.security_definer;
 
   if v_xau > 0 then
-    select string_agg(chu_ky, ', ') into v_ten from (
-      select chu_ky from _ngoai_tam_00340
-      where extension is null or security_definer limit 10) t;
+    select string_agg(
+             chu_ky || ' [ext=' || coalesce(extension, 'KHONG') ||
+             ', ngon_ngu=' || ngon_ngu ||
+             ', definer=' || security_definer::text || ']', '; ')
+      into v_ten
+    from (select * from _ngoai_tam_00340 t
+          where t.extension is null
+             or t.extension not in (select extname from _ext_cho_phep_00340)
+             or t.ngon_ngu <> 'c'
+             or t.security_definer
+          limit 10) x;
     raise exception
-      '00340 DUNG: % routine NGOAI TAM khong dat dieu kien an toan '
-      '(phai thuoc extension VA khong phai SECURITY DEFINER). Vi du: %. '
-      'De nguyen la de ho that su - phai xu ly rieng nhom nay truoc.',
+      '00340 DUNG: % routine NGOAI TAM khong nam trong danh sach da kiem. Chi tiet: %. '
+      'Danh sach cho phep hien tai: pg_trgm (C, invoker). Chay BUOC 1B, ra tung ham, '
+      'roi moi them extension moi vao _ext_cho_phep_00340. KHONG noi long thanh '
+      '"extension nao cung duoc" - http_get/dblink_connect deu la invoker thuoc extension.',
       v_xau, v_ten;
   end if;
 
   if v_tong > 0 then
     raise warning
       '00340: % routine ngoai tam (chu: %; extension: %) VAN mo cho anon. '
-      'Da kiem: deu thuoc extension va khong phai SECURITY DEFINER nen chap nhan duoc. '
-      'Day la gioi han da biet, khong phai bo sot.',
+      'Deu nam trong danh sach da kiem tan noi (pg_trgm, C, invoker). '
+      'Day la gioi han da biet, khong phai bo sot - va khong suy rong cho extension khac.',
       v_tong, v_chu, v_ext;
   end if;
 end $chot_ngoai_tam$;

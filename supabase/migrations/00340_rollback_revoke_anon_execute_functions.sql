@@ -148,12 +148,16 @@ begin
     end loop;
   end loop;
 
-  -- (b) Chủ sở hữu KHÔNG có trong ảnh chụp: trước khi vá họ không có dòng nào,
-  --     tức dùng mặc định dựng sẵn (PUBLIC có EXECUTE). 00340 đã tạo dòng cho
-  --     họ ⇒ trả PUBLIC lại để dòng đó tự tiêu và về đúng mặc định dựng sẵn.
+  -- (b) Dòng (chủ sở hữu, phạm vi) KHÔNG có trong ảnh chụp = dòng do CHÍNH
+  --     00340 tạo ra. Trước khi vá họ không có dòng nào, tức dùng MẶC ĐỊNH
+  --     DỰNG SẴN của PostgreSQL. Phải đưa ACL về đúng mặc định đó thì dòng mới
+  --     tự tiêu — và phải làm cho CẢ HAI phạm vi: `in schema public` LẪN toàn
+  --     CSDL. Bản trước chỉ xử lý toàn CSDL nên để sót dòng schema.
   for r in
-    select d.defaclrole::regrole::text as chu,
-           coalesce(n.nspname, '(toan_csdl)') as pham_vi
+    select d.defaclrole::regrole::text      as chu,
+           d.defaclrole                     as chu_oid,
+           coalesce(n.nspname,'(toan_csdl)') as pham_vi,
+           d.defaclacl                      as acl_hien_tai
     from pg_default_acl d
     left join pg_namespace n on n.oid = d.defaclnamespace
     where d.defaclobjtype = 'f' and (n.nspname = 'public' or d.defaclnamespace = 0)
@@ -163,12 +167,59 @@ begin
           and b.pham_vi = coalesce(n.nspname, '(toan_csdl)')
       )
   loop
-    if r.pham_vi = '(toan_csdl)' then
-      perform pg_temp.dat_vai(r.chu);
-      execute format('alter default privileges for role %I grant execute on functions to public', r.chu);
+    v_pv := case when r.pham_vi = 'public' then ' in schema public' else '' end;
+
+    -- Gỡ mục đang có mà mặc định dựng sẵn KHÔNG có
+    for m in
+      select jsonb_build_object('grantee',
+               case when a.grantee = 0 then 'PUBLIC' else a.grantee::regrole::text end,
+             'grantor', a.grantor::regrole::text,
+             'grantable', a.is_grantable)
+      from aclexplode(r.acl_hien_tai) a
+      where a.privilege_type = 'EXECUTE'
+        and not exists (
+          select 1 from aclexplode(acldefault('f', r.chu_oid)) b
+          where b.privilege_type = 'EXECUTE' and b.grantee = a.grantee
+            and b.is_grantable = a.is_grantable)
+    loop
+      v_role := m->>'grantee';
+      perform pg_temp.dat_vai(m->>'grantor');
+      if v_role = 'PUBLIC' then
+        execute format('alter default privileges for role %I%s revoke execute on functions from public',
+                       r.chu, v_pv);
+      else
+        execute format('alter default privileges for role %I%s revoke execute on functions from %I',
+                       r.chu, v_pv, v_role);
+      end if;
       reset role;
       v_n := v_n + 1;
-    end if;
+    end loop;
+
+    -- Cấp lại mục mặc định dựng sẵn CÓ mà hiện đang thiếu
+    for m in
+      select jsonb_build_object('grantee',
+               case when b.grantee = 0 then 'PUBLIC' else b.grantee::regrole::text end,
+             'grantable', b.is_grantable)
+      from aclexplode(acldefault('f', r.chu_oid)) b
+      where b.privilege_type = 'EXECUTE'
+        and not exists (
+          select 1 from aclexplode(r.acl_hien_tai) a
+          where a.privilege_type = 'EXECUTE' and a.grantee = b.grantee
+            and a.is_grantable = b.is_grantable)
+    loop
+      v_role := m->>'grantee';
+      v_opt  := case when (m->>'grantable')::boolean then ' with grant option' else '' end;
+      perform pg_temp.dat_vai(r.chu);
+      if v_role = 'PUBLIC' then
+        execute format('alter default privileges for role %I%s grant execute on functions to public%s',
+                       r.chu, v_pv, v_opt);
+      else
+        execute format('alter default privileges for role %I%s grant execute on functions to %I%s',
+                       r.chu, v_pv, v_role, v_opt);
+      end if;
+      reset role;
+      v_n := v_n + 1;
+    end loop;
   end loop;
 
   raise notice '00340 hoàn tác: dựng lại % mục quyền mặc định', v_n;
@@ -178,7 +229,7 @@ drop function if exists pg_temp.dat_vai(text);
 
 -- ── Khối 3. HẬU KIỂM: ACL phải KHỚP ẢNH CHỤP từng mục, cả trực tiếp lẫn hiệu lực
 do $hau_kiem$
-declare v_lech int; v_role text; v_n int;
+declare v_lech int; v_role text; v_n int; v_ten text;
 begin
   -- (1) ACL TRỰC TIẾP: từng mục EXECUTE phải trùng khớp ảnh chụp.
   select count(*) into v_lech
@@ -224,6 +275,31 @@ begin
   if v_lech <> 0 then
     raise exception
       '00340 hoàn tác THẤT BẠI: PUBLIC lệch ảnh chụp ở % routine. CUỘN LẠI.', v_lech;
+  end if;
+
+  -- (4b) HẬU KIỂM ÂM: sau hoàn tác KHÔNG được còn dòng pg_default_acl nào
+  --      (phạm vi public hoặc toàn CSDL) mà ảnh chụp không có. Dòng như vậy
+  --      chỉ có thể do chính 00340 tạo ra ⇒ hoàn tác chưa sạch.
+  select count(*) into v_lech
+  from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
+  where d.defaclobjtype = 'f' and (n.nspname = 'public' or d.defaclnamespace = 0)
+    and not exists (
+      select 1 from public.default_acl_backup_00340 b
+      where b.chu_so_huu = d.defaclrole::regrole::text
+        and b.pham_vi = coalesce(n.nspname, '(toan_csdl)'));
+  if v_lech <> 0 then
+    select string_agg(d.defaclrole::regrole::text || ' · ' ||
+                      coalesce(n.nspname,'(toan_csdl)') || ' = ' || d.defaclacl::text, '; ')
+      into v_ten
+    from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
+    where d.defaclobjtype = 'f' and (n.nspname = 'public' or d.defaclnamespace = 0)
+      and not exists (
+        select 1 from public.default_acl_backup_00340 b
+        where b.chu_so_huu = d.defaclrole::regrole::text
+          and b.pham_vi = coalesce(n.nspname, '(toan_csdl)'));
+    raise exception
+      '00340 hoan tac THAT BAI: con % dong quyen mac dinh KHONG co trong anh chup (%). '
+      'Dong nhu vay chi co the do chinh 00340 tao ra. CUON LAI.', v_lech, v_ten;
   end if;
 
   -- (4) QUYỀN MẶC ĐỊNH phải khớp nguyên văn ảnh chụp.
