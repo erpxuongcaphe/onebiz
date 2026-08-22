@@ -14,6 +14,7 @@ import {
   normalizeCreatedAtRange,
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
+import { apDungLocChungTuBan } from "./chung-tu-ban";
 
 export function getInvoiceShipmentQueryPlan(
   deliveryFilter: string | string[] | undefined,
@@ -44,6 +45,15 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
     .eq("tenant_id", tenantId)
     // 00173: ẩn đơn nháp đã xóa mềm khỏi list Hóa đơn.
     .is("deleted_at", null);
+
+  // Trang Hoá đơn chỉ hiện CHỨNG TỪ BÁN — đơn đặt hàng (kể cả đã xử lý) thuộc
+  // trang Đơn đặt hàng. Đặt NGAY sau .is(deleted_at) và TRƯỚC mọi .or() khác:
+  // supabase-js sinh mỗi .or() thành một tham số `or=(…)` riêng và PostgREST
+  // nối các tham số bằng AND, nên nhóm này không thể bị nhóm tìm kiếm nuốt.
+  // Hàm chung → bảng, tổng số, tìm kiếm, lọc trạng thái/ngày/chi nhánh và xuất
+  // Excel dùng CHUNG một tập dòng, không thể lệch nhau. KPI đầu trang đọc RPC
+  // riêng nên được vá cùng điều kiện ở migration 00342.
+  query = apDungLocChungTuBan(query);
 
   // Search — escape % wildcard.
   // Note: search by SĐT KH cần subquery customers.phone — chưa wire vì
