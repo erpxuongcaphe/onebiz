@@ -48,30 +48,64 @@ insert into _cho_phep_00340(chu_ky) values
 --
 -- Số dưới đây lấy từ BƯỚC 1 chạy trên production 22/08/2026.
 create temporary table _ngoai_tam_00340 on commit drop as
-select p.oid, p.oid::regprocedure::text as chu_ky, p.proowner::regrole::text as chu_so_huu
-from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+select p.oid,
+       p.oid::regprocedure::text     as chu_ky,
+       p.proowner::regrole::text     as chu_so_huu,
+       p.prosecdef                   as security_definer,
+       e.extname                     as extension
+from pg_proc p
+join pg_namespace n on n.oid = p.pronamespace
+left join pg_depend d on d.objid = p.oid and d.deptype = 'e'
+left join pg_extension e on e.oid = d.refobjid
 where n.nspname = 'public' and p.prokind in ('f','p','a','w')
   and not pg_has_role(current_user, p.proowner, 'USAGE');
 
+-- GUARD THEO BẢN CHẤT, không chỉ theo số lượng.
+--
+-- BƯỚC 1B chạy trên production 22/08 cho thấy cả 31 routine ngoài tầm đều:
+--   · thuộc extension `pg_trgm` (hàm hỗ trợ chỉ mục/toán tử tìm gần đúng)
+--   · viết bằng C, KHÔNG phải SECURITY DEFINER
+--   · nằm ở nhóm `4_ham_thuong` — nhận text, trả số; không đọc/ghi bảng nào
+-- Nên để chúng mở cho anon là chấp nhận được.
+--
+-- Điều KHÔNG chấp nhận được là một hàm NGUY HIỂM lọt vào nhóm ngoài tầm mà ta
+-- không hay. Vì thế guard dưới đây kiểm BẢN CHẤT chứ không đếm:
+--   · mọi routine ngoài tầm PHẢI thuộc một extension
+--   · và PHẢI không phải SECURITY DEFINER
+-- Sai một điều kiện là DỪNG toàn bộ. Con số chỉ dùng để báo, không dùng để chốt.
 do $chot_ngoai_tam$
 declare
-  c_ky_vong constant int := 31;
-  v_that int;
+  v_tong int;
+  v_xau  int;
+  v_ten  text;
   v_chu  text;
+  v_ext  text;
 begin
-  select count(*) into v_that from _ngoai_tam_00340;
+  select count(*) into v_tong from _ngoai_tam_00340;
   select string_agg(distinct chu_so_huu, ', ') into v_chu from _ngoai_tam_00340;
-  if v_that <> c_ky_vong then
+  select string_agg(distinct coalesce(extension, '(khong thuoc extension)'), ', ')
+    into v_ext from _ngoai_tam_00340;
+
+  select count(*) into v_xau from _ngoai_tam_00340
+  where extension is null or security_definer;
+
+  if v_xau > 0 then
+    select string_agg(chu_ky, ', ') into v_ten from (
+      select chu_ky from _ngoai_tam_00340
+      where extension is null or security_definer limit 10) t;
     raise exception
-      '00340 DUNG: so routine NGOAI TAM la % (ky vong %). Chu so huu: %. '
-      'Chay lai BUOC 1 va BUOC 1B, ra xem nhom moi la gi roi cap nhat c_ky_vong.',
-      v_that, c_ky_vong, coalesce(v_chu, '(khong co)');
+      '00340 DUNG: % routine NGOAI TAM khong dat dieu kien an toan '
+      '(phai thuoc extension VA khong phai SECURITY DEFINER). Vi du: %. '
+      'De nguyen la de ho that su - phai xu ly rieng nhom nay truoc.',
+      v_xau, v_ten;
   end if;
-  if v_that > 0 then
+
+  if v_tong > 0 then
     raise warning
-      '00340: % routine thuoc % KHONG go duoc bang vai tro hien tai - se VAN mo cho anon. '
-      'Day la gioi han da biet, khong phai bo sot. Xem BUOC 1B de biet danh sach.',
-      v_that, v_chu;
+      '00340: % routine ngoai tam (chu: %; extension: %) VAN mo cho anon. '
+      'Da kiem: deu thuoc extension va khong phai SECURITY DEFINER nen chap nhan duoc. '
+      'Day la gioi han da biet, khong phai bo sot.',
+      v_tong, v_chu, v_ext;
   end if;
 end $chot_ngoai_tam$;
 

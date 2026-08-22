@@ -253,12 +253,22 @@ describe("00340 — bộ file và phạm vi", () => {
 });
 
 describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)", () => {
-  it("chốt số lượng kỳ vọng, lệch là DỪNG", () => {
-    // Prod 22/08: supabase_admin sở hữu 31 routine, postgres không phải thành
-    // viên nên REVOKE không có tác dụng. Không được giả vờ đã đóng.
+  it("chốt theo BẢN CHẤT, không theo số lượng", () => {
+    // Prod 22/08 (BƯỚC 1B): cả 31 routine ngoài tầm đều thuộc extension pg_trgm,
+    // viết bằng C, KHÔNG phải SECURITY DEFINER, nhóm 4_ham_thuong. Chấp nhận
+    // được. Điều KHÔNG chấp nhận được là một hàm nguy hiểm lọt vào nhóm đó.
     expect(VA).toContain("_ngoai_tam_00340");
-    expect(VA).toContain("c_ky_vong constant int := 31");
-    expect(VA).toContain("00340 DUNG: so routine NGOAI TAM la %");
+    expect(VA).toContain("extension is null or security_definer");
+    expect(VA).toContain("phai thuoc extension VA khong phai SECURITY DEFINER");
+    // Không được quay lại cách chốt bằng con số cứng.
+    expect(VA).not.toContain("c_ky_vong");
+  });
+
+  it("bảng ngoài tầm ghi cả extension và cờ SECURITY DEFINER", () => {
+    const khoi = VA.slice(VA.indexOf("create temporary table _ngoai_tam_00340"), VA.indexOf("$chot_ngoai_tam$"));
+    expect(khoi).toContain("p.prosecdef");
+    expect(khoi).toContain("pg_extension");
+    expect(khoi).toContain("d.deptype = 'e'");
   });
 
   it("xác định bằng pg_has_role, không đoán theo tên chủ sở hữu", () => {
@@ -269,7 +279,7 @@ describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)"
 
   it("cảnh báo TO khi còn routine ngoài tầm, không im lặng", () => {
     expect(VA).toContain("raise warning");
-    expect(VA).toContain("KHONG go duoc bang vai tro hien tai");
+    expect(VA).toContain("VAN mo cho anon");
     expect(VA).toContain("Day la gioi han da biet, khong phai bo sot");
   });
 
