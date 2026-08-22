@@ -41,6 +41,51 @@ begin
   end if;
 end $guard$;
 
+-- Cả 5 hàm PHẢI tồn tại trước khi vá. Hai hàm bị thay toàn bộ thân
+-- (get_invoice_list_summary, get_sales_report_invoice_page) do 00305/00198 tạo
+-- ra; nếu chúng chưa có thì ảnh chụp sẽ thiếu và hoàn tác về sau KHÔNG khôi
+-- phục được bản gốc. Thà dừng ở đây còn hơn để mất đường lùi.
+do $guard_du_5$
+declare v_thieu text;
+begin
+  select string_agg(t.ten, ', ') into v_thieu
+  from (values ('get_invoice_list_summary'), ('get_sales_report_invoice_page'),
+               ('get_sales_report_summary'), ('get_profit_and_loss_report'),
+               ('get_branch_profit_and_loss_report')) as t(ten)
+  where not exists (
+    select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname = t.ten
+  );
+  if v_thieu is not null then
+    raise exception
+      'GUARD_00339: thiếu hàm % — chạy 00198 và 00305 trước. '
+      'Vá khi chưa đủ 5 hàm sẽ làm ảnh chụp thiếu và mất đường hoàn tác.', v_thieu;
+  end if;
+end $guard_du_5$;
+
+-- ── Ảnh chụp BẤT BIẾN thân hàm TRƯỚC KHI VÁ ───────────────────────────────
+-- Hoàn tác đọc thẳng từ đây nên TỰ ĐỦ: không bắt người vận hành nhớ chạy thêm
+-- migration nào khác, và khôi phục đúng bản đang chạy chứ không phải bản trong
+-- repo (hai thứ có thể lệch nhau).
+-- Chỉ chụp MỘT LẦN cho mỗi hàm: chạy lần hai KHÔNG chụp đè bản đã vá.
+create table if not exists public.rpc_backup_ngay_hoa_don (
+  migration  text not null,
+  ham_oid    oid  not null,
+  chu_ky     text not null,
+  def_truoc  text not null,
+  chup_luc   timestamptz not null default now(),
+  primary key (migration, ham_oid)
+);
+comment on table public.rpc_backup_ngay_hoa_don is
+  'Ảnh chụp BẤT BIẾN thân RPC báo cáo trước khi đổi sang ngày hóa đơn (00338/00339). Dùng cho rollback tự đủ.';
+revoke all on table public.rpc_backup_ngay_hoa_don from public, anon, authenticated;
+
+insert into public.rpc_backup_ngay_hoa_don (migration, ham_oid, chu_ky, def_truoc)
+select '00339', p.oid, p.oid::regprocedure::text, pg_get_functiondef(p.oid)
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname in ('get_invoice_list_summary','get_sales_report_invoice_page','get_sales_report_summary','get_profit_and_loss_report','get_branch_profit_and_loss_report')
+on conflict (migration, ham_oid) do nothing;
+
 -- ── Khối 5a. get_invoice_list_summary — bản 00305 + lọc theo NGÀY HOÁ ĐƠN ──
 -- Danh sách gồm cả nháp (issued_at NULL) → coalesce. Sau Pha A giá trị bằng
 -- created_at nên KẾT QUẢ Y HỆT hôm nay. Marker: ISSUED_AT_00335.

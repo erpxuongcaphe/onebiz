@@ -37,6 +37,29 @@ begin
   end if;
 end $guard$;
 
+-- ── Ảnh chụp BẤT BIẾN thân hàm TRƯỚC KHI VÁ ───────────────────────────────
+-- Hoàn tác đọc thẳng từ đây nên TỰ ĐỦ: không bắt người vận hành nhớ chạy thêm
+-- migration nào khác, và khôi phục đúng bản đang chạy chứ không phải bản trong
+-- repo (hai thứ có thể lệch nhau).
+-- Chỉ chụp MỘT LẦN cho mỗi hàm: chạy lần hai KHÔNG chụp đè bản đã vá.
+create table if not exists public.rpc_backup_ngay_hoa_don (
+  migration  text not null,
+  ham_oid    oid  not null,
+  chu_ky     text not null,
+  def_truoc  text not null,
+  chup_luc   timestamptz not null default now(),
+  primary key (migration, ham_oid)
+);
+comment on table public.rpc_backup_ngay_hoa_don is
+  'Ảnh chụp BẤT BIẾN thân RPC báo cáo trước khi đổi sang ngày hóa đơn (00338/00339). Dùng cho rollback tự đủ.';
+revoke all on table public.rpc_backup_ngay_hoa_don from public, anon, authenticated;
+
+insert into public.rpc_backup_ngay_hoa_don (migration, ham_oid, chu_ky, def_truoc)
+select '00338', p.oid, p.oid::regprocedure::text, pg_get_functiondef(p.oid)
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.proname in ('get_customer_product_report','get_customer_product_detail_page','get_customer_product_export_page')
+on conflict (migration, ham_oid) do nothing;
+
 create function pg_temp.dem_00338(p_text text, p_chuoi text) returns int
 language sql immutable as
 $f$ select (length(p_text) - length(replace(p_text, p_chuoi, ''))) / length(p_chuoi) $f$;

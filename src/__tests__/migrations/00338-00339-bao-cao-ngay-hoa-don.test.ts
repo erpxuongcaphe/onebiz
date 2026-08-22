@@ -66,6 +66,53 @@ describe("Tám RPC báo cáo đọc theo ngày hóa đơn phải nằm TRONG REP
     expect(tep).toContain("00339_rollback_invoice_report_rpcs_issued_at.sql");
   });
 
+  it("chụp ẢNH BẤT BIẾN thân hàm trước khi vá", () => {
+    for (const so of ["00338", "00339"]) {
+      const f = NOI_DUNG_MIGRATION.find((m) => m.ten.startsWith(so))!;
+      expect(f.noiDung).toContain("public.rpc_backup_ngay_hoa_don");
+      expect(f.noiDung).toContain("pg_get_functiondef(p.oid)");
+      // Chạy lần hai KHÔNG được chụp đè bản đã vá.
+      expect(f.noiDung).toContain("on conflict (migration, ham_oid) do nothing");
+      expect(f.noiDung).not.toMatch(/drop table if exists public\.rpc_backup_ngay_hoa_don/);
+    }
+  });
+
+  it("HOÀN TÁC TỰ ĐỦ — không bắt người vận hành nhớ chạy 00305/00198", () => {
+    for (const [so, soHam] of [["00338", "3"], ["00339", "5"]] as const) {
+      const ht = readFileSync(
+        join(
+          THU_MUC,
+          so === "00338"
+            ? "00338_rollback_report_rpcs_issued_at.sql"
+            : "00339_rollback_invoice_report_rpcs_issued_at.sql",
+        ),
+        "utf8",
+      );
+      // Khôi phục từ ảnh chụp, không chép thân hàm ra chỗ thứ hai.
+      expect(ht).toContain("execute r.def_truoc");
+      expect(ht).toContain("public.rpc_backup_ngay_hoa_don");
+      expect(ht).toContain(`migration = '${so}'`);
+      // Guard rõ khi thiếu ảnh chụp hoặc thiếu dòng.
+      expect(ht).toContain("không thể hoàn tác chính xác");
+      expect(ht).toContain(`(phải ${soHam})`);
+      // KHÔNG được yêu cầu chạy thêm migration khác.
+      expect(ht).not.toMatch(/chạy lại đúng migration gốc/);
+      expect(ht).not.toMatch(/00305_kpi_hoa_don_summary\.sql/);
+      expect(ht).not.toMatch(/00198_reporting_v3_core_aggregates\.sql/);
+      // Hậu kiểm so với ẢNH CHỤP, không so marker: trên production bản trước
+      // khi chạy vốn ĐÃ có marker (Pha A/A3 vá 20/08) nên so marker sẽ báo
+      // hỏng oan.
+      expect(ht).toContain("is distinct from b.def_truoc");
+      expect(ht).not.toMatch(/còn % hàm mang marker/);
+    }
+  });
+
+  it("00339 DỪNG khi chưa đủ 5 hàm — tránh chụp ảnh thiếu, mất đường lùi", () => {
+    const f = NOI_DUNG_MIGRATION.find((m) => m.ten.startsWith("00339"))!;
+    expect(f.noiDung).toContain("GUARD_00339: thiếu hàm");
+    expect(f.noiDung).toContain("chạy 00198 và 00305 trước");
+  });
+
   it("hậu kiểm nằm TRONG transaction — sai là rollback, không để nửa vời", () => {
     for (const so of ["00338", "00339"]) {
       const f = NOI_DUNG_MIGRATION.find((m) => m.ten.startsWith(so))!;
