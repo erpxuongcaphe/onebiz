@@ -82,6 +82,11 @@ export {
   getOrderReconciliation,
   tinhDoiChieuDatBan,
   markOrderProcessed,
+  donConDungDuoc,
+  // Ba mức xử lý đơn đặt hàng (CEO 21/08)
+  trangThaiXuLyDon,
+  NHAN_TRANG_THAI_XU_LY,
+  demDonConHoanTat,
 } from "./orders";
 export type {
   SalesOrderListSummary,

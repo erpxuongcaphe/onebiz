@@ -898,6 +898,23 @@ export default function HoaDonPage() {
       cell: ({ row }) => {
         const debt = row.original.debt;
         if (row.original.status !== "completed") {
+          // 00332: ĐƠN ĐẶT HÀNG gốc đã gắn hóa đơn con thì KHÔNG phải "chưa
+          // hoàn tất" — nó đã được xử lý, tiền nằm ở hóa đơn con. Đơn gốc cố ý
+          // giữ status='draft' (RPC chỉ ghi fulfilled_by_id, không đụng status,
+          // tiền, kho hay công nợ) nên phải phân biệt ở chỗ TRÌNH BÀY.
+          if (row.original.status !== "cancelled" && row.original.fulfilledById) {
+            return (
+              <span
+                className="text-status-success text-right block"
+                title="Đơn đặt hàng này đã được xuất thành hóa đơn con"
+              >
+                Đã xử lý
+                {row.original.fulfilledInvoiceCode
+                  ? ` · ${row.original.fulfilledInvoiceCode}`
+                  : ""}
+              </span>
+            );
+          }
           return (
             <span className="text-status-warning text-right block">
               {row.original.status === "cancelled" ? "Đã hủy" : "Chưa hoàn tất"}

@@ -37,6 +37,18 @@ export interface Invoice {
    * ngoài danh sách. undefined = chưa load / không có phiếu trả.
    */
   returnedAmount?: number;
+  /**
+   * 00331: 'order' = ĐƠN ĐẶT HÀNG (không phải một lần bán). Đơn đặt hàng nằm
+   * chung bảng `invoices` nên phải phân biệt khi trình bày trạng thái.
+   */
+  source?: string;
+  /**
+   * 00332: đơn đặt hàng gốc đã được gắn hóa đơn con nào. Có giá trị ⇒ đơn ĐÃ
+   * ĐƯỢC XỬ LÝ, tiền nằm ở hóa đơn con — KHÔNG được hiện "Chưa hoàn tất".
+   */
+  fulfilledById?: string;
+  /** Mã hóa đơn con đã gắn (HD…) để hiện kèm và đối chiếu. */
+  fulfilledInvoiceCode?: string;
   /** Tên chi nhánh ghi nhận hóa đơn (resolved từ branches.name). */
   branchName?: string;
   /** Branch UUID để filter / drill-down. */
@@ -183,6 +195,19 @@ export interface SalesOrder {
   fulfilledById?: string;
   /** Mã hóa đơn đã xuất (HD…) để hiện + đối chiếu. */
   fulfilledInvoiceCode?: string;
+  /**
+   * 00331/00337 — SỐ ĐƠN BÁN CON ĐÃ THANH TOÁN và còn hiệu lực (không nháp,
+   * không huỷ, không void, không xoá mềm).
+   *
+   * Vì sao cần: một đơn đặt hàng được phép tạo KHÔNG GIỚI HẠN đơn bán con, nên
+   * "đã có hóa đơn" và "đã hoàn tất xử lý" là hai việc khác nhau. Đơn có hóa
+   * đơn nhưng chưa gắn (fulfilled_by_id null) phải hiện "Đang xử lý", KHÔNG
+   * được gọi là "Chờ xử lý".
+   *
+   * `undefined` = máy chủ chưa trả (chưa chạy migration cột) ⇒ màn quay về mô
+   * hình hai mức cũ thay vì đoán bừa.
+   */
+  completedChildCount?: number;
   /** Ghi chú người bán (invoices.note) — in trên phiếu đặt hàng (CEO 08/07). */
   note?: string;
   createdBy: string;

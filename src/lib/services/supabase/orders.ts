@@ -118,10 +118,27 @@ export async function getOrders(
       : ", shipments:shipping_orders!shipping_orders_invoice_id_fkey!inner(id)"
     : "";
 
+  // BA MỨC XỬ LÝ — lọc bằng QUAN HỆ NHÚNG, không bằng danh sách id.
+  //
+  // Vì sao không dùng danh sách id: phải tải hết hóa đơn con rồi khử trùng mới
+  // ra tập đơn gốc; hễ có trần là một đơn nhiều hóa đơn con sẽ ăn hết quota và
+  // làm rơi mất đơn khác — danh sách thiếu mà người dùng tưởng là đủ. Nhúng
+  // quan hệ để MÁY CHỦ tự lọc, không giới hạn, giữ nguyên mọi bộ lọc khác.
+  //
+  // Cùng một mẫu trang này đã dùng cho vận đơn: `!inner` = phải có ít nhất một
+  // dòng khớp; không `!inner` + `.is(<quan hệ>, null)` = không có dòng nào khớp.
+  const locBaMuc =
+    fulfillmentState === "pending" || fulfillmentState === "processing";
+  const childRelation = locBaMuc
+    ? fulfillmentState === "processing"
+      ? ", con_hoan_tat:invoices!invoices_source_order_id_fkey!inner(id)"
+      : ", con_hoan_tat:invoices!invoices_source_order_id_fkey(id)"
+    : "";
+
   let query = (supabase as any)
     .from("invoices")
     .select(
-      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}`,
+      `*, profiles!invoices_created_by_fkey(full_name), branches!invoices_branch_id_fkey(name), ${customerRelation}${shipmentRelation}${childRelation}`,
       { count: "exact" },
     )
     .eq("tenant_id", tenantId)
@@ -168,10 +185,25 @@ export async function getOrders(
   // ô "Thời gian" nhưng trước đây KHÔNG áp ngày; nay truyền dateFrom/dateTo.
   query = applyCreatedAtRangeFilter(query, params.filters);
 
-  if (fulfillmentState === "pending") {
-    query = query.is("fulfilled_by_id", null);
-  } else if (fulfillmentState === "fulfilled") {
+  // Ba mức xử lý (CEO 21/08). "pending" nay là CHỜ XỬ LÝ theo nghĩa chặt: chưa
+  // gắn hóa đơn VÀ chưa có đơn con nào đã thanh toán. Đơn đã có hóa đơn nhưng
+  // chưa gắn là "processing" — không được gọi là chờ xử lý nữa.
+  if (fulfillmentState === "fulfilled") {
     query = query.not("fulfilled_by_id", "is", null);
+  } else if (locBaMuc) {
+    query = query.is("fulfilled_by_id", null);
+    // Điều kiện "hóa đơn con còn hiệu lực" áp lên QUAN HỆ NHÚNG. Máy chủ tự
+    // lọc nên một đơn có bao nhiêu hóa đơn con cũng đúng.
+    query = query
+      .eq("con_hoan_tat.status", "completed")
+      .is("con_hoan_tat.deleted_at", null)
+      .is("con_hoan_tat.voided_at", null)
+      .is("con_hoan_tat.cancelled_at", null);
+    if (fulfillmentState === "pending") {
+      // Không có dòng con nào khớp ⇒ chưa có hóa đơn ⇒ CHỜ XỬ LÝ.
+      query = query.is("con_hoan_tat", null);
+    }
+    // "processing" đã có `!inner` trong select nên chỉ giữ đơn CÓ dòng khớp.
   }
 
   if (debtState === "outstanding") {
@@ -279,6 +311,20 @@ export async function getOrders(
     for (const o of orders) {
       if (o.fulfilledById) {
         o.fulfilledInvoiceCode = codeById.get(o.fulfilledById) ?? undefined;
+      }
+    }
+  }
+
+  // 00337 — ĐẾM ĐƠN BÁN CON ĐÃ THANH TOÁN cho các đơn chưa gắn hóa đơn, để
+  // phân biệt "Chờ xử lý" với "Đang xử lý". Đơn đã gắn thì đã là Hoàn tất, không
+  // cần đếm. Máy chủ chưa có cột ⇒ trả null ⇒ để undefined, màn quay về mô hình
+  // hai mức cũ thay vì đoán bừa.
+  const chuaGan = orders.filter((o) => !o.fulfilledById).map((o) => o.id);
+  if (chuaGan.length > 0) {
+    const dem = await demDonConHoanTat(chuaGan);
+    if (dem) {
+      for (const o of orders) {
+        if (!o.fulfilledById) o.completedChildCount = dem.get(o.id) ?? 0;
       }
     }
   }
@@ -1267,6 +1313,99 @@ export interface ChildSaleInfo {
   total: number;
   paid: number;
   createdAt: string;
+  /**
+   * Huỷ bỏ hóa đơn (void) là trạng thái RIÊNG, không nằm trong `status`. Một
+   * đơn con `completed` rồi bị void vẫn giữ status='completed' — nếu chỉ nhìn
+   * status thì màn đơn gốc tiếp tục trình bày "đã hoàn tất" trong khi tiền đã
+   * bị thu hồi. Phải đọc cả hai.
+   */
+  voidedAt: string | null;
+  cancelledAt: string | null;
+}
+
+/** Đơn con có thực sự dùng được để "Hoàn tất xử lý" đơn gốc hay không. */
+export function donConDungDuoc(c: ChildSaleInfo): boolean {
+  return c.status === "completed" && !c.voidedAt && !c.cancelledAt;
+}
+
+/**
+ * BA MỨC XỬ LÝ của một đơn đặt hàng (CEO 21/08/2026).
+ *
+ * Một đơn đặt hàng được phép tạo KHÔNG GIỚI HẠN đơn bán con, nên KHÔNG tự
+ * hoàn tất đơn ngay khi đơn con đầu tiên thanh toán xong. Ba mức:
+ *
+ *   cho_xu_ly   — chưa gắn hóa đơn VÀ chưa có đơn con nào đã thanh toán
+ *   dang_xu_ly  — đã có ≥1 đơn con đã thanh toán nhưng CHƯA gắn (còn bán tiếp)
+ *   hoan_tat    — đã gắn hóa đơn vào đơn gốc (fulfilled_by_id khác null)
+ *
+ * Nháp / đã huỷ / đã void KHÔNG được tính là hóa đơn hoàn tất — phần lọc đó
+ * nằm ở nơi đếm `completedChildCount`.
+ */
+export type TrangThaiXuLyDon = "cho_xu_ly" | "dang_xu_ly" | "hoan_tat";
+
+export function trangThaiXuLyDon(o: {
+  fulfilledById?: string | null;
+  completedChildCount?: number;
+}): TrangThaiXuLyDon {
+  if (o.fulfilledById) return "hoan_tat";
+  // undefined = máy chủ chưa trả số đếm ⇒ giữ nguyên hành vi cũ (chờ xử lý),
+  // không đoán bừa thành "đang xử lý".
+  if ((o.completedChildCount ?? 0) > 0) return "dang_xu_ly";
+  return "cho_xu_ly";
+}
+
+export const NHAN_TRANG_THAI_XU_LY: Record<
+  TrangThaiXuLyDon,
+  { nhan: string; mo_ta: string }
+> = {
+  cho_xu_ly: { nhan: "Chờ xử lý", mo_ta: "Chưa có hóa đơn nào đã thanh toán" },
+  dang_xu_ly: { nhan: "Đang xử lý", mo_ta: "Đã có hóa đơn, còn bán tiếp được" },
+  hoan_tat: { nhan: "Hoàn tất", mo_ta: "Đã gắn hóa đơn vào đơn đặt hàng" },
+};
+
+/**
+ * Đếm đơn bán con ĐÃ THANH TOÁN và còn hiệu lực cho một loạt đơn gốc.
+ *
+ * Trả `null` khi máy chủ chưa có cột (chưa chạy 00331/00335) — nơi gọi phải
+ * hiểu là "không biết" chứ không phải "bằng 0".
+ */
+export async function demDonConHoanTat(
+  orderIds: string[],
+): Promise<Map<string, number> | null> {
+  if (orderIds.length === 0) return new Map();
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const dem = new Map<string, number>();
+  // Đọc theo TRANG cho tới hết. Không đặt trần rồi thôi: một đơn có rất nhiều
+  // hóa đơn con sẽ ăn hết quota và làm những đơn sau đếm thiếu — số đếm sai mà
+  // nhìn vẫn hợp lý là kiểu lỗi khó phát hiện nhất.
+  const CO_TRANG = 1000;
+  for (let tu = 0; ; tu += CO_TRANG) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoices")
+      .select("source_order_id")
+      .eq("tenant_id", tenantId)
+      .in("source_order_id", orderIds)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .is("voided_at", null)
+      .is("cancelled_at", null)
+      .order("id", { ascending: true })
+      .range(tu, tu + CO_TRANG - 1);
+    if (error) {
+      if (error.code === MA_LOI_CHUA_CO_COT) return null;
+      handleError(error, "demDonConHoanTat");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (data ?? []) as any[];
+    for (const row of rows) {
+      const k = String(row.source_order_id);
+      dem.set(k, (dem.get(k) ?? 0) + 1);
+    }
+    if (rows.length < CO_TRANG) break;
+  }
+  return dem;
 }
 
 /** Máy chủ chưa chạy 00331: cột/RPC chưa tồn tại. */
@@ -1324,7 +1463,7 @@ export async function listChildSales(
     // 00335: mỗi đơn bán con có NGÀY HOÁ ĐƠN riêng — hiện theo ngày chứng từ
     // (đã bán = ngày phát hành; còn nháp = ngày tạo). Khác với danh sách ĐƠN
     // ĐẶT HÀNG bên trên vẫn giữ created_at = ngày đặt.
-    .select("id, code, status, total, paid, ngay_chung_tu")
+    .select("id, code, status, total, paid, ngay_chung_tu, voided_at, cancelled_at")
     .eq("tenant_id", tenantId)
     .eq("source_order_id", orderId)
     .is("deleted_at", null)
@@ -1341,6 +1480,8 @@ export async function listChildSales(
     total: Number(row.total ?? 0),
     paid: Number(row.paid ?? 0),
     createdAt: String(row.ngay_chung_tu ?? ""),
+    voidedAt: row.voided_at ? String(row.voided_at) : null,
+    cancelledAt: row.cancelled_at ? String(row.cancelled_at) : null,
   }));
 }
 

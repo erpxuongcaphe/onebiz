@@ -26,6 +26,8 @@ import {
   listDraftOrders,
   getDraftOrderById,
   getOrders,
+  trangThaiXuLyDon,
+  NHAN_TRANG_THAI_XU_LY,
   adoptDraftSession,
   createChildSaleFromOrder,
   deleteDraftOrder,
@@ -5339,6 +5341,16 @@ function ProcessOrderModal({
                     >
                       {o.statusName}
                     </span>
+                    {/* Đơn ĐANG XỬ LÝ vẫn chọn được để bán tiếp đợt sau — chỉ
+                        báo cho thu ngân biết đơn này đã có hóa đơn rồi. */}
+                    {trangThaiXuLyDon(o) === "dang_xu_ly" && (
+                      <span
+                        className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning"
+                        title={NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta}
+                      >
+                        Đã có {o.completedChildCount} hóa đơn
+                      </span>
+                    )}
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5 truncate">
                     {new Date(o.date).toLocaleString("vi-VN", {

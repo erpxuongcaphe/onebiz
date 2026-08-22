@@ -56,6 +56,8 @@ import {
   getChiSoDonDatHangTheoPhamVi,
   khoaChiSoDonDatHang,
   taoBoNhoChiSoDonDatHang,
+  trangThaiXuLyDon,
+  NHAN_TRANG_THAI_XU_LY,
   type PhamViDonDatHang,
   type SalesOrderListSummary,
   type SalesOrderListSummaryParams,
@@ -104,10 +106,13 @@ const statusFilterOptions = [
   { label: "Đã hủy", value: "cancelled" },
 ];
 
+// Ba mức xử lý (CEO 21/08). Một đơn đặt hàng tạo được không giới hạn đơn bán
+// con, nên "đã có hóa đơn" khác "đã hoàn tất xử lý".
 const fulfillmentOptions = [
   { label: "Tất cả", value: "all" },
-  { label: "Chưa xuất hóa đơn", value: "pending" },
-  { label: "Đã xuất hóa đơn", value: "fulfilled" },
+  { label: "Chờ xử lý", value: "pending" },
+  { label: "Đang xử lý", value: "processing" },
+  { label: "Hoàn tất", value: "fulfilled" },
 ];
 
 const debtStateOptions = [
@@ -167,17 +172,24 @@ function OrderDetail({
 }) {
   // CEO 14/07: đơn đã xuất hóa đơn RIÊNG → hiện "Đã xuất hóa đơn" ở mọi nơi
   // trong chi tiết (không phải trạng thái bán, số bán thật ở hóa đơn kia).
-  const status = order.fulfilledById
-    ? {
-        label: order.fulfilledInvoiceCode
-          ? `Đã xuất hóa đơn · ${order.fulfilledInvoiceCode}`
-          : "Đã xuất hóa đơn",
-        variant: "default" as const,
-      }
-    : statusMap[order.status] ?? {
-        label: order.statusName,
-        variant: "secondary" as const,
-      };
+  const mucXuLy = trangThaiXuLyDon(order);
+  const status =
+    mucXuLy === "hoan_tat"
+      ? {
+          label: order.fulfilledInvoiceCode
+            ? `Hoàn tất · ${order.fulfilledInvoiceCode}`
+            : "Hoàn tất",
+          variant: "default" as const,
+        }
+      : mucXuLy === "dang_xu_ly"
+        ? {
+            label: `Đang xử lý · ${order.completedChildCount ?? 0} hóa đơn`,
+            variant: "outline" as const,
+          }
+        : statusMap[order.status] ?? {
+            label: order.statusName,
+            variant: "secondary" as const,
+          };
 
   // Lazy fetch line items thật (P0 audit fix — trước hardcode "SP001").
   const [items, setItems] = useState<SalesOrderItemRow[]>([]);
@@ -989,21 +1001,37 @@ export default function DatHangPage() {
       accessorKey: "status",
       header: "Trạng thái",
       cell: ({ row }) => {
-        // CEO 14/07: đơn đã xuất thành hóa đơn RIÊNG → badge "Đã xuất hóa đơn"
-        // (không phải một lần bán riêng; số bán thật ở hóa đơn kia).
-        if (row.original.fulfilledById) {
+        // Ba mức xử lý (CEO 21/08). Một đơn đặt hàng tạo được không giới hạn
+        // đơn bán con, nên đơn ĐÃ CÓ hóa đơn nhưng chưa gắn KHÔNG được gọi là
+        // "Chờ xử lý" nữa — nó là "Đang xử lý" và còn bán tiếp được.
+        const muc = trangThaiXuLyDon(row.original);
+        if (muc === "hoan_tat") {
           return (
             <Badge
               variant="default"
               className="bg-status-success/10 text-status-success border-status-success/25"
             >
-              Đã xuất hóa đơn
+              Hoàn tất
               {row.original.fulfilledInvoiceCode
                 ? ` · ${row.original.fulfilledInvoiceCode}`
                 : ""}
             </Badge>
           );
         }
+        if (muc === "dang_xu_ly") {
+          const n = row.original.completedChildCount ?? 0;
+          return (
+            <Badge
+              variant="outline"
+              className="bg-status-warning/10 text-status-warning border-status-warning/25"
+              title={NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta}
+            >
+              Đang xử lý · {n} hóa đơn
+            </Badge>
+          );
+        }
+        // Chờ xử lý: giữ nguyên nhãn trạng thái bán của đơn (nháp / đã xác
+        // nhận / đang giao…) vì đó vẫn là thông tin có ích.
         const s = statusMap[row.original.status] ?? {
           label: row.original.statusName,
           variant: "secondary" as const,
