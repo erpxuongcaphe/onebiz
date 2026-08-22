@@ -38,6 +38,43 @@ insert into _cho_phep_00340(chu_ky) values
   ('public.get_email_by_phone(text)'),
   ('public.normalize_phone(text)');
 
+-- ── Khối 0b. NGOÀI TẦM — routine thuộc chủ sở hữu mà vai trò đang chạy KHÔNG
+-- sửa được. Trên Supabase, `postgres` không phải superuser và không là thành
+-- viên của `supabase_admin`; quyền của những routine đó do chính supabase_admin
+-- cấp (anon=X/supabase_admin) nên REVOKE chạy bằng postgres KHÔNG có tác dụng.
+--
+-- Không giả vờ đóng được. Thay vào đó: liệt kê rõ, CHỐT SỐ LƯỢNG kỳ vọng (số
+-- thực tế khác là DỪNG để người rà lại), và vẫn đóng bằng hết phần trong tầm.
+--
+-- Số dưới đây lấy từ BƯỚC 1 chạy trên production 22/08/2026.
+create temporary table _ngoai_tam_00340 on commit drop as
+select p.oid, p.oid::regprocedure::text as chu_ky, p.proowner::regrole::text as chu_so_huu
+from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+where n.nspname = 'public' and p.prokind in ('f','p','a','w')
+  and not pg_has_role(current_user, p.proowner, 'USAGE');
+
+do $chot_ngoai_tam$
+declare
+  c_ky_vong constant int := 31;
+  v_that int;
+  v_chu  text;
+begin
+  select count(*) into v_that from _ngoai_tam_00340;
+  select string_agg(distinct chu_so_huu, ', ') into v_chu from _ngoai_tam_00340;
+  if v_that <> c_ky_vong then
+    raise exception
+      '00340 DUNG: so routine NGOAI TAM la % (ky vong %). Chu so huu: %. '
+      'Chay lai BUOC 1 va BUOC 1B, ra xem nhom moi la gi roi cap nhat c_ky_vong.',
+      v_that, c_ky_vong, coalesce(v_chu, '(khong co)');
+  end if;
+  if v_that > 0 then
+    raise warning
+      '00340: % routine thuoc % KHONG go duoc bang vai tro hien tai - se VAN mo cho anon. '
+      'Day la gioi han da biet, khong phai bo sot. Xem BUOC 1B de biet danh sach.',
+      v_that, v_chu;
+  end if;
+end $chot_ngoai_tam$;
+
 do $kiem_danh_sach$
 declare r record; v_n int;
 begin
@@ -150,7 +187,7 @@ revoke execute on all routines  in schema public from anon, public;
 -- routine mới và routine đó sẽ nhận mặc định dựng sẵn (PUBLIC có EXECUTE).
 -- Nên lấy HỢP của: chủ sở hữu routine hiện có ∪ chủ có dòng default ACL.
 do $mac_dinh$
-declare r record; v_da int := 0;
+declare r record; v_da int := 0; v_bo_qua int := 0;
 begin
   for r in
     select distinct chu from (
@@ -167,6 +204,13 @@ begin
     ) t
     where chu is not null
   loop
+    -- Chủ sở hữu NGOÀI TẦM đã chốt ở Khối 0b: bỏ qua CÓ CHỦ ĐÍCH. Nổ ở đây thì
+    -- migration vĩnh viễn không chạy được trên Supabase, và 105 routine trong
+    -- tầm cũng không đóng nổi — tệ hơn là đóng được phần lớn rồi ghi rõ phần dư.
+    if not pg_has_role(current_user, r.chu::regrole, 'USAGE') then
+      v_bo_qua := v_bo_qua + 1;
+      continue;
+    end if;
     begin
       execute format(
         'alter default privileges for role %I in schema public revoke execute on functions from anon',
@@ -178,12 +222,11 @@ begin
       v_da := v_da + 1;
     exception when insufficient_privilege then
       raise exception
-        '00340 THẤT BẠI: không đủ quyền sửa quyền mặc định của chủ sở hữu % — '
-        'routine MỚI do chủ này tạo sẽ vẫn tự mở cho anon/PUBLIC. CUỘN LẠI. '
-        'Xem P4/P5 của BƯỚC 1 để biết cần xử tay nhóm nào.', r.chu;
+        '00340 THAT BAI: chu so huu % nam TRONG tam (pg_has_role = true) ma van '
+        'khong sua duoc quyen mac dinh - mau thuan, phai ra lai. CUON LAI.', r.chu;
     end;
   end loop;
-  raise notice '00340: đã gỡ quyền mặc định anon + PUBLIC cho % chủ sở hữu', v_da;
+  raise notice '00340: da go quyen mac dinh anon + PUBLIC cho % chu so huu (bo qua % chu ngoai tam)', v_da, v_bo_qua;
 end $mac_dinh$;
 
 -- ── Khối 4. Trả lại ĐÚNG quyền hiệu lực cho authenticated / service_role ───
@@ -233,7 +276,8 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.prokind in ('f','p','a','w')
     and has_function_privilege('anon', p.oid, 'EXECUTE')
-    and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340);
+    and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340)
+    and p.oid not in (select oid from _ngoai_tam_00340);
   if v_n <> 0 then
     select string_agg(x, ', ') into v_ten from (
       select p.oid::regprocedure::text as x
@@ -241,6 +285,7 @@ begin
       where n.nspname = 'public' and p.prokind in ('f','p','a','w')
         and has_function_privilege('anon', p.oid, 'EXECUTE')
         and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340)
+        and p.oid not in (select oid from _ngoai_tam_00340)
       limit 10) t;
     raise exception
       '00340 THẤT BẠI: còn % routine anon gọi được ngoài danh sách (ví dụ: %). '
@@ -253,9 +298,10 @@ begin
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace,
   lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
   where n.nspname = 'public' and p.prokind in ('f','p','a','w')
-    and a.privilege_type = 'EXECUTE' and a.grantee = 0;
+    and a.privilege_type = 'EXECUTE' and a.grantee = 0
+    and p.oid not in (select oid from _ngoai_tam_00340);
   if v_n <> 0 then
-    raise exception '00340 THẤT BẠI: còn % routine cấp EXECUTE cho PUBLIC. CUỘN LẠI.', v_n;
+    raise exception '00340 THAT BAI: con % routine TRONG TAM cap EXECUTE cho PUBLIC. CUON LAI.', v_n;
   end if;
 
   -- K3. Quyền mặc định không còn anon và không còn PUBLIC.
@@ -263,9 +309,10 @@ begin
   from pg_default_acl d left join pg_namespace n on n.oid = d.defaclnamespace
   where d.defaclobjtype = 'f'
     and (n.nspname = 'public' or d.defaclnamespace = 0)
-    and (d.defaclacl::text like '%anon=%' or d.defaclacl::text ~ '[{,]=[a-zA-Z]');
+    and (d.defaclacl::text like '%anon=%' or d.defaclacl::text ~ '[{,]=[a-zA-Z]')
+    and pg_has_role(current_user, d.defaclrole, 'USAGE');
   if v_n <> 0 then
-    raise exception '00340 THẤT BẠI: quyền mặc định vẫn cấp cho anon/PUBLIC. CUỘN LẠI.';
+    raise exception '00340 THAT BAI: quyen mac dinh cua chu TRONG TAM van cap cho anon/PUBLIC. CUON LAI.';
   end if;
 
   -- K4. authenticated và service_role KHÔNG mất quyền nào so với ảnh chụp.
@@ -326,9 +373,10 @@ begin
   lateral aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
   where n.nspname = 'public' and p.prokind in ('f','p','a','w')
     and a.privilege_type = 'EXECUTE' and a.grantee = 'anon'::regrole
-    and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340);
+    and p.oid not in (select to_regprocedure(chu_ky)::oid from _cho_phep_00340)
+    and p.oid not in (select oid from _ngoai_tam_00340);
   if v_n <> 0 then
-    raise exception '00340 THẤT BẠI: còn % mục ACL TRỰC TIẾP của anon ngoài danh sách. CUỘN LẠI.', v_n;
+    raise exception '00340 THAT BAI: con % muc ACL TRUC TIEP cua anon TRONG TAM ma ngoai danh sach. CUON LAI.', v_n;
   end if;
 
   -- K9. service_role KHÔNG được mở rộng thêm so với ảnh chụp (đối xứng với K5).
@@ -339,7 +387,11 @@ begin
     raise exception '00340 THẤT BẠI: service_role được mở rộng thêm % routine. CUỘN LẠI.', v_n;
   end if;
 
-  raise notice '00340: ĐẠT — anon chỉ còn 2 routine đăng nhập, PUBLIC sạch, authenticated/service_role nguyên vẹn, routine mới không tự mở';
+  select count(*) into v_n from _ngoai_tam_00340;
+  raise notice
+    '00340: DAT - TRONG TAM: anon chi con 2 routine dang nhap, PUBLIC sach, '
+    'authenticated/service_role nguyen ven, routine moi khong tu mo. '
+    'NGOAI TAM: % routine van mo cho anon (gioi han da biet, xem BUOC 1B).', v_n;
 end $hau_kiem$;
 
 commit;

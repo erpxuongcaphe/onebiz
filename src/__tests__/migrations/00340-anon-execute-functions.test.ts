@@ -171,7 +171,7 @@ describe("00340 — giữ nguyên authenticated / service_role", () => {
   });
 
   it("hậu kiểm đo CẢ ACL trực tiếp của anon, không chỉ quyền hiệu lực", () => {
-    expect(VA).toContain("mục ACL TRỰC TIẾP của anon ngoài danh sách");
+    expect(VA).toContain("muc ACL TRUC TIEP cua anon TRONG TAM ma ngoai danh sach");
   });
 });
 
@@ -249,5 +249,41 @@ describe("00340 — bộ file và phạm vi", () => {
     const uuid = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
     expect(VA).not.toMatch(uuid);
     expect(HOAN_TAC).not.toMatch(uuid);
+  });
+});
+
+describe("00340 — nhóm NGOÀI TẦM (chủ sở hữu không sửa được)", () => {
+  it("chốt số lượng kỳ vọng, lệch là DỪNG", () => {
+    // Prod 22/08: supabase_admin sở hữu 31 routine, postgres không phải thành
+    // viên nên REVOKE không có tác dụng. Không được giả vờ đã đóng.
+    expect(VA).toContain("_ngoai_tam_00340");
+    expect(VA).toContain("c_ky_vong constant int := 31");
+    expect(VA).toContain("00340 DUNG: so routine NGOAI TAM la %");
+  });
+
+  it("xác định bằng pg_has_role, không đoán theo tên chủ sở hữu", () => {
+    const khoi = VA.slice(VA.indexOf("create temporary table _ngoai_tam_00340"), VA.indexOf("$chot_ngoai_tam$"));
+    expect(khoi).toContain("not pg_has_role(current_user, p.proowner, 'USAGE')");
+    expect(khoi).not.toContain("supabase_admin");
+  });
+
+  it("cảnh báo TO khi còn routine ngoài tầm, không im lặng", () => {
+    expect(VA).toContain("raise warning");
+    expect(VA).toContain("KHONG go duoc bang vai tro hien tai");
+    expect(VA).toContain("Day la gioi han da biet, khong phai bo sot");
+  });
+
+  it("hậu kiểm chỉ đòi hỏi ở phần TRONG TẦM, nhưng vẫn chặt", () => {
+    const hk = VA.slice(VA.indexOf("$hau_kiem$"));
+    // Mọi phép kiểm anon/PUBLIC/ACL trực tiếp đều trừ nhóm ngoài tầm...
+    expect((hk.match(/_ngoai_tam_00340/g) ?? []).length).toBeGreaterThanOrEqual(3);
+    // ...và quyền mặc định chỉ xét chủ trong tầm.
+    expect(hk).toContain("pg_has_role(current_user, d.defaclrole, 'USAGE')");
+    // Còn sót TRONG TẦM vẫn là EXCEPTION.
+    expect(hk).toContain("CUON LAI");
+  });
+
+  it("thông báo cuối nói rõ đóng được bao nhiêu và còn dư bao nhiêu", () => {
+    expect(VA).toContain("NGOAI TAM: % routine van mo cho anon");
   });
 });
