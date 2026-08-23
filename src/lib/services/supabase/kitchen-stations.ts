@@ -80,6 +80,24 @@ function mapStation(row: any): KitchenStation {
   };
 }
 
+async function requireTenantRecord(
+  table: "branches" | "categories" | "kitchen_stations",
+  id: string,
+  tenantId: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from(table)
+    .select("id")
+    .eq("id", id)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error) handleError(error, `requireTenantRecord:${table}`);
+  if (!data) throw new Error("Không tìm thấy dữ liệu trong công ty hiện tại.");
+}
+
 // ============================================================
 // Queries
 // ============================================================
@@ -140,6 +158,7 @@ export async function createKitchenStation(
 ): Promise<KitchenStation> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("branches", input.branchId, tenantId);
 
   const insertData = {
     tenant_id: tenantId,
@@ -249,6 +268,10 @@ export async function assignCategoryToStation(
 ): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("categories", categoryId, tenantId);
+  if (stationId) {
+    await requireTenantRecord("kitchen_stations", stationId, tenantId);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
