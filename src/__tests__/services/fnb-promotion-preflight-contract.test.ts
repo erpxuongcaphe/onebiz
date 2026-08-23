@@ -34,5 +34,9 @@ describe("F&B promotion payment preflight contract", () => {
     expect(preflight).toContain("co_kiem_mat_hang_nhom_hang");
     expect(preflight).toContain("ghi_promotion_discount_tu_tham_so_client");
     expect(preflight).toContain("A2C_COUPON_ATOMIC");
+    expect(preflight).toContain("A2D_QUYEN_GOI_TRUC_TIEP_THANH_TOAN");
+    expect(preflight).toContain("has_function_privilege('authenticated'");
+    expect(preflight).toContain("aclexplode(coalesce(h.proacl");
+    expect(preflight).toContain("_fnb_send_to_kitchen_impl_00303");
   });
 });
