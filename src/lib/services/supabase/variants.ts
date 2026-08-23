@@ -3,8 +3,7 @@
 // Multi-tenant safety: filter tenant_id mọi query đọc + insert dùng
 // getCurrentTenantId() thay vì hardcode "".
 
-import { getClient } from "./base";
-import { getCurrentTenantId } from "./base";
+import { getClient, getCurrentTenantId } from "./base";
 import type { ProductVariant } from "@/lib/types";
 
 const supabase = getClient();
@@ -122,6 +121,7 @@ export async function updateVariant(
     bomCode: string | null;
   }>
 ) {
+  const tenantId = await getCurrentTenantId();
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.sku !== undefined) updateObj.sku = updates.sku;
@@ -139,16 +139,19 @@ export async function updateVariant(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase.from("product_variants").update as any)(updateObj)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
 
   if (error) throw error;
 }
 
 export async function deleteVariant(id: string) {
+  const tenantId = await getCurrentTenantId();
   const { error } = await supabase
     .from("product_variants")
     .update({ is_active: false })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
 
   if (error) throw error;
 }
