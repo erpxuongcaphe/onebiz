@@ -50,9 +50,10 @@ export async function getDeliveryPlatformSettings(): Promise<DeliveryPlatformSet
     .eq("id", tenantId)
     .maybeSingle();
 
-  if (error || !data) {
-    return DEFAULT_DELIVERY_PLATFORM_SETTINGS;
-  }
+  // Do not turn a failed read into defaults. A cashier could otherwise select
+  // a delivery platform and record a 0% commission against an unknown setup.
+  if (error) handleError(error, "getDeliveryPlatformSettings");
+  if (!data) throw new Error("[getDeliveryPlatformSettings] Không tìm thấy cấu hình doanh nghiệp.");
   const settings = (data.settings ?? {}) as Record<string, unknown>;
   const platforms = (settings.fnb_delivery_platforms ?? {}) as Partial<DeliveryPlatformSettings>;
 
@@ -104,7 +105,8 @@ export async function getDiscountPresets(): Promise<DiscountPreset[]> {
     .eq("id", tenantId)
     .maybeSingle();
 
-  if (error || !data) return [];
+  if (error) handleError(error, "getDiscountPresets");
+  if (!data) throw new Error("[getDiscountPresets] Không tìm thấy cấu hình doanh nghiệp.");
 
   const settings = (data.settings ?? {}) as Record<string, unknown>;
   const presets = (settings.fnb_discount_presets ?? []) as DiscountPreset[];

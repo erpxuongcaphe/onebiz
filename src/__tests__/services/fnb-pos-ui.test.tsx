@@ -628,6 +628,83 @@ describe("FnbCart — component", () => {
     const inputs = screen.getAllByPlaceholderText("0");
     expect(inputs.length).toBeGreaterThan(0);
   });
+
+  it("chỉ hiện sàn đang bật trong cấu hình đã tải", () => {
+    const onDeliveryPlatformChange = vi.fn();
+    render(
+      <FnbCart
+        {...baseProps}
+        activeTab={{ ...baseTab, orderType: "delivery" }}
+        onDeliveryPlatformChange={onDeliveryPlatformChange}
+        deliveryPlatformSettingsStatus="ready"
+        deliveryPlatformSettings={{
+          shopee_food: { active: false, commissionPercent: 25 },
+          grab_food: { active: true, commissionPercent: 25 },
+          gojek: { active: false, commissionPercent: 25 },
+          be: { active: false, commissionPercent: 20 },
+          direct: { active: true, commissionPercent: 0 },
+        }}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Shopee Food" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Grab Food" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Tự giao" })).toBeDefined();
+  });
+
+  it("lỗi tải cấu hình sàn: không cho chọn sàn và có nút thử lại", () => {
+    const retry = vi.fn();
+    const onDeliveryPlatformChange = vi.fn();
+    render(
+      <FnbCart
+        {...baseProps}
+        activeTab={{ ...baseTab, orderType: "delivery", deliveryPlatform: "grab_food" }}
+        onDeliveryPlatformChange={onDeliveryPlatformChange}
+        deliveryPlatformSettingsStatus="error"
+        onRetryDeliveryPlatformSettings={retry}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Không tải được cấu hình sàn");
+    expect(screen.queryByRole("button", { name: "Shopee Food" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Tự giao" }));
+    expect(onDeliveryPlatformChange).toHaveBeenCalledWith("direct");
+    fireEvent.click(screen.getByText("Thử lại"));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("lỗi tải khuyến mãi nhanh không giả làm danh sách preset rỗng", () => {
+    const retry = vi.fn();
+    render(
+      <FnbCart
+        {...baseProps}
+        activeTab={{
+          ...baseTab,
+          lines: [
+            {
+              id: "line-1",
+              productId: "p1",
+              productName: "Trà đào",
+              quantity: 1,
+              unitPrice: 30_000,
+              toppings: [],
+              lineTotal: 30_000,
+            },
+          ],
+        }}
+        subtotal={30_000}
+        total={30_000}
+        lineCount={1}
+        onDiscountChange={noop}
+        discountPresetsError="Mất kết nối"
+        onRetryDiscountPresets={retry}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Không tải được khuyến mãi nhanh");
+    fireEvent.click(screen.getByText("Thử lại"));
+    expect(retry).toHaveBeenCalledOnce();
+  });
 });
 
 // ============================================================

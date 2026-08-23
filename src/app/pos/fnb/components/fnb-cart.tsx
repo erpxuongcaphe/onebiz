@@ -16,6 +16,7 @@ import type {
   FnbDiscountInput,
   DeliveryPlatform,
 } from "@/lib/types/fnb";
+import type { DeliveryPlatformSettings } from "@/lib/services/supabase/fnb-platform-settings";
 import { Icon } from "@/components/ui/icon";
 import { HelpTip } from "@/components/shared/help-tip";
 
@@ -78,6 +79,13 @@ interface FnbCartProps {
   }[];
   /** Sprint POS-FNB-EXT-1: discount presets từ settings. */
   discountPresets?: { id: string; name: string; mode: "amount" | "percent"; value: number }[];
+  /** Cấu hình sàn đã tải thành công. Không có thì chỉ cho phép Tự giao. */
+  deliveryPlatformSettings?: DeliveryPlatformSettings | null;
+  deliveryPlatformSettingsStatus?: "loading" | "ready" | "error";
+  onRetryDeliveryPlatformSettings?: () => void;
+  /** Lỗi tải preset không được giả làm danh sách khuyến mãi rỗng. */
+  discountPresetsError?: string | null;
+  onRetryDiscountPresets?: () => void;
   /**
    * Phase 1A.2: Sửa tuỳ chọn dòng giỏ — mở lại FnbItemDialog với
    * dữ liệu pre-fill (size/đường/đá/topping/qty) để cashier chỉnh.
@@ -149,6 +157,11 @@ export function FnbCart({
   staffOptions,
   selfDeliveryTiers,
   discountPresets,
+  deliveryPlatformSettings,
+  deliveryPlatformSettingsStatus = "ready",
+  onRetryDeliveryPlatformSettings,
+  discountPresetsError,
+  onRetryDiscountPresets,
 }: FnbCartProps) {
   // Sprint POS-FNB-EXT-1: state cho note textarea expandable
   const [noteExpanded, setNoteExpanded] = useState(false);
@@ -170,6 +183,13 @@ export function FnbCart({
     orderDiscountAmount > 0 || !!appliedCouponCode || (freeItems?.length ?? 0) > 0;
   const orderTypeLabel =
     ORDER_TYPE_LABEL[activeTab?.orderType ?? "takeaway"] ?? "Mang về";
+  const selectedPlatform = activeTab?.deliveryPlatform ?? "direct";
+  const enabledDeliveryPlatforms = DELIVERY_PLATFORMS.filter(
+    (platform) =>
+      platform.key === selectedPlatform ||
+      (deliveryPlatformSettingsStatus === "ready" &&
+        deliveryPlatformSettings?.[platform.key]?.active),
+  );
 
   // Stitch FnB POS mockup: cart sidebar
   // - Container: bg-surface-container-lowest rounded-xl ambient-shadow border
@@ -388,28 +408,66 @@ export function FnbCart({
                   Mặc định % CK lấy từ Cài đặt → Sàn giao hàng.
                 </HelpTip>
               </div>
-              {/* Platform pills */}
-              <div className="flex gap-1 flex-wrap">
-                {DELIVERY_PLATFORMS.map((p) => {
+              {deliveryPlatformSettingsStatus === "error" ? (
+                <div
+                  role="alert"
+                  className="flex items-center justify-between gap-2 rounded-md border border-status-warning/30 bg-status-warning/10 px-2.5 py-2 text-xs text-status-warning"
+                >
+                  <span>Không tải được cấu hình sàn. Chỉ dùng Tự giao cho đến khi tải lại.</span>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {selectedPlatform !== "direct" && (
+                      <button
+                        type="button"
+                        onClick={() => onDeliveryPlatformChange("direct")}
+                        className="min-h-11 px-2 font-semibold underline underline-offset-2"
+                      >
+                        Tự giao
+                      </button>
+                    )}
+                    {onRetryDeliveryPlatformSettings && (
+                      <button
+                        type="button"
+                        onClick={onRetryDeliveryPlatformSettings}
+                        className="min-h-11 px-2 font-semibold underline underline-offset-2"
+                      >
+                        Thử lại
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : deliveryPlatformSettingsStatus === "loading" ? (
+                <p className="text-xs text-muted-foreground">Đang tải cấu hình sàn...</p>
+              ) : (
+                <div className="flex gap-1 flex-wrap">
+                  {enabledDeliveryPlatforms.map((p) => {
                   const isActive =
-                    (activeTab.deliveryPlatform ?? "direct") === p.key;
+                    selectedPlatform === p.key;
+                  const isSelectable =
+                    p.key === "direct" || deliveryPlatformSettings?.[p.key]?.active === true;
                   return (
                     <button
                       key={p.key}
                       type="button"
                       onClick={() => onDeliveryPlatformChange(p.key)}
+                      disabled={!isSelectable}
                       className={cn(
-                        "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        "min-h-11 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                         isActive
                           ? p.activeClassName
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
                       )}
+                      title={
+                        isSelectable
+                          ? undefined
+                          : "Sàn này đã được tắt trong Cài đặt POS F&B"
+                      }
                     >
                       {p.label}
                     </button>
                   );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
               {/* Fee + Commission inputs row */}
               {(activeTab.deliveryPlatform ?? "direct") !== "direct" && (
                 <div className="grid grid-cols-2 gap-2">
@@ -691,11 +749,29 @@ export function FnbCart({
 
         {/* Discount controls + Preset dropdown (Sprint POS-FNB-EXT-1) */}
         {!isEmpty && onDiscountChange && (
-          <DiscountRow
-            discount={activeTab?.orderDiscount}
-            onChange={onDiscountChange}
-            presets={discountPresets}
-          />
+          discountPresetsError ? (
+            <div
+              role="alert"
+              className="flex items-center justify-between gap-2 rounded-md border border-status-warning/30 bg-status-warning/10 px-2.5 py-2 text-xs text-status-warning"
+            >
+              <span>Không tải được khuyến mãi nhanh.</span>
+              {onRetryDiscountPresets && (
+                <button
+                  type="button"
+                  onClick={onRetryDiscountPresets}
+                  className="min-h-11 shrink-0 px-2 font-semibold underline underline-offset-2"
+                >
+                  Thử lại
+                </button>
+              )}
+            </div>
+          ) : (
+            <DiscountRow
+              discount={activeTab?.orderDiscount}
+              onChange={onDiscountChange}
+              presets={discountPresets}
+            />
+          )
         )}
 
         {/* Discount display */}
