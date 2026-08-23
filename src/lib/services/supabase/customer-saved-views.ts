@@ -43,10 +43,13 @@ export interface SavedView {
  */
 export async function getSavedViews(): Promise<SavedView[]> {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
     .from("customer_saved_views")
     .select("*")
+    .eq("tenant_id", ctx.tenantId)
+    .or(`user_id.eq.${ctx.userId},is_shared.eq.true`)
     .order("sort_order", { ascending: true })
     .order("created_at", { ascending: true });
 
@@ -119,6 +122,7 @@ export async function updateSavedView(
   }>,
 ): Promise<void> {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const payload: any = {};
   if (updates.name !== undefined) payload.name = updates.name.trim();
@@ -131,6 +135,8 @@ export async function updateSavedView(
   const { error } = await (supabase as any)
     .from("customer_saved_views")
     .update(payload)
+    .eq("tenant_id", ctx.tenantId)
+    .eq("user_id", ctx.userId)
     .eq("id", id);
 
   if (error) handleError(error, "updateSavedView");
@@ -141,10 +147,13 @@ export async function updateSavedView(
  */
 export async function deleteSavedView(id: string): Promise<void> {
   const supabase = getClient();
+  const ctx = await getCurrentContext();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
     .from("customer_saved_views")
     .delete()
+    .eq("tenant_id", ctx.tenantId)
+    .eq("user_id", ctx.userId)
     .eq("id", id);
 
   if (error) handleError(error, "deleteSavedView");
