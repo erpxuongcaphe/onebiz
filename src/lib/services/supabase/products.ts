@@ -1350,6 +1350,7 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
  */
 export async function updateProduct(id: string, updates: Partial<Product & ProductDetail>): Promise<Product> {
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: ProductUpdate = {};
   if (updates.code !== undefined) payload.code = updates.code;
@@ -1393,6 +1394,7 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
     .from("products")
     .update(payload)
     .eq("id", id)
+    .eq("tenant_id", tenantId)
     .select(
       "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
     )
@@ -1528,14 +1530,16 @@ export async function moveProductSortOrder(
   const { error: e2 } = await (supabase as any)
     .from("products")
     .update({ sort_order: neighbor.sort_order })
-    .eq("id", productId);
+    .eq("id", productId)
+    .eq("tenant_id", tenantId);
   if (e2) throw e2;
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: e3 } = await (supabase as any)
     .from("products")
     .update({ sort_order: current.sort_order })
-    .eq("id", neighbor.id);
+    .eq("id", neighbor.id)
+    .eq("tenant_id", tenantId);
   if (e3) throw e3;
 
   return true;
@@ -1553,11 +1557,13 @@ export async function bulkUpdateCategory(
 ): Promise<{ count: number }> {
   if (ids.length === 0) return { count: 0 };
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
     .from("products")
     .update({ category_id: categoryId || null })
     .in("id", ids)
+    .eq("tenant_id", tenantId)
     .select("id");
 
   if (error) handleError(error, "bulkUpdateCategory");
@@ -1577,6 +1583,7 @@ export async function bulkUpdatePrice(
     return { count: 0 };
   }
   const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
 
   const payload: ProductUpdate = {};
   if (updates.sellPrice !== undefined) payload.sell_price = updates.sellPrice;
@@ -1586,6 +1593,7 @@ export async function bulkUpdatePrice(
     .from("products")
     .update(payload)
     .in("id", ids)
+    .eq("tenant_id", tenantId)
     .select("id");
 
   if (error) handleError(error, "bulkUpdatePrice");
