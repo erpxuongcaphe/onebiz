@@ -125,6 +125,7 @@ export async function updateCategory(
     channel: "fnb" | "retail" | null;
   }>
 ) {
+  const tenantId = await getCurrentTenantId();
   const updateObj: Record<string, unknown> = {};
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.code !== undefined) updateObj.code = updates.code;
@@ -133,7 +134,8 @@ export async function updateCategory(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase.from("categories").update as any)(updateObj)
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
 
   if (error) throw error;
 }
@@ -153,11 +155,13 @@ export async function moveCategorySortOrder(
   categoryId: string,
   direction: "up" | "down",
 ): Promise<boolean> {
+  const tenantId = await getCurrentTenantId();
   // Lấy current category info
   const { data: current, error: e1 } = await supabase
     .from("categories")
     .select("id, scope, sort_order, tenant_id")
     .eq("id", categoryId)
+    .eq("tenant_id", tenantId)
     .single();
   if (e1 || !current) throw e1 ?? new Error("Không tìm thấy nhóm hàng");
 
@@ -169,7 +173,7 @@ export async function moveCategorySortOrder(
   let neighborQuery = supabase
     .from("categories")
     .select("id, sort_order")
-    .eq("tenant_id", current.tenant_id)
+    .eq("tenant_id", tenantId)
     .eq("scope", current.scope);
 
   if (direction === "up") {
@@ -191,13 +195,15 @@ export async function moveCategorySortOrder(
   const { error: e2 } = await supabase
     .from("categories")
     .update({ sort_order: neighbor.sort_order })
-    .eq("id", current.id);
+    .eq("id", current.id)
+    .eq("tenant_id", tenantId);
   if (e2) throw e2;
 
   const { error: e3 } = await supabase
     .from("categories")
     .update({ sort_order: current.sort_order })
-    .eq("id", neighbor.id);
+    .eq("id", neighbor.id)
+    .eq("tenant_id", tenantId);
   if (e3) throw e3;
 
   return true;
@@ -307,7 +313,12 @@ export function previewProductCodeFromGroup(
 }
 
 export async function deleteCategory(id: string) {
-  const { error } = await supabase.from("categories").delete().eq("id", id);
+  const tenantId = await getCurrentTenantId();
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
   if (error) throw error;
 }
 
