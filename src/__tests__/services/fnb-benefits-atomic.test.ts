@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  "supabase/migrations/00255_harden_fnb_checkout_benefits.sql",
+  "supabase/migrations/00343_fnb_payment_benefits_server_authority.sql",
   "utf8",
 );
 const service = readFileSync(
@@ -11,35 +11,50 @@ const service = readFileSync(
 );
 const page = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
 
-describe("F&B checkout benefits atomic hardening", () => {
-  it("returns an existing paid invoice on a network retry", () => {
-    expect(migration).toContain("for update");
-    expect(migration).toContain("if v_order.invoice_id is not null then");
-    expect(migration).toContain("'idempotent', true");
+describe("F&B payment benefit authority", () => {
+  it("adds a new server-authoritative endpoint without changing the active V2 endpoint", () => {
+    expect(migration).toContain("public.fnb_complete_payment_atomic_v3");
+    expect(migration).not.toContain("revoke all on function public.fnb_complete_payment_atomic_v2");
   });
 
-  it("commits promotion, coupon and loyalty with payment", () => {
-    expect(migration).toContain("public.fnb_complete_payment_atomic(");
+  it("calculates promotion and coupon values inside the payment transaction", () => {
+    expect(migration).toContain("v_promotion_discount");
+    expect(migration).toContain("v_coupon_discount");
+    expect(migration).toContain("FNB_PROMOTION_TYPE_NOT_SUPPORTED");
+    expect(migration).toContain("when 'buy_x_get_y' then");
+    expect(migration).toContain("generate_series(");
+    expect(migration).toContain("FNB_COUPON_TYPE_INVALID");
     expect(migration).toContain("public.increment_promotion_usage");
     expect(migration).toContain("public.apply_coupon_atomic");
-    expect(migration).toContain("public.earn_loyalty_points");
-    expect(migration).toContain("'fnb_checkout_benefits_applied'");
   });
 
-  it("queues all benefit context for online and offline checkout", () => {
-    expect(service).toContain('"fnb_complete_payment_atomic_v2"');
-    expect(service).toContain("p_promotion_id: input.promotionId");
-    expect(service).toContain("p_coupon_code: input.couponCode");
-    expect(page).toContain("customerId: tab?.customerId ?? null");
-    expect(page).toContain("promotionId: appliedPromotion?.promotion.id");
-    expect(page).toContain("couponCode: couponApplied?.code");
-    expect(page).toContain("appliedPromotion, couponApplied]");
+  it("does not expose client-calculated automatic benefit fields in the browser RPC", () => {
+    expect(service).toContain('"fnb_complete_payment_atomic_v3"');
+    expect(service).not.toContain("p_promotion_discount");
+    expect(service).not.toContain("p_coupon_discount");
+    // Param values, including stale OTP removal, are tested through the
+    // fnbPayment wrapper's observable RPC payload in fnb-checkout.test.ts.
   });
 
-  it("removes post-payment benefit writes from the page", () => {
-    expect(page).not.toContain("await incrementPromotionUsage(");
-    expect(page).not.toContain("tagInvoicePromotion({");
-    expect(page).not.toContain("applyCouponAtomic({");
-    expect(page).not.toContain("earnLoyaltyPoints(");
+  it("keeps payment benefits scoped to the tab that started checkout", () => {
+    expect(page).not.toContain("pos.setOrderDiscount(best.discountAmount)");
+    expect(page).not.toContain("pos.setOrderDiscount(result.discount)");
+    expect(page).toContain("const paymentManualDiscountAmount = pos.orderDiscountAmount");
+    expect(page).toContain("const paymentPromotionId = appliedPromotion?.promotion.id ?? null");
+    expect(page).toContain("const paymentCouponCode = couponApplied?.code ?? null");
+    expect(page).toContain("manualDiscountAmount:");
+    expect(page).toContain("promotionId: paymentPromotionId");
+    expect(page).toContain("couponCode: paymentCouponCode");
+  });
+
+  it("does not reinterpret a legacy combined discount as a manual discount", () => {
+    expect(service).toContain("Đơn offline cũ có giảm giá");
+    expect(service).not.toContain("input.manualDiscountAmount ?? input.discountAmount");
+  });
+
+  it("requires server-side OTP verification and keeps the split-table guard", () => {
+    expect(migration).toContain("public.verify_otp_authorization(");
+    expect(migration).toContain("FNB_MANUAL_DISCOUNT_OTP_REQUIRED");
+    expect(migration).toContain("current_order_id = v_next_order_id");
   });
 });

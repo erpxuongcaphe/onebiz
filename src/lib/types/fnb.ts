@@ -196,8 +196,8 @@ export interface FnbTabSnapshot {
   orderDiscount?: FnbDiscountInput;
   /**
    * Day 3 16/05/2026: Khi cashier xin OTP duyệt giảm giá manual → lưu otpId
-   * + reason vào tab để khi checkout, service `recordDiscountAudit` ghi audit
-   * log với link tới manager_otps row chính xác (truy vết được ai duyệt).
+   * + reason vào tab để checkout V3 xác minh OTP và ghi audit log trong cùng
+   * transaction thanh toán (truy vết được ai duyệt, không có audit "best effort").
    */
   discountAuditCtx?: { otpId: string; reason: string };
   lines: FnbOrderLine[];

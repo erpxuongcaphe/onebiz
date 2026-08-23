@@ -97,6 +97,18 @@ export async function offlineFnbPayment(
     return fnbPayment(input);
   }
 
+  // Discount and benefit eligibility must be calculated by the server. A
+  // local receipt cannot safely promise a total that may change on replay.
+  if (
+    (input.manualDiscountAmount ?? input.discountAmount ?? 0) > 0 ||
+    input.promotionId ||
+    input.couponCode
+  ) {
+    throw new Error(
+      "Đơn có giảm giá hoặc ưu đãi cần kết nối mạng để thanh toán an toàn.",
+    );
+  }
+
   // Offline → update pending order + enqueue
   const localId = input.kitchenOrderId; // may be a local ID
   const localInvoiceCode = await getNextLocalInvoiceNumber();

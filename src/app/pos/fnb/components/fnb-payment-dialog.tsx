@@ -16,6 +16,8 @@ export type PaymentMethod = "cash" | "transfer" | "card" | "mixed";
 export interface FnbPaymentConfirmPayload {
   paymentMethod: PaymentMethod;
   paid: number;
+  /** Thu ngân đã chủ động xác nhận phần tiền còn thiếu là công nợ. */
+  allowDebt?: boolean;
   paymentBreakdown?: { cash: number; transfer: number; card: number };
   customerName: string;
   /** Tiền tip khách cho. Cộng vào total, ghi vào invoice.tip_amount. */
@@ -27,6 +29,9 @@ interface FnbPaymentDialogProps {
   onOpenChange: (open: boolean) => void;
   subtotal: number;
   discountAmount?: number;
+  manualDiscountAmount?: number;
+  promotionDiscountAmount?: number;
+  couponDiscountAmount?: number;
   /** Total KHÔNG bao gồm tip. Tip sẽ cộng thêm trong dialog. */
   total: number;
   lineCount: number;
@@ -56,7 +61,8 @@ function formatDenom(v: number): string {
 // ── Component ──
 
 export function FnbPaymentDialog({
-  open, onOpenChange, subtotal, discountAmount = 0, total: baseTotal, lineCount, orderNumber, onConfirm,
+  open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
+  promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber, onConfirm,
 }: FnbPaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
@@ -103,6 +109,12 @@ export function FnbPaymentDialog({
   // CEO 29/05/2026: đơn 0đ (miễn phí / hàng mẫu / xuất nội bộ) → cho phép
   // xác nhận mà không cần nhập tiền. Banner + nhãn nút làm bước xác nhận.
   const isFreeOrder = total === 0;
+  // Compatibility for a cart snapshot created before the benefit sources were
+  // split. New callers pass the three source-specific amounts.
+  const unclassifiedDiscountAmount = Math.max(
+    0,
+    discountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
+  );
   // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
   const canConfirm =
     isFreeOrder ||
@@ -115,6 +127,9 @@ export function FnbPaymentDialog({
     };
     if (tipAmount > 0) {
       payload.tipAmount = tipAmount;
+    }
+    if (allowDebt) {
+      payload.allowDebt = true;
     }
     if (method === "mixed") {
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
@@ -148,10 +163,28 @@ export function FnbPaymentDialog({
               <span className="text-muted-foreground">Tạm tính</span>
               <span className="tabular-nums">{formatCurrency(subtotal)}</span>
             </div>
-            {discountAmount > 0 && (
+            {manualDiscountAmount > 0 && (
+              <div className="flex justify-between text-status-warning">
+                <span>Giảm giá thủ công</span>
+                <span className="tabular-nums">-{formatCurrency(manualDiscountAmount)}</span>
+              </div>
+            )}
+            {promotionDiscountAmount > 0 && (
+              <div className="flex justify-between text-status-warning">
+                <span>Khuyến mãi</span>
+                <span className="tabular-nums">-{formatCurrency(promotionDiscountAmount)}</span>
+              </div>
+            )}
+            {couponDiscountAmount > 0 && (
+              <div className="flex justify-between text-status-warning">
+                <span>Mã giảm giá</span>
+                <span className="tabular-nums">-{formatCurrency(couponDiscountAmount)}</span>
+              </div>
+            )}
+            {unclassifiedDiscountAmount > 0 && (
               <div className="flex justify-between text-status-warning">
                 <span>Giảm giá</span>
-                <span className="tabular-nums">-{formatCurrency(discountAmount)}</span>
+                <span className="tabular-nums">-{formatCurrency(unclassifiedDiscountAmount)}</span>
               </div>
             )}
             {tipAmount > 0 && (

@@ -241,7 +241,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         });
         return { data: { success: true }, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic_v2") {
+      if (fn === "fnb_complete_payment_atomic_v3") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         const paymentMethod = (args?.p_payment_method as string) ?? "cash";
         const paid = (args?.p_paid as number) ?? 0;
@@ -249,7 +249,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
           | Array<{ method: string; amount: number }>
           | null
           | undefined;
-        const discountAmount = (args?.p_discount_amount as number) ?? 0;
+        const discountAmount = (args?.p_manual_discount_amount as number) ?? 0;
 
         // Lookup order + items via mockFromHandler to simulate server-side fetch
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

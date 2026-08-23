@@ -52,7 +52,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic_v2") {
+      if (fn === "fnb_complete_payment_atomic_v3") {
         return {
           data: {
             invoice_id: "inv-1",
@@ -60,6 +60,10 @@ vi.mock("@/lib/services/supabase/base", () => ({
             total: 51000,
             paid: 51000,
             debt: 0,
+            tendered_amount: 60000,
+            change_amount: 9000,
+            discount_amount: 5000,
+            platform_commission_amount: 1000,
           },
           error: null,
         };
@@ -91,7 +95,7 @@ vi.mock("@/lib/services/supabase/fnb-tables", () => ({
   markTableAvailable: vi.fn(),
 }));
 
-import { sendToKitchen, fnbPayment } from "@/lib/services/supabase/fnb-checkout";
+import { sendToKitchen, fnbPayment, getFnbPaymentErrorMessage } from "@/lib/services/supabase/fnb-checkout";
 import type { ToppingAttachment } from "@/lib/types/fnb";
 
 // === Helpers ===
@@ -261,13 +265,44 @@ describe("sendToKitchen", () => {
 // fnbPayment — Atomic RPC tests
 // ============================================================
 //
-// fnbPayment() now delegates to `fnb_complete_payment_atomic_v2` Postgres RPC.
+// fnbPayment() delegates to `fnb_complete_payment_atomic_v3`. The server uses
+// promotion/coupon identifiers only and recalculates every automatic benefit.
 // Business logic (flatten items + toppings, create invoice, decrement stock,
 // cash_transactions, release table) is tested at DB layer via integration.
 // Here we only verify the TS wrapper: correct param mapping + response handling.
 
 describe("fnbPayment (atomic RPC wrapper)", () => {
-  it("calls fnb_complete_payment_atomic_v2 RPC with correct params", async () => {
+  it("đổi mã guard coupon thành lỗi tiếng Việt cho thu ngân", async () => {
+    rpcResponses["fnb_complete_payment_atomic_v3"] = {
+      data: null,
+      error: { message: "FNB_COUPON_NOT_AVAILABLE", code: "22023" },
+    };
+
+    await expect(
+      fnbPayment({
+        kitchenOrderId: "ko-1",
+        ...CTX,
+        customerName: "Khách lẻ",
+        paymentMethod: "cash",
+        paid: 50_000,
+      }),
+    ).rejects.toThrow("Mã giảm giá không còn áp dụng cho đơn này");
+  });
+
+  it("nhận diện OTP hết hạn kể cả khi Supabase bọc thêm chi tiết lỗi", () => {
+    expect(
+      getFnbPaymentErrorMessage({
+        message: "OTP_EXPIRED: authorization expired",
+      }),
+    ).toBe("Giảm giá thủ công cần OTP hợp lệ của người có quyền duyệt.");
+  });
+
+  it("nói rõ phải xác nhận ghi nợ khi máy chủ từ chối thu thiếu", () => {
+    expect(getFnbPaymentErrorMessage({ message: "FNB_DEBT_CONFIRMATION_REQUIRED" }))
+      .toBe("Số tiền khách đưa chưa đủ. Chọn Ghi nợ hoặc thu đủ tiền trước khi thanh toán.");
+  });
+
+  it("calls the server-authoritative V3 RPC with OTP-authorized manual discount only", async () => {
     const result = await fnbPayment({
       kitchenOrderId: "ko-1",
       ...CTX,
@@ -275,14 +310,23 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       customerName: "Nguyễn Văn A",
       paymentMethod: "cash",
       paid: 50000,
-      discountAmount: 5000,
+      manualDiscountAmount: 5000,
+      manualDiscountOtpId: "otp-1",
+      manualDiscountReason: "Khách phản ánh chất lượng",
+      promotionId: "promotion-1",
+      couponCode: "GIAM10",
       note: "ghi chú",
     });
 
     expect(result.invoiceId).toBe("inv-1");
     expect(result.invoiceCode).toBe("HD00001");
+    expect(result.total).toBe(51000);
+    expect(result.discountAmount).toBe(5000);
+    expect(result.platformCommissionAmount).toBe(1000);
+    expect(result.tenderedAmount).toBe(60000);
+    expect(result.changeAmount).toBe(9000);
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v3");
     expect(rpcCall).toBeDefined();
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_kitchen_order_id).toBe("ko-1");
@@ -290,9 +334,65 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
     expect(params.p_customer_name).toBe("Nguyễn Văn A");
     expect(params.p_payment_method).toBe("cash");
     expect(params.p_paid).toBe(50000);
-    expect(params.p_discount_amount).toBe(5000);
+    expect(params.p_allow_debt).toBe(false);
+    expect(params.p_manual_discount_amount).toBe(5000);
+    expect(params.p_manual_discount_otp_id).toBe("otp-1");
+    expect(params.p_manual_discount_reason).toBe("Khách phản ánh chất lượng");
+    expect(params.p_promotion_id).toBe("promotion-1");
+    expect(params.p_coupon_code).toBe("GIAM10");
     expect(params.p_note).toBe("ghi chú");
-    expect(params.p_created_by).toBeNull();
+    expect(params).not.toHaveProperty("p_discount_amount");
+    expect(params).not.toHaveProperty("p_promotion_discount");
+    expect(params).not.toHaveProperty("p_coupon_discount");
+  });
+
+  it("chặn giảm giá thủ công không có OTP trước khi gọi RPC", async () => {
+    await expect(
+      fnbPayment({
+        kitchenOrderId: "ko-1",
+        ...CTX,
+        customerName: "Khách lẻ",
+        paymentMethod: "cash",
+        paid: 50_000,
+        manualDiscountAmount: 5_000,
+      }),
+    ).rejects.toThrow("cần OTP hợp lệ");
+
+    expect(rpcCalls).toHaveLength(0);
+  });
+
+  it("không gửi OTP hoặc lý do cũ khi đơn không còn giảm giá thủ công", async () => {
+    await fnbPayment({
+      kitchenOrderId: "ko-1",
+      ...CTX,
+      customerName: "Khách lẻ",
+      paymentMethod: "cash",
+      paid: 50_000,
+      manualDiscountAmount: 0,
+      manualDiscountOtpId: "otp-cu",
+      manualDiscountReason: "Lý do cũ",
+    });
+
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v3");
+    const params = rpcCall!.params as Record<string, unknown>;
+    expect(params.p_manual_discount_amount).toBe(0);
+    expect(params.p_manual_discount_otp_id).toBeNull();
+    expect(params.p_manual_discount_reason).toBeNull();
+  });
+
+  it("chặn payload offline cũ có giảm giá gộp thay vì suy diễn thành giảm tay", async () => {
+    await expect(
+      fnbPayment({
+        kitchenOrderId: "ko-1",
+        ...CTX,
+        customerName: "Khách lẻ",
+        paymentMethod: "cash",
+        paid: 50_000,
+        discountAmount: 12_000,
+      }),
+    ).rejects.toThrow("Đơn offline cũ có giảm giá");
+
+    expect(rpcCalls).toHaveLength(0);
   });
 
   it("passes payment_breakdown for mixed payment", async () => {
@@ -309,10 +409,24 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       paid: 50000,
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v3");
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_payment_method).toBe("mixed");
     expect(params.p_payment_breakdown).toEqual(breakdown);
+  });
+
+  it("chỉ truyền ghi nợ khi thu ngân xác nhận rõ", async () => {
+    await fnbPayment({
+      kitchenOrderId: "ko-1",
+      ...CTX,
+      customerName: "Khách lẻ",
+      paymentMethod: "cash",
+      paid: 20_000,
+      allowDebt: true,
+    });
+
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v3");
+    expect((rpcCall!.params as Record<string, unknown>).p_allow_debt).toBe(true);
   });
 
   it("uses default customer name when empty string", async () => {
@@ -324,13 +438,13 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       paid: 50000,
     });
 
-    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v2");
+    const rpcCall = rpcCalls.find((c) => c.fn === "fnb_complete_payment_atomic_v3");
     const params = rpcCall!.params as Record<string, unknown>;
     expect(params.p_customer_name).toBe("Khách lẻ");
   });
 
   it("throws khi RPC trả lỗi (already paid)", async () => {
-    rpcResponses["fnb_complete_payment_atomic_v2"] = {
+    rpcResponses["fnb_complete_payment_atomic_v3"] = {
       data: null,
       error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
     };
@@ -347,7 +461,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
   });
 
   it("throws khi RPC trả response rỗng", async () => {
-    rpcResponses["fnb_complete_payment_atomic_v2"] = { data: null, error: null };
+    rpcResponses["fnb_complete_payment_atomic_v3"] = { data: null, error: null };
 
     await expect(
       fnbPayment({
@@ -361,7 +475,7 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
   });
 
   it("throws khi RPC response thiếu invoice_id", async () => {
-    rpcResponses["fnb_complete_payment_atomic_v2"] = {
+    rpcResponses["fnb_complete_payment_atomic_v3"] = {
       data: { invoice_code: "HD00001" }, // missing invoice_id
       error: null,
     };

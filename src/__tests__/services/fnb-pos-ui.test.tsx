@@ -538,6 +538,24 @@ describe("FnbCart — component", () => {
     expect(screen.queryByText("Giảm giá")).toBeNull();
   });
 
+  it("tách rõ giảm thủ công, khuyến mãi và coupon khi nguồn đã được xác định", () => {
+    render(
+      <FnbCart
+        {...baseProps}
+        subtotal={100_000}
+        total={70_000}
+        orderDiscountAmount={30_000}
+        manualDiscountAmount={5_000}
+        promotionDiscountAmount={10_000}
+        couponDiscountAmount={15_000}
+      />,
+    );
+    expect(screen.getByText("Giảm giá thủ công")).toBeDefined();
+    expect(screen.getByText("Khuyến mãi")).toBeDefined();
+    expect(screen.getByText("Mã giảm giá")).toBeDefined();
+    expect(screen.queryByText("Giảm giá")).toBeNull();
+  });
+
   it("mobile=true → hiện trên mọi viewport (không có class hidden độc lập)", () => {
     const { container } = render(<FnbCart {...baseProps} mobile />);
     const rootDiv = container.firstElementChild as HTMLElement;
@@ -758,6 +776,24 @@ describe("FnbPaymentDialog — component", () => {
     expect(screen.queryByText("Giảm giá")).toBeNull();
   });
 
+  it("hiện từng nguồn giảm giá riêng trong bước xác nhận", () => {
+    render(
+      <FnbPaymentDialog
+        {...baseProps}
+        subtotal={200_000}
+        discountAmount={60_000}
+        manualDiscountAmount={10_000}
+        promotionDiscountAmount={20_000}
+        couponDiscountAmount={30_000}
+        total={140_000}
+      />,
+    );
+    expect(screen.getByText("Giảm giá thủ công")).toBeDefined();
+    expect(screen.getByText("Khuyến mãi")).toBeDefined();
+    expect(screen.getByText("Mã giảm giá")).toBeDefined();
+    expect(screen.queryByText("Giảm giá")).toBeNull();
+  });
+
   it("hiện 4 phương thức thanh toán", () => {
     render(<FnbPaymentDialog {...baseProps} />);
     expect(screen.getByText("Tiền mặt")).toBeDefined();
@@ -793,6 +829,21 @@ describe("FnbPaymentDialog — component", () => {
 
     const cashInput = screen.getByPlaceholderText("0") as HTMLInputElement;
     expect(cashInput.value).toBe("100000");
+  });
+
+  it("chỉ gửi cờ ghi nợ sau khi thu ngân xác nhận rõ", () => {
+    const onConfirm = vi.fn();
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} total={200_000} />);
+
+    fireEvent.click(screen.getByText("100k"));
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/i }));
+
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({
+      paid: 100_000,
+      allowDebt: true,
+      paymentMethod: "cash",
+    }));
   });
 
   it("confirm button hiện tổng tiền (total, không phải subtotal)", () => {
