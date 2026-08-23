@@ -82,6 +82,7 @@ import { ChildSalesBlock } from "./child-sales-block";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
+import { FulfilledOrderStatus } from "./order-fulfillment-status";
 
 // --- Status config ---
 
@@ -1006,17 +1007,7 @@ export default function DatHangPage() {
         // "Chờ xử lý" nữa — nó là "Đang xử lý" và còn bán tiếp được.
         const muc = trangThaiXuLyDon(row.original);
         if (muc === "hoan_tat") {
-          return (
-            <Badge
-              variant="default"
-              className="bg-status-success/10 text-status-success border-status-success/25"
-            >
-              Hoàn tất
-              {row.original.fulfilledInvoiceCode
-                ? ` · ${row.original.fulfilledInvoiceCode}`
-                : ""}
-            </Badge>
-          );
+          return <FulfilledOrderStatus invoiceCode={row.original.fulfilledInvoiceCode} />;
         }
         if (muc === "dang_xu_ly") {
           const n = row.original.completedChildCount ?? 0;
