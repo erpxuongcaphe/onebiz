@@ -10,6 +10,10 @@ const rlsPreflight = readFileSync(
   "docs/qc/sql/RLS-PREFLIGHT-READONLY.sql",
   "utf8",
 );
+const fullRlsInventory = readFileSync(
+  "docs/qc/sql/RLS-TOAN-CUC-PREFLIGHT-READONLY.sql",
+  "utf8",
+);
 
 function normalizeSql(value: string) {
   return value.replace(/\r\n/g, "\n").trim();
@@ -27,7 +31,7 @@ describe("RLS preflight contracts", () => {
   }, 60_000);
 
   it("keeps both RLS preflights read-only", () => {
-    for (const sql of [staticPreflight, rlsPreflight]) {
+    for (const sql of [staticPreflight, rlsPreflight, fullRlsInventory]) {
       expect(sql).not.toMatch(
         /^\s*(insert|update|delete|alter|create|drop|truncate|grant|revoke|call|do)\b/im,
       );
