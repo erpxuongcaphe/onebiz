@@ -131,7 +131,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         insertCalls.push({ table: "_rpc", data: { type: "payment", invoice_id: args?.p_invoice_id } });
         return { data: { success: true }, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic_v2") {
+      if (fn === "fnb_complete_payment_atomic_v3") {
         const koId = (args?.p_kitchen_order_id as string) ?? "ko-1";
         atomicPaymentCalls.push({ kitchenOrderId: koId, params: args ?? {} });
         return {
@@ -715,7 +715,7 @@ describe("Scenario: Hoàn trả hoá đơn (void)", () => {
 describe("Scenario: Edge cases", () => {
   it("rejects payment on already completed order", async () => {
     // RPC raises when kitchen_order already paid
-    rpcResponseOverrides["fnb_complete_payment_atomic_v2"] = {
+    rpcResponseOverrides["fnb_complete_payment_atomic_v3"] = {
       data: null,
       error: { message: "Kitchen order ko-1 already paid (invoice_id=inv-old)" },
     };
@@ -729,7 +729,7 @@ describe("Scenario: Edge cases", () => {
   });
 
   it("rejects payment on cancelled order", async () => {
-    rpcResponseOverrides["fnb_complete_payment_atomic_v2"] = {
+    rpcResponseOverrides["fnb_complete_payment_atomic_v3"] = {
       data: null,
       error: { message: "Kitchen order ko-1 was cancelled — cannot pay" },
     };

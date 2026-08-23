@@ -47,7 +47,9 @@ describe("migration 00250 POS F&B payment and invoice-void hardening", () => {
     expect(migration).toContain("c.tenant_id = v_tenant_id");
     expect(migration).toContain("s.cashier_id = v_actor");
     expect(migration).toContain("kitchen_order_already_paid");
-    expect(fnbService).toContain("p_created_by: null");
+    // Payment V3 derives the actor from auth.uid() on the server. The client
+    // must never be able to nominate a different creator.
+    expect(fnbService).not.toContain("p_created_by:");
   });
 
   it("keeps refund method and audit inside the invoice-void transaction", () => {

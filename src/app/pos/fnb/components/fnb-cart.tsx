@@ -38,6 +38,12 @@ interface FnbCartProps {
   subtotal: number;
   total: number;
   orderDiscountAmount: number;
+  /** Giảm tay đã qua OTP; không bao gồm coupon/khuyến mãi tự động. */
+  manualDiscountAmount?: number;
+  /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
+  promotionDiscountAmount?: number;
+  /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
+  couponDiscountAmount?: number;
   lineCount: number;
   updateLineQty: (lineId: string, qty: number) => void;
   removeLine: (lineId: string) => void;
@@ -104,8 +110,7 @@ interface FnbCartProps {
    * đổi loại sau khi đã in bill bếp gây nhầm phục vụ).
    */
   onChangeOrderType?: (next: "dine_in" | "takeaway" | "delivery") => void;
-  /** Voucher apply — nếu có, hiển thị input áp mã khuyến mãi.
-   *  Callback nên gọi validateCoupon RPC + setOrderDiscount khi thành công. */
+  /** Voucher apply — callback chỉ kiểm tra trước; RPC thanh toán tự tính lại. */
   onApplyCoupon?: (code: string) => Promise<void> | void;
   onRemoveCoupon?: () => void;
   appliedCouponCode?: string;
@@ -127,6 +132,9 @@ export function FnbCart({
   subtotal,
   total,
   orderDiscountAmount,
+  manualDiscountAmount = 0,
+  promotionDiscountAmount = 0,
+  couponDiscountAmount = 0,
   lineCount,
   updateLineQty,
   removeLine,
@@ -181,6 +189,12 @@ export function FnbCart({
   const [moPhanPhu, setMoPhanPhu] = useState(false);
   const coUuDai =
     orderDiscountAmount > 0 || !!appliedCouponCode || (freeItems?.length ?? 0) > 0;
+  // Giữ được cách hiển thị cũ cho snapshot chưa phân loại nguồn giảm giá.
+  // Luồng mới luôn truyền đủ ba thành phần bên dưới.
+  const unclassifiedDiscountAmount = Math.max(
+    0,
+    orderDiscountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
+  );
   const orderTypeLabel =
     ORDER_TYPE_LABEL[activeTab?.orderType ?? "takeaway"] ?? "Mang về";
   const selectedPlatform = activeTab?.deliveryPlatform ?? "direct";
@@ -774,12 +788,36 @@ export function FnbCart({
           )
         )}
 
-        {/* Discount display */}
-        {orderDiscountAmount > 0 && (
+        {/* Benefits stay legible and cannot be mistaken for one manual discount. */}
+        {manualDiscountAmount > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-status-warning">Giảm giá thủ công</span>
+            <span className="text-sm font-medium text-status-warning tabular-nums">
+              -{formatCurrency(manualDiscountAmount)}
+            </span>
+          </div>
+        )}
+        {promotionDiscountAmount > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-status-warning">Khuyến mãi</span>
+            <span className="text-sm font-medium text-status-warning tabular-nums">
+              -{formatCurrency(promotionDiscountAmount)}
+            </span>
+          </div>
+        )}
+        {couponDiscountAmount > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-status-warning">Mã giảm giá</span>
+            <span className="text-sm font-medium text-status-warning tabular-nums">
+              -{formatCurrency(couponDiscountAmount)}
+            </span>
+          </div>
+        )}
+        {unclassifiedDiscountAmount > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-status-warning">Giảm giá</span>
             <span className="text-sm font-medium text-status-warning tabular-nums">
-              -{formatCurrency(orderDiscountAmount)}
+              -{formatCurrency(unclassifiedDiscountAmount)}
             </span>
           </div>
         )}

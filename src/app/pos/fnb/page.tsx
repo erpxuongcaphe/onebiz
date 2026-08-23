@@ -10,10 +10,7 @@ import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/su
 import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
 import {
   resolveAppliedPromotion,
-  type AppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
-import { fnbPayment } from "@/lib/services/supabase/fnb-checkout";
-import { recordDiscountAudit } from "@/lib/services/supabase/pos-checkout";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import {
   useNetworkStatus,
@@ -91,8 +88,10 @@ import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { cn } from "@/lib/utils";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
+import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
 import { FnbHeader } from "./components/fnb-header";
 import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
 import { FnbEmptyBranch } from "./components/fnb-empty-branch";
@@ -260,9 +259,17 @@ function FnbPosPageInner() {
   const [discountPresetsError, setDiscountPresetsError] = useState<string | null>(null);
   const [settingsReloadToken, setSettingsReloadToken] = useState(0);
 
-  // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
-  // couponApplied null = chưa áp. Khi áp, set orderDiscount = { mode: amount, value: discount }.
-  const [couponApplied, setCouponApplied] = useState<{ code: string; discount: number } | null>(null);
+  // Voucher / coupon là lợi ích tự động. Giảm tay vẫn nằm riêng trong tab và
+  // cần OTP; không được dùng chung một `orderDiscount` với coupon/khuyến mãi.
+  const {
+    couponApplied,
+    appliedPromotion,
+    promotionCleared,
+    setCouponForTab,
+    setPromotionForTab,
+    setPromotionClearedForTab,
+    clearTabBenefits,
+  } = useFnbTabBenefits(pos.activeTabId);
   const [couponApplying, setCouponApplying] = useState(false);
 
   const branchId = currentBranch?.id;
@@ -782,21 +789,28 @@ function FnbPosPageInner() {
   // Theo dõi activeTab.lines + branchId + customerId → resolve KM tốt nhất.
   // Mỗi tab có thể có KM riêng (vì cart khác nhau). Khi switch tab, useEffect
   // re-fire và resolve lại cho tab mới.
-  const [appliedPromotion, setAppliedPromotion] = useState<AppliedPromotion | null>(null);
-  const [promotionCleared, setPromotionCleared] = useState(false);
-
   const activeTabLines = pos.activeTab?.lines ?? [];
   const activeTabSubtotal = pos.subtotal;
   const activeTabCustomerId = pos.activeTab?.customerId;
+  const fnbBenefitDisplay = useMemo(
+    () =>
+      getFnbBenefitDisplay({
+        totalAfterManualDiscount: pos.total,
+        manualDiscountAmount: pos.orderDiscountAmount,
+        promotionDiscountAmount: appliedPromotion?.discountAmount,
+        couponDiscountAmount: couponApplied?.discount,
+      }),
+    [pos.total, pos.orderDiscountAmount, appliedPromotion?.discountAmount, couponApplied?.discount],
+  );
 
   useEffect(() => {
-    if (!branchId || !pos.activeTabId) return;
+    const promotionTabId = pos.activeTabId;
+    if (!branchId || !promotionTabId) return;
     if (promotionCleared) return;
 
     if (activeTabLines.length === 0) {
       if (appliedPromotion) {
-        setAppliedPromotion(null);
-        pos.setOrderDiscount(pos.activeTabId, undefined);
+        setPromotionForTab(promotionTabId, null);
       }
       return;
     }
@@ -821,38 +835,24 @@ function FnbPosPageInner() {
         if (cancelled) return;
         if (!best || best.discountAmount <= 0) {
           if (appliedPromotion) {
-            setAppliedPromotion(null);
-            if (pos.activeTabId) pos.setOrderDiscount(pos.activeTabId, undefined);
+            setPromotionForTab(promotionTabId, null);
           }
           return;
         }
         if (appliedPromotion?.promotion.id !== best.promotion.id) {
-          setAppliedPromotion(best);
-          if (pos.activeTabId) {
-            pos.setOrderDiscount(pos.activeTabId, {
-              mode: "amount",
-              value: best.discountAmount,
-            });
-          }
+          setPromotionForTab(promotionTabId, best);
           toast({
             title: `Áp dụng khuyến mãi: ${best.promotion.name}`,
             description: `${best.reasonLabel} — Giảm ${formatCurrency(best.discountAmount)}đ`,
             variant: "success",
           });
         } else if (appliedPromotion.discountAmount !== best.discountAmount) {
-          setAppliedPromotion(best);
-          if (pos.activeTabId) {
-            pos.setOrderDiscount(pos.activeTabId, {
-              mode: "amount",
-              value: best.discountAmount,
-            });
-          }
+          setPromotionForTab(promotionTabId, best);
         }
       })
       .catch(() => {
         if (appliedPromotion) {
-          setAppliedPromotion(null);
-          if (pos.activeTabId) pos.setOrderDiscount(pos.activeTabId, undefined);
+          setPromotionForTab(promotionTabId, null);
         }
       });
 
@@ -869,16 +869,9 @@ function FnbPosPageInner() {
     promotionCleared,
   ]);
 
-  // Khi switch tab → reset cleared flag (mỗi tab có "session" riêng)
-  useEffect(() => {
-    setPromotionCleared(false);
-  }, [pos.activeTabId]);
-
   function clearAppliedPromotion() {
     if (!pos.activeTabId) return;
-    setAppliedPromotion(null);
-    setPromotionCleared(true);
-    pos.setOrderDiscount(pos.activeTabId, undefined);
+    setPromotionClearedForTab(pos.activeTabId, true);
   }
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
@@ -1691,10 +1684,11 @@ function FnbPosPageInner() {
   }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
 
   // ── Voucher / Coupon apply ──
-  // Khi áp mã thành công, set orderDiscount = { mode: amount, value: discount }.
-  // Nếu user xoá mã hoặc đổi tab, coupon reset.
+  // Kết quả này là xem trước; máy chủ tính lại và ghi số tiền thật lúc thanh toán.
   const handleApplyCoupon = useCallback(async (code: string) => {
-    if (!pos.activeTabId || !pos.activeTab) return;
+    const tabId = pos.activeTabId;
+    const tab = pos.activeTab;
+    if (!tabId || !tab) return;
     const subtotal = pos.subtotal;
     if (subtotal <= 0) {
       toast({ title: "Đơn trống", description: "Thêm món trước khi áp mã.", variant: "warning" });
@@ -1702,7 +1696,7 @@ function FnbPosPageInner() {
     }
     setCouponApplying(true);
     try {
-      const result = await validateCoupon(code, subtotal, pos.activeTab.customerId);
+      const result = await validateCoupon(code, subtotal, tab.customerId);
       if (!result.valid || !result.discount_amount || result.discount_amount <= 0) {
         toast({
           title: "Mã không hợp lệ",
@@ -1711,11 +1705,7 @@ function FnbPosPageInner() {
         });
         return;
       }
-      pos.setOrderDiscount(pos.activeTabId, {
-        mode: "amount",
-        value: result.discount_amount,
-      });
-      setCouponApplied({ code, discount: result.discount_amount });
+      setCouponForTab(tabId, { code, discount: result.discount_amount });
       toast({
         title: "Áp mã thành công",
         description: `Giảm ${formatCurrency(result.discount_amount)} ₫ cho đơn.`,
@@ -1730,18 +1720,12 @@ function FnbPosPageInner() {
     } finally {
       setCouponApplying(false);
     }
-  }, [pos, toast]);
+  }, [pos.activeTabId, pos.activeTab, pos.subtotal, setCouponForTab, toast]);
 
   const handleRemoveCoupon = useCallback(() => {
     if (!pos.activeTabId) return;
-    pos.setOrderDiscount(pos.activeTabId, undefined);
-    setCouponApplied(null);
-  }, [pos]);
-
-  // Reset coupon khi đổi tab (mỗi tab có discount riêng).
-  useEffect(() => {
-    setCouponApplied(null);
-  }, [pos.activeTabId]);
+    setCouponForTab(pos.activeTabId, null);
+  }, [pos.activeTabId, setCouponForTab]);
 
   // Migration 00070: persist platform info xuống DB sau khi đơn đã gửi bếp.
   // Local state thôi không đủ — RPC thanh toán đọc commission_percent từ
@@ -1908,9 +1892,9 @@ function FnbPosPageInner() {
       tab.deliveryPlatform !== "direct" &&
       commissionPercent > 0;
     const commissionAmount = isPlatformOrder
-      ? Math.round((pos.total * commissionPercent) / 100)
+      ? Math.round((fnbBenefitDisplay.total * commissionPercent) / 100)
       : 0;
-    const netTotal = pos.total - commissionAmount;
+    const netTotal = fnbBenefitDisplay.total - commissionAmount;
 
     printPreBill({
       orderNumber: tab.label,
@@ -1928,7 +1912,7 @@ function FnbPosPageInner() {
         note: l.note,
       })),
       subtotal: pos.subtotal,
-      discountAmount: pos.orderDiscountAmount,
+      discountAmount: fnbBenefitDisplay.totalDiscountAmount,
       deliveryFee: 0,
       total: netTotal,
       createdAt: new Date().toISOString(),
@@ -1942,7 +1926,7 @@ function FnbPosPageInner() {
       platformCommissionPercent: isPlatformOrder ? commissionPercent : undefined,
       platformCommissionAmount: isPlatformOrder ? commissionAmount : undefined,
     });
-  }, [pos, settings, user]);
+  }, [pos, settings, user, fnbBenefitDisplay]);
 
   // P1-3D-P1 12/06/2026: submit-lock chống double-click / F9-spam tạo 2 kitchen
   // order. POS Retail có submitLockRef nhưng FnB trước đây thiếu — dialog đóng
@@ -2005,18 +1989,14 @@ function FnbPosPageInner() {
                 .map(([method, amount]) => ({ method: method as "cash" | "transfer" | "card", amount })))
             : undefined,
           paid: payload.paid,
-          discountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
+          allowDebt: payload.allowDebt === true,
+          manualDiscountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
+          manualDiscountOtpId: tab?.discountAuditCtx?.otpId ?? null,
+          manualDiscountReason: tab?.discountAuditCtx?.reason ?? null,
           shiftId: currentShift?.id ?? null,
           tipAmount: payload.tipAmount,
           promotionId: appliedPromotion?.promotion.id ?? null,
-          promotionDiscount: appliedPromotion?.discountAmount ?? 0,
-          promotionFreeValue:
-            appliedPromotion?.freeItems?.reduce(
-              (sum, item) => sum + item.quantity * item.unitPrice,
-              0,
-            ) ?? 0,
           couponCode: couponApplied?.code ?? null,
-          couponDiscount: couponApplied?.discount ?? 0,
         }, networkStatus.isOnline);
 
         // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (FnB online)
@@ -2046,6 +2026,16 @@ function FnbPosPageInner() {
           }
         }
 
+        // The server recalculates promotion/coupon eligibility in V3. Print
+        // its persisted numbers so a configuration change cannot produce a
+        // receipt that disagrees with the invoice.
+        const serverTotal = payResult.total ?? fnbBenefitDisplay.total + (payload.tipAmount ?? 0);
+        const serverPaid = payResult.paid ?? payload.paid;
+        const serverTendered = payResult.tenderedAmount ?? payload.paid;
+        const serverChange = payResult.changeAmount ?? Math.max(0, serverTendered - serverPaid);
+        const serverDiscount = payResult.discountAmount ?? fnbBenefitDisplay.totalDiscountAmount;
+        const serverCommissionAmount = payResult.platformCommissionAmount ?? 0;
+
         // Auto-print receipt if enabled.
         // Bọc print trong try/catch riêng: lỗi in KHÔNG được làm hỏng
         // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").
@@ -2059,11 +2049,7 @@ function FnbPosPageInner() {
               !!tab.deliveryPlatform &&
               tab.deliveryPlatform !== "direct" &&
               commissionPercent > 0;
-            const grossWithTip = pos.total + tipAmount;
-            const commissionAmount = isPlatformOrderPrint
-              ? Math.round((pos.total * commissionPercent) / 100)
-              : 0;
-            const netWithTip = grossWithTip - commissionAmount;
+            const commissionAmount = isPlatformOrderPrint ? serverCommissionAmount : 0;
             const printedViaTemplate = await printFnbBillWithTemplate({
               branchId,
               invoiceCode: payResult.invoiceCode,
@@ -2085,10 +2071,10 @@ function FnbPosPageInner() {
                 note: l.note,
               })),
               subtotal: pos.subtotal,
-              discountAmount: pos.orderDiscountAmount,
+              discountAmount: serverDiscount,
               tipAmount,
-              total: netWithTip,
-              paid: payload.paid,
+              total: serverTotal,
+              paid: serverTendered,
               customerName: payload.customerName,
               cashierName: user?.fullName,
               deliveryPlatform: tab.deliveryPlatform,
@@ -2117,15 +2103,15 @@ function FnbPosPageInner() {
                 note: l.note,
               })),
               subtotal: pos.subtotal,
-              discountAmount: pos.orderDiscountAmount,
+              discountAmount: serverDiscount,
               deliveryFee: 0,
               tipAmount,
-              total: netWithTip,
+              total: serverTotal,
               createdAt: new Date().toISOString(),
               cashierName: user?.fullName,
               paymentMethod: payload.paymentMethod,
-              paid: payload.paid,
-              change: isPlatformOrderPrint ? 0 : Math.max(0, payload.paid - grossWithTip),
+              paid: serverTendered,
+              change: isPlatformOrderPrint ? 0 : serverChange,
               customerName: payload.customerName,
               storeName: settings.print.showStoreName ? settings.store.name : undefined,
               storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
@@ -2168,40 +2154,11 @@ function FnbPosPageInner() {
           );
         }
 
-        // Day 3 16/05/2026: Audit log discount manual (sau OTP duyệt)
-        // Best-effort: nếu fail thì không block checkout (đã success)
-        if (
-          networkStatus.isOnline &&
-          tab?.discountAuditCtx &&
-          pos.orderDiscountAmount > 0 &&
-          payResult.invoiceId &&
-          payResult.invoiceCode
-        ) {
-          const auditCtx = tab.discountAuditCtx;
-          const subtotal = pos.subtotal;
-          const percent =
-            subtotal > 0 ? (pos.orderDiscountAmount / subtotal) * 100 : 0;
-          recordDiscountAudit({
-            invoiceId: payResult.invoiceId,
-            invoiceCode: payResult.invoiceCode,
-            invoiceTotal: pos.total,
-            discountAmount: pos.orderDiscountAmount,
-            discountPercent: Math.round(percent * 100) / 100,
-            reason: auditCtx.reason,
-            otpId: auditCtx.otpId,
-          }).catch((err) => console.warn("[FnB] recordDiscountAudit:", err));
-        }
-
-        // Khuyến mãi, coupon và điểm đã được ghi atomically cùng hóa đơn.
+        // Giảm giá, khuyến mãi, coupon và điểm được ghi atomically cùng hóa đơn.
 
         setPaymentOpen(false);
         pos.closeTab(pos.activeTabId);
-        setAppliedPromotion(null);
-        setPromotionCleared(false);
-        // Gỡ mã giảm giá TƯỜNG MINH như khuyến mãi ngay trên. Trước đây chỉ
-        // dựa vào effect reset-khi-đổi-tab — mã đã trừ lượt mà còn nằm trên
-        // màn hình thì đơn kế tiếp giảm giá oan + trừ lượt lần nữa.
-        setCouponApplied(null);
+        clearTabBenefits(tab?.id ?? pos.activeTabId);
         hapticSuccess();
 
         if (!networkStatus.isOnline) {
@@ -2219,7 +2176,7 @@ function FnbPosPageInner() {
         fnbSubmitLockRef.current = false;
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits]
   );
 
   // ── Table select (from floor plan) ──
@@ -3268,8 +3225,11 @@ function FnbPosPageInner() {
         <FnbCart
           activeTab={pos.activeTab}
           subtotal={pos.subtotal}
-          total={pos.total}
-          orderDiscountAmount={pos.orderDiscountAmount}
+          total={fnbBenefitDisplay.total}
+          orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
+          manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
+          promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
+          couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
           lineCount={pos.lineCount}
           updateLineQty={pos.updateLineQty}
           removeLine={pos.removeLine}
@@ -3351,8 +3311,11 @@ function FnbPosPageInner() {
             open={paymentOpen}
             onOpenChange={setPaymentOpen}
             subtotal={pos.subtotal}
-            discountAmount={pos.orderDiscountAmount}
-            total={pos.total}
+            discountAmount={fnbBenefitDisplay.totalDiscountAmount}
+            manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
+            promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
+            couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
+            total={fnbBenefitDisplay.total}
             lineCount={pos.lineCount}
             orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
             onConfirm={handlePayment}
@@ -3458,8 +3421,11 @@ function FnbPosPageInner() {
             <FnbCart
               activeTab={pos.activeTab}
               subtotal={pos.subtotal}
-              total={pos.total}
-              orderDiscountAmount={pos.orderDiscountAmount}
+              total={fnbBenefitDisplay.total}
+              orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
+              manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
+              promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
+              couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
               lineCount={pos.lineCount}
               updateLineQty={pos.updateLineQty}
               removeLine={pos.removeLine}
@@ -3515,7 +3481,7 @@ function FnbPosPageInner() {
           type="button"
           onClick={() => setMobileCartOpen(true)}
           className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest lg:hidden"
-          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(pos.subtotal ?? 0)}đ`}
+          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(fnbBenefitDisplay.total)}đ`}
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
@@ -3535,7 +3501,7 @@ function FnbPosPageInner() {
           </span>
           <span className="shrink-0 text-right">
             <span className="block text-base font-black text-primary tabular-nums leading-none">
-              {formatCurrency(pos.subtotal ?? 0)}đ
+              {formatCurrency(fnbBenefitDisplay.total)}đ
             </span>
             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-semibold text-primary">
               Mở giỏ

@@ -99,25 +99,116 @@ export interface FnbPaymentInput {
   customerName: string;
   paymentMethod: "cash" | "transfer" | "card" | "mixed";
   paymentBreakdown?: PaymentBreakdownItem[];
+  /** Thu ngân chủ động cho phép phần còn lại trở thành công nợ. */
+  allowDebt?: boolean;
   paid: number;
-  discountAmount?: number;
   note?: string;
   /** ID ca đang mở — nếu có, gắn vào invoice + cash_transaction để báo cáo ca đúng. */
   shiftId?: string | null;
   /** Tiền tip khách cho nhân viên. Cộng vào total + lưu invoices.tip_amount. */
   tipAmount?: number;
+  /** Giảm tay sau khi quản lý đã duyệt OTP. */
+  manualDiscountAmount?: number;
+  /** OTP đã được quản lý duyệt cho giảm giá thủ công; server xác minh lại. */
+  manualDiscountOtpId?: string | null;
+  /** Lý do đã xác nhận cùng OTP; bắt buộc khi có giảm giá thủ công. */
+  manualDiscountReason?: string | null;
+  /**
+   * @deprecated Dành cho nháp/offline queue được tạo trước migration 00343.
+   * Mã mới phải truyền manualDiscountAmount; khuyến mãi và coupon không được
+   * đưa vào trường này.
+   */
+  discountAmount?: number;
+  /** Chỉ là định danh; máy chủ tự tính điều kiện và số tiền. */
   promotionId?: string | null;
-  promotionDiscount?: number;
-  promotionFreeValue?: number;
+  /** Chỉ là định danh; máy chủ tự tính điều kiện và số tiền. */
   couponCode?: string | null;
-  couponDiscount?: number;
 }
 
 export interface FnbPaymentResult {
   invoiceId: string;
   invoiceCode: string;
+  /** Số tiền thực tế đã được server lưu trên hoá đơn. Undefined khi offline. */
+  total?: number;
+  paid?: number;
+  debt?: number;
+  /** Tiền khách thực đưa; khác `paid` khi thu tiền mặt có tiền thối. */
+  tenderedAmount?: number;
+  /** Tiền thối do máy chủ tính từ tổng đã chốt. */
+  changeAmount?: number;
+  discountAmount?: number;
+  platformCommissionAmount?: number;
   /** Day 18/05/2026 (CEO): BOM consume break-down — dùng cho toast tiêu hao NVL */
   bomConsumeResults?: import("./pos-checkout").BomConsumeResult[];
+}
+
+const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
+  codes: readonly string[];
+  message: string;
+}> = [
+  {
+    codes: ["AUTH_REQUIRED", "ACTIVE_PROFILE_REQUIRED", "FNB_PAYMENT_DENIED", "BRANCH_ACCESS_DENIED"],
+    message: "Anh/chị không có quyền thanh toán đơn này.",
+  },
+  {
+    codes: ["FNB_MANUAL_DISCOUNT_INVALID", "FNB_MANUAL_DISCOUNT_EXCEEDS_ORDER"],
+    message: "Giảm giá thủ công không hợp lệ.",
+  },
+  {
+    codes: ["FNB_MANUAL_DISCOUNT_OTP_REQUIRED", "FNB_MANUAL_DISCOUNT_APPROVER_DENIED", "OTP_"],
+    message: "Giảm giá thủ công cần OTP hợp lệ của người có quyền duyệt.",
+  },
+  {
+    codes: ["FNB_MANUAL_DISCOUNT_REASON_REQUIRED"],
+    message: "Vui lòng nhập lý do giảm giá thủ công.",
+  },
+  {
+    codes: ["FNB_PROMOTION_NOT_FOUND", "FNB_PROMOTION_NOT_AVAILABLE", "FNB_PROMOTION_TIME_CONFIG_INVALID", "FNB_PROMOTION_TIME_NOT_AVAILABLE", "FNB_PROMOTION_DAY_NOT_AVAILABLE", "FNB_PROMOTION_NOT_APPLICABLE", "FNB_PROMOTION_VALUE_INVALID", "FNB_PROMOTION_TYPE_NOT_SUPPORTED"],
+    message: "Khuyến mãi không còn áp dụng cho đơn này. Vui lòng kiểm tra lại.",
+  },
+  {
+    codes: ["FNB_COUPON_NOT_FOUND", "FNB_COUPON_NOT_AVAILABLE", "FNB_COUPON_PER_CUSTOMER_EXCEEDED", "FNB_COUPON_NOT_APPLICABLE", "FNB_COUPON_VALUE_INVALID", "FNB_COUPON_TYPE_INVALID"],
+    message: "Mã giảm giá không còn áp dụng cho đơn này. Vui lòng kiểm tra lại.",
+  },
+  {
+    codes: ["FNB_ORDER_TOTAL_INVALID", "FNB_TOTAL_DISCOUNT_EXCEEDS_ORDER"],
+    message: "Tổng giảm giá không hợp lệ. Vui lòng kiểm tra lại đơn hàng.",
+  },
+  {
+    codes: ["FNB_PAYMENT_AMOUNT_CHANGED"],
+    message: "Tổng tiền đã thay đổi. Vui lòng kiểm tra lại ưu đãi trước khi thanh toán.",
+  },
+  {
+    codes: ["FNB_DEBT_CONFIRMATION_REQUIRED"],
+    message: "Số tiền khách đưa chưa đủ. Chọn Ghi nợ hoặc thu đủ tiền trước khi thanh toán.",
+  },
+  {
+    codes: ["FNB_PAYMENT_AMOUNT_INVALID", "FNB_PAYMENT_METHOD_INVALID", "FNB_PAYMENT_BREAKDOWN_", "FNB_DEBT_METHOD_INVALID"],
+    message: "Thông tin thanh toán không hợp lệ. Vui lòng kiểm tra lại.",
+  },
+  {
+    codes: ["KITCHEN_ORDER_NOT_FOUND", "PAID_INVOICE_NOT_FOUND"],
+    message: "Không tìm thấy đơn bếp. Vui lòng tải lại màn hình.",
+  },
+  {
+    codes: ["CUSTOMER_NOT_FOUND", "SHIFT_NOT_OPEN_FOR_USER_BRANCH"],
+    message: "Thông tin khách hàng hoặc ca làm việc không còn hợp lệ. Vui lòng tải lại.",
+  },
+];
+
+export function getFnbPaymentErrorMessage(error: unknown): string | null {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  return (
+    FNB_PAYMENT_ERROR_MESSAGES.find((item) =>
+      item.codes.some((code) => rawMessage.includes(code)),
+    )?.message ?? null
+  );
 }
 
 // ============================================================
@@ -184,7 +275,7 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
 // ============================================================
 
 /**
- * Atomic F&B payment: gọi RPC `fnb_complete_payment_atomic` bọc TOÀN BỘ
+ * Atomic F&B payment: gọi RPC `fnb_complete_payment_atomic_v3` bọc TOÀN BỘ
  * (invoice + invoice_items + stock_movements + cash + link kitchen_order
  * + release table) trong 1 transaction Postgres.
  *
@@ -195,33 +286,52 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
 export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResult> {
   const supabase = getClient();
 
+  // Older offline payloads only carried one combined client-side discount.
+  // It is unsafe to guess whether that amount was a manual discount, coupon,
+  // or promotion. The cashier must reopen the order so V3 can calculate it.
+  if (input.manualDiscountAmount === undefined && (input.discountAmount ?? 0) > 0) {
+    throw new Error(
+      "Đơn offline cũ có giảm giá. Vui lòng mở lại đơn khi có mạng để hệ thống tính lại ưu đãi.",
+    );
+  }
+  if ((input.manualDiscountAmount ?? 0) > 0 && !input.manualDiscountOtpId) {
+    throw new Error("Giảm giá thủ công cần OTP hợp lệ của quản lý.");
+  }
+
+  const manualDiscountAmount = input.manualDiscountAmount ?? 0;
+  // OTP/reason only belong to a manual reduction. Never forward a stale
+  // approval from a tab after its manual discount was removed.
+  const manualDiscountOtpId = manualDiscountAmount > 0 ? input.manualDiscountOtpId ?? null : null;
+  const manualDiscountReason = manualDiscountAmount > 0 ? input.manualDiscountReason ?? null : null;
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic_v2", {
+  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic_v3", {
     p_kitchen_order_id: input.kitchenOrderId,
     p_customer_id: input.customerId ?? null,
     p_customer_name: input.customerName || "Khách lẻ",
     p_payment_method: input.paymentMethod,
     p_payment_breakdown: input.paymentBreakdown ?? null,
     p_paid: input.paid,
-    p_discount_amount: input.discountAmount ?? 0,
+    p_allow_debt: input.allowDebt === true,
+    p_manual_discount_amount: manualDiscountAmount,
+    p_manual_discount_otp_id: manualDiscountOtpId,
+    p_manual_discount_reason: manualDiscountReason,
     p_note: input.note ?? null,
-    p_created_by: null,
     p_shift_id: input.shiftId ?? null,
     p_tip_amount: input.tipAmount ?? 0,
     p_promotion_id: input.promotionId ?? null,
-    p_promotion_discount: input.promotionDiscount ?? 0,
-    p_promotion_free_value: input.promotionFreeValue ?? 0,
     p_coupon_code: input.couponCode ?? null,
-    p_coupon_discount: input.couponDiscount ?? 0,
   });
 
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có migration 00255. Không thể thanh toán FnB an toàn.",
+        "Chưa có migration 00343. Không thể thanh toán FnB an toàn.",
       );
     }
-    handleError(error, "fnbPayment:atomic_v2_rpc");
+    const friendlyMessage = getFnbPaymentErrorMessage(error);
+    if (friendlyMessage) throw new Error(friendlyMessage);
+    handleError(error, "fnbPayment:atomic_v3_rpc");
   }
   if (!data) throw new Error("Không nhận được phản hồi từ server khi thanh toán.");
 
@@ -229,6 +339,13 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   const result = data as {
     invoice_id: string;
     invoice_code: string;
+    total?: number;
+    paid?: number;
+    debt?: number;
+    tendered_amount?: number;
+    change_amount?: number;
+    discount_amount?: number;
+    platform_commission_amount?: number;
     bom_consume_results?: import("./pos-checkout").BomConsumeResult[];
   };
   if (!result.invoice_id || !result.invoice_code) {
@@ -238,6 +355,13 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   return {
     invoiceId: result.invoice_id,
     invoiceCode: result.invoice_code,
+    total: result.total,
+    paid: result.paid,
+    debt: result.debt,
+    tenderedAmount: result.tendered_amount,
+    changeAmount: result.change_amount,
+    discountAmount: result.discount_amount,
+    platformCommissionAmount: result.platform_commission_amount,
     bomConsumeResults: result.bom_consume_results,
   };
 }

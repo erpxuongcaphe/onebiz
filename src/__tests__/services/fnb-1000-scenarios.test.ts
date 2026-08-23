@@ -44,7 +44,7 @@ const updateCalls: { table: string; data: unknown; filters: Record<string, unkno
 const deleteCalls: { table: string; filters: Record<string, unknown> }[] = [];
 const rpcCalls: { fn: string; args: unknown }[] = [];
 let nextCodeCounter = 0;
-// Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic_v2 mock
+// Scenario snapshot captured by setupMocks — used by fnb_complete_payment_atomic_v3 mock
 // to simulate the server-side side effects (increment_product_stock per item/topping,
 // releaseTableMock if dine_in) that real RPC would perform.
 let currentScenario: Scenario | null = null;
@@ -186,7 +186,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
           error: null,
         };
       }
-      if (fn === "fnb_complete_payment_atomic_v2") {
+      if (fn === "fnb_complete_payment_atomic_v3") {
         // Simulate server-side atomic RPC behavior:
         // - For each item → call increment_product_stock (logged to rpcCalls)
         // - For each non-zero topping → call increment_product_stock
@@ -729,6 +729,8 @@ describe("A. Dine-in — gửi bếp + thanh toán + giải phóng bàn", () => 
       setupMocks(s);
 
       const subtotal = calcSubtotal(s);
+      const manualDiscountAmount =
+        s.discount?.mode === "fixed" ? s.discount.value : undefined;
 
       const result = await fnbPayment({
         kitchenOrderId: `ko-${s.id}`,
@@ -737,7 +739,13 @@ describe("A. Dine-in — gửi bếp + thanh toán + giải phóng bàn", () => 
         paymentMethod: s.paymentMethod,
         paymentBreakdown: s.paymentBreakdown,
         paid: subtotal,
-        discountAmount: s.discount?.mode === "fixed" ? s.discount.value : undefined,
+        ...(manualDiscountAmount
+          ? {
+              manualDiscountAmount,
+              manualDiscountOtpId: "otp-scenario",
+              manualDiscountReason: "Kịch bản giảm giá F&B",
+            }
+          : {}),
       });
 
       expect(result.invoiceId).toBeTruthy();
@@ -1138,6 +1146,11 @@ describe("F. Edge cases — large, heavy toppings, simple, debt", () => {
       setupMocks(s);
 
       const subtotal = calcSubtotal(s);
+      const manualDiscountAmount = s.discount
+        ? s.discount.mode === "fixed"
+          ? s.discount.value
+          : Math.round((subtotal * s.discount.value) / 100)
+        : undefined;
       const result = await fnbPayment({
         kitchenOrderId: `ko-${s.id}`,
         ...CTX,
@@ -1145,9 +1158,13 @@ describe("F. Edge cases — large, heavy toppings, simple, debt", () => {
         paymentMethod: s.paymentMethod,
         paymentBreakdown: s.paymentBreakdown,
         paid: label.startsWith("Debt") ? Math.round(subtotal * 0.3) : subtotal,
-        discountAmount: s.discount
-          ? s.discount.mode === "fixed" ? s.discount.value : Math.round(subtotal * s.discount.value / 100)
-          : undefined,
+        ...(manualDiscountAmount
+          ? {
+              manualDiscountAmount,
+              manualDiscountOtpId: "otp-scenario",
+              manualDiscountReason: "Kịch bản giảm giá F&B",
+            }
+          : {}),
       });
 
       expect(result.invoiceId).toBeTruthy();

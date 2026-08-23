@@ -44,6 +44,13 @@
    "tenant_id",
    "user_id"
   ],
+  "rpc_backup_ngay_hoa_don": [
+   "chu_ky",
+   "chup_luc",
+   "def_truoc",
+   "ham_oid",
+   "migration"
+  ],
   "online_orders": [
    "channel_id",
    "channel_name",
@@ -114,6 +121,13 @@
    "tenant_id",
    "updated_at",
    "version_number"
+  ],
+  "rpc_backup_chung_tu_ban": [
+   "chu_ky",
+   "chup_luc",
+   "def_truoc",
+   "ham_oid",
+   "migration"
   ],
   "mkt_channel_plan_stages": [
    "created_at",
@@ -1499,6 +1513,20 @@
    "updated_at",
    "user_id"
   ],
+  "acl_backup_00340": [
+   "acl_execute",
+   "anon_goi_duoc",
+   "authenticated_goi_duoc",
+   "chu_ky",
+   "chu_so_huu",
+   "chup_luc",
+   "ham_oid",
+   "proacl_truoc",
+   "prokind",
+   "public_goi_duoc",
+   "service_role_goi_duoc",
+   "tu_khoa"
+  ],
   "sales_returns": [
    "branch_id",
    "code",
@@ -1885,6 +1913,12 @@
    "unit",
    "unit_cost"
   ],
+  "default_acl_backup_00340": [
+   "acl_items",
+   "acl_truoc",
+   "chu_so_huu",
+   "pham_vi"
+  ],
   "kitchen_order_items": [
    "batch_id",
    "cancelled_qty",
@@ -2098,6 +2132,7 @@
   "complete_draft_atomic_v3",
   "complete_draft_atomic_v4",
   "complete_draft_atomic_v5",
+  "complete_draft_atomic_v6",
   "complete_legacy_sales_order_atomic",
   "complete_production_atomic",
   "complete_production_order",
@@ -2125,6 +2160,7 @@
   "fnb_cancel_unpaid_order_atomic",
   "fnb_complete_payment_atomic",
   "fnb_complete_payment_atomic_v2",
+  "fnb_complete_payment_atomic_v3",
   "fnb_floor_decoration_config_atomic",
   "fnb_floor_layout_update_atomic",
   "fnb_floor_plan_object_writable",
@@ -2308,6 +2344,7 @@
   "pos_complete_checkout_atomic",
   "pos_complete_checkout_atomic_v2",
   "pos_complete_checkout_atomic_v3",
+  "pos_complete_checkout_atomic_v4",
   "pos_prepare_retail_checkout",
   "recalculate_bom_cost_cache",
   "receive_purchase_items_atomic",
@@ -2380,7 +2417,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 137,
- "soCot": 1752,
- "soRpc": 351
+ "soBang": 141,
+ "soCot": 1778,
+ "soRpc": 354
 }
