@@ -443,7 +443,6 @@ export {
   markNotificationAsRead,
   markAllNotificationsAsRead,
   deleteNotification,
-  createNotification,
 } from "./notifications";
 export type { NotificationKind, NotificationRow } from "./notifications";
 export type { AuditLogEntry, AuditFilters } from "./audit";
