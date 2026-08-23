@@ -24,6 +24,8 @@ ham as (
     p.proname,
     pg_get_function_identity_arguments(p.oid) as chu_ky,
     md5(pg_get_functiondef(p.oid)) as van_tay_md5,
+    p.proowner,
+    p.proacl,
     p.prosecdef as security_definer,
     l.lanname as ngon_ngu,
     regexp_replace(lower(pg_get_functiondef(p.oid)), E'\\s+', ' ', 'g') as than_ham
@@ -37,7 +39,8 @@ ham as (
       'increment_promotion_usage',
       'apply_coupon_atomic',
       'validate_coupon',
-      'fnb_send_to_kitchen_atomic_v2'
+      'fnb_send_to_kitchen_atomic_v2',
+      '_fnb_send_to_kitchen_impl_00303'
     ])
 ),
 payment_v2 as (
@@ -53,6 +56,61 @@ payment_goc as (
   where h.oid = to_regprocedure(
     'public.fnb_complete_payment_atomic(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric)'
   )
+),
+payment_targets as (
+  select *
+  from (values
+    (
+      'thanh_toan_v2',
+      to_regprocedure(
+        'public.fnb_complete_payment_atomic_v2(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric,uuid,numeric,numeric,text,numeric)'
+      )
+    ),
+    (
+      'thanh_toan_goc',
+      to_regprocedure(
+        'public.fnb_complete_payment_atomic(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric)'
+      )
+    ),
+    (
+      'ap_dung_coupon',
+      to_regprocedure('public.apply_coupon_atomic(text,uuid,uuid,numeric,uuid)')
+    ),
+    (
+      'tang_luot_khuyen_mai',
+      to_regprocedure('public.increment_promotion_usage(uuid)')
+    ),
+    (
+      'kiem_coupon',
+      to_regprocedure('public.validate_coupon(text,numeric,uuid)')
+    )
+  ) as v(vai_tro, oid)
+),
+payment_privileges as (
+  select
+    t.vai_tro,
+    h.proname,
+    h.chu_ky,
+    h.security_definer,
+    h.ngon_ngu,
+    pg_get_userbyid(h.proowner) as chu_so_huu,
+    coalesce(has_function_privilege('anon', h.oid, 'EXECUTE'), false) as anon_goi_duoc,
+    coalesce(has_function_privilege('authenticated', h.oid, 'EXECUTE'), false) as authenticated_goi_duoc,
+    coalesce(
+      exists (
+        select 1
+        from aclexplode(coalesce(h.proacl, acldefault('f', h.proowner))) as a
+        where a.grantee = 0
+          and a.privilege_type = 'EXECUTE'
+      ),
+      false
+    ) as public_goi_duoc,
+    coalesce(
+      h.than_ham like '%public.fnb_complete_payment_atomic(%',
+      false
+    ) as thanh_toan_v2_goi_ham_goc
+  from payment_targets t
+  left join ham h on h.oid = t.oid
 ),
 payment_markers as (
   select
@@ -127,13 +185,27 @@ don_fnb_hien_co as (
   from public.kitchen_orders ko
   join tenant_duoc_chon t on t.id = ko.tenant_id
 ),
+delivery_ham_dang_thi_hanh as (
+  select case
+    when exists (
+      select 1
+      from ham h
+      where h.oid = to_regprocedure(
+        'public.fnb_send_to_kitchen_atomic_v2(uuid,uuid,text,text,text,jsonb,text,numeric,numeric,uuid,text,uuid)'
+      )
+        and h.than_ham like '%_fnb_send_to_kitchen_impl_00303%'
+    ) then '_fnb_send_to_kitchen_impl_00303'
+    else 'fnb_send_to_kitchen_atomic_v2'
+  end as ten_ham
+),
 delivery_markers as (
   select
+    (select ten_ham from delivery_ham_dang_thi_hanh) as ham_duoc_soi,
     coalesce(bool_or(than_ham like '%fnb_delivery_platforms%'), false) as doc_cau_hinh_san_tu_tenant,
     coalesce(bool_or(than_ham like '%delivery_platform_disabled%'), false) as chan_san_da_tat,
     coalesce(bool_or(than_ham like '%platform_commission_override_denied%'), false) as chan_tu_y_doi_phi_san
-  from ham
-  where proname = 'fnb_send_to_kitchen_atomic_v2'
+  from ham h
+  join delivery_ham_dang_thi_hanh d on d.ten_ham = h.proname
 )
 select
   'A0_TENANT' as muc,
@@ -213,6 +285,27 @@ select
 from coupon_markers
 union all
 select
+  'A2D_QUYEN_GOI_TRUC_TIEP_THANH_TOAN' as muc,
+  case when count(*) = 5 and count(*) filter (where proname is null) = 0 then 'THONG_TIN' else 'CAN_DUNG' end as loai,
+  coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'vai_tro', vai_tro,
+        'ten_ham', proname,
+        'chu_ky', chu_ky,
+        'chu_so_huu', chu_so_huu,
+        'security_definer', security_definer,
+        'anon_goi_duoc', anon_goi_duoc,
+        'authenticated_goi_duoc', authenticated_goi_duoc,
+        'public_goi_duoc', public_goi_duoc,
+        'thanh_toan_v2_goi_ham_goc', thanh_toan_v2_goi_ham_goc
+      ) order by vai_tro
+    ),
+    '[]'::jsonb
+  ) as chi_tiet
+from payment_privileges
+union all
+select
   'A3_KHUYEN_MAI_FNB_DANG_CO_HIEU_LUC' as muc,
   'THONG_TIN' as loai,
   coalesce(
@@ -256,10 +349,11 @@ select
   'A5_GUI_BEP_VA_PHI_SAN' as muc,
   'THONG_TIN' as loai,
   jsonb_build_object(
+    'ham_duoc_soi', ham_duoc_soi,
     'doc_cau_hinh_san_tu_tenant', doc_cau_hinh_san_tu_tenant,
     'chan_san_da_tat', chan_san_da_tat,
     'chan_tu_y_doi_phi_san', chan_tu_y_doi_phi_san,
-    'luu_y', 'Muc nay chi doi chieu dau vet cua ham gui bep dang cai; khong thay doi cau hinh san.'
+    'luu_y', 'Neu lop boc Size dang goi ham noi bo, preflight se soi ham noi bo thay vi chi soi lop boc. Khong thay doi cau hinh san.'
   ) as chi_tiet
 from delivery_markers
 order by muc;
