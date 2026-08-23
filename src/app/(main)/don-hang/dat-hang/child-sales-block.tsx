@@ -15,6 +15,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Icon } from "@/components/ui/icon";
@@ -30,6 +31,7 @@ import {
   type ChildSaleInfo,
   type OrderReconRow,
 } from "@/lib/services/supabase";
+import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
 
 const NHAN_TRANG_THAI: Record<string, { label: string; cls: string }> = {
   draft: { label: "Nháp", cls: "bg-muted text-muted-foreground" },
@@ -272,7 +274,17 @@ export function ChildSalesBlock({
                     key={c.id}
                     className="flex flex-wrap items-center gap-2 rounded-md border border-outline-variant/30 px-3 py-1.5 text-sm"
                   >
-                    <span className="font-medium">{c.code}</span>
+                    {c.code ? (
+                      <Link
+                        href={buildInvoiceListDeepLink(c.code)}
+                        className="font-medium text-primary underline-offset-2 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label={`Mở hóa đơn ${c.code}`}
+                      >
+                        {c.code}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">—</span>
+                    )}
                     <span className={cn("rounded-full px-2 py-0.5 text-xs", nhan.cls)}>
                       {nhan.label}
                     </span>

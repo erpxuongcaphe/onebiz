@@ -94,6 +94,11 @@ import {
   resolveInvoiceDeliveryFilter,
   type InvoiceKpiFilter,
 } from "@/lib/utils/invoice-list-filters";
+import {
+  findInvoiceListRowByCode,
+  getInvoiceListDeepLinkFilters,
+  readInvoiceListDeepLink,
+} from "@/lib/utils/invoice-list-deep-link";
 
 const statusMap: Record<
   Invoice["status"],
@@ -484,11 +489,8 @@ export default function HoaDonPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  // Nút "Mở trang chứng từ" (thẻ kho) truyền ?tim=<mã> → đổ vào ô tìm.
-  useEffect(() => {
-    const q = new URLSearchParams(window.location.search).get("tim");
-    if (q) setSearch(q);
-  }, []);
+  const [invoiceToOpen, setInvoiceToOpen] = useState<string | null>(null);
+  const [deepLinkReady, setDeepLinkReady] = useState(false);
   // CEO 28/05/2026: debounce search 300ms — tránh gọi server mỗi keystroke.
   const debouncedSearch = useDebounce(search, 300);
   // CEO 04/07: ô "Tìm theo" — "all" = gộp mã+tên KH như cũ.
@@ -537,6 +539,26 @@ export default function HoaDonPage() {
   );
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [filterOpen, setFilterOpen] = useState(false);
+  // Nút "Mở trang chứng từ" và mã HD con đều truyền ?tim=<mã>. Riêng
+  // ?mo=1 yêu cầu mở chi tiết, đồng thời bỏ giới hạn "Tháng này" để hóa đơn
+  // cũ vẫn hiện đúng; chỉ tìm kiếm thông thường thì giữ bộ lọc người dùng.
+  useEffect(() => {
+    const target = readInvoiceListDeepLink(window.location.search);
+    if (target.code) {
+      setSearch(target.code);
+      const filters = getInvoiceListDeepLinkFilters(target);
+      if (filters.datePreset) {
+        setDatePreset(filters.datePreset);
+        // A direct-open link must not be hidden by remembered list defaults.
+        // Server-side tenant and branch guards still define readable scope.
+        setSelectedStatuses(filters.statuses ?? []);
+        setSelectedTypes(filters.types ?? ["no_delivery", "delivery"]);
+        setInvoiceToOpen(target.code);
+      }
+    }
+
+    setDeepLinkReady(true);
+  }, []);
   // CEO 08/07: xem tất cả chi nhánh (cục bộ) khi bảng trống vì lọc chi nhánh.
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
@@ -595,7 +617,7 @@ export default function HoaDonPage() {
   const dateRange = useCallback(() => computeListPresetRange(datePreset), [datePreset]);
 
   const fetchData = useCallback(async () => {
-    if (!branchScopeReady) return;
+    if (!branchScopeReady || !deepLinkReady) return;
     setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
@@ -641,7 +663,7 @@ export default function HoaDonPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, dateRange, phamViHienTai, toast]);
+  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
 
   useEffect(() => {
     fetchData();
@@ -652,6 +674,16 @@ export default function HoaDonPage() {
     setPage(0);
     setExpandedRow(null);
   }, [debouncedSearch, selectedStatuses, selectedTypes, datePreset]);
+
+  useEffect(() => {
+    if (!invoiceToOpen || loading) return;
+
+    const rowIndex = findInvoiceListRowByCode(data, invoiceToOpen);
+    if (rowIndex >= 0) {
+      setExpandedRow(rowIndex);
+      setInvoiceToOpen(null);
+    }
+  }, [data, invoiceToOpen, loading]);
 
   const toggleStar = (id: string) => {
     setStarred((prev) => {

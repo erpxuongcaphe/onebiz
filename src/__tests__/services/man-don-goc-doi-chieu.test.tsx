@@ -80,6 +80,10 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
     render(<ChildSalesBlock orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("NH000201")).toBeTruthy());
+    expect(screen.getByRole("link", { name: "Mở hóa đơn NH000201" })).toHaveAttribute(
+      "href",
+      "/don-hang/hoa-don?tim=NH000201&mo=1",
+    );
     expect(screen.getByText("3")).toBeTruthy();
     expect(screen.getByText("Đã thanh toán")).toBeTruthy();
     expect(screen.getByText("Nháp")).toBeTruthy();
