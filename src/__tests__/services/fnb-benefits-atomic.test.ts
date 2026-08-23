@@ -36,12 +36,15 @@ describe("F&B payment benefit authority", () => {
     // fnbPayment wrapper's observable RPC payload in fnb-checkout.test.ts.
   });
 
-  it("does not fold automatic promotion or coupon values into the OTP-gated manual discount", () => {
+  it("keeps payment benefits scoped to the tab that started checkout", () => {
     expect(page).not.toContain("pos.setOrderDiscount(best.discountAmount)");
     expect(page).not.toContain("pos.setOrderDiscount(result.discount)");
-    expect(page).toContain("manualDiscountAmount: pos.orderDiscountAmount");
-    expect(page).toContain("promotionId: appliedPromotion?.promotion.id");
-    expect(page).toContain("couponCode: couponApplied?.code");
+    expect(page).toContain("const paymentManualDiscountAmount = pos.orderDiscountAmount");
+    expect(page).toContain("const paymentPromotionId = appliedPromotion?.promotion.id ?? null");
+    expect(page).toContain("const paymentCouponCode = couponApplied?.code ?? null");
+    expect(page).toContain("manualDiscountAmount:");
+    expect(page).toContain("promotionId: paymentPromotionId");
+    expect(page).toContain("couponCode: paymentCouponCode");
   });
 
   it("does not reinterpret a legacy combined discount as a manual discount", () => {

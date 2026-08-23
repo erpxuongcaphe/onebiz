@@ -1946,6 +1946,13 @@ function FnbPosPageInner() {
       }
       fnbSubmitLockRef.current = true;
       const tab = pos.activeTab;
+      // Payment awaits the kitchen request. Preserve the exact tab context so
+      // a later tab change cannot combine another guest's benefits or cart.
+      const paymentBenefitDisplay = fnbBenefitDisplay;
+      const paymentSubtotal = pos.subtotal;
+      const paymentManualDiscountAmount = pos.orderDiscountAmount;
+      const paymentPromotionId = appliedPromotion?.promotion.id ?? null;
+      const paymentCouponCode = couponApplied?.code ?? null;
       // CEO 29/05/2026: lấy kitchenOrderId TRỰC TIẾP từ giá trị handleSendToKitchen
       // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
       // await → trước đây koId undefined → bấm Thanh toán đơ im lặng, mất đơn).
@@ -1963,7 +1970,7 @@ function FnbPosPageInner() {
         koId = await handleSendToKitchen();
       }
 
-      if (!koId) {
+      if (!tab || !koId) {
         fnbSubmitLockRef.current = false;
         toast({
           title: "Chưa thể thanh toán",
@@ -1974,13 +1981,12 @@ function FnbPosPageInner() {
       }
 
       try {
-        const tab = pos.activeTab;
         const payResult = await offlineFnbPayment({
           kitchenOrderId: koId,
           tenantId,
           branchId: branchId!,
           createdBy: userId,
-          customerId: tab?.customerId ?? null,
+          customerId: tab.customerId ?? null,
           customerName: payload.customerName,
           paymentMethod: payload.paymentMethod,
           paymentBreakdown: payload.paymentBreakdown
@@ -1990,13 +1996,14 @@ function FnbPosPageInner() {
             : undefined,
           paid: payload.paid,
           allowDebt: payload.allowDebt === true,
-          manualDiscountAmount: pos.orderDiscountAmount > 0 ? pos.orderDiscountAmount : undefined,
-          manualDiscountOtpId: tab?.discountAuditCtx?.otpId ?? null,
-          manualDiscountReason: tab?.discountAuditCtx?.reason ?? null,
+          manualDiscountAmount:
+            paymentManualDiscountAmount > 0 ? paymentManualDiscountAmount : undefined,
+          manualDiscountOtpId: tab.discountAuditCtx?.otpId ?? null,
+          manualDiscountReason: tab.discountAuditCtx?.reason ?? null,
           shiftId: currentShift?.id ?? null,
           tipAmount: payload.tipAmount,
-          promotionId: appliedPromotion?.promotion.id ?? null,
-          couponCode: couponApplied?.code ?? null,
+          promotionId: paymentPromotionId,
+          couponCode: paymentCouponCode,
         }, networkStatus.isOnline);
 
         // Day 18/05/2026 (CEO): toast tiêu hao NVL theo BOM (FnB online)
@@ -2029,17 +2036,18 @@ function FnbPosPageInner() {
         // The server recalculates promotion/coupon eligibility in V3. Print
         // its persisted numbers so a configuration change cannot produce a
         // receipt that disagrees with the invoice.
-        const serverTotal = payResult.total ?? fnbBenefitDisplay.total + (payload.tipAmount ?? 0);
+        const serverTotal = payResult.total ?? paymentBenefitDisplay.total + (payload.tipAmount ?? 0);
         const serverPaid = payResult.paid ?? payload.paid;
         const serverTendered = payResult.tenderedAmount ?? payload.paid;
         const serverChange = payResult.changeAmount ?? Math.max(0, serverTendered - serverPaid);
-        const serverDiscount = payResult.discountAmount ?? fnbBenefitDisplay.totalDiscountAmount;
+        const serverDiscount =
+          payResult.discountAmount ?? paymentBenefitDisplay.totalDiscountAmount;
         const serverCommissionAmount = payResult.platformCommissionAmount ?? 0;
 
         // Auto-print receipt if enabled.
         // Bọc print trong try/catch riêng: lỗi in KHÔNG được làm hỏng
         // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").
-        if (settings.print.autoPrintReceipt && tab) {
+        if (settings.print.autoPrintReceipt) {
           try {
             const tipAmount = payload.tipAmount ?? 0;
             // Migration 00070: total trên bill = NET (quán thực thu) cho đơn sàn.
@@ -2070,7 +2078,7 @@ function FnbPosPageInner() {
                 ),
                 note: l.note,
               })),
-              subtotal: pos.subtotal,
+              subtotal: paymentSubtotal,
               discountAmount: serverDiscount,
               tipAmount,
               total: serverTotal,
@@ -2102,7 +2110,7 @@ function FnbPosPageInner() {
                 ),
                 note: l.note,
               })),
-              subtotal: pos.subtotal,
+              subtotal: paymentSubtotal,
               discountAmount: serverDiscount,
               deliveryFee: 0,
               tipAmount,
@@ -2144,7 +2152,7 @@ function FnbPosPageInner() {
 
         // Cập nhật trạng thái bàn ngay (optimistic) để floor plan không còn
         // hiển thị bàn đỏ khi đã thanh toán xong — kể cả chế độ offline.
-        if (tab?.tableId) {
+        if (tab.tableId) {
           setTables((prev) =>
             prev.map((t) =>
               t.id === tab.tableId
@@ -2157,8 +2165,8 @@ function FnbPosPageInner() {
         // Giảm giá, khuyến mãi, coupon và điểm được ghi atomically cùng hóa đơn.
 
         setPaymentOpen(false);
-        pos.closeTab(pos.activeTabId);
-        clearTabBenefits(tab?.id ?? pos.activeTabId);
+        pos.closeTab(tab.id);
+        clearTabBenefits(tab.id);
         hapticSuccess();
 
         if (!networkStatus.isOnline) {
