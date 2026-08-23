@@ -8,6 +8,18 @@ import type { ProductVariant } from "@/lib/types";
 
 const supabase = getClient();
 
+async function requireTenantProduct(productId: string, tenantId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("products")
+    .select("id")
+    .eq("id", productId)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) throw new Error("Không tìm thấy sản phẩm trong công ty hiện tại.");
+}
+
 export async function getVariantsByProduct(
   productId: string
 ): Promise<ProductVariant[]> {
@@ -78,6 +90,7 @@ export async function createVariant(variant: {
   bomCode?: string | null;
 }): Promise<ProductVariant> {
   const tenantId = await getCurrentTenantId();
+  await requireTenantProduct(variant.productId, tenantId);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.from("product_variants").insert as any)({
     tenant_id: tenantId,
