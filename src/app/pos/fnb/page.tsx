@@ -256,6 +256,9 @@ function FnbPosPageInner() {
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
   const [discountPresets, setDiscountPresets] = useState<DiscountPreset[]>([]);
+  const [platformSettingsStatus, setPlatformSettingsStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [discountPresetsError, setDiscountPresetsError] = useState<string | null>(null);
+  const [settingsReloadToken, setSettingsReloadToken] = useState(0);
 
   // Voucher / coupon state — áp mã khuyến mãi cho đơn hiện tại.
   // couponApplied null = chưa áp. Khi áp, set orderDiscount = { mode: amount, value: discount }.
@@ -595,22 +598,40 @@ function FnbPosPageInner() {
     };
   }, [branchId, userId, networkStatus.isOnline, shiftReloadToken]);
 
-  // Sprint POS-FNB-EXT-1 (CEO 08/05): Load delivery platform settings +
-  // discount presets on mount. Cached suốt session — F5 reload.
+  // Settings fail independently: a delivery platform must never silently use
+  // a 0% fallback, while manual discounts and self-delivery remain usable.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDeliveryPlatformSettings(), getDiscountPresets()])
-      .then(([p, pr]) => {
+    setPlatformSettingsStatus("loading");
+    setDiscountPresetsError(null);
+    void Promise.allSettled([getDeliveryPlatformSettings(), getDiscountPresets()])
+      .then(([platformsResult, presetsResult]) => {
         if (cancelled) return;
-        setPlatformSettings(p);
-        setDiscountPresets(pr);
-      })
-      .catch(() => {
-        // Silent — fallback empty
+        if (platformsResult.status === "fulfilled") {
+          setPlatformSettings(platformsResult.value);
+          setPlatformSettingsStatus("ready");
+        } else {
+          setPlatformSettings(null);
+          setPlatformSettingsStatus("error");
+        }
+        if (presetsResult.status === "fulfilled") {
+          setDiscountPresets(presetsResult.value);
+        } else {
+          setDiscountPresets([]);
+          setDiscountPresetsError(
+            presetsResult.reason instanceof Error
+              ? presetsResult.reason.message
+              : "Không tải được khuyến mãi nhanh.",
+          );
+        }
       });
     return () => {
       cancelled = true;
     };
+  }, [settingsReloadToken]);
+
+  const retryFnbSettings = useCallback(() => {
+    setSettingsReloadToken((current) => current + 1);
   }, []);
 
   // Day 21/05/2026 (CEO): load shipper list + delivery fee tiers + count today
@@ -1794,6 +1815,17 @@ function FnbPosPageInner() {
 
   const handleDeliveryPlatformChange = useCallback(
     (platform: import("@/lib/types/fnb").DeliveryPlatform) => {
+      if (platform !== "direct" && !platformSettings?.[platform]?.active) {
+        toast({
+          title: "Chưa thể chọn sàn giao hàng",
+          description:
+            platformSettingsStatus === "error"
+              ? "Không tải được cấu hình sàn. Hãy thử lại trước khi chọn sàn."
+              : "Sàn này đang tắt trong Cài đặt POS F&B.",
+          variant: "warning",
+        });
+        return;
+      }
       const defaultCommission =
         platformSettings?.[platform]?.commissionPercent ?? 0;
       pos.setDeliveryPlatform(pos.activeTabId, platform, defaultCommission);
@@ -1807,7 +1839,7 @@ function FnbPosPageInner() {
         );
       }
     },
-    [platformSettings, pos, persistDeliveryPlatform],
+    [platformSettings, platformSettingsStatus, pos, persistDeliveryPlatform, toast],
   );
 
   const handleDeliveryFeeChange = useCallback(
@@ -3267,6 +3299,11 @@ function FnbPosPageInner() {
           staffOptions={shipperOptions}
           selfDeliveryTiers={deliveryTiers}
           discountPresets={discountPresets}
+          discountPresetsError={discountPresetsError}
+          onRetryDiscountPresets={retryFnbSettings}
+          deliveryPlatformSettings={platformSettings}
+          deliveryPlatformSettingsStatus={platformSettingsStatus}
+          onRetryDeliveryPlatformSettings={retryFnbSettings}
         />
       </div>
 
@@ -3455,6 +3492,11 @@ function FnbPosPageInner() {
               staffOptions={shipperOptions}
               selfDeliveryTiers={deliveryTiers}
               discountPresets={discountPresets}
+              discountPresetsError={discountPresetsError}
+              onRetryDiscountPresets={retryFnbSettings}
+              deliveryPlatformSettings={platformSettings}
+              deliveryPlatformSettingsStatus={platformSettingsStatus}
+              onRetryDeliveryPlatformSettings={retryFnbSettings}
               mobile
             />
           </div>
