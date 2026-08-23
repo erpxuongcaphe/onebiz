@@ -7,7 +7,25 @@ const { chain, from } = vi.hoisted(() => {
   >;
   const self = () => mockedChain;
   mockedChain.eq = vi.fn(self);
+  mockedChain.select = vi.fn(self);
   mockedChain.update = vi.fn(self);
+  mockedChain.insert = vi.fn(self);
+  mockedChain.maybeSingle = vi.fn().mockResolvedValue({ data: { id: "product-1" }, error: null });
+  mockedChain.single = vi.fn().mockResolvedValue({
+    data: {
+      id: "variant-1",
+      tenant_id: "tenant-current",
+      product_id: "product-1",
+      name: "Size L",
+      sell_price: 30000,
+      cost_price: 10000,
+      is_active: true,
+      sort_order: 0,
+      created_at: "",
+      updated_at: "",
+    },
+    error: null,
+  });
 
   return { chain: mockedChain, from: vi.fn(() => mockedChain) };
 });
@@ -17,7 +35,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: vi.fn().mockResolvedValue("tenant-current"),
 }));
 
-import { deleteVariant, updateVariant } from "@/lib/services/supabase/variants";
+import { createVariant, deleteVariant, updateVariant } from "@/lib/services/supabase/variants";
 
 describe("product variant mutation scope", () => {
   beforeEach(() => {
@@ -38,5 +56,19 @@ describe("product variant mutation scope", () => {
     expect(from).toHaveBeenCalledWith("product_variants");
     expect(chain.eq).toHaveBeenCalledWith("id", "variant-1");
     expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-current");
+  });
+
+  it("verifies that the parent product belongs to the active tenant before creating a variant", async () => {
+    await createVariant({
+      productId: "product-1",
+      name: "Size L",
+      sellPrice: 30000,
+      costPrice: 10000,
+    });
+
+    expect(from).toHaveBeenCalledWith("products");
+    expect(chain.eq).toHaveBeenCalledWith("id", "product-1");
+    expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-current");
+    expect(from).toHaveBeenCalledWith("product_variants");
   });
 });
