@@ -75,6 +75,53 @@ export function getModifierStockConfigError(input: {
   return null;
 }
 
+async function requireTenantRecord(
+  table: "modifier_groups" | "products" | "categories",
+  id: string,
+  tenantId: string,
+): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from(table)
+    .select("id")
+    .eq("id", id)
+    .eq("tenant_id", tenantId)
+    .maybeSingle();
+  if (error) handleError(error, `requireTenantRecord:${table}`);
+  if (!data) throw new Error("Không tìm thấy dữ liệu trong công ty hiện tại.");
+}
+
+async function requireTenantModifierOption(id: string, tenantId: string): Promise<void> {
+  // modifier_options kế thừa phạm vi công ty từ modifier_groups.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from("modifier_options")
+    .select("id, modifier_groups!inner(tenant_id)")
+    .eq("id", id)
+    .eq("modifier_groups.tenant_id", tenantId)
+    .maybeSingle();
+  if (error) handleError(error, "requireTenantModifierOption");
+  if (!data) throw new Error("Không tìm thấy tùy chọn trong công ty hiện tại.");
+}
+
+async function requireTenantModifierGroups(groupIds: string[], tenantId: string): Promise<void> {
+  const ids = [...new Set(groupIds)];
+  if (ids.length === 0) return;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = getClient() as any;
+  const { data, error } = await supabase
+    .from("modifier_groups")
+    .select("id")
+    .eq("tenant_id", tenantId)
+    .in("id", ids);
+  if (error) handleError(error, "requireTenantModifierGroups");
+  if ((data ?? []).length !== ids.length) {
+    throw new Error("Có nhóm tùy chọn không thuộc công ty hiện tại.");
+  }
+}
+
 // ────────────────────────────────────────────────────────────
 // GROUPS
 // ────────────────────────────────────────────────────────────
@@ -82,9 +129,11 @@ export function getModifierStockConfigError(input: {
 export async function listModifierGroups(): Promise<ModifierGroup[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("modifier_groups")
     .select("*, modifier_options(count)")
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
@@ -127,6 +176,7 @@ export async function createModifierGroup(input: ModifierGroupInput): Promise<Mo
         updated_at: new Date().toISOString(),
       })
       .eq("id", existing.id)
+      .eq("tenant_id", tenantId)
       .select("*")
       .single();
     if (reErr) handleError(reErr, "createModifierGroup:reactivate");
@@ -156,6 +206,7 @@ export async function updateModifierGroup(
 ): Promise<ModifierGroup> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.name !== undefined) patch.name = input.name.trim();
   if (input.rule !== undefined) patch.rule = input.rule;
@@ -172,6 +223,7 @@ export async function updateModifierGroup(
     .from("modifier_groups")
     .update(patch)
     .eq("id", id)
+    .eq("tenant_id", tenantId)
     .select("*")
     .single();
   if (error) handleError(error, "updateModifierGroup");
@@ -181,11 +233,13 @@ export async function updateModifierGroup(
 export async function deleteModifierGroup(id: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
   // Soft delete: is_active=false để giữ audit. Cascade options qua FK.
   const { error } = await supabase
     .from("modifier_groups")
     .update({ is_active: false, updated_at: new Date().toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("tenant_id", tenantId);
   if (error) handleError(error, "deleteModifierGroup");
 }
 
@@ -196,6 +250,8 @@ export async function deleteModifierGroup(id: string): Promise<void> {
 export async function listModifierOptions(groupId: string): Promise<ModifierOption[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("modifier_groups", groupId, tenantId);
   const { data, error } = await supabase
     .from("modifier_options")
     .select("*, products!modifier_options_linked_product_id_fkey(code, name)")
@@ -215,6 +271,11 @@ export async function createModifierOption(
   if (configError) throw new Error(configError);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("modifier_groups", groupId, tenantId);
+  if (input.linkedProductId) {
+    await requireTenantRecord("products", input.linkedProductId, tenantId);
+  }
   const { data, error } = await supabase
     .from("modifier_options")
     .insert({
@@ -240,6 +301,11 @@ export async function updateModifierOption(
   if (configError) throw new Error(configError);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+  await requireTenantModifierOption(id, tenantId);
+  if (input.linkedProductId) {
+    await requireTenantRecord("products", input.linkedProductId, tenantId);
+  }
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (input.label !== undefined) patch.label = input.label.trim();
   if (input.priceDelta !== undefined) patch.price_delta = input.priceDelta;
@@ -260,6 +326,8 @@ export async function updateModifierOption(
 export async function deleteModifierOption(id: string): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
+  await requireTenantModifierOption(id, tenantId);
   const { error } = await supabase
     .from("modifier_options")
     .update({ is_active: false, updated_at: new Date().toISOString() })
@@ -376,7 +444,8 @@ export async function seedFnbVnPreset(): Promise<PresetSeedResult> {
           sort_order: preset.sortOrder,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", found.id);
+        .eq("id", found.id)
+        .eq("tenant_id", tenantId);
       if (reErr) handleError(reErr, "seedFnbVnPreset.reactivate");
       groupId = found.id;
     } else {
@@ -445,10 +514,12 @@ export async function listCategoryModifierLinks(
 ): Promise<CategoryModifierLink[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("category_modifier_groups")
     .select("id, category_id, modifier_group_id, sort_order")
     .eq("category_id", categoryId)
+    .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
   if (error) handleError(error, "listCategoryModifierLinks");
   return ((data ?? []) as Array<{
@@ -476,6 +547,8 @@ export async function setCategoryModifierGroups(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("categories", categoryId, tenantId);
+  await requireTenantModifierGroups(groupIds, tenantId);
 
   const existing = await listCategoryModifierLinks(categoryId);
   const existingIds = new Set(existing.map((l) => l.modifierGroupId));
@@ -490,7 +563,8 @@ export async function setCategoryModifierGroups(
       .in(
         "id",
         toDelete.map((l) => l.id),
-      );
+      )
+      .eq("tenant_id", tenantId);
     if (error) handleError(error, "setCategoryModifierGroups.delete");
   }
 
@@ -530,10 +604,12 @@ export async function listProductModifierLinks(
 ): Promise<ProductModifierLink[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("product_modifier_groups")
     .select("id, product_id, modifier_group_id, rule_override, sort_order")
     .eq("product_id", productId)
+    .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
   if (error) handleError(error, "listProductModifierLinks");
   return ((data ?? []) as Array<{
@@ -558,6 +634,8 @@ export async function setProductModifierGroups(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const tenantId = await getCurrentTenantId();
+  await requireTenantRecord("products", productId, tenantId);
+  await requireTenantModifierGroups(groupIds, tenantId);
 
   const existing = await listProductModifierLinks(productId);
   const existingIds = new Set(existing.map((l) => l.modifierGroupId));
@@ -571,7 +649,8 @@ export async function setProductModifierGroups(
       .in(
         "id",
         toDelete.map((l) => l.id),
-      );
+      )
+      .eq("tenant_id", tenantId);
     if (error) handleError(error, "setProductModifierGroups.delete");
   }
 
@@ -607,6 +686,7 @@ export async function getEffectiveModifierGroupsForProduct(
 ): Promise<ModifierGroup[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
+  const tenantId = await getCurrentTenantId();
 
   // 1. Check SP-level override
   const productLinks = await listProductModifierLinks(productId);
@@ -633,6 +713,7 @@ export async function getEffectiveModifierGroupsForProduct(
       "id",
       links.map((l) => l.modifierGroupId),
     )
+    .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .in("channel", ["fnb", "all"]);
   if (error) handleError(error, "getEffectiveModifierGroupsForProduct");

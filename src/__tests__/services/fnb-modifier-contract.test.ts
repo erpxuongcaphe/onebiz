@@ -123,6 +123,7 @@ describe("P0.2 — rule_override cấp món phải được áp vào kết quả
       product_modifier_groups: [
         {
           id: "l1",
+          tenant_id: "tenant-1",
           product_id: "sp1",
           modifier_group_id: "g-duong",
           rule_override: "single_required",
@@ -143,6 +144,7 @@ describe("P0.2 — rule_override cấp món phải được áp vào kết quả
       product_modifier_groups: [
         {
           id: "l1",
+          tenant_id: "tenant-1",
           product_id: "sp1",
           modifier_group_id: "g-duong",
           rule_override: null,
@@ -160,8 +162,8 @@ describe("P0.3 — thứ tự phải theo sort_order của LIÊN KẾT", () => {
   it("cấp món: link đảo thứ tự → POS phải theo link, không theo nhóm", async () => {
     duLieu = {
       product_modifier_groups: [
-        { id: "l1", product_id: "sp1", modifier_group_id: "g-b", rule_override: null, sort_order: 0 },
-        { id: "l2", product_id: "sp1", modifier_group_id: "g-a", rule_override: null, sort_order: 1 },
+        { id: "l1", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "g-b", rule_override: null, sort_order: 0 },
+        { id: "l2", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "g-a", rule_override: null, sort_order: 1 },
       ],
       // sort_order của NHÓM ngược lại với ý người quản lý đặt ở liên kết
       modifier_groups: [NHOM("g-a", "Nhóm A", "single", 1), NHOM("g-b", "Nhóm B", "single", 9)],
@@ -175,8 +177,8 @@ describe("P0.3 — thứ tự phải theo sort_order của LIÊN KẾT", () => {
     duLieu = {
       product_modifier_groups: [],
       category_modifier_groups: [
-        { id: "c1", category_id: "cat1", modifier_group_id: "g-b", sort_order: 0 },
-        { id: "c2", category_id: "cat1", modifier_group_id: "g-a", sort_order: 1 },
+        { id: "c1", tenant_id: "tenant-1", category_id: "cat1", modifier_group_id: "g-b", sort_order: 0 },
+        { id: "c2", tenant_id: "tenant-1", category_id: "cat1", modifier_group_id: "g-a", sort_order: 1 },
       ],
       modifier_groups: [NHOM("g-a", "Nhóm A", "single", 1), NHOM("g-b", "Nhóm B", "single", 9)],
     };
@@ -190,8 +192,8 @@ describe("P0.4 — client phải lọc channel giống máy chủ (fnb | all)", 
   it("nhóm channel='retail' bị gán nhầm → KHÔNG được hiện trên POS FnB", async () => {
     duLieu = {
       product_modifier_groups: [
-        { id: "l1", product_id: "sp1", modifier_group_id: "g-retail", rule_override: null, sort_order: 0 },
-        { id: "l2", product_id: "sp1", modifier_group_id: "g-fnb", rule_override: null, sort_order: 1 },
+        { id: "l1", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "g-retail", rule_override: null, sort_order: 0 },
+        { id: "l2", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "g-fnb", rule_override: null, sort_order: 1 },
       ],
       modifier_groups: [
         NHOM("g-retail", "Nhóm Retail", "single", 1, "retail"),
@@ -207,7 +209,7 @@ describe("P0.4 — client phải lọc channel giống máy chủ (fnb | all)", 
   it("nhóm channel='all' vẫn được hiện", async () => {
     duLieu = {
       product_modifier_groups: [
-        { id: "l1", product_id: "sp1", modifier_group_id: "g-all", rule_override: null, sort_order: 0 },
+        { id: "l1", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "g-all", rule_override: null, sort_order: 0 },
       ],
       modifier_groups: [NHOM("g-all", "Ghi chú chung", "single", 1, "all")],
     };
