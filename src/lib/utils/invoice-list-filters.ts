@@ -1,3 +1,8 @@
+import {
+  copyDefaultStatuses,
+  DEFAULT_INVOICE_LIST_STATUSES,
+} from "./document-list-statuses";
+
 export type InvoiceDeliveryFilter = "all" | "delivery" | "no_delivery";
 export type InvoiceKpiFilter = "all" | "completed" | "cancelled";
 
@@ -17,7 +22,7 @@ export function resolveInvoiceDeliveryFilter(
 export function invoiceStatusesForKpi(filter: InvoiceKpiFilter): string[] {
   if (filter === "completed") return ["completed"];
   if (filter === "cancelled") return ["cancelled"];
-  return [];
+  return copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES);
 }
 
 export function isInvoiceKpiSelected(

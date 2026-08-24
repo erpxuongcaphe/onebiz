@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 /**
  * TRANG HOÁ ĐƠN CHỈ HIỆN CHỨNG TỪ BÁN
@@ -171,12 +172,17 @@ describe("Chống hồi quy: KHÔNG được rút gọn thành lọc ngây thơ"
 // getInvoices thật sự áp bộ lọc, và áp thành MỘT NHÓM RIÊNG
 // ─────────────────────────────────────────────────────────────────────────────
 const orCalls: string[] = [];
+const inCalls: Array<[string, unknown]> = [];
 
 vi.mock("@/lib/services/supabase/base", () => {
   const chain = (): Record<string, unknown> => {
     const o: Record<string, unknown> = {};
-    for (const m of ["select", "eq", "is", "ilike", "in", "gte", "lt", "lte", "order", "range", "not"])
+    for (const m of ["select", "eq", "is", "ilike", "gte", "lt", "lte", "order", "range", "not"])
       o[m] = () => o;
+    o.in = (column: string, values: unknown) => {
+      inCalls.push([column, values]);
+      return o;
+    };
     o.or = (dieuKien: string) => {
       orCalls.push(dieuKien);
       return o;
@@ -199,9 +205,27 @@ const { getInvoices } = await import("@/lib/services/supabase/invoices");
 
 beforeEach(() => {
   orCalls.length = 0;
+  inCalls.length = 0;
 });
 
 describe("getInvoices áp điều kiện ở tầng đọc", () => {
+  it("mặc định loại đơn đã hủy ở cả tầng dịch vụ", async () => {
+    await getInvoices({ page: 0, pageSize: 15 });
+    expect(inCalls).toContainEqual([
+      "status",
+      DEFAULT_INVOICE_LIST_STATUSES,
+    ]);
+  });
+
+  it("chỉ trả đơn đã hủy khi bộ lọc chọn rõ trạng thái đó", async () => {
+    await getInvoices({
+      page: 0,
+      pageSize: 15,
+      filters: { status: ["cancelled"] },
+    });
+    expect(inCalls).toContainEqual(["status", ["cancelled"]]);
+  });
+
   it("luôn gửi bộ lọc chứng từ bán, kể cả khi không có bộ lọc nào khác", async () => {
     await getInvoices({ page: 0, pageSize: 15 });
     expect(orCalls).toContain(LOC_CHUNG_TU_BAN);

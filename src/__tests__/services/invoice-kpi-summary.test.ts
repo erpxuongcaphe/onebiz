@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 /**
  * K2 — CHỈ SỐ MÀN HOÁ ĐƠN LẤY TỪ MÁY CHỦ (RPC 00305)
@@ -81,9 +82,9 @@ describe("Không ánh xạ trạng thái lần hai ở client", () => {
     expect(rpcCalls[0].args.p_statuses).toEqual(["processing", "completed"]);
   });
 
-  it("danh sách trạng thái rỗng → null (không lọc trạng thái)", async () => {
+  it("danh sách trạng thái rỗng vẫn ẩn hóa đơn đã hủy", async () => {
     await getInvoiceListSummary({ statuses: [] });
-    expect(rpcCalls[0].args.p_statuses).toBeNull();
+    expect(rpcCalls[0].args.p_statuses).toEqual(DEFAULT_INVOICE_LIST_STATUSES);
   });
 });
 
@@ -147,6 +148,10 @@ describe("Khoá nhớ tạm — gồm mọi bộ lọc, KHÔNG gồm số trang"
     expect(khoaChiSoHoaDon({ ...NEN, statuses: ["completed", "cancelled"] })).toBe(
       khoaChiSoHoaDon({ ...NEN, statuses: ["cancelled", "completed"] }),
     );
+  });
+
+  it("rỗng và bỏ trống cùng là bộ lọc mặc định còn hiệu lực", () => {
+    expect(khoaChiSoHoaDon({})).toBe(khoaChiSoHoaDon({ statuses: [] }));
   });
 
   it("KHÔNG có số trang trong khoá — lật trang không được gọi lại RPC", () => {

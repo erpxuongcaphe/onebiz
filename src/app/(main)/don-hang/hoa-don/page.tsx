@@ -95,6 +95,12 @@ import {
   type InvoiceKpiFilter,
 } from "@/lib/utils/invoice-list-filters";
 import {
+  copyDefaultStatuses,
+  DEFAULT_INVOICE_LIST_STATUSES,
+  isDefaultStatusSelection,
+  keepVisibleStatusSelection,
+} from "@/lib/utils/document-list-statuses";
+import {
   findInvoiceListRowByCode,
   getInvoiceListDeepLinkFilters,
   readInvoiceListDeepLink,
@@ -524,11 +530,9 @@ export default function HoaDonPage() {
   }, []);
 
   // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "confirmed",
-    "draft",
-    "completed",
-  ]);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+    copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES),
+  );
   const [selectedTypes, setSelectedTypes] = useState<string[]>([
     "no_delivery",
     "delivery",
@@ -582,7 +586,11 @@ export default function HoaDonPage() {
     STANDARD_LIST_PRESETS.find((preset) => preset.value === datePreset)?.label ??
     "Thời gian";
   const filterChips: ListFilterChip[] = [];
-  if (selectedStatuses.length > 0) {
+  const isDefaultStatuses = isDefaultStatusSelection(
+    selectedStatuses,
+    DEFAULT_INVOICE_LIST_STATUSES,
+  );
+  if (!isDefaultStatuses) {
     const labels = statuses
       .filter((status) => selectedStatuses.includes(status.value))
       .map((status) => status.label);
@@ -590,7 +598,8 @@ export default function HoaDonPage() {
       key: "status",
       label: "Trạng thái",
       value: labels.join(", ") || `${selectedStatuses.length} lựa chọn`,
-      onClear: () => setSelectedStatuses([]),
+      onClear: () =>
+        setSelectedStatuses(copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES)),
     });
   }
   if (deliveryFilter !== "all") {
@@ -602,7 +611,7 @@ export default function HoaDonPage() {
     });
   }
   const clearListFilters = () => {
-    setSelectedStatuses([]);
+    setSelectedStatuses(copyDefaultStatuses(DEFAULT_INVOICE_LIST_STATUSES));
     setSelectedTypes(["no_delivery", "delivery"]);
   };
   const emptyState = chuaCoPhamVi
@@ -1391,12 +1400,20 @@ export default function HoaDonPage() {
 
         <FilterGroup
           label="Trạng thái hóa đơn"
-          activeHint={selectedStatuses.length > 0 ? `${selectedStatuses.length} chọn` : undefined}
+          activeHint={
+            isDefaultStatuses
+              ? "Mặc định ẩn đơn đã hủy"
+              : `${selectedStatuses.length} lựa chọn`
+          }
         >
           <CheckboxFilter
             options={statuses}
             selected={selectedStatuses}
-            onChange={setSelectedStatuses}
+            onChange={(next) =>
+              setSelectedStatuses(
+                keepVisibleStatusSelection(next, DEFAULT_INVOICE_LIST_STATUSES),
+              )
+            }
           />
         </FilterGroup>
       </FilterPanel>
