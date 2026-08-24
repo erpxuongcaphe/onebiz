@@ -1,8 +1,9 @@
 /**
  * Dự kiến mua hàng (MRP) — CEO 14/07.
  *
- * Từ ĐƠN ĐẶT HÀNG đang mở (chưa giao/chưa hoàn tất) → nổ BOM của các SKU đặt
- * → ra danh sách NGUYÊN VẬT LIỆU cần chuẩn bị/mua, so với TỒN KHO TỔNG.
+ * Từ ĐƠN ĐẶT HÀNG đang mở (chưa giao/chưa hoàn tất) → trừ phần đã xuất bằng
+ * hóa đơn con đã hoàn thành → nổ BOM của SKU CÒN LẠI → ra danh sách NGUYÊN
+ * VẬT LIỆU cần chuẩn bị/mua, so với TỒN KHO TỔNG.
  *
  * QUYẾT ĐỊNH CEO CHỐT (v1):
  *  1. Đơn tính nhu cầu = source='order', status ∈ {draft, confirmed, delivering}
@@ -31,7 +32,13 @@ export interface ForecastSkuRow {
   unit: string;
   branchId: string | null;
   branchName: string;
-  quantity: number;
+  /** Số lượng ghi trên đơn đặt hàng gốc. */
+  orderedQuantity: number;
+  /** Số lượng đã xuất qua hóa đơn con completed còn hiệu lực. */
+  issuedQuantity: number;
+  /** Số lượng còn phải xuất; đây là số được nổ BOM. */
+  remainingQuantity: number;
+  /** Giá trị phần còn phải xuất, phân bổ theo tỷ lệ số lượng. */
   amount: number;
 }
 
@@ -63,6 +70,113 @@ export interface PurchaseForecastResult {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyRow = any;
+
+export interface PurchaseForecastOrderLine {
+  orderId: string;
+  productId: string;
+  quantity: number;
+  total: number;
+}
+
+export interface PurchaseForecastChildSale {
+  id: string;
+  orderId: string;
+  status: string;
+  deletedAt?: string | null;
+  voidedAt?: string | null;
+  cancelledAt?: string | null;
+}
+
+export interface PurchaseForecastChildSaleLine {
+  childSaleId: string;
+  productId: string;
+  quantity: number;
+}
+
+export interface PurchaseForecastRemainingLine {
+  orderId: string;
+  productId: string;
+  orderedQuantity: number;
+  issuedQuantity: number;
+  remainingQuantity: number;
+  remainingAmount: number;
+}
+
+/** Chỉ hóa đơn con đã hoàn thành và chưa bị đảo/hủy mới làm giảm nhu cầu mua. */
+export function laHoaDonConDaXuatHopLe(
+  invoice: PurchaseForecastChildSale,
+): boolean {
+  return (
+    invoice.status === "completed" &&
+    !invoice.deletedAt &&
+    !invoice.voidedAt &&
+    !invoice.cancelledAt
+  );
+}
+
+/**
+ * Tính phần hàng còn phải xuất trên TỪNG đơn gốc và TỪNG SKU.
+ *
+ * Không trừ chéo giữa hai đơn: cùng một SKU của DH A đã xuất không được làm
+ * giảm nhu cầu của DH B. Bán vượt số đặt chỉ đưa nhu cầu của dòng đó về 0;
+ * hàng bán thêm không tạo nhu cầu âm trong MRP.
+ */
+export function tinhNhuCauMuaConLai(
+  orderLines: PurchaseForecastOrderLine[],
+  childSales: PurchaseForecastChildSale[],
+  childSaleLines: PurchaseForecastChildSaleLine[],
+): PurchaseForecastRemainingLine[] {
+  const khoaDonHang = (orderId: string, productId: string) =>
+    `${orderId}::${productId}`;
+  const donConHopLe = new Map(
+    childSales
+      .filter(laHoaDonConDaXuatHopLe)
+      .map((sale) => [sale.id, sale.orderId]),
+  );
+  const daXuat = new Map<string, number>();
+  for (const line of childSaleLines) {
+    const orderId = donConHopLe.get(line.childSaleId);
+    if (!orderId || !line.productId) continue;
+    const key = khoaDonHang(orderId, line.productId);
+    daXuat.set(key, (daXuat.get(key) ?? 0) + (Number(line.quantity) || 0));
+  }
+
+  const datTheoDon = new Map<
+    string,
+    { orderId: string; productId: string; quantity: number; total: number }
+  >();
+  for (const line of orderLines) {
+    if (!line.productId) continue;
+    const key = khoaDonHang(line.orderId, line.productId);
+    const current = datTheoDon.get(key) ?? {
+      orderId: line.orderId,
+      productId: line.productId,
+      quantity: 0,
+      total: 0,
+    };
+    current.quantity += Number(line.quantity) || 0;
+    current.total += Number(line.total) || 0;
+    datTheoDon.set(key, current);
+  }
+
+  return [...datTheoDon.entries()].map(([key, line]) => {
+    const issuedQuantity = daXuat.get(key) ?? 0;
+    const remainingQuantity = Math.max(0, line.quantity - issuedQuantity);
+    return {
+      orderId: line.orderId,
+      productId: line.productId,
+      orderedQuantity: line.quantity,
+      issuedQuantity,
+      remainingQuantity,
+      // MRP không lấy doanh thu hóa đơn con làm giá trị dự kiến mua. Giá trị
+      // của phần còn lại luôn phân bổ từ giá trị đơn gốc.
+      remainingAmount:
+        line.quantity > 0
+          ? (line.total * remainingQuantity) / line.quantity
+          : 0,
+    };
+  });
+}
 
 /** Lấy active BOM (map productId → {id, yieldQty}) cho 1 tập product id. */
 async function fetchActiveBoms(
@@ -143,6 +257,8 @@ export async function getPurchaseForecast(
     .eq("tenant_id", tenantId)
     .eq("source", "order")
     .is("deleted_at", null)
+    // "Hoàn tất xử lý" là xác nhận không cần dùng đơn này để dự kiến mua nữa.
+    .is("fulfilled_by_id", null)
     .in("status", OPEN_ORDER_STATUSES as unknown as string[]);
   orderQ = applyCreatedAtRangeFilter(orderQ, filters);
   if (branchId) orderQ = orderQ.eq("branch_id", branchId);
@@ -194,10 +310,8 @@ export async function getPurchaseForecast(
     };
   }
 
-  // ── 3) invoice_items → nhu cầu SKU (per (branch, product)) + tổng theo product ──
-  // key = branchId|productId
-  const perBranch = new Map<string, { productId: string; branchId: string | null; branchName: string; qty: number; amount: number }>();
-  const totalDemand = new Map<string, number>(); // productId → tổng SL (nổ BOM chain-wide)
+  // ── 3) Lấy dòng đơn gốc và phần đã xuất từ hóa đơn con hợp lệ ──
+  const orderLines: PurchaseForecastOrderLine[] = [];
   for (let i = 0; i < orderIds.length; i += 100) {
     const { data: items } = await supabase
       .from("invoice_items")
@@ -205,19 +319,99 @@ export async function getPurchaseForecast(
       .in("invoice_id", orderIds.slice(i, i + 100));
     for (const it of (items ?? []) as AnyRow[]) {
       if (!it.product_id) continue;
-      const br = orderBranch.get(it.invoice_id) ?? { id: null, name: "—" };
-      const q = Number(it.quantity) || 0;
-      const amt = Number(it.total) || 0;
-      const key = `${br.id ?? "null"}|${it.product_id}`;
-      const cur = perBranch.get(key);
-      if (cur) {
-        cur.qty += q;
-        cur.amount += amt;
-      } else {
-        perBranch.set(key, { productId: it.product_id, branchId: br.id, branchName: br.name, qty: q, amount: amt });
-      }
-      totalDemand.set(it.product_id, (totalDemand.get(it.product_id) ?? 0) + q);
+      orderLines.push({
+        orderId: it.invoice_id,
+        productId: it.product_id,
+        quantity: Number(it.quantity) || 0,
+        total: Number(it.total) || 0,
+      });
     }
+  }
+
+  const childSales: PurchaseForecastChildSale[] = [];
+  for (let i = 0; i < orderIds.length; i += 100) {
+    const { data: children } = await supabase
+      .from("invoices")
+      .select("id, source_order_id, status, deleted_at, voided_at, cancelled_at")
+      .eq("tenant_id", tenantId)
+      .in("source_order_id", orderIds.slice(i, i + 100))
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .is("voided_at", null)
+      .is("cancelled_at", null);
+    for (const child of (children ?? []) as AnyRow[]) {
+      childSales.push({
+        id: child.id,
+        orderId: child.source_order_id,
+        status: child.status,
+        deletedAt: child.deleted_at,
+        voidedAt: child.voided_at,
+        cancelledAt: child.cancelled_at,
+      });
+    }
+  }
+
+  const childSaleLines: PurchaseForecastChildSaleLine[] = [];
+  const childSaleIds = childSales.map((sale) => sale.id);
+  for (let i = 0; i < childSaleIds.length; i += 100) {
+    const { data: items } = await supabase
+      .from("invoice_items")
+      .select("invoice_id, product_id, quantity")
+      .in("invoice_id", childSaleIds.slice(i, i + 100));
+    for (const it of (items ?? []) as AnyRow[]) {
+      if (!it.product_id) continue;
+      childSaleLines.push({
+        childSaleId: it.invoice_id,
+        productId: it.product_id,
+        quantity: Number(it.quantity) || 0,
+      });
+    }
+  }
+
+  const remainingLines = tinhNhuCauMuaConLai(
+    orderLines,
+    childSales,
+    childSaleLines,
+  );
+
+  // key = branchId|productId. Chỉ phần CÒN CẦN mới đi xuống BOM/MRP.
+  const perBranch = new Map<
+    string,
+    {
+      productId: string;
+      branchId: string | null;
+      branchName: string;
+      orderedQuantity: number;
+      issuedQuantity: number;
+      remainingQuantity: number;
+      amount: number;
+    }
+  >();
+  const totalDemand = new Map<string, number>();
+  const orderIdsConNhuCau = new Set<string>();
+  for (const line of remainingLines) {
+    if (line.remainingQuantity <= 0) continue;
+    const br = orderBranch.get(line.orderId) ?? { id: null, name: "—" };
+    const key = `${br.id ?? "null"}|${line.productId}`;
+    const current = perBranch.get(key) ?? {
+      productId: line.productId,
+      branchId: br.id,
+      branchName: br.name,
+      orderedQuantity: 0,
+      issuedQuantity: 0,
+      remainingQuantity: 0,
+      amount: 0,
+    };
+    current.orderedQuantity += line.orderedQuantity;
+    current.issuedQuantity += line.issuedQuantity;
+    current.remainingQuantity += line.remainingQuantity;
+    current.amount += line.remainingAmount;
+    perBranch.set(key, current);
+    totalDemand.set(
+      line.productId,
+      (totalDemand.get(line.productId) ?? 0) + line.remainingQuantity,
+    );
+    orderIdsConNhuCau.add(line.orderId);
   }
 
   // ── 4) Nổ BOM theo TỪNG CẤP (batch), gộp NVL lá ──
@@ -332,7 +526,9 @@ export async function getPurchaseForecast(
       unit: info?.unit ?? "",
       branchId: r.branchId,
       branchName: r.branchName,
-      quantity: r.qty,
+      orderedQuantity: r.orderedQuantity,
+      issuedQuantity: r.issuedQuantity,
+      remainingQuantity: r.remainingQuantity,
       amount: r.amount,
     };
   });
@@ -342,7 +538,7 @@ export async function getPurchaseForecast(
 
   return {
     khoTongName: khoTong?.name ?? null,
-    orderCount: orderIds.length,
+    orderCount: orderIdsConNhuCau.size,
     skuRows,
     materials,
     totalToBuyAmount,
