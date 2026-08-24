@@ -45,6 +45,16 @@ function isIos(): boolean {
   return /iPhone|iPad|iPod/.test(navigator.userAgent);
 }
 
+/** POS là bề mặt thao tác thời gian thực: không để banner cài ứng dụng che giỏ hoặc thanh toán. */
+export function anGoiYcaiDatPwa(pathname: string): boolean {
+  return (
+    pathname.startsWith("/dang-nhap") ||
+    pathname.startsWith("/dang-ky") ||
+    pathname === "/pos" ||
+    pathname.startsWith("/pos/")
+  );
+}
+
 export function PwaInstallPrompt() {
   const { isFnb } = useFnbSubdomain();
   const pathname = usePathname();
@@ -53,11 +63,9 @@ export function PwaInstallPrompt() {
     useState<BeforeInstallPromptEvent | null>(null);
   const [visible, setVisible] = useState(false);
   const [iosHint, setIosHint] = useState(false);
-  // Day 6 16/05/2026: bật prompt cho mọi đường dẫn (kể cả ERP main),
-  // không chỉ /manager. Bỏ qua /dang-nhap để không ép user chưa login.
-  const isAuthRoute =
-    pathname.startsWith("/dang-nhap") || pathname.startsWith("/dang-ky");
-  const promptConfig = isAuthRoute
+  // Hiện trên các màn quản trị phù hợp; POS và đăng nhập không hiển thị để
+  // không che bề mặt thao tác hoặc ép người dùng trước khi đăng nhập.
+  const promptConfig = anGoiYcaiDatPwa(pathname)
     ? null
     : isFnb
       ? APP_PROMPT.fnb

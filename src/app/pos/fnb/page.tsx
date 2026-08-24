@@ -105,6 +105,7 @@ import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
 import { FnbPinHandoverDialog } from "./components/fnb-pin-handover-dialog";
 import { PosPinSwitchDialog } from "@/components/shared/dialogs/pos-pin-switch-dialog";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
+import { kiemTraGiaBanThemNhanhFnb } from "./fnb-menu-sale-guard";
 import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
 import { FnbCart } from "./components/fnb-cart";
 import type { FnbItemConfirmPayload, FnbItemInitialSelection } from "./components/fnb-item-dialog";
@@ -1207,6 +1208,18 @@ function FnbPosPageInner() {
 
       const quickAdd = () => {
         if (itemLoadRequestRef.current !== requestId) return;
+        const giaBan = kiemTraGiaBanThemNhanhFnb({
+          catalogPrice: product.sell_price,
+          resolvedPrice,
+        });
+        if (!giaBan.dat) {
+          toast({
+            title: `Chưa thể thêm ${product.name}`,
+            description: giaBan.lyDo,
+            variant: "warning",
+          });
+          return;
+        }
         pos.addLine({
           productId: product.id,
           productName: product.name,
