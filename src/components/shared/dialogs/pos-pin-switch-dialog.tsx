@@ -38,8 +38,11 @@ interface PosPinSwitchDialogProps {
   branchId: string;
   /** ID user đang login — để loại khỏi list (không tự switch về mình). */
   currentUserId?: string;
-  /** Callback chạy sau switch thành công. Caller nên reload POS. */
-  onSwitched: (result: PosPinSwitchResult) => void;
+  /**
+   * Callback chạy sau switch thành công. Có thể chờ caller lưu trạng thái
+   * cục bộ trước khi tải lại POS với phiên đăng nhập mới.
+   */
+  onSwitched: (result: PosPinSwitchResult) => void | Promise<void>;
 }
 
 type Step = "select" | "pin";
@@ -104,7 +107,7 @@ export function PosPinSwitchDialog({
     setError(null);
     try {
       const result = await verifyPosPinAndSwitch(selectedUser.id, pin, branchId);
-      onSwitched(result);
+      await onSwitched(result);
       onOpenChange(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "PIN không đúng";

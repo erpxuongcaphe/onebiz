@@ -3099,7 +3099,10 @@ function FnbPosPageInner() {
           onOpenChange={setPinSwitchOpen}
           branchId={branchId}
           currentUserId={userId ?? undefined}
-          onSwitched={() => {
+          onSwitched={async () => {
+            // Giỏ thuộc quầy/chi nhánh, không thuộc người vừa bàn giao. Lưu
+            // ngay để không mất món vừa chọn trong khoảng debounce trước reload.
+            await pos.flushPersistedTabs();
             // Reload POS với user mới — session đã swap, AuthContext sẽ
             // pick up profile mới khi mount.
             window.location.reload();
