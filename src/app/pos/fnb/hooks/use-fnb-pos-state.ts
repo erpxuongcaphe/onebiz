@@ -81,6 +81,11 @@ export interface UseFnbPosStateReturn {
   closeTab: (tabId: string) => void;
   /** Reset toàn bộ tabs về 1 tab "Mang về #1" rỗng. Dùng khi đổi chi nhánh. */
   resetAllTabs: () => void;
+  /**
+   * Lưu ngay giỏ tạm của chi nhánh. Dùng trước khi đổi PIN vì trang POS sẽ
+   * tải lại để nhận phiên đăng nhập mới; không chờ nhịp tự lưu debounce.
+   */
+  flushPersistedTabs: () => Promise<void>;
   updateTabMeta: (
     tabId: string,
     meta: Partial<
@@ -160,6 +165,19 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
 
+  const flushPersistedTabs = useCallback(async () => {
+    if (!branchId) return;
+
+    // Cùng quy tắc với auto-save: không giữ lại một giỏ hoàn toàn rỗng.
+    const onlyEmpty = tabs.length === 1 && tabs[0].lines.length === 0;
+    if (onlyEmpty) {
+      await clearPersistedTabs(branchId);
+      return;
+    }
+
+    await savePersistedTabs(branchId, tabs, activeTabId);
+  }, [branchId, tabs, activeTabId]);
+
   // R12: Restore persisted tabs khi branch change. Tabs cũ hơn 24h tự bỏ
   // qua. Nếu không có persist → giữ tab default đã init.
   const restoredBranchRef = useRef<string | undefined>(undefined);
@@ -180,18 +198,12 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     if (!branchId) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      // Skip lưu nếu chỉ có 1 tab rỗng (đỡ ghi I/O thừa)
-      const onlyEmpty = tabs.length === 1 && tabs[0].lines.length === 0;
-      if (onlyEmpty) {
-        clearPersistedTabs(branchId);
-      } else {
-        savePersistedTabs(branchId, tabs, activeTabId);
-      }
+      void flushPersistedTabs();
     }, 400);
     return () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
-  }, [branchId, tabs, activeTabId]);
+  }, [branchId, tabs, activeTabId, flushPersistedTabs]);
 
   const activeTab = tabs.find((t) => t.id === activeTabId);
 
@@ -560,6 +572,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     switchTab,
     closeTab,
     resetAllTabs,
+    flushPersistedTabs,
     updateTabMeta,
     setActiveTabOrderType,
     addLine,
