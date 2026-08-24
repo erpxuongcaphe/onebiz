@@ -148,7 +148,7 @@ export function FnbSidenavDrawer({
                 onClose();
                 onSwitchUser();
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
+              className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-primary/10 hover:text-primary transition-colors"
             >
               <Icon name="switch_account" size={18} />
               <span className="flex-1 text-left font-medium">Đổi nhân viên (PIN)</span>
@@ -161,7 +161,7 @@ export function FnbSidenavDrawer({
                 onClose();
                 onCloseShift();
               }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container hover:text-foreground transition-colors"
+              className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-surface-container hover:text-foreground transition-colors"
             >
               <Icon name="logout" size={18} />
               <span className="flex-1 text-left font-medium">Đóng ca</span>
@@ -173,7 +173,7 @@ export function FnbSidenavDrawer({
               onClose();
               await logout();
             }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-status-error/10 hover:text-status-error transition-colors"
+            className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-status-error/10 hover:text-status-error transition-colors"
           >
             <Icon name="exit_to_app" size={18} />
             <span className="flex-1 text-left font-medium">Đăng xuất</span>

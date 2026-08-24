@@ -102,6 +102,7 @@ import {
 } from "./components/fnb-category-sidebar";
 import { FnbCategoryGrid } from "./components/fnb-category-grid";
 import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
+import { FnbPinHandoverDialog } from "./components/fnb-pin-handover-dialog";
 import { PosPinSwitchDialog } from "@/components/shared/dialogs/pos-pin-switch-dialog";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
 import { FnbSubcategoryPills } from "./components/fnb-subcategory-pills";
@@ -242,6 +243,7 @@ function FnbPosPageInner() {
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
   const [pinSwitchOpen, setPinSwitchOpen] = useState(false);
+  const [pinHandoverOpen, setPinHandoverOpen] = useState(false);
   // CEO 13/05: discount manual OTP dialog (BẤT KỲ giảm giá manual nào)
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
   const pendingDiscountRef = useRef<(() => void) | null>(null);
@@ -3067,7 +3069,27 @@ function FnbPosPageInner() {
           currentShift ? () => setCloseShiftDialogOpen(true) : undefined
         }
         hasOpenShift={!!currentShift}
-        onSwitchUser={() => setPinSwitchOpen(true)}
+        onSwitchUser={() => {
+          if (currentShift) {
+            setPinHandoverOpen(true);
+            return;
+          }
+          setPinSwitchOpen(true);
+        }}
+      />
+
+      <FnbPinHandoverDialog
+        open={pinHandoverOpen}
+        onOpenChange={setPinHandoverOpen}
+        cashierName={user?.fullName ?? "nhân viên hiện tại"}
+        onCloseShiftFirst={() => {
+          setPinHandoverOpen(false);
+          setCloseShiftDialogOpen(true);
+        }}
+        onContinue={() => {
+          setPinHandoverOpen(false);
+          setPinSwitchOpen(true);
+        }}
       />
 
       {/* Sprint B.5 (CEO 12/05): PIN POS switch user (Approach Z) */}

@@ -1,14 +1,14 @@
 "use client";
 
 /**
- * PosPinSwitchDialog — chọn account + nhập PIN để switch user trên POS FnB.
+ * PosPinSwitchDialog — xác nhận nhân viên tiếp nhận quầy bằng PIN trên POS FnB.
  *
  * Sprint B.5 (CEO 12/05/2026, Approach Z): thay vì cashier logout + login
  * email/password (~30-45s), bấm icon account_circle ở header POS → mở dialog
  * này → chọn tên → nhập PIN 6 số → swap session → reload POS với user mới.
  *
  * Flow:
- *   1. Mount: gọi listPosPinUsers(branchId) → list user có PIN
+ *   1. Mount: gọi listPosPinUsers(branchId) → list user có PIN tại chi nhánh
  *   2. User chọn account → step 2 (nhập PIN)
  *   3. Nhập PIN → verifyPosPinAndSwitch → server verify + swap session
  *   4. onSuccess callback → caller reload POS (window.location.reload)
@@ -54,6 +54,7 @@ export function PosPinSwitchDialog({
   const [step, setStep] = useState<Step>("select");
   const [users, setUsers] = useState<PosPinUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedUser, setSelectedUser] = useState<PosPinUser | null>(null);
 
   const [pinDigits, setPinDigits] = useState<string[]>(["", "", "", "", "", ""]);
@@ -63,12 +64,14 @@ export function PosPinSwitchDialog({
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true);
+    setLoadError(null);
     try {
       const data = await listPosPinUsers(branchId);
       setUsers(data.filter((u) => u.id !== currentUserId));
     } catch (err) {
       console.warn("[PosPinSwitch] load users failed:", err);
       setUsers([]);
+      setLoadError("Không tải được danh sách nhân viên. Kiểm tra kết nối rồi thử lại.");
     } finally {
       setLoadingUsers(false);
     }
@@ -157,16 +160,16 @@ export function PosPinSwitchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="switch_account" size={18} className="text-primary" />
-            {step === "select" ? "Chọn nhân viên" : `Nhập PIN — ${selectedUser?.fullName}`}
+            {step === "select" ? "Bàn giao cho nhân viên" : `Nhập PIN — ${selectedUser?.fullName}`}
           </DialogTitle>
           <DialogDescription>
             {step === "select"
-              ? "Chọn tên để switch user trên POS FnB. Chỉ user đã được đặt PIN mới hiện ở đây."
-              : "Nhập PIN 6 số. Sai 10 lần sẽ bị khoá 15 phút."}
+              ? "Chọn người tiếp nhận quầy. Giỏ tạm của chi nhánh được giữ nguyên; thao tác sẽ được ghi nhật ký."
+              : "Nhập PIN 6 số của người tiếp nhận. Thao tác không tự chuyển ca hoặc tiền quỹ."}
           </DialogDescription>
         </DialogHeader>
 
@@ -177,9 +180,18 @@ export function PosPinSwitchDialog({
                 <Icon name="progress_activity" size={20} className="inline-block animate-spin" />
                 <div className="mt-2">Đang tải danh sách...</div>
               </div>
+            ) : loadError ? (
+              <div className="py-8 text-center text-sm text-muted-foreground">
+                <Icon name="error" size={20} className="inline-block text-status-error" />
+                <div className="mt-2">{loadError}</div>
+                <Button type="button" variant="outline" className="mt-3 min-h-11" onClick={loadUsers}>
+                  <Icon name="refresh" size={16} className="mr-1" />
+                  Thử lại
+                </Button>
+              </div>
             ) : users.length === 0 ? (
               <div className="py-8 text-center text-sm text-muted-foreground">
-                Chưa có user nào được đặt PIN tại chi nhánh này. Quản lý vào{" "}
+                Chưa có nhân viên nào được đặt PIN tại chi nhánh này. Quản lý vào{" "}
                 <code className="text-xs bg-muted px-1 rounded">/he-thong/users</code> để đặt PIN.
               </div>
             ) : (
@@ -190,7 +202,7 @@ export function PosPinSwitchDialog({
                     onClick={() => handleSelectUser(u)}
                     disabled={u.isLocked}
                     className={cn(
-                      "w-full flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
+                      "w-full min-h-11 flex items-center gap-3 p-3 rounded-lg border transition-colors text-left",
                       "hover:border-primary hover:bg-primary/5",
                       u.isLocked && "opacity-50 cursor-not-allowed border-status-error/30 bg-status-error/5",
                     )}
@@ -233,6 +245,7 @@ export function PosPinSwitchDialog({
                   disabled={verifying}
                   onChange={(e) => handleDigitChange(i, e.target.value)}
                   onKeyDown={(e) => handleKeyDown(i, e)}
+                  aria-label={`Chữ số PIN ${i + 1}`}
                   className={cn(
                     "h-14 w-12 rounded-lg border-2 text-center text-2xl font-bold transition-colors",
                     "focus:outline-none focus:ring-2 focus:ring-primary/40",
@@ -313,7 +326,7 @@ export function PosPinSwitchDialog({
                 ) : (
                   <>
                     <Icon name="login" size={14} className="mr-1" />
-                    Vào ca
+                    Xác nhận PIN
                   </>
                 )}
               </Button>
