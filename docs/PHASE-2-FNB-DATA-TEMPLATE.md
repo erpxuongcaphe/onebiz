@@ -1,5 +1,11 @@
 # Phase 2 FnB — Cấu trúc Excel data anh điền
 
+> **TÀI LIỆU LỊCH SỬ - KHÔNG DÙNG ĐỂ NHẬP DỮ LIỆU LIVE.** Mô hình Size dạng
+> modifier và cấu trúc import trong tài liệu này đã cũ. Size hiện dùng
+> `product_variants`, mỗi cỡ có giá và BOM riêng; guard 00330 cấm kế thừa BOM
+> món cha. Dùng `docs/CHECKLIST-CAU-HINH-TRUOC-VAN-HANH-FNB.md` và chạy
+> `docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql` trước khi nhập.
+
 > CEO 01/06/2026. Tài liệu này mô tả cấu trúc Excel để anh fill data FnB từ phần mềm cũ → import vào OneBiz. Sprint 2.1b (em sẽ build sau khi anh apply migration 00121) sẽ có **import script** đọc đúng cấu trúc này.
 
 ## Tổng quan 5 sheet

@@ -1,69 +1,110 @@
-# CHECKLIST — Cấu hình trước khi vận hành F&B (topping SKU)
+# Checklist chuẩn bị dữ liệu trước khi vận hành FnB
 
-> Lập 08/08/2026 theo chỉ đạo CEO. **Toàn bộ mã đã sẵn sàng và merge trước** —
-> checklist này chỉ gồm việc CẤU HÌNH khi quyết định vận hành thật, CEO tự
-> thực hiện, không cần sửa mã. Làm ĐÚNG THỨ TỰ; mỗi bước có cách kiểm.
+> Cập nhật 24/08/2026. Đây là trình tự nhập và nghiệm thu dữ liệu, không phải
+> hướng dẫn chạy migration. Các lớp máy chủ 00330 (guard Size) và 00343
+> (thanh toán V3) đã live; bộ preflight sẽ kiểm lại bản đang cài.
 
-## Trạng thái nền (đã xong từ trước, không phải làm lại)
+## Nguyên tắc
 
-- ✅ 00303 gửi bếp ghi cả `productId` + `product_id` (đã chạy prod).
-- ✅ RPC thanh toán hiện hành đã nổ BOM cho topping `has_bom` + nhân số phần × số ly.
-- ✅ Popup + cache offline lấy topping từ một cửa `fnb-toppings.ts`
-  (SKU + fnb + active + BOM đúng chi nhánh + giá > 0); cache có dấu phiên bản.
-- ✅ Cờ `NEXT_PUBLIC_FNB_TOPPING_SKU` mặc định TẮT — hệ thống chạy y như cũ.
+- Không nhập hàng loạt 124 món ngay từ đầu.
+- Không bật đồng thời nhóm tùy chọn Size cũ và quy cách M/L/XL mới trên cùng món.
+- Mỗi quy cách đang bật phải có giá lớn hơn 0, đúng một cỡ mặc định và BOM riêng.
+- Không dùng công thức món cha cho cỡ L/XL. Định lượng các cỡ thường không tăng đều.
+- Không tạo đơn thử hoặc chỉnh dữ liệu khách thật để nghiệm thu.
+- Chỉ UAT bằng dữ liệu mẫu được CEO cho phép; mọi đối chiếu sau thao tác là chỉ đọc.
 
-## Bước 1 — Nhập giá + công thức cho SKU-TPP (bắt đầu 1 mã thử)
+## Bước 0 - Đo hiện trạng
 
-Màn hình: **Hàng hóa → Hàng bán → tìm "SKU-TPP" → Sửa** (làm trong dialog
-sản phẩm để cờ `has_bom` tự bật — tạo BOM đường khác sẽ THIẾU cờ này và máy
-chủ không nổ công thức).
+Chạy toàn bộ file:
 
-- [ ] `SKU-TPP-012 Trân Châu Trắng`: giá bán **8.000đ/phần** (CEO quyết số
-      cuối) · tab Công thức: NVL *Trân châu trắng Zion* **0,025 Bịch**
-      (= 50g trên bịch 2kg, khớp pattern "ly bịch 50").
-- [ ] 13 mã SKU-TPP còn lại: lặp lại khi sẵn sàng — mã nào đủ giá + BOM sẽ
-      TỰ hiện lên popup, không cần đổi mã nguồn.
+`docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql`
 
-**Kiểm:** mở POS FnB (tải lại trang) — chưa bật cờ thì popup CHƯA hiện gì
-(đúng thiết kế); danh sách chỉ hiện sau Bước 4.
+File đã khóa tenant `OneBiz Coffee Demo` (`148e8ac5-b891-4de3-9055-cfa41f39ddb0`),
+không cần dán UUID. Các dòng `DIEU_KIEN` phải có `dat=true`. Dòng `THONG_TIN`
+dùng để lập danh sách công việc, không phải lỗi tự động.
 
-## Bước 2 — Chạy migration 00304 (giá topping do máy chủ quyết)
+## Bước 1 - Chọn bộ mẫu dọc
 
-File: `supabase/migrations/00304_fnb_topping_gia_server.sql`
-(rollback: `00304_rollback_fnb_topping_gia_server.sql`).
+Chỉ cấu hình bốn mẫu đầu tiên:
 
-- [ ] Chạy trên Supabase SQL Editor. Migration TỰ kiểm fingerprint (câu giá
-      cũ phải xuất hiện đúng 2 lần) — lệch là dừng, không phá gì.
-- [ ] Thấy notice `00304: OK` là xong. Chạy lại lần nữa vô hại (idempotent).
+1. Một món một giá, có công thức cố định.
+2. Một món Rang xay có M/L, mỗi cỡ một giá và một BOM riêng.
+3. Một món bán nguyên trạng, BOM 1:1 trỏ tới SKU đang giữ tồn.
+4. Một topping có giá theo phần và BOM riêng.
 
-**Ý nghĩa:** từ đây giá topping lúc thanh toán lấy `sell_price` trên máy chủ
-cho SKU topping hợp lệ; mã cũ/đơn cũ vẫn dùng giá payload (tương thích).
+Chưa nhân sang món thứ hai nếu một mẫu chưa qua UAT.
 
-## Bước 3 — Dọn cấu hình "Mức đường" (Tuỳ chọn món FnB)
+## Bước 2 - Chuẩn hóa nguyên liệu và đơn vị
 
-- [ ] Mặc định = **100%** · hệ số của 100% = **1.0** (đang 0.8).
-- [ ] Dòng **"Không đường" trùng: chỉ TẮT (is_active)** — không xoá vật lý.
+- Mã nguyên liệu và đơn vị kho phải đúng trước khi nhập BOM.
+- Kiểm tra quy đổi, ví dụ `1 thùng = 12 hộp`; không đảo chiều hệ số.
+- Mỗi dòng BOM có nguyên liệu, đơn vị và định lượng lớn hơn 0.
+- Định lượng được cân/đo thực tế; không ước lượng bằng mắt.
+- Món bán nguyên trạng dùng công thức 1:1 đúng đơn vị và đúng chi nhánh.
 
-## Bước 4 — Bật cơ chế topping SKU (cờ môi trường)
+## Bước 3 - Nhập giá và quy cách
 
-- [ ] Sao lưu cấu hình nhóm modifier "Topping" (chụp màn hình danh sách
-      lựa chọn là đủ — nhóm chỉ có 1 dòng Cốm xào).
-- [ ] **Tắt nhóm modifier "Topping"** trong Tuỳ chọn món FnB.
-- [ ] Vercel → Project → Settings → Environment Variables:
-      thêm `NEXT_PUBLIC_FNB_TOPPING_SKU = 1` (Production) → **Redeploy**.
-- [ ] *(khuyến nghị)* thêm `NEXT_PUBLIC_FNB_TOPPING_LEGACY_GROUP_IDS` = ID nhóm
-      Topping legacy (lấy ở màn Tuỳ chọn món FnB). Khai rồi thì hệ thống chỉ ẩn
-      đúng nhóm đó, không suy đoán. Bỏ trống cũng an toàn: chỉ nhóm vừa
-      *chọn-nhiều* vừa có lựa chọn **liên kết sản phẩm** mới bị ẩn — Syrup /
-      Thêm shot / Sốt chấm (chỉ có hệ số, không liên kết) vẫn hiện bình thường.
+Trong **Hàng hóa → Danh sách sản phẩm → Sửa → Quy cách**:
 
-**Kiểm sau khi bật:** mở POS FnB → popup món chỉ còn MỘT khu topping
-(SKU-TPP, giá theo phần); nhóm chọn-nhiều cũ không hiện; thêm 2 phần
-Trân Châu Trắng vào 1 ly = +16.000đ; sửa/mở lại món giữ nguyên lựa chọn
-và tổng. **Nhân viên tải lại trang POS** (cache giữ cấu hình cũ).
+- Món một giá: giá bán gốc lớn hơn 0.
+- Món nhiều cỡ: tên cỡ không trống/không trùng; giá từng cỡ lớn hơn 0.
+- Chọn đúng một cỡ mặc định, thông thường là M.
+- Bật **Trừ kho theo công thức từng cỡ**.
+- Mỗi cỡ phải có ít nhất một nguyên liệu với định lượng lớn hơn 0.
 
-## Đảo ngược khẩn cấp
+Form hiện chặn lưu nếu thiếu một điều kiện trên. Máy chủ tiếp tục chặn lần hai
+khi gửi bếp, nên không thể lách bằng devtools.
 
-- Tắt cờ (`NEXT_PUBLIC_FNB_TOPPING_SKU` xoá/`0`) + redeploy → về ngay giao
-  diện cũ; bật lại nhóm modifier "Topping" nếu cần bán tiếp kiểu cũ.
-- Gỡ giá server: chạy `00304_rollback_fnb_topping_gia_server.sql`.
+## Bước 4 - Rà tùy chọn món
+
+- Nhóm bắt buộc chọn một phải có đúng một lựa chọn mặc định.
+- Nhóm chọn một không bắt buộc có tối đa một mặc định.
+- Một lựa chọn không được vừa nhân định lượng (`scale_factor`) vừa liên kết SKU
+  trừ kho, vì sẽ có nguy cơ trừ hai lần.
+- Đường/đá/ghi chú pha chế dùng đúng cơ chế đã chọn; không tự gắn hàng loạt.
+- Premium Coffee và Trà cần rà từng món trước khi gắn Đường/Đá/Size/Topping.
+
+## Bước 5 - Topping SKU
+
+- Mỗi `SKU-TPP` đang bật có giá bán lớn hơn 0 và BOM đang bật.
+- Giá lấy từ `products.sell_price` và được máy chủ kiểm soát.
+- Chỉ tắt nhóm Topping cũ sau khi topping SKU mới đã đủ dữ liệu và UAT đạt.
+- Cờ `NEXT_PUBLIC_FNB_TOPPING_SKU` chỉ bật sau khi preflight không còn topping lỗi.
+
+## Bước 6 - Hạ tầng quán
+
+- Tạo trạm bếp/bar cho chi nhánh quán sẽ vận hành.
+- Tạo khu và bàn nếu phục vụ tại bàn; mô hình chỉ mang đi không bắt buộc có bàn.
+- Kiểm quyền quản lý bàn/sơ đồ và quyền nhân viên vận hành trước ngày mở bán.
+- Không đóng F1b thu hồi ghi thẳng cho tới khi UAT cấu hình bàn đủ 5 mục đã chốt.
+
+## Bước 7 - Chạy lại preflight
+
+Chỉ chuyển sang UAT khi dòng `Z_KET_LUAN` trả:
+
+`ĐẠT CỔNG DỮ LIỆU - được phép UAT có kiểm soát`
+
+Nếu chưa đạt, xử lý đúng dòng `DIEU_KIEN` lỗi; không sửa SQL và không bỏ guard.
+
+## Bước 8 - UAT một lát cắt dọc
+
+Với bốn mẫu ở Bước 1, kiểm theo thứ tự:
+
+1. POS chọn món/cỡ/tùy chọn đúng và phiếu bếp hiển thị đủ.
+2. Gửi bếp không sinh đơn lặp.
+3. Thanh toán đúng tổng, phương thức, tiền thực thu hoặc công nợ.
+4. Tồn chi nhánh và FIFO trừ đúng nguyên liệu của đúng cỡ.
+5. Giá vốn khớp BOM.
+6. Hủy/trả hoàn đúng nguyên liệu và đúng cỡ, không hoàn vào món menu.
+7. Sổ kho, sổ quỹ và báo cáo tham chiếu đúng chứng từ.
+
+Đạt cả bốn mẫu mới nhân dữ liệu theo thứ tự: **Rang xay → Trà Sữa → Cà phê
+tươi → các nhóm còn lại**. Mỗi nhóm chạy lại preflight trước khi bật.
+
+## Điều kiện go-live
+
+- Preflight đạt toàn bộ điều kiện.
+- Bộ mẫu UAT đạt và có số đối chiếu.
+- Nhân viên đã được phân quyền, mở ca và thao tác bếp/thanh toán đúng.
+- Có phương án quay về Size cũ bằng cách tắt quy cách mới; không xóa dữ liệu.
+- Không còn món giá 0 xuất hiện trên POS của chi nhánh live.

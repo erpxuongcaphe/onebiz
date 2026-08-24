@@ -61,6 +61,7 @@ import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
 import { buildUomConversion } from "@/lib/format-uom";
+import { validateFnbVariantSetup } from "@/lib/fnb-product-setup-validation";
 // CEO 01/06/2026 — Sprint 2.2d: tab "Tuỳ chọn FnB" trong form SP.
 import {
   listModifierGroups,
@@ -784,9 +785,10 @@ export function CreateProductDialog({
         if (persisted.bomCode !== code) {
           await updateVariant(persisted.id, { bomCode: code });
         }
-      } else if (persisted.bomCode) {
-        // Size không nhập gì → bỏ liên kết để kế thừa công thức cha.
-        await updateVariant(persisted.id, { bomCode: null });
+      } else {
+        throw new Error(
+          `Quy cách ${v.name.trim() || "chưa đặt tên"} chưa có công thức riêng.`,
+        );
       }
     }
     // SP phải has_bom=true để khi bán mới trừ NVL theo công thức size.
@@ -938,6 +940,24 @@ export function CreateProductDialog({
 
   async function handleSave() {
     if (!validate()) return;
+
+    const fnbSetupIssues = validateFnbVariantSetup({
+      isFnb: scope === "sku" && channel === "fnb",
+      variants: variantItems,
+      recipeEnabled,
+      recipeRows,
+    });
+    if (fnbSetupIssues.length > 0) {
+      setInnerTab("variants");
+      toast({
+        variant: "error",
+        title: "Chưa thể lưu quy cách FnB",
+        description: fnbSetupIssues[0].message,
+        duration: 10000,
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       // Common payload — dùng cho cả create và update. Gom hết field mà user

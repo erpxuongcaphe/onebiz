@@ -31,19 +31,47 @@ describe("Hậu kiểm trước vận hành FnB", () => {
     expect(sql).not.toContain("p.deleted_at");
   });
 
-  it("kiểm đủ giá topping, giới hạn lựa chọn và công thức theo Size", () => {
+  it("khóa đúng tenant OneBiz đã được xác minh, không còn ô giữ chỗ", () => {
+    expect(sql).toContain("148e8ac5-b891-4de3-9055-cfa41f39ddb0");
+    expect(sql).toContain("OneBiz Coffee Demo");
+    expect(sql).not.toMatch(/DAN_TENANT|TENANT_ID_VAO_DAY/i);
+  });
+
+  it("kiểm đường thanh toán V3 đang live và guard gửi bếp 00330", () => {
+    expect(sql).toContain("fnb_complete_payment_atomic_v3");
+    expect(sql).toContain("00343 phase A:");
+    expect(sql).toContain("FNB_PAYMENT_AMOUNT_CHANGED");
+    expect(sql).toContain("FNB_DEBT_CONFIRMATION_REQUIRED");
+    expect(sql).toContain("fnb_send_to_kitchen_atomic_v2");
+    expect(sql).toContain("_fnb_send_to_kitchen_impl_00303");
+    expect(sql).toContain("00330:");
+    expect(sql).toContain("ham_noi_bo_da_khoa");
+  });
+
+  it("kiểm đủ giá topping và công thức theo Size xuyên suốt", () => {
     expect(sql).toContain("GIA_TOPPING_SERVER_00304");
-    expect(sql).toContain("enforce_fnb_modifier_multi_limits_00318");
     expect(sql).toContain("get_active_bom_for_branch(uuid,uuid,uuid)");
     expect(sql).toContain("consume_bom_for_sale(uuid,uuid,uuid,numeric");
     expect(sql).toContain("restore_bom_for_return(uuid,uuid,uuid,numeric");
-    expect(sql).toContain("r.variant_id");
+    expect(sql).toContain("quy_cach_thieu_ma_bom");
+    expect(sql).toContain("quy_cach_chua_ap_dung_du_chi_nhanh");
+  });
+
+  it("đếm các nhóm dữ liệu phải hoàn thiện trước go-live", () => {
+    expect(sql).toContain("mon_mot_gia_thieu_gia");
+    expect(sql).toContain("mon_sai_so_mac_dinh");
+    expect(sql).toContain("dong_bom_sai_luong_hoac_don_vi");
+    expect(sql).toContain("tong_topping_sku");
+    expect(sql).toContain("lua_chon_co_nguy_co_tru_hai_lan");
+    expect(sql).toContain("tram_bep_dang_bat");
+    expect(sql).toContain("I2_SIZE_CU_DANG_BAT");
   });
 
   it("trả kết luận và hướng xử lý rõ ràng bằng tiếng Việt", () => {
-    expect(sql).toContain("DỪNG - công thức theo Size chưa đủ mắt xích");
-    expect(sql).toContain("CHƯA SẴN SÀNG - topping chưa đủ giá và công thức");
-    expect(sql).toContain("ĐẠT - sẵn sàng kiểm khói FnB");
-    expect(sql).toContain("viec_can_lam_tiep");
+    expect(sql).toContain("CHƯA SẴN SÀNG - chưa được bật bán FnB");
+    expect(sql).toContain("ĐẠT CỔNG DỮ LIỆU - được phép UAT có kiểm soát");
+    expect(sql).toContain("viec_can_lam");
+    expect(sql).toContain("DIEU_KIEN");
+    expect(sql).toContain("THONG_TIN");
   });
 });
