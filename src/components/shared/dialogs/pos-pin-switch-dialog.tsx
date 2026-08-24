@@ -309,6 +309,7 @@ export function PosPinSwitchDialog({
             <div className="flex justify-between gap-2">
               <Button
                 variant="outline"
+                size="touch"
                 onClick={() => setStep("select")}
                 disabled={verifying}
                 className="flex-1"
@@ -317,6 +318,7 @@ export function PosPinSwitchDialog({
                 Chọn lại
               </Button>
               <Button
+                size="touch"
                 onClick={handleVerify}
                 disabled={!pinReady || verifying}
                 className="flex-1"
