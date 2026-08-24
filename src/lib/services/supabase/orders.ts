@@ -32,6 +32,7 @@ import {
   applyCreatedAtRangeFilter,
   normalizeCreatedAtRange,
 } from "@/lib/utils/list-date-preset-range";
+import { DEFAULT_ORDER_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 // ============================================================
 // Sales Orders — real Supabase queries against `sales_orders`
@@ -49,11 +50,21 @@ const STATUS_LABEL: Record<string, string> = {
 /** Các trạng thái invoices hợp lệ để lọc từ UI (chặn giá trị lạ). */
 const VALID_ORDER_STATUSES = new Set([
   "draft",
+  "new",
   "confirmed",
   "delivering",
   "completed",
   "cancelled",
 ]);
+
+function getEffectiveOrderListStatuses(statuses?: string[]): string[] {
+  const validStatuses = (statuses ?? []).filter((status) =>
+    VALID_ORDER_STATUSES.has(status),
+  );
+  return validStatuses.length > 0
+    ? validStatuses
+    : [...DEFAULT_ORDER_LIST_STATUSES];
+}
 
 export async function getOrders(
   params: QueryParams
@@ -146,14 +157,16 @@ export async function getOrders(
     // 00173: ẩn đơn đã xóa mềm (đơn đặt hàng vốn KHÔNG bị xóa — guard cho chắc).
     .is("deleted_at", null);
 
-  // Lọc trạng thái (tùy chọn) — UI truyền mảng qua filters.status. Chỉ nhận
-  // giá trị hợp lệ; rỗng/không hợp lệ → không lọc (hiện tất cả trạng thái).
+  // Trạng thái rỗng không được hiểu là "hiện cả đơn đã hủy". Danh sách mặc
+  // định chỉ hiện đơn còn hiệu lực; muốn xem đơn hủy phải tick "Đã hủy".
   const statusFilter = params.filters?.status;
-  if (statusFilter) {
-    const statuses = (Array.isArray(statusFilter) ? statusFilter : [statusFilter])
-      .filter((s) => VALID_ORDER_STATUSES.has(s));
-    if (statuses.length > 0) query = query.in("status", statuses);
-  }
+  const statuses = (Array.isArray(statusFilter) ? statusFilter : [statusFilter])
+    .filter((status): status is string => typeof status === "string");
+  const effectiveStatuses = getEffectiveOrderListStatuses(statuses);
+  query = query.in(
+    "status",
+    effectiveStatuses,
+  );
 
   // CEO 14/07: đơn đã xuất hóa đơn (fulfilled_by_id) không còn là "chưa xử lý".
   // KHÔNG lọc ở query (cột thêm ở 00188 — lọc server .is() sẽ LỖI nếu migration
@@ -386,12 +399,12 @@ export async function getSalesOrderListSummary(
     dateTo: params.shippingDateTo,
   });
 
+  const statuses = getEffectiveOrderListStatuses(params.statuses);
   const { data, error } = await supabase.rpc("get_sales_order_list_summary", {
     p_branch_id: params.branchId ?? null,
     p_date_from: orderRange.from ?? null,
     p_date_to_exclusive: orderRange.toExclusive ?? null,
-    p_statuses:
-      params.statuses && params.statuses.length > 0 ? params.statuses : null,
+    p_statuses: statuses,
     p_search: params.search?.trim() || null,
     p_search_field: params.searchField ?? "all",
     p_delivery_partner_id:

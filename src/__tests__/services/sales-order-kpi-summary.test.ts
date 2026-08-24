@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_ORDER_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 const rpcCalls: Array<{ name: string; args: Record<string, unknown> }> = [];
 const queryCalls: Array<{ method: string; args: unknown[] }> = [];
@@ -111,14 +112,14 @@ describe("chỉ số Đơn đặt hàng từ RPC 00306", () => {
     );
   });
 
-  it("lựa chọn Tất cả và chuỗi rỗng phải về null", async () => {
+  it("trạng thái rỗng vẫn chỉ hiện đơn còn hiệu lực", async () => {
     await getSalesOrderListSummary({
       statuses: [],
       deliveryPartnerId: "all",
       deliveryArea: "   ",
     });
     expect(rpcCalls[0].args).toMatchObject({
-      p_statuses: null,
+      p_statuses: DEFAULT_ORDER_LIST_STATUSES,
       p_delivery_partner_id: null,
       p_delivery_area: null,
     });
@@ -126,6 +127,25 @@ describe("chỉ số Đơn đặt hàng từ RPC 00306", () => {
 });
 
 describe("danh sách dùng cùng bộ lọc vận đơn", () => {
+  it("mặc định chỉ lấy đơn còn hiệu lực; Đã hủy phải được chọn rõ", async () => {
+    await getOrders({ page: 0, pageSize: 15 });
+    expect(queryCalls).toContainEqual({
+      method: "in",
+      args: ["status", DEFAULT_ORDER_LIST_STATUSES],
+    });
+
+    queryCalls.length = 0;
+    await getOrders({
+      page: 0,
+      pageSize: 15,
+      filters: { status: ["cancelled"] },
+    });
+    expect(queryCalls).toContainEqual({
+      method: "in",
+      args: ["status", ["cancelled"]],
+    });
+  });
+
   it("tìm mã gồm cả code và order_code; tìm SĐT qua bảng customers", async () => {
     await getOrders({
       page: 0,

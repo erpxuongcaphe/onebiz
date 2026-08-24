@@ -83,6 +83,12 @@ import { buildTransactionRowActions } from "@/components/shared/transaction-row-
 import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 import { FulfilledOrderStatus } from "./order-fulfillment-status";
+import {
+  copyDefaultStatuses,
+  DEFAULT_ORDER_LIST_STATUSES,
+  isDefaultStatusSelection,
+  keepVisibleStatusSelection,
+} from "@/lib/utils/document-list-statuses";
 
 // --- Status config ---
 
@@ -101,6 +107,7 @@ const statusMap: Record<
 // Trạng thái thật của invoices nguồn đơn đặt hàng.
 const statusFilterOptions = [
   { label: "Chờ xử lý", value: "draft" },
+  { label: "Phiếu tạm", value: "new" },
   { label: "Đã xác nhận", value: "confirmed" },
   { label: "Đang giao hàng", value: "delivering" },
   { label: "Hoàn thành", value: "completed" },
@@ -470,8 +477,11 @@ export default function DatHangPage() {
   const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  // CEO 08/07: lọc trạng thái — rỗng = tất cả (đơn đã giữ đủ mọi trạng thái).
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+  // "Tất cả" mặc định là mọi đơn còn hiệu lực. Đơn đã hủy chỉ hiện khi người
+  // dùng chọn rõ trong bộ lọc, tránh nhầm đơn đã hủy là đơn còn phải xử lý.
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+    copyDefaultStatuses(DEFAULT_ORDER_LIST_STATUSES),
+  );
   const [fulfillmentState, setFulfillmentState] = useState("all");
   const [debtState, setDebtState] = useState("all");
   const [amountMin, setAmountMin] = useState("");
@@ -549,7 +559,11 @@ export default function DatHangPage() {
       },
     });
   }
-  if (selectedStatuses.length > 0) {
+  const isDefaultStatuses = isDefaultStatusSelection(
+    selectedStatuses,
+    DEFAULT_ORDER_LIST_STATUSES,
+  );
+  if (!isDefaultStatuses) {
     const labels = statusFilterOptions
       .filter((option) => selectedStatuses.includes(option.value))
       .map((option) => option.label);
@@ -557,7 +571,8 @@ export default function DatHangPage() {
       key: "status",
       label: "Trạng thái",
       value: labels.join(", ") || `${selectedStatuses.length} lựa chọn`,
-      onClear: () => setSelectedStatuses([]),
+      onClear: () =>
+        setSelectedStatuses(copyDefaultStatuses(DEFAULT_ORDER_LIST_STATUSES)),
     });
   }
   if (deliveryPartner !== "all") {
@@ -627,7 +642,7 @@ export default function DatHangPage() {
     setDatePreset("this_month");
     setDateFrom("");
     setDateTo("");
-    setSelectedStatuses([]);
+    setSelectedStatuses(copyDefaultStatuses(DEFAULT_ORDER_LIST_STATUSES));
     setFulfillmentState("all");
     setDebtState("all");
     setAmountMin("");
@@ -1369,15 +1384,19 @@ export default function DatHangPage() {
         <FilterGroup
           label="Trạng thái"
           activeHint={
-            selectedStatuses.length > 0
-              ? `${selectedStatuses.length} lựa chọn`
-              : undefined
+            isDefaultStatuses
+              ? "Mặc định ẩn đơn đã hủy"
+              : `${selectedStatuses.length} lựa chọn`
           }
         >
           <CheckboxFilter
             options={statusFilterOptions}
             selected={selectedStatuses}
-            onChange={setSelectedStatuses}
+            onChange={(next) =>
+              setSelectedStatuses(
+                keepVisibleStatusSelection(next, DEFAULT_ORDER_LIST_STATUSES),
+              )
+            }
           />
         </FilterGroup>
 

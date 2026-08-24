@@ -15,6 +15,23 @@ import {
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { apDungLocChungTuBan } from "./chung-tu-ban";
+import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
+
+const VALID_INVOICE_LIST_STATUSES = new Set([
+  "draft",
+  "confirmed",
+  "completed",
+  "cancelled",
+]);
+
+function getEffectiveInvoiceListStatuses(statuses?: string[]): string[] {
+  const validStatuses = (statuses ?? []).filter(
+    (status) => status === "processing" || VALID_INVOICE_LIST_STATUSES.has(status),
+  );
+  return validStatuses.length > 0
+    ? validStatuses
+    : [...DEFAULT_INVOICE_LIST_STATUSES];
+}
 
 export function getInvoiceShipmentQueryPlan(
   deliveryFilter: string | string[] | undefined,
@@ -70,19 +87,24 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
         `code.ilike.%${esc}%,customer_name.ilike.%${esc}%`,
       );
   }
-  // Filter: status (single value or array)
-  if (params.filters?.status && params.filters.status !== "all") {
-    if (Array.isArray(params.filters.status)) {
-      const dbStatuses = (params.filters.status as string[]).flatMap((s) =>
-        s === "processing" ? ["draft", "confirmed"] : [s],
-      );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query = query.in("status", dbStatuses as any);
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      query = query.eq("status", params.filters.status as any);
-    }
-  }
+  // Trạng thái rỗng không được hiểu là "hiện cả đơn đã hủy". Danh sách mặc
+  // định chỉ hiện chứng từ còn hiệu lực; muốn tra cứu hủy phải chọn cancelled.
+  const requestedStatuses = params.filters?.status;
+  const rawStatuses = Array.isArray(requestedStatuses)
+    ? requestedStatuses
+    : typeof requestedStatuses === "string"
+      ? [requestedStatuses]
+      : [];
+  const dbStatuses = rawStatuses
+    .flatMap((status) =>
+      status === "processing" ? ["draft", "confirmed"] : [status],
+    )
+    .filter((status) => VALID_INVOICE_LIST_STATUSES.has(status));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  query = query.in(
+    "status",
+    (dbStatuses.length > 0 ? dbStatuses : DEFAULT_INVOICE_LIST_STATUSES) as any,
+  );
   // 00335: mặc định lọc theo NGÀY CHỨNG TỪ để khớp KPI đầu trang (RPC
   // get_invoice_list_summary dùng cùng công thức coalesce). Nơi cần thời điểm
   // thao tác thật (đơn trong ca) truyền dateColumn="created_at".
@@ -730,11 +752,12 @@ export async function getInvoiceListSummary(
     dateTo: params.dateTo,
   });
 
+  const statuses = getEffectiveInvoiceListStatuses(params.statuses);
   const { data, error } = await supabase.rpc("get_invoice_list_summary", {
     p_branch_id: params.branchId ?? null,
     p_date_from: from ?? null,
     p_date_to_exclusive: toExclusive ?? null,
-    p_statuses: params.statuses && params.statuses.length > 0 ? params.statuses : null,
+    p_statuses: statuses,
     p_search: params.search && params.search !== "" ? params.search : null,
     p_search_field: params.searchField ?? "all",
     p_delivery: params.delivery ?? "all",
@@ -757,11 +780,12 @@ export async function getInvoiceListSummary(
  * trang — lật trang không được gọi lại RPC.
  */
 export function khoaChiSoHoaDon(params: InvoiceListSummaryParams): string {
+  const statuses = getEffectiveInvoiceListStatuses(params.statuses);
   return JSON.stringify([
     params.branchId ?? "",
     params.dateFrom ?? "",
     params.dateTo ?? "",
-    [...(params.statuses ?? [])].sort(),
+    [...statuses].sort(),
     params.search ?? "",
     params.searchField ?? "all",
     params.delivery ?? "all",

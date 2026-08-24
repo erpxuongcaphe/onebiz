@@ -4,6 +4,10 @@ import {
   isInvoiceKpiSelected,
   resolveInvoiceDeliveryFilter,
 } from "@/lib/utils/invoice-list-filters";
+import {
+  DEFAULT_INVOICE_LIST_STATUSES,
+  keepVisibleStatusSelection,
+} from "@/lib/utils/document-list-statuses";
 import { getInvoiceShipmentQueryPlan } from "@/lib/services/supabase/invoices";
 
 describe("Bộ lọc có/không giao hàng", () => {
@@ -34,17 +38,32 @@ describe("Bộ lọc có/không giao hàng", () => {
 });
 
 describe("Bấm thẻ chỉ số để lọc trạng thái", () => {
-  it("mọi trạng thái dùng mảng rỗng, các thẻ trạng thái dùng đúng mã", () => {
-    expect(invoiceStatusesForKpi("all")).toEqual([]);
+  it("thẻ Tất cả chỉ hiện chứng từ còn hiệu lực, các thẻ khác dùng đúng mã", () => {
+    expect(invoiceStatusesForKpi("all")).toEqual(DEFAULT_INVOICE_LIST_STATUSES);
     expect(invoiceStatusesForKpi("completed")).toEqual(["completed"]);
     expect(invoiceStatusesForKpi("cancelled")).toEqual(["cancelled"]);
   });
 
   it("chỉ đánh dấu thẻ khi bộ lọc khớp chính xác", () => {
-    expect(isInvoiceKpiSelected([], "all")).toBe(true);
+    expect(isInvoiceKpiSelected(DEFAULT_INVOICE_LIST_STATUSES, "all")).toBe(true);
+    expect(isInvoiceKpiSelected([], "all")).toBe(false);
     expect(isInvoiceKpiSelected(["completed"], "completed")).toBe(true);
     expect(isInvoiceKpiSelected(["processing", "completed"], "completed")).toBe(false);
     expect(isInvoiceKpiSelected(["cancelled"], "cancelled")).toBe(true);
+  });
+});
+
+describe("Trạng thái hủy chỉ hiện khi chọn rõ", () => {
+  it("bỏ tick cuối cùng quay về tập chứng từ còn hiệu lực", () => {
+    expect(
+      keepVisibleStatusSelection([], DEFAULT_INVOICE_LIST_STATUSES),
+    ).toEqual(DEFAULT_INVOICE_LIST_STATUSES);
+  });
+
+  it("chọn Đã hủy tường minh vẫn được giữ nguyên", () => {
+    expect(
+      keepVisibleStatusSelection(["cancelled"], DEFAULT_INVOICE_LIST_STATUSES),
+    ).toEqual(["cancelled"]);
   });
 });
 
