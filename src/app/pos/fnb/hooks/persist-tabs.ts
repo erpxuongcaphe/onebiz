@@ -8,15 +8,16 @@
  * 3-5 đơn dở. Giờ tabs auto-saved sau mỗi state change (debounced 300ms),
  * restore khi mount.
  *
- * Key store: `fnb-tabs:<branchId>` — mỗi branch có session riêng, đổi
- * branch không kéo cart qua (đã có resetAllTabs).
+ * Key store: `fnb-tabs:<branchId>` — giỏ thuộc quầy/chi nhánh, không thuộc
+ * riêng một nhân viên. Nhân viên tiếp nhận quầy bằng PIN vì thế tiếp tục được
+ * giỏ đang dở; đổi branch thì không kéo cart qua (đã có resetAllTabs).
  */
 
 import { getMeta, setMeta } from "@/lib/offline/db";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 
 const KEY_PREFIX = "fnb-tabs:";
-/** Tabs cũ hơn 24h → bỏ qua (cashier khác đã đóng ca). */
+/** Tabs cũ hơn 24h → bỏ qua để không kéo giỏ dở qua ngày vận hành mới. */
 const STALE_MS = 24 * 60 * 60 * 1000;
 
 interface PersistedTabsRecord {
@@ -26,12 +27,16 @@ interface PersistedTabsRecord {
   savedAt: number;
 }
 
+export function getFnbTabsStorageKey(branchId: string): string {
+  return KEY_PREFIX + branchId;
+}
+
 export async function loadPersistedTabs(
   branchId: string,
 ): Promise<{ tabs: FnbTabSnapshot[]; activeTabId: string } | null> {
   if (typeof window === "undefined") return null;
   try {
-    const record = await getMeta<PersistedTabsRecord>(KEY_PREFIX + branchId);
+    const record = await getMeta<PersistedTabsRecord>(getFnbTabsStorageKey(branchId));
     if (!record) return null;
     if (Date.now() - record.savedAt > STALE_MS) return null;
     if (!record.tabs || record.tabs.length === 0) return null;
@@ -55,7 +60,7 @@ export async function savePersistedTabs(
       activeTabId,
       savedAt: Date.now(),
     };
-    await setMeta(KEY_PREFIX + branchId, record);
+    await setMeta(getFnbTabsStorageKey(branchId), record);
   } catch (err) {
     console.warn("[FnB] savePersistedTabs failed:", err);
   }
@@ -64,7 +69,7 @@ export async function savePersistedTabs(
 export async function clearPersistedTabs(branchId: string): Promise<void> {
   if (typeof window === "undefined") return;
   try {
-    await setMeta(KEY_PREFIX + branchId, null);
+    await setMeta(getFnbTabsStorageKey(branchId), null);
   } catch (err) {
     console.warn("[FnB] clearPersistedTabs failed:", err);
   }

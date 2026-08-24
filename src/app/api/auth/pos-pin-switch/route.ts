@@ -6,7 +6,7 @@
  *
  * Flow:
  *   1. Caller (đang login với user A) gửi { userId: "B", pin: "123456", branchId }
- *   2. Server verify caller có session active + cùng tenant với target user
+ *   2. Server verify A va B cung tenant, dung chi nhanh va co quyen FnB
  *   3. Server call RPC verify_pos_pin(userId, pin, branchId) qua client của caller
  *      → RPC compare bcrypt hash, track failed attempts, audit log pos_pin_login
  *   4. Nếu pass → server dùng Admin API generateLink({ type: 'magiclink' }) cho
@@ -17,12 +17,12 @@
  * Bảo mật:
  *   - Service role key chỉ dùng SERVER-SIDE (route runtime = "nodejs")
  *   - RPC verify_pos_pin chạy với auth.uid() của caller → RLS check tenant
- *   - Target user phải cùng tenant với caller (verify trong RPC)
+ *   - A va B phai cung tenant, duoc vao dung chi nhanh va co quyen FnB (RPC)
  *   - PIN sai 10 lần → khoá 15 phút (handle trong RPC)
  *   - Audit log mọi switch
  *
  * Body:
- *   { userId: string, pin: string (6 digits), branchId?: string }
+ *   { userId: string, pin: string (6 digits), branchId: string }
  *
  * Response success:
  *   { success: true, hashed_token: string, email: string, redirect_to?: string }
@@ -41,8 +41,11 @@ export const runtime = "nodejs";
 interface PosPinSwitchBody {
   userId: string;
   pin: string;
-  branchId?: string;
+  branchId: string;
 }
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(req: NextRequest) {
   try {
@@ -90,9 +93,15 @@ export async function POST(req: NextRequest) {
     }
 
     const body = (await req.json()) as PosPinSwitchBody;
-    if (!body.userId || !body.pin) {
+    if (!body.userId || !body.pin || !body.branchId) {
       return NextResponse.json(
-        { success: false, message: "Thiếu userId hoặc pin", code: "INVALID_PAYLOAD" },
+        { success: false, message: "Thiếu nhân viên, PIN hoặc chi nhánh", code: "INVALID_PAYLOAD" },
+        { status: 400 },
+      );
+    }
+    if (!UUID_RE.test(body.userId) || !UUID_RE.test(body.branchId)) {
+      return NextResponse.json(
+        { success: false, message: "Dữ liệu bàn giao không hợp lệ", code: "INVALID_PAYLOAD" },
         { status: 400 },
       );
     }
@@ -103,17 +112,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── 2. Verify caller cùng tenant với target user (qua RPC RLS) ───
-    // RPC verify_pos_pin tự check is_active + tenant + lock + bcrypt compare +
-    // audit log. Caller dùng session của user A nên RLS sẽ enforce
-    // (verify_pos_pin có SECURITY DEFINER nên có thể đọc target user trong cùng tenant).
+    // ─── 2. Verify ban giao qua RPC server-side ───
+    // RPC khoa dong PIN, kiem A/B cung tenant + chi nhanh + quyen FnB,
+    // va ghi audit cho ca nguoi giao va nguoi nhan truoc khi Admin API tao token.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: verifyData, error: verifyErr } = await (sb.rpc as any)(
       "verify_pos_pin",
       {
         p_user_id: body.userId,
         p_pin: body.pin,
-        p_branch_id: body.branchId ?? null,
+        p_branch_id: body.branchId,
       },
     );
 
@@ -141,6 +149,19 @@ export async function POST(req: NextRequest) {
       if (msg.includes("USER_INACTIVE")) {
         return NextResponse.json(
           { success: false, message: "Tài khoản đã bị khoá", code: "USER_INACTIVE" },
+          { status: 403 },
+        );
+      }
+      if (
+        msg.includes("PIN_HANDOVER_") ||
+        msg.includes("AUTH_REQUIRED")
+      ) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Không thể bàn giao cho nhân viên này tại chi nhánh hiện tại.",
+            code: "PIN_HANDOVER_DENIED",
+          },
           { status: 403 },
         );
       }
