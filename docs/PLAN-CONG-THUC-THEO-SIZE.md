@@ -4,7 +4,12 @@
 > phi tuyến) → bán size nào trừ kho đúng size đó. Làm **trước khi FnB go-live**, không
 > phá hệ đang bán. CEO áp migration thủ công qua Supabase Dashboard.
 
-Ngày lập: 16/06/2026 · Trạng thái: **chờ CEO duyệt**
+Ngày lập: 16/06/2026 · Cập nhật 24/08/2026 · Trạng thái: **đã live**
+
+> Tài liệu này giữ lại lịch sử thiết kế. Nguồn vận hành hiện hành là
+> `docs/CHECKLIST-CAU-HINH-TRUOC-VAN-HANH-FNB.md` và preflight chỉ đọc tại
+> `docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql`. Guard 00330 đã thay đổi một
+> quyết định cũ quan trọng: món có quy cách **không được kế thừa BOM cha**.
 
 > **Nguyên tắc thực thi (CEO 16/06):** làm **TRỌN VẸN 1 lát cắt dọc** (migration → RPC → trả hàng → màn nhập + cảnh báo → POS/KDS) đã test xong mới go-live — **KHÔNG ship nửa chừng** (khó test + khó cho nhân viên làm việc). **UX/UI nhập liệu + logic dữ liệu là ưu tiên số 1.** "Pilot" chỉ áp cho *dữ liệu* (nhập công thức vài món để kiểm), KHÔNG phải build code nửa vời.
 
@@ -32,12 +37,14 @@ Ngày lập: 16/06/2026 · Trạng thái: **chờ CEO duyệt**
 **Chọn Option A — tái dùng `bom.variant_id` đã có sẵn** (KHÔNG tạo bảng mới).
 Lý do: schema đã có (`bom.variant_id` + `product_variants.bom_code`); chỉ cần mở rộng RPC `get_active_bom_for_branch` nhận thêm tham số **optional** `p_variant_id`. Tham số optional `DEFAULT NULL` → **caller cũ không đổi gì → backward-compat 100%**. Tạo bảng mới = rủi ro cao trên hệ đang bán → loại.
 
-**Quy tắc phân giải BOM (chốt cứng, đưa vào comment RPC):**
+**Quy tắc phân giải BOM hiện hành:**
 1. Có `variant_id` + variant có `bom_code` → dùng **BOM của size đó**.
-2. Có `variant_id` nhưng variant **chưa** có `bom_code` → **kế thừa BOM của SP cha** (auto-inherit; không lỗi).
+2. Có `variant_id` nhưng variant **chưa** có `bom_code` → **chặn gửi bếp và báo
+   lỗi tiếng Việt**. Không kế thừa BOM cha vì cỡ L/XL có thể dùng định lượng khác.
 3. Không có `variant_id` → BOM của SP cha (đúng như hiện tại).
 
-→ Nghĩa là: chỉ món nào cần công thức-theo-size mới phải nhập; món chưa nhập vẫn chạy y cũ.
+→ Nghĩa là: món một giá vẫn dùng BOM món cha; món đã bật quy cách phải hoàn
+thiện giá và công thức riêng cho từng cỡ trước khi bán.
 
 **Tương tác Size × Modifier (chốt):** dùng BOM của variant làm gốc, rồi modifier `scale_factor` áp lên đúng NVL được gắn trong BOM của variant đó (nhân, không ghi đè). Vd Size L (BOM-L có đường 10g, gắn nhóm "Mức đường") + chọn 70% → trừ 7g.
 
@@ -47,7 +54,8 @@ Lý do: schema đã có (`bom.variant_id` + `product_variants.bom_code`); chỉ 
 
 **Pha 0 — Backfill + kiểm (READ-ONLY, an toàn nhất, làm trước)**
 - Xác nhận `product_variants.bom_code` + `bom.variant_id` đã tồn tại (00121 đã áp ✓).
-- Query soát: variant nào của SP `has_bom=true` mà `bom_code` NULL → liệt kê (sẽ auto-inherit cha, nhưng cần biết để nhập sau).
+- Query soát: variant nào của SP `has_bom=true` mà `bom_code` NULL → liệt kê và
+  bổ sung trước khi bật; guard 00330 sẽ chặn bán các cỡ này.
 - Query soát **mã BOM mồ côi**: `variant.bom_code` trỏ tới BOM không tồn tại/đã xoá → phải sửa trước.
 
 **Pha 1 — `get_active_bom_for_branch` nhận `p_variant_id`** (migration mới)
@@ -87,7 +95,7 @@ Lý do: schema đã có (`bom.variant_id` + `product_variants.bom_code`); chỉ 
 
 | Rủi ro | Mức | Xử lý (đã đưa vào plan) |
 |---|---|---|
-| Variant chưa có `bom_code` → trừ sai | Cao | Quy tắc **auto-inherit BOM cha** (mục 3) + Pha 0 liệt kê variant thiếu |
+| Variant chưa có `bom_code` → trừ sai | Cao | Guard 00330 chặn gửi bếp; form chặn lưu cấu hình thiếu công thức |
 | **Trả hàng FnB** không biết variant → hoàn sai | Cao | **Pha 5** bắt buộc — restore theo variant (chỉ FnB) |
 | Đụng nhầm luồng **POS Retail** | — | **Không làm Retail.** Hàm dùng chung chỉ thêm tham số tùy chọn → Retail chạy y cũ |
 | 2 variant trùng `bom_code` → cùng công thức | TB | Pha 6 chặn trùng khi lưu |
@@ -118,7 +126,10 @@ Lý do: schema đã có (`bom.variant_id` + `product_variants.bom_code`); chỉ 
 
 ## 8. Checklist go-live + ma trận test
 
-**Go-live (món nhiều size):** ☐ mỗi size có `bom_code` + BOM riêng · ☐ modifier đường/đá/topping gắn đúng · ☐ test bán mỗi size soát `stock_movements` · ☐ test trả hàng hoàn đúng · ☐ đối soát thử 1 ca.
+**Go-live (món nhiều size):** ☐ mỗi size có giá > 0 · ☐ đúng một size mặc định ·
+☐ mỗi size có `bom_code` + BOM riêng · ☐ modifier đường/đá/topping gắn đúng ·
+☐ test bán mỗi size soát `stock_movements` · ☐ test trả hàng hoàn đúng · ☐ đối
+soát thử 1 ca.
 
 **Ma trận test E2E:**
 1. FnB size L (BOM riêng) → trừ BOM-L, không cha.

@@ -1,172 +1,359 @@
--- Hậu kiểm CHỈ ĐỌC trước khi vận hành POS FnB.
--- File này không tạo, sửa hoặc xóa dữ liệu.
--- Chạy toàn bộ file và đọc cột ket_luan + viec_can_lam_tiep.
+-- ============================================================================
+-- FNB GO-LIVE PREFLIGHT - CHI DOC
+-- Tenant da xac minh: OneBiz Coffee Demo
+--
+-- Chay TOAN BO file trong Supabase SQL Editor. File chi co mot cau SELECT,
+-- khong tao/sua/xoa du lieu. Moi dong loai DIEU_KIEN phai dat=true. Dong
+-- THONG_TIN dung de lap danh sach nhap; khong tu dong coi dat=false la loi.
+-- ============================================================================
 
-with function_defs as (
+with
+tham_so as (
   select
-    coalesce(pg_get_functiondef(to_regprocedure(
+    '148e8ac5-b891-4de3-9055-cfa41f39ddb0'::uuid as tenant_id,
+    'OneBiz Coffee Demo'::text as tenant_name
+),
+ham as (
+  select
+    to_regprocedure(
+      'public.fnb_complete_payment_atomic_v3(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)'
+    ) as payment_v3_oid,
+    to_regprocedure(
       'public.fnb_send_to_kitchen_atomic_v2(uuid,uuid,text,text,text,jsonb,text,numeric,numeric,uuid,text,uuid)'
-    )), '') as send_to_kitchen,
-    coalesce(pg_get_functiondef(to_regprocedure(
+    ) as send_v2_oid,
+    to_regprocedure(
+      'public._fnb_send_to_kitchen_impl_00303(uuid,uuid,text,text,text,jsonb,text,numeric,numeric,uuid,text,uuid)'
+    ) as send_impl_oid,
+    to_regprocedure(
       'public._fnb_complete_payment_impl_00230(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric)'
-    )), '') as complete_payment,
-    coalesce(pg_get_functiondef(to_regprocedure(
-      'public.get_active_bom_for_branch(uuid,uuid,uuid)'
-    )), '') as bom_lookup,
-    coalesce(pg_get_functiondef(to_regprocedure(
+    ) as payment_impl_oid,
+    to_regprocedure('public.get_active_bom_for_branch(uuid,uuid,uuid)') as bom_lookup_oid,
+    to_regprocedure(
       'public.consume_bom_for_sale(uuid,uuid,uuid,numeric,uuid,uuid,text,jsonb,boolean,uuid)'
-    )), '') as bom_consume,
-    coalesce(pg_get_functiondef(to_regprocedure(
+    ) as bom_consume_oid,
+    to_regprocedure(
       'public.restore_bom_for_return(uuid,uuid,uuid,numeric,uuid,uuid,text,uuid)'
-    )), '') as bom_restore
-), modifier_schema as (
+    ) as bom_restore_oid
+),
+dinh_nghia_ham as (
   select
-    count(*) filter (where column_name = 'min_select') = 1 as has_min_select,
-    count(*) filter (where column_name = 'max_select') = 1 as has_max_select
-  from information_schema.columns
-  where table_schema = 'public'
-    and table_name = 'modifier_groups'
-    and column_name in ('min_select', 'max_select')
-), configuration as (
+    h.*,
+    coalesce(pg_get_functiondef(h.payment_v3_oid), '') as payment_v3,
+    coalesce(pg_get_functiondef(h.send_v2_oid), '') as send_v2,
+    coalesce(pg_get_functiondef(h.payment_impl_oid), '') as payment_impl,
+    coalesce(pg_get_functiondef(h.bom_lookup_oid), '') as bom_lookup,
+    coalesce(pg_get_functiondef(h.bom_consume_oid), '') as bom_consume,
+    coalesce(pg_get_functiondef(h.bom_restore_oid), '') as bom_restore,
+    coalesce(obj_description(h.payment_v3_oid, 'pg_proc'), '') as payment_v3_note,
+    coalesce(obj_description(h.send_v2_oid, 'pg_proc'), '') as send_v2_note
+  from ham h
+),
+chi_nhanh_fnb as (
+  select b.id, b.name
+  from public.branches b
+  cross join tham_so t
+  where b.tenant_id = t.tenant_id
+    and b.is_active = true
+    and b.branch_type = 'store'
+),
+mon_fnb as (
+  select p.*
+  from public.products p
+  cross join tham_so t
+  where p.tenant_id = t.tenant_id
+    and p.is_active = true
+    and p.allow_sale = true
+    and p.product_type = 'sku'
+    and p.channel = 'fnb'
+),
+quy_cach as (
+  select pv.*
+  from public.product_variants pv
+  join mon_fnb p on p.id = pv.product_id and p.tenant_id = pv.tenant_id
+  where pv.is_active = true
+),
+mon_co_quy_cach as (
+  select product_id, count(*) as so_quy_cach,
+         count(*) filter (where is_default) as so_mac_dinh
+  from quy_cach
+  group by product_id
+),
+loi_quy_cach as (
   select
+    count(*) filter (where coalesce(q.sell_price, 0) <= 0) as thieu_gia,
+    count(*) filter (where nullif(btrim(q.bom_code), '') is null) as thieu_ma_bom,
     count(*) filter (
-      where p.is_active = true
-        and p.product_type = 'sku'
-        and p.channel = 'fnb'
-        and p.code ilike 'SKU-TPP%'
-    ) as topping_total,
-    count(*) filter (
-      where p.is_active = true
-        and p.product_type = 'sku'
-        and p.channel = 'fnb'
-        and p.code ilike 'SKU-TPP%'
-        and p.sell_price > 0
-        and exists (
-          select 1
-          from public.bom b
-          where b.is_active = true
-            and (
-              b.product_id = p.id
-              or (p.bom_code is not null and b.code = p.bom_code)
+      where nullif(btrim(q.bom_code), '') is not null
+        and not exists (
+          select 1 from public.bom b
+          where b.tenant_id = q.tenant_id
+            and b.code = q.bom_code
+            and b.is_active = true
+            and exists (
+              select 1 from public.bom_items bi
+              where bi.bom_id = b.id and bi.quantity > 0
             )
         )
-    ) as topping_ready
-  from public.products p
-), modifier_configuration as (
+    ) as ma_bom_khong_co_cong_thuc,
+    count(*) filter (
+      where nullif(btrim(q.bom_code), '') is not null
+        and exists (select 1 from chi_nhanh_fnb)
+        and exists (
+          select 1 from chi_nhanh_fnb cn
+          where not exists (
+            select 1 from public.bom b
+            where b.tenant_id = q.tenant_id
+              and b.code = q.bom_code
+              and b.is_active = true
+              and (b.branch_id = cn.id or b.branch_id is null)
+              and exists (
+                select 1 from public.bom_items bi
+                where bi.bom_id = b.id and bi.quantity > 0
+              )
+          )
+        )
+    ) as chua_ap_dung_du_chi_nhanh
+  from quy_cach q
+),
+loi_mon as (
+  select
+    count(*) as tong_mon,
+    count(*) filter (where mcq.product_id is null and coalesce(p.sell_price, 0) <= 0)
+      as mon_mot_gia_thieu_gia,
+    count(*) filter (
+      where mcq.product_id is null
+        and p.inventory_role = 'fnb_menu_item'
+        and coalesce(p.has_bom, false) = false
+    ) as mon_menu_chua_khai_quan_ly_tieu_hao,
+    count(*) filter (
+      where mcq.product_id is null
+        and coalesce(p.has_bom, false) = true
+        and not exists (
+          select 1 from public.bom b
+          where b.tenant_id = p.tenant_id
+            and b.is_active = true
+            and (b.product_id = p.id or (p.bom_code is not null and b.code = p.bom_code))
+            and exists (
+              select 1 from public.bom_items bi
+              where bi.bom_id = b.id and bi.quantity > 0
+            )
+        )
+    ) as mon_bat_bom_nhung_thieu_cong_thuc,
+    count(*) filter (where mcq.product_id is not null and mcq.so_mac_dinh <> 1)
+      as mon_sai_so_mac_dinh
+  from mon_fnb p
+  left join mon_co_quy_cach mcq on mcq.product_id = p.id
+),
+loi_bom as (
+  select
+    count(*) filter (
+      where b.is_active = true
+        and (bi.quantity is null or bi.quantity <= 0 or btrim(coalesce(bi.unit, '')) = '')
+    ) as dong_cong_thuc_khong_hop_le
+  from public.bom b
+  cross join tham_so t
+  left join public.bom_items bi on bi.bom_id = b.id
+  where b.tenant_id = t.tenant_id
+),
+topping as (
+  select
+    count(*) as tong,
+    count(*) filter (where coalesce(p.sell_price, 0) <= 0) as thieu_gia,
+    count(*) filter (
+      where not exists (
+        select 1 from public.bom b
+        where b.tenant_id = p.tenant_id
+          and b.is_active = true
+          and (b.product_id = p.id or (p.bom_code is not null and b.code = p.bom_code))
+          and exists (
+            select 1 from public.bom_items bi
+            where bi.bom_id = b.id and bi.quantity > 0
+          )
+      )
+    ) as thieu_cong_thuc
+  from mon_fnb p
+  where p.code ilike 'SKU-TPP%'
+),
+tuy_chon as (
   select
     count(distinct mg.id) filter (
-      where mg.is_active = true
-        and mg.name = 'Topping'
-    ) as legacy_topping_groups_active,
+      where mg.is_active = true and mg.rule = 'single_required'
+        and (
+          select count(*) from public.modifier_options moi
+          where moi.group_id = mg.id and moi.is_active = true and moi.is_default = true
+        ) <> 1
+    ) as nhom_bat_buoc_sai_mac_dinh,
+    count(distinct mg.id) filter (
+      where mg.is_active = true and mg.rule = 'single'
+        and (
+          select count(*) from public.modifier_options moi
+          where moi.group_id = mg.id and moi.is_active = true and moi.is_default = true
+        ) > 1
+    ) as nhom_tuy_chon_nhieu_mac_dinh,
     count(*) filter (
       where mg.is_active = true
-        and mg.name = 'Mức đường'
         and mo.is_active = true
         and mo.scale_factor is not null
         and mo.linked_product_id is not null
-    ) as sugar_double_stock_options,
-    count(*) filter (
-      where mg.is_active = true
-        and mg.name = 'Mức đường'
-        and mo.is_active = true
-        and mo.is_default = true
-    ) as sugar_defaults
+    ) as lua_chon_vua_nhan_dinh_luong_vua_tru_sku
   from public.modifier_groups mg
+  cross join tham_so t
   left join public.modifier_options mo on mo.group_id = mg.id
-), checks as (
+  where mg.tenant_id = t.tenant_id
+),
+size_cu as (
   select
-    position('00303' in f.send_to_kitchen) > 0 as topping_compat_00303_ok,
-    position('GIA_TOPPING_SERVER_00304' in f.complete_payment) > 0
-      as topping_server_price_00304_ok,
-    m.has_min_select
-      and m.has_max_select
-      and to_regprocedure(
-        'public.enforce_fnb_modifier_multi_limits_00318()'
-      ) is not null as modifier_limits_00318_ok,
-    f.bom_lookup <> ''
-      and position('p_variant_id' in f.bom_lookup) > 0
-      as variant_bom_lookup_ok,
-    f.bom_consume <> ''
-      and position('p_variant_id' in f.bom_consume) > 0
-      and position('get_active_bom_for_branch' in f.bom_consume) > 0
-      as variant_bom_consume_ok,
-    f.complete_payment <> ''
-      and position('r.variant_id' in f.complete_payment) > 0
-      and position('consume_bom_for_sale' in f.complete_payment) > 0
-      as fnb_checkout_passes_variant_ok,
-    f.bom_restore <> ''
-      and position('p_variant_id' in f.bom_restore) > 0
-      and position('get_active_bom_for_branch' in f.bom_restore) > 0
-      as fnb_return_restores_variant_ok,
-    c.topping_total,
-    c.topping_ready,
-    mc.legacy_topping_groups_active,
-    mc.sugar_double_stock_options,
-    mc.sugar_defaults
-  from function_defs f
-  cross join modifier_schema m
-  cross join configuration c
-  cross join modifier_configuration mc
+    count(distinct mg.id) as so_nhom_size_cu,
+    count(distinct cmg.category_id) + count(distinct pmg.product_id) as so_lien_ket
+  from public.modifier_groups mg
+  cross join tham_so t
+  left join public.category_modifier_groups cmg on cmg.modifier_group_id = mg.id
+  left join public.product_modifier_groups pmg on pmg.modifier_group_id = mg.id
+  where mg.tenant_id = t.tenant_id
+    and mg.is_active = true
+    and lower(btrim(mg.name)) = 'size'
+),
+ha_tang as (
+  select
+    (select count(*) from chi_nhanh_fnb) as so_chi_nhanh_fnb,
+    (select count(*) from public.restaurant_tables rt cross join tham_so t
+      where rt.tenant_id = t.tenant_id and rt.is_active = true) as so_ban,
+    (select count(*) from public.kitchen_stations ks cross join tham_so t
+      where ks.tenant_id = t.tenant_id and ks.is_active = true) as so_tram_bep,
+    (select count(*) from public.kitchen_orders ko cross join tham_so t
+      where ko.tenant_id = t.tenant_id) as so_don_bep
+),
+kiem as (
+  select 'P0_TENANT_DUNG'::text as muc, 'DIEU_KIEN'::text as loai,
+    exists (
+      select 1 from public.tenants x cross join tham_so t
+      where x.id = t.tenant_id and x.name = t.tenant_name
+    ) as dat,
+    jsonb_build_object('tenant_id', t.tenant_id, 'tenant_name', t.tenant_name) as chi_tiet,
+    'Dừng nếu sai tenant; không dùng kết quả cho công ty khác.'::text as viec_can_lam
+  from tham_so t
+
+  union all
+  select 'P1_THANH_TOAN_V3', 'DIEU_KIEN',
+    d.payment_v3_oid is not null
+      and d.payment_v3_note like '00343 phase A:%'
+      and d.payment_v3 like '%FNB_PAYMENT_AMOUNT_CHANGED%'
+      and d.payment_v3 like '%FNB_DEBT_CONFIRMATION_REQUIRED%'
+      and has_function_privilege('authenticated', d.payment_v3_oid, 'EXECUTE')
+      and not has_function_privilege('anon', d.payment_v3_oid, 'EXECUTE'),
+    jsonb_build_object('chu_ky_co_mat', d.payment_v3_oid is not null, 'dau_vet_00343', d.payment_v3_note like '00343 phase A:%'),
+    'Khôi phục đúng 00343 trước khi vận hành.'
+  from dinh_nghia_ham d
+
+  union all
+  select 'P2_GUI_BEP_GUARD_SIZE', 'DIEU_KIEN',
+    d.send_v2_oid is not null
+      and d.send_v2_note like '00330:%'
+      and d.send_v2 like '%chưa có công thức riêng%'
+      and d.send_v2 like '%chưa có giá bán%'
+      and has_function_privilege('authenticated', d.send_v2_oid, 'EXECUTE')
+      and not has_function_privilege('anon', d.send_v2_oid, 'EXECUTE')
+      and d.send_impl_oid is not null
+      and not has_function_privilege('authenticated', d.send_impl_oid, 'EXECUTE'),
+    jsonb_build_object('dau_vet_00330', d.send_v2_note like '00330:%', 'ham_noi_bo_da_khoa', d.send_impl_oid is not null and not has_function_privilege('authenticated', d.send_impl_oid, 'EXECUTE')),
+    'Khôi phục đúng 00330; không mở đường gọi hàm nội bộ.'
+  from dinh_nghia_ham d
+
+  union all
+  select 'P3_CONG_THUC_SIZE_XUYEN_SUOT', 'DIEU_KIEN',
+    d.bom_lookup like '%p_variant_id%'
+      and d.bom_consume like '%p_variant_id%'
+      and d.bom_consume like '%get_active_bom_for_branch%'
+      and d.bom_restore like '%p_variant_id%'
+      and d.bom_restore like '%get_active_bom_for_branch%',
+    jsonb_build_object('tra_bom', d.bom_lookup_oid is not null, 'tru_kho', d.bom_consume_oid is not null, 'hoan_kho', d.bom_restore_oid is not null),
+    'Dừng nếu thiếu mắt xích chọn, trừ hoặc hoàn kho theo quy cách.'
+  from dinh_nghia_ham d
+
+  union all
+  select 'P4_GIA_TOPPING_MAY_CHU', 'DIEU_KIEN',
+    d.payment_impl_oid is not null and d.payment_impl like '%GIA_TOPPING_SERVER_00304%',
+    jsonb_build_object('dau_vet_00304', d.payment_impl like '%GIA_TOPPING_SERVER_00304%'),
+    'Dừng nếu giá topping chưa được máy chủ kiểm soát.'
+  from dinh_nghia_ham d
+
+  union all
+  select 'D1_GIA_MON', 'DIEU_KIEN',
+    lm.tong_mon > 0 and lm.mon_mot_gia_thieu_gia = 0 and lq.thieu_gia = 0,
+    jsonb_build_object('tong_mon_dang_ban', lm.tong_mon, 'mon_mot_gia_thieu_gia', lm.mon_mot_gia_thieu_gia, 'quy_cach_thieu_gia', lq.thieu_gia),
+    'Nhập giá lớn hơn 0 cho món một giá và mọi quy cách đang bật.'
+  from loi_mon lm cross join loi_quy_cach lq
+
+  union all
+  select 'D2_QUY_CACH_VA_CONG_THUC', 'DIEU_KIEN',
+    lm.mon_sai_so_mac_dinh = 0
+      and lq.thieu_ma_bom = 0
+      and lq.ma_bom_khong_co_cong_thuc = 0
+      and lq.chua_ap_dung_du_chi_nhanh = 0,
+    jsonb_build_object('mon_sai_so_mac_dinh', lm.mon_sai_so_mac_dinh, 'quy_cach_thieu_ma_bom', lq.thieu_ma_bom, 'ma_bom_khong_co_cong_thuc', lq.ma_bom_khong_co_cong_thuc, 'quy_cach_chua_ap_dung_du_chi_nhanh', lq.chua_ap_dung_du_chi_nhanh),
+    'Mỗi món nhiều cỡ cần đúng một mặc định; mỗi cỡ có BOM riêng áp dụng đủ quán.'
+  from loi_mon lm cross join loi_quy_cach lq
+
+  union all
+  select 'D3_BOM_HOP_LE', 'DIEU_KIEN',
+    lm.mon_bat_bom_nhung_thieu_cong_thuc = 0 and lb.dong_cong_thuc_khong_hop_le = 0,
+    jsonb_build_object('mon_bat_bom_nhung_thieu', lm.mon_bat_bom_nhung_thieu_cong_thuc, 'dong_bom_sai_luong_hoac_don_vi', lb.dong_cong_thuc_khong_hop_le),
+    'BOM đang bật phải có nguyên liệu, lượng dương và đơn vị đầy đủ.'
+  from loi_mon lm cross join loi_bom lb
+
+  union all
+  select 'D4_TOPPING_SKU', 'DIEU_KIEN',
+    tp.tong = 0 or (tp.thieu_gia = 0 and tp.thieu_cong_thuc = 0),
+    jsonb_build_object('tong_topping_sku', tp.tong, 'thieu_gia', tp.thieu_gia, 'thieu_cong_thuc', tp.thieu_cong_thuc),
+    'Nếu dùng topping SKU, nhập đủ giá và BOM trước khi bật.'
+  from topping tp
+
+  union all
+  select 'D5_TUY_CHON', 'DIEU_KIEN',
+    tc.nhom_bat_buoc_sai_mac_dinh = 0
+      and tc.nhom_tuy_chon_nhieu_mac_dinh = 0
+      and tc.lua_chon_vua_nhan_dinh_luong_vua_tru_sku = 0,
+    jsonb_build_object('nhom_bat_buoc_sai_mac_dinh', tc.nhom_bat_buoc_sai_mac_dinh, 'nhom_tuy_chon_nhieu_mac_dinh', tc.nhom_tuy_chon_nhieu_mac_dinh, 'lua_chon_co_nguy_co_tru_hai_lan', tc.lua_chon_vua_nhan_dinh_luong_vua_tru_sku),
+    'Sửa mặc định và gỡ cấu hình vừa nhân định lượng vừa trừ SKU.'
+  from tuy_chon tc
+
+  union all
+  select 'D6_HA_TANG_QUAN', 'DIEU_KIEN',
+    ht.so_chi_nhanh_fnb > 0 and ht.so_tram_bep > 0,
+    jsonb_build_object('chi_nhanh_fnb', ht.so_chi_nhanh_fnb, 'ban_dang_bat', ht.so_ban, 'tram_bep_dang_bat', ht.so_tram_bep, 'don_bep_hien_co', ht.so_don_bep),
+    'Cấu hình ít nhất một trạm bếp; bàn có thể bổ sung theo mô hình phục vụ tại quán.'
+  from ha_tang ht
+
+  union all
+  select 'I1_MON_CHUA_KHAI_TIEU_HAO', 'THONG_TIN', null::boolean,
+    jsonb_build_object('so_mon', lm.mon_menu_chua_khai_quan_ly_tieu_hao),
+    'Phân loại từng món: có BOM, bán nguyên trạng 1:1, hoặc không quản lý tồn có lý do được duyệt.'
+  from loi_mon lm
+
+  union all
+  select 'I2_SIZE_CU_DANG_BAT', 'THONG_TIN', null::boolean,
+    jsonb_build_object('nhom_size_cu', sc.so_nhom_size_cu, 'so_lien_ket', sc.so_lien_ket),
+    'Không bật đồng thời Size cũ và quy cách mới trên cùng món; chuyển từng nhóm sau UAT.'
+  from size_cu sc
+),
+ket_luan as (
+  select coalesce(bool_and(dat), false) as dat
+  from kiem
+  where loai = 'DIEU_KIEN'
 )
+select muc, loai, dat, chi_tiet, viec_can_lam
+from kiem
+union all
 select
-  topping_compat_00303_ok,
-  topping_server_price_00304_ok,
-  modifier_limits_00318_ok,
-  variant_bom_lookup_ok,
-  variant_bom_consume_ok,
-  fnb_checkout_passes_variant_ok,
-  fnb_return_restores_variant_ok,
-  topping_total as topping_sku_total,
-  topping_ready as topping_sku_ready,
-  legacy_topping_groups_active,
-  sugar_double_stock_options,
-  sugar_defaults,
-  case
-    when not variant_bom_lookup_ok
-      or not variant_bom_consume_ok
-      or not fnb_checkout_passes_variant_ok
-      or not fnb_return_restores_variant_ok
-      then 'DỪNG - công thức theo Size chưa đủ mắt xích'
-    when not topping_compat_00303_ok
-      then 'DỪNG - chưa có lớp tương thích topping 00303'
-    when not topping_server_price_00304_ok
-      then 'DỪNG - giá topping chưa được máy chủ kiểm soát'
-    when not modifier_limits_00318_ok
-      then 'DỪNG - giới hạn lựa chọn món chưa được bảo vệ'
-    when topping_total = 0 or topping_ready < topping_total
-      then 'CHƯA SẴN SÀNG - topping chưa đủ giá và công thức'
-    when legacy_topping_groups_active > 0
-      then 'CHƯA SẴN SÀNG - còn nhóm Topping cũ đang bật'
-    when sugar_double_stock_options > 0 or sugar_defaults <> 1
-      then 'CHƯA SẴN SÀNG - cấu hình Mức đường chưa sạch'
-    else 'ĐẠT - sẵn sàng kiểm khói FnB'
-  end as ket_luan,
-  case
-    when not variant_bom_lookup_ok
-      or not variant_bom_consume_ok
-      or not fnb_checkout_passes_variant_ok
-      or not fnb_return_restores_variant_ok
-      then 'Không bật FnB. Đối chiếu và cài lại 00147, 00148, 00230 hoặc 00244 bị thiếu.'
-    when not topping_compat_00303_ok
-      then 'Không bật FnB. Chạy migration 00303 rồi chạy lại hậu kiểm.'
-    when not topping_server_price_00304_ok
-      then 'Không bật topping SKU. Chạy migration 00304 rồi chạy lại hậu kiểm.'
-    when not modifier_limits_00318_ok
-      then 'Không bật FnB. Chạy migration 00318 rồi chạy lại hậu kiểm.'
-    when topping_total = 0
-      then 'Nhập SKU topping theo phần trước khi bật tính năng.'
-    when topping_ready < topping_total
-      then format(
-        'Còn %s/%s SKU topping thiếu giá bán hoặc BOM đang bật.',
-        topping_total - topping_ready,
-        topping_total
-      )
-    when legacy_topping_groups_active > 0
-      then 'Tắt nhóm tùy chọn Topping cũ sau khi đã kiểm SKU topping mới.'
-    when sugar_double_stock_options > 0
-      then 'Gỡ liên kết sản phẩm khỏi lựa chọn Mức đường để tránh trừ kho hai lần.'
-    when sugar_defaults <> 1
-      then 'Mức đường phải có đúng một lựa chọn mặc định; nên chọn 100%.'
-    else 'Kiểm một đơn thử: chọn Size và topping, gửi bếp, thanh toán, trả hàng; đối chiếu tồn và phiếu bếp.'
-  end as viec_can_lam_tiep
-from checks;
+  'Z_KET_LUAN',
+  'KET_LUAN',
+  k.dat,
+  jsonb_build_object(
+    'ket_luan', case when k.dat then 'ĐẠT CỔNG DỮ LIỆU - được phép UAT có kiểm soát' else 'CHƯA SẴN SÀNG - chưa được bật bán FnB' end
+  ),
+  case when k.dat
+    then 'UAT 1 món một giá, 1 món M/L, 1 món nguyên trạng 1:1 và 1 topping; đối chiếu bếp, tồn, giá vốn, thanh toán và hoàn kho.'
+    else 'Xử lý các dòng ĐIỀU_KIEN có dat=false rồi chạy lại toàn bộ file.'
+  end
+from ket_luan k
+order by muc;
