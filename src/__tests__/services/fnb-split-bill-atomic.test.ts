@@ -89,7 +89,10 @@ describe("atomic F&B split bill", () => {
     expect(service).not.toContain('.from("kitchen_order_items").update');
     expect(tableGuardMigration).toContain("v_next_order_id");
     expect(tableGuardMigration).toContain("current_order_id = v_next_order_id");
-    expect(page).toContain("result.parentDiscountAmount");
-    expect(page).toContain("childDiscountAmounts");
+    // Sau khi tách, giảm giá phải nạp lại từ snapshot máy chủ của từng đơn.
+    // Không giữ số giảm giá cũ trên tab vì người dùng có thể chuyển ca/máy.
+    expect(page).toContain("persistedOrderDiscountAmount: order.discountAmount");
+    expect(page).toContain("await loadChildOrderIntoTab(result.childOrderId, newTabId)");
+    expect(page).toContain("await hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id, true)");
   });
 });

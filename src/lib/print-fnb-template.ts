@@ -35,6 +35,8 @@ export interface FnbBillTemplatePayload {
   }[];
   subtotal: number;
   discountAmount: number;
+  /** Phí giao khách trả, đã nằm trong tổng hoá đơn. */
+  deliveryFee: number;
   tipAmount: number;
   /** NET quán thực thu (đơn sàn đã trừ phí; migration 00070). */
   total: number;
@@ -98,6 +100,8 @@ export async function printFnbBillWithTemplate(
     ];
     if (p.discountAmount > 0)
       summaryRows.push({ label: "Giảm giá", value: money(p.discountAmount) });
+    if (p.deliveryFee > 0)
+      summaryRows.push({ label: "Phí giao hàng", value: money(p.deliveryFee) });
     if (p.tipAmount > 0)
       summaryRows.push({ label: "Tip", value: money(p.tipAmount) });
     if (isPlatform) {

@@ -98,3 +98,22 @@ describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng
     expect(hanhDong.slice(0, 300)).not.toContain("max-height");
   });
 });
+
+describe("C3 — thao tác thu ngân trên màn cảm ứng", () => {
+  it("giữ vùng chạm 44px cho các điểm đổi loại đơn, phí giao, ưu đãi và hành động chính", () => {
+    const zoneOrderType = CART.slice(
+      CART.indexOf("Order type pill row"),
+      CART.indexOf("Cart lines"),
+    );
+    const footerActions = CART.slice(CART.indexOf("Primary actions row"));
+
+    expect(zoneOrderType).toContain("min-h-11 lg:min-h-7 lg:h-7");
+    expect(zoneOrderType).toContain("min-h-11 lg:min-h-8 lg:h-8");
+    expect(zoneOrderType).toContain("min-h-11 lg:min-h-8");
+    expect(footerActions).toContain("h-14");
+    expect(CART).toContain("function CouponRow");
+    expect(CART).toContain("min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7");
+    expect(CART).toContain("function DiscountRow");
+    expect(CART).toContain("w-full min-h-11 px-3 py-2");
+  });
+});

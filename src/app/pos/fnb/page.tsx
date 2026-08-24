@@ -84,7 +84,7 @@ import {
   type CatalogStatus,
 } from "./shift-catalog-guards";
 import { printShiftReport } from "@/lib/print-shift-report";
-import type { RestaurantTable, FnbOrderLine } from "@/lib/types/fnb";
+import type { RestaurantTable, FnbOrderLine, KitchenOrderItem } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -137,6 +137,22 @@ const FnbSearchModal = lazy(() => import("./components/fnb-search-modal").then(m
 const FnbCustomerPicker = lazy(() => import("./components/fnb-customer-picker").then(m => ({ default: m.FnbCustomerPicker })));
 const SyncQueueDrawer = lazy(() => import("./components/sync-queue-drawer").then(m => ({ default: m.SyncQueueDrawer })));
 const FnbOrderHistoryDialog = lazy(() => import("./components/fnb-order-history-dialog").then(m => ({ default: m.FnbOrderHistoryDialog })));
+
+function kitchenItemToCartLine(
+  item: KitchenOrderItem,
+): Omit<FnbOrderLine, "id" | "lineTotal"> {
+  return {
+    productId: item.productId,
+    productName: item.productName,
+    variantId: item.variantId ?? undefined,
+    variantLabel: item.variantLabel ?? undefined,
+    quantity: item.quantity,
+    unitPrice: item.unitPrice,
+    toppings: (item.toppings ?? []) as FnbOrderLine["toppings"],
+    modifierSelections: item.modifierSelections,
+    note: item.note ?? undefined,
+  };
+}
 
 /**
  * 06/08/2026 — Trạng thái ca, MỘT nguồn duy nhất (CEO chốt).
@@ -234,6 +250,7 @@ function FnbPosPageInner() {
     orderId: string;
     label: string;
     reasonCode: string;
+    reasonNote?: string;
     tableId?: string | null;
   } | null>(null);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
@@ -789,10 +806,12 @@ function FnbPosPageInner() {
   // ============================================================
   // Sprint KM-2: Promotion engine cho POS FnB
   // ============================================================
-  // Theo dõi activeTab.lines + branchId + customerId → resolve KM tốt nhất.
+  // Theo dõi toàn bộ món của tab + branchId + customerId → resolve KM tốt nhất.
+  // `lines` chỉ là phần chưa gửi bếp; sau F10, món đã gửi nằm trong `sentLines`
+  // nhưng vẫn phải giữ đúng khuyến mãi cho phiếu tạm và lúc thanh toán.
   // Mỗi tab có thể có KM riêng (vì cart khác nhau). Khi switch tab, useEffect
   // re-fire và resolve lại cho tab mới.
-  const activeTabLines = pos.activeTab?.lines ?? [];
+  const activeTabLines = pos.allLines;
   const activeTabSubtotal = pos.subtotal;
   const activeTabCustomerId = pos.activeTab?.customerId;
   const fnbBenefitDisplay = useMemo(
@@ -800,10 +819,11 @@ function FnbPosPageInner() {
       getFnbBenefitDisplay({
         totalAfterManualDiscount: pos.total,
         manualDiscountAmount: pos.orderDiscountAmount,
+        persistedOrderDiscountAmount: pos.activeTab?.persistedOrderDiscountAmount,
         promotionDiscountAmount: appliedPromotion?.discountAmount,
         couponDiscountAmount: couponApplied?.discount,
       }),
-    [pos.total, pos.orderDiscountAmount, appliedPromotion?.discountAmount, couponApplied?.discount],
+    [pos.total, pos.orderDiscountAmount, pos.activeTab?.persistedOrderDiscountAmount, appliedPromotion?.discountAmount, couponApplied?.discount],
   );
 
   useEffect(() => {
@@ -1513,43 +1533,56 @@ function FnbPosPageInner() {
           networkStatus.isOnline
         );
 
+        // Server (hoặc hàng đợi offline bền vững) đã nhận món. Chuyển ngay
+        // khỏi hàng chờ trước khi in để lỗi máy in không biến lần bấm F10
+        // tiếp theo thành một lần gửi trùng vào bếp.
+        pos.markActiveLinesSent();
+
         // In ticket bổ sung (đánh dấu "BỔ SUNG") — Sprint KITCHEN-1: split
         // theo station, mỗi station 1 phiếu với header lớn (BAR / BẾP / ...).
         if (settings.print.autoPrintKitchen && branchId) {
-          await printKitchenTicketsByStation(
-            tab.lines.map((l) => ({
-              productId: l.productId,
-              productName: l.productName,
-              variantLabel: l.variantLabel,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              toppings: l.toppings.map((t) => ({
-                name: t.name,
-                quantity: t.quantity,
-                price: t.price,
+          try {
+            await printKitchenTicketsByStation(
+              tab.lines.map((l) => ({
+                productId: l.productId,
+                productName: l.productName,
+                variantLabel: l.variantLabel,
+                quantity: l.quantity,
+                unitPrice: l.unitPrice,
+                toppings: l.toppings.map((t) => ({
+                  name: t.name,
+                  quantity: t.quantity,
+                  price: t.price,
+                })),
+                // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
+                modifierLabels: l.modifierSelections?.map(
+                  (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+                ),
+                note: l.note,
               })),
-              // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
-              modifierLabels: l.modifierSelections?.map(
-                (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
-              ),
-              note: l.note,
-            })),
-            {
-              orderNumber: tab.label,
-              tableName: tab.label,
-              orderType: tab.orderType,
-              createdAt: new Date().toISOString(),
-              cashierName: user?.fullName,
-              style: settings.print.kitchenTicketStyle,
-              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-              isOffline: !networkStatus.isOnline,
-              isSupplement: true,
-            },
-            branchId,
-          );
+              {
+                orderNumber: tab.label,
+                tableName: tab.label,
+                orderType: tab.orderType,
+                createdAt: new Date().toISOString(),
+                cashierName: user?.fullName,
+                style: settings.print.kitchenTicketStyle,
+                paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+                isOffline: !networkStatus.isOnline,
+                isSupplement: true,
+              },
+              branchId,
+            );
+          } catch (printError) {
+            console.error("[FnB] in phiếu bổ sung thất bại sau khi đã gửi bếp:", printError);
+            toast({
+              title: "Món đã gửi bếp, nhưng in phiếu lỗi",
+              description: "Không gửi lại món. Kiểm tra máy in rồi in lại từ đơn bếp.",
+              variant: "warning",
+            });
+          }
         }
 
-        pos.clearCart();
         hapticSuccess();
 
         const extraCount = mappedItems.length;
@@ -1589,46 +1622,57 @@ function FnbPosPageInner() {
       }, networkStatus.isOnline);
 
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
+      // Xem giải thích ở nhánh "gửi bổ sung" phía trên. Mốc này phải đứng
+      // trước in phiếu vì máy chủ đã chốt đơn bếp rồi.
+      pos.markActiveLinesSent();
 
       // Print kitchen ticket — Sprint KITCHEN-1: split theo station, mỗi
       // station 1 phiếu (Bar / Bếp / Quầy bánh...). Backward compat: tenant
       // chỉ có 1 station "Bar pha chế" → in 1 phiếu y hệt cũ.
       if (settings.print.autoPrintKitchen && branchId) {
-        await printKitchenTicketsByStation(
-          tab.lines.map((l) => ({
-            productId: l.productId,
-            productName: l.productName,
-            variantLabel: l.variantLabel,
-            quantity: l.quantity,
-            unitPrice: l.unitPrice,
-            toppings: l.toppings.map((t) => ({
-              name: t.name,
-              quantity: t.quantity,
-              price: t.price,
+        try {
+          await printKitchenTicketsByStation(
+            tab.lines.map((l) => ({
+              productId: l.productId,
+              productName: l.productName,
+              variantLabel: l.variantLabel,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              toppings: l.toppings.map((t) => ({
+                name: t.name,
+                quantity: t.quantity,
+                price: t.price,
+              })),
+              // PR 1 (08/08): luồng gửi bếp CHÍNH trước đây thiếu dòng này —
+              // màn KDS có Đường/Đá nhưng PHIẾU GIẤY thì không.
+              modifierLabels: l.modifierSelections?.map(
+                (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+              ),
+              note: l.note,
             })),
-            // PR 1 (08/08): luồng gửi bếp CHÍNH trước đây thiếu dòng này —
-            // màn KDS có Đường/Đá nhưng PHIẾU GIẤY thì không.
-            modifierLabels: l.modifierSelections?.map(
-              (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
-            ),
-            note: l.note,
-          })),
-          {
-            orderNumber: result.orderNumber ?? "—",
-            tableName: tab.label,
-            orderType: tab.orderType,
-            createdAt: new Date().toISOString(),
-            cashierName: user?.fullName,
-            style: settings.print.kitchenTicketStyle,
-            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-            isOffline: !networkStatus.isOnline,
-            orderNote: tab.orderNote, // Sprint POS-FNB-EXT-1: in ghi chú đơn ra phiếu
-          },
-          branchId,
-        );
+            {
+              orderNumber: result.orderNumber ?? "—",
+              tableName: tab.label,
+              orderType: tab.orderType,
+              createdAt: new Date().toISOString(),
+              cashierName: user?.fullName,
+              style: settings.print.kitchenTicketStyle,
+              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+              isOffline: !networkStatus.isOnline,
+              orderNote: tab.orderNote, // Sprint POS-FNB-EXT-1: in ghi chú đơn ra phiếu
+            },
+            branchId,
+          );
+        } catch (printError) {
+          console.error("[FnB] in phiếu bếp thất bại sau khi đã gửi bếp:", printError);
+          toast({
+            title: "Đơn đã gửi bếp, nhưng in phiếu lỗi",
+            description: "Không gửi lại món. Kiểm tra máy in rồi in lại từ đơn bếp.",
+            variant: "warning",
+          });
+        }
       }
 
-      pos.clearCart();
       hapticSuccess();
 
       if (!networkStatus.isOnline) {
@@ -1893,10 +1937,61 @@ function FnbPosPageInner() {
     [pos, persistDeliveryTier],
   );
 
+  /**
+   * Nạp snapshot chỉ-đọc từ đơn bếp để có thể thu tiền/in lại ở tab vừa mở
+   * trên máy hoặc ca khác. Không đưa món vào hàng chờ gửi, tránh gửi trùng.
+   */
+  const hydrateKitchenOrderIntoTab = useCallback(
+    async (orderId: string, tabId: string, silent = false): Promise<boolean> => {
+      try {
+        const order = await getKitchenOrderById(orderId);
+        pos.loadSentLinesIntoTab(
+          tabId,
+          (order.items ?? []).map(kitchenItemToCartLine),
+        );
+        // Các trường này là snapshot máy chủ của đơn đã gửi. Nạp lại cùng
+        // món để thu ngân nhận ca/in phiếu tạm không dùng metadata còn sót
+        // của máy cũ. Khách hàng không ghi vào kitchen_orders nên tuyệt đối
+        // không suy diễn. Nếu tab không giữ được ngữ cảnh cục bộ, dialog thanh
+        // toán sẽ buộc xác nhận Khách lẻ/chọn lại khách.
+        const previousTab = pos.tabs.find((tab) => tab.id === tabId);
+        const hasKnownCustomerContext = Boolean(
+          previousTab?.customerId || previousTab?.customerConfirmationRequired === false,
+        );
+        pos.updateTabMeta(tabId, {
+          kitchenOrderId: order.id,
+          tableId: order.tableId ?? undefined,
+          orderType: order.orderType,
+          orderNote: order.note ?? undefined,
+          deliveryPlatform: order.deliveryPlatform ?? undefined,
+          deliveryFee: order.deliveryFee,
+          platformCommissionPercent: order.platformCommissionPercent,
+          deliveryStaffId: order.deliveryStaffId ?? undefined,
+          deliveryDistanceTier: order.deliveryDistanceTier ?? undefined,
+          persistedOrderDiscountAmount: order.discountAmount,
+          customerConfirmationRequired: !hasKnownCustomerContext,
+        });
+        return true;
+      } catch (err) {
+        console.error("[FnB] nạp snapshot đơn bếp thất bại:", err);
+        if (!silent) {
+          toast({
+            title: "Chưa tải được món của đơn bếp",
+            description: "Kiểm tra mạng rồi bấm Thanh toán lại. Đơn chưa bị thu tiền.",
+            variant: "warning",
+          });
+        }
+        return false;
+      }
+    },
+    [pos, toast],
+  );
+
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
     const tab = pos.activeTab;
-    if (!tab || tab.lines.length === 0) return;
+    const billLines = pos.allLines;
+    if (!tab || billLines.length === 0) return;
 
     // Migration 00070: nếu là đơn sàn → bill in NET (quán thực thu),
     // commission line tách riêng cho shipper thấy.
@@ -1906,16 +2001,20 @@ function FnbPosPageInner() {
       !!tab.deliveryPlatform &&
       tab.deliveryPlatform !== "direct" &&
       commissionPercent > 0;
+    // Máy chủ tính tổng phải thu = tiền món sau giảm + phí giao + tip, rồi mới
+    // trừ phí sàn. Phiếu tạm phải bám cùng công thức để thu ngân không báo sai.
+    const deliveryFee = tab.deliveryFee ?? 0;
+    const grossTotal = fnbBenefitDisplay.total + deliveryFee;
     const commissionAmount = isPlatformOrder
-      ? Math.round((fnbBenefitDisplay.total * commissionPercent) / 100)
+      ? Math.round((grossTotal * commissionPercent) / 100)
       : 0;
-    const netTotal = fnbBenefitDisplay.total - commissionAmount;
+    const netTotal = grossTotal - commissionAmount;
 
     printPreBill({
       orderNumber: tab.label,
       tableName: tab.label,
       orderType: tab.orderType,
-      items: tab.lines.map((l) => ({
+      items: billLines.map((l) => ({
         name: l.productName,
         variant: l.variantLabel,
         quantity: l.quantity,
@@ -1928,7 +2027,7 @@ function FnbPosPageInner() {
       })),
       subtotal: pos.subtotal,
       discountAmount: fnbBenefitDisplay.totalDiscountAmount,
-      deliveryFee: 0,
+      deliveryFee,
       total: netTotal,
       createdAt: new Date().toISOString(),
       cashierName: user?.fullName,
@@ -1965,6 +2064,7 @@ function FnbPosPageInner() {
       // a later tab change cannot combine another guest's benefits or cart.
       const paymentBenefitDisplay = fnbBenefitDisplay;
       const paymentSubtotal = pos.subtotal;
+      const paymentLines = pos.allLines;
       const paymentManualDiscountAmount = pos.orderDiscountAmount;
       const paymentPromotionId = appliedPromotion?.promotion.id ?? null;
       const paymentCouponCode = couponApplied?.code ?? null;
@@ -2078,7 +2178,7 @@ function FnbPosPageInner() {
               invoiceCode: payResult.invoiceCode,
               tableName: tab.label,
               orderType: tab.orderType,
-              items: tab.lines.map((l) => ({
+              items: paymentLines.map((l) => ({
                 name: l.productName,
                 variant: l.variantLabel,
                 quantity: l.quantity,
@@ -2095,6 +2195,7 @@ function FnbPosPageInner() {
               })),
               subtotal: paymentSubtotal,
               discountAmount: serverDiscount,
+              deliveryFee: tab.deliveryFee ?? 0,
               tipAmount,
               total: serverTotal,
               paid: serverTendered,
@@ -2114,7 +2215,7 @@ function FnbPosPageInner() {
               orderNumber: tab.label,
               tableName: tab.label,
               orderType: tab.orderType,
-              items: tab.lines.map((l) => ({
+              items: paymentLines.map((l) => ({
                 name: l.productName,
                 variant: l.variantLabel,
                 quantity: l.quantity,
@@ -2127,7 +2228,7 @@ function FnbPosPageInner() {
               })),
               subtotal: paymentSubtotal,
               discountAmount: serverDiscount,
-              deliveryFee: 0,
+              deliveryFee: tab.deliveryFee ?? 0,
               tipAmount,
               total: serverTotal,
               createdAt: new Date().toISOString(),
@@ -2228,6 +2329,7 @@ function FnbPosPageInner() {
           pos.updateTabMeta(newTabId, {
             kitchenOrderId: table.currentOrderId,
           });
+          void hydrateKitchenOrderIntoTab(table.currentOrderId, newTabId, true);
           setShowFloorPlan(false);
           toast({
             title: `Bàn ${table.tableNumber} đang có đơn cũ`,
@@ -2258,7 +2360,7 @@ function FnbPosPageInner() {
           });
       }
     },
-    [pos, branchId, canManageTables, toast],
+    [pos, branchId, canManageTables, toast, hydrateKitchenOrderIntoTab],
   );
 
   // ── Shift handlers ──
@@ -2282,6 +2384,26 @@ function FnbPosPageInner() {
    * vẫn KHÔNG bị chặn — bếp phải pha được kể cả khi chưa mở ca).
    */
   const requestPayment = useCallback((): boolean => {
+    const tab = pos.activeTab;
+    // Tab có thể vừa được mở từ sơ đồ bàn/máy khác nên chưa có snapshot local.
+    // Nạp trước khi mở dialog để thu ngân không thấy 0đ rồi thu thiếu.
+    if (tab?.kitchenOrderId && pos.lineCount === 0) {
+      void hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id).then((loaded) => {
+        if (loaded) {
+          toast({
+            title: "Đã nạp món của đơn bếp",
+            description: "Kiểm tra lại tổng tiền rồi bấm Thanh toán.",
+            variant: "success",
+          });
+        }
+      });
+      toast({
+        title: "Đang tải món của đơn bếp",
+        description: "Chưa mở thanh toán cho tới khi tổng tiền được nạp xong.",
+        variant: "info",
+      });
+      return false;
+    }
     const quyetDinh = quyetDinhThanhToan({
       lineCount: pos.lineCount,
       isOnline: networkStatus.isOnline,
@@ -2328,7 +2450,7 @@ function FnbPosPageInner() {
       case "khong_lam_gi":
         return false;
     }
-  }, [pos.lineCount, networkStatus.isOnline, shiftState.status, toast]);
+  }, [pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab]);
 
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
@@ -2421,6 +2543,7 @@ function FnbPosPageInner() {
     async (args: {
       orderId: string;
       reasonCode: string;
+      reasonNote?: string;
       label: string;
       tableId?: string | null;
       otpId?: string;
@@ -2429,6 +2552,7 @@ function FnbPosPageInner() {
         await cancelUnpaidKitchenOrder({
           orderId: args.orderId,
           reasonCode: args.reasonCode,
+          reasonNote: args.reasonNote,
           shiftId: currentShift?.id ?? null,
           otpId: args.otpId,
         });
@@ -2436,8 +2560,8 @@ function FnbPosPageInner() {
         toast({
           title: "Đã huỷ đơn bếp",
           description: args.otpId
-            ? `Đơn ${args.label} đã được huỷ (duyệt qua OTP). Lý do: ${args.reasonCode}`
-            : `Đơn ${args.label} đã được huỷ. Lý do: ${args.reasonCode}`,
+            ? `Đơn ${args.label} đã được huỷ (duyệt qua OTP). Lý do: ${args.reasonCode}${args.reasonNote ? ` - ${args.reasonNote}` : ""}`
+            : `Đơn ${args.label} đã được huỷ. Lý do: ${args.reasonCode}${args.reasonNote ? ` - ${args.reasonNote}` : ""}`,
           variant: "success",
         });
         setVoidReason("");
@@ -2501,15 +2625,16 @@ function FnbPosPageInner() {
       });
       return;
     }
-    const effectiveReason =
-      voidReason === "Khác" ? `Khác: ${voidReasonOther.trim()}` : voidReason.trim();
+    const reasonCode = voidReason.trim();
+    const reasonNote = voidReason === "Khác" ? voidReasonOther.trim() : undefined;
 
     // Phase 3a: cashier không có quyền → chuyển sang OTP delegation flow.
     if (!canCancelUnpaidOrder) {
       setVoidOtpContext({
         orderId: tab.kitchenOrderId,
         label: tab.label,
-        reasonCode: effectiveReason,
+        reasonCode,
+        reasonNote,
         tableId: tab.tableId ?? null,
       });
       setVoidConfirmOpen(false);
@@ -2519,7 +2644,8 @@ function FnbPosPageInner() {
 
     await executeKitchenOrderCancel({
       orderId: tab.kitchenOrderId,
-      reasonCode: voidReason.trim(),
+      reasonCode,
+      reasonNote,
       label: tab.label,
       tableId: tab.tableId,
     });
@@ -2630,6 +2756,7 @@ function FnbPosPageInner() {
         targetTabId = pos.createTab(`Bàn ${target.tableNumber}`, "dine_in", target.id);
         pos.updateTabMeta(targetTabId, { kitchenOrderId: target.currentOrderId });
       }
+      await hydrateKitchenOrderIntoTab(target.currentOrderId, targetTabId, true);
       if (sourceTab) pos.closeTab(sourceTab.id);
       pos.switchTab(targetTabId);
 
@@ -2668,6 +2795,7 @@ function FnbPosPageInner() {
     pos,
     tables,
     toast,
+    hydrateKitchenOrderIntoTab,
   ]);
 
   // ── Customer selection ──
@@ -2676,6 +2804,7 @@ function FnbPosPageInner() {
       pos.updateTabMeta(pos.activeTabId, {
         customerId: customer?.id,
         customerName: customer?.name ?? "Khách lẻ",
+        customerConfirmationRequired: false,
       });
       setCustomerPickerOpen(false);
     },
@@ -2727,32 +2856,12 @@ function FnbPosPageInner() {
     }
   }, [pos, toast]);
 
-  // 29/07: rót món của đơn con vừa tách vào tab con. Bắt buộc — màn thanh
-  // toán lấy số tiền khách đưa từ GIỎ (pos.total), giỏ rỗng thì bấm thanh
-  // toán sẽ đưa 0đ và hoá đơn ghi nợ nguyên đơn (RPC tự tính đúng tổng từ
-  // đơn bếp, nên lệch ra thành công nợ ảo).
+  // Nạp món của đơn con vào snapshot ĐÃ GỬI BẾP. Nếu đưa vào `lines`, lần
+  // thanh toán sau sẽ hiểu nhầm là món mới và gửi bếp trùng lần nữa.
   const loadChildOrderIntoTab = useCallback(
     async (childOrderId: string, tabId: string) => {
-      try {
-        const child = await getKitchenOrderById(childOrderId);
-        pos.loadLinesIntoTab(
-          tabId,
-          (child.items ?? []).map((it) => ({
-            productId: it.productId,
-            productName: it.productName,
-            variantId: it.variantId ?? undefined,
-            variantLabel: it.variantLabel ?? undefined,
-            quantity: it.quantity,
-            unitPrice: it.unitPrice,
-            toppings: (it.toppings ?? []) as unknown as FnbOrderLine["toppings"],
-            modifierSelections: it.modifierSelections,
-            note: it.note ?? undefined,
-          })),
-        );
-      } catch (err) {
-        // Không chặn: đơn con đã nằm trong DB và tab đã cầm mã đơn. Thu ngân
-        // bấm lại vào tab là màn hình tự nạp; báo để không thu nhầm 0đ.
-        console.error("[FnB] nạp món đơn con thất bại:", err);
+      const loaded = await hydrateKitchenOrderIntoTab(childOrderId, tabId, true);
+      if (!loaded) {
         toast({
           title: "Chưa tải được món của bill tách",
           description: "Mở lại tab đó trước khi thu tiền để số tiền hiện đúng.",
@@ -2760,7 +2869,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos, toast],
+    [hydrateKitchenOrderIntoTab, toast],
   );
 
   const handleSplitByItems = useCallback(
@@ -2782,25 +2891,14 @@ function FnbPosPageInner() {
       }
       try {
         const result = await splitByItems(tab.kitchenOrderId, itemIds);
-        pos.setOrderDiscount(
-          tab.id,
-          result.parentDiscountAmount > 0
-            ? { mode: "amount", value: result.parentDiscountAmount }
-            : undefined,
-        );
         // 29/07: NỐI tab mới với đơn con vừa tách. Trước đây tab được tạo
         // rỗng, không cầm mã đơn bếp nào → bấm thanh toán trên tab đó sẽ mở
         // một đơn MỚI, còn đơn con đã tách nằm mồ côi: bếp đã làm món mà
         // không ai thu được tiền.
         const newTabId = pos.createTab(`${tab.label}-B`, tab.orderType, tab.tableId);
         pos.updateTabMeta(newTabId, { kitchenOrderId: result.childOrderId });
-        pos.setOrderDiscount(
-          newTabId,
-          result.childDiscountAmount > 0
-            ? { mode: "amount", value: result.childDiscountAmount }
-            : undefined,
-        );
         await loadChildOrderIntoTab(result.childOrderId, newTabId);
+        await hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id, true);
         hapticSuccess();
         toast({
           title: "Đã tách bill",
@@ -2816,7 +2914,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab]
+    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
   );
 
   const handleSplitEqually = useCallback(
@@ -2841,17 +2939,8 @@ function FnbPosPageInner() {
         return;
       }
       try {
-        const {
-          childOrderIds,
-          childDiscountAmounts,
-          parentDiscountAmount,
-        } = await splitEqually(tab.kitchenOrderId, numberOfWays);
-        pos.setOrderDiscount(
-          tab.id,
-          parentDiscountAmount > 0
-            ? { mode: "amount", value: parentDiscountAmount }
-            : undefined,
-        );
+        const { childOrderIds } = await splitEqually(tab.kitchenOrderId, numberOfWays);
+        await hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id, true);
         // 29/07: mỗi tab con NỐI với một đơn con đã tách (xem ghi chú ở
         // handleSplitByItems) — không nối thì các phần chia ra không thu
         // được tiền.
@@ -2861,13 +2950,6 @@ function FnbPosPageInner() {
           const childId = childOrderIds[i - 1];
           if (childId) {
             pos.updateTabMeta(newTabId, { kitchenOrderId: childId });
-            const childDiscount = childDiscountAmounts[i - 1] ?? 0;
-            pos.setOrderDiscount(
-              newTabId,
-              childDiscount > 0
-                ? { mode: "amount", value: childDiscount }
-                : undefined,
-            );
             await loadChildOrderIntoTab(childId, newTabId);
           }
         }
@@ -2886,7 +2968,7 @@ function FnbPosPageInner() {
         });
       }
     },
-    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab]
+    [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
   );
 
   // ── Keyboard shortcuts (F3/F4/F9/F10/Ctrl+Tab) ──
@@ -2941,7 +3023,7 @@ function FnbPosPageInner() {
       }
       if (e.key === "F10") {
         e.preventDefault();
-        if (pos.lineCount > 0) handleSendToKitchen();
+        if (pos.unsentLineCount > 0) handleSendToKitchen();
         return;
       }
       if (e.key === "F1" || (e.key === "?" && !inInput)) {
@@ -3273,10 +3355,12 @@ function FnbPosPageInner() {
           subtotal={pos.subtotal}
           total={fnbBenefitDisplay.total}
           orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
+          persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
           manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
           promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
           couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
           lineCount={pos.lineCount}
+          unsentLineCount={pos.unsentLineCount}
           updateLineQty={pos.updateLineQty}
           removeLine={pos.removeLine}
           onEditLine={handleEditLine}
@@ -3359,11 +3443,20 @@ function FnbPosPageInner() {
             subtotal={pos.subtotal}
             discountAmount={fnbBenefitDisplay.totalDiscountAmount}
             manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
+            persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
             promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
             couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
             total={fnbBenefitDisplay.total}
             lineCount={pos.lineCount}
             orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
+            initialCustomerName={pos.activeTab?.customerName}
+            customerLocked={Boolean(pos.activeTab?.customerId)}
+            customerConfirmationRequired={Boolean(pos.activeTab?.customerConfirmationRequired)}
+            onCustomerConfirmed={() => pos.updateTabMeta(pos.activeTabId, {
+              customerId: undefined,
+              customerName: "Khách lẻ",
+              customerConfirmationRequired: false,
+            })}
             onConfirm={handlePayment}
           />
         </Suspense>
@@ -3469,10 +3562,12 @@ function FnbPosPageInner() {
               subtotal={pos.subtotal}
               total={fnbBenefitDisplay.total}
               orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
+              persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
               manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
               promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
               couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
               lineCount={pos.lineCount}
+              unsentLineCount={pos.unsentLineCount}
               updateLineQty={pos.updateLineQty}
               removeLine={pos.removeLine}
               onEditLine={handleEditLine}
@@ -3678,13 +3773,14 @@ function FnbPosPageInner() {
             ? {
                 kitchen_order_id: voidOtpContext.orderId,
                 reason_code: voidOtpContext.reasonCode,
+                reason_note: voidOtpContext.reasonNote,
                 table_id: voidOtpContext.tableId,
               }
             : undefined
         }
         contextLabel={
           voidOtpContext
-            ? `Huỷ đơn ${voidOtpContext.label} — lý do: ${voidOtpContext.reasonCode}`
+            ? `Huỷ đơn ${voidOtpContext.label} — lý do: ${voidOtpContext.reasonCode}${voidOtpContext.reasonNote ? ` - ${voidOtpContext.reasonNote}` : ""}`
             : undefined
         }
         onApproved={async (verified) => {
@@ -3692,6 +3788,7 @@ function FnbPosPageInner() {
           await executeKitchenOrderCancel({
             orderId: voidOtpContext.orderId,
             reasonCode: voidOtpContext.reasonCode,
+            reasonNote: voidOtpContext.reasonNote,
             label: voidOtpContext.label,
             tableId: voidOtpContext.tableId,
             otpId: verified.otpId,

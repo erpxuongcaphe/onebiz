@@ -124,6 +124,39 @@ describe("useFnbPosState", () => {
     });
   });
 
+  it("updateTabMeta — nạp lại đúng metadata đơn đã gửi khi nhận ca", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    const tabId = result.current.activeTabId;
+
+    act(() => {
+      result.current.updateTabMeta(tabId, {
+        kitchenOrderId: "ko-server-1",
+        orderType: "delivery",
+        orderNote: "Gọi trước khi giao",
+        deliveryPlatform: "direct",
+        deliveryFee: 25_000,
+        platformCommissionPercent: 0,
+        deliveryStaffId: "shipper-1",
+        deliveryDistanceTier: "mid",
+        persistedOrderDiscountAmount: 15_000,
+        customerConfirmationRequired: true,
+      });
+    });
+
+    expect(result.current.activeTab).toMatchObject({
+      kitchenOrderId: "ko-server-1",
+      orderType: "delivery",
+      orderNote: "Gọi trước khi giao",
+      deliveryPlatform: "direct",
+      deliveryFee: 25_000,
+      platformCommissionPercent: 0,
+      deliveryStaffId: "shipper-1",
+      deliveryDistanceTier: "mid",
+      persistedOrderDiscountAmount: 15_000,
+      customerConfirmationRequired: true,
+    });
+  });
+
   // ── Cart lines ──
 
   it("thêm 1 món → subtotal = unitPrice * qty", () => {
@@ -228,6 +261,46 @@ describe("useFnbPosState", () => {
 
     expect(result.current.activeTab!.lines).toHaveLength(0);
     expect(result.current.subtotal).toBe(0);
+  });
+
+  it("gửi bếp xong vẫn giữ tổng để thanh toán, nhưng không còn món chờ gửi", () => {
+    const { result } = renderHook(() => useFnbPosState());
+
+    act(() => {
+      result.current.addLine(makeLine({ unitPrice: 35_000, quantity: 2 }));
+      result.current.markActiveLinesSent();
+    });
+
+    expect(result.current.activeTab!.lines).toHaveLength(0);
+    expect(result.current.activeTab!.sentLines).toHaveLength(1);
+    expect(result.current.subtotal).toBe(70_000);
+    expect(result.current.lineCount).toBe(2);
+    expect(result.current.unsentLineCount).toBe(0);
+
+    act(() => {
+      result.current.addLine(makeLine({ productId: "extra", unitPrice: 20_000 }));
+    });
+
+    expect(result.current.activeTab!.lines).toHaveLength(1);
+    expect(result.current.activeTab!.sentLines).toHaveLength(1);
+    expect(result.current.subtotal).toBe(90_000);
+    expect(result.current.unsentLineCount).toBe(1);
+  });
+
+  it("nạp đơn bếp vào snapshot đã gửi, không biến thành món gửi lại", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    const tabId = result.current.activeTabId;
+
+    act(() => {
+      result.current.loadSentLinesIntoTab(tabId, [
+        makeLine({ productId: "server-item", unitPrice: 45_000, quantity: 2 }),
+      ]);
+    });
+
+    expect(result.current.activeTab!.lines).toHaveLength(0);
+    expect(result.current.activeTab!.sentLines).toHaveLength(1);
+    expect(result.current.subtotal).toBe(90_000);
+    expect(result.current.unsentLineCount).toBe(0);
   });
 
   it("toppings tính vào lineTotal", () => {
@@ -513,6 +586,38 @@ describe("FnbCart — component", () => {
     expect(screen.getByText("Gửi thêm (F10)")).toBeDefined();
   });
 
+  it("món đã gửi bếp vẫn thanh toán được nhưng không thể gửi hay sửa lại", () => {
+    const sentLine = {
+      id: "sent-1",
+      productId: "coffee",
+      productName: "Cà phê sữa",
+      quantity: 1,
+      unitPrice: 35_000,
+      toppings: [],
+      lineTotal: 35_000,
+    };
+    render(
+      <FnbCart
+        {...baseProps}
+        activeTab={{
+          ...baseTab,
+          kitchenOrderId: "ko-1",
+          lines: [],
+          sentLines: [sentLine],
+        }}
+        subtotal={35_000}
+        total={35_000}
+        lineCount={1}
+        unsentLineCount={0}
+      />,
+    );
+
+    expect(screen.getAllByText("Đã gửi bếp").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/Không sửa trực tiếp/)).toBeDefined();
+    expect(screen.getByRole("button", { name: /Gửi thêm/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /Thanh toán/i })).not.toBeDisabled();
+  });
+
   it("hiện subtotal và total", () => {
     render(
       <FnbCart {...baseProps} subtotal={100_000} total={100_000} />
@@ -794,6 +899,21 @@ describe("FnbPaymentDialog — component", () => {
     expect(screen.queryByText("Giảm giá")).toBeNull();
   });
 
+  it("hiện giảm giá đã lưu riêng, không giả thành giảm giá thủ công", () => {
+    render(
+      <FnbPaymentDialog
+        {...baseProps}
+        subtotal={200_000}
+        discountAmount={20_000}
+        persistedOrderDiscountAmount={20_000}
+        total={180_000}
+      />,
+    );
+    expect(screen.getByText("Giảm giá đã lưu")).toBeDefined();
+    expect(screen.queryByText("Giảm giá thủ công")).toBeNull();
+    expect(screen.queryByText("Giảm giá")).toBeNull();
+  });
+
   it("hiện 4 phương thức thanh toán", () => {
     render(<FnbPaymentDialog {...baseProps} />);
     expect(screen.getByText("Tiền mặt")).toBeDefined();
@@ -875,6 +995,52 @@ describe("FnbPaymentDialog — component", () => {
   it("hiện order number trong title khi có", () => {
     render(<FnbPaymentDialog {...baseProps} orderNumber="Bàn 5" />);
     expect(screen.getByText("Thanh toán — Bàn 5")).toBeDefined();
+  });
+
+  it("giữ đúng khách đã chọn và không cho đổi tên làm lệch mã khách", () => {
+    const onConfirm = vi.fn();
+    render(
+      <FnbPaymentDialog
+        {...baseProps}
+        initialCustomerName="Công ty Minh An"
+        customerLocked
+        onConfirm={onConfirm}
+      />,
+    );
+
+    const customerInput = screen.getByPlaceholderText("Khách lẻ") as HTMLInputElement;
+    expect(customerInput.value).toBe("Công ty Minh An");
+    expect(customerInput.readOnly).toBe(true);
+
+    fireEvent.click(screen.getByText("Đủ"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/i }));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customerName: "Công ty Minh An" }));
+  });
+
+  it("đơn mở lại thiếu ngữ cảnh khách phải xác nhận Khách lẻ trước khi thanh toán", () => {
+    const onConfirm = vi.fn();
+    const onCustomerConfirmed = vi.fn();
+    render(
+      <FnbPaymentDialog
+        {...baseProps}
+        customerConfirmationRequired
+        onCustomerConfirmed={onCustomerConfirmed}
+        onConfirm={onConfirm}
+      />,
+    );
+
+    const customerInput = screen.getByPlaceholderText("Khách lẻ") as HTMLInputElement;
+    expect(customerInput.readOnly).toBe(true);
+    const confirmButton = screen.getByRole("button", { name: /Hoàn tất thanh toán/i });
+    fireEvent.click(screen.getByText("Đủ"));
+    expect(confirmButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: /Tôi xác nhận đây là Khách lẻ/i }));
+    expect(confirmButton).not.toBeDisabled();
+    fireEvent.click(confirmButton);
+
+    expect(onCustomerConfirmed).toHaveBeenCalledOnce();
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customerName: "Khách lẻ" }));
   });
 
   it("dialog ẩn khi open=false", () => {

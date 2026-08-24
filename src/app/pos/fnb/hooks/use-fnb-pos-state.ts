@@ -91,7 +91,20 @@ export interface UseFnbPosStateReturn {
     meta: Partial<
       Pick<
         FnbTabSnapshot,
-        "customerId" | "customerName" | "kitchenOrderId" | "tableId" | "label"
+        | "customerId"
+        | "customerName"
+        | "customerConfirmationRequired"
+        | "persistedOrderDiscountAmount"
+        | "kitchenOrderId"
+        | "tableId"
+        | "label"
+        | "orderType"
+        | "orderNote"
+        | "deliveryPlatform"
+        | "deliveryFee"
+        | "platformCommissionPercent"
+        | "deliveryStaffId"
+        | "deliveryDistanceTier"
       >
     >,
   ) => void;
@@ -111,12 +124,16 @@ export interface UseFnbPosStateReturn {
    */
   updateLine: (lineId: string, line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   clearCart: () => void;
+  /** Chuyển các món vừa được server nhận vào snapshot "đã gửi bếp". */
+  markActiveLinesSent: () => void;
   /**
    * 29/07: nạp món vào MỘT tab chỉ định (không cần tab đó đang mở). Dùng cho
    * tách bill: tab con phải cầm sẵn món của đơn con, nếu không màn thanh toán
    * hiện 0đ và hoá đơn ghi nợ toàn bộ.
    */
   loadLinesIntoTab: (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => void;
+  /** Nạp snapshot món đã có trên đơn bếp; không đưa chúng vào hàng chờ gửi. */
+  loadSentLinesIntoTab: (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => void;
 
   // Discount
   setOrderDiscount: (tabId: string, discount: FnbDiscountInput | undefined) => void;
@@ -150,6 +167,10 @@ export interface UseFnbPosStateReturn {
   subtotal: number;
   total: number;
   lineCount: number;
+  /** Số món chưa gửi bếp. Chỉ số này quyết định có bật nút Bếp/F10 hay không. */
+  unsentLineCount: number;
+  /** Toàn bộ món của tab: đã gửi bếp + chưa gửi. Dùng cho in/tổng tiền. */
+  allLines: FnbOrderLine[];
 }
 
 export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
@@ -169,7 +190,10 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     if (!branchId) return;
 
     // Cùng quy tắc với auto-save: không giữ lại một giỏ hoàn toàn rỗng.
-    const onlyEmpty = tabs.length === 1 && tabs[0].lines.length === 0;
+    const onlyEmpty =
+      tabs.length === 1 &&
+      tabs[0].lines.length === 0 &&
+      (tabs[0].sentLines?.length ?? 0) === 0;
     if (onlyEmpty) {
       await clearPersistedTabs(branchId);
       return;
@@ -276,7 +300,20 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       meta: Partial<
         Pick<
           FnbTabSnapshot,
-          "customerId" | "customerName" | "kitchenOrderId" | "tableId" | "label"
+          | "customerId"
+          | "customerName"
+          | "customerConfirmationRequired"
+          | "persistedOrderDiscountAmount"
+          | "kitchenOrderId"
+          | "tableId"
+          | "label"
+          | "orderType"
+          | "orderNote"
+          | "deliveryPlatform"
+          | "deliveryFee"
+          | "platformCommissionPercent"
+          | "deliveryStaffId"
+          | "deliveryDistanceTier"
         >
       >,
     ) => {
@@ -399,6 +436,19 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     updateActiveTab(() => []);
   }, [updateActiveTab]);
 
+  const markActiveLinesSent = useCallback(() => {
+    setTabs((prev) =>
+      prev.map((tab) => {
+        if (tab.id !== activeTabId || tab.lines.length === 0) return tab;
+        return {
+          ...tab,
+          sentLines: [...(tab.sentLines ?? []), ...tab.lines],
+          lines: [],
+        };
+      }),
+    );
+  }, [activeTabId]);
+
   // 29/07: nạp món vào tab chỉ định — khác addLine ở chỗ KHÔNG bám activeTab,
   // vì tách bill phải rót món vào tab con trong khi thu ngân vẫn đứng ở tab gốc.
   const loadLinesIntoTab = useCallback(
@@ -415,6 +465,26 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
                 })),
               }
             : t,
+        ),
+      );
+    },
+    [],
+  );
+
+  const loadSentLinesIntoTab = useCallback(
+    (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => {
+      setTabs((prev) =>
+        prev.map((tab) =>
+          tab.id === tabId
+            ? {
+                ...tab,
+                sentLines: lines.map((line) => ({
+                  ...line,
+                  id: nextLineId(),
+                  lineTotal: calcLineTotal(line),
+                })),
+              }
+            : tab,
         ),
       );
     },
@@ -550,9 +620,11 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   // ── Totals ──
 
-  const lines = activeTab?.lines ?? [];
-  const subtotal = lines.reduce((sum, l) => sum + l.lineTotal, 0);
-  const lineCount = lines.reduce((sum, l) => sum + l.quantity, 0);
+  const pendingLines = activeTab?.lines ?? [];
+  const allLines = [...(activeTab?.sentLines ?? []), ...pendingLines];
+  const subtotal = allLines.reduce((sum, l) => sum + l.lineTotal, 0);
+  const lineCount = allLines.reduce((sum, l) => sum + l.quantity, 0);
+  const unsentLineCount = pendingLines.reduce((sum, l) => sum + l.quantity, 0);
 
   const orderDiscountAmount = (() => {
     const disc = activeTab?.orderDiscount;
@@ -580,7 +652,9 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     removeLine,
     updateLine,
     clearCart,
+    markActiveLinesSent,
     loadLinesIntoTab,
+    loadSentLinesIntoTab,
     setOrderDiscount,
     attachDiscountAudit,
     orderDiscountAmount,
@@ -593,5 +667,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     subtotal,
     total,
     lineCount,
+    unsentLineCount,
+    allLines,
   };
 }

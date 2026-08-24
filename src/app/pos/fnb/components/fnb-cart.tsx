@@ -38,6 +38,8 @@ interface FnbCartProps {
   subtotal: number;
   total: number;
   orderDiscountAmount: number;
+  /** Giảm giá máy chủ đã lưu trên đơn bếp; không phải giảm tay mới. */
+  persistedOrderDiscountAmount?: number;
   /** Giảm tay đã qua OTP; không bao gồm coupon/khuyến mãi tự động. */
   manualDiscountAmount?: number;
   /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
@@ -45,6 +47,8 @@ interface FnbCartProps {
   /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
   couponDiscountAmount?: number;
   lineCount: number;
+  /** Số món còn ở hàng chờ gửi. Món đã gửi vẫn được tính tiền nhưng không gửi lại. */
+  unsentLineCount?: number;
   updateLineQty: (lineId: string, qty: number) => void;
   removeLine: (lineId: string) => void;
   onSendToKitchen: () => void;
@@ -132,10 +136,12 @@ export function FnbCart({
   subtotal,
   total,
   orderDiscountAmount,
+  persistedOrderDiscountAmount = 0,
   manualDiscountAmount = 0,
   promotionDiscountAmount = 0,
   couponDiscountAmount = 0,
   lineCount,
+  unsentLineCount = lineCount,
   updateLineQty,
   removeLine,
   onSendToKitchen,
@@ -173,7 +179,9 @@ export function FnbCart({
 }: FnbCartProps) {
   // Sprint POS-FNB-EXT-1: state cho note textarea expandable
   const [noteExpanded, setNoteExpanded] = useState(false);
-  const lines = activeTab?.lines ?? [];
+  const sentLines = activeTab?.sentLines ?? [];
+  const pendingLines = activeTab?.lines ?? [];
+  const lines = [...sentLines, ...pendingLines];
   const isEmpty = lines.length === 0;
   // C3 (CEO 18/08): màn THẤP (bàn phím mở HOẶC điện thoại xoay ngang) không
   // được ẨN CỨNG nhóm ưu đãi — chỉ THU GỌN, có nút mở lại. State đổi class,
@@ -193,7 +201,7 @@ export function FnbCart({
   // Luồng mới luôn truyền đủ ba thành phần bên dưới.
   const unclassifiedDiscountAmount = Math.max(
     0,
-    orderDiscountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
+    orderDiscountAmount - persistedOrderDiscountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
   );
   const orderTypeLabel =
     ORDER_TYPE_LABEL[activeTab?.orderType ?? "takeaway"] ?? "Mang về";
@@ -371,7 +379,7 @@ export function FnbCart({
                   type="button"
                   onClick={() => onChangeOrderType(opt.key)}
                   className={cn(
-                    "inline-flex items-center gap-1 px-3 h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
+                    "inline-flex items-center gap-1 px-3 min-h-11 lg:min-h-7 lg:h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
                     isActive
                       ? "bg-primary text-on-primary ambient-shadow"
                       : "text-muted-foreground hover:text-foreground",
@@ -487,10 +495,10 @@ export function FnbCart({
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-0.5">
                     <label className="text-[10px] text-on-surface-variant flex items-center gap-1">
-                      Phí ship (₫)
+                      Phí giao khách trả (₫)
                       <HelpTip>
-                        Phí giao hàng quán trả cho sàn / shipper. Khách thường
-                        thấy &quot;Free ship&quot; nhưng quán vẫn chịu phí qua sàn.
+                        Khoản này được cộng vào tổng khách cần trả. Phí/chiết
+                        khấu sàn của quán được tính riêng ở ô bên cạnh.
                       </HelpTip>
                     </label>
                     <Input
@@ -501,7 +509,7 @@ export function FnbCart({
                       onChange={(e) =>
                         onDeliveryFeeChange?.(parseInt(e.target.value) || 0)
                       }
-                      className="h-8 text-xs"
+                      className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
                       placeholder="0"
                     />
                   </div>
@@ -525,7 +533,7 @@ export function FnbCart({
                           parseInt(e.target.value) || 0,
                         )
                       }
-                      className="h-8 text-xs"
+                      className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
                       placeholder="0"
                     />
                   </div>
@@ -565,7 +573,7 @@ export function FnbCart({
                           type="button"
                           onClick={() => onDeliveryTierChange(tier.code, tier.fee)}
                           className={cn(
-                            "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                            "min-h-11 lg:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
                             isActive
                               ? "bg-primary text-on-primary"
                               : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -583,7 +591,7 @@ export function FnbCart({
                       type="button"
                       onClick={() => onDeliveryTierChange("custom")}
                       className={cn(
-                        "px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        "min-h-11 lg:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
                         activeTab.deliveryDistanceTier === "custom"
                           ? "bg-primary text-on-primary"
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -596,7 +604,7 @@ export function FnbCart({
                   {activeTab.deliveryDistanceTier === "custom" && onDeliveryFeeChange && (
                     <div className="grid grid-cols-2 gap-2 pt-1">
                       <label className="text-[10px] text-on-surface-variant col-span-2">
-                        Phí giao (VND)
+                        Phí giao khách trả (VND)
                       </label>
                       <Input
                         type="number"
@@ -606,7 +614,7 @@ export function FnbCart({
                         onChange={(e) =>
                           onDeliveryFeeChange(parseInt(e.target.value) || 0)
                         }
-                        className="h-8 text-xs"
+                        className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
                         placeholder="0"
                       />
                     </div>
@@ -632,7 +640,7 @@ export function FnbCart({
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
                     }
-                    className="w-full h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full min-h-11 lg:min-h-8 lg:h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">— Chưa gán (gán sau) —</option>
                     {staffOptions.map((s) => (
@@ -676,15 +684,19 @@ export function FnbCart({
           <div className="p-3 flex flex-col gap-2">
             {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
                 data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}
-            {[...lines].reverse().map((line) => (
+            {[...lines].reverse().map((line) => {
+              const isSent = sentLines.some((sentLine) => sentLine.id === line.id);
+              return (
               <CartLineItem
                 key={line.id}
                 line={line}
-                onUpdateQty={(qty) => updateLineQty(line.id, qty)}
-                onRemove={() => removeLine(line.id)}
-                onEdit={onEditLine ? () => onEditLine(line) : undefined}
+                sentToKitchen={isSent}
+                onUpdateQty={isSent ? undefined : (qty) => updateLineQty(line.id, qty)}
+                onRemove={isSent ? undefined : () => removeLine(line.id)}
+                onEdit={isSent || !onEditLine ? undefined : () => onEditLine(line)}
               />
-            ))}
+              );
+            })}
           </div>
         </ScrollArea>
       )}
@@ -789,6 +801,14 @@ export function FnbCart({
         )}
 
         {/* Benefits stay legible and cannot be mistaken for one manual discount. */}
+        {persistedOrderDiscountAmount > 0 && (
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-status-warning">Giảm giá đã lưu</span>
+            <span className="text-sm font-medium text-status-warning tabular-nums">
+              -{formatCurrency(persistedOrderDiscountAmount)}
+            </span>
+          </div>
+        )}
         {manualDiscountAmount > 0 && (
           <div className="flex items-center justify-between">
             <span className="text-sm text-status-warning">Giảm giá thủ công</span>
@@ -907,7 +927,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onPrintPreBill}
-                className="flex-1 h-8 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 min-h-11 lg:min-h-8 lg:h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="description" size={14} className="mr-1" />
                 Tạm tính
@@ -917,7 +937,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onSplitBill}
-                className="flex-1 h-8 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 min-h-11 lg:min-h-8 lg:h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="content_cut" size={14} className="mr-1" />
                 Tách bill
@@ -931,7 +951,7 @@ export function FnbCart({
           <button
             type="button"
             onClick={onSendToKitchen}
-            disabled={isEmpty || kitchenSubmitting}
+            disabled={unsentLineCount === 0 || kitchenSubmitting}
             className={cn(
               "flex-[0.4] h-14 rounded-lg font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               activeTab?.kitchenOrderId
@@ -987,7 +1007,7 @@ function CouponRow({
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">Mã</span>
-        <div className="flex-1 min-w-0 flex items-center gap-2 px-3 h-9 md:h-7 rounded bg-status-success/10 border border-status-success/30">
+        <div className="flex-1 min-w-0 flex items-center gap-2 px-3 min-h-11 lg:min-h-7 lg:h-7 rounded bg-status-success/10 border border-status-success/30">
           <Icon name="local_offer" size={14} className="text-status-success shrink-0" />
           <span className="text-xs font-semibold text-status-success truncate tabular-nums">
             {appliedCode}
@@ -997,7 +1017,7 @@ function CouponRow({
           <button
             type="button"
             onClick={onRemove}
-            className="h-9 w-9 md:h-7 md:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-status-error hover:border-status-error flex items-center justify-center shrink-0 transition-colors"
+            className="min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-status-error hover:border-status-error flex items-center justify-center shrink-0 transition-colors"
             title="Bỏ mã khuyến mãi"
             aria-label="Bỏ mã"
           >
@@ -1030,14 +1050,14 @@ function CouponRow({
         }}
         placeholder="Nhập mã khuyến mãi"
         disabled={applying}
-        className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 font-mono uppercase"
+        className="min-h-11 lg:min-h-7 lg:h-7 text-sm lg:text-xs flex-1 min-w-0 font-mono uppercase"
       />
       <button
         type="button"
         onClick={handleApply}
         disabled={!code.trim() || applying}
         className={cn(
-          "h-9 md:h-7 px-3 rounded border text-xs font-semibold shrink-0 transition-colors",
+          "min-h-11 lg:min-h-7 lg:h-7 px-3 rounded border text-xs font-semibold shrink-0 transition-colors",
           code.trim() && !applying
             ? "bg-primary text-on-primary border-primary hover:bg-primary-hover"
             : "bg-surface-container-low text-muted-foreground border-border opacity-60"
@@ -1105,13 +1125,13 @@ function DiscountRow({
           value={localValue}
           onChange={(e) => handleValueChange(e.target.value)}
           placeholder="0"
-          className="h-9 md:h-7 text-sm md:text-xs flex-1 min-w-0 tabular-nums"
+          className="min-h-11 lg:min-h-7 lg:h-7 text-sm lg:text-xs flex-1 min-w-0 tabular-nums"
         />
         <button
           type="button"
           onClick={toggleMode}
           className={cn(
-            "h-9 w-9 md:h-7 md:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
+            "min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
             mode === "percent"
               ? "bg-primary-fixed border-primary text-primary"
               : "bg-surface-container-low border-border text-muted-foreground",
@@ -1130,7 +1150,7 @@ function DiscountRow({
             <button
               type="button"
               onClick={() => setPresetMenuOpen((v) => !v)}
-              className="h-9 w-9 md:h-7 md:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-primary hover:border-primary flex items-center justify-center transition-colors"
+              className="min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-primary hover:border-primary flex items-center justify-center transition-colors"
               title="Khuyến mãi nhanh"
             >
               <Icon name="local_offer" size={14} className="md:h-3 md:w-3" />
@@ -1150,7 +1170,7 @@ function DiscountRow({
                       key={p.id}
                       type="button"
                       onClick={() => applyPreset(p)}
-                      className="w-full px-3 py-2 text-left text-xs hover:bg-surface-container-low transition-colors flex items-center justify-between"
+                      className="w-full min-h-11 px-3 py-2 text-left text-xs hover:bg-surface-container-low transition-colors flex items-center justify-between"
                     >
                       <span className="truncate">{p.name}</span>
                       <span className="font-semibold text-primary tabular-nums shrink-0 ml-2">
@@ -1175,12 +1195,15 @@ function CartLineItem({
   onUpdateQty,
   onRemove,
   onEdit,
+  sentToKitchen = false,
 }: {
   line: FnbOrderLine;
-  onUpdateQty: (qty: number) => void;
-  onRemove: () => void;
+  onUpdateQty?: (qty: number) => void;
+  onRemove?: () => void;
   /** Phase 1A.2: optional. Khi có → render nút "Sửa" mở lại item dialog. */
   onEdit?: () => void;
+  /** Dòng đã nằm trên đơn bếp: chỉ đọc để không sửa/gửi trùng. */
+  sentToKitchen?: boolean;
 }) {
   // Stitch FnB mockup cart line:
   // - Wrap card: bg-surface-container-low rounded-lg p-3
@@ -1198,6 +1221,11 @@ function CartLineItem({
           {line.variantLabel && (
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {line.variantLabel}
+            </p>
+          )}
+          {sentToKitchen && (
+            <p className="mt-1 text-[11px] font-medium text-status-info">
+              Đã gửi bếp
             </p>
           )}
         </div>
@@ -1238,10 +1266,13 @@ function CartLineItem({
           POS-FIX-C1: tăng touch target lên 36px md+, 44px touch device.
           Trước đây size-7 (28px) — barista đeo găng tap nhầm sang nút xoá. */}
       <div className="flex items-center justify-between mt-3">
+        {sentToKitchen ? (
+          <span className="text-xs text-muted-foreground">Không sửa trực tiếp sau khi gửi bếp</span>
+        ) : (
         <div className="inline-flex items-center gap-0.5 bg-surface-container-lowest rounded-full p-0.5 border border-outline-variant/15">
           <button
             type="button"
-            onClick={() => onUpdateQty(line.quantity - 1)}
+            onClick={() => onUpdateQty?.(line.quantity - 1)}
             className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
             aria-label="Giảm số lượng"
           >
@@ -1254,15 +1285,16 @@ function CartLineItem({
           </span>
           <button
             type="button"
-            onClick={() => onUpdateQty(line.quantity + 1)}
+            onClick={() => onUpdateQty?.(line.quantity + 1)}
             className="size-11 md:size-9 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
             aria-label="Tăng số lượng"
           >
             <Icon name="add" size={16} />
           </button>
         </div>
+        )}
 
-        <div className="flex items-center gap-1">
+        {!sentToKitchen && <div className="flex items-center gap-1">
           {onEdit && (
             <button
               type="button"
@@ -1283,7 +1315,7 @@ function CartLineItem({
           >
             <Icon name="delete" size={16} />
           </button>
-        </div>
+        </div>}
       </div>
     </div>
   );

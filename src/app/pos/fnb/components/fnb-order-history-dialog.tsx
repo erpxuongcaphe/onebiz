@@ -128,15 +128,16 @@ export function FnbOrderHistoryDialog({
     try {
       const detail = await getFnbInvoiceForReprint(id);
       // Migration 00070: detail.total đã = NET (sau commission) cho đơn platform.
-      // subtotal = net + commission − tip + discount  (vì invoices.total đã trừ commission)
+      // subtotal = net + commission − tip + discount − phí giao
+      // (vì invoices.total đã bao gồm phí giao và đã trừ commission).
       const isPlatformOrder =
         detail.orderType === "delivery" &&
         !!detail.deliveryPlatform &&
         detail.deliveryPlatform !== "direct" &&
         detail.platformCommissionAmount > 0;
       const subtotalForReprint = isPlatformOrder
-        ? detail.total + detail.platformCommissionAmount - detail.tipAmount + detail.discountAmount
-        : detail.total - detail.tipAmount + detail.discountAmount;
+        ? detail.total + detail.platformCommissionAmount - detail.tipAmount + detail.discountAmount - detail.deliveryFee
+        : detail.total - detail.tipAmount + detail.discountAmount - detail.deliveryFee;
       const printedViaTemplate = await printFnbBillWithTemplate({
         branchId,
         invoiceCode: detail.invoiceCode,
@@ -149,6 +150,7 @@ export function FnbOrderHistoryDialog({
         })),
         subtotal: subtotalForReprint,
         discountAmount: detail.discountAmount,
+        deliveryFee: detail.deliveryFee,
         tipAmount: detail.tipAmount,
         total: detail.total,
         paid: detail.paid,
@@ -178,7 +180,7 @@ export function FnbOrderHistoryDialog({
         })),
         subtotal: subtotalForReprint,
         discountAmount: detail.discountAmount,
-        deliveryFee: 0,
+        deliveryFee: detail.deliveryFee,
         tipAmount: detail.tipAmount,
         total: detail.total,
         createdAt: detail.createdAt,
@@ -547,11 +549,11 @@ export function FnbOrderHistoryDialog({
         onApproved={async (verified, reason) => {
           if (!otpTarget) return;
           try {
-            // Sau khi manager duyệt OTP → dùng issuedBy (manager) làm voidedBy
-            // để audit ghi nhận ai thực sự duyệt thao tác này.
-            const voidedBy = verified.issuedBy || userId || "";
+            // Người thực hiện là thu ngân đang thao tác; người duyệt được
+            // server lấy từ OTP và ghi riêng vào approved_by.
+            const voidedBy = userId || "";
             if (!voidedBy) {
-              throw new Error("Không xác định được người duyệt — vui lòng thử lại.");
+              throw new Error("Không xác định được thu ngân — vui lòng đăng nhập lại.");
             }
             // Day 17/05: truyền otpId xuống RPC để server verify lại
             await executeVoid(otpTarget, reason, voidedBy, verified.otpId);

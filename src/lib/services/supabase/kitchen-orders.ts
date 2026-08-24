@@ -50,6 +50,8 @@ function mapKitchenOrder(row: any): KitchenOrder {
     // Migration 00070: tách commission_percent / commission_amount
     platformCommissionPercent: Number(row.platform_commission_percent ?? 0),
     platformCommissionAmount: Number(row.platform_commission_amount ?? 0),
+    deliveryStaffId: row.delivery_staff_id ?? null,
+    deliveryDistanceTier: row.delivery_distance_tier ?? null,
     mergedIntoId: row.merged_into_id ?? null,
     originalTableId: row.original_table_id ?? null,
     parentOrderId: row.parent_order_id ?? null,
