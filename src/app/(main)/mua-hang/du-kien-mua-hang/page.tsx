@@ -177,15 +177,19 @@ export default function DuKienMuaHangPage() {
           { label: "Mã hàng", key: "code", width: 16 },
           { label: "Tên hàng", key: "name", width: 34 },
           { label: "ĐVT", key: "unit", width: 8 },
-          { label: "SL đặt", key: "qty", width: 12, format: "number" },
-          { label: "Giá trị", key: "amount", width: 16, format: "currency" },
+          { label: "SL đặt", key: "orderedQty", width: 12, format: "number" },
+          { label: "Đã xuất", key: "issuedQty", width: 12, format: "number" },
+          { label: "Còn cần", key: "remainingQty", width: 12, format: "number" },
+          { label: "Giá trị còn lại", key: "amount", width: 16, format: "currency" },
         ],
         rows: filteredSkuRows.map((r) => ({
           branch: r.branchName,
           code: r.code,
           name: r.name,
           unit: r.unit,
-          qty: r.quantity,
+          orderedQty: r.orderedQuantity,
+          issuedQty: r.issuedQuantity,
+          remainingQty: r.remainingQuantity,
           amount: r.amount,
         })),
       });
@@ -203,7 +207,7 @@ export default function DuKienMuaHangPage() {
     <div className="space-y-4">
       <ReportPageHeader
         title="Dự kiến mua hàng"
-        subtitle="Từ đơn đặt hàng chưa hoàn tất → nổ công thức → nguyên vật liệu cần chuẩn bị / mua"
+        subtitle="Chỉ lấy phần hàng còn phải xuất của đơn đặt hàng → nổ công thức → nguyên vật liệu cần chuẩn bị / mua"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -227,7 +231,7 @@ export default function DuKienMuaHangPage() {
             >
               <option value="all">Tất cả NVL và SKU</option>
               <option value="materials">NVL cần mua</option>
-              <option value="sku">SKU đã đặt</option>
+              <option value="sku">SKU còn phải xuất</option>
             </select>
           </div>
 
@@ -351,7 +355,7 @@ export default function DuKienMuaHangPage() {
           <Icon name="inventory_2" size={16} className="text-primary" />
           Tồn lấy tại: <strong className="text-foreground">{data?.khoTongName ?? "Kho Tổng"}</strong>
         </span>
-        <span>· Đơn đặt hàng chưa hoàn tất: <strong className="text-foreground">{data?.orderCount ?? 0}</strong></span>
+        <span>· Đơn còn hàng chưa xuất: <strong className="text-foreground">{data?.orderCount ?? 0}</strong></span>
         <span>· Đơn giá = giá vốn</span>
       </div>
 
@@ -364,7 +368,7 @@ export default function DuKienMuaHangPage() {
           <div className="py-12 text-center text-sm text-muted-foreground">Đang tính...</div>
         ) : !data || filteredMaterials.length === 0 ? (
           <div className="py-12 text-center text-sm text-muted-foreground">
-            Không có đơn đặt hàng chưa hoàn tất trong khoảng thời gian này (hoặc SKU chưa có công thức).
+            Không có hàng còn phải xuất trong các đơn phù hợp (hoặc SKU chưa có công thức).
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -412,7 +416,7 @@ export default function DuKienMuaHangPage() {
       </ChartCard>}
 
       {/* ② Đặt hàng theo chi nhánh */}
-      {itemView !== "materials" && <ChartCard title="Đặt hàng theo chi nhánh" subtitle="Chi tiết SKU đã đặt trong các đơn (nguồn của dự kiến trên)">
+      {itemView !== "materials" && <ChartCard title="Hàng còn phải xuất theo chi nhánh" subtitle="Đối chiếu số đặt, số đã xuất và số còn phải chuẩn bị cho dự kiến mua">
         {loading ? (
           <div className="py-10 text-center text-sm text-muted-foreground">Đang tải...</div>
         ) : skuByBranch.length === 0 ? (
@@ -433,7 +437,9 @@ export default function DuKienMuaHangPage() {
                         <th className="text-left py-1.5 pr-3 font-medium">Tên hàng</th>
                         <th className="text-left py-1.5 pr-3 font-medium">ĐVT</th>
                         <th className="text-right py-1.5 pr-3 font-medium">SL đặt</th>
-                        <th className="text-right py-1.5 font-medium">Giá trị</th>
+                        <th className="text-right py-1.5 pr-3 font-medium">Đã xuất</th>
+                        <th className="text-right py-1.5 pr-3 font-medium">Còn cần</th>
+                        <th className="text-right py-1.5 font-medium">Giá trị còn lại</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -442,7 +448,9 @@ export default function DuKienMuaHangPage() {
                           <td className="py-1.5 pr-3 font-mono text-xs text-primary">{r.code}</td>
                           <td className="py-1.5 pr-3">{r.name}</td>
                           <td className="py-1.5 pr-3 text-muted-foreground">{r.unit}</td>
-                          <td className="py-1.5 pr-3 text-right tabular-nums">{formatNumber(r.quantity)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{formatNumber(r.orderedQuantity)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">{formatNumber(r.issuedQuantity)}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums font-semibold text-primary">{formatNumber(r.remainingQuantity)}</td>
                           <td className="py-1.5 text-right tabular-nums">{formatCurrency(r.amount)}</td>
                         </tr>
                       ))}
