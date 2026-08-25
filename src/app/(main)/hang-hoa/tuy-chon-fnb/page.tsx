@@ -126,8 +126,9 @@ export default function ModifierFnbPage() {
   const [optionDialog, setOptionDialog] = useState<{
     open: boolean;
     groupId: string | null;
+    group: ModifierGroup | null;
     editing: ModifierOption | null;
-  }>({ open: false, groupId: null, editing: null });
+  }>({ open: false, groupId: null, group: null, editing: null });
 
   // ── Load groups ──
   // CEO 16/08/2026: chống kết quả cũ đè kết quả mới. Đổi chi nhánh / bấm Thử
@@ -274,11 +275,11 @@ export default function ModifierFnbPage() {
     }
   }
 
-  function openCreateOption(groupId: string) {
-    setOptionDialog({ open: true, groupId, editing: null });
+  function openCreateOption(group: ModifierGroup) {
+    setOptionDialog({ open: true, groupId: group.id, group, editing: null });
   }
-  function openEditOption(groupId: string, o: ModifierOption) {
-    setOptionDialog({ open: true, groupId, editing: o });
+  function openEditOption(group: ModifierGroup, o: ModifierOption) {
+    setOptionDialog({ open: true, groupId: group.id, group, editing: o });
   }
   async function handleDeleteOption(o: ModifierOption) {
     if (!window.confirm(`Xoá option "${o.label}"?`)) return;
@@ -460,7 +461,7 @@ export default function ModifierFnbPage() {
                   <div className="border-t bg-muted/30 px-4 py-3">
                     <div className="mb-2 flex items-center justify-between">
                       <h4 className="text-sm font-medium">Lựa chọn trong "{g.name}"</h4>
-                      <Button size="sm" onClick={() => openCreateOption(g.id)}>
+                      <Button size="sm" onClick={() => openCreateOption(g)}>
                         <Icon name="add" size={14} className="mr-1" />
                         Thêm lựa chọn
                       </Button>
@@ -514,7 +515,7 @@ export default function ModifierFnbPage() {
                                 )}
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => openEditOption(g.id, o)}>
+                            <Button variant="ghost" size="sm" onClick={() => openEditOption(g, o)}>
                               <Icon name="edit" size={12} />
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => handleDeleteOption(o)} className="text-status-error hover:bg-status-error/10">
@@ -543,8 +544,9 @@ export default function ModifierFnbPage() {
       {optionDialog.open && optionDialog.groupId && (
         <OptionDialog
           groupId={optionDialog.groupId}
+          group={optionDialog.group}
           editing={optionDialog.editing}
-          onClose={() => setOptionDialog({ open: false, groupId: null, editing: null })}
+          onClose={() => setOptionDialog({ open: false, groupId: null, group: null, editing: null })}
           onSuccess={async () => {
             if (optionDialog.groupId) {
               const list = await listModifierOptions(optionDialog.groupId);
@@ -747,11 +749,13 @@ function GroupDialog({
 // ════════════════════════════════════════════════════════════════
 function OptionDialog({
   groupId,
+  group,
   editing,
   onClose,
   onSuccess,
 }: {
   groupId: string;
+  group: ModifierGroup | null;
   editing: ModifierOption | null;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
@@ -766,6 +770,12 @@ function OptionDialog({
   const [isDefault, setIsDefault] = useState(editing?.isDefault ?? false);
   const [sortOrder, setSortOrder] = useState(editing?.sortOrder ?? 0);
   const [saving, setSaving] = useState(false);
+  const previewScale = scaleFactor.trim() ? Number(scaleFactor) : null;
+  const stockConfigError = getModifierStockConfigError({
+    scaleFactor: Number.isFinite(previewScale) ? previewScale : null,
+    linkedProductId: linkedCode.trim() ? "configured-product" : null,
+  });
+  const groupSelectsOne = group?.rule === "single" || group?.rule === "single_required";
 
   async function handleSave() {
     if (!label.trim()) {
@@ -893,6 +903,11 @@ function OptionDialog({
               Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Không điền cho mức đường/đá dùng hệ số công thức.
             </p>
           </div>
+          {stockConfigError && (
+            <p role="alert" className="rounded-md border border-status-error/30 bg-status-error/5 px-3 py-2 text-xs text-status-error">
+              {stockConfigError} Xóa một trong hai trường trước khi lưu.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -901,7 +916,7 @@ function OptionDialog({
                 onChange={(e) => setIsDefault(e.target.checked)}
                 className="size-4"
               />
-              Mặc định
+              {groupSelectsOne ? "Mặc định duy nhất" : "Chọn sẵn"}
             </label>
             <div>
               <Label>Thứ tự</Label>
@@ -918,7 +933,7 @@ function OptionDialog({
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || Boolean(stockConfigError)}>
             {saving ? (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
             ) : (

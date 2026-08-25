@@ -70,7 +70,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant-1",
 }));
 
-const { getEffectiveModifierGroupsForProduct, getModifierStockConfigError } = await import(
+const { getEffectiveModifierGroupsForProduct, getModifierStockConfigError, listModifierGroups } = await import(
   "@/lib/services/supabase/modifier-groups"
 );
 
@@ -94,6 +94,20 @@ beforeEach(() => {
 });
 
 describe("Cấu hình trừ kho của một lựa chọn", () => {
+  it("chỉ đếm lựa chọn còn đang bật trên thẻ nhóm", async () => {
+    duLieu = {
+      modifier_groups: [NHOM("g-duong", "Mức đường", "single", 2)],
+      modifier_options: [
+        { id: "active", group_id: "g-duong", is_active: true },
+        { id: "soft-deleted", group_id: "g-duong", is_active: false },
+      ],
+    };
+
+    await expect(listModifierGroups()).resolves.toMatchObject([
+      { id: "g-duong", optionCount: 1 },
+    ]);
+  });
+
   it("chặn dùng đồng thời hệ số công thức và mã hàng trừ trực tiếp", () => {
     expect(
       getModifierStockConfigError({ scaleFactor: 0.8, linkedProductId: "nvl-duong" }),
