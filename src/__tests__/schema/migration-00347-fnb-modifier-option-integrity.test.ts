@@ -17,6 +17,10 @@ const preflight = readFileSync(
   "docs/qc/sql/00347-FNB-MODIFIER-PREFLIGHT-READONLY.sql",
   "utf8",
 );
+const privilegeHotfix = readFileSync(
+  "supabase/migrations/00348_revoke_modifier_trigger_execute.sql",
+  "utf8",
+);
 
 describe("00347 - integrity of FnB modifier options", () => {
   it("installs database guards without rewriting business data", () => {
@@ -49,6 +53,9 @@ describe("00347 - integrity of FnB modifier options", () => {
     expect(rollback).toContain("drop function if exists public.enforce_modifier_option_integrity_00347()");
     expect(postflight).toContain("K3_KHONG_TRU_KHO_HAI_LAN");
     expect(postflight).toContain("K4_MOI_NHOM_CHON_MOT_CO_MOT_MAC_DINH");
+    expect(postflight).toContain("option_service_role");
+    expect(postflight).toContain("group_service_role");
+    expect(privilegeHotfix).toContain("authenticated, service_role");
     expect(postflight).not.toMatch(/\b(?:insert|update|delete|truncate)\s+/i);
     expect(preflight).toContain("P2_KHONG_TRU_KHO_HAI_LAN");
     expect(preflight).toContain("P3_MOI_NHOM_CHON_MOT_CO_MOT_MAC_DINH");

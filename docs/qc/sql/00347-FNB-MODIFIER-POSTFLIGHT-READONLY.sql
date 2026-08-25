@@ -38,13 +38,17 @@ results as (
     'DIEU_KIEN',
     not has_function_privilege('anon', option_routine, 'execute')
       and not has_function_privilege('authenticated', option_routine, 'execute')
+      and not has_function_privilege('service_role', option_routine, 'execute')
       and not has_function_privilege('anon', group_routine, 'execute')
-      and not has_function_privilege('authenticated', group_routine, 'execute'),
+      and not has_function_privilege('authenticated', group_routine, 'execute')
+      and not has_function_privilege('service_role', group_routine, 'execute'),
     jsonb_build_object(
       'option_anon', has_function_privilege('anon', option_routine, 'execute'),
       'option_authenticated', has_function_privilege('authenticated', option_routine, 'execute'),
+      'option_service_role', has_function_privilege('service_role', option_routine, 'execute'),
       'group_anon', has_function_privilege('anon', group_routine, 'execute'),
-      'group_authenticated', has_function_privilege('authenticated', group_routine, 'execute')
+      'group_authenticated', has_function_privilege('authenticated', group_routine, 'execute'),
+      'group_service_role', has_function_privilege('service_role', group_routine, 'execute')
     )
   from routine_checks
 
