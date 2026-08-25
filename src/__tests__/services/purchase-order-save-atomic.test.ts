@@ -31,6 +31,10 @@ const replaySafeMigration = readFileSync(
   "supabase/migrations/00346_purchase_order_save_replay_safe.sql",
   "utf8",
 );
+const replaySafeStep2 = readFileSync(
+  "SQL-CAN-CHAY/00346-BUOC-2-CHAY-MIGRATION.sql",
+  "utf8",
+);
 const purchaseEntriesService = readFileSync(
   "src/lib/services/supabase/purchase-entries.ts",
   "utf8",
@@ -209,6 +213,7 @@ describe("atomic purchase-order save", () => {
   });
 
   it("makes receipt creation replay-safe without repeating stock or debt writes", () => {
+    expect(replaySafeStep2).toBe(replaySafeMigration);
     expect(replaySafeMigration).toContain("pg_advisory_xact_lock");
     expect(replaySafeMigration).toContain("purchase_order_save_keys");
     expect(replaySafeMigration).toContain("v_saved_hash <> v_request_hash");
