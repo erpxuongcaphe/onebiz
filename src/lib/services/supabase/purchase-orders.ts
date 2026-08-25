@@ -75,6 +75,43 @@ export interface SavePurchaseOrderResult {
   total: number;
   paid: number;
   debt: number;
+  idempotent?: boolean;
+}
+
+const PURCHASE_SAVE_RESPONSE_TIMEOUT_MS = 20_000;
+
+function isAmbiguousPurchaseSaveError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === "object" && error && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : String(error ?? "");
+  return /PURCHASE_ORDER_SAVE_RESPONSE_TIMEOUT|failed to fetch|fetch failed|network|load failed/i.test(
+    message,
+  );
+}
+
+async function callPurchaseSaveRpc(
+  supabase: ReturnType<typeof getClient>,
+  rpcName: string,
+  params: Record<string, unknown>,
+): Promise<{ data: unknown; error: { message: string; code?: string } | null }> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(
+      () => reject(new Error("PURCHASE_ORDER_SAVE_RESPONSE_TIMEOUT")),
+      PURCHASE_SAVE_RESPONSE_TIMEOUT_MS,
+    );
+  });
+  try {
+    return await Promise.race([
+      Promise.resolve((supabase.rpc as any)(rpcName, params)),
+      timeout,
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 export interface UpdateReceivedPurchaseOrderInput {
@@ -118,33 +155,50 @@ export async function savePurchaseOrderAtomic(
   input: SavePurchaseOrderInput,
 ): Promise<SavePurchaseOrderResult> {
   const supabase = getClient();
-  const { data, error } = await (supabase.rpc as any)(
-    "save_purchase_order_with_uom_atomic",
-    {
-      p_purchase_order_id: input.orderId ?? null,
-      p_requested_code: input.requestedCode ?? null,
-      p_branch_id: input.branchId,
-      p_supplier_id: input.supplierId,
-      p_note: input.note ?? null,
-      p_shipping_cost: Number(input.shippingCost ?? 0),
-      p_other_cost: Number(input.otherCost ?? 0),
-      p_order_discount: Number(input.orderDiscount ?? 0),
-      p_paid_amount: Number(input.paidAmount ?? 0),
-      p_payment_method: input.paymentMethod ?? "cash",
-      p_mark_ordered: Boolean(input.markOrdered),
-      p_receive_now: Boolean(input.receiveNow),
-      p_items: input.items.map((item) => ({
-        product_id: item.productId,
-        unit: item.unit ?? null,
-        quantity: Number(item.quantity),
-        unit_price: Number(item.unitPrice),
-        discount: Number(item.discount ?? 0),
-        vat_rate: Number(item.vatRate ?? 0),
-        expiry_date: item.expiryDate ?? null,
-        lot_number: item.lotNumber ?? null,
-      })),
-    },
-  );
+  const requestedCode = input.requestedCode?.trim() || null;
+  const replaySafeCreate = !input.orderId && requestedCode !== null;
+  const rpcName = replaySafeCreate
+    ? "save_purchase_order_with_uom_atomic_v2"
+    : "save_purchase_order_with_uom_atomic";
+  const params = {
+    p_purchase_order_id: input.orderId ?? null,
+    p_requested_code: requestedCode,
+    p_branch_id: input.branchId,
+    p_supplier_id: input.supplierId,
+    p_note: input.note ?? null,
+    p_shipping_cost: Number(input.shippingCost ?? 0),
+    p_other_cost: Number(input.otherCost ?? 0),
+    p_order_discount: Number(input.orderDiscount ?? 0),
+    p_paid_amount: Number(input.paidAmount ?? 0),
+    p_payment_method: input.paymentMethod ?? "cash",
+    p_mark_ordered: Boolean(input.markOrdered),
+    p_receive_now: Boolean(input.receiveNow),
+    p_items: input.items.map((item) => ({
+      product_id: item.productId,
+      unit: item.unit ?? null,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unitPrice),
+      discount: Number(item.discount ?? 0),
+      vat_rate: Number(item.vatRate ?? 0),
+      expiry_date: item.expiryDate ?? null,
+      lot_number: item.lotNumber ?? null,
+    })),
+  };
+
+  let response: Awaited<ReturnType<typeof callPurchaseSaveRpc>>;
+  try {
+    response = await callPurchaseSaveRpc(supabase, rpcName, params);
+    if (response.error && replaySafeCreate && isAmbiguousPurchaseSaveError(response.error)) {
+      response = await callPurchaseSaveRpc(supabase, rpcName, params);
+    }
+  } catch (error) {
+    if (!replaySafeCreate || !isAmbiguousPurchaseSaveError(error)) throw error;
+    // Lần đầu có thể đã COMMIT nhưng phản hồi bị mất. Gọi lại cùng mã phiếu;
+    // wrapper 00346 sẽ trả bản ghi đã có thay vì cộng tồn/công nợ lần hai.
+    response = await callPurchaseSaveRpc(supabase, rpcName, params);
+  }
+
+  const { data, error } = response;
   if (error) handleError(error, "savePurchaseOrderAtomic");
 
   const result = data as Record<string, unknown> | null;
@@ -159,6 +213,7 @@ export async function savePurchaseOrderAtomic(
     total: Number(result.total ?? 0),
     paid: Number(result.paid ?? 0),
     debt: Number(result.debt ?? 0),
+    idempotent: Boolean(result.idempotent),
   };
 }
 

@@ -504,6 +504,14 @@ export function CreatePurchaseOrderDialog({
 
   async function handleSave(mode: "draft" | "receive") {
     if (!validate()) return;
+    if (!isEdit && (!code || code === "Đang tạo mã...")) {
+      toast({
+        title: "Đang chuẩn bị mã phiếu",
+        description: "Vui lòng chờ một chút rồi bấm lại. Hệ thống chưa ghi dữ liệu.",
+        variant: "warning",
+      });
+      return;
+    }
     setSavingMode(mode);
     try {
       const supabase = getClient();
@@ -537,6 +545,7 @@ export function CreatePurchaseOrderDialog({
 
       const saveResult = await savePurchaseOrderAtomic({
         orderId: isEdit && editingPO ? editingPO.id : null,
+        requestedCode: isEdit && editingPO ? editingPO.code : code,
         branchId: ctx.branchId,
         supplierId: selectedSupplier!.id,
         note: notes || null,
@@ -578,15 +587,23 @@ export function CreatePurchaseOrderDialog({
       }
       onSuccess?.();
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Vui lòng thử lại";
+      const resultNotConfirmed =
+        /PURCHASE_ORDER_SAVE_RESPONSE_TIMEOUT|failed to fetch|fetch failed|network|load failed/i.test(
+          message,
+        );
       toast({
-        title:
-          mode === "receive"
+        title: resultNotConfirmed
+          ? "Chưa xác nhận được kết quả"
+          : mode === "receive"
             ? "Lỗi nhập kho"
             : isEdit
               ? "Lỗi cập nhật phiếu"
               : "Lỗi lưu phiếu tạm",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại",
-        variant: "error",
+        description: resultNotConfirmed
+          ? `Kết nối bị gián đoạn. Giữ nguyên popup và bấm lại nút vừa dùng để hệ thống đối chiếu mã ${code}; không nhập lại thành phiếu mới.`
+          : message,
+        variant: resultNotConfirmed ? "warning" : "error",
       });
     } finally {
       setSavingMode(null);
