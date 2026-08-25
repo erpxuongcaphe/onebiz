@@ -13,7 +13,11 @@ describe("bố cục danh sách Hàng hóa", () => {
 
   it("gom bốn chỉ số và công cụ vào dải của bảng", () => {
     expect(page).toContain("toolbarMetrics={");
-    expect(page).toContain('label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}');
+    expect(page).toContain('isFnbOutletView');
+    expect(page).toContain('? "Tổng thành phần"');
+    expect(page).toContain(': "Tổng món F&B"');
+    expect(page).toContain('? "Tổng NVL"');
+    expect(page).toContain(': "Tổng hàng bán"');
     expect(page).toContain('label="Giá trị tồn kho"');
     expect(page).toContain('label="Hết hàng"');
     expect(page).toContain('label="Sắp hết (≤ 5)"');
