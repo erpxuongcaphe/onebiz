@@ -27,6 +27,10 @@ const stateMigration = readFileSync(
   "supabase/migrations/00262_atomic_purchase_order_state.sql",
   "utf8",
 );
+const replaySafeMigration = readFileSync(
+  "supabase/migrations/00346_purchase_order_save_replay_safe.sql",
+  "utf8",
+);
 const purchaseEntriesService = readFileSync(
   "src/lib/services/supabase/purchase-entries.ts",
   "utf8",
@@ -96,7 +100,7 @@ describe("atomic purchase-order save", () => {
       status: "completed",
     });
     expect(rpc).toHaveBeenCalledWith(
-      "save_purchase_order_with_uom_atomic",
+      "save_purchase_order_with_uom_atomic_v2",
       expect.objectContaining({
         p_requested_code: "PO-IMPORT-001",
         p_branch_id: "branch-1",
@@ -109,6 +113,44 @@ describe("atomic purchase-order save", () => {
     const params = rpc.mock.calls[0][1];
     expect(params).not.toHaveProperty("p_actor_id");
     expect(params).not.toHaveProperty("p_tenant_id");
+  });
+
+  it("retries an ambiguous response with the same reserved code", async () => {
+    rpc.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    rpc.mockResolvedValueOnce({
+      data: {
+        purchase_order_id: "po-1",
+        code: "PO000269",
+        status: "completed",
+        total: 98_000,
+        paid: 98_000,
+        debt: 0,
+        idempotent: true,
+      },
+      error: null,
+    });
+
+    const result = await savePurchaseOrderAtomic({
+      requestedCode: "PO000269",
+      branchId: "branch-1",
+      supplierId: "supplier-1",
+      receiveNow: true,
+      items: [
+        {
+          productId: "product-1",
+          quantity: 1,
+          unitPrice: 98_000,
+          discount: 0,
+          vatRate: 0,
+        },
+      ],
+    });
+
+    expect(result.idempotent).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    for (const [, params] of rpc.mock.calls) {
+      expect(params.p_requested_code).toBe("PO000269");
+    }
   });
 
   it("fails closed when the server transaction fails", async () => {
@@ -149,6 +191,9 @@ describe("atomic purchase-order save", () => {
 
   it("removes multi-step header and item writes from the form", () => {
     expect(dialog).toContain("savePurchaseOrderAtomic({");
+    expect(dialog).toContain(
+      "requestedCode: isEdit && editingPO ? editingPO.code : code",
+    );
     expect(dialog).not.toMatch(/\.from\("purchase_order_items"\)[\s\S]{0,120}\.insert\(/);
     expect(dialog).not.toMatch(/\.from\("purchase_order_items"\)[\s\S]{0,120}\.delete\(/);
     expect(dialog).not.toContain("await receivePurchaseOrder(");
@@ -161,6 +206,25 @@ describe("atomic purchase-order save", () => {
     expect(excelImportService).toContain("requestedCode: code");
     expect(excelImportService).not.toMatch(/bulkImportPurchaseOrders[\s\S]{0,7000}\.from\("purchase_orders"\)[\s\S]{0,120}\.insert\(/);
     expect(excelImportService).not.toMatch(/bulkImportPurchaseOrders[\s\S]{0,7000}\.from\("purchase_orders"\)[\s\S]{0,120}\.delete\(/);
+  });
+
+  it("makes receipt creation replay-safe without repeating stock or debt writes", () => {
+    expect(replaySafeMigration).toContain("pg_advisory_xact_lock");
+    expect(replaySafeMigration).toContain("purchase_order_save_keys");
+    expect(replaySafeMigration).toContain("v_saved_hash <> v_request_hash");
+    expect(replaySafeMigration).toContain("PURCHASE_ORDER_CODE_CONFLICT");
+    expect(replaySafeMigration).toContain("created_by <> v_actor");
+    expect(replaySafeMigration).toContain("user_has_branch_access");
+    expect(replaySafeMigration).toContain("'idempotent', true");
+    expect(replaySafeMigration).toContain(
+      "return public.save_purchase_order_with_uom_atomic(",
+    );
+    expect(replaySafeMigration).toContain(
+      "revoke all on function public.save_purchase_order_with_uom_atomic_v2",
+    );
+    expect(replaySafeMigration).toContain(
+      "revoke all on table public.purchase_order_save_keys from public, anon, authenticated",
+    );
   });
   it("changes ordered/cancelled state through an audited server lock", async () => {
     rpc.mockResolvedValueOnce({
