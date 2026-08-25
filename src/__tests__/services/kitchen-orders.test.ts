@@ -68,6 +68,7 @@ import {
   updateKitchenItemStatus,
   linkInvoiceToOrder,
   cancelUnpaidKitchenOrder,
+  getFnbCancelErrorMessage,
 } from "@/lib/services/supabase/kitchen-orders";
 
 // === Fixtures ===
@@ -140,6 +141,16 @@ beforeEach(() => {
 });
 
 describe("cancelUnpaidKitchenOrder", () => {
+  it("diễn giải lỗi chi nhánh để thu ngân không nhầm với lỗi mạng", () => {
+    expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_BRANCH_ACCESS_DENIED" }))
+      .toBe("Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.");
+  });
+
+  it("chỉ rõ đơn đã thanh toán phải đi qua luồng huỷ hoá đơn", () => {
+    expect(getFnbCancelErrorMessage({ message: "ORDER_ALREADY_PAID" }))
+      .toBe("Đơn đã thanh toán. Hãy dùng luồng huỷ hoá đơn để hoàn kho và hoàn tiền đúng sổ.");
+  });
+
   it("calls the secure atomic RPC with reason and shift context (no OTP)", async () => {
     await cancelUnpaidKitchenOrder({
       orderId: "ko-1",
