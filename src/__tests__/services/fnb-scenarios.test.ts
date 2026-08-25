@@ -167,10 +167,7 @@ import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } fr
 import {
   transferTable,
   mergeKitchenOrders,
-  applyOrderDiscount,
   setDeliveryPlatform,
-  updateOrderItemQty,
-  removeOrderItem,
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
@@ -330,27 +327,8 @@ describe("Scenario: Takeaway (mang về, không bàn)", () => {
 // 2. SỬA ĐƠN — Modify order after kitchen send
 // ============================================================
 
-describe("Scenario: Sửa đơn (modify order items)", () => {
-  it("updates item quantity", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
-    await updateOrderItemQty("koi-1", 3);
-    // Should have called update with quantity: 3
-    expect(updateCalls.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("removes item when qty set to 0", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
-    await updateOrderItemQty("koi-1", 0);
-    expect(deleteCalls.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("removes item directly", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
-    await removeOrderItem("koi-2");
-    expect(deleteCalls.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("adds item to existing order (bổ sung món)", async () => {
+describe("Scenario: Đơn đã gửi bếp", () => {
+  it("chỉ bổ sung món qua RPC; không sửa hoặc xóa dòng món trực tiếp", async () => {
     mockFromHandler = () => createChain({ data: null, error: null });
     await addItemsToExistingOrder("ko-1", [
       { productId: "p3", productName: "Trà Đào", quantity: 1, unitPrice: 29000 },
@@ -462,26 +440,7 @@ describe("Scenario: Gộp đơn (Bàn 5 + Bàn 6 → 1 hoá đơn)", () => {
 // ============================================================
 
 describe("Scenario: Giảm giá (discount)", () => {
-  it("applies fixed discount (giảm 20k)", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
-
-    const result = await applyOrderDiscount("ko-1", "fixed", 20000, "Khách quen");
-    expect(result.discountAmount).toBe(20000);
-  });
-
-  it("applies percent discount (10%)", async () => {
-    // Need getKitchenOrderById mock for percent calc
-    setupPaymentMocks({}, makeItemRows([
-      { id: "p1", name: "CF Sữa Đá", qty: 2, price: 35000 },
-      { id: "p2", name: "Hồng Trà", qty: 1, price: 29000 },
-    ]));
-
-    const result = await applyOrderDiscount("ko-1", "percent", 10, "Ngày khai trương");
-    // subtotal = 2*35000 + 1*29000 = 99000, 10% = 9900
-    expect(result.discountAmount).toBe(9900);
-  });
-
-  it("discount flows through to invoice total", async () => {
+  it("sends the saved discount through to the invoice total", async () => {
     setupPaymentMocks(
       { discount_amount: 15000 },
       makeItemRows([
@@ -791,7 +750,7 @@ describe("Scenario: Edge cases", () => {
     await updateKitchenItemStatus("koi-1", "preparing");
     await updateKitchenItemStatus("koi-1", "ready");
     await updateKitchenOrderStatus("ko-1", "served");
-    // completed happens via linkInvoiceToOrder during payment
+    // Thanh toán hoàn tất đơn qua RPC thanh toán nguyên tử.
   });
 });
 

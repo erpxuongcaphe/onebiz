@@ -38,13 +38,13 @@ describe("FnB does not reopen legacy browser-side mutations", () => {
   });
 
   it("prevents production modules from importing legacy mutation helpers", () => {
-    const allowedDefinition = path.normalize(
+    const servicePath = path.normalize(
       path.join(process.cwd(), "src/lib/services/supabase/kitchen-orders.ts"),
     );
     const violations: string[] = [];
 
     for (const file of PRODUCTION_ROOTS.flatMap(listSourceFiles)) {
-      if (path.normalize(file) === allowedDefinition) continue;
+      if (path.normalize(file) === servicePath) continue;
 
       const source = fs.readFileSync(file, "utf8");
       for (const helper of LEGACY_MUTATIONS) {
@@ -55,5 +55,33 @@ describe("FnB does not reopen legacy browser-side mutations", () => {
     }
 
     expect(violations).toEqual([]);
+  }, 15_000);
+
+  it("removes the legacy helpers instead of leaving a callable back door", () => {
+    const service = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/services/supabase/kitchen-orders.ts"),
+      "utf8",
+    );
+
+    for (const helper of LEGACY_MUTATIONS) {
+      expect(service).not.toMatch(
+        new RegExp(`export\\s+async\\s+function\\s+${helper}\\b`),
+      );
+    }
+  });
+
+  it("does not keep browser-side writes to kitchen orders or their items", () => {
+    const service = fs.readFileSync(
+      path.join(process.cwd(), "src/lib/services/supabase/kitchen-orders.ts"),
+      "utf8",
+    );
+
+    for (const table of ["kitchen_orders", "kitchen_order_items"]) {
+      expect(service).not.toMatch(
+        new RegExp(
+          `\\.from\\("${table}"\\)[\\s\\S]{0,320}?\\.(?:insert|update|delete)\\(`,
+        ),
+      );
+    }
   });
 });

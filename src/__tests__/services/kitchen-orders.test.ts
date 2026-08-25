@@ -2,9 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // === Supabase mock ===
 
-const insertCalls: { table: string; data: unknown }[] = [];
 const rpcCalls: { fn: string; args?: unknown }[] = [];
-let nextCodeCounter = 0;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -18,14 +16,7 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
   chain.single = vi.fn(() => resolvedValue);
   chain.maybeSingle = vi.fn(() => resolvedValue);
   chain.then = (resolve: (v: unknown) => void) => resolve(resolvedValue);
-  chain.insert = vi.fn((data: unknown) => {
-    if (Array.isArray(data)) {
-      data.forEach((d) => insertCalls.push({ table: "_batch", data: d }));
-    } else {
-      insertCalls.push({ table: "_single", data: data as unknown });
-    }
-    return chain;
-  });
+  chain.insert = vi.fn(self);
   chain.update = vi.fn(self);
   chain.delete = vi.fn(self);
   return chain;
@@ -39,10 +30,6 @@ vi.mock("@/lib/services/supabase/base", () => ({
     from: vi.fn((table: string) => mockFromHandler(table)),
     rpc: vi.fn((fn: string, args?: unknown) => {
       rpcCalls.push({ fn, args });
-      if (fn === "next_code") {
-        nextCodeCounter++;
-        return { data: `KB${String(nextCodeCounter).padStart(5, "0")}`, error: null };
-      }
       if (fn === "fnb_cancel_unpaid_order_atomic") {
         return { data: { success: true }, error: null };
       }
@@ -62,11 +49,9 @@ import {
   getKitchenOrders,
   getKitchenOrdersWithItems,
   getKitchenOrderById,
-  createKitchenOrder,
   addItemsToOrder,
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
-  linkInvoiceToOrder,
   cancelUnpaidKitchenOrder,
   getFnbCancelErrorMessage,
 } from "@/lib/services/supabase/kitchen-orders";
@@ -125,9 +110,7 @@ const ITEM_ROWS = [
 ];
 
 beforeEach(() => {
-  insertCalls.length = 0;
   rpcCalls.length = 0;
-  nextCodeCounter = 0;
 
   mockFromHandler = (table: string) => {
     if (table === "kitchen_orders") {
@@ -310,46 +293,8 @@ describe("getKitchenOrderById", () => {
   });
 });
 
-describe("createKitchenOrder", () => {
-  it("creates order with items", async () => {
-    const order = await createKitchenOrder(
-      {
-        tenantId: "t1",
-        branchId: "b1",
-        createdBy: "u1",
-        tableId: "table-5",
-        orderType: "dine_in",
-        items: [
-          {
-            productId: "p1",
-            productName: "Espresso",
-            quantity: 1,
-            unitPrice: 40000,
-            toppings: [{ productId: "tp1", name: "Kem cheese", quantity: 1, price: 12000 }],
-          },
-        ],
-      },
-      "KB00001"
-    );
-
-    expect(order.id).toBe("ko-1");
-    expect(order.orderNumber).toBe("KB00001");
-
-    // Verify items were inserted
-    const itemInserts = insertCalls.filter(
-      (c) => (c.data as Record<string, unknown>)?.kitchen_order_id === "ko-1"
-    );
-    expect(itemInserts.length).toBeGreaterThanOrEqual(1);
-    const firstItem = itemInserts[0].data as Record<string, unknown>;
-    expect(firstItem.product_name).toBe("Espresso");
-    expect(firstItem.toppings).toEqual([
-      { productId: "tp1", name: "Kem cheese", quantity: 1, price: 12000 },
-    ]);
-  });
-});
-
 describe("addItemsToOrder", () => {
-  it("inserts additional items into existing order", async () => {
+  it("sends additional items through the atomic kitchen RPC", async () => {
     await addItemsToOrder("ko-1", [
       {
         productId: "p3",
@@ -392,44 +337,5 @@ describe("updateKitchenItemStatus", () => {
   it("cycles: preparing → ready", async () => {
     await updateKitchenItemStatus("koi-1", "ready");
     // No throw = success
-  });
-});
-
-describe("linkInvoiceToOrder", () => {
-  it("links invoice and sets completed", async () => {
-    await linkInvoiceToOrder("ko-1", "inv-1");
-    // No throw = success
-  });
-});
-
-describe("kitchen order lifecycle", () => {
-  it("pending → preparing → ready → served → completed", async () => {
-    // Step 1: Create order
-    const order = await createKitchenOrder(
-      {
-        tenantId: "t1",
-        branchId: "b1",
-        createdBy: "u1",
-        orderType: "takeaway",
-        items: [
-          { productId: "p1", productName: "Latte", quantity: 1, unitPrice: 42000 },
-        ],
-      },
-      "KB00001"
-    );
-    expect(order.status).toBe("pending");
-
-    // Step 2: Item preparing
-    await updateKitchenItemStatus("koi-1", "preparing");
-
-    // Step 3: Item ready
-    await updateKitchenItemStatus("koi-1", "ready");
-
-    // Step 4: Order served (all items ready → bar marks served)
-    await updateKitchenOrderStatus(order.id, "served");
-
-    // Step 5: Payment → completed
-    await linkInvoiceToOrder(order.id, "inv-1");
-    // No throws = full lifecycle success
   });
 });
