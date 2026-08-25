@@ -117,11 +117,18 @@ describe("danhGiaFnbReadiness", () => {
     ]);
   });
 
-  it("phân biệt món một giá, quy cách và trạm bếp trước khi cho vận hành", () => {
+  it("phân biệt món một giá thiếu BOM, quy cách và trạm bếp trước khi cho vận hành", () => {
     const result = danhGiaFnbReadiness({
       products: [],
       menuProducts: [
-        { id: "drink-1", code: "CF-001", name: "Cà phê đen", sell_price: 0, bom_code: null },
+        {
+          id: "drink-1",
+          code: "CF-001",
+          name: "Cà phê đen",
+          sell_price: 0,
+          bom_code: null,
+          has_bom: true,
+        },
         { id: "drink-2", code: "TS-001", name: "Trà sữa", sell_price: 0, bom_code: null },
       ],
       variants: [
@@ -153,6 +160,7 @@ describe("danhGiaFnbReadiness", () => {
     expect(result).toMatchObject({
       menuTotal: 2,
       simpleProductsMissingPrice: 1,
+      simpleProductsMissingBom: 1,
       variantsTotal: 2,
       variantsMissingPrice: 1,
       variantsMissingBom: 1,
@@ -160,7 +168,7 @@ describe("danhGiaFnbReadiness", () => {
       activeKitchenStations: 0,
     });
     expect(result.menuIssues).toEqual([
-      expect.objectContaining({ code: "CF-001", missingPrice: true, missingBom: false }),
+      expect.objectContaining({ code: "CF-001", missingPrice: true, missingBom: true }),
       expect.objectContaining({ code: "TS-001", variantName: "L", missingPrice: true, missingBom: true }),
     ]);
   });

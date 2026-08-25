@@ -12,6 +12,7 @@ interface SanPhamTopping {
   name: string;
   sell_price: number | null;
   bom_code: string | null;
+  has_bom?: boolean | null;
 }
 
 interface QuyCachFnb {
@@ -63,6 +64,7 @@ export interface FnbConfigurationIssue {
 export interface FnbReadiness {
   menuTotal: number;
   simpleProductsMissingPrice: number;
+  simpleProductsMissingBom: number;
   variantsTotal: number;
   variantsMissingPrice: number;
   variantsMissingBom: number;
@@ -182,6 +184,11 @@ export function danhGiaFnbReadiness(input: {
   const simpleProductsMissingPrice = simpleProducts.filter(
     (product) => (product.sell_price ?? 0) <= 0,
   );
+  const simpleProductsMissingBom = simpleProducts.filter(
+    (product) =>
+      product.has_bom === true &&
+      !coBomApDung(product, input.boms, input.branchId),
+  );
   const variantsMissingPrice = variants.filter(
     (variant) => (variant.sell_price ?? 0) <= 0,
   );
@@ -218,19 +225,24 @@ export function danhGiaFnbReadiness(input: {
     }
   }
   const menuIssues: FnbMenuIssue[] = [
-    ...simpleProductsMissingPrice.map((product) => ({
-      id: product.id,
-      code: product.code,
-      name: product.name,
-      missingPrice: true,
-      missingBom: false,
-    })),
+    ...simpleProducts
+      .map((product) => ({
+        id: product.id,
+        code: product.code,
+        name: product.name,
+        missingPrice: (product.sell_price ?? 0) <= 0,
+        missingBom:
+          product.has_bom === true &&
+          !coBomApDung(product, input.boms, input.branchId),
+      }))
+      .filter((product) => product.missingPrice || product.missingBom),
     ...variantIssueById.values(),
   ].sort((a, b) => a.code.localeCompare(b.code, "vi"));
 
   return {
     menuTotal: menuProducts.length,
     simpleProductsMissingPrice: simpleProductsMissingPrice.length,
+    simpleProductsMissingBom: simpleProductsMissingBom.length,
     variantsTotal: variants.length,
     variantsMissingPrice: variantsMissingPrice.length,
     variantsMissingBom: variantsMissingBom.length,
@@ -282,7 +294,7 @@ export async function getFnbReadiness(
   const [menuProductsResult, groupsResult] = await Promise.all([
     supabase
       .from("products")
-      .select("id, code, name, sell_price, bom_code")
+      .select("id, code, name, sell_price, bom_code, has_bom")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .eq("product_type", "sku")

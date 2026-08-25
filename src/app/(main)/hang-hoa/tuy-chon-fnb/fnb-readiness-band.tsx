@@ -45,6 +45,7 @@ export function FnbReadinessBand({
     : 0;
   const menuRisks =
     readiness.simpleProductsMissingPrice +
+    readiness.simpleProductsMissingBom +
     readiness.variantsMissingPrice +
     readiness.variantsMissingBom +
     readiness.variantProductsWithInvalidDefaults;
@@ -92,6 +93,11 @@ export function FnbReadinessBand({
         {readiness.simpleProductsMissingPrice > 0 && (
           <span className="text-status-error">
             Món thiếu giá: <strong>{readiness.simpleProductsMissingPrice}</strong>
+          </span>
+        )}
+        {readiness.simpleProductsMissingBom > 0 && (
+          <span className="text-status-error">
+            Món thiếu công thức: <strong>{readiness.simpleProductsMissingBom}</strong>
           </span>
         )}
         {readiness.variantsMissingPrice > 0 && (

@@ -6,6 +6,7 @@ import type { FnbReadiness } from "@/lib/services/supabase/fnb-readiness";
 const readiness: FnbReadiness = {
   menuTotal: 124,
   simpleProductsMissingPrice: 123,
+  simpleProductsMissingBom: 0,
   variantsTotal: 2,
   variantsMissingPrice: 2,
   variantsMissingBom: 2,
