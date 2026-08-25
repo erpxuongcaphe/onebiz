@@ -392,6 +392,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
   total: number;
   paid: number;
   tipAmount: number;
+  deliveryFee: number;
   discountAmount: number;
   paymentMethod: string;
   createdAt: string;
@@ -417,7 +418,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     // invoices có platform_commission (KHÔNG có platform_commission_amount —
     // cột đó thuộc kitchen_orders). Danh sách cột cũ copy nhầm nên select lỗi
     // 42703 → in lại hoá đơn F&B chết hoàn toàn.
-    .select("id, code, customer_name, total, paid, tip_amount, discount_amount, payment_method, ngay_chung_tu, platform_commission, platform_commission_percent")
+    .select("id, code, customer_name, total, paid, tip_amount, delivery_fee, discount_amount, payment_method, ngay_chung_tu, platform_commission, platform_commission_percent")
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
     .single();
@@ -454,6 +455,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     total: Number(inv.total ?? 0),
     paid: Number(inv.paid ?? 0),
     tipAmount: Number(inv.tip_amount ?? 0),
+    deliveryFee: Number(inv.delivery_fee ?? 0),
     discountAmount: Number(inv.discount_amount ?? 0),
     paymentMethod: inv.payment_method ?? "cash",
     createdAt: inv.ngay_chung_tu,

@@ -14,6 +14,24 @@ interface SanPhamTopping {
   bom_code: string | null;
 }
 
+interface QuyCachFnb {
+  id: string;
+  product_id: string;
+  name: string;
+  sell_price: number | null;
+  bom_code: string | null;
+  is_default: boolean;
+}
+
+export interface FnbMenuIssue {
+  id: string;
+  code: string;
+  name: string;
+  variantName?: string;
+  missingPrice: boolean;
+  missingBom: boolean;
+}
+
 interface NhomTuyChon {
   id: string;
   name: string;
@@ -43,6 +61,15 @@ export interface FnbConfigurationIssue {
 }
 
 export interface FnbReadiness {
+  menuTotal: number;
+  simpleProductsMissingPrice: number;
+  variantsTotal: number;
+  variantsMissingPrice: number;
+  variantsMissingBom: number;
+  variantProductsWithInvalidDefaults: number;
+  activeKitchenStations: number;
+  activeTables: number;
+  menuIssues: FnbMenuIssue[];
   toppingTotal: number;
   toppingReady: number;
   toppingMissingPrice: number;
@@ -56,7 +83,7 @@ export interface FnbReadiness {
 }
 
 function coBomApDung(
-  product: SanPhamTopping,
+  product: Pick<SanPhamTopping, "id" | "bom_code">,
   boms: readonly DongBom[],
   branchId: string | null | undefined,
 ): boolean {
@@ -74,11 +101,15 @@ function coBomApDung(
 /** Lõi thuần để khóa cách tính bằng test, không ghi hoặc sửa dữ liệu. */
 export function danhGiaFnbReadiness(input: {
   products: SanPhamTopping[];
+  menuProducts?: SanPhamTopping[];
+  variants?: QuyCachFnb[];
   boms: DongBom[];
   groups: NhomTuyChon[];
   options: LuaChonTuyChon[];
   branchId?: string | null;
   toppingSkuEnabled?: boolean;
+  activeKitchenStations?: number;
+  activeTables?: number;
 }): FnbReadiness {
   const optionsByGroup = new Map<string, LuaChonTuyChon[]>();
   for (const option of input.options) {
@@ -136,7 +167,77 @@ export function danhGiaFnbReadiness(input: {
     }
   }
 
+  const menuProducts = input.menuProducts ?? [];
+  const variants = input.variants ?? [];
+  const variantsByProductId = new Map<string, QuyCachFnb[]>();
+  for (const variant of variants) {
+    const current = variantsByProductId.get(variant.product_id) ?? [];
+    current.push(variant);
+    variantsByProductId.set(variant.product_id, current);
+  }
+
+  const simpleProducts = menuProducts.filter(
+    (product) => (variantsByProductId.get(product.id) ?? []).length === 0,
+  );
+  const simpleProductsMissingPrice = simpleProducts.filter(
+    (product) => (product.sell_price ?? 0) <= 0,
+  );
+  const variantsMissingPrice = variants.filter(
+    (variant) => (variant.sell_price ?? 0) <= 0,
+  );
+  const variantsMissingBom = variants.filter(
+    (variant) =>
+      !variant.bom_code ||
+      !input.boms.some(
+        (bom) =>
+          bom.code === variant.bom_code &&
+          (bom.branch_id === null ||
+            (!!input.branchId && bom.branch_id === input.branchId)),
+      ),
+  );
+  const variantProductsWithInvalidDefaults = [...variantsByProductId.values()].filter(
+    (productVariants) =>
+      productVariants.filter((variant) => variant.is_default).length !== 1,
+  );
+  const menuById = new Map(menuProducts.map((product) => [product.id, product]));
+  const variantIssueById = new Map<string, FnbMenuIssue>();
+  for (const variant of variants) {
+    const product = menuById.get(variant.product_id);
+    if (!product) continue;
+    const missingPrice = (variant.sell_price ?? 0) <= 0;
+    const missingBom = variantsMissingBom.some((item) => item.id === variant.id);
+    if (missingPrice || missingBom) {
+      variantIssueById.set(variant.id, {
+        id: variant.id,
+        code: product.code,
+        name: product.name,
+        variantName: variant.name,
+        missingPrice,
+        missingBom,
+      });
+    }
+  }
+  const menuIssues: FnbMenuIssue[] = [
+    ...simpleProductsMissingPrice.map((product) => ({
+      id: product.id,
+      code: product.code,
+      name: product.name,
+      missingPrice: true,
+      missingBom: false,
+    })),
+    ...variantIssueById.values(),
+  ].sort((a, b) => a.code.localeCompare(b.code, "vi"));
+
   return {
+    menuTotal: menuProducts.length,
+    simpleProductsMissingPrice: simpleProductsMissingPrice.length,
+    variantsTotal: variants.length,
+    variantsMissingPrice: variantsMissingPrice.length,
+    variantsMissingBom: variantsMissingBom.length,
+    variantProductsWithInvalidDefaults: variantProductsWithInvalidDefaults.length,
+    activeKitchenStations: input.activeKitchenStations ?? 0,
+    activeTables: input.activeTables ?? 0,
+    menuIssues,
     toppingTotal: input.products.length,
     toppingReady,
     toppingMissingPrice: input.products.filter(
@@ -178,7 +279,7 @@ export async function getFnbReadiness(
 ): Promise<FnbReadiness> {
   const supabase = getClient();
 
-  const [productsResult, groupsResult] = await Promise.all([
+  const [menuProductsResult, groupsResult] = await Promise.all([
     supabase
       .from("products")
       .select("id, code, name, sell_price, bom_code")
@@ -186,7 +287,6 @@ export async function getFnbReadiness(
       .eq("is_active", true)
       .eq("product_type", "sku")
       .eq("channel", "fnb")
-      .ilike("code", `${TIEN_TO_SKU_TOPPING}%`)
       .order("code")
       .limit(500),
     supabase
@@ -197,16 +297,66 @@ export async function getFnbReadiness(
       .in("channel", ["fnb", "all"])
       .limit(200),
   ]);
-  if (productsResult.error) throw productsResult.error;
+  if (menuProductsResult.error) throw menuProductsResult.error;
   if (groupsResult.error) throw groupsResult.error;
 
-  const products = (productsResult.data ?? []) as unknown as SanPhamTopping[];
+  const menuProducts = (menuProductsResult.data ?? []) as unknown as SanPhamTopping[];
+  const products = menuProducts.filter((product) =>
+    product.code.startsWith(TIEN_TO_SKU_TOPPING),
+  );
   const groups = (groupsResult.data ?? []) as unknown as NhomTuyChon[];
-  const productIds = products.map((product) => product.id);
-  const bomCodes = products
+  const productIds = menuProducts.map((product) => product.id);
+  const productBomCodes = menuProducts
     .map((product) => product.bom_code)
     .filter((code): code is string => !!code);
   const groupIds = groups.map((group) => group.id);
+
+  const variantsPromise = productIds.length
+    ? (supabase as any)
+        .from("product_variants")
+        .select("id, product_id, name, sell_price, bom_code, is_default")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .in("product_id", productIds)
+        .limit(1000)
+    : Promise.resolve({ data: [], error: null });
+
+  const [variantsResult, optionsResult, stationsResult, tablesResult] = await Promise.all([
+    variantsPromise,
+    groupIds.length
+      ? supabase
+          .from("modifier_options")
+          .select("group_id, label, is_default, scale_factor, linked_product_id")
+          .in("group_id", groupIds)
+          .eq("is_active", true)
+          .limit(1000)
+      : Promise.resolve({ data: [], error: null }),
+    (supabase as any)
+      .from("kitchen_stations")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId ?? "")
+      .eq("is_active", true),
+    (supabase as any)
+      .from("restaurant_tables")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("branch_id", branchId ?? "")
+      .eq("is_active", true),
+  ]);
+  if (variantsResult.error) throw variantsResult.error;
+  if (optionsResult.error) throw optionsResult.error;
+  if (stationsResult.error) throw stationsResult.error;
+  if (tablesResult.error) throw tablesResult.error;
+
+  const variants = (variantsResult.data ?? []) as QuyCachFnb[];
+  const bomCodes = [
+    ...productBomCodes,
+    ...variants
+      .map((variant) => variant.bom_code)
+      .filter((code): code is string => !!code),
+  ];
+  const uniqueBomCodes = [...new Set(bomCodes)];
 
   const bomsPromise = productIds.length
     ? (() => {
@@ -216,8 +366,8 @@ export async function getFnbReadiness(
           .eq("tenant_id", tenantId)
           .eq("is_active", true)
           .or(
-            bomCodes.length
-              ? `product_id.in.(${productIds.join(",")}),code.in.(${bomCodes.map((code) => `"${code}"`).join(",")})`
+            uniqueBomCodes.length
+              ? `product_id.in.(${productIds.join(",")}),code.in.(${uniqueBomCodes.map((code) => `"${code}"`).join(",")})`
               : `product_id.in.(${productIds.join(",")})`,
           );
         query = branchId
@@ -227,27 +377,18 @@ export async function getFnbReadiness(
       })()
     : Promise.resolve({ data: [], error: null });
 
-  const optionsPromise = groupIds.length
-    ? supabase
-        .from("modifier_options")
-        .select("group_id, label, is_default, scale_factor, linked_product_id")
-        .in("group_id", groupIds)
-        .eq("is_active", true)
-        .limit(1000)
-    : Promise.resolve({ data: [], error: null });
-
-  const [bomsResult, optionsResult] = await Promise.all([
-    bomsPromise,
-    optionsPromise,
-  ]);
+  const bomsResult = await bomsPromise;
   if (bomsResult.error) throw bomsResult.error;
-  if (optionsResult.error) throw optionsResult.error;
 
   return danhGiaFnbReadiness({
     products,
+    menuProducts,
+    variants,
     boms: (bomsResult.data ?? []) as unknown as DongBom[],
     groups,
     options: (optionsResult.data ?? []) as unknown as LuaChonTuyChon[],
     branchId,
+    activeKitchenStations: stationsResult.count ?? 0,
+    activeTables: tablesResult.count ?? 0,
   });
 }

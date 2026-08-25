@@ -68,6 +68,7 @@ import {
   updateKitchenItemStatus,
   linkInvoiceToOrder,
   cancelUnpaidKitchenOrder,
+  getFnbCancelErrorMessage,
 } from "@/lib/services/supabase/kitchen-orders";
 
 // === Fixtures ===
@@ -140,6 +141,16 @@ beforeEach(() => {
 });
 
 describe("cancelUnpaidKitchenOrder", () => {
+  it("diễn giải lỗi chi nhánh để thu ngân không nhầm với lỗi mạng", () => {
+    expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_BRANCH_ACCESS_DENIED" }))
+      .toBe("Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.");
+  });
+
+  it("chỉ rõ đơn đã thanh toán phải đi qua luồng huỷ hoá đơn", () => {
+    expect(getFnbCancelErrorMessage({ message: "ORDER_ALREADY_PAID" }))
+      .toBe("Đơn đã thanh toán. Hãy dùng luồng huỷ hoá đơn để hoàn kho và hoàn tiền đúng sổ.");
+  });
+
   it("calls the secure atomic RPC with reason and shift context (no OTP)", async () => {
     await cancelUnpaidKitchenOrder({
       orderId: "ko-1",
@@ -175,6 +186,47 @@ describe("cancelUnpaidKitchenOrder", () => {
         p_reason_note: null,
         p_shift_id: "shift-1",
         p_otp_id: "otp-uuid-789",
+      },
+    });
+  });
+
+  it("keeps the free-text explanation separate from the reason code for audit", async () => {
+    await cancelUnpaidKitchenOrder({
+      orderId: "ko-3",
+      reasonCode: "Khác",
+      reasonNote: "Khách đổi sang đơn giao ngày mai",
+      shiftId: "shift-2",
+    });
+
+    expect(rpcCalls).toContainEqual({
+      fn: "fnb_cancel_unpaid_order_atomic",
+      args: {
+        p_order_id: "ko-3",
+        p_reason_code: "Khác",
+        p_reason_note: "Khách đổi sang đơn giao ngày mai",
+        p_shift_id: "shift-2",
+        p_otp_id: null,
+      },
+    });
+  });
+
+  it("keeps the free-text explanation when a manager delegates by OTP", async () => {
+    await cancelUnpaidKitchenOrder({
+      orderId: "ko-4",
+      reasonCode: "Khác",
+      reasonNote: "Nhập sai bàn phục vụ",
+      shiftId: "shift-3",
+      otpId: "otp-uuid-456",
+    });
+
+    expect(rpcCalls).toContainEqual({
+      fn: "fnb_cancel_unpaid_order_atomic",
+      args: {
+        p_order_id: "ko-4",
+        p_reason_code: "Khác",
+        p_reason_note: "Nhập sai bàn phục vụ",
+        p_shift_id: "shift-3",
+        p_otp_id: "otp-uuid-456",
       },
     });
   });

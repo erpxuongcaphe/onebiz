@@ -40,10 +40,27 @@ export function FnbReadinessBand({
     readiness.singleGroupsWithManyDefaults +
     readiness.conflictingStockOptions +
     readiness.legacyToppingGroups;
+  const toppingRisks = readiness.toppingSkuEnabled
+    ? readiness.toppingMissingPrice + readiness.toppingMissingBom
+    : 0;
+  const menuRisks =
+    readiness.simpleProductsMissingPrice +
+    readiness.variantsMissingPrice +
+    readiness.variantsMissingBom +
+    readiness.variantProductsWithInvalidDefaults;
   const ready =
-    readiness.toppingTotal > 0 &&
-    readiness.toppingReady === readiness.toppingTotal &&
-    risks === 0;
+    readiness.menuTotal > 0 &&
+    menuRisks === 0 &&
+    risks === 0 &&
+    toppingRisks === 0 &&
+    readiness.activeKitchenStations > 0;
+  const totalIssues =
+    readiness.menuIssues.length +
+    readiness.configurationIssues.length +
+    (readiness.toppingSkuEnabled ? readiness.toppingIssues.length : 0) +
+    (readiness.activeKitchenStations === 0 ? 1 : 0) +
+    (readiness.variantProductsWithInvalidDefaults > 0 ? 1 : 0);
+  const menuIssuesToShow = readiness.menuIssues.slice(0, 12);
 
   return (
     <section
@@ -56,67 +73,137 @@ export function FnbReadinessBand({
       )}
     >
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-      <div className="flex items-center gap-2 font-medium">
-        <Icon
-          name={ready ? "check_circle" : "warning"}
-          size={18}
-          className={ready ? "text-status-success" : "text-status-warning"}
-        />
-        {ready ? "Cấu hình FnB đã sẵn sàng" : "Cấu hình FnB chưa hoàn tất"}
-        {branchName && (
-          <span className="font-normal text-muted-foreground">
-            · {branchName}
+        <div className="flex items-center gap-2 font-medium">
+          <Icon
+            name={ready ? "check_circle" : "warning"}
+            size={18}
+            className={ready ? "text-status-success" : "text-status-warning"}
+          />
+          {ready ? "Cấu hình FnB đã sẵn sàng" : "Cấu hình FnB chưa hoàn tất"}
+          {branchName && (
+            <span className="font-normal text-muted-foreground">
+              · {branchName}
+            </span>
+          )}
+        </div>
+        <span>
+          Món thực đơn: <strong>{readiness.menuTotal}</strong>
+        </span>
+        {readiness.simpleProductsMissingPrice > 0 && (
+          <span className="text-status-error">
+            Món thiếu giá: <strong>{readiness.simpleProductsMissingPrice}</strong>
           </span>
         )}
-      </div>
-      <span>
-        Topping dùng được:{" "}
-        <strong>
-          {readiness.toppingReady}/{readiness.toppingTotal}
-        </strong>
-      </span>
-      {readiness.toppingMissingPrice > 0 && (
-        <span className="text-status-error">
-          Thiếu giá: <strong>{readiness.toppingMissingPrice}</strong>
+        {readiness.variantsMissingPrice > 0 && (
+          <span className="text-status-error">
+            Cỡ thiếu giá: <strong>{readiness.variantsMissingPrice}</strong>
+          </span>
+        )}
+        {readiness.variantsMissingBom > 0 && (
+          <span className="text-status-error">
+            Cỡ thiếu công thức: <strong>{readiness.variantsMissingBom}</strong>
+          </span>
+        )}
+        {readiness.variantProductsWithInvalidDefaults > 0 && (
+          <span className="text-status-error">
+            Cỡ mặc định sai: <strong>{readiness.variantProductsWithInvalidDefaults}</strong>
+          </span>
+        )}
+        {readiness.activeKitchenStations === 0 ? (
+          <span className="text-status-error">
+            Chưa có trạm bếp đang bật
+          </span>
+        ) : (
+          <span>
+            Trạm bếp: <strong>{readiness.activeKitchenStations}</strong>
+          </span>
+        )}
+        <span className="text-muted-foreground">
+          Bàn đang bật: <strong>{readiness.activeTables}</strong>
         </span>
-      )}
-      {readiness.toppingMissingBom > 0 && (
-        <span className="text-status-error">
-          Thiếu công thức: <strong>{readiness.toppingMissingBom}</strong>
+        {readiness.singleGroupsWithManyDefaults > 0 && (
+          <span className="text-status-error">
+            Nhiều mặc định: <strong>{readiness.singleGroupsWithManyDefaults}</strong>
+          </span>
+        )}
+        {readiness.conflictingStockOptions > 0 && (
+          <span className="text-status-error">
+            Trùng cách trừ kho: <strong>{readiness.conflictingStockOptions}</strong>
+          </span>
+        )}
+        {readiness.legacyToppingGroups > 0 && (
+          <span className="text-status-error">
+            Nhóm topping cũ: <strong>{readiness.legacyToppingGroups}</strong>
+          </span>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          Topping theo phần: {readiness.toppingSkuEnabled ? "đang bật" : "đang tắt"}
         </span>
-      )}
-      {readiness.singleGroupsWithManyDefaults > 0 && (
-        <span className="text-status-error">
-          Nhiều mặc định:{" "}
-          <strong>{readiness.singleGroupsWithManyDefaults}</strong>
-        </span>
-      )}
-      {readiness.conflictingStockOptions > 0 && (
-        <span className="text-status-error">
-          Trùng cách trừ kho:{" "}
-          <strong>{readiness.conflictingStockOptions}</strong>
-        </span>
-      )}
-      {readiness.legacyToppingGroups > 0 && (
-        <span className="text-status-error">
-          Nhóm topping cũ: <strong>{readiness.legacyToppingGroups}</strong>
-        </span>
-      )}
-      <span className="ml-auto text-xs text-muted-foreground">
-        Topping theo phần:{" "}
-        {readiness.toppingSkuEnabled ? "đang bật" : "đang tắt an toàn"}
-      </span>
       </div>
 
       {!ready &&
-        (readiness.toppingIssues.length > 0 ||
-          readiness.configurationIssues.length > 0) && (
+        totalIssues > 0 && (
           <details className="mt-2 border-t border-current/10 pt-2">
             <summary className="w-fit cursor-pointer font-medium text-primary">
-              Xem việc cần xử lý ({readiness.toppingIssues.length + readiness.configurationIssues.length})
+              Xem việc cần xử lý ({totalIssues})
             </summary>
             <div className="mt-2 grid gap-2 lg:grid-cols-2">
-              {readiness.toppingIssues.map((item) => (
+              {readiness.activeKitchenStations === 0 && (
+                <div className="flex min-w-0 items-center gap-2 rounded border bg-background/80 px-2.5 py-2">
+                  <Icon name="local_dining" size={16} className="shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">Chưa có trạm bếp đang bật</p>
+                    <p className="text-xs text-status-error">Tạo và bật ít nhất một trạm trước khi gửi bếp.</p>
+                  </div>
+                </div>
+              )}
+              {readiness.variantProductsWithInvalidDefaults > 0 && (
+                <div className="flex min-w-0 items-center gap-2 rounded border bg-background/80 px-2.5 py-2">
+                  <Icon name="tune" size={16} className="shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">Cỡ mặc định chưa hợp lệ</p>
+                    <p className="text-xs text-status-error">
+                      {readiness.variantProductsWithInvalidDefaults} món có nhiều cỡ phải chọn đúng một cỡ mặc định.
+                    </p>
+                  </div>
+                  <a
+                    href="/hang-hoa?scope=sku"
+                    className="shrink-0 font-medium text-primary hover:underline"
+                  >
+                    Mở
+                  </a>
+                </div>
+              )}
+              {menuIssuesToShow.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex min-w-0 items-center gap-2 rounded border bg-background/80 px-2.5 py-2"
+                >
+                  <Icon name="local_cafe" size={16} className="shrink-0 text-muted-foreground" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium">
+                      {item.code} · {item.name}{item.variantName ? ` · ${item.variantName}` : ""}
+                    </p>
+                    <p className="text-xs text-status-error">
+                      {[item.missingPrice ? "Thiếu giá bán" : null, item.missingBom ? "Thiếu công thức riêng" : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
+                  <a
+                    href={`/hang-hoa?scope=sku&search=${encodeURIComponent(item.code)}`}
+                    className="shrink-0 font-medium text-primary hover:underline"
+                  >
+                    Mở
+                  </a>
+                </div>
+              ))}
+              {readiness.menuIssues.length > menuIssuesToShow.length && (
+                <p className="px-1 text-xs text-muted-foreground">
+                  Còn {readiness.menuIssues.length - menuIssuesToShow.length} món/cỡ cần cấu hình.
+                </p>
+              )}
+              {readiness.toppingSkuEnabled && readiness.toppingIssues.map((item) => (
                 <div
                   key={item.id}
                   className="flex min-w-0 items-center gap-2 rounded border bg-background/80 px-2.5 py-2"

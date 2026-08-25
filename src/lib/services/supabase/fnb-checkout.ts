@@ -191,6 +191,14 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
     message: "Không tìm thấy đơn bếp. Vui lòng tải lại màn hình.",
   },
   {
+    codes: ["FNB_PAYMENT_OPEN_SHIFT_REQUIRED"],
+    message: "Cần mở ca của chính anh/chị tại chi nhánh này trước khi thanh toán.",
+  },
+  {
+    codes: ["FNB_PAYMENT_SHIFT_NOT_OPEN_FOR_USER_BRANCH"],
+    message: "Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.",
+  },
+  {
     codes: ["CUSTOMER_NOT_FOUND", "SHIFT_NOT_OPEN_FOR_USER_BRANCH"],
     message: "Thông tin khách hàng hoặc ca làm việc không còn hợp lệ. Vui lòng tải lại.",
   },
@@ -206,6 +214,39 @@ export function getFnbPaymentErrorMessage(error: unknown): string | null {
 
   return (
     FNB_PAYMENT_ERROR_MESSAGES.find((item) =>
+      item.codes.some((code) => rawMessage.includes(code)),
+    )?.message ?? null
+  );
+}
+
+const FNB_VOID_ERROR_MESSAGES: ReadonlyArray<{
+  codes: readonly string[];
+  message: string;
+}> = [
+  {
+    codes: ["FNB_VOID_ACTOR_MISMATCH", "FNB_VOID_BRANCH_ACCESS_DENIED", "FNB_VOID_BRANCH_MISMATCH"],
+    message: "Anh/chị không có quyền huỷ hoá đơn này tại chi nhánh hiện tại.",
+  },
+  {
+    codes: ["FNB_VOID_ORDER_INVOICE_MISMATCH", "FNB_VOID_INVOICE_NOT_FOUND", "FNB_VOID_TENANT_MISMATCH"],
+    message: "Hoá đơn và đơn bếp không khớp. Vui lòng tải lại lịch sử đơn rồi thử lại.",
+  },
+  {
+    codes: ["FNB_VOID_SHIFT_NOT_OPEN_FOR_USER_BRANCH"],
+    message: "Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.",
+  },
+];
+
+export function getFnbVoidErrorMessage(error: unknown): string | null {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  return (
+    FNB_VOID_ERROR_MESSAGES.find((item) =>
       item.codes.some((code) => rawMessage.includes(code)),
     )?.message ?? null
   );
@@ -433,6 +474,8 @@ export async function voidFnbInvoice(input: {
     if (isRpcUnavailable(atomicError)) {
       throw new Error("Chưa có RPC fnb_void_invoice_atomic. Vui lòng chạy migration POS/FnB atomic trước khi huỷ hoá đơn.");
     }
+    const friendlyMessage = getFnbVoidErrorMessage(atomicError);
+    if (friendlyMessage) throw new Error(friendlyMessage);
     handleError(atomicError, "voidFnbInvoice:atomic_rpc");
   }
 

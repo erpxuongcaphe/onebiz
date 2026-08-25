@@ -137,6 +137,10 @@ export interface KitchenOrder {
   platformCommissionPercent: number;
   /** Số tiền phí sàn thực tế = round(total_gross * percent / 100). */
   platformCommissionAmount: number;
+  /** Nhân viên được phân công giao đơn tự giao, nếu có. */
+  deliveryStaffId?: string | null;
+  /** Cấp khoảng cách đã được máy chủ chốt để tính phí giao hàng. */
+  deliveryDistanceTier?: "near" | "mid" | "far" | "custom" | null;
   mergedIntoId: string | null;
   originalTableId: string | null;
   parentOrderId: string | null;
@@ -193,13 +197,34 @@ export interface FnbTabSnapshot {
   kitchenOrderId?: string; // set after sendToKitchen
   customerId?: string;
   customerName: string;
+  /**
+   * Đơn mở lại từ KDS không lưu snapshot khách hàng. Khi không có ngữ cảnh
+   * cục bộ đáng tin, buộc thu ngân xác nhận Khách lẻ hoặc chọn lại khách trước
+   * thanh toán thay vì âm thầm gán sai công nợ/điểm tích lũy.
+   */
+  customerConfirmationRequired?: boolean;
   orderDiscount?: FnbDiscountInput;
+  /**
+   * Giảm giá đã được lưu trong kitchen_orders (ví dụ sau tách bill). Đây
+   * không phải giảm tay của tab, nên chỉ dùng để hiển thị đúng tổng và không
+   * được gửi lại như một yêu cầu OTP mới khi thanh toán.
+   */
+  persistedOrderDiscountAmount?: number;
   /**
    * Day 3 16/05/2026: Khi cashier xin OTP duyệt giảm giá manual → lưu otpId
    * + reason vào tab để checkout V3 xác minh OTP và ghi audit log trong cùng
    * transaction thanh toán (truy vết được ai duyệt, không có audit "best effort").
    */
   discountAuditCtx?: { otpId: string; reason: string };
+  /**
+   * Những dòng đã được máy chủ nhận vào đơn bếp. Tách khỏi `lines` (món
+   * chưa gửi) để thu ngân có thể thu tiền sau khi gửi bếp mà không thể vô
+   * tình gửi lại hoặc sửa trực tiếp món bếp đang làm.
+   *
+   * Đây chỉ là snapshot hiển thị/nhập tiền. Máy chủ vẫn là nguồn chốt khi
+   * thanh toán và tab sẽ nạp lại snapshot từ đơn bếp khi mở ở máy khác.
+   */
+  sentLines?: FnbOrderLine[];
   lines: FnbOrderLine[];
   /**
    * Sprint POS-FNB-EXT-1 (CEO 08/05): Ghi chú đơn — ghi chú toàn bill

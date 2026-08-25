@@ -30,12 +30,21 @@ interface FnbPaymentDialogProps {
   subtotal: number;
   discountAmount?: number;
   manualDiscountAmount?: number;
+  persistedOrderDiscountAmount?: number;
   promotionDiscountAmount?: number;
   couponDiscountAmount?: number;
   /** Total KHÔNG bao gồm tip. Tip sẽ cộng thêm trong dialog. */
   total: number;
   lineCount: number;
   orderNumber?: string;
+  /** Tên khách đã được chọn ở giỏ trước khi mở thanh toán. */
+  initialCustomerName?: string;
+  /** Có mã khách đi kèm: không cho gõ tên khác làm lệch mã khách và tên trên hóa đơn. */
+  customerLocked?: boolean;
+  /** Đơn bếp vừa được mở ở máy/ca khác, chưa có snapshot khách đáng tin. */
+  customerConfirmationRequired?: boolean;
+  /** Lưu xác nhận Khách lẻ cho tab hiện tại sau khi thu ngân xác nhận rõ. */
+  onCustomerConfirmed?: () => void;
   onConfirm: (payload: FnbPaymentConfirmPayload) => void;
 }
 
@@ -62,7 +71,8 @@ function formatDenom(v: number): string {
 
 export function FnbPaymentDialog({
   open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
-  promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber, onConfirm,
+  persistedOrderDiscountAmount = 0, promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber,
+  initialCustomerName, customerLocked = false, customerConfirmationRequired = false, onCustomerConfirmed, onConfirm,
 }: FnbPaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
@@ -71,16 +81,18 @@ export function FnbPaymentDialog({
   const [customerName, setCustomerName] = useState("Khách lẻ");
   const [allowDebt, setAllowDebt] = useState(false);
   const [tipInput, setTipInput] = useState("");
+  const [walkInConfirmed, setWalkInConfirmed] = useState(false);
 
   useEffect(() => {
     if (open) {
       setMethod("cash");
       setCashInput(""); setTransferInput(""); setCardInput("");
-      setCustomerName("Khách lẻ");
+      setCustomerName(initialCustomerName?.trim() || "Khách lẻ");
       setAllowDebt(false);
       setTipInput("");
+      setWalkInConfirmed(false);
     }
-  }, [open]);
+  }, [initialCustomerName, open]);
 
   // Reset allowDebt when switching method (fresh validation each time)
   useEffect(() => {
@@ -109,18 +121,22 @@ export function FnbPaymentDialog({
   // CEO 29/05/2026: đơn 0đ (miễn phí / hàng mẫu / xuất nội bộ) → cho phép
   // xác nhận mà không cần nhập tiền. Banner + nhãn nút làm bước xác nhận.
   const isFreeOrder = total === 0;
+  const customerNameReadOnly = customerLocked || customerConfirmationRequired;
   // Compatibility for a cart snapshot created before the benefit sources were
   // split. New callers pass the three source-specific amounts.
   const unclassifiedDiscountAmount = Math.max(
     0,
-    discountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
+    discountAmount - persistedOrderDiscountAmount - manualDiscountAmount - promotionDiscountAmount - couponDiscountAmount,
   );
   // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
   const canConfirm =
-    isFreeOrder ||
-    (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt));
+    (isFreeOrder || (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt))) &&
+    (!customerConfirmationRequired || walkInConfirmed);
 
   const handleConfirm = () => {
+    if (customerConfirmationRequired && walkInConfirmed) {
+      onCustomerConfirmed?.();
+    }
     const payload: FnbPaymentConfirmPayload = {
       paymentMethod: method, paid: totalPaid,
       customerName: customerName.trim() || "Khách lẻ",
@@ -163,6 +179,12 @@ export function FnbPaymentDialog({
               <span className="text-muted-foreground">Tạm tính</span>
               <span className="tabular-nums">{formatCurrency(subtotal)}</span>
             </div>
+            {persistedOrderDiscountAmount > 0 && (
+              <div className="flex justify-between text-status-warning">
+                <span>Giảm giá đã lưu</span>
+                <span className="tabular-nums">-{formatCurrency(persistedOrderDiscountAmount)}</span>
+              </div>
+            )}
             {manualDiscountAmount > 0 && (
               <div className="flex justify-between text-status-warning">
                 <span>Giảm giá thủ công</span>
@@ -383,13 +405,38 @@ export function FnbPaymentDialog({
             </label>
           )}
 
-          {/* Customer name */}
+          {/* Customer */}
           <div className="space-y-2">
             <Label className="text-sm flex items-center gap-2">
-              <Icon name="person" size={14} /> Tên khách hàng
+              <Icon name="person" size={14} /> Khách hàng
             </Label>
-            <Input value={customerName} onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Khách lẻ" />
+            <Input
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+              placeholder="Khách lẻ"
+              readOnly={customerNameReadOnly}
+              aria-readonly={customerNameReadOnly || undefined}
+              className={customerNameReadOnly ? "bg-muted text-muted-foreground" : undefined}
+            />
+            {customerLocked && (
+              <p className="text-xs text-muted-foreground">
+                Đổi khách trước khi thanh toán để hóa đơn và điểm tích lũy khớp nhau.
+              </p>
+            )}
+            {customerConfirmationRequired && (
+              <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning space-y-2">
+                <p>Đơn này được mở từ máy hoặc ca khác. Hãy chọn khách bằng F4, hoặc xác nhận đây là Khách lẻ trước khi thu tiền.</p>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={walkInConfirmed}
+                    onChange={(e) => setWalkInConfirmed(e.target.checked)}
+                    className="h-4 w-4 accent-primary"
+                  />
+                  <span>Tôi xác nhận đây là Khách lẻ</span>
+                </label>
+              </div>
+            )}
           </div>
         </div>
 

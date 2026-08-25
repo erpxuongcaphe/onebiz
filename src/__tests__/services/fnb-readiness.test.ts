@@ -116,4 +116,73 @@ describe("danhGiaFnbReadiness", () => {
       },
     ]);
   });
+
+  it("phân biệt món một giá, quy cách và trạm bếp trước khi cho vận hành", () => {
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [
+        { id: "drink-1", code: "CF-001", name: "Cà phê đen", sell_price: 0, bom_code: null },
+        { id: "drink-2", code: "TS-001", name: "Trà sữa", sell_price: 0, bom_code: null },
+      ],
+      variants: [
+        {
+          id: "size-m",
+          product_id: "drink-2",
+          name: "M",
+          sell_price: 35_000,
+          bom_code: "BOM-TS-M",
+          is_default: true,
+        },
+        {
+          id: "size-l",
+          product_id: "drink-2",
+          name: "L",
+          sell_price: 0,
+          bom_code: null,
+          is_default: false,
+        },
+      ],
+      boms: [{ product_id: null, code: "BOM-TS-M", branch_id: "branch-a" }],
+      groups: [],
+      options: [],
+      branchId: "branch-a",
+      activeKitchenStations: 0,
+      activeTables: 0,
+    });
+
+    expect(result).toMatchObject({
+      menuTotal: 2,
+      simpleProductsMissingPrice: 1,
+      variantsTotal: 2,
+      variantsMissingPrice: 1,
+      variantsMissingBom: 1,
+      variantProductsWithInvalidDefaults: 0,
+      activeKitchenStations: 0,
+    });
+    expect(result.menuIssues).toEqual([
+      expect.objectContaining({ code: "CF-001", missingPrice: true, missingBom: false }),
+      expect.objectContaining({ code: "TS-001", variantName: "L", missingPrice: true, missingBom: true }),
+    ]);
+  });
+
+  it("không biến topping SKU đang tắt thành điều kiện chặn vận hành", () => {
+    const result = danhGiaFnbReadiness({
+      products: [
+        { id: "t1", code: "SKU-TPP-001", name: "Trân châu", sell_price: 0, bom_code: null },
+      ],
+      menuProducts: [
+        { id: "drink", code: "CF-001", name: "Cà phê", sell_price: 30_000, bom_code: null },
+      ],
+      variants: [],
+      boms: [],
+      groups: [],
+      options: [],
+      toppingSkuEnabled: false,
+      activeKitchenStations: 1,
+    });
+
+    expect(result.toppingMissingPrice).toBe(1);
+    expect(result.toppingSkuEnabled).toBe(false);
+    expect(result.menuIssues).toEqual([]);
+  });
 });

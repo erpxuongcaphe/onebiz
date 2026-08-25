@@ -50,6 +50,8 @@ function mapKitchenOrder(row: any): KitchenOrder {
     // Migration 00070: tách commission_percent / commission_amount
     platformCommissionPercent: Number(row.platform_commission_percent ?? 0),
     platformCommissionAmount: Number(row.platform_commission_amount ?? 0),
+    deliveryStaffId: row.delivery_staff_id ?? null,
+    deliveryDistanceTier: row.delivery_distance_tier ?? null,
     mergedIntoId: row.merged_into_id ?? null,
     originalTableId: row.original_table_id ?? null,
     parentOrderId: row.parent_order_id ?? null,
@@ -499,6 +501,47 @@ export interface CancelUnpaidKitchenOrderInput {
   otpId?: string;
 }
 
+const FNB_CANCEL_ERROR_MESSAGES: ReadonlyArray<{
+  codes: readonly string[];
+  message: string;
+}> = [
+  {
+    codes: ["FNB_CANCEL_BRANCH_ACCESS_DENIED"],
+    message: "Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.",
+  },
+  {
+    codes: ["FNB_CANCEL_SHIFT_NOT_OPEN_FOR_USER_BRANCH", "SHIFT_NOT_OPEN_FOR_ORDER_BRANCH"],
+    message: "Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.",
+  },
+  {
+    codes: ["ORDER_ALREADY_PAID"],
+    message: "Đơn đã thanh toán. Hãy dùng luồng huỷ hoá đơn để hoàn kho và hoàn tiền đúng sổ.",
+  },
+  {
+    codes: ["ORDER_ALREADY_CANCELLED"],
+    message: "Đơn này đã được huỷ trước đó. Vui lòng tải lại lịch sử đơn.",
+  },
+  {
+    codes: ["KITCHEN_ORDER_NOT_FOUND"],
+    message: "Không tìm thấy đơn bếp. Vui lòng tải lại màn hình.",
+  },
+];
+
+export function getFnbCancelErrorMessage(error: unknown): string | null {
+  const rawMessage =
+    typeof error === "string"
+      ? error
+      : error && typeof error === "object" && "message" in error
+        ? String((error as { message?: unknown }).message ?? "")
+        : "";
+
+  return (
+    FNB_CANCEL_ERROR_MESSAGES.find((item) =>
+      item.codes.some((code) => rawMessage.includes(code)),
+    )?.message ?? null
+  );
+}
+
 /**
  * Secure cancel for a sent-but-unpaid F&B order.
  *
@@ -533,6 +576,8 @@ export async function cancelUnpaidKitchenOrder(
     if (isRpcUnavailable(error)) {
       throw new Error("Chưa có RPC fnb_cancel_unpaid_order_atomic. Vui lòng chạy migration kiểm soát hủy bill FnB trước.");
     }
+    const friendlyMessage = getFnbCancelErrorMessage(error);
+    if (friendlyMessage) throw new Error(friendlyMessage);
     handleError(error, "cancelUnpaidKitchenOrder:atomic_rpc");
   }
 

@@ -8,12 +8,15 @@ export interface FnbBenefitDisplayInput {
   /** Total already reflects the manual tab discount. */
   totalAfterManualDiscount: number;
   manualDiscountAmount: number;
+  /** Giảm giá đã được máy chủ lưu cùng đơn bếp, ví dụ sau tách bill. */
+  persistedOrderDiscountAmount?: number;
   promotionDiscountAmount?: number;
   couponDiscountAmount?: number;
 }
 
 export interface FnbBenefitDisplay {
   manualDiscountAmount: number;
+  persistedOrderDiscountAmount: number;
   promotionDiscountAmount: number;
   couponDiscountAmount: number;
   automaticDiscountAmount: number;
@@ -28,20 +31,23 @@ function nonNegative(value: number | null | undefined): number {
 export function getFnbBenefitDisplay({
   totalAfterManualDiscount,
   manualDiscountAmount,
+  persistedOrderDiscountAmount,
   promotionDiscountAmount,
   couponDiscountAmount,
 }: FnbBenefitDisplayInput): FnbBenefitDisplay {
   const manual = nonNegative(manualDiscountAmount);
+  const persisted = nonNegative(persistedOrderDiscountAmount);
   const promotion = nonNegative(promotionDiscountAmount);
   const coupon = nonNegative(couponDiscountAmount);
   const automatic = promotion + coupon;
 
   return {
     manualDiscountAmount: manual,
+    persistedOrderDiscountAmount: persisted,
     promotionDiscountAmount: promotion,
     couponDiscountAmount: coupon,
     automaticDiscountAmount: automatic,
-    totalDiscountAmount: manual + automatic,
-    total: Math.max(0, nonNegative(totalAfterManualDiscount) - automatic),
+    totalDiscountAmount: manual + persisted + automatic,
+    total: Math.max(0, nonNegative(totalAfterManualDiscount) - persisted - automatic),
   };
 }

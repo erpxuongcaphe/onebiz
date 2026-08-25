@@ -272,6 +272,16 @@ describe("sendToKitchen", () => {
 // Here we only verify the TS wrapper: correct param mapping + response handling.
 
 describe("fnbPayment (atomic RPC wrapper)", () => {
+  it("nói rõ phải mở ca trước khi thanh toán lần đầu", () => {
+    expect(getFnbPaymentErrorMessage({ message: "FNB_PAYMENT_OPEN_SHIFT_REQUIRED" }))
+      .toBe("Cần mở ca của chính anh/chị tại chi nhánh này trước khi thanh toán.");
+  });
+
+  it("nói rõ khi ca không còn thuộc thu ngân đang thao tác", () => {
+    expect(getFnbPaymentErrorMessage({ message: "FNB_PAYMENT_SHIFT_NOT_OPEN_FOR_USER_BRANCH" }))
+      .toBe("Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.");
+  });
+
   it("đổi mã guard coupon thành lỗi tiếng Việt cho thu ngân", async () => {
     rpcResponses["fnb_complete_payment_atomic_v3"] = {
       data: null,
