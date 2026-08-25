@@ -71,7 +71,32 @@ results as (
          where o.is_active
            and o.scale_factor is not null
            and o.linked_product_id is not null
-      )
+      ),
+      'danh_sach', coalesce((
+        select jsonb_agg(jsonb_build_object(
+          'nhom', x.group_name,
+          'lua_chon', x.option_label,
+          'he_so', x.scale_factor,
+          'ma_hang_lien_ket', x.product_code,
+          'ten_hang_lien_ket', x.product_name,
+          'la_mac_dinh', x.is_default
+        ) order by x.group_name, x.option_label)
+          from (
+            select
+              g.name as group_name,
+              o.label as option_label,
+              o.scale_factor,
+              o.is_default,
+              p.code as product_code,
+              p.name as product_name
+            from public.modifier_options o
+            join public.modifier_groups g on g.id = o.group_id
+            left join public.products p on p.id = o.linked_product_id
+            where o.is_active
+              and o.scale_factor is not null
+              and o.linked_product_id is not null
+          ) x
+      ), '[]'::jsonb)
     )
 
   union all

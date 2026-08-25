@@ -55,10 +55,13 @@ describe("00347 - integrity of FnB modifier options", () => {
     expect(postflight).toContain("K4_MOI_NHOM_CHON_MOT_CO_MOT_MAC_DINH");
     expect(postflight).toContain("option_service_role");
     expect(postflight).toContain("group_service_role");
+    expect(postflight).toContain("ma_hang_lien_ket");
+    expect(postflight).toContain("ten_hang_lien_ket");
     expect(privilegeHotfix).toContain("authenticated, service_role");
     expect(postflight).not.toMatch(/\b(?:insert|update|delete|truncate)\s+/i);
     expect(preflight).toContain("P2_KHONG_TRU_KHO_HAI_LAN");
     expect(preflight).toContain("P3_MOI_NHOM_CHON_MOT_CO_MOT_MAC_DINH");
+    expect(preflight).toContain("ma_hang_lien_ket");
     expect(preflight).not.toMatch(/\b(?:insert|update|delete|truncate)\s+/i);
   });
 });
