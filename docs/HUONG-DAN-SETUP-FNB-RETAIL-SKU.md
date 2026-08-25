@@ -1,6 +1,6 @@
 # Hướng Dẫn Setup FnB Theo Logic Retail SKU Làm Đầu Vào
 
-Ngày cập nhật: 06/07/2026
+Ngày cập nhật: 25/08/2026
 
 Tài liệu này là bản hướng dẫn chuẩn cho mô hình OneBiz hiện tại: Retail và FnB là 2 mảng riêng, nhưng hàng đầu vào của FnB có thể chính là SKU Retail được bán nội bộ, chuyển kho hoặc cấp từ Kho tổng sang Quán FnB.
 
@@ -43,7 +43,7 @@ Kho tổng / Retail / Xưởng
 
 Quán FnB
   Nhận SKU Retail từ Kho tổng
-    -> cà phê rang xay, sữa lon, syrup chai, ly, nắp...
+    -> cà phê rang xay, sữa lon, syrup chai, ly và các vật tư được chọn quản lý tồn
   Tạo SKU FnB
     -> bạc xỉu, cà phê sữa đá, latte...
   BOM FnB
@@ -173,6 +173,16 @@ Quán A phải có tồn:
 
 Nếu chưa có tồn ở quán mà POS FnB bán món, hệ thống có thể báo thiếu hàng hoặc làm tồn âm tùy cấu hình.
 
+### 5.1. Chọn Đúng Chứng Từ Cấp Hàng
+
+| Tình huống | Dùng nghiệp vụ | Kết quả đúng |
+|---|---|---|
+| Retail bán đầu vào cho quán FnB cùng doanh nghiệp, cần có giá trị bán/mua nội bộ | **Bán nội bộ chuỗi** | Tạo hóa đơn bên bán, phiếu nhập bên mua và biến động tồn tự động |
+| Chỉ điều chuyển vật lý giữa hai kho/chi nhánh, không cần giá hay chứng từ mua-bán nội bộ | **Chuyển kho** | Chỉ chuyển tồn giữa hai nơi |
+| Nhà cung cấp bên ngoài giao trực tiếp cho quán | **Nhập hàng** | Ghi nhận nhà cung cấp, công nợ và tồn tại quán |
+
+Với Xưởng Tư Búa nhận hàng từ mảng Retail của cùng tenant, dùng **Bán nội bộ chuỗi**. Không tạo phiếu nhập NCC bên ngoài cho cùng lô hàng, vì như vậy sẽ làm đúp chứng từ và dễ lệch tồn/giá vốn.
+
 ## 6. Setup SKU FnB
 
 SKU FnB là món bán trên menu:
@@ -191,6 +201,7 @@ Quy tắc:
 - Món có công thức phải bật BOM/`has_bom = true`.
 - Giá bán nằm ở SKU hoặc variant.
 - Giá vốn nên tính từ BOM, không nhập tay tùy tiện nếu đã có công thức.
+- Không tự thêm nắp, ống hút hoặc đá vào BOM; chỉ thêm nguyên liệu/vật tư mà chi nhánh quyết định theo dõi tồn.
 
 Nếu có size M/L:
 
@@ -214,7 +225,6 @@ Ví dụ BOM Bạc xỉu size M:
 | Cà phê rang xay | `SKU-CPH-RX-001` | 0.018 | Kg |
 | Sữa đặc lon | `SKU-SUA-LON-001` | 0.030 | Lon |
 | Ly nhựa 500ml | `SKU-LY-500-001` | 1 | Cái |
-| Nắp ly 500ml | `SKU-NAP-500-001` | 1 | Cái |
 
 Trong template Excel BOM, cột có thể tên là "Mã NVL". Với mô hình của anh, hãy hiểu cột này là "mã hàng thành phần bị trừ tồn". Mã đó có thể là:
 
@@ -255,7 +265,7 @@ Modifier là tùy chọn khi bán món:
 | Nhóm | Ví dụ | Cách dùng |
 |---|---|---|
 | Mức đường | 0%, 30%, 50%, 70%, 100% | Có thể scale dòng đường trong BOM |
-| Mức đá | Ít đá, bình thường, nhiều đá | Có thể chỉ ghi chú hoặc scale nếu có setup |
+| Mức đá | Ít đá, bình thường, nhiều đá | Tại Xưởng Tư Búa chỉ là tùy chọn phục vụ, không scale BOM và không trừ tồn |
 | Size | M, L | Nên dùng variant nếu giá và định lượng khác |
 | Topping | Trân châu, thạch, kem cheese | Nên có mã hàng riêng để trừ tồn |
 
@@ -265,6 +275,19 @@ Khuyến nghị:
 - Đường có thể dùng `Scale theo modifier`.
 - Topping bán thêm nên là hàng có tồn riêng.
 - Modifier không nên thay thế BOM, vì BOM mới là nơi kiểm soát giá vốn.
+
+### 8.1. Mẫu Chuẩn: Hồng Trà Không Size
+
+Món **Hồng Trà** là món một giá, không tạo variant M/L. Dùng hai nhóm tùy chọn đơn:
+
+| Nhóm | Rule | Mặc định | Tác động tồn |
+|---|---|---|---|
+| Mức đường | `single_required` | 100% | Chỉ scale dòng Đường cát trắng trong BOM |
+| Mức đá | `single_required` | Bình thường | Không scale, không liên kết SKU |
+
+BOM của Hồng Trà tại Xưởng Tư Búa nhập theo công thức đã chốt: dòng **Hồng Trà - Toàn Phát** là 6.8 g và giữ nguyên định lượng; dòng **Đường cát trắng** đặt định lượng gốc 35 g và chọn `Scale theo modifier = Mức đường`. Các option 100% / 80% / 60% có `scale_factor` lần lượt là 1 / 0.8 / 0.6, nên hệ thống trừ 35 g / 28 g / 21 g đường nhưng không làm thay đổi lượng trà.
+
+Chỉ thêm ly vào BOM nếu anh quyết định quản lý tồn ly. Không thêm nắp, ống hút hoặc đá vào BOM theo quy ước vận hành hiện tại; đó là chi phí khác, không phải hàng tiêu hao cần trừ theo từng bill.
 
 ## 9. Quy Trình Setup Từ Đầu
 
@@ -283,7 +306,7 @@ Tạo nhóm và SKU Retail cho:
 
 - Cà phê rang xay.
 - Sữa, syrup, bột nền.
-- Ly, nắp, ống hút, bao bì.
+- Ly hoặc bao bì nếu doanh nghiệp quyết định quản lý tồn.
 - Bánh, snack, nước chai nếu có bán Retail.
 
 Tất cả là `product_type = sku`, `channel = retail`.
@@ -358,6 +381,8 @@ Chỉ khi test này đúng mới nhân rộng setup.
 | Tồn kho ban đầu | Nên để 0 | 0 | Nên nhập qua tồn đầu kỳ/phiếu nhập |
 
 Lưu ý: tồn thật nên nhập bằng mẫu tồn đầu kỳ hoặc phiếu nhập để có lịch sử kho.
+
+Với hàng Retail cấp nội bộ sang quán FnB, ưu tiên **Bán nội bộ chuỗi** thay vì tạo phiếu nhập NCC. Phiếu nhập chỉ phù hợp khi nhà cung cấp bên ngoài giao hàng cho quán.
 
 ### 10.2. File BOM
 
@@ -489,6 +514,7 @@ Kiểm tra:
 - [ ] BOM của Quán FnB tham chiếu SKU Retail tại quán.
 - [ ] BOM riêng chi nhánh đã tạo nếu cần cascade tại quán.
 - [ ] Modifier scale đã gắn đúng dòng cần scale.
+- [ ] Không thêm nắp, ống hút hoặc đá vào BOM của Xưởng Tư Búa.
 
 ### POS và báo cáo
 
