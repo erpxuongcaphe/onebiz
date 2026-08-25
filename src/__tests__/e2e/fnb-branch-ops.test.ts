@@ -479,10 +479,7 @@ import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } fr
 import {
   transferTable,
   mergeKitchenOrders,
-  applyOrderDiscount,
   setDeliveryPlatform,
-  updateOrderItemQty,
-  removeOrderItem,
   updateKitchenOrderStatus,
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
@@ -745,22 +742,8 @@ describe("Part 2: Delivery — Shopee Food (Matcha Latte, commission 25%)", () =
   });
 });
 
-describe("Part 2: Sửa đơn — Modify order mid-service", () => {
-  it("update item qty from 1 to 3", async () => {
-    mockFromHandler = () => createChain({ data: { id: "item-1", quantity: 3 }, error: null });
-    await updateOrderItemQty("item-1", 3);
-    const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).quantity === 3);
-    expect(upd).toBeDefined();
-  });
-
-  it("remove item from order", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
-    await removeOrderItem("item-2");
-    // Should delete the item
-    expect(true).toBe(true); // removeOrderItem uses .delete()
-  });
-
-  it("add items to existing order via addItemsToExistingOrder", async () => {
+describe("Part 2: Đơn đã gửi bếp", () => {
+  it("only adds items through addItemsToExistingOrder", async () => {
     mockFromHandler = (table: string) => {
       if (table === "kitchen_orders") return createChain({ data: makeOrderRow({ id: "ko-1", status: "preparing" }), error: null });
       if (table === "kitchen_order_items") return createChain({ data: null, error: null });
@@ -773,10 +756,9 @@ describe("Part 2: Sửa đơn — Modify order mid-service", () => {
       unitPrice: MENU.croissant.price,
       toppings: [],
     }]);
-    const croissantInsert = insertCalls.find(
-      (c) => (c.data as Record<string, unknown>)?.product_name === MENU.croissant.name
-    );
-    expect(croissantInsert).toBeDefined();
+    expect(rpcCalls).toContainEqual(expect.objectContaining({
+      fn: "fnb_send_to_kitchen_atomic_v2",
+    }));
   });
 });
 
@@ -836,42 +818,6 @@ describe("Part 2: Gộp đơn — Merge tables 3+5 into table 3", () => {
         p_source_order_ids: ["ko-source-1"],
       },
     });
-  });
-});
-
-describe("Part 2: Giảm giá — Fixed 20k discount", () => {
-  it("applies fixed discount to order", async () => {
-    mockFromHandler = () => createChain({ data: makeOrderRow(), error: null });
-    await applyOrderDiscount("ko-1", "fixed", 20000, "Khách quen");
-    const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).discount_amount === 20000);
-    expect(upd).toBeDefined();
-    expect((upd!.data as Record<string, unknown>).discount_reason).toBe("Khách quen");
-  });
-});
-
-describe("Part 2: Giảm giá — Percent 10% on 100k order", () => {
-  it("applies percent discount, calculated from order items", async () => {
-    // getKitchenOrderById needs: kitchen_orders (with joined table) + kitchen_order_items
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") {
-        return createChain({ data: makeOrderRow({ id: "ko-pct" }), error: null });
-      }
-      if (table === "kitchen_order_items") {
-        return createChain({
-          data: makeItemRows([
-            { id: "p1", name: "Latte", qty: 2, price: 45000 },
-            { id: "p2", name: "Bánh mì", qty: 1, price: 10000 },
-          ]),
-          error: null,
-        });
-      }
-      return createChain({ data: null, error: null });
-    };
-    // 10% of (2*45000 + 10000) = 10% of 100000 = 10000
-    await applyOrderDiscount("ko-pct", "percent", 10, "Giờ vàng 14-16h");
-    const upd = updateCalls.find((c) => (c.data as Record<string, unknown>).discount_amount === 10000);
-    expect(upd).toBeDefined();
-    expect((upd!.data as Record<string, unknown>).discount_reason).toBe("Giờ vàng 14-16h");
   });
 });
 
@@ -1176,22 +1122,7 @@ describe("Part 6: Complex combo — Transfer → Add items → Discount → Mixe
     ]);
     expect(insertCalls.length).toBeGreaterThanOrEqual(1);
 
-    // 3. Apply discount (percent needs items for calculation)
-    updateCalls.length = 0;
-    mockFromHandler = (table: string) => {
-      if (table === "kitchen_orders") return createChain({ data: makeOrderRow(), error: null });
-      if (table === "kitchen_order_items") return createChain({
-        data: makeItemRows([
-          { id: MENU.cfSuaDa.id, name: MENU.cfSuaDa.name, qty: 1, price: 35000 },
-          { id: MENU.banhMi.id, name: MENU.banhMi.name, qty: 2, price: 25000 },
-        ]),
-        error: null,
-      });
-      return createChain({ data: null, error: null });
-    };
-    await applyOrderDiscount("ko-1", "percent", 15, "Happy hour");
-
-    // 4. Mixed payment
+    // 3. Mixed payment
     insertCalls.length = 0;
     rpcCalls.length = 0;
     setupPaymentMocks(

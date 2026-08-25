@@ -236,10 +236,7 @@ import { sendToKitchen, fnbPayment, addItemsToExistingOrder, voidFnbInvoice } fr
 import {
   transferTable,
   mergeKitchenOrders,
-  applyOrderDiscount,
   setDeliveryPlatform,
-  updateOrderItemQty,
-  removeOrderItem,
   updateKitchenOrderStatus,
 } from "@/lib/services/supabase/kitchen-orders";
 import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
@@ -907,28 +904,17 @@ describe("D. Retail POS — direct checkout (as FnB takeaway)", () => {
 // E. SPECIAL OPERATIONS (120 tests)
 // ============================================================
 
-describe("E1. Sửa đơn — modify items after kitchen send", () => {
+describe("E1. Đơn đã gửi bếp — chỉ bổ sung món", () => {
   const modifyScenarios = ALL_SCENARIOS.filter(s => s.specialOp === "modify");
 
   it.each(modifyScenarios.map(s => [s.id, s] as const))(
-    "Scenario #%d — update qty + remove + add items",
+    "Scenario #%d — bổ sung món qua RPC",
     async (id, s) => {
       resetMocks();
       setupMocks(s);
 
-      // Update first item qty to 5
-      await updateOrderItemQty(`koi-${s.id}-0`, 5);
-      expect(updateCalls.length).toBeGreaterThanOrEqual(1);
-
-      // Remove last item
-      resetMocks();
-      setupMocks(s);
-      await removeOrderItem(`koi-${s.id}-${s.items.length - 1}`);
-      expect(deleteCalls.length).toBeGreaterThanOrEqual(1);
-
-      // Add new item
-      resetMocks();
-      setupMocks(s);
+      // Món đã gửi bếp không được sửa số lượng/xóa trực tiếp.
+      // Thu ngân chỉ được bổ sung món qua RPC; cần sửa phải hủy bill có lý do.
       await addItemsToExistingOrder(`ko-${s.id}`, [
         { productId: "p-nuoc", productName: "Nước Suối", quantity: 1, unitPrice: 10000 },
       ]);
