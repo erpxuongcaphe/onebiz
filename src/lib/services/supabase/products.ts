@@ -23,15 +23,15 @@ function applyCreatedAtRange(query: any, filters: QueryParams["filters"] | undef
  * Phương án B (CEO 20/07): giới hạn danh mục theo NGÀNH của chi nhánh.
  * - cascade_mode='production' (Kho Tổng): NVL (channel NULL) + SKU không phải
  *   F&B — hiện ĐỦ kể cả chưa từng có tồn.
- * - cascade_mode='outlet' (quán F&B / VP): món F&B + mọi mã ĐANG có dòng tồn
- *   thật tại CN (SKU Retail thành phần quán đã nhận).
+ * - cascade_mode='outlet' (quán F&B / VP): món F&B + TOÀN BỘ SKU Retail.
+ *   SKU Retail là danh mục thành phần chuẩn của quán, nên phải hiện kể cả
+ *   trước lần nhập đầu tiên. Số tồn vẫn lấy riêng từ branch_stock.
  * "Tất cả chi nhánh" không đi qua đây (hiện toàn bộ).
  */
 // LƯU Ý: hàm áp filter phải SYNC — PostgREST builder là thenable, để nó lọt
 // qua async return là JS "await" luôn builder → query bắn non thiếu filter.
 interface BranchIndustryScope {
   isOutlet: boolean;
-  stockedIds: string[];
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -43,27 +43,15 @@ async function getBranchIndustryScope(supabase: any, tenantId: string, branchId:
     .eq("id", branchId)
     .maybeSingle();
   const isOutlet = br?.cascade_mode === "outlet";
-  let stockedIds: string[] = [];
-  if (isOutlet) {
-    const { data: rows } = await supabase
-      .from("branch_stock")
-      .select("product_id")
-      .eq("tenant_id", tenantId)
-      .eq("branch_id", branchId)
-      .is("variant_id", null)
-      .limit(2000);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    stockedIds = Array.from(new Set((rows ?? []).map((r: any) => r.product_id)));
-  }
-  return { isOutlet, stockedIds };
+  return { isOutlet };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyBranchIndustryScope(query: any, scope: BranchIndustryScope) {
   if (scope.isOutlet) {
-    return scope.stockedIds.length
-      ? query.or(`channel.eq.fnb,id.in.(${scope.stockedIds.join(",")})`)
-      : query.eq("channel", "fnb");
+    // Danh mục tự động: SKU Retail mới tạo sẽ xuất hiện ngay tại mọi outlet,
+    // không cần tạo dòng branch_stock=0 hoặc gán thủ công từng chi nhánh.
+    return query.or("channel.eq.fnb,channel.eq.retail");
   }
   return query.or("channel.is.null,channel.neq.fnb");
 }
@@ -82,8 +70,8 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   // Branch-scope Phương án B (CEO 20/07): chế độ CHI NHÁNH hiện DANH MỤC theo
   // NGÀNH của CN (branches.cascade_mode) — production (Kho Tổng): NVL + SKU
   // Retail đủ hết (kể cả chưa có dòng tồn; SKU xem "≈ khả dụng" từ BOM);
-  // outlet (quán F&B): món F&B + mọi mã ĐANG có tồn thật tại quán. Tồn hiển
-  // thị = tồn CN (LEFT join, chưa có dòng → 0). Khi BẬT lọc tồn kho → INNER
+  // outlet (quán F&B): món F&B + toàn bộ SKU Retail làm thành phần tại quán.
+  // Tồn hiển thị = tồn CN (LEFT join, chưa có dòng → 0). Khi BẬT lọc tồn kho → INNER
   // join tồn thật như trước (PostgREST không lọc parent qua LEFT join).
   const branchId =
     params.branchId && params.branchId !== "all" ? params.branchId : undefined;
@@ -294,7 +282,13 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
  * Với 5000 SP payload ~50KB — acceptable cho go-live. Nếu scale lớn hơn thì
  * chuyển sang Postgres RPC function (xem comment trong body).
  */
-export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Promise<{
+export async function getProductStats(
+  scope: "nvl" | "sku" | "all" = "all",
+  options?: {
+    channel?: "retail" | "fnb";
+    branchId?: string;
+  },
+): Promise<{
   totalCount: number;
   stockValue: number;
   outOfStock: number;
@@ -304,14 +298,30 @@ export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Pro
   const tenantId = await getCurrentTenantId();
   // inventory_role (00164) chưa có trong generated types → cast any.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const branchId = options?.branchId;
   let query = (supabase as any)
     .from("products")
-    .select("stock, cost_price, inventory_role", { count: "exact" })
+    .select(
+      "stock, cost_price, inventory_role" +
+        (branchId ? ", branch_stock(quantity)" : ""),
+      { count: "exact" },
+    )
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
 
+  if (branchId) {
+    query = query
+      .eq("branch_stock.branch_id", branchId)
+      .is("branch_stock.variant_id", null);
+    const industryScope = await getBranchIndustryScope(supabase, tenantId, branchId);
+    query = applyBranchIndustryScope(query, industryScope);
+  }
+
   if (scope !== "all") {
     query = query.eq("product_type", scope);
+  }
+  if (options?.channel) {
+    query = query.eq("channel", options.channel);
   }
 
   const { data, count, error } = await query;
@@ -328,7 +338,13 @@ export async function getProductStats(scope: "nvl" | "sku" | "all" = "all"): Pro
     if ((row as { inventory_role?: string }).inventory_role === "fnb_menu_item") {
       continue;
     }
-    const stock = Number((row as { stock: number | null }).stock ?? 0);
+    const typedRow = row as {
+      stock: number | null;
+      branch_stock?: Array<{ quantity: number | null }>;
+    };
+    const stock = branchId
+      ? Number(typedRow.branch_stock?.[0]?.quantity ?? 0)
+      : Number(typedRow.stock ?? 0);
     const cost = Number((row as { cost_price: number | null }).cost_price ?? 0);
     stockValue += stock * cost;
     if (stock === 0) outOfStock++;
@@ -439,7 +455,10 @@ export async function getProductCategoriesAsync(
  * is_active=true để khỏi kẹt brand "ma" từ sản phẩm đã xoá mềm. Có thể
  * filter theo scope (nvl/sku) để chỉ hiện brand phù hợp với tab đang xem.
  */
-export async function getProductBrands(scope?: "nvl" | "sku"): Promise<string[]> {
+export async function getProductBrands(
+  scope?: "nvl" | "sku",
+  channel?: "retail" | "fnb",
+): Promise<string[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -451,6 +470,7 @@ export async function getProductBrands(scope?: "nvl" | "sku"): Promise<string[]>
     .eq("is_active", true);
 
   if (scope) query = query.eq("product_type", scope);
+  if (channel) query = query.eq("channel", channel);
 
   const { data, error } = await query;
   if (error) {

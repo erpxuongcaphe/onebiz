@@ -380,12 +380,22 @@ export default function HangHoaPage() {
 
   // Bulk action state — phase 2: wire backend mutations
   const { toast } = useToast();
-  // Branch-scope danh sách SP (CEO 13/07): mặc định hiện theo chi nhánh đang
-  // chọn (cột "Tồn" = tồn CN đó, chỉ SP có ở CN); toggle "Toàn chuỗi" xem hết.
+  // Branch-scope danh sách SP: tồn vẫn lấy theo chi nhánh, còn danh mục outlet
+  // gồm toàn bộ SKU Retail kể cả trước lần nhập đầu tiên.
   const { activeBranchId, currentBranch } = useBranchFilter();
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const branchStockView = !viewAllBranches && !!activeBranchId;
+  const isFnbOutletView =
+    branchStockView && currentBranch?.branchType === "store";
+  // Ở quán, tab "Thành phần" là một góc nhìn vận hành của SKU Retail;
+  // không đổi product_type thành NVL và không tạo tồn 0 giả.
+  const catalogProductType: ProductScope = isFnbOutletView ? "sku" : scope;
+  const catalogChannel = isFnbOutletView
+    ? scope === "nvl"
+      ? "retail"
+      : "fnb"
+    : undefined;
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá SP.
   //   - canDeleteProduct = true  → bấm Xoá → ConfirmDialog → service trực tiếp
@@ -463,13 +473,14 @@ export default function HangHoaPage() {
   // cần option này ngay từ đầu thay vì bắt gõ manual.
   const [brands, setBrands] = useState<string[]>([]);
 
-  // Reload categories + brands khi scope đổi (NVL vs SKU có brand pool khác nhau)
+  // Reload categories + brands theo đúng góc nhìn. Tại quán, "Thành phần"
+  // dùng nhóm của SKU Retail chứ không dùng nhóm NVL thô ở Kho Tổng.
   useEffect(() => {
     let cancelled = false;
-    getProductCategoriesAsync(scope).then((cats) => {
+    getProductCategoriesAsync(catalogProductType, catalogChannel).then((cats) => {
       if (!cancelled) setCategories(cats);
     });
-    getProductBrands(scope)
+    getProductBrands(catalogProductType, catalogChannel)
       .then((list) => {
         if (!cancelled) setBrands(list);
       })
@@ -479,7 +490,15 @@ export default function HangHoaPage() {
     return () => {
       cancelled = true;
     };
-  }, [scope]);
+  }, [catalogProductType, catalogChannel]);
+
+  // Nhóm/thương hiệu của hai góc nhìn outlet là hai tập khác nhau. Khi đổi
+  // tab, bỏ bộ lọc cũ để tránh màn rỗng giả (ví dụ nhóm Hồng Trà của món F&B
+  // không tồn tại trong danh mục SKU Retail nguyên liệu).
+  useEffect(() => {
+    setCategoryFilter("all");
+    setBrandFilter("all");
+  }, [catalogProductType, catalogChannel]);
 
   // Bộ lọc danh sách hiện hành — dùng chung cho tải trang VÀ xuất file, để
   // file xuất ra đúng tập đang lọc (không phải chỉ trang đang xem).
@@ -490,7 +509,8 @@ export default function HangHoaPage() {
     const effectiveCreatedTo =
       createdDatePreset === "custom" ? createdDateTo : createdRange.to;
     return {
-      productType: scope,
+      productType: catalogProductType,
+      ...(catalogChannel && { channel: catalogChannel }),
       ...(categoryFilter !== "all" && { category: [categoryFilter] }),
       ...(stockFilter !== "all" && { stock: stockFilter }),
       ...(statusFilter !== "all" && { status: statusFilter }),
@@ -499,7 +519,8 @@ export default function HangHoaPage() {
       ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
     };
   }, [
-    scope,
+    catalogProductType,
+    catalogChannel,
     categoryFilter,
     stockFilter,
     statusFilter,
@@ -643,15 +664,19 @@ export default function HangHoaPage() {
   // quay lại visible hoặc bfcache restore. Pattern React Query / SWR.
   useRevalidateOnFocus(fetchData);
 
-  // Fetch stats KPI (totalCount, stockValue, outOfStock, lowStock) theo scope
+  // KPI phải dùng cùng tập danh mục và cùng tồn chi nhánh với bảng. Trước đây
+  // trang đang xem Xưởng Tư Búa nhưng KPI vẫn cộng tồn toàn chuỗi.
   const fetchStats = useCallback(async () => {
     try {
-      const s = await getProductStats(scope);
+      const s = await getProductStats(catalogProductType, {
+        channel: catalogChannel,
+        branchId: branchStockView ? activeBranchId : undefined,
+      });
       setStats(s);
     } catch {
       // silent fail — KPI không critical cho page
     }
-  }, [scope]);
+  }, [catalogProductType, catalogChannel, branchStockView, activeBranchId]);
 
   // PERF F10: Bỏ dep `data` — trước đây mỗi lần fetchData xong (đổi page/
   // search/filter) → data đổi → fetchStats re-run lại. Stats CHỈ phụ thuộc
@@ -1264,6 +1289,20 @@ export default function HangHoaPage() {
       header: "Tồn kho",
       size: 150,
       cell: ({ row }) => {
+        if (
+          isFnbOutletView &&
+          row.original.channel === "retail" &&
+          row.original.branchStock == null
+        ) {
+          return (
+            <span
+              className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-0.5 text-xs text-muted-foreground"
+              title="Mã thành phần đã có trong danh mục quán nhưng chưa từng được nhập về chi nhánh này"
+            >
+              Chưa nhập
+            </span>
+          );
+        }
         // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
         if (branchStockView && row.original.hasBom) {
           const avail = bomAvailability.get(row.original.id);
@@ -1681,12 +1720,24 @@ export default function HangHoaPage() {
           tabs={
             <Tabs value={scope} onValueChange={(v) => setScope(v as ProductScope)}>
               <TabsList>
-                <TabsTrigger value="nvl">Nguyên vật liệu</TabsTrigger>
-                <TabsTrigger value="sku">Hàng bán</TabsTrigger>
+                <TabsTrigger value="nvl">
+                  {isFnbOutletView ? "Thành phần tại quán" : "Nguyên vật liệu"}
+                </TabsTrigger>
+                <TabsTrigger value="sku">
+                  {isFnbOutletView ? "Món F&B" : "Hàng bán"}
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           }
-          searchPlaceholder={scope === "nvl" ? "Theo mã, tên NVL" : "Theo mã, tên SKU"}
+          searchPlaceholder={
+            isFnbOutletView
+              ? scope === "nvl"
+                ? "Theo mã, tên thành phần"
+                : "Theo mã, tên món F&B"
+              : scope === "nvl"
+                ? "Theo mã, tên NVL"
+                : "Theo mã, tên SKU"
+          }
           searchValue={search}
           onSearchChange={setSearch}
           searchFields={[
@@ -1777,7 +1828,15 @@ export default function HangHoaPage() {
             <>
               <ListMetric
                 icon={<Icon name="inventory_2" size={15} />}
-                label={scope === "nvl" ? "Tổng NVL" : "Tổng hàng bán"}
+                label={
+                  isFnbOutletView
+                    ? scope === "nvl"
+                      ? "Tổng thành phần"
+                      : "Tổng món F&B"
+                    : scope === "nvl"
+                      ? "Tổng NVL"
+                      : "Tổng hàng bán"
+                }
                 value={stats ? formatNumber(stats.totalCount) : "—"}
                 loading={!stats}
               />
@@ -1845,19 +1904,29 @@ export default function HangHoaPage() {
           emptyIcon={scope === "nvl" ? "inventory_2" : "shopping_bag"}
           emptyTitle={
             emptyState === "no-results"
-              ? scope === "nvl"
-                ? "Không tìm thấy nguyên vật liệu"
-                : "Không tìm thấy sản phẩm bán"
-              : scope === "nvl"
-                ? "Chưa có nguyên vật liệu nào"
-                : "Chưa có sản phẩm bán nào"
+              ? isFnbOutletView
+                ? scope === "nvl"
+                  ? "Không tìm thấy thành phần"
+                  : "Không tìm thấy món F&B"
+                : scope === "nvl"
+                  ? "Không tìm thấy nguyên vật liệu"
+                  : "Không tìm thấy sản phẩm bán"
+              : isFnbOutletView
+                ? scope === "nvl"
+                  ? "Chưa có SKU Retail đang hoạt động"
+                  : "Chưa có món F&B nào"
+                : scope === "nvl"
+                  ? "Chưa có nguyên vật liệu nào"
+                  : "Chưa có sản phẩm bán nào"
           }
           emptyDescription={
             emptyState === "no-results"
               ? "Thử thay đổi nhóm hàng, thương hiệu, tồn kho, trạng thái, thời gian, nhà cung cấp hoặc nội dung tìm kiếm."
-              : scope === "nvl"
-                ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để nhập danh sách.'
-                : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để nhập danh sách.'
+              : isFnbOutletView && scope === "nvl"
+                ? "Mọi SKU Retail đang hoạt động sẽ tự xuất hiện tại đây, kể cả trước lần nhập đầu tiên."
+                : scope === "nvl"
+                  ? 'Bấm "Tạo mới" để thêm NVL hoặc "Nhập Excel" để nhập danh sách.'
+                  : 'Bấm "Tạo mới" để thêm SKU hoặc "Nhập Excel" để nhập danh sách.'
           }
           // Branch-scope: bảng trống vì lọc CN → gợi ý xem toàn chuỗi.
           emptyBranchHint={
@@ -1907,15 +1976,7 @@ export default function HangHoaPage() {
               page: 0,
               pageSize: 5000,
               branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
-              filters: {
-                productType: scope,
-                ...(categoryFilter !== "all" && { category: [categoryFilter] }),
-                ...(stockFilter !== "all" && { stock: stockFilter }),
-                ...(statusFilter !== "all" && { status: statusFilter }),
-                ...(brandFilter !== "all" && { brand: brandFilter }),
-                ...(effectiveCreatedFrom && { dateFrom: effectiveCreatedFrom }),
-                ...(effectiveCreatedTo && { dateTo: effectiveCreatedTo }),
-              },
+              filters: buildListFilters(),
             });
           }}
           bulkActions={[
