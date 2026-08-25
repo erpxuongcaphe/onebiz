@@ -21,6 +21,10 @@ const privilegeHotfix = readFileSync(
   "supabase/migrations/00348_revoke_modifier_trigger_execute.sql",
   "utf8",
 );
+const toppingDiagnosis = readFileSync(
+  "docs/qc/sql/00347-FNB-TOPPING-OPTION-READONLY.sql",
+  "utf8",
+);
 
 describe("00347 - integrity of FnB modifier options", () => {
   it("installs database guards without rewriting business data", () => {
@@ -63,5 +67,8 @@ describe("00347 - integrity of FnB modifier options", () => {
     expect(preflight).toContain("P3_MOI_NHOM_CHON_MOT_CO_MOT_MAC_DINH");
     expect(preflight).toContain("ma_hang_lien_ket");
     expect(preflight).not.toMatch(/\b(?:insert|update|delete|truncate)\s+/i);
+    expect(toppingDiagnosis).toContain("T1_TOPPING_HIEN_TAI");
+    expect(toppingDiagnosis).toContain("T2_MON_DANG_DUNG_TOPPING");
+    expect(toppingDiagnosis).not.toMatch(/\b(?:insert|update|delete|truncate)\s+/i);
   });
 });
