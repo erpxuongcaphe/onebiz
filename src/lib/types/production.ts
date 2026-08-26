@@ -65,6 +65,7 @@ export interface BOMModifierOptionQuantity {
   bomId: string;
   materialId: string;
   modifierOptionId: string;
+  /** Canonical stock quantity used by the checkout stock movement. */
   quantity: number;
   createdAt: string;
   updatedAt: string;
