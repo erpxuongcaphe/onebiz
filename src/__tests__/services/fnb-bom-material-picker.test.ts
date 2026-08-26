@@ -34,6 +34,23 @@ describe("Bộ chọn thành phần công thức FnB", () => {
     expect(source).toContain("setYieldUnit(selectedSkuForYield.unit)");
   });
 
+  it("mở BOM từ thông tin SKU sẽ giữ đúng chi nhánh đang xem", () => {
+    const dialogSource = readFileSync(
+      "src/components/shared/dialogs/bom-editor-dialog.tsx",
+      "utf8",
+    );
+    const productSource = readFileSync(
+      "src/app/(main)/hang-hoa/page.tsx",
+      "utf8",
+    );
+
+    expect(dialogSource).toContain("defaultBranchId?: string");
+    expect(dialogSource).toContain("setBranchId(defaultBranchId ?? null)");
+    expect(productSource).toContain("getBOMsByProduct(product.id)");
+    expect(productSource).toContain("(bom.branchId ?? null) === expectedBranchId");
+    expect(productSource).toContain("defaultBranchId={branchStockView ? activeBranchId : undefined}");
+  });
+
   it("dấu chọn trong dòng không phải nút lồng nên không giành sự kiện click", () => {
     const source = readFileSync(
       "src/components/shared/dialogs/create-product-dialog.tsx",

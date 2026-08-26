@@ -52,6 +52,11 @@ interface BOMEditorDialogProps {
   bomId?: string;
   /** Pre-fill product (when opened from product detail) */
   productId?: string;
+  /**
+   * Pre-select the active outlet when a BOM is created from a product detail.
+   * The central BOM workspace intentionally leaves this undefined for global BOMs.
+   */
+  defaultBranchId?: string;
   onSuccess?: () => void;
 }
 
@@ -79,6 +84,7 @@ export function BOMEditorDialog({
   onOpenChange,
   bomId,
   productId: initialProductId,
+  defaultBranchId,
   onSuccess,
 }: BOMEditorDialogProps) {
   const { toast } = useToast();
@@ -90,8 +96,8 @@ export function BOMEditorDialog({
 
   // Form state
   const [productId, setProductId] = useState(initialProductId ?? "");
-  // Day 18/05/2026 (CEO): null = BOM global (3 quán dùng chung), có value = BOM riêng quán
-  const [branchId, setBranchId] = useState<string | null>(null);
+  // null = BOM global; a product-detail entry point can safely preselect its active outlet.
+  const [branchId, setBranchId] = useState<string | null>(defaultBranchId ?? null);
   const [name, setName] = useState("");
   const [batchSize, setBatchSize] = useState("1");
   const [yieldQty, setYieldQty] = useState("1");
@@ -142,7 +148,7 @@ export function BOMEditorDialog({
     if (!bomId) {
       // Reset for create mode
       setProductId(initialProductId ?? "");
-      setBranchId(null);
+      setBranchId(defaultBranchId ?? null);
       setName("");
       setBatchSize("1");
       setYieldQty("1");
@@ -221,7 +227,7 @@ export function BOMEditorDialog({
         setExactRecipeReady(false);
       }
     })();
-  }, [open, bomId, initialProductId]);
+  }, [open, bomId, initialProductId, defaultBranchId]);
 
   // A drink recipe should start as "1 Ly", not the legacy "1 kg" default.
   // Preserve an operator's explicit edit: this only reacts to the selected SKU.
