@@ -43,8 +43,8 @@ export interface BOMItem {
   sortOrder: number;
   note?: string;
   /**
-   * CEO 01/06/2026 — Sprint 2.3c: link với 1 modifier_group. RPC checkout
-   * scale qty NVL theo scale_factor option đã chọn. Null = không scale.
+   * Link dòng NVL với một modifier group. Nếu BOM có định lượng thực tế theo
+   * option, checkout ưu tiên các số đó; scale_factor chỉ là fallback cũ.
    */
   modifierScaleTarget?: string | null;
   // Joined
@@ -52,6 +52,22 @@ export interface BOMItem {
   materialCode?: string;
   materialCostPrice?: number;
   lineCost?: number;
+}
+
+/**
+ * Định lượng thực tế của một NVL khi khách chọn một option FnB cụ thể.
+ * Ví dụ BOM Hồng Trà × Đường × 80% = 28g. Có dòng này thì checkout không
+ * dùng `scaleFactor` chung nữa.
+ */
+export interface BOMModifierOptionQuantity {
+  id: string;
+  tenantId: string;
+  bomId: string;
+  materialId: string;
+  modifierOptionId: string;
+  quantity: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProductionOrder {

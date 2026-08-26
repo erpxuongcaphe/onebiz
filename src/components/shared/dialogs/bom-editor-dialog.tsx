@@ -27,7 +27,15 @@ import {
   getProducts,
   calculateBOMCost,
   getUOMConversions,
+  listBOMModifierOptionQuantities,
+  saveBOMModifierOptionQuantities,
 } from "@/lib/services";
+import {
+  listModifierGroups,
+  listModifierOptions,
+  type ModifierGroup,
+  type ModifierOption,
+} from "@/lib/services/supabase/modifier-groups";
 import { formatCurrency } from "@/lib/format";
 import { getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
 import type { Product, BOMCostBreakdown, UOMConversion } from "@/lib/types";
@@ -53,6 +61,7 @@ interface MaterialLine {
   stockUnit: string;
   conversions: UOMConversion[];
   wastePercent: string;
+  modifierScaleTarget?: string | null;
 }
 
 export function BOMEditorDialog({
@@ -79,6 +88,11 @@ export function BOMEditorDialog({
   const [yieldUnit, setYieldUnit] = useState("kg");
   const [note, setNote] = useState("");
   const [items, setItems] = useState<MaterialLine[]>([]);
+  const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
+  const [modifierOptionsByGroup, setModifierOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
+  const [exactQuantityByKey, setExactQuantityByKey] = useState<Record<string, string>>({});
+  const [exactRecipeEnabled, setExactRecipeEnabled] = useState(false);
+  const [exactRecipeReady, setExactRecipeReady] = useState(false);
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerMaterialId, setPickerMaterialId] = useState("");
@@ -125,6 +139,11 @@ export function BOMEditorDialog({
       setYieldUnit("kg");
       setNote("");
       setItems([]);
+      setModifierGroups([]);
+      setModifierOptionsByGroup({});
+      setExactQuantityByKey({});
+      setExactRecipeEnabled(false);
+      setExactRecipeReady(false);
       setCostPreview(null);
       setErrors({});
       return;
@@ -149,9 +168,48 @@ export function BOMEditorDialog({
           stockUnit: it.unit,
           conversions: await getUOMConversions(it.materialId).catch(() => []),
           wastePercent: String(it.wastePercent ?? 0),
+          modifierScaleTarget: it.modifierScaleTarget ?? null,
         }))
       );
       setItems(loadedItems);
+
+      const targetGroupIds = [...new Set(
+        (bom.items ?? [])
+          .map((item) => item.modifierScaleTarget)
+          .filter((id): id is string => Boolean(id)),
+      )];
+      if (targetGroupIds.length === 0) {
+        setModifierGroups([]);
+        setModifierOptionsByGroup({});
+        setExactQuantityByKey({});
+        setExactRecipeEnabled(false);
+        setExactRecipeReady(false);
+        return;
+      }
+
+      try {
+        const groups = await listModifierGroups();
+        const relevantGroups = groups.filter((group) => targetGroupIds.includes(group.id));
+        const optionsEntries = await Promise.all(
+          relevantGroups.map(async (group) => [group.id, await listModifierOptions(group.id)] as const),
+        );
+        setModifierGroups(relevantGroups);
+        setModifierOptionsByGroup(Object.fromEntries(optionsEntries));
+
+        // 00350 may not have been installed on an older environment yet. The
+        // formula remains editable; only the exact-quantity panel stays off.
+        const saved = await listBOMModifierOptionQuantities(bomId);
+        const nextDraft: Record<string, string> = {};
+        for (const row of saved) {
+          nextDraft[`${row.materialId}:${row.modifierOptionId}`] = String(row.quantity);
+        }
+        setExactQuantityByKey(nextDraft);
+        setExactRecipeEnabled(saved.length > 0);
+        setExactRecipeReady(true);
+      } catch (err) {
+        console.warn("Exact FnB recipe quantities are unavailable:", err);
+        setExactRecipeReady(false);
+      }
     })();
   }, [open, bomId, initialProductId]);
 
@@ -211,11 +269,57 @@ export function BOMEditorDialog({
     return Object.keys(e).length === 0;
   }
 
+  /**
+   * Prepares the complete replacement set before saving the BOM itself. That
+   * prevents a basic BOM edit from being persisted when the exact recipe panel
+   * is enabled but a cashier choice still has no measured quantity.
+   */
+  function buildExactQuantityRows() {
+    if (!bomId || !exactRecipeReady) return null;
+
+    const targetRows = items.filter((item) => item.modifierScaleTarget);
+    if (!exactRecipeEnabled || targetRows.length === 0) return [];
+
+    const rows = targetRows.flatMap((item) => {
+      const options = modifierOptionsByGroup[item.modifierScaleTarget ?? ""] ?? [];
+      if (options.length === 0) {
+        throw new Error(`Nhóm lựa chọn của ${item.materialName} chưa có lựa chọn đang bật.`);
+      }
+      return options.map((option) => {
+        const key = `${item.materialId}:${option.id}`;
+        return {
+          materialId: item.materialId,
+          modifierOptionId: option.id,
+          value: exactQuantityByKey[key]?.trim() ?? "",
+        };
+      });
+    });
+
+    const invalid = rows.find((row) => {
+      const quantity = Number(row.value);
+      return row.value === "" || !Number.isFinite(quantity) || quantity < 0;
+    });
+    if (invalid) {
+      throw new Error(
+        "Đã bật định lượng riêng thì phải nhập số hợp lệ cho mọi lựa chọn của từng nguyên liệu. Nhập 0 cho lựa chọn không tiêu hao.",
+      );
+    }
+
+    return rows.map((row) => ({
+      materialId: row.materialId,
+      modifierOptionId: row.modifierOptionId,
+      quantity: Number(row.value),
+    }));
+  }
+
   async function handleSave() {
     if (!validate()) return;
     setSaving(true);
     const isEdit = Boolean(bomId);
     try {
+      // Validate the whole exact-recipe replacement before the base BOM is
+      // touched. The database then replaces mappings atomically in one RPC.
+      const exactQuantityRows = isEdit ? buildExactQuantityRows() : null;
       const itemsPayload = items.map((it, idx) => ({
         materialId: it.materialId,
         quantity: Number(it.quantity) || 0,
@@ -252,6 +356,12 @@ export function BOMEditorDialog({
         savedBomId = created.id;
       }
 
+      if (isEdit && bomId && exactQuantityRows !== null) {
+        // Empty is an explicit atomic replacement: it removes mappings no
+        // longer used by this BOM and returns it to the legacy model.
+        await saveBOMModifierOptionQuantities(bomId, exactQuantityRows);
+      }
+
       // Optionally fetch official cost from RPC
       try {
         const cost = await calculateBOMCost(savedBomId);
@@ -279,6 +389,7 @@ export function BOMEditorDialog({
   }
 
   const selectedSku = skuOptions.find((p) => p.id === productId);
+  const exactTargets = items.filter((item) => item.modifierScaleTarget);
   const pickerOptions = useMemo(() => {
     const query = pickerSearch.trim().toLocaleLowerCase("vi");
     return nvlOptions
@@ -552,6 +663,76 @@ export function BOMEditorDialog({
               </div>
             )}
           </div>
+
+          {/* Note */}
+          {bomId && exactTargets.length > 0 && (
+            <section className="space-y-3 border rounded-lg p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium">Định lượng riêng theo lựa chọn FnB</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Dùng số thực tế của từng món, không suy từ phần trăm chung. Bật mục này thì cần nhập đủ mọi lựa chọn; nhập 0 khi lựa chọn đó không dùng nguyên liệu.
+                  </p>
+                </div>
+                <label className="flex shrink-0 items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="size-4"
+                    checked={exactRecipeEnabled}
+                    disabled={!exactRecipeReady}
+                    onChange={(event) => setExactRecipeEnabled(event.target.checked)}
+                  />
+                  Dùng định lượng riêng
+                </label>
+              </div>
+
+              {!exactRecipeReady ? (
+                <p className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
+                  Chưa tải được lớp định lượng riêng. Công thức cơ bản vẫn không bị thay đổi; chạy migration 00350 rồi tải lại trang để cấu hình phần này.
+                </p>
+              ) : (
+                exactTargets.map((item) => {
+                  const group = modifierGroups.find((candidate) => candidate.id === item.modifierScaleTarget);
+                  const options = modifierOptionsByGroup[item.modifierScaleTarget ?? ""] ?? [];
+                  return (
+                    <fieldset key={`${item.materialId}:${item.modifierScaleTarget}`} className="rounded-md border p-3">
+                      <legend className="px-1 text-sm font-medium">
+                        {item.materialName} - {group?.name ?? "Nhóm lựa chọn"}
+                      </legend>
+                      {options.length === 0 ? (
+                        <p className="text-xs text-status-warning">Nhóm này chưa có lựa chọn đang bật.</p>
+                      ) : (
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {options.map((option) => {
+                            const key = `${item.materialId}:${option.id}`;
+                            return (
+                              <label key={option.id} className="grid grid-cols-[minmax(0,1fr)_7rem] items-center gap-2 text-sm">
+                                <span className="truncate">{option.label}</span>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.0001"
+                                  inputMode="decimal"
+                                  disabled={!exactRecipeEnabled}
+                                  value={exactQuantityByKey[key] ?? ""}
+                                  onChange={(event) => setExactQuantityByKey((previous) => ({
+                                    ...previous,
+                                    [key]: event.target.value,
+                                  }))}
+                                  placeholder={item.unit}
+                                  aria-label={`${item.materialName} - ${option.label}`}
+                                />
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </fieldset>
+                  );
+                })
+              )}
+            </section>
+          )}
 
           {/* Note */}
           <div className="space-y-2">

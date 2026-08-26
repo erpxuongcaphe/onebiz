@@ -503,7 +503,7 @@ export default function ModifierFnbPage() {
                                   <span className="text-xs text-status-success">+{formatCurrency(o.priceDelta)}</span>
                                 )}
                                 {o.scaleFactor !== null && (
-                                  <span className="text-xs text-status-info">hệ số × {o.scaleFactor}</span>
+                                  <span className="text-xs text-status-info">hệ số cũ × {o.scaleFactor}</span>
                                 )}
                                 {o.linkedProductName && (
                                   <span className="text-xs text-muted-foreground">→ {o.linkedProductCode} {o.linkedProductName}</span>
@@ -854,7 +854,7 @@ function OptionDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Sửa lựa chọn" : "Thêm lựa chọn"}</DialogTitle>
           <DialogDescription>
-            Dùng hệ số cho thành phần đã có trong công thức, hoặc trừ thẳng một mã hàng. Không dùng cả hai.
+            Với đồ uống có định lượng riêng, nhập số gram/ml tại công thức BOM. Hệ số bên dưới chỉ giữ cho mô hình cũ hoặc món chưa chuyển đổi; không dùng đồng thời hệ số và trừ thẳng một mã hàng.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -882,7 +882,7 @@ function OptionDialog({
               />
             </div>
             <div>
-              <Label>Hệ số công thức (×)</Label>
+              <Label>Hệ số dự phòng cũ (×)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -900,7 +900,7 @@ function OptionDialog({
               placeholder="VD: NVL-TPV-001"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Không điền cho mức đường/đá dùng hệ số công thức.
+              Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Topping mới nên là SKU-TPP bán theo phần, có BOM riêng; không liên kết trực tiếp túi nguyên liệu.
             </p>
           </div>
           {stockConfigError && (

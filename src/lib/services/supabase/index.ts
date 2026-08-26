@@ -344,6 +344,11 @@ export { getVariantsByProduct, createVariant, updateVariant, deleteVariant } fro
 // BOM (Production Formulas)
 export { getAllBOMs, getBOMByCode, getBOMsByProduct, getBOMById, createBOM, updateBOM, deleteBOM, calculateBOMCost, getBOMProductionHistory, getActiveBOMForBranch, cloneBOMForBranch, getProductIdsWithActiveBom, getBomAvailabilityBatch } from "./bom";
 export type { BomAvailabilityEntry } from "./bom";
+export {
+  listBOMModifierOptionQuantities,
+  saveBOMModifierOptionQuantities,
+} from "./bom-modifier-option-quantities";
+export type { SaveBOMModifierOptionQuantityInput } from "./bom-modifier-option-quantities";
 
 // Print Template Engine (Cài đặt In V3 — GĐ3)
 export {

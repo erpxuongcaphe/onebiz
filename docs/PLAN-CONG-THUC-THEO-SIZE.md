@@ -10,6 +10,8 @@ Ngày lập: 16/06/2026 · Cập nhật 24/08/2026 · Trạng thái: **đã live
 > `docs/CHECKLIST-CAU-HINH-TRUOC-VAN-HANH-FNB.md` và preflight chỉ đọc tại
 > `docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql`. Guard 00330 đã thay đổi một
 > quyết định cũ quan trọng: món có quy cách **không được kế thừa BOM cha**.
+> Migration 00350 cũng thay thế nhận định cũ về Mức đường: BOM mới dùng định
+> lượng riêng theo option, không suy từ `scale_factor` chung.
 
 > **Nguyên tắc thực thi (CEO 16/06):** làm **TRỌN VẸN 1 lát cắt dọc** (migration → RPC → trả hàng → màn nhập + cảnh báo → POS/KDS) đã test xong mới go-live — **KHÔNG ship nửa chừng** (khó test + khó cho nhân viên làm việc). **UX/UI nhập liệu + logic dữ liệu là ưu tiên số 1.** "Pilot" chỉ áp cho *dữ liệu* (nhập công thức vài món để kiểm), KHÔNG phải build code nửa vời.
 
@@ -26,7 +28,7 @@ Ngày lập: 16/06/2026 · Cập nhật 24/08/2026 · Trạng thái: **đã live
 | Loại tùy chọn | Trừ kho? | Cơ chế | Ví dụ |
 |---|---|---|---|
 | **Size** | ✅ | **Variant — mỗi size 1 công thức (BOM) riêng** (nằm trong BOM sẵn có, không bảng mới) | M cà phê 18g · L 25g (khác hẳn) |
-| **Mức đường** | ✅ *(nếu đường là NVL tách riêng)* | Modifier `scale_factor` nhân đúng 1 NVL | 70% → đường ×0.7 |
+| **Mức đường** | ✅ *(nếu đường là NVL tách riêng)* | Định lượng BOM riêng theo từng option | Hồng Trà 80% → đường 28 g |
 | **Topping** | ✅ | Modifier cộng thêm (`linked_product_id`) | +Trân châu → trừ NVL trân châu |
 | **Mức đá / Nóng-Đá / ít ngọt / mang đi** | ❌ **Không** | Modifier không gắn NVL & không hệ số → **chỉ ghi chú pha chế** (hiện ở POS + KDS) | "Ít đá" chỉ để pha chế biết |
 
@@ -46,7 +48,7 @@ Lý do: schema đã có (`bom.variant_id` + `product_variants.bom_code`); chỉ 
 → Nghĩa là: món một giá vẫn dùng BOM món cha; món đã bật quy cách phải hoàn
 thiện giá và công thức riêng cho từng cỡ trước khi bán.
 
-**Tương tác Size × Modifier (chốt):** dùng BOM của variant làm gốc, rồi modifier `scale_factor` áp lên đúng NVL được gắn trong BOM của variant đó (nhân, không ghi đè). Vd Size L (BOM-L có đường 10g, gắn nhóm "Mức đường") + chọn 70% → trừ 7g.
+**Tương tác Size × Modifier (hiện hành):** dùng BOM của variant làm gốc. Dòng NVL gắn nhóm "Mức đường" có bảng định lượng riêng theo option của chính BOM đó. Vd Size L chọn 80% sẽ trừ đúng số gram đã cân cho BOM-L; không nhân tỷ lệ chung.
 
 ## 4. Các pha triển khai (đã fold rủi ro vào)
 

@@ -55,13 +55,14 @@ export interface ToppingAttachment {
  * đổi tên / sửa scale sau ngày bán → báo cáo cũ vẫn show đúng label gốc.
  * Pattern này giống cách lưu unitPrice trong invoice_items (snapshot price).
  *
- * RPC scale BOM (Sprint 2.3b) sẽ đọc `scaleFactor` + `linkedProductId` từ
- * snapshot này để tính tồn NVL.
+ * RPC đọc option ID từ snapshot này để lấy định lượng BOM theo từng lựa chọn;
+ * `scaleFactor` chỉ là fallback cho công thức cũ. `linkedProductId` vẫn phục
+ * vụ đường topping cũ trong thời gian chuyển đổi.
  */
 export interface ModifierSelectionOption {
   optionId: string;
   label: string;
-  /** Tỷ lệ scale BOM ingredient (null cho topping/size). */
+  /** Hệ số tương thích của công thức cũ; BOM đã chuyển đổi không dùng số này. */
   scaleFactor: number | null;
   /** Phí cộng thêm (đã include vào unitPrice). Lưu lại để báo cáo. */
   priceDelta: number;
@@ -175,8 +176,9 @@ export interface FnbOrderLine {
    * Mức đá, Topping...) đã snapshot. Optional vì:
    *  - SP không gán modifier → cart line không có field này.
    *  - Cashier dùng hardcoded fallback → cũng không có (backward compat).
-   * RPC checkout Sprint 2.3b sẽ scale BOM theo scaleFactor + trừ tồn
-   * topping NVL theo linkedProductId.
+   * RPC checkout đọc option để lấy định lượng riêng của BOM nếu đã khai;
+   * scaleFactor chỉ là fallback của công thức cũ, topping legacy vẫn dùng
+   * linkedProductId trong thời gian chuyển đổi.
    */
   modifierSelections?: ModifierSelectionPayload[];
   note?: string;

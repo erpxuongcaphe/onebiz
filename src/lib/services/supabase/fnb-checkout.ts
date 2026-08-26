@@ -77,9 +77,9 @@ export interface SendToKitchenInput {
     toppings?: ToppingAttachment[];
     /**
      * CEO 01/06/2026 — Sprint 2.3a: snapshot dynamic modifier choices.
-     * RPC fnb_send_to_kitchen_atomic v2 (Sprint 2.3b migration 00122) sẽ
-     * scale BOM ingredient theo scaleFactor + trừ tồn topping NVL theo
-     * linkedProductId. v1 RPC ignore field này → backward compat OK.
+     * RPC fnb_send_to_kitchen_atomic_v2 xác nhận lại option từ snapshot này.
+     * BOM đã chuyển đổi dùng định lượng theo option; BOM cũ mới dùng
+     * scaleFactor. linkedProductId chỉ còn cho topping legacy.
      */
     modifierSelections?: ModifierSelectionPayload[];
   }[];

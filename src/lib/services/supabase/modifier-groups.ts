@@ -70,7 +70,7 @@ export function getModifierStockConfigError(input: {
   linkedProductId?: string | null;
 }): string | null {
   if (input.scaleFactor !== null && input.scaleFactor !== undefined && input.linkedProductId) {
-    return "Chỉ chọn một cách trừ kho: dùng hệ số công thức hoặc trừ thẳng mã hàng.";
+    return "Chỉ chọn một cách trừ kho: dùng hệ số công thức cũ hoặc trừ thẳng mã hàng.";
   }
   return null;
 }

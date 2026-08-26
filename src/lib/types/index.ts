@@ -36,6 +36,7 @@ export type {
 export type {
   BOM,
   BOMItem,
+  BOMModifierOptionQuantity,
   ProductionOrder,
   ProductionOrderStatus,
   ProductionOrderMaterial,

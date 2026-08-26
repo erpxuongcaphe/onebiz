@@ -4,7 +4,9 @@
 > modifier và cấu trúc import trong tài liệu này đã cũ. Size hiện dùng
 > `product_variants`, mỗi cỡ có giá và BOM riêng; guard 00330 cấm kế thừa BOM
 > món cha. Dùng `docs/CHECKLIST-CAU-HINH-TRUOC-VAN-HANH-FNB.md` và chạy
-> `docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql` trước khi nhập.
+> `docs/qc/sql/FNB-GO-LIVE-PREFLIGHT-READONLY.sql` trước khi nhập. Từ
+> migration 00350, Mức đường/syrup mới phải khai **định lượng thật theo từng
+> option** trong màn sửa BOM; cột `scale_factor` dưới đây chỉ mô tả dữ liệu cũ.
 
 > CEO 01/06/2026. Tài liệu này mô tả cấu trúc Excel để anh fill data FnB từ phần mềm cũ → import vào OneBiz. Sprint 2.1b (em sẽ build sau khi anh apply migration 00121) sẽ có **import script** đọc đúng cấu trúc này.
 
@@ -55,8 +57,8 @@
 | Topping | Thạch phô mai | 8000 | | `NVL-TPV-002` | | 2 |
 | Topping | Kem cheese | 10000 | | `NVL-TPV-003` | | 3 |
 
-**Lưu ý:**
-- `scale_factor`: chỉ cho Mức đường (BOM "Đường" × scale_factor khi tính tồn).
+**Lưu ý lịch sử:**
+- `scale_factor`: mô hình cũ, chỉ dùng tạm khi chuyển đổi BOM. Dữ liệu mới gắn nhóm Mức đường vào dòng BOM rồi khai số gram/ml thực tế cho từng option trong màn sửa BOM.
 - `linked_nvl_code`: chỉ cho Topping (mã NVL/SKU sẽ trừ tồn khi cashier chọn).
 - `is_default`: tick nếu option đó là mặc định (vd 70% đường).
 

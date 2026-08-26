@@ -1,6 +1,6 @@
 # Checklist chuẩn bị dữ liệu trước khi vận hành FnB
 
-> Cập nhật 24/08/2026. Đây là trình tự nhập và nghiệm thu dữ liệu, không phải
+> Cập nhật 26/08/2026. Đây là trình tự nhập và nghiệm thu dữ liệu, không phải
 > hướng dẫn chạy migration. Các lớp máy chủ 00330 (guard Size) và 00343
 > (thanh toán V3) đã live; bộ preflight sẽ kiểm lại bản đang cài.
 
@@ -27,8 +27,8 @@ dùng để lập danh sách công việc, không phải lỗi tự động.
 
 Chỉ cấu hình bốn mẫu đầu tiên:
 
-1. Một món một giá, có công thức cố định.
-2. Một món Rang xay có M/L, mỗi cỡ một giá và một BOM riêng.
+1. **Hồng Trà** một giá, không size, có Mức đường/Mức đá và định lượng đường riêng cho từng lựa chọn.
+2. Một đồ uống có M/L, mỗi cỡ một giá và một BOM riêng.
 3. Một món bán nguyên trạng, BOM 1:1 trỏ tới SKU đang giữ tồn.
 4. Một topping có giá theo phần và BOM riêng.
 
@@ -61,14 +61,15 @@ khi gửi bếp, nên không thể lách bằng devtools.
 - Nhóm chọn một không bắt buộc có tối đa một mặc định.
 - Một lựa chọn không được vừa nhân định lượng (`scale_factor`) vừa liên kết SKU
   trừ kho, vì sẽ có nguy cơ trừ hai lần.
-- Đường/đá/ghi chú pha chế dùng đúng cơ chế đã chọn; không tự gắn hàng loạt.
+- Với đường/syrup, sau khi gắn nhóm vào dòng BOM phải bật **Dùng định lượng riêng** và nhập đủ mọi lựa chọn, kể cả `0` cho "Không đường". Không dùng phần trăm chung để suy công thức của món khác.
+- Đá và ghi chú pha chế chỉ là phục vụ tại quầy, không gắn SKU/NVL theo quy ước hiện tại.
 - Premium Coffee và Trà cần rà từng món trước khi gắn Đường/Đá/Size/Topping.
 
 ## Bước 5 - Topping SKU
 
 - Mỗi `SKU-TPP` đang bật có giá bán lớn hơn 0 và BOM đang bật.
 - Giá lấy từ `products.sell_price` và được máy chủ kiểm soát.
-- Chỉ tắt nhóm Topping cũ sau khi topping SKU mới đã đủ dữ liệu và UAT đạt.
+- Giữ nhóm Topping cũ làm vỏ cấu hình; POS tự ẩn nhóm khi không còn lựa chọn đang bật. Không xóa nhóm chỉ vì đang chưa dùng.
 - Cờ `NEXT_PUBLIC_FNB_TOPPING_SKU` chỉ bật sau khi preflight không còn topping lỗi.
 
 ## Bước 6 - Hạ tầng quán

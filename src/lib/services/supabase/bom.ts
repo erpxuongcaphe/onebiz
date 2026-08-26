@@ -352,10 +352,7 @@ export async function createBOM(bom: {
     wastePercent?: number;
     sortOrder?: number;
     note?: string;
-    /**
-     * CEO 01/06/2026 — Sprint 2.3c: link 1 modifier_group → RPC checkout
-     * scale qty NVL theo scale_factor option đã chọn.
-     */
+    /** Link dòng NVL với nhóm lựa chọn để khai định lượng riêng theo option. */
     modifierScaleTarget?: string | null;
   }[];
 }): Promise<BOM> {

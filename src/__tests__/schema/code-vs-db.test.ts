@@ -46,10 +46,13 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  // (trống — 00331/00332/00333 đã chạy đủ trên prod 18/08/2026, dump 351 RPC)
+  ["save_bom_modifier_option_quantities", "00350"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
+]);
+const BANG_CHO_MIGRATION = new Map<string, string>([
+  ["bom_modifier_option_quantities", "00350"],
 ]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */
@@ -141,6 +144,7 @@ function quet(): { rpc: Loi[]; cot: Loi[]; bang: Loi[] } {
 
     const bao = (bang: string, c: string, idx: number, kieu: string) => {
       if (!COT.has(bang)) {
+        if (BANG_CHO_MIGRATION.has(bang)) return; // chờ CEO chạy migration
         loiBang.push({ file: rel, dong: soDong(idx), mo_ta: `bảng "${bang}" không có trong database` });
         return;
       }
@@ -262,17 +266,18 @@ describe("code gọi đúng schema database", () => {
 });
 
 describe("danh sách chờ migration phải sạch", () => {
-  it("RPC/cột đã có trong schema dump thì PHẢI xoá khỏi danh sách chờ", () => {
+  it("RPC/cột/bảng đã có trong schema dump thì PHẢI xoá khỏi danh sách chờ", () => {
     const daCoRpc = [...RPC_CHO_MIGRATION.entries()].filter(([ten]) => RPC.has(ten));
     const daCoCot = [...COT_CHO_MIGRATION.entries()].filter(([duongDan]) => {
       const [bang, cot] = duongDan.split(".");
       return COT.get(bang)?.has(cot) ?? false;
     });
-    const nhac = [...daCoRpc, ...daCoCot]
+    const daCoBang = [...BANG_CHO_MIGRATION.entries()].filter(([ten]) => COT.has(ten));
+    const nhac = [...daCoRpc, ...daCoCot, ...daCoBang]
       .map(([ten, mig]) => `  ${ten} (migration ${mig} đã chạy — xoá dòng chờ)`)
       .join("\n");
     expect(
-      daCoRpc.length + daCoCot.length,
+      daCoRpc.length + daCoCot.length + daCoBang.length,
       `Schema dump ĐÃ có các tên sau, dọn danh sách chờ trong test này:\n${nhac}`,
     ).toBe(0);
   });

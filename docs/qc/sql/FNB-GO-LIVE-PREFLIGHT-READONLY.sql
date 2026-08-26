@@ -5,6 +5,8 @@
 -- Chay TOAN BO file trong Supabase SQL Editor. File chi co mot cau SELECT,
 -- khong tao/sua/xoa du lieu. Moi dong loai DIEU_KIEN phai dat=true. Dong
 -- THONG_TIN dung de lap danh sach nhap; khong tu dong coi dat=false la loi.
+-- Tien quyet: 00350 phai da cai. Day la cong gate truoc UAT/go-live, khong
+-- phai preflight cua rieng migration 00350.
 -- ============================================================================
 
 with
@@ -33,7 +35,11 @@ ham as (
     ) as bom_consume_oid,
     to_regprocedure(
       'public.restore_bom_for_return(uuid,uuid,uuid,numeric,uuid,uuid,text,uuid)'
-    ) as bom_restore_oid
+    ) as bom_restore_oid,
+    to_regclass('public.bom_modifier_option_quantities') as exact_mapping_table,
+    to_regprocedure(
+      'public.save_bom_modifier_option_quantities(uuid,jsonb)'
+    ) as exact_save_oid
 ),
 dinh_nghia_ham as (
   select
@@ -201,6 +207,40 @@ tuy_chon as (
   left join public.modifier_options mo on mo.group_id = mg.id
   where mg.tenant_id = t.tenant_id
 ),
+dinh_luong_tuy_chon_chinh_xac as (
+  select
+    count(*) as dong_bom_co_tuy_chon,
+    count(*) filter (
+      where so_lua_chon_dang_bat = 0
+         or so_dinh_luong_da_khai <> so_lua_chon_dang_bat
+    ) as dong_bom_thieu_dinh_luong
+  from (
+    select
+      b.id as bom_id,
+      bi.material_id,
+      bi.modifier_scale_target as nhom_tuy_chon_id,
+      count(mo.id) as so_lua_chon_dang_bat,
+      count(q.id) as so_dinh_luong_da_khai
+    from public.bom b
+    join mon_fnb p on p.id = b.product_id and p.tenant_id = b.tenant_id
+    join public.bom_items bi on bi.bom_id = b.id
+    join public.modifier_groups mg
+      on mg.id = bi.modifier_scale_target
+     and mg.tenant_id = b.tenant_id
+     and mg.is_active = true
+     and mg.rule in ('single', 'single_required')
+    left join public.modifier_options mo
+      on mo.group_id = mg.id and mo.is_active = true
+    left join public.bom_modifier_option_quantities q
+      on q.bom_id = b.id
+     and q.material_id = bi.material_id
+     and q.modifier_option_id = mo.id
+    cross join tham_so t
+    where b.tenant_id = t.tenant_id
+      and b.is_active = true
+    group by b.id, bi.material_id, bi.modifier_scale_target
+  ) muc_tieu
+),
 size_cu as (
   select
     count(distinct mg.id) as so_nhom_size_cu,
@@ -276,6 +316,23 @@ kiem as (
     jsonb_build_object('dau_vet_00304', d.payment_impl like '%GIA_TOPPING_SERVER_00304%'),
     'Dừng nếu giá topping chưa được máy chủ kiểm soát.'
   from dinh_nghia_ham d
+
+  union all
+  select 'P5_DINH_LUONG_TUY_CHON_CHINH_XAC', 'DIEU_KIEN',
+    d.exact_mapping_table is not null
+      and d.exact_save_oid is not null
+      and d.send_v2 like '%FNB_EXACT_RECIPE_OPTION_MISSING%'
+      and d.bom_consume like '%bom_modifier_option_quantities%'
+      and dl.dong_bom_thieu_dinh_luong = 0,
+    jsonb_build_object(
+      'bang_dinh_luong', d.exact_mapping_table is not null,
+      'rpc_luu_nguyen_tu', d.exact_save_oid is not null,
+      'dong_bom_co_tuy_chon', dl.dong_bom_co_tuy_chon,
+      'dong_bom_thieu_dinh_luong', dl.dong_bom_thieu_dinh_luong
+    ),
+    'Chạy 00350, rồi khai đủ định lượng thật cho từng lựa chọn của mỗi dòng BOM có gắn nhóm. Nhập 0 cho lựa chọn không tiêu hao.'
+  from dinh_nghia_ham d
+  cross join dinh_luong_tuy_chon_chinh_xac dl
 
   union all
   select 'D1_GIA_MON', 'DIEU_KIEN',

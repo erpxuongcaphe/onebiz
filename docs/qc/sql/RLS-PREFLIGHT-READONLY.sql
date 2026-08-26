@@ -24,6 +24,7 @@ order by version;
 with targets(table_name, scope_kind, parent_table) as (
   values
     ('audit_log', 'tenant', null),
+    ('bom_modifier_option_quantities', 'tenant', null),
     ('branches', 'tenant', null),
     ('cash_transactions', 'tenant', null),
     ('code_sequences', 'tenant', null),
@@ -85,7 +86,7 @@ order by t.table_name;
 -- permissive cua PostgreSQL duoc gop bang OR.
 with targets(table_name) as (
   values
-    ('audit_log'), ('branches'), ('cash_transactions'), ('code_sequences'),
+    ('audit_log'), ('bom_modifier_option_quantities'), ('branches'), ('cash_transactions'), ('code_sequences'),
     ('conversations'), ('coupon_usages'), ('delivery_partners'), ('favorites'),
     ('inventory_checks'), ('invoices'), ('loyalty_settings'),
     ('loyalty_transactions'), ('notifications'), ('profiles'),
@@ -112,7 +113,7 @@ order by p.tablename, p.cmd, p.policyname;
 -- sai se thanh loi mo quyen thuc te.
 with targets(table_name) as (
   values
-    ('audit_log'), ('branches'), ('cash_transactions'), ('code_sequences'),
+    ('audit_log'), ('bom_modifier_option_quantities'), ('branches'), ('cash_transactions'), ('code_sequences'),
     ('conversations'), ('coupon_usages'), ('delivery_partners'), ('favorites'),
     ('inventory_checks'), ('invoices'), ('loyalty_settings'),
     ('loyalty_transactions'), ('notifications'), ('profiles'),
