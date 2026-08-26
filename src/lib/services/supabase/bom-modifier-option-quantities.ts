@@ -11,7 +11,10 @@ import type { BOMModifierOptionQuantity } from "@/lib/types";
 export interface SaveBOMModifierOptionQuantityInput {
   materialId: string;
   modifierOptionId: string;
-  quantity: number;
+  /** Measured amount in the recipe's preparation unit, for example 21 G. */
+  inputQuantity: number;
+  /** Must match the BOM line's preparation unit, for example G. */
+  inputUnit: string;
 }
 
 export async function listBOMModifierOptionQuantities(
@@ -47,8 +50,8 @@ export async function saveBOMModifierOptionQuantities(
 ): Promise<void> {
   const unique = new Set<string>();
   for (const row of rows) {
-    if (!row.materialId || !row.modifierOptionId || !Number.isFinite(row.quantity) || row.quantity < 0) {
-      throw new Error("Mỗi định lượng phải có nguyên liệu, lựa chọn và số lượng từ 0 trở lên.");
+    if (!row.materialId || !row.modifierOptionId || !Number.isFinite(row.inputQuantity) || row.inputQuantity < 0 || !row.inputUnit.trim()) {
+      throw new Error("Mỗi định lượng phải có nguyên liệu, lựa chọn, đơn vị pha chế và số lượng từ 0 trở lên.");
     }
     const key = `${row.materialId}:${row.modifierOptionId}`;
     if (unique.has(key)) {
@@ -65,7 +68,8 @@ export async function saveBOMModifierOptionQuantities(
       p_rows: rows.map((row) => ({
         materialId: row.materialId,
         modifierOptionId: row.modifierOptionId,
-        quantity: row.quantity,
+        inputQuantity: row.inputQuantity,
+        inputUnit: row.inputUnit,
       })),
     },
   );

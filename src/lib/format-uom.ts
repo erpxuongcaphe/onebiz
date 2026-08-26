@@ -58,6 +58,44 @@ export function getDirectConversionFactor(
 }
 
 /**
+ * Normalizes a recipe quantity entered in the operator's preparation unit to
+ * the material's canonical stock unit. This deliberately excludes waste: the
+ * database applies waste once when it writes the stock movement.
+ */
+export function getRecipeQuantityInStockUnit(
+  inputQuantity: number,
+  stockUnit: string,
+  inputUnit: string,
+  conversions: UOMConversion[] | null | undefined,
+): number | null {
+  if (!Number.isFinite(inputQuantity) || inputQuantity < 0) return null;
+
+  const factor = getDirectConversionFactor(stockUnit, inputUnit, conversions);
+  if (factor == null) return null;
+
+  return Math.round(inputQuantity * factor * 10_000) / 10_000;
+}
+
+/**
+ * Converts a canonical stock quantity back into the preparation unit shown in
+ * the recipe editor. Exact FnB option quantities are persisted in stock units,
+ * but operators must always review them in grams, millilitres or pieces.
+ */
+export function getRecipeQuantityInInputUnit(
+  stockQuantity: number,
+  stockUnit: string,
+  inputUnit: string,
+  conversions: UOMConversion[] | null | undefined,
+): number | null {
+  if (!Number.isFinite(stockQuantity) || stockQuantity < 0) return null;
+
+  const factor = getDirectConversionFactor(stockUnit, inputUnit, conversions);
+  if (factor == null || factor <= 0) return null;
+
+  return Math.round((stockQuantity / factor) * 10_000) / 10_000;
+}
+
+/**
  * Quantity that will be deducted from stock for one recipe output.
  *
  * BOM stores a human-friendly input snapshot (for example 6.8 g) and a
@@ -76,10 +114,13 @@ export function getRecipeStockQuantity(
   if (!Number.isFinite(inputQuantity) || inputQuantity < 0) return null;
   if (!Number.isFinite(wastePercent) || wastePercent < 0) return null;
 
-  const factor = getDirectConversionFactor(stockUnit, inputUnit, conversions);
-  if (factor == null) return null;
-
-  const normalized = Math.round(inputQuantity * factor * 10_000) / 10_000;
+  const normalized = getRecipeQuantityInStockUnit(
+    inputQuantity,
+    stockUnit,
+    inputUnit,
+    conversions,
+  );
+  if (normalized == null) return null;
   return Math.round(normalized * (1 + wastePercent / 100) * 10_000) / 10_000;
 }
 

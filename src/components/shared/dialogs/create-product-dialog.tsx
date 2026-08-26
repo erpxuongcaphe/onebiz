@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -151,18 +152,6 @@ function findCaseInsensitiveDup(input: string, existing: string[]): string | nul
     (u) => u.toLowerCase() === lower && u !== trimmed,
   );
   return match ?? null;
-}
-
-// Currency input: lưu raw digits trong state, format khi render. CEO complain
-// "195000" khó đọc — convention en-US: "195,000" với separator ",".
-function formatVnd(value: string): string {
-  if (!value) return "";
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "";
-  return formatNumber(Number(digits));
-}
-function parseVnd(value: string): string {
-  return value.replace(/\D/g, "");
 }
 
 interface CreateProductDialogProps {
@@ -1816,10 +1805,13 @@ export function CreateProductDialog({
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Giá vốn (₫)</label>
-                <Input
-                  inputMode="numeric"
-                  value={formatVnd(costPrice)}
-                  onChange={(e) => setCostPrice(parseVnd(e.target.value))}
+                <NumericInput
+                  value={costPrice === "" ? null : Number(costPrice)}
+                  onChange={(value) =>
+                    setCostPrice(value == null ? "" : String(value))
+                  }
+                  min={0}
+                  decimals={4}
                   placeholder="0"
                 />
                 {/* Có công thức thì giá vốn do công thức quyết định (00236) —
@@ -1842,10 +1834,13 @@ export function CreateProductDialog({
                     </span>
                   )}
                 </label>
-                <Input
-                  inputMode="numeric"
-                  value={formatVnd(sellPrice)}
-                  onChange={(e) => setSellPrice(parseVnd(e.target.value))}
+                <NumericInput
+                  value={sellPrice === "" ? null : Number(sellPrice)}
+                  onChange={(value) =>
+                    setSellPrice(value == null ? "" : String(value))
+                  }
+                  min={0}
+                  decimals={0}
                   placeholder={scope === "nvl" ? "Không áp dụng" : "0"}
                   disabled={scope === "nvl"}
                   aria-invalid={!!errors.sellPrice}

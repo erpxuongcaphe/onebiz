@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   getDirectConvertibleUnits,
   getDirectConversionFactor,
+  getRecipeQuantityInInputUnit,
+  getRecipeQuantityInStockUnit,
   getRecipeStockQuantity,
   formatStockConversion,
   pickBestConversion,
@@ -65,6 +67,32 @@ describe("getRecipeStockQuantity", () => {
 
   it("does not guess when a material is missing its direct conversion", () => {
     expect(getRecipeStockQuantity(6.8, "Túi", "G", [])).toBeNull();
+  });
+});
+
+describe("exact FnB recipe quantity units", () => {
+  const CONV_KG_GRAM: UOMConversion = {
+    id: "c-sugar",
+    tenantId: "t1",
+    productId: "sugar",
+    fromUnit: "Kg",
+    toUnit: "G",
+    factor: 1000,
+    isActive: true,
+    createdAt: "",
+  };
+
+  it("stores 21 G as 0.021 Kg without applying waste a second time", () => {
+    expect(getRecipeQuantityInStockUnit(21, "Kg", "G", [CONV_KG_GRAM])).toBe(0.021);
+  });
+
+  it("reads the stored stock quantity back as the operator's 21 G", () => {
+    expect(getRecipeQuantityInInputUnit(0.021, "Kg", "G", [CONV_KG_GRAM])).toBe(21);
+  });
+
+  it("refuses exact quantities when there is no direct conversion", () => {
+    expect(getRecipeQuantityInStockUnit(21, "Kg", "G", [])).toBeNull();
+    expect(getRecipeQuantityInInputUnit(0.021, "Kg", "G", [])).toBeNull();
   });
 });
 

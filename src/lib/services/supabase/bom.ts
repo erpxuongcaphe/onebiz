@@ -421,6 +421,11 @@ export async function updateBOM(
       unit: string;
       wastePercent?: number;
       sortOrder?: number;
+      /**
+       * Null xoa lien ket; undefined giu lien ket cu de cac caller cu
+       * khong vo tinh lam mat cau hinh FnB.
+       */
+      modifierScaleTarget?: string | null;
     }[];
   }>
 ) {
@@ -461,7 +466,8 @@ export async function updateBOM(
     const { error: delErr } = await supabase.from("bom_items").delete().eq("bom_id", id);
     if (delErr) throw delErr;
 
-    // Chèn items mới, mang theo modifier_scale_target nếu material giữ nguyên
+    // Chèn items mới. Caller moi co the doi/xoa target ro rang; caller cu
+    // khong truyen field thi giu lien ket theo material nhu truoc.
     if (updates.items.length > 0) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error: insErr } = await (supabase.from("bom_items").insert as any)(
@@ -472,7 +478,10 @@ export async function updateBOM(
           unit: item.unit,
           waste_percent: item.wastePercent ?? 0,
           sort_order: item.sortOrder ?? idx,
-          modifier_scale_target: scaleByMaterial.get(item.materialId) ?? null,
+          modifier_scale_target:
+            item.modifierScaleTarget !== undefined
+              ? item.modifierScaleTarget
+              : (scaleByMaterial.get(item.materialId) ?? null),
         }))
       );
       if (insErr) throw insErr;
