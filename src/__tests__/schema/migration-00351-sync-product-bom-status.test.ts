@@ -61,5 +61,7 @@ describe("00351 - sync product BOM status", () => {
     expect(preflight).toContain("P2_CO_BOM_LECH_FLAG");
     expect(postflight).toContain("K1_KHONG_CON_LECH_FLAG");
     expect(postflight).toContain("K2_HONG_TRA_XTB_CO_BOM");
+    expect(postflight).toContain("bool_or(flag_hien_tai)");
+    expect(postflight).not.toContain("max(flag_hien_tai)");
   });
 });

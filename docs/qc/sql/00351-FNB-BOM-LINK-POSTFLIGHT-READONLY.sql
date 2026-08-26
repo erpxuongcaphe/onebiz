@@ -30,7 +30,7 @@ select 'K1_KHONG_CON_LECH_FLAG' as muc,
 union all
 select 'K2_HONG_TRA_XTB_CO_BOM',
        'DIEU_KIEN',
-       coalesce((select max(flag_hien_tai) from expected where code = 'SKU-HTR-001'), false)
+       coalesce((select bool_or(flag_hien_tai) from expected where code = 'SKU-HTR-001'), false)
        and exists (
          select 1
            from public.bom b
@@ -44,7 +44,7 @@ select 'K2_HONG_TRA_XTB_CO_BOM',
        ),
        jsonb_build_object(
          'ma', 'SKU-HTR-001',
-         'co_bom', coalesce((select max(flag_hien_tai) from expected where code = 'SKU-HTR-001'), false),
+         'co_bom', coalesce((select bool_or(flag_hien_tai) from expected where code = 'SKU-HTR-001'), false),
          'bom_xtb_ba_dong', exists (
            select 1
              from public.bom b
