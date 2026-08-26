@@ -157,6 +157,23 @@ results as (
            and p.tenant_id <> g.tenant_id
       )
     )
+
+  union all
+
+  select
+    'K6_CHO_PHEP_TAT_CAU_HINH_LOI_CU',
+    'DIEU_KIEN',
+    option_routine is not null
+      and position(
+        'if not new.is_active' in lower(pg_get_functiondef(option_routine))
+      ) > 0,
+    jsonb_build_object(
+      'guard_00349', option_routine is not null
+        and position(
+          'if not new.is_active' in lower(pg_get_functiondef(option_routine))
+        ) > 0
+    )
+  from routine_checks
 )
 select muc, loai, dat, chi_tiet
   from results
