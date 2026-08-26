@@ -52,9 +52,9 @@ describe("00352 - exact FnB recipe UOM authority", () => {
 
   it("keeps authenticated access only and completes the DDL transaction before reloading schema", () => {
     expect(migration).toContain("revoke all on function public.save_bom_modifier_option_quantities(uuid, jsonb)");
-    expect(migration).toContain("grant execute on function public.save_bom_modifier_option_quantities(uuid, jsonb)\n  to authenticated");
+    expect(migration).toMatch(/grant execute on function public\.save_bom_modifier_option_quantities\(uuid, jsonb\)\s+to authenticated/);
     expect(migration).toContain("begin;");
-    expect(migration).toContain("commit;\n\nnotify pgrst, 'reload schema'");
+    expect(migration).toMatch(/commit;\s+notify pgrst, 'reload schema'/);
   });
 
   it("does not offer a destructive rollback that would reopen the unit ambiguity", () => {

@@ -27,15 +27,15 @@ describe("00351 - sync product BOM status", () => {
   it("derives the flag from a usable active BOM instead of trusting stale data", () => {
     expect(migration).toContain("sync_product_has_bom_from_active_bom");
     expect(migration).toContain("get_active_bom_for_branch");
-    expect(migration).toContain("exists (\n         select 1\n           from public.bom_items bi");
+    expect(migration).toMatch(/exists\s*\(\s*select 1\s*from public\.bom_items bi/);
     expect(migration).toContain("and bi.material_id = p_product_id");
     expect(migration).toContain("update public.products");
   });
 
   it("keeps self-referential and empty BOMs out of the live flag", () => {
     expect(migration).toContain("BOM tu chua chinh SKU bi loai tru");
-    expect(migration).toContain("and not exists (\n         select 1\n           from public.bom_items bi");
-    expect(migration).toContain("and exists (\n         select 1\n           from public.bom_items bi");
+    expect(migration).toMatch(/and not exists\s*\(\s*select 1\s*from public\.bom_items bi/);
+    expect(migration).toMatch(/and exists\s*\(\s*select 1\s*from public\.bom_items bi/);
   });
 
   it("updates the flag after both header and item changes, then verifies every product", () => {

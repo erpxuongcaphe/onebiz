@@ -71,6 +71,11 @@ import {
   setProductModifierGroups,
   type ModifierGroup,
 } from "@/lib/services/supabase/modifier-groups";
+import {
+  getFnbProductBranchMenuScope,
+  saveFnbProductBranchMenuScope,
+} from "@/lib/services/supabase/fnb-product-branch-menu";
+import { invalidateMenuCache } from "@/lib/offline";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
@@ -294,6 +299,19 @@ export function CreateProductDialog({
     "inherit",
   );
   const [loadingModifierPicker, setLoadingModifierPicker] = useState(false);
+
+  // 00353: a FnB SKU is global until an explicit branch whitelist is saved.
+  // This state is intentionally saved with its own button, separate from the
+  // product form, so changing a price can never accidentally move a menu.
+  const [fnbMenuScopeMode, setFnbMenuScopeMode] = useState<"all" | "selected">(
+    "all",
+  );
+  const [fnbMenuBranchIds, setFnbMenuBranchIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [loadingFnbMenuScope, setLoadingFnbMenuScope] = useState(false);
+  const [savingFnbMenuScope, setSavingFnbMenuScope] = useState(false);
+  const [fnbMenuScopeError, setFnbMenuScopeError] = useState<string | null>(null);
 
   // CEO 01/06/2026 — Sprint 2.4a: Variants Size (M/L/XL) inline editor.
   // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
@@ -554,6 +572,43 @@ export function CreateProductDialog({
     };
   }, [open, scope, channel, categoryId, initialData, innerTab]);
 
+  // Lazy-load branch scope only when the FnB configuration tab is opened.
+  // Older deployed databases simply show a clear migration message; editing
+  // normal product information remains available until 00353 is installed.
+  useEffect(() => {
+    if (!open || scope !== "sku" || channel !== "fnb" || !initialData) {
+      setFnbMenuScopeMode("all");
+      setFnbMenuBranchIds(new Set());
+      setFnbMenuScopeError(null);
+      return;
+    }
+    if (innerTab !== "modifier") return;
+
+    let cancelled = false;
+    setLoadingFnbMenuScope(true);
+    setFnbMenuScopeError(null);
+    getFnbProductBranchMenuScope(initialData.id)
+      .then((branchIds) => {
+        if (cancelled) return;
+        setFnbMenuBranchIds(new Set(branchIds));
+        setFnbMenuScopeMode(branchIds.length > 0 ? "selected" : "all");
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setFnbMenuScopeError(
+          err instanceof Error
+            ? err.message
+            : "Không tải được phạm vi menu FnB.",
+        );
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingFnbMenuScope(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, scope, channel, initialData, innerTab]);
+
   function toggleProductModifierGroup(groupId: string) {
     setProductModifierGroupIds((prev) => {
       const next = new Set(prev);
@@ -561,6 +616,58 @@ export function CreateProductDialog({
       else next.add(groupId);
       return next;
     });
+  }
+
+  function toggleFnbMenuBranch(branchId: string) {
+    setFnbMenuBranchIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(branchId)) next.delete(branchId);
+      else next.add(branchId);
+      return next;
+    });
+  }
+
+  async function handleSaveFnbMenuScope() {
+    if (!initialData) return;
+    const branchIds = Array.from(fnbMenuBranchIds);
+    if (fnbMenuScopeMode === "selected" && branchIds.length === 0) {
+      toast({
+        title: "Chọn ít nhất một chi nhánh",
+        description: "Hoặc chuyển về Bán tại tất cả chi nhánh.",
+        variant: "warning",
+      });
+      return;
+    }
+
+    setSavingFnbMenuScope(true);
+    try {
+      await saveFnbProductBranchMenuScope(
+        initialData.id,
+        fnbMenuScopeMode === "selected" ? branchIds : [],
+      );
+      // This browser may also be running POS in another tab. Clearing the
+      // local cache makes its next load re-read the server whitelist.
+      await invalidateMenuCache();
+      toast({
+        title: "Đã lưu phạm vi menu FnB",
+        description:
+          fnbMenuScopeMode === "selected"
+            ? `Món chỉ hiện tại ${branchIds.length} chi nhánh đã chọn.`
+            : "Món đang bán tại tất cả chi nhánh FnB.",
+        variant: "success",
+      });
+      onSuccess?.();
+    } catch (err) {
+      toast({
+        title: "Chưa lưu được phạm vi menu",
+        description:
+          err instanceof Error ? err.message : "Lỗi không xác định.",
+        variant: "error",
+        duration: 10000,
+      });
+    } finally {
+      setSavingFnbMenuScope(false);
+    }
   }
 
   // CEO 01/06/2026 — Sprint 2.4a + Bước 1 (perf): LAZY load variants
@@ -2318,6 +2425,127 @@ export function CreateProductDialog({
                 </div>
               ) : (
                 <div className="space-y-4">
+                  {/* 00353: menu scope follows the SKU, not the modifier
+                      group. This keeps a pilot product isolated before its
+                      exact modifier quantities are configured. */}
+                  <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+                    <div className="flex items-start gap-2">
+                      <Icon name="storefront" size={16} className="mt-0.5 shrink-0 text-primary" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium">Menu FnB theo chi nhánh</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Chưa chọn riêng thì giữ cách cũ: món hiện ở mọi chi nhánh FnB.
+                          Khi chọn quán, món chỉ hiện ở các quán đã chọn; không làm thay đổi tồn kho, giá hoặc BOM.
+                        </p>
+                      </div>
+                    </div>
+
+                    {!initialData ? (
+                      <p className="mt-3 text-xs text-muted-foreground">
+                        Tạo món xong rồi mở lại phần sửa để chọn các quán được bán.
+                      </p>
+                    ) : loadingFnbMenuScope ? (
+                      <div className="mt-3 flex items-center text-xs text-muted-foreground">
+                        <Icon name="progress_activity" size={14} className="mr-2 animate-spin" />
+                        Đang tải phạm vi menu...
+                      </div>
+                    ) : fnbMenuScopeError ? (
+                      <p className="mt-3 text-xs text-destructive">
+                        Chưa đọc được phạm vi menu. Cần cài 00353 trước khi cấu hình: {fnbMenuScopeError}
+                      </p>
+                    ) : (
+                      <div className="mt-3 space-y-3">
+                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={() => setFnbMenuScopeMode("all")}
+                            className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                              fnbMenuScopeMode === "all"
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-card text-muted-foreground hover:bg-muted/50"
+                            }`}
+                          >
+                            <span className="block font-medium">Bán tại tất cả chi nhánh</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              Giữ hành vi hiện tại của món.
+                            </span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setFnbMenuScopeMode("selected")}
+                            className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                              fnbMenuScopeMode === "selected"
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border bg-card text-muted-foreground hover:bg-muted/50"
+                            }`}
+                          >
+                            <span className="block font-medium">Chỉ bán tại quán đã chọn</span>
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              Dùng khi thử nghiệm hoặc mỗi quán có menu riêng.
+                            </span>
+                          </button>
+                        </div>
+
+                        {fnbMenuScopeMode === "selected" && (
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {branches
+                              .filter((branch) => branch.branchType === "store")
+                              .map((branch) => {
+                                const checked = fnbMenuBranchIds.has(branch.id);
+                                return (
+                                  <label
+                                    key={branch.id}
+                                    className={`flex cursor-pointer items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm transition-colors ${
+                                      checked
+                                        ? "border-primary bg-primary/10"
+                                        : "border-border hover:bg-muted/50"
+                                    }`}
+                                  >
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={() => toggleFnbMenuBranch(branch.id)}
+                                    />
+                                    <span className="min-w-0 truncate">{branch.name}</span>
+                                  </label>
+                                );
+                              })}
+                          </div>
+                        )}
+
+                        {fnbMenuScopeMode === "selected" &&
+                          branches.filter((branch) => branch.branchType === "store").length === 0 && (
+                            <p className="text-xs text-destructive">
+                              Chưa có chi nhánh FnB đang hoạt động để chọn.
+                            </p>
+                          )}
+
+                        <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
+                          <p className="text-xs text-muted-foreground">
+                            {fnbMenuScopeMode === "selected"
+                              ? `Đã chọn ${fnbMenuBranchIds.size} chi nhánh.`
+                              : "Món không bị giới hạn chi nhánh."}
+                          </p>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={handleSaveFnbMenuScope}
+                            disabled={
+                              savingFnbMenuScope ||
+                              (fnbMenuScopeMode === "selected" && fnbMenuBranchIds.size === 0)
+                            }
+                          >
+                            {savingFnbMenuScope ? (
+                              <Icon name="progress_activity" size={14} className="mr-1 animate-spin" />
+                            ) : (
+                              <Icon name="save" size={14} className="mr-1" />
+                            )}
+                            Lưu phạm vi menu
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Section 1: Inherit từ nhóm (read-only) */}
                   <div className="rounded-lg border bg-muted/30 p-3">
                     <div className="flex items-start gap-2 mb-2">

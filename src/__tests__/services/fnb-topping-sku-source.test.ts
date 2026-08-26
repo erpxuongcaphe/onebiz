@@ -161,7 +161,7 @@ describe("Khoá nguồn topping — một cửa fnb-toppings.ts", () => {
   it("cache offline: không NVL-TOP; ghi topping kèm dấu phạm vi; đọc có kiểm dấu", () => {
     expect(cache).not.toContain("NVL-TOP");
     expect(cache).toContain("getToppingPhanHopLe(tenantId, branchId)");
-    expect(cache).toContain('menuMetaKey(tenantId, "topping_scope")');
+    expect(cache).toContain('menuMetaKey(tenantId, "topping_scope", branchId)');
     expect(cache).toContain("toppingsCacheConHieuLuc");
   });
 

@@ -66,6 +66,7 @@ with required(relation_name, operation) as (
     ('fnb_delivery_fee_tiers', 'insert'),
     ('fnb_delivery_fee_tiers', 'select'),
     ('fnb_delivery_fee_tiers', 'update'),
+    ('fnb_product_branch_menu_scopes', 'select'),
     ('input_invoices', 'select'),
     ('internal_exports', 'select'),
     ('internal_sale_items', 'select'),
