@@ -264,7 +264,7 @@ Modifier là tùy chọn khi bán món:
 
 | Nhóm | Ví dụ | Cách dùng |
 |---|---|---|
-| Mức đường | 0%, 30%, 50%, 70%, 100% | Có thể scale dòng đường trong BOM |
+| Mức đường | Không đường, 60%, 80%, 100% | Khai định lượng riêng của từng lựa chọn trên dòng Đường trong BOM |
 | Mức đá | Ít đá, bình thường, nhiều đá | Tại Xưởng Tư Búa chỉ là tùy chọn phục vụ, không scale BOM và không trừ tồn |
 | Size | M, L | Nên dùng variant nếu giá và định lượng khác |
 | Topping | Trân châu, thạch, kem cheese | Nên có mã hàng riêng để trừ tồn |
@@ -272,7 +272,7 @@ Modifier là tùy chọn khi bán món:
 Khuyến nghị:
 
 - Size nên là variant.
-- Đường có thể dùng `Scale theo modifier`.
+- Đường/syrup dùng **định lượng riêng theo lựa chọn**; không suy từ một tỷ lệ % chung vì mỗi món có công thức khác nhau.
 - Topping bán thêm nên là hàng có tồn riêng.
 - Modifier không nên thay thế BOM, vì BOM mới là nơi kiểm soát giá vốn.
 
@@ -282,10 +282,19 @@ Món **Hồng Trà** là món một giá, không tạo variant M/L. Dùng hai nh
 
 | Nhóm | Rule | Mặc định | Tác động tồn |
 |---|---|---|---|
-| Mức đường | `single_required` | 100% | Chỉ scale dòng Đường cát trắng trong BOM |
+| Mức đường | `single_required` | 100% | Trừ đúng định lượng đã khai cho từng lựa chọn |
 | Mức đá | `single_required` | Bình thường | Không scale, không liên kết SKU |
 
-BOM của Hồng Trà tại Xưởng Tư Búa nhập theo công thức đã chốt: dòng **Hồng Trà - Toàn Phát** là 6.8 g và giữ nguyên định lượng; dòng **Đường cát trắng** đặt định lượng gốc 35 g và chọn `Scale theo modifier = Mức đường`. Các option 100% / 80% / 60% có `scale_factor` lần lượt là 1 / 0.8 / 0.6, nên hệ thống trừ 35 g / 28 g / 21 g đường nhưng không làm thay đổi lượng trà.
+BOM của Hồng Trà tại Xưởng Tư Búa nhập theo công thức đã chốt: dòng **Hồng Trà - Toàn Phát** là 6.8 g và giữ nguyên định lượng. Dòng **Đường cát trắng** được gắn nhóm **Mức đường**, rồi mở lại BOM và bật **Dùng định lượng riêng** để nhập đúng số đã cân:
+
+| Lựa chọn | Hồng Trà - Toàn Phát | Đường cát trắng |
+|---|---:|---:|
+| Không đường | 6.8 g | 0 g |
+| 60% | 6.8 g | 21 g |
+| 80% | 6.8 g | 28 g |
+| 100% | 6.8 g | 35 g |
+
+Không tự tạo mức 120% hay áp hệ số cho món khác khi chưa có công thức cân thực tế. Nếu sau này thêm lựa chọn mới, phải nhập định lượng cho từng dòng nguyên liệu có gắn nhóm đó trước khi bán.
 
 Chỉ thêm ly vào BOM nếu anh quyết định quản lý tồn ly. Không thêm nắp, ống hút hoặc đá vào BOM theo quy ước vận hành hiện tại; đó là chi phí khác, không phải hàng tiêu hao cần trừ theo từng bill.
 
@@ -342,7 +351,7 @@ Với mỗi món:
 - Chọn chi nhánh nếu là BOM riêng cho quán.
 - Thêm hàng thành phần là SKU Retail đang cấp sang quán.
 - Khai số lượng và đơn vị chính xác.
-- Gắn scale modifier nếu cần.
+- Với đường/syrup thay đổi theo lựa chọn: gắn nhóm vào dòng BOM, lưu, rồi mở lại BOM để bật **Dùng định lượng riêng** và nhập từng mức đã cân.
 
 ### Bước 6. Cấp Tồn Sang Quán
 
@@ -394,7 +403,7 @@ Với hàng Retail cấp nội bộ sang quán FnB, ưu tiên **Bán nội bộ 
 | Mã NVL | Với mô hình này có thể là mã SKU Retail thành phần |
 | Số lượng | Dùng chuẩn số US, ví dụ `1,234.56` |
 | ĐVT | Đồng nhất với quy đổi hệ thống |
-| Scale theo modifier | Điền tên nhóm modifier nếu cần |
+| Theo lựa chọn FnB | Gắn nhóm vào dòng BOM; định lượng riêng của từng option nhập trong màn sửa BOM, không import theo tỷ lệ % |
 
 Chuẩn số và ngày:
 

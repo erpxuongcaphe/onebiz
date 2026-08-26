@@ -57,6 +57,14 @@ describe("Hậu kiểm trước vận hành FnB", () => {
     expect(sql).toContain("quy_cach_chua_ap_dung_du_chi_nhanh");
   });
 
+  it("không cho go-live khi BOM có lựa chọn nhưng chưa khai định lượng thật", () => {
+    expect(sql).toContain("P5_DINH_LUONG_TUY_CHON_CHINH_XAC");
+    expect(sql).toContain("bom_modifier_option_quantities");
+    expect(sql).toContain("save_bom_modifier_option_quantities(uuid,jsonb)");
+    expect(sql).toContain("dong_bom_thieu_dinh_luong");
+    expect(sql).toContain("FNB_EXACT_RECIPE_OPTION_MISSING");
+  });
+
   it("đếm các nhóm dữ liệu phải hoàn thiện trước go-live", () => {
     expect(sql).toContain("mon_mot_gia_thieu_gia");
     expect(sql).toContain("mon_sai_so_mac_dinh");

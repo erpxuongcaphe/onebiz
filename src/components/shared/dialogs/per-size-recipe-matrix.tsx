@@ -417,8 +417,8 @@ export function PerSizeRecipeMatrix({
       <p className="text-xs text-muted-foreground leading-relaxed">
         <Icon name="info" size={13} className="inline-block mr-1 align-text-bottom" />
         Lượng nhập theo <b>đơn vị kho</b> của nguyên liệu (cột ĐVT tự hiện, sửa được).
-        Cho phép số lẻ (vd 0,5). Với nguyên liệu đường, chọn “Theo tùy chọn = Mức đường”
-        để khi khách chọn 70% thì tự trừ 70%.
+        Cho phép số lẻ (vd 0,5). Với đường/syrup, gắn “Theo tùy chọn = Mức đường”,
+        lưu rồi mở lại BOM để khai định lượng riêng cho từng mức đã cân.
         {loading ? " · Đang tải nguyên liệu…" : ""}
       </p>
     </div>

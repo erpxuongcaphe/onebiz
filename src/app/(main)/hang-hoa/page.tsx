@@ -39,6 +39,13 @@ const CreateProductDialog = dynamic(
     ),
   { ssr: false },
 );
+const BOMEditorDialog = dynamic(
+  () =>
+    import("@/components/shared/dialogs/bom-editor-dialog").then(
+      (m) => m.BOMEditorDialog,
+    ),
+  { ssr: false },
+);
 import { downloadTemplate } from "@/lib/excel";
 import { productExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportProducts } from "@/lib/services/supabase/excel-import";
@@ -79,6 +86,7 @@ import {
   verifyCurrentUserPassword,
   getProductIdsWithActiveBom,
   getUOMConversionsByProductIds,
+  getBOMsByProduct,
 } from "@/lib/services";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
@@ -133,6 +141,7 @@ function ProductDetail({
   canViewCost,
   stockCardBranchId,
   stockCardBranchName,
+  onConfigureBom,
 }: {
   product: Product;
   onClose: () => void;
@@ -142,6 +151,7 @@ function ProductDetail({
   canViewCost: boolean;
   stockCardBranchId?: string;
   stockCardBranchName?: string;
+  onConfigureBom?: () => void;
 }) {
   const isNvl = product.productType === "nvl";
   return (
@@ -232,6 +242,22 @@ function ProductDetail({
                     },
                   ]}
                 />
+                {!isNvl && onConfigureBom && (
+                  <div className="flex flex-col gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Công thức (BOM)</p>
+                      <p className="text-xs text-muted-foreground">
+                        {stockCardBranchName
+                          ? `Tạo từ đây sẽ chỉ áp dụng cho ${stockCardBranchName}.`
+                          : "Thiết lập nguyên liệu trừ kho cho SKU này."}
+                      </p>
+                    </div>
+                    <Button type="button" size="sm" onClick={onConfigureBom}>
+                      <Icon name="science" size={16} className="mr-1.5" />
+                      {product.hasBom ? "Thiết lập BOM" : "Tạo công thức"}
+                    </Button>
+                  </div>
+                )}
               </div>
             ),
           },
@@ -357,6 +383,10 @@ export default function HangHoaPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [bomEditor, setBomEditor] = useState<{
+    product: Product;
+    bomId?: string;
+  } | null>(null);
   const [importOpen, setImportOpen] = useState(false);
 
   // Single-row delete confirm
@@ -396,6 +426,25 @@ export default function HangHoaPage() {
       ? "retail"
       : "fnb"
     : undefined;
+
+  const openProductBomEditor = useCallback(async (product: Product) => {
+    try {
+      const boms = await getBOMsByProduct(product.id);
+      // In a branch workspace, only edit that outlet's own BOM. A global BOM
+      // remains untouched and a new branch override is intentionally created.
+      const expectedBranchId = branchStockView ? activeBranchId ?? null : null;
+      const matchingBom = boms.find(
+        (bom) => (bom.branchId ?? null) === expectedBranchId,
+      );
+      setBomEditor({ product, bomId: matchingBom?.id });
+    } catch (error) {
+      toast({
+        variant: "error",
+        title: "Không mở được công thức",
+        description: error instanceof Error ? error.message : "Lỗi không xác định",
+      });
+    }
+  }, [activeBranchId, branchStockView, toast]);
 
   // Sprint S2 Phase 1 + 3a (CEO 12/05): defense-in-depth permission cho xoá SP.
   //   - canDeleteProduct = true  → bấm Xoá → ConfirmDialog → service trực tiếp
@@ -2068,6 +2117,9 @@ export default function HangHoaPage() {
               canViewCost={canViewCost}
               stockCardBranchId={branchStockView ? activeBranchId : undefined}
               stockCardBranchName={branchStockView ? currentBranch?.name : undefined}
+              onConfigureBom={() => {
+                void openProductBomEditor(product);
+              }}
             />
           )}
           rowActions={(row) => {
@@ -2251,6 +2303,17 @@ export default function HangHoaPage() {
         }}
         onSuccess={fetchData}
         initialData={editingProduct}
+      />
+
+      <BOMEditorDialog
+        open={!!bomEditor}
+        onOpenChange={(open) => {
+          if (!open) setBomEditor(null);
+        }}
+        bomId={bomEditor?.bomId}
+        productId={bomEditor?.product.id}
+        defaultBranchId={branchStockView ? activeBranchId : undefined}
+        onSuccess={fetchData}
       />
 
       {/* --- Single-row delete confirm --- */}

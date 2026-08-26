@@ -126,8 +126,9 @@ export default function ModifierFnbPage() {
   const [optionDialog, setOptionDialog] = useState<{
     open: boolean;
     groupId: string | null;
+    group: ModifierGroup | null;
     editing: ModifierOption | null;
-  }>({ open: false, groupId: null, editing: null });
+  }>({ open: false, groupId: null, group: null, editing: null });
 
   // ── Load groups ──
   // CEO 16/08/2026: chống kết quả cũ đè kết quả mới. Đổi chi nhánh / bấm Thử
@@ -274,11 +275,11 @@ export default function ModifierFnbPage() {
     }
   }
 
-  function openCreateOption(groupId: string) {
-    setOptionDialog({ open: true, groupId, editing: null });
+  function openCreateOption(group: ModifierGroup) {
+    setOptionDialog({ open: true, groupId: group.id, group, editing: null });
   }
-  function openEditOption(groupId: string, o: ModifierOption) {
-    setOptionDialog({ open: true, groupId, editing: o });
+  function openEditOption(group: ModifierGroup, o: ModifierOption) {
+    setOptionDialog({ open: true, groupId: group.id, group, editing: o });
   }
   async function handleDeleteOption(o: ModifierOption) {
     if (!window.confirm(`Xoá option "${o.label}"?`)) return;
@@ -460,7 +461,7 @@ export default function ModifierFnbPage() {
                   <div className="border-t bg-muted/30 px-4 py-3">
                     <div className="mb-2 flex items-center justify-between">
                       <h4 className="text-sm font-medium">Lựa chọn trong "{g.name}"</h4>
-                      <Button size="sm" onClick={() => openCreateOption(g.id)}>
+                      <Button size="sm" onClick={() => openCreateOption(g)}>
                         <Icon name="add" size={14} className="mr-1" />
                         Thêm lựa chọn
                       </Button>
@@ -502,7 +503,7 @@ export default function ModifierFnbPage() {
                                   <span className="text-xs text-status-success">+{formatCurrency(o.priceDelta)}</span>
                                 )}
                                 {o.scaleFactor !== null && (
-                                  <span className="text-xs text-status-info">hệ số × {o.scaleFactor}</span>
+                                  <span className="text-xs text-status-info">hệ số cũ × {o.scaleFactor}</span>
                                 )}
                                 {o.linkedProductName && (
                                   <span className="text-xs text-muted-foreground">→ {o.linkedProductCode} {o.linkedProductName}</span>
@@ -514,7 +515,7 @@ export default function ModifierFnbPage() {
                                 )}
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => openEditOption(g.id, o)}>
+                            <Button variant="ghost" size="sm" onClick={() => openEditOption(g, o)}>
                               <Icon name="edit" size={12} />
                             </Button>
                             <Button variant="ghost" size="sm" onClick={() => handleDeleteOption(o)} className="text-status-error hover:bg-status-error/10">
@@ -543,8 +544,9 @@ export default function ModifierFnbPage() {
       {optionDialog.open && optionDialog.groupId && (
         <OptionDialog
           groupId={optionDialog.groupId}
+          group={optionDialog.group}
           editing={optionDialog.editing}
-          onClose={() => setOptionDialog({ open: false, groupId: null, editing: null })}
+          onClose={() => setOptionDialog({ open: false, groupId: null, group: null, editing: null })}
           onSuccess={async () => {
             if (optionDialog.groupId) {
               const list = await listModifierOptions(optionDialog.groupId);
@@ -747,11 +749,13 @@ function GroupDialog({
 // ════════════════════════════════════════════════════════════════
 function OptionDialog({
   groupId,
+  group,
   editing,
   onClose,
   onSuccess,
 }: {
   groupId: string;
+  group: ModifierGroup | null;
   editing: ModifierOption | null;
   onClose: () => void;
   onSuccess: () => Promise<void> | void;
@@ -766,6 +770,12 @@ function OptionDialog({
   const [isDefault, setIsDefault] = useState(editing?.isDefault ?? false);
   const [sortOrder, setSortOrder] = useState(editing?.sortOrder ?? 0);
   const [saving, setSaving] = useState(false);
+  const previewScale = scaleFactor.trim() ? Number(scaleFactor) : null;
+  const stockConfigError = getModifierStockConfigError({
+    scaleFactor: Number.isFinite(previewScale) ? previewScale : null,
+    linkedProductId: linkedCode.trim() ? "configured-product" : null,
+  });
+  const groupSelectsOne = group?.rule === "single" || group?.rule === "single_required";
 
   async function handleSave() {
     if (!label.trim()) {
@@ -844,7 +854,7 @@ function OptionDialog({
         <DialogHeader>
           <DialogTitle>{editing ? "Sửa lựa chọn" : "Thêm lựa chọn"}</DialogTitle>
           <DialogDescription>
-            Dùng hệ số cho thành phần đã có trong công thức, hoặc trừ thẳng một mã hàng. Không dùng cả hai.
+            Với đồ uống có định lượng riêng, nhập số gram/ml tại công thức BOM. Hệ số bên dưới chỉ giữ cho mô hình cũ hoặc món chưa chuyển đổi; không dùng đồng thời hệ số và trừ thẳng một mã hàng.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 py-2">
@@ -872,7 +882,7 @@ function OptionDialog({
               />
             </div>
             <div>
-              <Label>Hệ số công thức (×)</Label>
+              <Label>Hệ số dự phòng cũ (×)</Label>
               <Input
                 type="number"
                 step="0.01"
@@ -890,9 +900,14 @@ function OptionDialog({
               placeholder="VD: NVL-TPV-001"
             />
             <p className="mt-1 text-xs text-muted-foreground">
-              Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Không điền cho mức đường/đá dùng hệ số công thức.
+              Mỗi lần chọn sẽ trừ trực tiếp 1 đơn vị của mã này. Topping mới nên là SKU-TPP bán theo phần, có BOM riêng; không liên kết trực tiếp túi nguyên liệu.
             </p>
           </div>
+          {stockConfigError && (
+            <p role="alert" className="rounded-md border border-status-error/30 bg-status-error/5 px-3 py-2 text-xs text-status-error">
+              {stockConfigError} Xóa một trong hai trường trước khi lưu.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="flex items-center gap-2 text-sm">
               <input
@@ -901,7 +916,7 @@ function OptionDialog({
                 onChange={(e) => setIsDefault(e.target.checked)}
                 className="size-4"
               />
-              Mặc định
+              {groupSelectsOne ? "Mặc định duy nhất" : "Chọn sẵn"}
             </label>
             <div>
               <Label>Thứ tự</Label>
@@ -918,7 +933,7 @@ function OptionDialog({
           <Button variant="ghost" onClick={onClose} disabled={saving}>
             Huỷ
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button onClick={handleSave} disabled={saving || Boolean(stockConfigError)}>
             {saving ? (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
             ) : (

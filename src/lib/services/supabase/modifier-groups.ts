@@ -70,7 +70,7 @@ export function getModifierStockConfigError(input: {
   linkedProductId?: string | null;
 }): string | null {
   if (input.scaleFactor !== null && input.scaleFactor !== undefined && input.linkedProductId) {
-    return "Chỉ chọn một cách trừ kho: dùng hệ số công thức hoặc trừ thẳng mã hàng.";
+    return "Chỉ chọn một cách trừ kho: dùng hệ số công thức cũ hoặc trừ thẳng mã hàng.";
   }
   return null;
 }
@@ -130,15 +130,33 @@ export async function listModifierGroups(): Promise<ModifierGroup[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = getClient() as any;
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("modifier_groups")
-    .select("*, modifier_options(count)")
-    .eq("tenant_id", tenantId)
-    .eq("is_active", true)
-    .order("sort_order", { ascending: true })
-    .order("name", { ascending: true });
-  if (error) handleError(error, "listModifierGroups");
-  return ((data ?? []) as RawGroup[]).map((row) => mapGroup(row));
+  // The embedded count includes soft-deleted options. Fetch the small list of
+  // live option group ids separately so the card count matches what the user
+  // can actually expand and edit.
+  const [groupsResult, liveOptionsResult] = await Promise.all([
+    supabase
+      .from("modifier_groups")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true }),
+    supabase
+      .from("modifier_options")
+      .select("group_id")
+      .eq("is_active", true),
+  ]);
+  if (groupsResult.error) handleError(groupsResult.error, "listModifierGroups");
+  if (liveOptionsResult.error) handleError(liveOptionsResult.error, "listModifierGroups:liveOptions");
+
+  const counts = new Map<string, number>();
+  for (const row of (liveOptionsResult.data ?? []) as Array<{ group_id: string }>) {
+    counts.set(row.group_id, (counts.get(row.group_id) ?? 0) + 1);
+  }
+  return ((groupsResult.data ?? []) as RawGroup[]).map((row) => ({
+    ...mapGroup(row),
+    optionCount: counts.get(row.id) ?? 0,
+  }));
 }
 
 export async function createModifierGroup(input: ModifierGroupInput): Promise<ModifierGroup> {

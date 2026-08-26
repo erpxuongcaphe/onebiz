@@ -70,8 +70,9 @@ export const CHE_DO_TOPPING_SKU =
  *  2. Không khai danh sách → suy theo CẤU TRÚC, không theo tên: nhóm vừa
  *     `multi` VỪA có ít nhất một lựa chọn LIÊN KẾT SẢN PHẨM
  *     (`linkedProductId`). Liên kết sản phẩm chính là cơ chế "bán thêm có
- *     giá + trừ kho" mà khu topping SKU thay thế. Nhóm Đường/Đá/Syrup chỉ
- *     có `scaleFactor`, không liên kết sản phẩm → không bao giờ bị ẩn.
+ *     giá + trừ kho" mà khu topping SKU thay thế. Nhóm Đường/Đá/Syrup không
+ *     liên kết sản phẩm trực tiếp nên không bao giờ bị ẩn; định lượng đường
+ *     theo option được lấy từ BOM khi đã cấu hình.
  *
  * KHÔNG dò theo TÊN hiển thị ("Topping"): tên đổi được, dịch được.
  */

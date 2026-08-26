@@ -120,11 +120,9 @@ interface InlineBomItem {
   wastePercent: number;
   note?: string;
   /**
-   * CEO 01/06/2026 — Sprint 2.3c: link với 1 modifier group.
-   * Khi cashier chọn option của group đó (vd "70%"), RPC scale
-   * qty NVL × scale_factor. Vd item "Đường" gán group "Mức đường" →
-   * 70% đường → trừ 7g thay vì 10g.
-   * Null = không scale theo modifier (default).
+   * Link dòng NVL với một nhóm lựa chọn. Sau khi tạo BOM, người dùng có thể
+   * khai định lượng đo thực tế của từng option trong màn sửa BOM. scale_factor
+   * chỉ còn là cơ chế tương thích cho BOM chưa chuyển đổi.
    */
   modifierScaleTarget?: string | null;
 }
@@ -2176,13 +2174,13 @@ export function CreateProductDialog({
                           <th className="text-left px-3 py-2 font-semibold">NVL</th>
                           <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
-                          {/* CEO 01/06/2026 — Sprint 2.3c: chỉ cho SKU FnB */}
+                          {/* Nhóm chọn một để khai định lượng riêng sau khi lưu BOM. */}
                           {channel === "fnb" && (
                             <th
                               className="text-left px-3 py-2 font-semibold w-40"
-                              title="Khi cashier chọn modifier của nhóm này, qty NVL sẽ × scale_factor của option"
+                              title="Gắn nhóm lựa chọn cho dòng NVL. Sau khi lưu, mở lại BOM để khai định lượng thực tế cho từng lựa chọn."
                             >
-                              Scale theo modifier
+                              Theo lựa chọn FnB
                             </th>
                           )}
                           <th className="text-right px-3 py-2 font-semibold w-28">Cost/SP</th>
@@ -2227,7 +2225,7 @@ export function CreateProductDialog({
                                   }}
                                 />
                               </td>
-                              {/* CEO 01/06/2026 — Sprint 2.3c: cột Scale modifier (chỉ FnB) */}
+                              {/* Nhóm lựa chọn FnB gắn với dòng NVL này. */}
                               {channel === "fnb" && (
                                 <td className="px-3 py-2">
                                   <select
@@ -2242,10 +2240,10 @@ export function CreateProductDialog({
                                     }}
                                     className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
                                   >
-                                    <option value="">— Không scale —</option>
+                                    <option value="">— Không áp dụng —</option>
                                     {availableFnbModifierGroups
                                       .filter((g) =>
-                                        // Chỉ group có rule single/single_required và có scale_factor (vd Mức đường)
+                                        // Chỉ nhóm chọn một có thể quyết định một định lượng NVL.
                                         g.rule !== "multi",
                                       )
                                       .map((g) => (

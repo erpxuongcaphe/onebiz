@@ -80,12 +80,12 @@ Bạn vào **Danh mục → Nhóm hàng**, chuyển sang thẻ **Hàng bán**, b
 
 | Tùy chọn | Các lựa chọn | Có trừ kho không? |
 |----------|--------------|-------------------|
-| **Mức đường** | 0% · 30% · 50% · 70% · 100% | Có — trừ lượng đường theo đúng phần trăm khách chọn |
+| **Mức đường** | Không đường · 60% · 80% · 100% | Có — trừ đúng định lượng đã cân cho lựa chọn khách chọn |
 | **Mức đá** | Không đá · Ít · Vừa · Nhiều | Không — chỉ là lời nhắc cho người pha |
 | **Topping** | (bạn tự thêm) | Có — mỗi topping trừ nguyên liệu riêng |
 
 Ba điều cần nhớ ở đây:
-- **Mức đường** có trừ kho thông minh: khách chọn 70% thì chỉ trừ 70% lượng đường.
+- **Mức đường** có trừ kho chính xác: mỗi món tự có bảng định lượng riêng. Ví dụ Hồng Trà 80% có thể trừ 28 g đường, nhưng món khác 80% không bị ép dùng cùng tỷ lệ.
 - **Mức đá** chỉ là lời nhắc, **không** trừ kho. Đá không tính vào nguyên liệu.
 - **Topping** (trân châu, thạch…) thì mỗi loại có nguyên liệu riêng, bán kèm sẽ trừ riêng.
 
@@ -146,7 +146,7 @@ Vì thế mỗi cỡ ly mình ghi một công thức riêng. Việc này gói g�
 
 **Bước 3 — Bật công thức.** Ngay dưới danh sách cỡ, có ô tích **"Trừ kho theo công thức từng cỡ"**. Tích vào đó, một cái bảng hiện ra.
 
-**Bước 4 — Điền công thức cho từng cỡ.** Bảng có cột nguyên liệu, cột đơn vị, và mỗi cỡ một cột. Với mỗi nguyên liệu: gõ vài chữ để tìm rồi chọn (phần mềm tự điền đơn vị), sau đó gõ lượng cho từng cỡ (cho phép số lẻ như 0,5). Với đường hoặc syrup, ở cột "Theo modifier" bạn chọn **Mức đường** để khi khách chọn 70% thì tự trừ 70%. Cuối bảng phần mềm tự tính giá vốn từng cỡ giúp bạn.
+**Bước 4 — Điền công thức cho từng cỡ.** Bảng có cột nguyên liệu, cột đơn vị, và mỗi cỡ một cột. Với mỗi nguyên liệu: gõ vài chữ để tìm rồi chọn (phần mềm tự điền đơn vị), sau đó gõ lượng cho từng cỡ (cho phép số lẻ như 0,5). Với đường hoặc syrup thay đổi theo lựa chọn, gắn nhóm **Mức đường**, lưu BOM, rồi mở lại BOM và bật **Dùng định lượng riêng** để nhập số đã cân cho từng mức. Nhập `0` cho "Không đường". Cuối bảng phần mềm tự tính giá vốn từng cỡ giúp bạn.
 
 **Bước 5 — Bấm Lưu một lần.** Một lần bấm Lưu là cả cỡ ly lẫn công thức đều được lưu cùng lúc.
 
