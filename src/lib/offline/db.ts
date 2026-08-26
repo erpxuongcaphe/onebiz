@@ -17,6 +17,12 @@ import { openDB, type DBSchema, type IDBPDatabase } from "idb";
 export interface MenuCacheRecord {
   id: string;
   tenantId?: string;
+  /**
+   * Menu items are branch-scoped from database migration 00353 onward.
+   * Undefined denotes a legacy cache entry and is never trusted by the new
+   * reader, preventing a menu from one FnB branch appearing at another.
+   */
+  branchId?: string;
   _type: "product" | "category" | "topping";
   data: unknown; // FnbProduct | FnbCategory | ToppingProduct
 }
@@ -137,8 +143,10 @@ interface OneBizFnbDB extends DBSchema {
 // ── Singleton ──
 
 const DB_NAME = "onebiz-fnb-offline";
-// v2: thêm `variant_cache` store — persist variants per-product qua reload
-const DB_VERSION = 2;
+// v2: thêm `variant_cache` store — persist variants per-product qua reload.
+// v3: menu records carry branchId. The store shape is unchanged, but the
+// version makes the cache boundary explicit for future migrations.
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<OneBizFnbDB>> | null = null;
 

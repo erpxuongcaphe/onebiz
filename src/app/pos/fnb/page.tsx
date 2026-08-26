@@ -64,6 +64,11 @@ import {
   CHE_DO_TOPPING_SKU,
   locNhomTheoCheDoTopping,
 } from "@/lib/services/supabase/fnb-toppings";
+import {
+  filterFnbProductsForBranch,
+  getFnbMenuScopeFingerprint,
+  listFnbProductBranchMenuScopes,
+} from "@/lib/services/supabase/fnb-product-branch-menu";
 // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
 import {
   getEffectiveModifierGroupsForProduct,
@@ -430,7 +435,16 @@ function FnbPosPageInner() {
 
         // Step 2: Background refresh from Supabase (if online) — PARALLEL
         if (networkStatus.isOnline) {
-          const needsRefresh = await shouldRefreshMenu(tenantId).catch(() => true);
+          // Menu whitelist is a branch safety boundary, not a cosmetic
+          // filter. Its compact fingerprint is checked on every POS load so
+          // a cached catalog cannot stay valid after an admin isolates a SKU
+          // to another branch.
+          const menuScopes = await listFnbProductBranchMenuScopes(tenantId);
+          const needsRefresh = await shouldRefreshMenu(
+            tenantId,
+            branchId,
+            getFnbMenuScopeFingerprint(menuScopes),
+          ).catch(() => true);
           const supabase = getClient();
 
           // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
@@ -510,7 +524,11 @@ function FnbPosPageInner() {
             }));
             setCategories(mappedCats);
 
-            const prods = prodsResp.data ?? [];
+            const prods = filterFnbProductsForBranch(
+              prodsResp.data ?? [],
+              menuScopes,
+              branchId,
+            );
             setProducts(
               prods.map((p) => ({
                 id: p.id,
@@ -525,7 +543,7 @@ function FnbPosPageInner() {
             );
 
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId, branchId).catch((err) =>
+            prefetchMenuData(tenantId, branchId, menuScopes).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }

@@ -17,6 +17,12 @@ import {
   type ToppingPhan,
 } from "@/lib/services/supabase/fnb-toppings";
 import { getTablesByBranch } from "@/lib/services/supabase/fnb-tables";
+import {
+  filterFnbProductsForBranch,
+  getFnbMenuScopeFingerprint,
+  listFnbProductBranchMenuScopes,
+  type FnbProductBranchMenuScope,
+} from "@/lib/services/supabase/fnb-product-branch-menu";
 import type { FnbCategory } from "@/app/pos/fnb/components/fnb-category-tabs";
 import type { FnbProduct } from "@/app/pos/fnb/components/fnb-product-grid";
 
@@ -39,8 +45,20 @@ const STALE_MS = 30 * 60 * 1000;
 
 // ── Prefetch: Menu ──
 
-function menuMetaKey(tenantId: string, key: string): string {
-  return `menu:${tenantId}:${key}`;
+function normalizedMenuBranchId(branchId: string | null | undefined): string {
+  return branchId ?? "__no_branch__";
+}
+
+function menuMetaKey(
+  tenantId: string,
+  key: string,
+  branchId?: string | null,
+): string {
+  // Variant cache belongs to a product, not a branch. Menu data and its
+  // freshness marker must be branch-specific so switching outlets cannot
+  // reuse a different outlet's catalog.
+  if (key.startsWith("variants_")) return `menu:${tenantId}:${key}`;
+  return `menu:${tenantId}:${normalizedMenuBranchId(branchId)}:${key}`;
 }
 
 function tablesMetaKey(tenantId: string, branchId: string, key: string): string {
@@ -50,8 +68,10 @@ function tablesMetaKey(tenantId: string, branchId: string, key: string): string 
 export async function prefetchMenuData(
   tenantId: string,
   branchId: string | null | undefined,
+  knownScopes?: FnbProductBranchMenuScope[],
 ): Promise<void> {
   const supabase = getClient();
+  const cachedBranchId = normalizedMenuBranchId(branchId);
 
   // Fetch categories
   const { data: cats } = await supabase
@@ -71,9 +91,21 @@ export async function prefetchMenuData(
     .eq("channel", "fnb")
     .order("name");
 
-  // 08/08 Giai đoạn 2 topping: SKU-TPP bán theo phần (giá 1 phần + BOM áp
-  // dụng ĐÚNG chi nhánh), KHÔNG còn NVL-TOP%. Xem fnb-toppings.ts.
-  const toppings = await getToppingPhanHopLe(tenantId, branchId);
+  // Scope rows are small but authoritative. Fetch them alongside the catalog
+  // unless POS has already obtained the same snapshot for this refresh.
+  const [scopes, toppings] = await Promise.all([
+    knownScopes
+      ? Promise.resolve(knownScopes)
+      : listFnbProductBranchMenuScopes(tenantId),
+    // 08/08 Giai đoạn 2 topping: SKU-TPP bán theo phần (giá 1 phần + BOM áp
+    // dụng ĐÚNG chi nhánh), KHÔNG còn NVL-TOP%. Xem fnb-toppings.ts.
+    getToppingPhanHopLe(tenantId, branchId),
+  ]);
+  const visibleProducts = filterFnbProductsForBranch(
+    prods ?? [],
+    scopes,
+    branchId,
+  );
 
   // Write to IndexedDB — wrap với quota recovery vì menu có thể lớn (500+ SKU
   // × image_url string → dễ đẩy usage gần quota trên Safari mobile).
@@ -82,24 +114,35 @@ export async function prefetchMenuData(
     const tx = db.transaction("menu_cache", "readwrite");
     const store = tx.objectStore("menu_cache");
 
-    // Clear old cache
-    await store.clear();
+    // Refresh only the active branch. Legacy entries do not have a branch id;
+    // remove them too so an old shared cache can never leak across branches.
+    const existing = await store.getAll();
+    for (const record of existing) {
+      if (
+        record.tenantId === tenantId &&
+        (record.branchId === cachedBranchId || record.branchId === undefined)
+      ) {
+        await store.delete(record.id);
+      }
+    }
 
     // Write categories
     for (const c of cats ?? []) {
       await store.put({
-        id: `cat_${c.id}`,
+        id: `cat_${cachedBranchId}_${c.id}`,
         tenantId,
+        branchId: cachedBranchId,
         _type: "category",
         data: { id: c.id, name: c.name, code: c.code },
       });
     }
 
     // Write products
-    for (const p of prods ?? []) {
+    for (const p of visibleProducts) {
       await store.put({
-        id: `prod_${p.id}`,
+        id: `prod_${cachedBranchId}_${p.id}`,
         tenantId,
+        branchId: cachedBranchId,
         _type: "product",
         data: {
           id: p.id,
@@ -116,8 +159,9 @@ export async function prefetchMenuData(
     // Write toppings — đã là {id, name, price} (giá MỘT PHẦN)
     for (const t of toppings) {
       await store.put({
-        id: `top_${t.id}`,
+        id: `top_${cachedBranchId}_${t.id}`,
         tenantId,
+        branchId: cachedBranchId,
         _type: "topping",
         data: t,
       });
@@ -127,12 +171,19 @@ export async function prefetchMenuData(
   });
 
   // Update meta timestamps
-  const version = computeVersion(prods ?? [], toppings);
-  await setMeta(menuMetaKey(tenantId, "last_sync"), Date.now());
-  await setMeta(menuMetaKey(tenantId, "version"), version);
+  const version = computeVersion(visibleProducts, toppings);
+  await setMeta(menuMetaKey(tenantId, "last_sync", branchId), Date.now());
+  await setMeta(menuMetaKey(tenantId, "version", branchId), version);
+  await setMeta(
+    menuMetaKey(tenantId, "scope_fingerprint", branchId),
+    getFnbMenuScopeFingerprint(scopes),
+  );
   // Đóng dấu phạm vi topping (phiên bản nguồn + chi nhánh) — thiếu dấu này
   // (cache đời NVL-TOP) thì lúc đọc bị coi là vô hiệu.
-  await setMeta(menuMetaKey(tenantId, "topping_scope"), phamViCacheTopping(branchId));
+  await setMeta(
+    menuMetaKey(tenantId, "topping_scope", branchId),
+    phamViCacheTopping(branchId),
+  );
 }
 
 /**
@@ -148,22 +199,36 @@ export async function saveToppingsToCache(
   branchId: string | null | undefined,
   toppings: ToppingPhan[],
 ): Promise<void> {
+  const cachedBranchId = normalizedMenuBranchId(branchId);
   await withQuotaRecovery(async () => {
     const db = await getDb();
     const tx = db.transaction("menu_cache", "readwrite");
     const store = tx.objectStore("menu_cache");
     const all = await store.getAll();
     for (const rec of all) {
-      if (rec.tenantId === tenantId && rec._type === "topping") {
+      if (
+        rec.tenantId === tenantId &&
+        rec._type === "topping" &&
+        (rec.branchId === cachedBranchId || rec.branchId === undefined)
+      ) {
         await store.delete(rec.id);
       }
     }
     for (const t of toppings) {
-      await store.put({ id: `top_${t.id}`, tenantId, _type: "topping", data: t });
+      await store.put({
+        id: `top_${cachedBranchId}_${t.id}`,
+        tenantId,
+        branchId: cachedBranchId,
+        _type: "topping",
+        data: t,
+      });
     }
     await tx.done;
   });
-  await setMeta(menuMetaKey(tenantId, "topping_scope"), phamViCacheTopping(branchId));
+  await setMeta(
+    menuMetaKey(tenantId, "topping_scope", branchId),
+    phamViCacheTopping(branchId),
+  );
 }
 
 // ── Prefetch: Tables ──
@@ -208,13 +273,14 @@ export async function getMenuFromCache(
 ): Promise<MenuData> {
   const db = await getDb();
   const all = await db.getAll("menu_cache");
+  const cachedBranchId = normalizedMenuBranchId(branchId);
 
   // 08/08 (CEO): topping trong cache chỉ dùng được khi ĐÚNG phiên bản nguồn
   // + ĐÚNG chi nhánh. Cache đời NVL-TOP không có dấu phạm vi → vô hiệu ngay
   // từ bản build này; offline thà không hiện topping còn hơn hiện topping
   // nguyên liệu cũ giá nguyên túi/hộp.
   const phamViDaLuu = await getMeta<string>(
-    menuMetaKey(tenantId, "topping_scope"),
+    menuMetaKey(tenantId, "topping_scope", branchId),
   ).catch(() => undefined);
   const toppingDungDuoc = toppingsCacheConHieuLuc(phamViDaLuu, branchId);
 
@@ -223,7 +289,12 @@ export async function getMenuFromCache(
   const toppings: ToppingProduct[] = [];
 
   for (const record of all) {
-    if (record.tenantId !== tenantId) continue;
+    if (
+      record.tenantId !== tenantId ||
+      record.branchId !== cachedBranchId
+    ) {
+      continue;
+    }
     switch (record._type) {
       case "category":
         categories.push(record.data as FnbCategory);
@@ -331,9 +402,21 @@ export async function invalidateVariantCache(tenantId?: string): Promise<void> {
 
 // ── Cache validity ──
 
-export async function shouldRefreshMenu(tenantId: string): Promise<boolean> {
-  const lastSync = await getMeta<number>(menuMetaKey(tenantId, "last_sync"));
+export async function shouldRefreshMenu(
+  tenantId: string,
+  branchId: string | null | undefined,
+  scopeFingerprint?: string,
+): Promise<boolean> {
+  const lastSync = await getMeta<number>(
+    menuMetaKey(tenantId, "last_sync", branchId),
+  );
   if (!lastSync) return true;
+  if (scopeFingerprint !== undefined) {
+    const cachedFingerprint = await getMeta<string>(
+      menuMetaKey(tenantId, "scope_fingerprint", branchId),
+    );
+    if (cachedFingerprint !== scopeFingerprint) return true;
+  }
   return Date.now() - lastSync > STALE_MS;
 }
 
@@ -353,9 +436,13 @@ export async function invalidateMenuCache(tenantId?: string): Promise<void> {
         await tx.objectStore("variant_cache").delete(record.productId);
       }
     }
-    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "last_sync"), value: 0 });
-    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "version"), value: "" });
-    await tx.objectStore("meta").put({ key: menuMetaKey(tenantId, "variants_last_sync"), value: 0 });
+    const metaStore = tx.objectStore("meta");
+    const metadata = await metaStore.getAll();
+    for (const meta of metadata) {
+      if (meta.key.startsWith(`menu:${tenantId}:`)) {
+        await metaStore.delete(meta.key);
+      }
+    }
     await tx.done;
     return;
   }
