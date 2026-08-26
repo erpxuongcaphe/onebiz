@@ -25,6 +25,15 @@ describe("Bộ chọn thành phần công thức FnB", () => {
     expect(source).toContain("materialId: material.id");
   });
 
+  it("BOM món nước lấy đơn vị đầu ra từ chính SKU, không mặc định kg", () => {
+    const source = readFileSync(
+      "src/components/shared/dialogs/bom-editor-dialog.tsx",
+      "utf8",
+    );
+    expect(source).toContain("const selectedSkuForYield = skuOptions.find");
+    expect(source).toContain("setYieldUnit(selectedSkuForYield.unit)");
+  });
+
   it("dấu chọn trong dòng không phải nút lồng nên không giành sự kiện click", () => {
     const source = readFileSync(
       "src/components/shared/dialogs/create-product-dialog.tsx",

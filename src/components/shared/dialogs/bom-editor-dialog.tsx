@@ -37,7 +37,11 @@ import {
   type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
 import { formatCurrency } from "@/lib/format";
-import { getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
+import {
+  getDirectConvertibleUnits,
+  getDirectConversionFactor,
+  getRecipeStockQuantity,
+} from "@/lib/format-uom";
 import type { Product, BOMCostBreakdown, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
@@ -62,6 +66,12 @@ interface MaterialLine {
   conversions: UOMConversion[];
   wastePercent: string;
   modifierScaleTarget?: string | null;
+}
+
+function formatRecipeQuantity(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 4,
+  }).format(value);
 }
 
 export function BOMEditorDialog({
@@ -213,6 +223,16 @@ export function BOMEditorDialog({
     })();
   }, [open, bomId, initialProductId]);
 
+  // A drink recipe should start as "1 Ly", not the legacy "1 kg" default.
+  // Preserve an operator's explicit edit: this only reacts to the selected SKU.
+  useEffect(() => {
+    if (!open || bomId || !productId) return;
+    const selectedSkuForYield = skuOptions.find((sku) => sku.id === productId);
+    if (selectedSkuForYield?.unit) {
+      setYieldUnit(selectedSkuForYield.unit);
+    }
+  }, [open, bomId, productId, skuOptions]);
+
   // Compute live preview cost (client-side)
   const previewTotal = items.reduce((sum, it) => {
     const qty = Number(it.quantity) || 0;
@@ -265,6 +285,20 @@ export function BOMEditorDialog({
     if (!productId) e.productId = "Chọn SKU đầu ra";
     if (!name.trim()) e.name = "Nhập tên công thức";
     if (items.length === 0) e.items = "Thêm ít nhất 1 thành phần";
+    const invalidQuantity = items.find((item) => {
+      const quantity = Number(item.quantity);
+      const wastePercent = Number(item.wastePercent);
+      return !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(wastePercent) || wastePercent < 0;
+    });
+    if (invalidQuantity) {
+      e.items = `Nhập định lượng lớn hơn 0 và hao hụt từ 0 trở lên cho ${invalidQuantity.materialName}.`;
+    }
+    const missingConversion = items.find((item) =>
+      getDirectConversionFactor(item.stockUnit, item.unit, item.conversions) == null,
+    );
+    if (missingConversion) {
+      e.items = `${missingConversion.materialCode || missingConversion.materialName} chưa có quy đổi từ ${missingConversion.unit} sang đơn vị tồn ${missingConversion.stockUnit}.`;
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -559,6 +593,9 @@ export function BOMEditorDialog({
 
             {items.length > 0 && (
               <div className="border rounded-lg overflow-hidden">
+                <div className="border-b bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  Nhập theo đơn vị pha chế. Hệ thống tự quy đổi sang đơn vị tồn của SKU retail khi tính giá vốn, trừ kho và hoàn kho.
+                </div>
                 <table className="w-full text-sm">
                   <thead className="bg-muted/30">
                     <tr>
@@ -576,6 +613,14 @@ export function BOMEditorDialog({
                       const waste = Number(it.wastePercent) || 0;
                       const factor = getDirectConversionFactor(it.stockUnit, it.unit, it.conversions) ?? 0;
                       const lineCost = qty * factor * (1 + waste / 100) * (it.costPrice ?? 0);
+                      const stockQuantity = getRecipeStockQuantity(
+                        qty,
+                        it.stockUnit,
+                        it.unit,
+                        it.conversions,
+                        waste,
+                      );
+                      const isConverted = it.stockUnit.trim().toLocaleLowerCase("vi") !== it.unit.trim().toLocaleLowerCase("vi");
                       return (
                         <tr key={`${it.materialId}-${idx}`} className="border-t">
                           <td className="p-2">
@@ -583,6 +628,11 @@ export function BOMEditorDialog({
                             <div className="text-xs text-muted-foreground">
                               {it.materialCode} · {formatCurrency(it.costPrice)}/{it.stockUnit}
                             </div>
+                            {isConverted && stockQuantity != null && (
+                              <div className="mt-1 text-xs text-primary">
+                                Pha chế {formatRecipeQuantity(qty)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit} / 1 {yieldUnit}
+                              </div>
+                            )}
                           </td>
                           <td className="p-2">
                             <Input

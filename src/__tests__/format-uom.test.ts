@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   getDirectConvertibleUnits,
   getDirectConversionFactor,
+  getRecipeStockQuantity,
   formatStockConversion,
   pickBestConversion,
   getConversionText,
@@ -39,6 +40,31 @@ describe("getDirectConversionFactor", () => {
 
   it("đổi ngược đơn vị nhỏ sang lượng tồn chuẩn", () => {
     expect(getDirectConversionFactor("thùng", "hộp", [CONV_THUNG_HOP])).toBeCloseTo(1 / 12);
+  });
+});
+
+describe("getRecipeStockQuantity", () => {
+  const CONV_TUI_GRAM: UOMConversion = {
+    id: "c-recipe",
+    tenantId: "t1",
+    productId: "tea",
+    fromUnit: "Túi",
+    toUnit: "G",
+    factor: 500,
+    isActive: true,
+    createdAt: "",
+  };
+
+  it("keeps the recipe in grams while previewing stock in bags", () => {
+    expect(getRecipeStockQuantity(6.8, "Túi", "G", [CONV_TUI_GRAM])).toBe(0.0136);
+  });
+
+  it("uses the same two-step rounding as the BOM normalization and consumption flow", () => {
+    expect(getRecipeStockQuantity(6.8, "Túi", "G", [CONV_TUI_GRAM], 10)).toBe(0.015);
+  });
+
+  it("does not guess when a material is missing its direct conversion", () => {
+    expect(getRecipeStockQuantity(6.8, "Túi", "G", [])).toBeNull();
   });
 });
 

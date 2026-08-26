@@ -57,6 +57,32 @@ export function getDirectConversionFactor(
   return matches.length === 1 ? matches[0] : null;
 }
 
+/**
+ * Quantity that will be deducted from stock for one recipe output.
+ *
+ * BOM stores a human-friendly input snapshot (for example 6.8 g) and a
+ * normalized stock quantity (for example 0.0136 Túi). Keep this preview in
+ * lockstep with the two-step rounding in `normalize_bom_item_uom_00320` and
+ * `consume_bom_for_sale`, so the setup screen never asks an operator to do
+ * package-to-gram arithmetic mentally.
+ */
+export function getRecipeStockQuantity(
+  inputQuantity: number,
+  stockUnit: string,
+  inputUnit: string,
+  conversions: UOMConversion[] | null | undefined,
+  wastePercent: number = 0,
+): number | null {
+  if (!Number.isFinite(inputQuantity) || inputQuantity < 0) return null;
+  if (!Number.isFinite(wastePercent) || wastePercent < 0) return null;
+
+  const factor = getDirectConversionFactor(stockUnit, inputUnit, conversions);
+  if (factor == null) return null;
+
+  const normalized = Math.round(inputQuantity * factor * 10_000) / 10_000;
+  return Math.round(normalized * (1 + wastePercent / 100) * 10_000) / 10_000;
+}
+
 export function buildUomConversion(
   mainUnit: string,
   relatedUnit: string,
