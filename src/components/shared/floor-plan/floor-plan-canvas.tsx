@@ -227,8 +227,8 @@ export function FloorPlanCanvas({
     const node = e.target;
     const scaleX = node.scaleX();
     const scaleY = node.scaleY();
-    const newWidth = Math.max(20, node.width() * scaleX);
-    const newHeight = Math.max(20, node.height() * scaleY);
+    const newWidth = Math.max(4, node.width() * scaleX);
+    const newHeight = Math.max(4, node.height() * scaleY);
     node.scaleX(1);
     node.scaleY(1);
     onDecorationChange?.(id, {
@@ -344,7 +344,11 @@ export function FloorPlanCanvas({
               rotateEnabled={true}
               keepRatio={false}
               boundBoxFunc={(_, newBox) => {
-                if (newBox.width < 40 || newBox.height < 40) return _;
+                // Doors, windows, TVs and walls are deliberately thin. Tables
+                // keep their ergonomic 40px minimum while decorations may use
+                // the 4px lower bound enforced by the database migration.
+                const minimum = selectedDecorationId ? 4 : 40;
+                if (newBox.width < minimum || newBox.height < minimum) return _;
                 return newBox;
               }}
             />

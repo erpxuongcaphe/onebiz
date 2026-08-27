@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -167,6 +167,24 @@ const newVariantKey = () => `vk${++_vk}`;
 const sanitizeBomCode = (s: string) =>
   s.trim().toUpperCase().replace(/\s+/g, "");
 
+/**
+ * Inline BOM belongs to one SKU, so its readable code can be deterministic.
+ * The branch suffix only identifies an explicit local recipe override; the
+ * SKU itself keeps the product_id lookup model, which preserves global
+ * fallback for every branch.
+ */
+function getAutomaticBomCode(
+  productCode: string,
+  branchId: string | null,
+  branches: Array<{ id: string; code?: string }>,
+): string {
+  const normalizedProductCode = productCode.trim().toUpperCase() || "SKU";
+  if (!branchId) return `BOM-${normalizedProductCode}`;
+  const branchCode = branches.find((branch) => branch.id === branchId)?.code;
+  const suffix = (branchCode || branchId.slice(0, 8)).trim().toUpperCase();
+  return `BOM-${normalizedProductCode}-${suffix}`;
+}
+
 // Tìm đơn vị tương tự (chỉ khác hoa/thường) trong list existing —
 // VD input "kg", existing có "Kg" → return "Kg" để suggest dùng tên cũ.
 // CEO chốt: "không cho đặt giống nhau" → cảnh báo từ đầu thay vì để
@@ -216,6 +234,7 @@ export function CreateProductDialog({
   initialData,
 }: CreateProductDialogProps) {
   const isEdit = !!initialData;
+  const dialogProductKey = initialData?.id ?? "__new_product__";
   const { toast } = useToast();
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -259,6 +278,7 @@ export function CreateProductDialog({
   const [bomCodeInput, setBomCodeInput] = useState("");
   const [bomCodeValid, setBomCodeValid] = useState<boolean | null>(null); // null = chưa verify
   const [bomExistingId, setBomExistingId] = useState<string | null>(null); // edit mode
+  const [bomExistingCode, setBomExistingCode] = useState<string | null>(null);
   const [bomPickerOpen, setBomPickerOpen] = useState(false);
   // Day 19/05/2026 (CEO Phase A): multi-select picker — tick nhiều NVL,
   // thêm 1 lần. State chuyển từ string đơn → Set<string>.
@@ -315,6 +335,12 @@ export function CreateProductDialog({
   // Edit mode hiện code thật của SP nên không cần preview.
   const [previewCode, setPreviewCode] = useState<string>("");
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const automaticBomCodePreview = getAutomaticBomCode(
+    initialData?.code ?? previewCode,
+    bomBranchId,
+    branches,
+  );
+  const visibleBomCode = bomExistingCode ?? automaticBomCodePreview;
 
   // CEO 01/06/2026 — Sprint 2.2d: Modifier picker cho SKU FnB.
   // Pattern Toast inheritance:
@@ -347,6 +373,14 @@ export function CreateProductDialog({
   const [savingFnbMenuScope, setSavingFnbMenuScope] = useState(false);
   const [fnbMenuScopeError, setFnbMenuScopeError] = useState<string | null>(null);
 
+  // A product dialog is a draft. Lazy loaders may run when the user changes
+  // tabs, but they must never overwrite choices made in the same open dialog.
+  const initializedDialogKeyRef = useRef<string | null>(null);
+  const loadedBomKeyRef = useRef<string | null>(null);
+  const loadedModifierDraftKeyRef = useRef<string | null>(null);
+  const loadedMenuScopeKeyRef = useRef<string | null>(null);
+  const loadedVariantsKeyRef = useRef<string | null>(null);
+
   // CEO 01/06/2026 — Sprint 2.4a: Variants Size (M/L/XL) inline editor.
   // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
   // 18g cà phê, Size L dùng 25g.
@@ -362,7 +396,16 @@ export function CreateProductDialog({
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      initializedDialogKeyRef.current = null;
+      loadedBomKeyRef.current = null;
+      loadedModifierDraftKeyRef.current = null;
+      loadedMenuScopeKeyRef.current = null;
+      loadedVariantsKeyRef.current = null;
+      return;
+    }
+    if (initializedDialogKeyRef.current === dialogProductKey) return;
+    initializedDialogKeyRef.current = dialogProductKey;
     if (initialData) {
       setScope(initialData.productType);
       setCategoryId(initialData.categoryId || "");
@@ -380,6 +423,7 @@ export function CreateProductDialog({
       setHasBom(!!initialData.hasBom);
       setBomItems([]);
       setBomExistingId(null);
+      setBomExistingCode(null);
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
@@ -422,6 +466,7 @@ export function CreateProductDialog({
       setHasBom(false);
       setBomItems([]);
       setBomExistingId(null);
+      setBomExistingCode(null);
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
@@ -447,7 +492,7 @@ export function CreateProductDialog({
       setErrors({});
       setInnerTab("info");
     }
-  }, [open, initialData]);
+  }, [open, dialogProductKey]);
 
   // Day 18/05/2026 (CEO): load BOM existing khi edit SKU has_bom=true.
   // Hiển thị form items prefilled để user sửa ngay trong tab "Công thức".
@@ -455,6 +500,8 @@ export function CreateProductDialog({
     if (!open || !initialData || initialData.productType !== "sku" || !initialData.hasBom) {
       return;
     }
+    if (loadedBomKeyRef.current === initialData.id) return;
+    loadedBomKeyRef.current = initialData.id;
     let cancelled = false;
     (async () => {
       try {
@@ -464,6 +511,7 @@ export function CreateProductDialog({
         // Ưu tiên BOM global (branch_id=null) — em load BOM đầu tiên
         const bom = boms[0];
         setBomExistingId(bom.id);
+        setBomExistingCode(bom.code ?? null);
         setBomName(bom.name);
         setBomNote(bom.note ?? "");
         setBomBranchId(bom.branchId ?? null);
@@ -518,7 +566,12 @@ export function CreateProductDialog({
           setBomModifierGroups(groups);
           setBomModifierOptionsByGroup(Object.fromEntries(optionEntries));
           setBomExactQuantityByKey(quantities);
-          setBomExactRecipeEnabled(savedQuantities.length > 0);
+          // Any material tied to a single-choice group needs an explicit
+          // amount for every option. Do not make the user discover a second
+          // switch before the fields become editable.
+          setBomExactRecipeEnabled(
+            savedQuantities.length > 0 || loadedItems.some((item) => item.modifierScaleTarget),
+          );
           setBomExactRecipeReady(true);
         } catch (exactError) {
           console.warn("Exact FnB recipe quantities are unavailable:", exactError);
@@ -536,7 +589,16 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, initialData]);
+  }, [open, initialData?.id, initialData?.productType, initialData?.hasBom]);
+
+  // A linked FnB choice group is never a percentage scaler. Its exact rows
+  // are the source of truth, so keep the editor enabled when a saved BOM is
+  // re-opened or a user links a new material row.
+  useEffect(() => {
+    if (bomItems.some((item) => item.modifierScaleTarget)) {
+      setBomExactRecipeEnabled(true);
+    }
+  }, [bomItems]);
 
   // Day 19/05/2026 (CEO UOM Smart Hybrid): load existing UOM conversion
   // khi edit SP — prefill 2 ô "Đóng gói" + "Hệ số quy đổi".
@@ -601,8 +663,11 @@ export function CreateProductDialog({
     if (!open || scope !== "sku" || channel !== "fnb") {
       setAvailableFnbModifierGroups([]);
       setInheritedModifierGroups([]);
-      setProductModifierGroupIds(new Set());
-      setModifierMode("inherit");
+      if (!open) {
+        loadedModifierDraftKeyRef.current = null;
+        setProductModifierGroupIds(new Set());
+        setModifierMode("inherit");
+      }
       return;
     }
     // LAZY: chỉ fetch khi user đã bấm tab modifier ít nhất 1 lần.
@@ -631,22 +696,26 @@ export function CreateProductDialog({
           setInheritedModifierGroups([]);
         }
 
-        // 3. Load SP-level override (chỉ edit mode)
-        if (initialData) {
-          const productLinks = await listProductModifierLinks(initialData.id);
-          if (cancelled) return;
-          if (productLinks.length > 0) {
-            setModifierMode("override");
-            setProductModifierGroupIds(
-              new Set(productLinks.map((l) => l.modifierGroupId)),
-            );
+        // 3. Load the server draft only once per dialog opening. Returning to
+        // this tab must retain checkboxes the user has not saved yet.
+        if (loadedModifierDraftKeyRef.current !== dialogProductKey) {
+          if (initialData) {
+            const productLinks = await listProductModifierLinks(initialData.id);
+            if (cancelled) return;
+            if (productLinks.length > 0) {
+              setModifierMode("override");
+              setProductModifierGroupIds(
+                new Set(productLinks.map((l) => l.modifierGroupId)),
+              );
+            } else {
+              setModifierMode("inherit");
+              setProductModifierGroupIds(new Set());
+            }
           } else {
             setModifierMode("inherit");
             setProductModifierGroupIds(new Set());
           }
-        } else {
-          setModifierMode("inherit");
-          setProductModifierGroupIds(new Set());
+          loadedModifierDraftKeyRef.current = dialogProductKey;
         }
       } catch (err) {
         console.warn("Load modifier picker failed:", err);
@@ -657,19 +726,23 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, channel, categoryId, initialData, innerTab]);
+  }, [open, scope, channel, categoryId, dialogProductKey, initialData?.id, innerTab]);
 
   // Lazy-load branch menu policy only when the FnB configuration tab is opened.
   // Older deployed databases simply show a clear migration message; editing
   // normal product information remains available until 00354 is installed.
   useEffect(() => {
     if (!open || scope !== "sku" || channel !== "fnb" || !initialData) {
-      setFnbMenuScopeMode("all");
-      setFnbMenuBranchIds(new Set());
-      setFnbMenuScopeError(null);
+      if (!open) {
+        loadedMenuScopeKeyRef.current = null;
+        setFnbMenuScopeMode("all");
+        setFnbMenuBranchIds(new Set());
+        setFnbMenuScopeError(null);
+      }
       return;
     }
     if (innerTab !== "modifier") return;
+    if (loadedMenuScopeKeyRef.current === initialData.id) return;
 
     let cancelled = false;
     setLoadingFnbMenuScope(true);
@@ -683,8 +756,9 @@ export function CreateProductDialog({
             ? "selected"
             : policy.mode === "except"
               ? "excluded"
-              : "all",
+            : "all",
         );
+        loadedMenuScopeKeyRef.current = initialData.id;
       })
       .catch((err) => {
         if (cancelled) return;
@@ -700,7 +774,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, channel, initialData, innerTab]);
+  }, [open, scope, channel, initialData?.id, innerTab]);
 
   function toggleProductModifierGroup(groupId: string) {
     setProductModifierGroupIds((prev) => {
@@ -774,11 +848,16 @@ export function CreateProductDialog({
   // chỉ khi user bấm tab "Quy cách". Tránh fetch eager + dialog freeze.
   useEffect(() => {
     if (!open || !initialData || initialData.productType !== "sku") {
-      setVariantItems([]);
-      setOriginalVariantIds(new Set());
+      if (!open) {
+        loadedVariantsKeyRef.current = null;
+        setVariantItems([]);
+        setOriginalVariantIds(new Set());
+      }
       return;
     }
     if (innerTab !== "variants") return;
+    if (loadedVariantsKeyRef.current === initialData.id) return;
+    loadedVariantsKeyRef.current = initialData.id;
     let cancelled = false;
     (async () => {
       try {
@@ -838,7 +917,7 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, initialData, innerTab, channel]);
+  }, [open, initialData?.id, initialData?.productType, innerTab, channel]);
 
   // Helper: add empty variant row.
   // CEO 01/06/2026: tên để trống mặc định — placeholder gợi ý M/L/XL/250ml/...,
@@ -1140,7 +1219,6 @@ export function CreateProductDialog({
         "Chưa tải được định lượng riêng của BOM. Tải lại form trước khi lưu để tránh mất cấu hình đang có.",
       );
     }
-    if (!bomExactRecipeEnabled) return [];
 
     const rows = targets.flatMap((item) => {
       const options = bomModifierOptionsByGroup[item.modifierScaleTarget ?? ""] ?? [];
@@ -1192,6 +1270,18 @@ export function CreateProductDialog({
   async function handleSave() {
     if (!validate()) return;
 
+    const bomCodeTrim = bomCodeInput.trim();
+    if (bomCodeTrim && bomCodeValid !== true) {
+      setInnerTab("bom");
+      toast({
+        variant: "error",
+        title: "Chưa thể liên kết BOM có sẵn",
+        description: "Mã BOM này chưa được xác nhận là một công thức đang tồn tại. Xóa mã để tạo công thức mới, hoặc kiểm tra lại mã BOM có sẵn.",
+        duration: 10000,
+      });
+      return;
+    }
+
     const fnbSetupIssues = validateFnbVariantSetup({
       isFnb: scope === "sku" && channel === "fnb",
       variants: variantItems,
@@ -1209,9 +1299,13 @@ export function CreateProductDialog({
       return;
     }
 
-    let inlineExactQuantityRows: ReturnType<typeof buildInlineExactQuantityRows>;
+    let inlineExactQuantityRows: ReturnType<typeof buildInlineExactQuantityRows> = [];
     try {
-      inlineExactQuantityRows = buildInlineExactQuantityRows();
+      // A standalone BOM is linked as-is. The inline table is only persisted
+      // when this dialog is creating or editing its own product BOM.
+      if (!bomCodeTrim) {
+        inlineExactQuantityRows = buildInlineExactQuantityRows();
+      }
     } catch (exactError) {
       setInnerTab("bom");
       toast({
@@ -1232,11 +1326,13 @@ export function CreateProductDialog({
       // (state lưu trong `stockUnit`). Backend auto-fill 4 cột DB = unit
       // chính → nhất quán, không break data cũ.
       const finalUnit = stockUnit.trim() || initialData?.unit || "Cái";
-      // Day 20/05/2026 (CEO BOM Phase 5): xử lý link Mã BOM
+      // Day 20/05/2026 (CEO BOM Phase 5): xử lý link Mã BOM có sẵn.
       // Nếu user nhập bomCode → set products.bom_code + has_bom=true
       // Nếu trống → bomCode = null (giữ logic cũ với items inline)
-      const bomCodeTrim = bomCodeInput.trim();
-      const linkedBomCode = bomCodeTrim || undefined;
+      // Clearing the advanced link must actually restore the normal inline
+      // product BOM lookup; omitting the field would leave the old link in DB.
+      const linkedBomCode =
+        bomCodeTrim || (isEdit && initialData?.bomCode ? null : undefined);
 
       const commonPayload = {
         name,
@@ -1329,7 +1425,7 @@ export function CreateProductDialog({
 
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
-          if (hasBom && bomItems.length > 0) {
+          if (hasBom && bomItems.length > 0 && !bomCodeTrim) {
             // Update the existing BOM in place. Replacing it with a new BOM id
             // used to orphan the exact FnB option quantities configured here.
             try {
@@ -1344,6 +1440,16 @@ export function CreateProductDialog({
               }));
               if (bomExistingId) {
                 await updateBOM(bomExistingId, {
+                  // Legacy inline BOMs may not have a code. Assign one the
+                  // first time they are saved, but never rename an existing
+                  // code that other historical documents may reference.
+                  code:
+                    bomExistingCode ??
+                    getAutomaticBomCode(
+                      initialData.code ?? "SKU",
+                      bomBranchId,
+                      branches,
+                    ),
                   branchId: bomBranchId,
                   name: bomName || `Công thức cho ${name}`,
                   note: bomNote || undefined,
@@ -1354,6 +1460,11 @@ export function CreateProductDialog({
                 const createdBom = await createBOM({
                   productId: initialData.id,
                   branchId: bomBranchId,
+                  code: getAutomaticBomCode(
+                    initialData.code ?? "SKU",
+                    bomBranchId,
+                    branches,
+                  ),
                   name: bomName || `Công thức cho ${name}`,
                   note: bomNote || undefined,
                   items,
@@ -1487,11 +1598,12 @@ export function CreateProductDialog({
 
       // Day 18/05/2026 (CEO refactor): nếu SKU có BOM + items → tạo BOM ngay
       // sau khi tạo SP. Vẫn trong cùng dialog, không pop thêm dialog mới.
-      if (scope === "sku" && hasBom && created?.id && bomItems.length > 0) {
+      if (scope === "sku" && hasBom && created?.id && bomItems.length > 0 && !bomCodeTrim) {
         try {
-          await createBOM({
+          const createdBom = await createBOM({
             productId: created.id,
             branchId: bomBranchId,
+            code: getAutomaticBomCode(code, bomBranchId, branches),
             name: bomName || `Công thức cho ${name}`,
             note: bomNote || undefined,
             items: bomItems.map((it, idx) => ({
@@ -1504,6 +1616,12 @@ export function CreateProductDialog({
               modifierScaleTarget: it.modifierScaleTarget ?? null,
             })),
           });
+          if (channel === "fnb") {
+            await saveBOMModifierOptionQuantities(
+              createdBom.id,
+              inlineExactQuantityRows,
+            );
+          }
         } catch (bomErr) {
           // SP đã tạo nhưng BOM fail → toast warning, không rollback SP
           toast({
@@ -2322,16 +2440,26 @@ export function CreateProductDialog({
                 tự trừ NVL theo công thức này.
               </div>
 
-              {/* Day 20/05/2026 (CEO BOM Phase 5): input Mã BOM link với BOM
-                  có sẵn. Nếu user nhập Mã BOM → save sẽ verify + set
-                  products.bom_code (KHÔNG tạo BOM mới). Nếu để trống → user
-                  tạo BOM inline với items bên dưới như cách cũ. */}
+              <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1.5">
+                <p className="text-sm font-medium">Mã BOM</p>
+                <p className="font-mono text-sm font-semibold text-primary">
+                  {visibleBomCode}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {bomExistingCode
+                    ? "Mã của công thức đang mở. Hệ thống giữ nguyên để các nghiệp vụ cũ vẫn tra được đúng công thức."
+                    : "Hệ thống tự sinh khi lưu công thức mới. Không cần nhập mã thủ công."}
+                </p>
+              </div>
+
+              {/* BOM standalone is an advanced shared-recipe workflow. It is
+                  intentionally secondary to the normal inline recipe flow. */}
               <div className="rounded-lg border border-dashed bg-muted/20 p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
-                    Mã BOM (link với công thức có sẵn){" "}
+                    Dùng BOM có sẵn thay cho công thức này{" "}
                     <span className="text-xs text-muted-foreground font-normal">
-                      · tuỳ chọn
+                      · nâng cao
                     </span>
                   </label>
                   {bomCodeInput && (
@@ -2370,7 +2498,7 @@ export function CreateProductDialog({
                       setBomCodeValid(false);
                     }
                   }}
-                  placeholder="VD: BOM-CFS-001 (phải đã tồn tại)"
+                  placeholder="VD: BOM-CFS-001 (chỉ nhập khi BOM đã tồn tại)"
                 />
                 {bomCodeValid === true && (
                   <p className="text-xs text-primary flex items-center gap-1">
@@ -2381,43 +2509,46 @@ export function CreateProductDialog({
                 {bomCodeValid === false && (
                   <p className="text-xs text-status-warning flex items-center gap-1">
                     <Icon name="warning" size={12} />
-                    Mã BOM chưa tồn tại. Tạo BOM ở /hang-hoa/cong-thuc trước.
+                    Không tìm thấy mã BOM đang hoạt động. Kiểm tra lại mã hoặc để trống để tạo công thức mới ở dưới.
                   </p>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  Để TRỐNG nếu muốn tạo công thức MỚI cho SKU này (điền items
-                  bên dưới). ĐIỀN nếu muốn dùng công thức đã có sẵn.
+                  Để trống trong luồng thông thường. Chỉ nhập khi một BOM dùng chung đã được tạo sẵn ở trang Công thức.
                 </p>
               </div>
 
-              {/* Branch áp dụng */}
+              {/* A BOM is either global or a single branch override. The
+                  product menu policy remains the multi-branch control. */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-sm font-medium">Áp dụng cho chi nhánh</label>
+                  <label className="text-sm font-medium">Phạm vi công thức</label>
                   <Select
                     value={bomBranchId ?? "__all__"}
                     onValueChange={(v) => setBomBranchId(v === "__all__" ? null : v)}
                     items={[
-                      { value: "__all__", label: "Áp dụng tất cả chi nhánh (mặc định)" },
-                      ...branches.map((b) => ({ value: b.id, label: b.name })),
+                      { value: "__all__", label: "Dùng chung cho mọi chi nhánh bán món này" },
+                      ...branches.map((b) => ({ value: b.id, label: `Ghi đè riêng: ${b.name}` })),
                     ]}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue>
                         {(v) => {
-                          if (!v || v === "__all__") return "Áp dụng tất cả chi nhánh";
+                          if (!v || v === "__all__") return "Dùng chung cho mọi chi nhánh bán món này";
                           const m = branches.find((b) => b.id === v);
-                          return m ? m.name : v;
+                          return m ? `Ghi đè riêng: ${m.name}` : v;
                         }}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="__all__">Áp dụng tất cả chi nhánh (mặc định)</SelectItem>
+                      <SelectItem value="__all__">Dùng chung cho mọi chi nhánh bán món này</SelectItem>
                       {branches.map((b) => (
-                        <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                        <SelectItem key={b.id} value={b.id}>Ghi đè riêng: {b.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Muốn bán món ở nhiều quán: chọn phạm vi dùng chung ở đây, rồi chọn nhiều quán tại tab Tùy chọn FnB. Chỉ ghi đè khi quán đó có công thức khác.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Tên công thức</label>
@@ -2550,6 +2681,12 @@ export function CreateProductDialog({
                                           i === idx ? { ...p, modifierScaleTarget: v } : p,
                                         ),
                                       );
+                                      // A linked choice group always uses the
+                                      // exact per-option recipe. Leaving the
+                                      // checkbox off used to lock the inputs
+                                      // and made a valid Hồng Trà Chanh recipe
+                                      // impossible to enter.
+                                      if (v) setBomExactRecipeEnabled(true);
                                     }}
                                     className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
                                   >
@@ -2621,10 +2758,9 @@ export function CreateProductDialog({
                     <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
                       <Checkbox
                         checked={bomExactRecipeEnabled}
-                        disabled={!bomExactRecipeReady}
-                        onCheckedChange={(checked) => setBomExactRecipeEnabled(Boolean(checked))}
+                        disabled
                       />
-                      Dùng định lượng riêng
+                      Bắt buộc dùng định lượng riêng
                     </label>
                   </div>
 

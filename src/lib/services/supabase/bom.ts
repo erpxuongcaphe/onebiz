@@ -402,6 +402,8 @@ export async function createBOM(bom: {
 export async function updateBOM(
   id: string,
   updates: Partial<{
+    /** Auto-generated only for legacy inline BOMs which predate a code. */
+    code: string;
     name: string;
     /** null = BOM global, có giá trị = riêng chi nhánh */
     branchId: string | null;
@@ -433,6 +435,7 @@ export async function updateBOM(
 
   // 1) Update header (chỉ set field được truyền)
   const updateObj: Record<string, unknown> = {};
+  if (updates.code !== undefined) updateObj.code = updates.code;
   if (updates.name !== undefined) updateObj.name = updates.name;
   if (updates.branchId !== undefined) updateObj.branch_id = updates.branchId;
   if (updates.batchSize !== undefined) updateObj.batch_size = updates.batchSize;

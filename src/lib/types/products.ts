@@ -28,7 +28,7 @@ export interface Product {
    * Migration 00105 thêm cột này + backfill từ existing bom.product_id.
    * Hàm get_active_bom_for_branch() ưu tiên đọc bom_code, fallback product_id.
    */
-  bomCode?: string;
+  bomCode?: string | null;
   /** Trạng thái kinh doanh — dùng cho filter "Đang bán / Ngừng bán" */
   status?: ProductStatus;
   sellPrice: number;
