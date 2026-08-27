@@ -52,6 +52,18 @@ export interface SidebarLeaf {
   permissions?: string[];
 }
 
+/**
+ * Navigation inside the ERP stays in the current tab. POS is the only
+ * workspace intentionally opened separately so the admin context is kept.
+ */
+export function getNavLinkTarget(mode?: SidebarLeaf["mode"]): "_self" | "_blank" {
+  return mode === "pos" ? "_blank" : "_self";
+}
+
+export function getNavLinkRel(mode?: SidebarLeaf["mode"]): string | undefined {
+  return mode === "pos" ? "noopener noreferrer" : undefined;
+}
+
 export interface SidebarSubGroup {
   label: string;
   icon?: string;

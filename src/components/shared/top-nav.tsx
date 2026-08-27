@@ -31,6 +31,8 @@ import {
 import {
   sidebarNavGroups,
   isHrefActive,
+  getNavLinkRel,
+  getNavLinkTarget,
   isGroupActive,
   canSeeNavLeaf,
   type SidebarLeaf,
@@ -317,6 +319,8 @@ function MobileLeafLink({
   return (
     <Link
       href={leaf.href}
+      target={getNavLinkTarget(leaf.mode)}
+      rel={getNavLinkRel(leaf.mode)}
       onClick={onClose}
       className={cn(
         "flex press-scale-sm items-center gap-3 px-3 py-2 rounded-lg text-sm",
@@ -561,6 +565,8 @@ function MobileNav() {
           <div className="pt-3 border-t">
             <Link
               href="/pos"
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex press-scale items-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold bg-primary text-primary-foreground hover:bg-primary-hover ambient-shadow"
               onClick={() => setOpen(false)}
             >
