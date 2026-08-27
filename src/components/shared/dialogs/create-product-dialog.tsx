@@ -87,6 +87,7 @@ import {
 import {
   getFnbProductBranchMenuPolicy,
   saveFnbProductBranchMenuPolicy,
+  type FnbProductBranchMenuPolicy,
 } from "@/lib/services/supabase/fnb-product-branch-menu";
 import { invalidateMenuCache } from "@/lib/offline";
 
@@ -370,7 +371,9 @@ export function CreateProductDialog({
     new Set(),
   );
   const [loadingFnbMenuScope, setLoadingFnbMenuScope] = useState(false);
-  const [savingFnbMenuScope, setSavingFnbMenuScope] = useState(false);
+  // The branch policy is part of this dialog's draft. It is only persisted
+  // by the main Save button, never by changing tabs or opening the section.
+  const [fnbMenuScopeDirty, setFnbMenuScopeDirty] = useState(false);
   const [fnbMenuScopeError, setFnbMenuScopeError] = useState<string | null>(null);
 
   // A product dialog is a draft. Lazy loaders may run when the user changes
@@ -402,6 +405,7 @@ export function CreateProductDialog({
       loadedModifierDraftKeyRef.current = null;
       loadedMenuScopeKeyRef.current = null;
       loadedVariantsKeyRef.current = null;
+      setFnbMenuScopeDirty(false);
       return;
     }
     if (initializedDialogKeyRef.current === dialogProductKey) return;
@@ -432,6 +436,7 @@ export function CreateProductDialog({
       setBomExactQuantityByKey({});
       setBomExactRecipeEnabled(false);
       setBomExactRecipeReady(false);
+      setFnbMenuScopeDirty(false);
       // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
       setBomCodeInput(initialData.bomCode ?? "");
       setBomCodeValid(initialData.bomCode ? true : null);
@@ -475,6 +480,7 @@ export function CreateProductDialog({
       setBomExactQuantityByKey({});
       setBomExactRecipeEnabled(false);
       setBomExactRecipeReady(false);
+      setFnbMenuScopeDirty(false);
       setBomCodeInput("");
       setBomCodeValid(null);
       setChannel("fnb");
@@ -756,8 +762,9 @@ export function CreateProductDialog({
             ? "selected"
             : policy.mode === "except"
               ? "excluded"
-            : "all",
+              : "all",
         );
+        setFnbMenuScopeDirty(false);
         loadedMenuScopeKeyRef.current = initialData.id;
       })
       .catch((err) => {
@@ -786,6 +793,7 @@ export function CreateProductDialog({
   }
 
   function toggleFnbMenuBranch(branchId: string) {
+    setFnbMenuScopeDirty(true);
     setFnbMenuBranchIds((previous) => {
       const next = new Set(previous);
       if (next.has(branchId)) next.delete(branchId);
@@ -794,54 +802,35 @@ export function CreateProductDialog({
     });
   }
 
-  async function handleSaveFnbMenuScope() {
-    if (!initialData) return;
+  function setFnbMenuScopeModeDraft(mode: "all" | "selected" | "excluded") {
+    setFnbMenuScopeDirty(true);
+    setFnbMenuScopeMode(mode);
+  }
+
+  function getFnbMenuScopeDraft(): FnbProductBranchMenuPolicy {
     const branchIds = Array.from(fnbMenuBranchIds);
     if (fnbMenuScopeMode !== "all" && branchIds.length === 0) {
-      toast({
-        title: "Chọn ít nhất một chi nhánh",
-        description: "Hoặc chuyển về Bán tại tất cả chi nhánh.",
-        variant: "warning",
-      });
-      return;
+      throw new Error("Chọn ít nhất một chi nhánh, hoặc chuyển về Bán tại tất cả chi nhánh.");
     }
-
-    setSavingFnbMenuScope(true);
-    try {
-      await saveFnbProductBranchMenuPolicy(
-        initialData.id,
+    return {
+      mode:
         fnbMenuScopeMode === "selected"
           ? "only"
           : fnbMenuScopeMode === "excluded"
             ? "except"
             : "all",
-        fnbMenuScopeMode === "all" ? [] : branchIds,
-      );
-      // This browser may also be running POS in another tab. Clearing the
-      // local cache makes its next load re-read the server whitelist.
-      await invalidateMenuCache();
-      toast({
-        title: "Đã lưu phạm vi menu FnB",
-        description:
-          fnbMenuScopeMode === "selected"
-            ? `Món chỉ hiện tại ${branchIds.length} chi nhánh đã chọn.`
-            : fnbMenuScopeMode === "excluded"
-              ? `Món bị ẩn tại ${branchIds.length} chi nhánh đã chọn.`
-              : "Món đang bán tại tất cả chi nhánh FnB.",
-        variant: "success",
-      });
-      onSuccess?.();
-    } catch (err) {
-      toast({
-        title: "Chưa lưu được phạm vi menu",
-        description:
-          err instanceof Error ? err.message : "Lỗi không xác định.",
-        variant: "error",
-        duration: 10000,
-      });
-    } finally {
-      setSavingFnbMenuScope(false);
-    }
+      branchIds: fnbMenuScopeMode === "all" ? [] : branchIds,
+    };
+  }
+
+  async function saveFnbMenuScopeDraft(productId: string) {
+    const draft = getFnbMenuScopeDraft();
+    await saveFnbProductBranchMenuPolicy(productId, draft.mode, draft.branchIds);
+    // This browser may also be running POS in another tab. Clearing the
+    // local cache makes its next load re-read the server whitelist.
+    await invalidateMenuCache();
+    setFnbMenuScopeDirty(false);
+    return draft;
   }
 
   // CEO 01/06/2026 — Sprint 2.4a + Bước 1 (perf): LAZY load variants
@@ -1317,6 +1306,30 @@ export function CreateProductDialog({
       return;
     }
 
+    const shouldSaveFnbMenuScope =
+      isEdit &&
+      !!initialData &&
+      scope === "sku" &&
+      channel === "fnb" &&
+      fnbMenuScopeDirty;
+    if (shouldSaveFnbMenuScope) {
+      try {
+        getFnbMenuScopeDraft();
+      } catch (menuScopeError) {
+        setInnerTab("modifier");
+        toast({
+          variant: "error",
+          title: "Chưa thể lưu phạm vi menu FnB",
+          description:
+            menuScopeError instanceof Error
+              ? menuScopeError.message
+              : "Phạm vi menu FnB chưa hợp lệ.",
+          duration: 10000,
+        });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       // Common payload — dùng cho cả create và update. Gom hết field mà user
@@ -1542,6 +1555,27 @@ export function CreateProductDialog({
                   ? varErr.message
                   : "Vui lòng vào lại form sửa Quy cách.",
             });
+          }
+        }
+
+        if (shouldSaveFnbMenuScope) {
+          try {
+            await saveFnbMenuScopeDraft(initialData.id);
+          } catch (menuScopeError) {
+            // The product and its BOM may already have been stored. Keep the
+            // dialog open so the operator can retry the final menu-policy step
+            // instead of silently leaving it in an unknown state.
+            toast({
+              variant: "warning",
+              title: "Sản phẩm đã lưu, phạm vi menu chưa lưu",
+              description:
+                menuScopeError instanceof Error
+                  ? menuScopeError.message
+                  : "Kiểm tra lại kết nối rồi bấm Lưu lần nữa.",
+              duration: 10000,
+            });
+            onSuccess?.();
+            return;
           }
         }
 
@@ -2898,7 +2932,7 @@ export function CreateProductDialog({
                         <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
                           <button
                             type="button"
-                            onClick={() => setFnbMenuScopeMode("all")}
+                            onClick={() => setFnbMenuScopeModeDraft("all")}
                             className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                               fnbMenuScopeMode === "all"
                                 ? "border-primary bg-primary/10 text-primary"
@@ -2912,7 +2946,7 @@ export function CreateProductDialog({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFnbMenuScopeMode("selected")}
+                            onClick={() => setFnbMenuScopeModeDraft("selected")}
                             className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                               fnbMenuScopeMode === "selected"
                                 ? "border-primary bg-primary/10 text-primary"
@@ -2926,7 +2960,7 @@ export function CreateProductDialog({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setFnbMenuScopeMode("excluded")}
+                            onClick={() => setFnbMenuScopeModeDraft("excluded")}
                             className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                               fnbMenuScopeMode === "excluded"
                                 ? "border-primary bg-primary/10 text-primary"
@@ -2981,22 +3015,17 @@ export function CreateProductDialog({
                                 ? `Ẩn tại ${fnbMenuBranchIds.size} chi nhánh đã chọn.`
                                 : "Món không bị giới hạn chi nhánh."}
                           </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            onClick={handleSaveFnbMenuScope}
-                            disabled={
-                              savingFnbMenuScope ||
-                              (fnbMenuScopeMode !== "all" && fnbMenuBranchIds.size === 0)
-                            }
+                          <p
+                            className={`text-xs ${
+                              fnbMenuScopeDirty
+                                ? "font-medium text-primary"
+                                : "text-muted-foreground"
+                            }`}
                           >
-                            {savingFnbMenuScope ? (
-                              <Icon name="progress_activity" size={14} className="mr-1 animate-spin" />
-                            ) : (
-                              <Icon name="save" size={14} className="mr-1" />
-                            )}
-                            Lưu phạm vi menu
-                          </Button>
+                            {fnbMenuScopeDirty
+                              ? "Phạm vi menu sẽ được lưu cùng nút Lưu bên dưới."
+                              : "Chưa có thay đổi phạm vi menu."}
+                          </p>
                         </div>
                       </div>
                     )}

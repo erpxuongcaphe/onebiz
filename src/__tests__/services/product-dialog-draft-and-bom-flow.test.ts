@@ -12,13 +12,18 @@ const bomService = readFileSync(
 );
 
 describe("product dialog draft and inline BOM flow", () => {
-  it("keeps unsaved FnB form choices when a user returns to a lazy tab", () => {
+  it("keeps FnB choices in one product draft until the final Save", () => {
     expect(dialog).toContain("const initializedDialogKeyRef = useRef<string | null>(null)");
     expect(dialog).toContain("const loadedModifierDraftKeyRef = useRef<string | null>(null)");
     expect(dialog).toContain("const loadedMenuScopeKeyRef = useRef<string | null>(null)");
     expect(dialog).toContain("if (loadedModifierDraftKeyRef.current !== dialogProductKey)");
     expect(dialog).toContain("if (loadedMenuScopeKeyRef.current === initialData.id) return");
     expect(dialog).toContain("if (loadedVariantsKeyRef.current === initialData.id) return");
+    expect(dialog).toContain("const [fnbMenuScopeDirty, setFnbMenuScopeDirty] = useState(false)");
+    expect(dialog).toContain("const shouldSaveFnbMenuScope =");
+    expect(dialog).toContain("await saveFnbMenuScopeDraft(initialData.id)");
+    expect(dialog).toContain("Phạm vi menu sẽ được lưu cùng nút Lưu bên dưới.");
+    expect(dialog).not.toContain("Lưu phạm vi menu");
   });
 
   it("makes exact quantities compulsory as soon as an FnB choice group is linked", () => {
@@ -46,6 +51,7 @@ describe("product dialog draft and inline BOM flow", () => {
 
   it("writes exact FnB quantities in the same create flow as the BOM", () => {
     expect(dialog).toContain("const createdBom = await createBOM({");
-    expect(dialog).toContain("await saveBOMModifierOptionQuantities(\n              createdBom.id,");
+    expect(dialog).toContain("await saveBOMModifierOptionQuantities(");
+    expect(dialog).toContain("createdBom.id,");
   });
 });

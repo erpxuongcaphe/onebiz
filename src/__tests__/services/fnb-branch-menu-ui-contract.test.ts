@@ -19,10 +19,12 @@ describe("FnB branch menu UI contract", () => {
     expect(cache).toContain("cachedFingerprint !== scopeFingerprint");
   });
 
-  it("gives product editors a separate, explicit branch-menu policy action", () => {
+  it("keeps branch-menu policy inside the product draft until final Save", () => {
     expect(dialog).toContain("Menu FnB theo chi nhánh");
     expect(dialog).toContain("saveFnbProductBranchMenuPolicy");
-    expect(dialog).toContain("Lưu phạm vi menu");
+    expect(dialog).toContain("const shouldSaveFnbMenuScope =");
+    expect(dialog).toContain("Phạm vi menu sẽ được lưu cùng nút Lưu bên dưới.");
+    expect(dialog).not.toContain("Lưu phạm vi menu");
     expect(dialog).toContain("Ẩn tại quán đã chọn");
     expect(dialog).toContain("không làm thay đổi tồn kho, giá hoặc BOM");
   });
