@@ -53,9 +53,16 @@ describe("FnB exact modifier recipe UI", () => {
     expect(dialog).toContain("Trừ ${formatRecipeQuantity(stockQuantity)} ${item.stockUnit}");
   });
 
-  it("does not present the legacy scale factor as the new recipe workflow", () => {
+  it("keeps the compact product form on the same exact-recipe workflow", () => {
     expect(creationDialog).toContain("Theo lựa chọn FnB");
-    expect(creationDialog).toContain("mở lại BOM để khai định lượng thực tế");
+    expect(creationDialog).toContain("Định lượng riêng theo lựa chọn FnB");
+    expect(creationDialog).toContain("function buildInlineExactQuantityRows()");
+    expect(creationDialog).toContain("saveBOMModifierOptionQuantities(");
+    expect(creationDialog).toContain("Update the existing BOM in place");
+    expect(creationDialog).toContain("Pha chế {formatRecipeQuantity(it.quantity)} {it.unit}");
+    expect(creationDialog).toContain("getRecipeQuantityInInputUnit");
+    expect(creationDialog).toContain("getRecipeQuantityInStockUnit");
+    expect(creationDialog).not.toContain("mở lại BOM để khai định lượng thực tế");
     expect(creationDialog).not.toContain("Scale theo modifier");
   });
 });

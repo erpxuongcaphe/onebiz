@@ -59,18 +59,31 @@ import {
 } from "@/lib/services/supabase/variants";
 import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
-import type { Product, BOMItem } from "@/lib/types";
+import type { Product, BOMItem, UOMConversion } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
-import { buildUomConversion } from "@/lib/format-uom";
+import {
+  buildUomConversion,
+  getDirectConversionFactor,
+  getDirectConvertibleUnits,
+  getRecipeQuantityInInputUnit,
+  getRecipeQuantityInStockUnit,
+} from "@/lib/format-uom";
 import { validateFnbVariantSetup } from "@/lib/fnb-product-setup-validation";
 // CEO 01/06/2026 — Sprint 2.2d: tab "Tuỳ chọn FnB" trong form SP.
 import {
   listModifierGroups,
   listCategoryModifierLinks,
   listProductModifierLinks,
+  listModifierOptions,
+  getEffectiveModifierGroupsForProduct,
   setProductModifierGroups,
   type ModifierGroup,
+  type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
+import {
+  listBOMModifierOptionQuantities,
+  saveBOMModifierOptionQuantities,
+} from "@/lib/services/supabase/bom-modifier-option-quantities";
 import {
   getFnbProductBranchMenuPolicy,
   saveFnbProductBranchMenuPolicy,
@@ -122,6 +135,9 @@ interface InlineBomItem {
   materialName: string;
   costPrice: number;
   unit: string;
+  /** Canonical unit used for stock and costing; `unit` is the prep unit. */
+  stockUnit: string;
+  conversions: UOMConversion[];
   quantity: number;
   wastePercent: number;
   note?: string;
@@ -131,6 +147,12 @@ interface InlineBomItem {
    * chỉ còn là cơ chế tương thích cho BOM chưa chuyển đổi.
    */
   modifierScaleTarget?: string | null;
+}
+
+function formatRecipeQuantity(value: number): string {
+  return new Intl.NumberFormat("vi-VN", {
+    maximumFractionDigits: 4,
+  }).format(value);
 }
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
@@ -219,6 +241,18 @@ export function CreateProductDialog({
   const [bomName, setBomName] = useState("");
   const [bomNote, setBomNote] = useState("");
   const [bomItems, setBomItems] = useState<InlineBomItem[]>([]);
+  // The compact product form must preserve and edit the same measured FnB
+  // quantities as the full BOM editor. Keeping this state here avoids a
+  // product save silently replacing a BOM and dropping its exact options.
+  const [bomModifierGroups, setBomModifierGroups] = useState<ModifierGroup[]>([]);
+  const [bomModifierOptionsByGroup, setBomModifierOptionsByGroup] = useState<
+    Record<string, ModifierOption[]>
+  >({});
+  const [bomExactQuantityByKey, setBomExactQuantityByKey] = useState<
+    Record<string, string>
+  >({});
+  const [bomExactRecipeEnabled, setBomExactRecipeEnabled] = useState(false);
+  const [bomExactRecipeReady, setBomExactRecipeReady] = useState(false);
   // Day 20/05/2026 (CEO BOM Phase 5): Mã BOM link với BOM có sẵn (standalone).
   // Khi user gõ Mã BOM → save sẽ verify + set products.bom_code (không tạo BOM
   // mới). Khi gõ items inline → tạo BOM riêng cho SKU (legacy path).
@@ -349,6 +383,11 @@ export function CreateProductDialog({
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
+      setBomModifierGroups([]);
+      setBomModifierOptionsByGroup({});
+      setBomExactQuantityByKey({});
+      setBomExactRecipeEnabled(false);
+      setBomExactRecipeReady(false);
       // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
       setBomCodeInput(initialData.bomCode ?? "");
       setBomCodeValid(initialData.bomCode ? true : null);
@@ -386,6 +425,11 @@ export function CreateProductDialog({
       setBomName("");
       setBomNote("");
       setBomBranchId(null);
+      setBomModifierGroups([]);
+      setBomModifierOptionsByGroup({});
+      setBomExactQuantityByKey({});
+      setBomExactRecipeEnabled(false);
+      setBomExactRecipeReady(false);
       setBomCodeInput("");
       setBomCodeValid(null);
       setChannel("fnb");
@@ -424,24 +468,67 @@ export function CreateProductDialog({
         setBomNote(bom.note ?? "");
         setBomBranchId(bom.branchId ?? null);
         // Items đã có trong bom.items (getBOMById return) nhưng getBOMsByProduct
-        // có thể không return items → cần fetch
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const fullBom = await (await import("@/lib/services")).getBOMById(bom.id);
-        if (cancelled) return;
-        setBomItems(
-          (fullBom.items ?? []).map((it: BOMItem) => ({
+        // có thể không return items → cần fetch. Keep the preparation snapshot
+        // here, otherwise this compact form would turn 35 G back into .035 Kg.
+        const fullBom = await getBOMById(bom.id);
+        const loadedItems = await Promise.all(
+          (fullBom.items ?? []).map(async (it: BOMItem) => ({
             materialId: it.materialId,
             materialCode: it.materialCode ?? "",
             materialName: it.materialName ?? "",
             costPrice: it.materialCostPrice ?? 0,
-            unit: it.unit,
-            quantity: it.quantity,
+            unit: it.inputUnit ?? it.unit,
+            stockUnit: it.unit,
+            conversions: await getUOMConversions(it.materialId).catch(() => []),
+            quantity: it.inputQuantity ?? it.quantity,
             wastePercent: it.wastePercent ?? 0,
             note: it.note,
-            // CEO 01/06/2026 — Sprint 2.3c
             modifierScaleTarget: it.modifierScaleTarget ?? null,
           })),
         );
+        if (cancelled) return;
+        setBomItems(loadedItems);
+
+        try {
+          const groups = (await getEffectiveModifierGroupsForProduct(
+            initialData.id,
+            initialData.categoryId ?? null,
+          )).filter((group) => group.rule === "single" || group.rule === "single_required");
+          const optionEntries = await Promise.all(
+            groups.map(async (group) => [group.id, await listModifierOptions(group.id)] as const),
+          );
+          const savedQuantities = await listBOMModifierOptionQuantities(bom.id);
+          if (cancelled) return;
+
+          const quantities: Record<string, string> = {};
+          for (const row of savedQuantities) {
+            const item = loadedItems.find((candidate) => candidate.materialId === row.materialId);
+            const inputQuantity = item
+              ? getRecipeQuantityInInputUnit(
+                  row.quantity,
+                  item.stockUnit,
+                  item.unit,
+                  item.conversions,
+                )
+              : null;
+            if (inputQuantity != null) {
+              quantities[`${row.materialId}:${row.modifierOptionId}`] = String(inputQuantity);
+            }
+          }
+          setBomModifierGroups(groups);
+          setBomModifierOptionsByGroup(Object.fromEntries(optionEntries));
+          setBomExactQuantityByKey(quantities);
+          setBomExactRecipeEnabled(savedQuantities.length > 0);
+          setBomExactRecipeReady(true);
+        } catch (exactError) {
+          console.warn("Exact FnB recipe quantities are unavailable:", exactError);
+          if (cancelled) return;
+          setBomModifierGroups([]);
+          setBomModifierOptionsByGroup({});
+          setBomExactQuantityByKey({});
+          setBomExactRecipeEnabled(false);
+          setBomExactRecipeReady(false);
+        }
       } catch {
         // fail silent — user vẫn có thể tạo BOM mới
       }
@@ -1045,6 +1132,63 @@ export function CreateProductDialog({
     return Object.keys(e).length === 0;
   }
 
+  function buildInlineExactQuantityRows() {
+    const targets = bomItems.filter((item) => item.modifierScaleTarget);
+    if (targets.length === 0) return [];
+    if (!bomExactRecipeReady) {
+      throw new Error(
+        "Chưa tải được định lượng riêng của BOM. Tải lại form trước khi lưu để tránh mất cấu hình đang có.",
+      );
+    }
+    if (!bomExactRecipeEnabled) return [];
+
+    const rows = targets.flatMap((item) => {
+      const options = bomModifierOptionsByGroup[item.modifierScaleTarget ?? ""] ?? [];
+      if (options.length === 0) {
+        throw new Error(
+          `Nhóm lựa chọn của ${item.materialName} chưa có lựa chọn đang bật.`,
+        );
+      }
+      return options.map((option) => ({
+        materialId: item.materialId,
+        modifierOptionId: option.id,
+        value: bomExactQuantityByKey[`${item.materialId}:${option.id}`]?.trim() ?? "",
+      }));
+    });
+    const invalid = rows.find((row) => {
+      const quantity = Number(row.value);
+      return row.value === "" || !Number.isFinite(quantity) || quantity < 0;
+    });
+    if (invalid) {
+      throw new Error(
+        "Đã bật định lượng riêng thì phải nhập số hợp lệ cho mọi lựa chọn. Nhập 0 khi lựa chọn không dùng nguyên liệu.",
+      );
+    }
+
+    return rows.map((row) => {
+      const item = bomItems.find((candidate) => candidate.materialId === row.materialId);
+      if (!item) throw new Error("Không tìm thấy nguyên liệu của định lượng riêng.");
+      if (
+        getRecipeQuantityInStockUnit(
+          Number(row.value),
+          item.stockUnit,
+          item.unit,
+          item.conversions,
+        ) == null
+      ) {
+        throw new Error(
+          `${item.materialName} chưa có quy đổi từ ${item.unit} sang đơn vị tồn ${item.stockUnit}.`,
+        );
+      }
+      return {
+        materialId: row.materialId,
+        modifierOptionId: row.modifierOptionId,
+        inputQuantity: Number(row.value),
+        inputUnit: item.unit,
+      };
+    });
+  }
+
   async function handleSave() {
     if (!validate()) return;
 
@@ -1060,6 +1204,20 @@ export function CreateProductDialog({
         variant: "error",
         title: "Chưa thể lưu quy cách FnB",
         description: fnbSetupIssues[0].message,
+        duration: 10000,
+      });
+      return;
+    }
+
+    let inlineExactQuantityRows: ReturnType<typeof buildInlineExactQuantityRows>;
+    try {
+      inlineExactQuantityRows = buildInlineExactQuantityRows();
+    } catch (exactError) {
+      setInnerTab("bom");
+      toast({
+        variant: "error",
+        title: "Chưa thể lưu công thức FnB",
+        description: exactError instanceof Error ? exactError.message : "Định lượng riêng chưa hợp lệ.",
         duration: 10000,
       });
       return;
@@ -1172,32 +1330,42 @@ export function CreateProductDialog({
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
           if (hasBom && bomItems.length > 0) {
-            // Có BOM items → tạo mới hoặc replace BOM existing
-            if (bomExistingId) {
-              // Replace: deactivate cũ + create mới (atomic-ish)
-              try {
-                await deleteBOM(bomExistingId); // soft delete (set is_active=false)
-              } catch {
-                // Ignore — BOM cũ có thể đã bị xoá
-              }
-            }
+            // Update the existing BOM in place. Replacing it with a new BOM id
+            // used to orphan the exact FnB option quantities configured here.
             try {
-              await createBOM({
-                productId: initialData.id,
-                branchId: bomBranchId,
-                name: bomName || `Công thức cho ${name}`,
-                note: bomNote || undefined,
-                items: bomItems.map((it, idx) => ({
-                  materialId: it.materialId,
-                  quantity: it.quantity,
-                  unit: it.unit,
-                  wastePercent: it.wastePercent,
-                  sortOrder: idx,
-                  note: it.note,
-                  // CEO 01/06/2026 — Sprint 2.3c
-                  modifierScaleTarget: it.modifierScaleTarget ?? null,
-                })),
-              });
+              let savedBomId: string;
+              const items = bomItems.map((it, idx) => ({
+                materialId: it.materialId,
+                quantity: it.quantity,
+                unit: it.unit,
+                wastePercent: it.wastePercent,
+                sortOrder: idx,
+                modifierScaleTarget: it.modifierScaleTarget ?? null,
+              }));
+              if (bomExistingId) {
+                await updateBOM(bomExistingId, {
+                  branchId: bomBranchId,
+                  name: bomName || `Công thức cho ${name}`,
+                  note: bomNote || undefined,
+                  items,
+                });
+                savedBomId = bomExistingId;
+              } else {
+                const createdBom = await createBOM({
+                  productId: initialData.id,
+                  branchId: bomBranchId,
+                  name: bomName || `Công thức cho ${name}`,
+                  note: bomNote || undefined,
+                  items,
+                });
+                savedBomId = createdBom.id;
+              }
+              if (channel === "fnb") {
+                await saveBOMModifierOptionQuantities(
+                  savedBomId,
+                  inlineExactQuantityRows,
+                );
+              }
             } catch (bomErr) {
               toast({
                 variant: "warning",
@@ -1333,6 +1501,7 @@ export function CreateProductDialog({
               wastePercent: it.wastePercent,
               sortOrder: idx,
               note: it.note,
+              modifierScaleTarget: it.modifierScaleTarget ?? null,
             })),
           });
         } catch (bomErr) {
@@ -2289,11 +2458,11 @@ export function CreateProductDialog({
                           <th className="text-left px-3 py-2 font-semibold">NVL</th>
                           <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
-                          {/* Nhóm chọn một để khai định lượng riêng sau khi lưu BOM. */}
+                          {/* Nhóm chọn một dùng định lượng chính xác theo option. */}
                           {channel === "fnb" && (
                             <th
                               className="text-left px-3 py-2 font-semibold w-40"
-                              title="Gắn nhóm lựa chọn cho dòng NVL. Sau khi lưu, mở lại BOM để khai định lượng thực tế cho từng lựa chọn."
+                              title="Gắn nhóm lựa chọn cho dòng NVL và nhập định lượng thực tế theo từng lựa chọn ngay bên dưới."
                             >
                               Theo lựa chọn FnB
                             </th>
@@ -2304,13 +2473,29 @@ export function CreateProductDialog({
                       </thead>
                       <tbody>
                         {bomItems.map((it, idx) => {
-                          // CEO 19/05/2026: bỏ Hao % khỏi UI (chưa cần), giá vốn = SL × cost
-                          const lineCost = it.quantity * it.costPrice;
+                          const conversionFactor = getDirectConversionFactor(
+                            it.stockUnit,
+                            it.unit,
+                            it.conversions,
+                          ) ?? 0;
+                          const lineCost = it.quantity * conversionFactor * it.costPrice;
+                          const stockQuantity = getRecipeQuantityInStockUnit(
+                            it.quantity,
+                            it.stockUnit,
+                            it.unit,
+                            it.conversions,
+                          );
+                          const isConverted = it.stockUnit.trim().toLocaleLowerCase("vi") !== it.unit.trim().toLocaleLowerCase("vi");
                           return (
                             <tr key={`${it.materialId}-${idx}`} className="border-t border-border">
                               <td className="px-3 py-2">
                                 <div className="font-medium">{it.materialName}</div>
                                 <div className="text-xs text-muted-foreground">{it.materialCode}</div>
+                                {isConverted && stockQuantity != null && (
+                                  <div className="mt-1 text-xs text-primary">
+                                    Pha chế {formatRecipeQuantity(it.quantity)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit}
+                                  </div>
+                                )}
                               </td>
                               <td className="px-3 py-2">
                                 <Input
@@ -2328,17 +2513,30 @@ export function CreateProductDialog({
                                 />
                               </td>
                               <td className="px-3 py-2">
-                                <Input
+                                <Select
                                   value={it.unit}
-                                  className="h-9 text-sm"
-                                  onChange={(e) => {
+                                  onValueChange={(value) => {
+                                    if (!value) return;
                                     setBomItems((prev) =>
                                       prev.map((p, i) =>
-                                        i === idx ? { ...p, unit: e.target.value } : p,
+                                        i === idx ? { ...p, unit: value } : p,
                                       ),
                                     );
                                   }}
-                                />
+                                  items={getDirectConvertibleUnits(it.stockUnit, it.conversions).map((unit) => ({
+                                    value: unit,
+                                    label: unit,
+                                  }))}
+                                >
+                                  <SelectTrigger className="h-9 min-w-[76px] text-sm">
+                                    <SelectValue>{it.unit}</SelectValue>
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {getDirectConvertibleUnits(it.stockUnit, it.conversions).map((unit) => (
+                                      <SelectItem key={unit} value={unit}>{unit}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </td>
                               {/* Nhóm lựa chọn FnB gắn với dòng NVL này. */}
                               {channel === "fnb" && (
@@ -2356,11 +2554,7 @@ export function CreateProductDialog({
                                     className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
                                   >
                                     <option value="">— Không áp dụng —</option>
-                                    {availableFnbModifierGroups
-                                      .filter((g) =>
-                                        // Chỉ nhóm chọn một có thể quyết định một định lượng NVL.
-                                        g.rule !== "multi",
-                                      )
+                                    {bomModifierGroups
                                       .map((g) => (
                                         <option key={g.id} value={g.id}>
                                           {g.name}
@@ -2396,10 +2590,15 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {formatCurrency(
-                              bomItems.reduce(
-                                (s, it) => s + it.quantity * it.costPrice,
-                                0,
-                              ),
+                              bomItems.reduce((sum, item) => (
+                                sum + item.quantity * (
+                                  getDirectConversionFactor(
+                                    item.stockUnit,
+                                    item.unit,
+                                    item.conversions,
+                                  ) ?? 0
+                                ) * item.costPrice
+                              ), 0),
                             )}
                           </td>
                           <td></td>
@@ -2409,6 +2608,98 @@ export function CreateProductDialog({
                   </div>
                 )}
               </div>
+
+              {channel === "fnb" && bomItems.some((item) => item.modifierScaleTarget) && (
+                <section className="space-y-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-sm font-medium">Định lượng riêng theo lựa chọn FnB</h3>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Nhập theo đơn vị pha chế của công thức. Hệ thống tự quy đổi sang đơn vị tồn khi tính giá vốn, trừ kho và hoàn kho; không dùng hệ số phần trăm chung.
+                      </p>
+                    </div>
+                    <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
+                      <Checkbox
+                        checked={bomExactRecipeEnabled}
+                        disabled={!bomExactRecipeReady}
+                        onCheckedChange={(checked) => setBomExactRecipeEnabled(Boolean(checked))}
+                      />
+                      Dùng định lượng riêng
+                    </label>
+                  </div>
+
+                  {!bomExactRecipeReady ? (
+                    <p className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
+                      Chưa tải được định lượng riêng. Tải lại form trước khi lưu để giữ nguyên cấu hình hiện có.
+                    </p>
+                  ) : (
+                    bomItems
+                      .filter((item) => item.modifierScaleTarget)
+                      .map((item) => {
+                        const group = bomModifierGroups.find(
+                          (candidate) => candidate.id === item.modifierScaleTarget,
+                        );
+                        const options = bomModifierOptionsByGroup[item.modifierScaleTarget ?? ""] ?? [];
+                        return (
+                          <fieldset
+                            key={`${item.materialId}:${item.modifierScaleTarget}`}
+                            className="rounded-md border bg-background p-3"
+                          >
+                            <legend className="px-1 text-sm font-medium">
+                              {item.materialName} - {group?.name ?? "Nhóm lựa chọn"}
+                            </legend>
+                            {options.length === 0 ? (
+                              <p className="text-xs text-status-warning">
+                                Nhóm này chưa có lựa chọn đang bật hoặc chưa được áp dụng cho sản phẩm.
+                              </p>
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-3">
+                                {options.map((option) => {
+                                  const key = `${item.materialId}:${option.id}`;
+                                  const rawValue = bomExactQuantityByKey[key] ?? "";
+                                  const stockQuantity = rawValue.trim()
+                                    ? getRecipeQuantityInStockUnit(
+                                        Number(rawValue),
+                                        item.stockUnit,
+                                        item.unit,
+                                        item.conversions,
+                                      )
+                                    : null;
+                                  return (
+                                    <label key={option.id} className="rounded-md border p-2 text-sm">
+                                      <span className="block font-medium">{option.label}</span>
+                                      <span className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                                        <Input
+                                          type="number"
+                                          min="0"
+                                          step="0.0001"
+                                          inputMode="decimal"
+                                          disabled={!bomExactRecipeEnabled}
+                                          value={rawValue}
+                                          onChange={(event) => setBomExactQuantityByKey((previous) => ({
+                                            ...previous,
+                                            [key]: event.target.value,
+                                          }))}
+                                          aria-label={`${item.materialName} - ${option.label}`}
+                                        />
+                                        <span className="text-xs text-muted-foreground">{item.unit}</span>
+                                      </span>
+                                      <span className="mt-1 block text-xs text-muted-foreground">
+                                        {stockQuantity == null
+                                          ? `Nhập ${item.unit}`
+                                          : `Trừ ${formatRecipeQuantity(stockQuantity)} ${item.stockUnit}`}
+                                      </span>
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </fieldset>
+                        );
+                      })
+                  )}
+                </section>
+              )}
 
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">Ghi chú công thức</label>
@@ -3187,23 +3478,28 @@ export function CreateProductDialog({
               </Button>
               <Button
                 disabled={bomPickerSelected.size === 0}
-                onClick={() => {
+                onClick={async () => {
                   // Thêm tất cả NVL đã tick vào BOM
                   const toAdd = Array.from(bomPickerSelected)
                     .map((id) => materialOptions.find((p) => p.id === id))
                     .filter((m): m is Product => !!m);
                   if (toAdd.length === 0) return;
-                  setBomItems((prev) => [
-                    ...prev,
-                    ...toAdd.map((m) => ({
+                  const newItems = await Promise.all(
+                    toAdd.map(async (m) => ({
                       materialId: m.id,
                       materialCode: m.code,
                       materialName: m.name,
                       costPrice: m.costPrice ?? 0,
                       unit: m.stockUnit || m.unit || "",
+                      stockUnit: m.stockUnit || m.unit || "",
+                      conversions: await getUOMConversions(m.id).catch(() => []),
                       quantity: 1,
                       wastePercent: 0,
                     })),
+                  );
+                  setBomItems((prev) => [
+                    ...prev,
+                    ...newItems,
                   ]);
                   setBomPickerSelected(new Set());
                   setBomPickerOpen(false);
