@@ -24,6 +24,7 @@ import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { savePurchaseOrderAtomic } from "@/lib/services/supabase/purchase-orders";
 import { Icon } from "@/components/ui/icon";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 
 interface CreatePurchaseEntryDialogProps {
@@ -124,6 +125,37 @@ export function CreatePurchaseEntryDialog({
     setErrors({});
     setSaving(false);
   }, [open]);
+
+  const { clearDraft } = useDurableFormDraft({
+    form: "purchase-order-create",
+    open,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: {
+      code,
+      supplierSearch,
+      selectedSupplier,
+      items,
+      shippingFee,
+      otherCost,
+      notes,
+    },
+    hasContent: (draft) =>
+      draft.items.length > 0 ||
+      !!draft.selectedSupplier ||
+      !!draft.supplierSearch.trim() ||
+      !!draft.notes.trim() ||
+      draft.shippingFee > 0 ||
+      draft.otherCost > 0,
+    restore: (draft) => {
+      setCode(draft.code);
+      setSupplierSearch(draft.supplierSearch);
+      setSelectedSupplier(draft.selectedSupplier);
+      setItems(draft.items);
+      setShippingFee(draft.shippingFee);
+      setOtherCost(draft.otherCost);
+      setNotes(draft.notes);
+    },
+  });
 
   useEffect(() => {
     if (!supplierSearch || supplierSearch.length < 1) {
@@ -259,6 +291,7 @@ export function CreatePurchaseEntryDialog({
         })),
       });
 
+      clearDraft();
       setCode(saved.code);
       onOpenChange(false);
       toast({

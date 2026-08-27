@@ -31,6 +31,7 @@
  */
 
 import { useEffect, useRef } from "react";
+import { hasActiveFormWork } from "@/lib/hooks/use-durable-form-draft";
 
 const THROTTLE_MS = 1000;
 
@@ -56,6 +57,9 @@ export function useRevalidateOnFocus(
     const handler = () => {
       // Chỉ fire khi tab thực sự visible (không phải khi prerender)
       if (document.visibilityState !== "visible") return;
+      // Không thay dữ liệu nền khi người dùng đang nhập một form có bản nháp.
+      // Lần refetch kế tiếp sau khi form đóng/saved sẽ lấy dữ liệu mới.
+      if (hasActiveFormWork()) return;
       const now = Date.now();
       if (now - lastFired.current < THROTTLE_MS) return;
       lastFired.current = now;

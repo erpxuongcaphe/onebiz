@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import {
   createProduct,
   updateProduct,
@@ -89,6 +89,7 @@ import {
   type FnbProductBranchMenuPolicy,
 } from "@/lib/services/supabase/fnb-product-branch-menu";
 import { invalidateMenuCache } from "@/lib/offline";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 type ShelfLifeUnit = "day" | "month" | "year";
 type SupplierOption = { id: string; name: string; code?: string };
@@ -236,6 +237,7 @@ export function CreateProductDialog({
   const isEdit = !!initialData;
   const dialogProductKey = initialData?.id ?? "__new_product__";
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
@@ -317,6 +319,10 @@ export function CreateProductDialog({
   const [allowSale, setAllowSale] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [bomDraftSourceReady, setBomDraftSourceReady] = useState(
+    !initialData?.hasBom,
+  );
+  const [uomDraftSourceReady, setUomDraftSourceReady] = useState(!initialData);
 
   // Inner tab — chia dialog thành 2 section để gọn (CEO feedback layout dài).
   // Tab 1 "info": identity (tên, nhóm, NCC, ĐVT, ảnh, mô tả).
@@ -433,6 +439,8 @@ export function CreateProductDialog({
     if (initializedDialogKeyRef.current === dialogProductKey) return;
     initializedDialogKeyRef.current = dialogProductKey;
     if (initialData) {
+      setBomDraftSourceReady(!initialData.hasBom);
+      setUomDraftSourceReady(false);
       setScope(initialData.productType);
       setCategoryId(initialData.categoryId || "");
       setName(initialData.name);
@@ -479,6 +487,8 @@ export function CreateProductDialog({
       setErrors({});
       setInnerTab("info");
     } else {
+      setBomDraftSourceReady(true);
+      setUomDraftSourceReady(true);
       setScope("nvl");
       setCategoryId("");
       setName("");
@@ -595,6 +605,8 @@ export function CreateProductDialog({
         }
       } catch {
         // fail silent — user vẫn có thể tạo BOM mới
+      } finally {
+        if (!cancelled) setBomDraftSourceReady(true);
       }
     })();
     return () => {
@@ -630,12 +642,123 @@ export function CreateProductDialog({
         );
       } catch {
         // fail silent
+      } finally {
+        if (!cancelled) setUomDraftSourceReady(true);
       }
     })();
     return () => {
       cancelled = true;
     };
   }, [open, initialData]);
+
+  const { clearDraft } = useDurableFormDraft({
+    form: isEdit ? "product-edit" : "product-create",
+    open,
+    branchId: activeBranchId,
+    entityId: initialData?.id ?? null,
+    autoRestore: !isEdit,
+    saveOnlyWhenChanged: isEdit,
+    ready: bomDraftSourceReady && uomDraftSourceReady,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: {
+      scope,
+      categoryId,
+      name,
+      sellPrice,
+      costPrice,
+      initialStock,
+      stockUnit,
+      uomConversions,
+      shelfLifeDays,
+      shelfLifeUnit,
+      hasBom,
+      bomBranchId,
+      bomName,
+      bomNote,
+      bomItems,
+      bomCodeInput,
+      bomCodeValid,
+      bomExistingId,
+      bomExistingCode,
+      bomExactQuantityByKey,
+      channel,
+      barcode,
+      brand,
+      supplierId,
+      weight,
+      vatRate,
+      vatCustom,
+      minStock,
+      maxStock,
+      description,
+      allowSale,
+      innerTab,
+      modifierMode,
+      productModifierGroupIds: Array.from(productModifierGroupIds),
+      fnbMenuScopeMode,
+      fnbMenuBranchIds: Array.from(fnbMenuBranchIds),
+      fnbMenuScopeDirty,
+      variantItems,
+      recipeRows,
+      recipeEnabled,
+    },
+    hasContent: (draft) =>
+      !!draft.name.trim() ||
+      !!draft.categoryId ||
+      draft.bomItems.length > 0 ||
+      draft.uomConversions.length > 0 ||
+      draft.variantItems.length > 0 ||
+      draft.productModifierGroupIds.length > 0 ||
+      draft.fnbMenuScopeDirty,
+    restore: (draft) => {
+      setScope(draft.scope);
+      setCategoryId(draft.categoryId);
+      setName(draft.name);
+      setSellPrice(draft.sellPrice);
+      setCostPrice(draft.costPrice);
+      setInitialStock(draft.initialStock);
+      setStockUnit(draft.stockUnit);
+      setPurchaseUnit(draft.stockUnit);
+      setSellUnit(draft.stockUnit);
+      setUomConversions(draft.uomConversions);
+      setShelfLifeDays(draft.shelfLifeDays);
+      setShelfLifeUnit(draft.shelfLifeUnit);
+      setHasBom(draft.hasBom);
+      setBomBranchId(draft.bomBranchId);
+      setBomName(draft.bomName);
+      setBomNote(draft.bomNote);
+      setBomItems(draft.bomItems);
+      setBomCodeInput(draft.bomCodeInput);
+      setBomCodeValid(draft.bomCodeValid);
+      setBomExistingId(draft.bomExistingId);
+      setBomExistingCode(draft.bomExistingCode);
+      setBomExactQuantityByKey(draft.bomExactQuantityByKey);
+      setBomExactQuantitiesReady(true);
+      setChannel(draft.channel);
+      setBarcode(draft.barcode);
+      setBrand(draft.brand);
+      setSupplierId(draft.supplierId);
+      setWeight(draft.weight);
+      setVatRate(draft.vatRate);
+      setVatCustom(draft.vatCustom);
+      setMinStock(draft.minStock);
+      setMaxStock(draft.maxStock);
+      setDescription(draft.description);
+      setAllowSale(draft.allowSale);
+      setInnerTab(draft.innerTab);
+      setModifierMode(draft.modifierMode);
+      setProductModifierGroupIds(new Set(draft.productModifierGroupIds));
+      setFnbMenuScopeMode(draft.fnbMenuScopeMode);
+      setFnbMenuBranchIds(new Set(draft.fnbMenuBranchIds));
+      setFnbMenuScopeDirty(draft.fnbMenuScopeDirty);
+      setVariantItems(draft.variantItems);
+      setRecipeRows(draft.recipeRows);
+      setRecipeEnabled(draft.recipeEnabled);
+      loadedModifierDraftKeyRef.current = dialogProductKey;
+      loadedMenuScopeKeyRef.current = initialData?.id ?? null;
+      loadedVariantsKeyRef.current = initialData?.id ?? null;
+    },
+  });
 
   // Load existing units khi dialog mở — dùng cho case-insensitive duplicate
   // warning (3 ô ĐVT). Gọi 1 lần, light query (chỉ 4 cột text).
@@ -1732,6 +1855,7 @@ export function CreateProductDialog({
           }
         }
 
+        clearDraft();
         onOpenChange(false);
         toast({
           title: "Cập nhật hàng hóa thành công",
@@ -1918,6 +2042,7 @@ export function CreateProductDialog({
         }
       }
 
+      clearDraft();
       onOpenChange(false);
       toast({
         title: "Tạo hàng hóa thành công",

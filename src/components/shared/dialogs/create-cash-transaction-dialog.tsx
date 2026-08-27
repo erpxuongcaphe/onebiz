@@ -34,6 +34,7 @@ import type {
 } from "@/lib/services/supabase/payments";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 interface CreateCashTransactionDialogProps {
   open: boolean;
@@ -103,6 +104,41 @@ export function CreateCashTransactionDialog({
       setSelectedRefId("");
     }
   }, [open, defaultType]);
+
+  const { clearDraft } = useDurableFormDraft({
+    form: `cash-transaction-${defaultType}`,
+    open,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: {
+      type,
+      code,
+      amount,
+      counterparty,
+      method,
+      category,
+      note,
+      selectedPartyId,
+      selectedRefId,
+    },
+    hasContent: (draft) =>
+      !!draft.amount.trim() ||
+      !!draft.counterparty.trim() ||
+      !!draft.category ||
+      !!draft.note.trim() ||
+      !!draft.selectedPartyId ||
+      !!draft.selectedRefId,
+    restore: (draft) => {
+      setType(draft.type);
+      setCode(draft.code);
+      setAmount(draft.amount);
+      setCounterparty(draft.counterparty);
+      setMethod(draft.method);
+      setCategory(draft.category);
+      setNote(draft.note);
+      setSelectedPartyId(draft.selectedPartyId);
+      setSelectedRefId(draft.selectedRefId);
+    },
+  });
 
   // Load party list khi user chọn category payment
   useEffect(() => {
@@ -230,6 +266,7 @@ export function CreateCashTransactionDialog({
         });
         setCode(created.code);
       }
+      clearDraft();
       onOpenChange(false);
       toast({
         title: type === "receipt" ? "Tạo phiếu thu thành công" : "Tạo phiếu chi thành công",

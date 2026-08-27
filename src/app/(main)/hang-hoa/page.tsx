@@ -87,6 +87,7 @@ import {
   getProductIdsWithActiveBom,
   getUOMConversionsByProductIds,
   getBOMsByProduct,
+  getProductById,
 } from "@/lib/services";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
@@ -100,6 +101,7 @@ import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dial
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import type { Product, UOMConversion } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 type ProductScope = "nvl" | "sku";
 
@@ -413,6 +415,26 @@ export default function HangHoaPage() {
   // Branch-scope danh sách SP: tồn vẫn lấy theo chi nhánh, còn danh mục outlet
   // gồm toàn bộ SKU Retail kể cả trước lần nhập đầu tiên.
   const { activeBranchId, currentBranch } = useBranchFilter();
+
+  useEffect(() => {
+    let cancelled = false;
+    findLatestFormDraft<unknown>("product-edit", {
+      branchId: activeBranchId,
+    })
+      .then(async (draft) => {
+        if (cancelled || !draft?.entityId) return;
+        const product = await getProductById(draft.entityId);
+        if (cancelled || !product) return;
+        setEditingProduct(product);
+        setCreateOpen(true);
+      })
+      .catch(() => {
+        // Draft recovery must never block the product list.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId]);
   const [viewAllBranches, setViewAllBranches] = useState(false);
   const [otherBranchCount, setOtherBranchCount] = useState(0);
   const branchStockView = !viewAllBranches && !!activeBranchId;
