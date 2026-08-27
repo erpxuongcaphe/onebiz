@@ -64,4 +64,38 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain("await saveBOMModifierOptionQuantities(");
     expect(dialog).toContain("createdBom.id,");
   });
+
+  it("persists product modifier links before guarded exact BOM quantities", () => {
+    const editStart = dialog.indexOf("if (isEdit && initialData)");
+    const editModifierSave = dialog.indexOf(
+      "await setProductModifierGroups(initialData.id, ids)",
+      editStart,
+    );
+    const editExactSave = dialog.indexOf(
+      "await saveBOMModifierOptionQuantities(",
+      editStart,
+    );
+    expect(editModifierSave).toBeGreaterThan(editStart);
+    expect(editModifierSave).toBeLessThan(editExactSave);
+
+    const createStart = dialog.indexOf("const created = await createProduct({");
+    const createModifierSave = dialog.indexOf(
+      "await setProductModifierGroups(",
+      createStart,
+    );
+    const createBom = dialog.indexOf("const createdBom = await createBOM({", createStart);
+    expect(createModifierSave).toBeGreaterThan(createStart);
+    expect(createModifierSave).toBeLessThan(createBom);
+  });
+
+  it("keeps the edit dialog open when a partial BOM save fails", () => {
+    const warningTitle = 'title: "Sản phẩm đã lưu, công thức chưa hoàn tất"';
+    const warningStart = dialog.indexOf(warningTitle);
+    const warningEnd = dialog.indexOf("return;", warningStart);
+    const warningFlow = dialog.slice(warningStart, warningEnd);
+
+    expect(warningStart).toBeGreaterThan(-1);
+    expect(warningFlow).toContain('setInnerTab("bom")');
+    expect(warningFlow).not.toContain("onOpenChange(false)");
+  });
 });

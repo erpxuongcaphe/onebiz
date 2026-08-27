@@ -1584,6 +1584,34 @@ export function CreateProductDialog({
           ),
         );
 
+        // Exact BOM quantities are guarded by the modifier groups currently
+        // effective for this product. Persist the same draft shown in the FnB
+        // tab before saving those quantities, otherwise the server correctly
+        // rejects a newly selected product-level group as not yet effective.
+        if (scope === "sku" && channel === "fnb") {
+          try {
+            const ids =
+              modifierMode === "override"
+                ? Array.from(productModifierGroupIds)
+                : [];
+            await setProductModifierGroups(initialData.id, ids);
+          } catch (modErr) {
+            console.warn("Save product modifier links failed:", modErr);
+            setInnerTab("modifier");
+            toast({
+              variant: "warning",
+              title: "Sản phẩm đã lưu, tùy chọn FnB chưa lưu",
+              description:
+                modErr instanceof Error
+                  ? modErr.message
+                  : "Kiểm tra lại nhóm tùy chọn rồi bấm Lưu lần nữa.",
+              duration: 10000,
+            });
+            onSuccess?.();
+            return;
+          }
+        }
+
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
           if (hasBom && bomItems.length > 0 && !bomCodeTrim) {
@@ -1641,11 +1669,11 @@ export function CreateProductDialog({
             } catch (bomErr) {
               toast({
                 variant: "warning",
-                title: "Cập nhật SKU OK nhưng BOM lỗi",
+                title: "Sản phẩm đã lưu, công thức chưa hoàn tất",
                 description: bomErr instanceof Error ? bomErr.message : "Lỗi không xác định",
                 duration: 10000,
               });
-              onOpenChange(false);
+              setInnerTab("bom");
               onSuccess?.();
               return;
             }
@@ -1656,29 +1684,6 @@ export function CreateProductDialog({
             } catch {
               // Ignore
             }
-          }
-        }
-
-        // CEO 01/06/2026 — Sprint 2.2d: Sync product_modifier_groups.
-        // - Mode "inherit"  → set [] để clear override (POS fallback inherit từ nhóm).
-        // - Mode "override" → set list tick.
-        if (scope === "sku" && channel === "fnb") {
-          try {
-            const ids =
-              modifierMode === "override"
-                ? Array.from(productModifierGroupIds)
-                : [];
-            await setProductModifierGroups(initialData.id, ids);
-          } catch (modErr) {
-            console.warn("Save product modifier links failed:", modErr);
-            toast({
-              variant: "warning",
-              title: "Đã lưu SP nhưng lỗi gán Tuỳ chọn",
-              description:
-                modErr instanceof Error
-                  ? modErr.message
-                  : "Anh có thể sửa lại sau từ form SP.",
-            });
           }
         }
 
@@ -1778,6 +1783,40 @@ export function CreateProductDialog({
         }
       }
 
+      // A newly created product-level override must exist before the guarded
+      // exact-recipe RPC can accept quantities for that modifier group.
+      if (
+        created?.id &&
+        scope === "sku" &&
+        channel === "fnb" &&
+        modifierMode === "override" &&
+        productModifierGroupIds.size > 0
+      ) {
+        try {
+          await setProductModifierGroups(
+            created.id,
+            Array.from(productModifierGroupIds),
+          );
+        } catch (modErr) {
+          console.warn(
+            "[create-product-dialog] sync product modifier links failed:",
+            modErr,
+          );
+          toast({
+            variant: "warning",
+            title: "Sản phẩm đã tạo, tùy chọn FnB chưa lưu",
+            description:
+              modErr instanceof Error
+                ? modErr.message
+                : "Mở lại sản phẩm và lưu nhóm tùy chọn trước khi khai định lượng.",
+            duration: 10000,
+          });
+          onOpenChange(false);
+          onSuccess?.();
+          return;
+        }
+      }
+
       // Day 18/05/2026 (CEO refactor): nếu SKU có BOM + items → tạo BOM ngay
       // sau khi tạo SP. Vẫn trong cùng dialog, không pop thêm dialog mới.
       if (scope === "sku" && hasBom && created?.id && bomItems.length > 0 && !bomCodeTrim) {
@@ -1853,28 +1892,6 @@ export function CreateProductDialog({
           onOpenChange(false);
           onSuccess?.();
           return;
-        }
-      }
-
-      // CEO 01/06/2026 — Sprint 2.2d: Sync product_modifier_groups khi tạo
-      // SP FnB. Mode "override" → set list tick; "inherit" → bỏ qua (mặc định).
-      if (
-        created?.id &&
-        scope === "sku" &&
-        channel === "fnb" &&
-        modifierMode === "override" &&
-        productModifierGroupIds.size > 0
-      ) {
-        try {
-          await setProductModifierGroups(
-            created.id,
-            Array.from(productModifierGroupIds),
-          );
-        } catch (modErr) {
-          console.warn(
-            "[create-product-dialog] sync product modifier links failed:",
-            modErr,
-          );
         }
       }
 
