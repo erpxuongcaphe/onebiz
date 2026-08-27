@@ -197,6 +197,30 @@ menu_phan_lo as (
       when coalesce(s.mo_tai_xtb, false) then 'MO_TAI_XUONG_TU_BUA'
       else 'CHI_MO_O_CHI_NHANH_KHAC'
     end as trang_thai_menu,
+    (
+      coalesce(q.so_quy_cach, 0) = 0
+      and coalesce(p.sell_price, 0) <= 0
+    ) as thieu_gia_ban,
+    (
+      coalesce(q.so_quy_cach, 0) > 0
+      and (
+        coalesce(q.so_quy_cach_mac_dinh, 0) <> 1
+        or coalesce(q.quy_cach_thieu_gia, 0) > 0
+        or coalesce(q.quy_cach_thieu_bom, 0) > 0
+      )
+    ) as can_chot_quy_cach,
+    (
+      coalesce(p.has_bom, false)
+      and not coalesce(b.co_bom_hop_le, false)
+    ) as thieu_cong_thuc_da_bat,
+    (
+      coalesce(q.so_quy_cach, 0) = 0
+      and not coalesce(p.has_bom, false)
+    ) as chua_chot_mo_hinh_tieu_hao,
+    (
+      coalesce(s.so_dong_pham_vi, 0) > 0
+      and not coalesce(s.mo_tai_xtb, false)
+    ) as chua_mo_tai_xtb,
     case
       when coalesce(q.so_quy_cach, 0) > 0
         and (coalesce(q.so_quy_cach_mac_dinh, 0) <> 1
@@ -245,7 +269,11 @@ ket_qua as (
       'mon_co_gia', count(*) filter (where so_quy_cach = 0 and coalesce(sell_price, 0) > 0),
       'mon_co_bom_hop_le_tai_xtb', count(*) filter (where co_bom_hop_le),
       'mon_mo_tai_xtb', count(*) filter (where trang_thai_menu in ('MO_TAI_XUONG_TU_BUA', 'DUNG_CHUNG_TAT_CA_CHI_NHANH')),
-      'mon_can_cong_thuc_nguon', count(*) filter (where buoc_ke_tiep in ('THIEU_CONG_THUC', 'CAN_XAC_NHAN_BAN_NGUYEN_TRANG_HAY_CONG_THUC'))
+      'mon_thieu_gia_ban', count(*) filter (where thieu_gia_ban),
+      'mon_can_chot_quy_cach', count(*) filter (where can_chot_quy_cach),
+      'mon_thieu_cong_thuc_da_bat', count(*) filter (where thieu_cong_thuc_da_bat),
+      'mon_chua_chot_mo_hinh_tieu_hao', count(*) filter (where chua_chot_mo_hinh_tieu_hao),
+      'mon_chua_mo_tai_xtb', count(*) filter (where chua_mo_tai_xtb)
     ),
     1
   from menu_phan_lo
@@ -258,10 +286,11 @@ ket_qua as (
     jsonb_build_object(
       'nhom', coalesce(nhom_hang, '(chua gan nhom)'),
       'tong_mon', count(*),
-      'thieu_gia', count(*) filter (where buoc_ke_tiep = 'THIEU_GIA_BAN'),
-      'thieu_cong_thuc', count(*) filter (where buoc_ke_tiep = 'THIEU_CONG_THUC'),
-      'can_chot_quy_cach', count(*) filter (where buoc_ke_tiep = 'CAN_CHOT_QUY_CACH_TRUOC'),
-      'can_xac_nhan_mo_hinh_ton', count(*) filter (where buoc_ke_tiep = 'CAN_XAC_NHAN_BAN_NGUYEN_TRANG_HAY_CONG_THUC'),
+      'thieu_gia', count(*) filter (where thieu_gia_ban),
+      'thieu_cong_thuc_da_bat', count(*) filter (where thieu_cong_thuc_da_bat),
+      'can_chot_quy_cach', count(*) filter (where can_chot_quy_cach),
+      'chua_chot_mo_hinh_tieu_hao', count(*) filter (where chua_chot_mo_hinh_tieu_hao),
+      'chua_mo_tai_xtb', count(*) filter (where chua_mo_tai_xtb),
       'mo_tai_xtb', count(*) filter (where trang_thai_menu in ('MO_TAI_XUONG_TU_BUA', 'DUNG_CHUNG_TAT_CA_CHI_NHANH'))
     ),
     2
@@ -290,6 +319,11 @@ ket_qua as (
       'trang_thai_menu', trang_thai_menu,
       'tuy_chon_hieu_luc', coalesce(tuy_chon_cap_mon, tuy_chon_ke_thua, ''),
       'nguon_tuy_chon', case when tuy_chon_cap_mon is not null then 'CAP_MON' else 'KE_THUA_NHOM_HANG' end,
+      'thieu_gia_ban', thieu_gia_ban,
+      'can_chot_quy_cach', can_chot_quy_cach,
+      'thieu_cong_thuc_da_bat', thieu_cong_thuc_da_bat,
+      'chua_chot_mo_hinh_tieu_hao', chua_chot_mo_hinh_tieu_hao,
+      'chua_mo_tai_xtb', chua_mo_tai_xtb,
       'buoc_ke_tiep', buoc_ke_tiep
     ),
     3

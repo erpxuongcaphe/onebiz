@@ -28,6 +28,15 @@ describe("Xưởng Tư Búa - phân lô nhập liệu FnB", () => {
     expect(sql).toContain("CAN_CHOT_QUY_CACH_TRUOC");
   });
 
+  it("reports price, recipe and branch gaps independently", () => {
+    expect(sql).toContain("mon_thieu_gia_ban");
+    expect(sql).toContain("mon_thieu_cong_thuc_da_bat");
+    expect(sql).toContain("mon_chua_chot_mo_hinh_tieu_hao");
+    expect(sql).toContain("thieu_cong_thuc_da_bat");
+    expect(sql).toContain("chua_chot_mo_hinh_tieu_hao");
+    expect(sql).toContain("chua_mo_tai_xtb");
+  });
+
   it("uses the same Xưởng Tư Búa BOM precedence as the server", () => {
     expect(sql).toContain("RIENG_XUONG_TU_BUA");
     expect(sql).toContain("DUNG_CHUNG");
