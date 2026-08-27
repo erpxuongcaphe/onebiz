@@ -75,7 +75,6 @@ import {
   listCategoryModifierLinks,
   listProductModifierLinks,
   listModifierOptions,
-  getEffectiveModifierGroupsForProduct,
   setProductModifierGroups,
   type ModifierGroup,
   type ModifierOption,
@@ -271,7 +270,12 @@ export function CreateProductDialog({
   const [bomExactQuantityByKey, setBomExactQuantityByKey] = useState<
     Record<string, string>
   >({});
-  const [bomExactRecipeReady, setBomExactRecipeReady] = useState(false);
+  // Loading the saved amounts and the current effective choices are separate
+  // concerns. Keeping both readiness flags prevents a later tab switch from
+  // saving an empty replacement over an already configured FnB recipe.
+  const [bomExactQuantitiesReady, setBomExactQuantitiesReady] = useState(false);
+  const [bomExactOptionsReady, setBomExactOptionsReady] = useState(false);
+  const bomExactRecipeReady = bomExactQuantitiesReady && bomExactOptionsReady;
   // Day 20/05/2026 (CEO BOM Phase 5): Mã BOM link với BOM có sẵn (standalone).
   // Khi user gõ Mã BOM → save sẽ verify + set products.bom_code (không tạo BOM
   // mới). Khi gõ items inline → tạo BOM riêng cho SKU (legacy path).
@@ -452,7 +456,8 @@ export function CreateProductDialog({
       setBomModifierGroups([]);
       setBomModifierOptionsByGroup({});
       setBomExactQuantityByKey({});
-      setBomExactRecipeReady(false);
+      setBomExactQuantitiesReady(!initialData.hasBom);
+      setBomExactOptionsReady(false);
       setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
@@ -496,7 +501,8 @@ export function CreateProductDialog({
       setBomModifierGroups([]);
       setBomModifierOptionsByGroup({});
       setBomExactQuantityByKey({});
-      setBomExactRecipeReady(false);
+      setBomExactQuantitiesReady(true);
+      setBomExactOptionsReady(false);
       setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       setBomCodeInput("");
@@ -562,13 +568,6 @@ export function CreateProductDialog({
         setBomItems(loadedItems);
 
         try {
-          const groups = (await getEffectiveModifierGroupsForProduct(
-            initialData.id,
-            initialData.categoryId ?? null,
-          )).filter((group) => group.rule === "single" || group.rule === "single_required");
-          const optionEntries = await Promise.all(
-            groups.map(async (group) => [group.id, await listModifierOptions(group.id)] as const),
-          );
           const savedQuantities = await listBOMModifierOptionQuantities(bom.id);
           if (cancelled) return;
 
@@ -587,17 +586,12 @@ export function CreateProductDialog({
               quantities[`${row.materialId}:${row.modifierOptionId}`] = String(inputQuantity);
             }
           }
-          setBomModifierGroups(groups);
-          setBomModifierOptionsByGroup(Object.fromEntries(optionEntries));
           setBomExactQuantityByKey(quantities);
-          setBomExactRecipeReady(true);
+          setBomExactQuantitiesReady(true);
         } catch (exactError) {
           console.warn("Exact FnB recipe quantities are unavailable:", exactError);
           if (cancelled) return;
-          setBomModifierGroups([]);
-          setBomModifierOptionsByGroup({});
-          setBomExactQuantityByKey({});
-          setBomExactRecipeReady(false);
+          setBomExactQuantitiesReady(false);
         }
       } catch {
         // fail silent — user vẫn có thể tạo BOM mới
@@ -677,7 +671,7 @@ export function CreateProductDialog({
       }
       return;
     }
-    if (innerTab !== "modifier" && innerTab !== "variants") return;
+    if (innerTab !== "modifier" && innerTab !== "bom" && innerTab !== "variants") return;
     let cancelled = false;
     setLoadingModifierPicker(true);
     (async () => {
@@ -759,6 +753,58 @@ export function CreateProductDialog({
       .catch((error) => {
         console.warn("Load size recipe modifier options failed:", error);
         if (!cancelled) setVariantModifierOptionsByGroup({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    scope,
+    channel,
+    innerTab,
+    perSizeModifierGroupKey,
+    perSizeModifierGroups,
+  ]);
+
+  // The BOM must read the same draft modifier groups as the modifier tab.
+  // Otherwise a cashier-facing choice selected moments ago can disappear from
+  // the recipe before the user presses the single final Save button.
+  useEffect(() => {
+    if (!open || scope !== "sku" || channel !== "fnb" || innerTab !== "bom") {
+      if (!open) {
+        setBomModifierGroups([]);
+        setBomModifierOptionsByGroup({});
+        setBomExactOptionsReady(false);
+      }
+      return;
+    }
+    if (!perSizeModifierGroupKey) {
+      setBomModifierGroups([]);
+      setBomModifierOptionsByGroup({});
+      setBomExactOptionsReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    setBomExactOptionsReady(false);
+    Promise.all(
+      perSizeModifierGroups.map(async (group) => [
+        group.id,
+        await listModifierOptions(group.id),
+      ] as const),
+    )
+      .then((entries) => {
+        if (cancelled) return;
+        setBomModifierGroups(perSizeModifierGroups);
+        setBomModifierOptionsByGroup(Object.fromEntries(entries));
+        setBomExactOptionsReady(true);
+      })
+      .catch((error) => {
+        console.warn("Load BOM modifier options failed:", error);
+        if (cancelled) return;
+        setBomModifierGroups([]);
+        setBomModifierOptionsByGroup({});
+        setBomExactOptionsReady(false);
       });
     return () => {
       cancelled = true;

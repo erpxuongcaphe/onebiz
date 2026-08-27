@@ -33,6 +33,16 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).not.toContain("disabled={!bomExactRecipeEnabled}");
   });
 
+  it("keeps the BOM aligned with unsaved FnB choice drafts while tabs change", () => {
+    expect(dialog).toContain('innerTab !== "modifier" && innerTab !== "bom" && innerTab !== "variants"');
+    expect(dialog).toContain("The BOM must read the same draft modifier groups as the modifier tab.");
+    expect(dialog).toContain("setBomModifierGroups(perSizeModifierGroups)");
+    expect(dialog).toContain("const [bomExactQuantitiesReady, setBomExactQuantitiesReady]");
+    expect(dialog).toContain("const [bomExactOptionsReady, setBomExactOptionsReady]");
+    expect(dialog).toContain("const bomExactRecipeReady = bomExactQuantitiesReady && bomExactOptionsReady");
+    expect(dialog).not.toContain("getEffectiveModifierGroupsForProduct");
+  });
+
   it("explains global recipes versus one-branch overrides without cloning recipes", () => {
     expect(dialog).toContain("Phạm vi công thức");
     expect(dialog).toContain("Dùng chung cho mọi chi nhánh bán món này");
