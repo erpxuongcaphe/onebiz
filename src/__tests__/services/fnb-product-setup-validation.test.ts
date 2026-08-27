@@ -148,4 +148,81 @@ describe("validateFnbVariantSetup", () => {
       message: "Quy cách L chưa có nguyên liệu với định lượng lớn hơn 0.",
     });
   });
+
+  it("cho phép định lượng riêng theo lựa chọn cho từng cỡ thay vì scale phần trăm", () => {
+    const issues = validateFnbVariantSetup({
+      isFnb: true,
+      variants,
+      recipeEnabled: true,
+      recipeRows: [
+        recipeRows[0],
+        {
+          materialId: "sugar",
+          unit: "G",
+          qty: {},
+          scaleTarget: "sweetness",
+          exactQty: {
+            m: { low: 21, medium: 28, full: 35 },
+            l: { low: 28, medium: 35, full: 42 },
+          },
+        },
+      ],
+      modifierOptionsByGroup: {
+        sweetness: [
+          { id: "low", isDefault: false },
+          { id: "medium", isDefault: false },
+          { id: "full", isDefault: true },
+        ],
+      },
+    });
+
+    expect(issues).toEqual([]);
+  });
+
+  it("chặn món có size khi còn thiếu một định lượng lựa chọn hoặc thiếu mức mặc định", () => {
+    const recipeWithOneMissingAmount = {
+      materialId: "sugar",
+      unit: "G",
+      qty: {},
+      scaleTarget: "sweetness",
+      exactQty: {
+        m: { low: 21, medium: 28, full: 35 },
+        l: { low: 28, medium: 35 },
+      },
+    };
+
+    const incompleteIssues = validateFnbVariantSetup({
+      isFnb: true,
+      variants,
+      recipeEnabled: true,
+      recipeRows: [recipeRows[0], recipeWithOneMissingAmount],
+      modifierOptionsByGroup: {
+        sweetness: [
+          { id: "low", isDefault: false },
+          { id: "medium", isDefault: false },
+          { id: "full", isDefault: true },
+        ],
+      },
+    });
+    expect(incompleteIssues.map((issue) => issue.code)).toContain(
+      "recipe_modifier_quantity_invalid",
+    );
+
+    const defaultIssues = validateFnbVariantSetup({
+      isFnb: true,
+      variants,
+      recipeEnabled: true,
+      recipeRows: [recipeRows[0], recipeWithOneMissingAmount],
+      modifierOptionsByGroup: {
+        sweetness: [
+          { id: "low", isDefault: false },
+          { id: "medium", isDefault: false },
+          { id: "full", isDefault: false },
+        ],
+      },
+    });
+    expect(defaultIssues.map((issue) => issue.code)).toContain(
+      "recipe_modifier_default_invalid",
+    );
+  });
 });

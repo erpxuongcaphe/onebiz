@@ -27,10 +27,10 @@ describe("product dialog draft and inline BOM flow", () => {
   });
 
   it("makes exact quantities compulsory as soon as an FnB choice group is linked", () => {
-    expect(dialog).toContain("if (v) setBomExactRecipeEnabled(true)");
-    expect(dialog).toContain("Bắt buộc dùng định lượng riêng");
-    expect(dialog).toContain("savedQuantities.length > 0 || loadedItems.some((item) => item.modifierScaleTarget)");
-    expect(dialog).not.toContain("if (!bomExactRecipeEnabled) return []");
+    expect(dialog).toContain("Bắt buộc theo lựa chọn đã gắn");
+    expect(dialog).toContain("bomItems.some((item) => item.modifierScaleTarget)");
+    expect(dialog).not.toContain("bomExactRecipeEnabled");
+    expect(dialog).not.toContain("disabled={!bomExactRecipeEnabled}");
   });
 
   it("explains global recipes versus one-branch overrides without cloning recipes", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -271,7 +271,6 @@ export function CreateProductDialog({
   const [bomExactQuantityByKey, setBomExactQuantityByKey] = useState<
     Record<string, string>
   >({});
-  const [bomExactRecipeEnabled, setBomExactRecipeEnabled] = useState(false);
   const [bomExactRecipeReady, setBomExactRecipeReady] = useState(false);
   // Day 20/05/2026 (CEO BOM Phase 5): Mã BOM link với BOM có sẵn (standalone).
   // Khi user gõ Mã BOM → save sẽ verify + set products.bom_code (không tạo BOM
@@ -350,6 +349,9 @@ export function CreateProductDialog({
   const [availableFnbModifierGroups, setAvailableFnbModifierGroups] = useState<
     ModifierGroup[]
   >([]);
+  const [variantModifierOptionsByGroup, setVariantModifierOptionsByGroup] = useState<
+    Record<string, ModifierOption[]>
+  >({});
   const [inheritedModifierGroups, setInheritedModifierGroups] = useState<
     ModifierGroup[]
   >([]);
@@ -396,6 +398,22 @@ export function CreateProductDialog({
   const [originalVariantIds, setOriginalVariantIds] = useState<Set<string>>(
     new Set(),
   );
+  const perSizeModifierGroups = useMemo(
+    () =>
+      modifierMode === "override"
+        ? availableFnbModifierGroups.filter((group) => productModifierGroupIds.has(group.id))
+        : inheritedModifierGroups,
+    [
+      availableFnbModifierGroups,
+      inheritedModifierGroups,
+      modifierMode,
+      productModifierGroupIds,
+    ],
+  );
+  const perSizeModifierGroupKey = perSizeModifierGroups
+    .map((group) => group.id)
+    .sort()
+    .join(",");
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -434,8 +452,8 @@ export function CreateProductDialog({
       setBomModifierGroups([]);
       setBomModifierOptionsByGroup({});
       setBomExactQuantityByKey({});
-      setBomExactRecipeEnabled(false);
       setBomExactRecipeReady(false);
+      setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
       setBomCodeInput(initialData.bomCode ?? "");
@@ -478,8 +496,8 @@ export function CreateProductDialog({
       setBomModifierGroups([]);
       setBomModifierOptionsByGroup({});
       setBomExactQuantityByKey({});
-      setBomExactRecipeEnabled(false);
       setBomExactRecipeReady(false);
+      setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       setBomCodeInput("");
       setBomCodeValid(null);
@@ -572,12 +590,6 @@ export function CreateProductDialog({
           setBomModifierGroups(groups);
           setBomModifierOptionsByGroup(Object.fromEntries(optionEntries));
           setBomExactQuantityByKey(quantities);
-          // Any material tied to a single-choice group needs an explicit
-          // amount for every option. Do not make the user discover a second
-          // switch before the fields become editable.
-          setBomExactRecipeEnabled(
-            savedQuantities.length > 0 || loadedItems.some((item) => item.modifierScaleTarget),
-          );
           setBomExactRecipeReady(true);
         } catch (exactError) {
           console.warn("Exact FnB recipe quantities are unavailable:", exactError);
@@ -585,7 +597,6 @@ export function CreateProductDialog({
           setBomModifierGroups([]);
           setBomModifierOptionsByGroup({});
           setBomExactQuantityByKey({});
-          setBomExactRecipeEnabled(false);
           setBomExactRecipeReady(false);
         }
       } catch {
@@ -596,15 +607,6 @@ export function CreateProductDialog({
       cancelled = true;
     };
   }, [open, initialData?.id, initialData?.productType, initialData?.hasBom]);
-
-  // A linked FnB choice group is never a percentage scaler. Its exact rows
-  // are the source of truth, so keep the editor enabled when a saved BOM is
-  // re-opened or a user links a new material row.
-  useEffect(() => {
-    if (bomItems.some((item) => item.modifierScaleTarget)) {
-      setBomExactRecipeEnabled(true);
-    }
-  }, [bomItems]);
 
   // Day 19/05/2026 (CEO UOM Smart Hybrid): load existing UOM conversion
   // khi edit SP — prefill 2 ô "Đóng gói" + "Hệ số quy đổi".
@@ -661,10 +663,9 @@ export function CreateProductDialog({
 
   // CEO 01/06/2026 — Sprint 2.2d: Load modifier picker khi dialog mở cho SKU FnB.
   // Reset khi đóng / switch sang NVL / Retail.
-  // CEO 01/06/2026 — Bước 1 (perf): LAZY load — chỉ fetch khi user thực sự
-  // bấm vào tab "Tuỳ chọn FnB". Trước đây dialog mở là fetch ngay 8 API
-  // song song → renderer freeze trên máy chậm. Giờ tab Thông tin nhẹ, các
-  // tab khác fetch on-demand. Track loadedRef để khỏi re-fetch khi switch tab.
+  // Load on demand for either FnB configuration surface. The size recipe
+  // editor needs the same effective groups as the modifier tab, otherwise an
+  // operator could configure a BOM against a group that never appears on POS.
   useEffect(() => {
     if (!open || scope !== "sku" || channel !== "fnb") {
       setAvailableFnbModifierGroups([]);
@@ -676,8 +677,7 @@ export function CreateProductDialog({
       }
       return;
     }
-    // LAZY: chỉ fetch khi user đã bấm tab modifier ít nhất 1 lần.
-    if (innerTab !== "modifier") return;
+    if (innerTab !== "modifier" && innerTab !== "variants") return;
     let cancelled = false;
     setLoadingModifierPicker(true);
     (async () => {
@@ -733,6 +733,44 @@ export function CreateProductDialog({
       cancelled = true;
     };
   }, [open, scope, channel, categoryId, dialogProductKey, initialData?.id, innerTab]);
+
+  // A size recipe with a target such as Mức đường must save exact amounts for
+  // every live choice. Load only the groups actually effective for this SKU;
+  // this keeps both the setup screen and POS on the same configuration.
+  useEffect(() => {
+    if (!open || scope !== "sku" || channel !== "fnb" || innerTab !== "variants") {
+      if (!open) setVariantModifierOptionsByGroup({});
+      return;
+    }
+    if (!perSizeModifierGroupKey) {
+      setVariantModifierOptionsByGroup({});
+      return;
+    }
+    let cancelled = false;
+    Promise.all(
+      perSizeModifierGroups.map(async (group) => [
+        group.id,
+        await listModifierOptions(group.id),
+      ] as const),
+    )
+      .then((entries) => {
+        if (!cancelled) setVariantModifierOptionsByGroup(Object.fromEntries(entries));
+      })
+      .catch((error) => {
+        console.warn("Load size recipe modifier options failed:", error);
+        if (!cancelled) setVariantModifierOptionsByGroup({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    scope,
+    channel,
+    innerTab,
+    perSizeModifierGroupKey,
+    perSizeModifierGroups,
+  ]);
 
   // Lazy-load branch menu policy only when the FnB configuration tab is opened.
   // Older deployed databases simply show a clear migration message; editing
@@ -868,8 +906,18 @@ export function CreateProductDialog({
 
         // CEO 17/06/2026 (Phương án B): nạp công thức theo size sẵn có vào lưới
         // (chỉ FnB). Gộp item theo (NVL + scale-target); qty keyed theo variant id.
+        // Exact option quantities are loaded with their preparation unit so an
+        // existing recipe can be opened and saved without turning 35 G into .035 Kg.
         if (channel === "fnb") {
           const rowMap = new Map<string, RecipeRow>();
+          const conversionCache = new Map<string, UOMConversion[]>();
+          const getConversions = async (materialId: string) => {
+            const cached = conversionCache.get(materialId);
+            if (cached) return cached;
+            const conversions = await getUOMConversions(materialId).catch(() => []);
+            conversionCache.set(materialId, conversions);
+            return conversions;
+          };
           for (const v of variants) {
             if (!v.bomCode) continue;
             try {
@@ -877,6 +925,9 @@ export function CreateProductDialog({
               const bom = boms.find((b) => !b.branchId) ?? boms[0];
               if (!bom) continue;
               const full = await getBOMById(bom.id);
+              const itemsByMaterial = new Map(
+                (full.items ?? []).map((item) => [item.materialId, item]),
+              );
               for (const it of full.items ?? []) {
                 const sk = it.modifierScaleTarget ?? "";
                 const rkey = `${it.materialId}|${sk}`;
@@ -884,11 +935,32 @@ export function CreateProductDialog({
                 if (!row) {
                   row = newRecipeRow();
                   row.materialId = it.materialId;
-                  row.unit = it.unit || "";
+                  row.unit = it.inputUnit ?? it.unit ?? "";
                   row.scaleTarget = it.modifierScaleTarget ?? null;
                   rowMap.set(rkey, row);
                 }
-                row.qty[v.id] = it.quantity;
+                row.qty[v.id] = it.inputQuantity ?? it.quantity;
+              }
+              const savedQuantities = await listBOMModifierOptionQuantities(bom.id);
+              for (const saved of savedQuantities) {
+                const item = itemsByMaterial.get(saved.materialId);
+                if (!item) continue;
+                const rkey = `${saved.materialId}|${item.modifierScaleTarget ?? ""}`;
+                const row = rowMap.get(rkey);
+                if (!row?.scaleTarget) continue;
+                const inputUnit = item.inputUnit ?? item.unit;
+                const conversions = await getConversions(saved.materialId);
+                const inputQuantity =
+                  getRecipeQuantityInInputUnit(
+                    saved.quantity,
+                    item.unit,
+                    inputUnit,
+                    conversions,
+                  ) ?? saved.quantity;
+                row.exactQty[v.id] = {
+                  ...(row.exactQty[v.id] ?? {}),
+                  [saved.modifierOptionId]: inputQuantity,
+                };
               }
             } catch {
               /* bỏ qua BOM lỗi 1 size, vẫn nạp các size khác */
@@ -1000,6 +1072,28 @@ export function CreateProductDialog({
   // CEO 17/06/2026 (Phương án B): lưu công thức theo size (CHỈ FnB) — mỗi variant
   // 1 BOM riêng (code = bomCode cũ hoặc MãSP-Size). Mirror logic dialog cũ nhưng
   // chạy chung trong handleSave để 1 nút Lưu là xong cả size + công thức.
+  function getPerSizeRecipeQuantity(row: RecipeRow, variantKey: string): number {
+    if (!row.scaleTarget) return row.qty[variantKey] ?? 0;
+    const defaultOption = (variantModifierOptionsByGroup[row.scaleTarget] ?? []).find(
+      (option) => option.isDefault,
+    );
+    return defaultOption
+      ? row.exactQty[variantKey]?.[defaultOption.id] ?? 0
+      : 0;
+  }
+
+  function buildPerSizeExactQuantityRows(variantKey: string) {
+    return recipeRows.flatMap((row) => {
+      if (!row.materialId || !row.scaleTarget) return [];
+      return (variantModifierOptionsByGroup[row.scaleTarget] ?? []).map((option) => ({
+        materialId: row.materialId,
+        modifierOptionId: option.id,
+        inputQuantity: row.exactQty[variantKey]?.[option.id] ?? 0,
+        inputUnit: row.unit,
+      }));
+    });
+  }
+
   async function syncPerSizeRecipes(
     productId: string,
     productCode: string,
@@ -1012,7 +1106,7 @@ export function CreateProductDialog({
       const items = valid
         .map((r) => ({
           materialId: r.materialId,
-          quantity: r.qty[v.key] ?? 0,
+          quantity: getPerSizeRecipeQuantity(r, v.key),
           unit: r.unit || "g",
           modifierScaleTarget: r.scaleTarget,
         }))
@@ -1022,28 +1116,35 @@ export function CreateProductDialog({
         persisted.bomCode?.trim() ||
         `${productCode}-${sanitizeBomCode(v.name || "SIZE")}`;
 
-      // Thay công thức: xoá-mềm mọi BOM cùng code rồi tạo lại (lookup theo code).
-      try {
-        const existing = await getBOMByCode(code);
-        for (const b of existing) {
-          try {
-            await deleteBOM(b.id);
-          } catch {
-            /* bỏ qua */
-          }
-        }
-      } catch {
-        /* getBOMByCode lỗi → vẫn thử tạo mới */
-      }
-
       if (items.length > 0) {
-        await createBOM({
-          productId,
-          variantId: persisted.id,
-          code,
-          name: `${name} ${v.name}`.trim(),
-          items,
-        });
+        // Update in place when a size recipe already exists. Soft-deleting it
+        // first could leave a working POS recipe unavailable if the next save
+        // is interrupted, and would discard its exact option quantities.
+        const existing = await getBOMByCode(code).catch(() => []);
+        const existingForVariant = existing.find(
+          (bom) => bom.productId === productId && bom.variantId === persisted.id,
+        );
+        let savedBomId: string;
+        if (existingForVariant) {
+          await updateBOM(existingForVariant.id, {
+            name: `${name} ${v.name}`.trim(),
+            items,
+          });
+          savedBomId = existingForVariant.id;
+        } else {
+          const createdBom = await createBOM({
+            productId,
+            variantId: persisted.id,
+            code,
+            name: `${name} ${v.name}`.trim(),
+            items,
+          });
+          savedBomId = createdBom.id;
+        }
+        await saveBOMModifierOptionQuantities(
+          savedBomId,
+          buildPerSizeExactQuantityRows(v.key),
+        );
         if (persisted.bomCode !== code) {
           await updateVariant(persisted.id, { bomCode: code });
         }
@@ -1276,6 +1377,7 @@ export function CreateProductDialog({
       variants: variantItems,
       recipeEnabled,
       recipeRows,
+      modifierOptionsByGroup: variantModifierOptionsByGroup,
     });
     if (fnbSetupIssues.length > 0) {
       setInnerTab("variants");
@@ -2715,12 +2817,6 @@ export function CreateProductDialog({
                                           i === idx ? { ...p, modifierScaleTarget: v } : p,
                                         ),
                                       );
-                                      // A linked choice group always uses the
-                                      // exact per-option recipe. Leaving the
-                                      // checkbox off used to lock the inputs
-                                      // and made a valid Hồng Trà Chanh recipe
-                                      // impossible to enter.
-                                      if (v) setBomExactRecipeEnabled(true);
                                     }}
                                     className="h-9 w-full rounded-md border border-input bg-transparent px-2 text-sm outline-none focus:border-ring"
                                   >
@@ -2789,13 +2885,10 @@ export function CreateProductDialog({
                         Nhập theo đơn vị pha chế của công thức. Hệ thống tự quy đổi sang đơn vị tồn khi tính giá vốn, trừ kho và hoàn kho; không dùng hệ số phần trăm chung.
                       </p>
                     </div>
-                    <label className="flex shrink-0 items-center gap-2 text-sm font-medium">
-                      <Checkbox
-                        checked={bomExactRecipeEnabled}
-                        disabled
-                      />
-                      Bắt buộc dùng định lượng riêng
-                    </label>
+                    <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-primary/30 bg-background px-2 py-1 text-xs font-medium text-primary">
+                      <Icon name="lock" size={13} />
+                      Bắt buộc theo lựa chọn đã gắn
+                    </span>
                   </div>
 
                   {!bomExactRecipeReady ? (
@@ -2844,7 +2937,6 @@ export function CreateProductDialog({
                                           min="0"
                                           step="0.0001"
                                           inputMode="decimal"
-                                          disabled={!bomExactRecipeEnabled}
                                           value={rawValue}
                                           onChange={(event) => setBomExactQuantityByKey((previous) => ({
                                             ...previous,
@@ -3337,8 +3429,13 @@ export function CreateProductDialog({
                       rows={recipeRows}
                       onChange={setRecipeRows}
                       materials={materialOptions}
-                      groups={availableFnbModifierGroups}
-                      loading={materialOptions.length === 0}
+                      groups={perSizeModifierGroups}
+                      optionsByGroup={variantModifierOptionsByGroup}
+                      loading={
+                        materialOptions.length === 0 ||
+                        (perSizeModifierGroups.length > 0 &&
+                          Object.keys(variantModifierOptionsByGroup).length === 0)
+                      }
                     />
                   )}
                 </div>
