@@ -830,9 +830,9 @@ export default function TonKhoPage() {
     }
   };
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     const reqId = ++reqIdRef.current;
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const filters = {
         branchId: branchFilter !== "all" ? branchFilter : undefined,

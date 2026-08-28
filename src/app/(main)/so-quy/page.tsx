@@ -361,7 +361,7 @@ export default function SoQuyPage() {
     ],
   );
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady || permissionsLoading) return;
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
@@ -369,7 +369,7 @@ export default function SoQuyPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     try {
       const result = await getCashBookListWorkspace({
         ...buildWorkspaceParams(),

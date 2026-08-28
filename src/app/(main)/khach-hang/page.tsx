@@ -293,9 +293,9 @@ export default function KhachHangPage() {
   ];
 
   /* ---- Fetch data ---- */
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady) return;
-    setLoading(true);
+    if (!background) setLoading(true);
     // Không có try/finally thì truy vấn lỗi là cờ loading không bao giờ tắt →
     // trang treo mãi ở vòng xoay, người dùng không biết vì sao.
     try {
