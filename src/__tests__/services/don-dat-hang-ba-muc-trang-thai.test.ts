@@ -48,7 +48,9 @@ describe("trangThaiXuLyDon — ba mức", () => {
 
   it("có đủ ba nhãn tiếng Việt", () => {
     expect(NHAN_TRANG_THAI_XU_LY.cho_xu_ly.nhan).toBe("Chờ xử lý");
-    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đang xử lý");
+    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe(
+      "Đã có hóa đơn · Chưa chốt",
+    );
     expect(NHAN_TRANG_THAI_XU_LY.hoan_tat.nhan).toBe("Hoàn tất");
   });
 });
@@ -59,7 +61,7 @@ describe("Đếm đơn con chỉ tính hóa đơn CÒN HIỆU LỰC", () => {
     "utf8",
   );
   const ham = svc.slice(
-    svc.indexOf("export async function demDonConHoanTat"),
+    svc.indexOf("export async function layTomTatDonConHoanTat"),
     svc.indexOf("export interface OrderReconRow"),
   );
 
@@ -104,7 +106,9 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
       trang.indexOf("const debtStateOptions"),
     );
     expect(khoi).toContain('{ label: "Chờ xử lý", value: "pending" }');
-    expect(khoi).toContain('{ label: "Đang xử lý", value: "processing" }');
+    expect(khoi).toContain(
+      '{ label: "Đã có hóa đơn · Chưa chốt", value: "processing" }',
+    );
     expect(khoi).toContain('{ label: "Hoàn tất", value: "fulfilled" }');
     // Nhãn cũ hai mức phải biến mất.
     expect(khoi).not.toContain("Chưa xuất hóa đơn");
@@ -157,8 +161,8 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
     }
   });
 
-  it("danh sách hiện 'Đang xử lý · N hóa đơn', không gọi là Chờ xử lý", () => {
-    expect(trang).toContain("Đang xử lý · {n} hóa đơn");
+  it("danh sách nói rõ đã có hóa đơn nhưng nhân viên chưa chốt", () => {
+    expect(trang).toContain("Đã có {n} hóa đơn · Chưa chốt");
     expect(trang).toContain('trangThaiXuLyDon(row.original)');
   });
 });
