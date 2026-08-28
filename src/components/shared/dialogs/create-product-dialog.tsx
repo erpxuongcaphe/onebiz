@@ -56,6 +56,7 @@ import {
   createVariant,
   updateVariant,
   deleteVariant,
+  saveFnbSizeSetupAtomic,
 } from "@/lib/services/supabase/variants";
 import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
@@ -1199,17 +1200,8 @@ export function CreateProductDialog({
     const currentIds = new Set(
       variantItems.filter((v) => v.id).map((v) => v.id as string),
     );
-    // 1. Delete old variants không còn trong list (soft delete)
-    for (const oldId of originalVariantIds) {
-      if (!currentIds.has(oldId)) {
-        try {
-          await deleteVariant(oldId);
-        } catch (err) {
-          console.warn("deleteVariant failed:", err);
-        }
-      }
-    }
-    // 2. Create or update current items
+    // Create/update first. Removed sizes are deactivated only after all current
+    // rows succeeded, so a transient failure cannot erase the working setup.
     for (let i = 0; i < variantItems.length; i++) {
       const v = variantItems[i];
       if (v.id) {
@@ -1234,6 +1226,9 @@ export function CreateProductDialog({
         });
         if (created?.id) vmap.set(v.key, { id: created.id, bomCode: v.bomCode });
       }
+    }
+    for (const oldId of originalVariantIds) {
+      if (!currentIds.has(oldId)) await deleteVariant(oldId);
     }
     return vmap;
   }
@@ -1263,68 +1258,53 @@ export function CreateProductDialog({
     });
   }
 
-  async function syncPerSizeRecipes(
+  async function syncFnbSizeSetup(
     productId: string,
     productCode: string,
-    vmap: Map<string, { id: string; bomCode: string | null }>,
   ): Promise<void> {
     const valid = recipeRows.filter((r) => r.materialId);
-    for (const v of variantItems) {
-      const persisted = vmap.get(v.key);
-      if (!persisted) continue;
+    const payload = variantItems.map((v, index) => {
       const items = valid
         .map((r) => ({
           materialId: r.materialId,
-          quantity: getPerSizeRecipeQuantity(r, v.key),
-          unit: r.unit || "g",
+          inputQuantity: getPerSizeRecipeQuantity(r, v.key),
+          inputUnit: r.unit || "g",
           modifierScaleTarget: r.scaleTarget,
         }))
-        .filter((it) => it.quantity > 0);
+        .filter((it) => it.inputQuantity > 0);
 
-      const code =
-        persisted.bomCode?.trim() ||
+      const bomCode =
+        v.bomCode?.trim() ||
         `${productCode}-${sanitizeBomCode(v.name || "SIZE")}`;
-
-      if (items.length > 0) {
-        // Update in place when a size recipe already exists. Soft-deleting it
-        // first could leave a working POS recipe unavailable if the next save
-        // is interrupted, and would discard its exact option quantities.
-        const existing = await getBOMByCode(code).catch(() => []);
-        const existingForVariant = existing.find(
-          (bom) => bom.productId === productId && bom.variantId === persisted.id,
-        );
-        let savedBomId: string;
-        if (existingForVariant) {
-          await updateBOM(existingForVariant.id, {
-            name: `${name} ${v.name}`.trim(),
-            items,
-          });
-          savedBomId = existingForVariant.id;
-        } else {
-          const createdBom = await createBOM({
-            productId,
-            variantId: persisted.id,
-            code,
-            name: `${name} ${v.name}`.trim(),
-            items,
-          });
-          savedBomId = createdBom.id;
-        }
-        await saveBOMModifierOptionQuantities(
-          savedBomId,
-          buildPerSizeExactQuantityRows(v.key),
-        );
-        if (persisted.bomCode !== code) {
-          await updateVariant(persisted.id, { bomCode: code });
-        }
-      } else {
+      if (items.length === 0) {
         throw new Error(
           `Quy cách ${v.name.trim() || "chưa đặt tên"} chưa có công thức riêng.`,
         );
       }
-    }
-    // SP phải has_bom=true để khi bán mới trừ NVL theo công thức size.
-    await updateProduct(productId, { hasBom: true });
+
+      return {
+        clientKey: v.key,
+        id: v.id ?? undefined,
+        name: v.name.trim() || "Default",
+        sellPrice: v.sellPrice,
+        costPrice: v.costPrice,
+        isDefault: v.isDefault,
+        sortOrder: index,
+        bomCode,
+        bomName: `${name} ${v.name}`.trim(),
+        items,
+        exactRows: buildPerSizeExactQuantityRows(v.key),
+      };
+    });
+
+    const saved = await saveFnbSizeSetupAtomic(productId, payload);
+    const savedByKey = new Map(saved.map((row) => [row.clientKey, row]));
+    setVariantItems((current) =>
+      current.map((variant) => {
+        const row = savedByKey.get(variant.key);
+        return row ? { ...variant, id: row.id, bomCode: row.bomCode } : variant;
+      }),
+    );
   }
 
   // Load NCC list 1 lần mỗi lần dialog mở. 500 NCC ~ 50KB payload — ok.
@@ -1813,13 +1793,10 @@ export function CreateProductDialog({
         // CEO 01/06/2026 — Sprint 2.4a: Sync variants (Size M/L/XL).
         if (scope === "sku") {
           try {
-            const vmap = await syncVariants(initialData.id);
             if (channel === "fnb" && recipeEnabled) {
-              await syncPerSizeRecipes(
-                initialData.id,
-                initialData.code ?? "",
-                vmap,
-              );
+              await syncFnbSizeSetup(initialData.id, initialData.code ?? "");
+            } else {
+              await syncVariants(initialData.id);
             }
           } catch (varErr) {
             console.warn("Save variants failed:", varErr);
@@ -1830,7 +1807,11 @@ export function CreateProductDialog({
                 varErr instanceof Error
                   ? varErr.message
                   : "Vui lòng vào lại form sửa Quy cách.",
+              duration: 10000,
             });
+            setInnerTab("variants");
+            onSuccess?.();
+            return;
           }
         }
 
@@ -2022,9 +2003,10 @@ export function CreateProductDialog({
       // CEO 01/06/2026 — Sprint 2.4a: Sync variants khi tạo SKU.
       if (created?.id && scope === "sku" && variantItems.length > 0) {
         try {
-          const vmap = await syncVariants(created.id);
           if (channel === "fnb" && recipeEnabled) {
-            await syncPerSizeRecipes(created.id, code, vmap);
+            await syncFnbSizeSetup(created.id, code);
+          } else {
+            await syncVariants(created.id);
           }
         } catch (varErr) {
           console.warn(
@@ -2038,7 +2020,11 @@ export function CreateProductDialog({
               varErr instanceof Error
                 ? varErr.message
                 : "Vui lòng vào lại form sửa Quy cách.",
+            duration: 10000,
           });
+          onOpenChange(false);
+          onSuccess?.();
+          return;
         }
       }
 
