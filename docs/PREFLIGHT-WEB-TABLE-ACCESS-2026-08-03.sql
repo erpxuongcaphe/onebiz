@@ -156,8 +156,6 @@ with required(relation_name, operation) as (
     ('print_templates', 'update'),
     ('product_lots', 'insert'),
     ('product_lots', 'select'),
-    ('product_modifier_groups', 'delete'),
-    ('product_modifier_groups', 'insert'),
     ('product_modifier_groups', 'select'),
     ('product_platform_prices', 'select'),
     ('product_variants', 'insert'),

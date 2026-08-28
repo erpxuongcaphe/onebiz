@@ -649,43 +649,22 @@ export async function setProductModifierGroups(
   productId: string,
   groupIds: string[],
 ): Promise<void> {
+  if (!productId) throw new Error("Sản phẩm không hợp lệ.");
+  if (groupIds.some((id) => !id) || new Set(groupIds).size !== groupIds.length) {
+    throw new Error("Danh sách nhóm tùy chọn không hợp lệ hoặc bị lặp.");
+  }
+
+  // 00356: máy chủ tự xác định tenant/người thao tác, khóa sản phẩm và thay
+  // toàn bộ danh sách trong một transaction. Mảng rỗng trả món về kế thừa.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getClient() as any;
-  const tenantId = await getCurrentTenantId();
-  await requireTenantRecord("products", productId, tenantId);
-  await requireTenantModifierGroups(groupIds, tenantId);
-
-  const existing = await listProductModifierLinks(productId);
-  const existingIds = new Set(existing.map((l) => l.modifierGroupId));
-  const newIds = new Set(groupIds);
-
-  const toDelete = existing.filter((l) => !newIds.has(l.modifierGroupId));
-  if (toDelete.length > 0) {
-    const { error } = await supabase
-      .from("product_modifier_groups")
-      .delete()
-      .in(
-        "id",
-        toDelete.map((l) => l.id),
-      )
-      .eq("tenant_id", tenantId);
-    if (error) handleError(error, "setProductModifierGroups.delete");
-  }
-
-  const toInsert = groupIds
-    .filter((id) => !existingIds.has(id))
-    .map((id, idx) => ({
-      tenant_id: tenantId,
-      product_id: productId,
-      modifier_group_id: id,
-      sort_order: existing.length + idx,
-    }));
-  if (toInsert.length > 0) {
-    const { error } = await supabase
-      .from("product_modifier_groups")
-      .insert(toInsert);
-    if (error) handleError(error, "setProductModifierGroups.insert");
-  }
+  const { error } = await (getClient() as any).rpc(
+    "save_product_modifier_groups_atomic",
+    {
+      p_product_id: productId,
+      p_group_ids: groupIds,
+    },
+  );
+  if (error) handleError(error, "setProductModifierGroups");
 }
 
 /**
