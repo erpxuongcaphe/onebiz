@@ -49,6 +49,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["save_bom_modifier_option_quantities", "00350"],
   ["save_fnb_product_branch_menu_scope", "00353"],
   ["save_fnb_product_branch_menu_policy", "00354"],
+  ["save_fnb_size_setup_atomic", "00357"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)

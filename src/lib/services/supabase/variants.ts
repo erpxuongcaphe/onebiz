@@ -8,6 +8,40 @@ import type { ProductVariant } from "@/lib/types";
 
 const supabase = getClient();
 
+export interface FnbSizeSetupItemInput {
+  materialId: string;
+  inputQuantity: number;
+  inputUnit: string;
+  modifierScaleTarget?: string | null;
+}
+
+export interface FnbSizeSetupExactInput {
+  materialId: string;
+  modifierOptionId: string;
+  inputQuantity: number;
+  inputUnit: string;
+}
+
+export interface FnbSizeSetupVariantInput {
+  clientKey: string;
+  id?: string;
+  name: string;
+  sellPrice: number;
+  costPrice: number;
+  isDefault: boolean;
+  sortOrder: number;
+  bomCode: string;
+  bomName: string;
+  items: FnbSizeSetupItemInput[];
+  exactRows: FnbSizeSetupExactInput[];
+}
+
+export interface SavedFnbSizeSetupVariant {
+  clientKey: string;
+  id: string;
+  bomCode: string;
+}
+
 async function requireTenantProduct(productId: string, tenantId: string): Promise<void> {
   const { data, error } = await supabase
     .from("products")
@@ -167,6 +201,28 @@ export async function deleteVariant(id: string) {
     .eq("tenant_id", tenantId);
 
   if (error) throw error;
+}
+
+/** 00357: replace the complete FnB size setup in one server transaction. */
+export async function saveFnbSizeSetupAtomic(
+  productId: string,
+  variants: FnbSizeSetupVariantInput[],
+): Promise<SavedFnbSizeSetupVariant[]> {
+  if (!productId) throw new Error("Sản phẩm không hợp lệ.");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "save_fnb_size_setup_atomic",
+    { p_product_id: productId, p_variants: variants },
+  );
+  if (error) throw error;
+
+  const rows = Array.isArray(data?.variants) ? data.variants : [];
+  return rows.map((row: Record<string, unknown>) => ({
+    clientKey: String(row.clientKey ?? ""),
+    id: String(row.id ?? ""),
+    bomCode: String(row.bomCode ?? ""),
+  }));
 }
 
 function mapVariant(row: Record<string, unknown>): ProductVariant {

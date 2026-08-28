@@ -76,8 +76,9 @@ describe("FnB exact modifier recipe UI", () => {
     expect(perSizeMatrix).toContain("setExactQty(");
     expect(perSizeMatrix).not.toContain("lưu rồi mở lại BOM để khai định lượng riêng");
     expect(creationDialog).toContain("function buildPerSizeExactQuantityRows(variantKey: string)");
-    expect(creationDialog).toContain("await saveBOMModifierOptionQuantities(");
     expect(creationDialog).toContain("buildPerSizeExactQuantityRows(v.key)");
-    expect(creationDialog).toContain("Update in place when a size recipe already exists");
+    expect(creationDialog).toContain("await saveFnbSizeSetupAtomic(productId, payload)");
+    expect(creationDialog).toContain("exactRows: buildPerSizeExactQuantityRows(v.key)");
+    expect(creationDialog).not.toContain("async function syncPerSizeRecipes(");
   });
 });
