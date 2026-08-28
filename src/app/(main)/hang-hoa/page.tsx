@@ -159,6 +159,7 @@ function ProductDetail({
   return (
     <InlineDetailPanel open onClose={onClose} onEdit={onEdit} onDelete={onDelete}>
       <DetailTabs
+        persistenceKey={`product:${product.id}`}
         tabs={[
           {
             id: "info",
@@ -733,7 +734,7 @@ export default function HangHoaPage() {
 
   // CEO 23/05/2026: Fix bug F5 không hiện data mới — refetch khi tab
   // quay lại visible hoặc bfcache restore. Pattern React Query / SWR.
-  useRevalidateOnFocus(fetchData);
+  useRevalidateOnFocus(fetchData, { enabled: expandedRow === null });
 
   // KPI phải dùng cùng tập danh mục và cùng tồn chi nhánh với bảng. Trước đây
   // trang đang xem Xưởng Tư Búa nhưng KPI vẫn cộng tồn toàn chuỗi.

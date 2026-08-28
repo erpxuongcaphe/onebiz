@@ -3,6 +3,26 @@
 import { ReactNode, useState } from "react";
 import { cn } from "@/lib/utils";
 
+const DETAIL_TAB_STORAGE_PREFIX = "onebiz:detail-tab:";
+
+function getInitialTab(
+  tabs: DetailTab[],
+  fallbackTab: string,
+  persistenceKey?: string,
+) {
+  if (!persistenceKey || typeof window === "undefined") return fallbackTab;
+  try {
+    const savedTab = window.sessionStorage.getItem(
+      `${DETAIL_TAB_STORAGE_PREFIX}${persistenceKey}`,
+    );
+    return savedTab && tabs.some((tab) => tab.id === savedTab)
+      ? savedTab
+      : fallbackTab;
+  } catch {
+    return fallbackTab;
+  }
+}
+
 export interface DetailTab {
   id: string;
   label: string;
@@ -13,13 +33,39 @@ export interface DetailTab {
 interface DetailTabsProps {
   tabs: DetailTab[];
   defaultTab?: string;
+  /** Ghi nhớ tab đang xem khi panel bị dựng lại hoặc trình duyệt tải lại. */
+  persistenceKey?: string;
   className?: string;
 }
 
-export function DetailTabs({ tabs, defaultTab, className }: DetailTabsProps) {
-  const [activeTab, setActiveTab] = useState(defaultTab || tabs[0]?.id || "");
+export function DetailTabs({
+  tabs,
+  defaultTab,
+  persistenceKey,
+  className,
+}: DetailTabsProps) {
+  const fallbackTab = defaultTab || tabs[0]?.id || "";
+  const [activeTab, setActiveTab] = useState(() =>
+    getInitialTab(tabs, fallbackTab, persistenceKey),
+  );
+  const visibleTab = tabs.some((tab) => tab.id === activeTab)
+    ? activeTab
+    : fallbackTab;
 
-  const activeContent = tabs.find((t) => t.id === activeTab)?.content;
+  const selectTab = (tabId: string) => {
+    setActiveTab(tabId);
+    if (!persistenceKey) return;
+    try {
+      window.sessionStorage.setItem(
+        `${DETAIL_TAB_STORAGE_PREFIX}${persistenceKey}`,
+        tabId,
+      );
+    } catch {
+      // Không để lỗi lưu preference làm hỏng thao tác xem chi tiết.
+    }
+  };
+
+  const activeContent = tabs.find((t) => t.id === visibleTab)?.content;
 
   return (
     <div className={cn("flex flex-col min-w-0", className)}>
@@ -31,11 +77,11 @@ export function DetailTabs({ tabs, defaultTab, className }: DetailTabsProps) {
             <button
               key={tab.id}
               type="button"
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => selectTab(tab.id)}
               className={cn(
                 "px-4 py-3 text-sm font-medium transition-colors whitespace-nowrap shrink-0",
                 "border-b-2 -mb-px",
-                activeTab === tab.id
+                visibleTab === tab.id
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30",
               )}
