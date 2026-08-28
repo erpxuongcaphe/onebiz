@@ -2,21 +2,20 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/00354_fnb_branch_menu_exclusions.sql"),
-  "utf8",
+const readSql = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8").replace(/\r\n/g, "\n");
+
+const migration = readSql(
+  "supabase/migrations/00354_fnb_branch_menu_exclusions.sql",
 );
-const rollback = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/00354_rollback_fnb_branch_menu_exclusions.sql"),
-  "utf8",
+const rollback = readSql(
+  "supabase/migrations/00354_rollback_fnb_branch_menu_exclusions.sql",
 );
-const preflight = readFileSync(
-  resolve(process.cwd(), "docs/qc/sql/00354-FNB-BRANCH-MENU-POLICY-PREFLIGHT-READONLY.sql"),
-  "utf8",
+const preflight = readSql(
+  "docs/qc/sql/00354-FNB-BRANCH-MENU-POLICY-PREFLIGHT-READONLY.sql",
 );
-const postflight = readFileSync(
-  resolve(process.cwd(), "docs/qc/sql/00354-FNB-BRANCH-MENU-POLICY-POSTFLIGHT-READONLY.sql"),
-  "utf8",
+const postflight = readSql(
+  "docs/qc/sql/00354-FNB-BRANCH-MENU-POLICY-POSTFLIGHT-READONLY.sql",
 );
 
 function executable(sql: string) {
