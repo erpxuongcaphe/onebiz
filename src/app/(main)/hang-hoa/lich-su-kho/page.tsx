@@ -128,8 +128,8 @@ export default function LichSuKhoPage() {
     setBranchFilter(activeBranchId ?? "all");
   }, [activeBranchId]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    if (!background) setLoading(true);
     try {
       // P1-3C-K2 12/06/2026: truyền dateFrom/dateTo (trước đây state có nhưng
       // không tới service → filter là UI giả).

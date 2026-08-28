@@ -602,7 +602,7 @@ export default function HangHoaPage() {
     createdDateTo,
   ]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (permissionsLoading) return;
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
@@ -611,7 +611,7 @@ export default function HangHoaPage() {
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!background) setLoading(true);
     const listFilters = buildListFilters();
     const result = await getProducts({
       page,

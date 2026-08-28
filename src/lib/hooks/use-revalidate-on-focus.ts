@@ -35,8 +35,13 @@ import { hasActiveFormWork } from "@/lib/hooks/use-durable-form-draft";
 
 const THROTTLE_MS = 1000;
 
+export interface FocusRevalidationContext {
+  /** Refresh triggered while returning to an already-rendered page. */
+  background: true;
+}
+
 export function useRevalidateOnFocus(
-  callback: (() => void) | (() => Promise<void>),
+  callback: (context?: FocusRevalidationContext) => void | Promise<void>,
   options: {
     /** Tắt hook (vd khi đang loading hoặc tab vô hiệu). Default `true`. */
     enabled?: boolean;
@@ -63,7 +68,9 @@ export function useRevalidateOnFocus(
       const now = Date.now();
       if (now - lastFired.current < THROTTLE_MS) return;
       lastFired.current = now;
-      void callbackRef.current();
+      // Keep populated content mounted during refresh so the page does not
+      // collapse and lose its current scroll position.
+      void callbackRef.current({ background: true });
     };
 
     document.addEventListener("visibilitychange", handler);

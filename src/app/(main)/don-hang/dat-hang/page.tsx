@@ -700,10 +700,10 @@ export default function DatHangPage() {
     debouncedDeliveryArea,
   ]);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (!branchScopeReady) return;
     const luot = ++fetchLuotRef.current;
-    setLoading(true);
+    if (!background) setLoading(true);
     // Trước đây không có try/finally: truy vấn lỗi là cờ loading không bao giờ
     // tắt → trang treo mãi ở vòng xoay, không nói vì sao.
     try {
@@ -854,9 +854,9 @@ export default function DatHangPage() {
     setNhipChiSo((nhip) => nhip + 1);
   }, [boNhoChiSo]);
 
-  const taiLaiSauKhiDoiDuLieu = useCallback(async () => {
+  const taiLaiSauKhiDoiDuLieu = useCallback(async (context?: { background: true }) => {
     lamMoiChiSo();
-    await fetchData();
+    await fetchData(context);
   }, [fetchData, lamMoiChiSo]);
 
   // CEO 20/07: mở form SỬA đơn — load đủ dòng hàng rồi bật dialog (chế độ sửa).

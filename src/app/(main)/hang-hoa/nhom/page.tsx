@@ -330,8 +330,8 @@ export default function NhomHangPage() {
     };
   }, [activeBranchId, branchReady, toast]);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    if (!background) setLoading(true);
     try {
       // Day 20/05/2026 (CEO Fix #3): SKU dùng breakdown để có badge channel
       if (scope === "sku") {
