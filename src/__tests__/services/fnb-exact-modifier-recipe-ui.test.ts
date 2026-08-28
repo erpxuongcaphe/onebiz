@@ -10,6 +10,10 @@ const creationDialog = readFileSync(
   resolve(process.cwd(), "src/components/shared/dialogs/create-product-dialog.tsx"),
   "utf8",
 );
+const perSizeMatrix = readFileSync(
+  resolve(process.cwd(), "src/components/shared/dialogs/per-size-recipe-matrix.tsx"),
+  "utf8",
+);
 const migration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/00350_fnb_exact_modifier_bom_quantities.sql"),
   "utf8",
@@ -64,5 +68,16 @@ describe("FnB exact modifier recipe UI", () => {
     expect(creationDialog).toContain("getRecipeQuantityInStockUnit");
     expect(creationDialog).not.toContain("mở lại BOM để khai định lượng thực tế");
     expect(creationDialog).not.toContain("Scale theo modifier");
+  });
+
+  it("lets an operator save exact modifier quantities for every size in one pass", () => {
+    expect(perSizeMatrix).toContain("exactQty: Record<string, Record<string, number>>");
+    expect(perSizeMatrix).toContain("Định lượng riêng:");
+    expect(perSizeMatrix).toContain("setExactQty(");
+    expect(perSizeMatrix).not.toContain("lưu rồi mở lại BOM để khai định lượng riêng");
+    expect(creationDialog).toContain("function buildPerSizeExactQuantityRows(variantKey: string)");
+    expect(creationDialog).toContain("await saveBOMModifierOptionQuantities(");
+    expect(creationDialog).toContain("buildPerSizeExactQuantityRows(v.key)");
+    expect(creationDialog).toContain("Update in place when a size recipe already exists");
   });
 });

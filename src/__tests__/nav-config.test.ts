@@ -7,7 +7,26 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { isHrefActive, isGroupActive, sidebarNavGroups } from "@/components/shared/nav-config";
+import {
+  getNavLinkRel,
+  getNavLinkTarget,
+  isHrefActive,
+  isGroupActive,
+  sidebarNavGroups,
+} from "@/components/shared/nav-config";
+
+describe("navigation tab policy", () => {
+  it("keeps ERP navigation in the current tab", () => {
+    expect(getNavLinkTarget()).toBe("_self");
+    expect(getNavLinkTarget("admin")).toBe("_self");
+    expect(getNavLinkRel()).toBeUndefined();
+  });
+
+  it("opens only POS navigation in a protected new tab", () => {
+    expect(getNavLinkTarget("pos")).toBe("_blank");
+    expect(getNavLinkRel("pos")).toBe("noopener noreferrer");
+  });
+});
 
 describe("isHrefActive — longest match wins", () => {
   it("exact match always active", () => {

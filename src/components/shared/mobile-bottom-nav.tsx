@@ -27,6 +27,8 @@ import { useAuth } from "@/lib/contexts";
 import {
   sidebarNavGroups,
   isHrefActive,
+  getNavLinkRel,
+  getNavLinkTarget,
   type SidebarGroup,
   type SidebarLeaf,
 } from "./nav-config";
@@ -82,6 +84,7 @@ interface FlatLeaf {
   comingSoon?: boolean;
   badge?: string;
   exact?: boolean;
+  mode?: SidebarLeaf["mode"];
 }
 
 function flattenGroup(
@@ -101,6 +104,7 @@ function flattenGroup(
       comingSoon: leaf.comingSoon,
       badge: leaf.badge,
       exact: leaf.exact,
+      mode: leaf.mode,
     });
   });
   group.subGroups?.forEach((sg) => {
@@ -117,6 +121,7 @@ function flattenGroup(
         comingSoon: leaf.comingSoon,
         badge: leaf.badge,
         exact: leaf.exact,
+        mode: leaf.mode,
       });
     });
   });
@@ -279,6 +284,7 @@ export function MobileBottomNav() {
               <Link
                 key={tab.href}
                 href={tab.href}
+                target="_self"
                 className={cn(
                   "flex flex-col press-scale-sm items-center justify-center flex-1 gap-0.5",
                   active
@@ -572,7 +578,13 @@ function MenuCardItem({
   }
 
   return (
-    <Link href={leaf.href} onClick={onClick} className={baseCls}>
+    <Link
+      href={leaf.href}
+      target={getNavLinkTarget(leaf.mode)}
+      rel={getNavLinkRel(leaf.mode)}
+      onClick={onClick}
+      className={baseCls}
+    >
       {inner}
     </Link>
   );

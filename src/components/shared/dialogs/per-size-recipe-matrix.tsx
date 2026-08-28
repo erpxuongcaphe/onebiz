@@ -23,7 +23,10 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import type { Product } from "@/lib/types";
-import type { ModifierGroup } from "@/lib/services/supabase/modifier-groups";
+import type {
+  ModifierGroup,
+  ModifierOption,
+} from "@/lib/services/supabase/modifier-groups";
 import { formatNumber } from "@/lib/format";
 
 export interface SizeCol {
@@ -36,10 +39,12 @@ export interface RecipeRow {
   key: string;
   materialId: string;
   unit: string;
-  /** id modifier group để scale (vd "Mức đường") — null = cố định */
+  /** id nhóm lựa chọn có định lượng riêng (vd "Mức đường") — null = cố định */
   scaleTarget: string | null;
-  /** sizeKey → lượng */
+  /** sizeKey → lượng cố định, hoặc lượng của lựa chọn mặc định khi có target */
   qty: Record<string, number>;
+  /** sizeKey → modifier option id → lượng pha chế đã cân thực tế. */
+  exactQty: Record<string, Record<string, number>>;
 }
 
 let _k = 0;
@@ -49,6 +54,7 @@ export const newRecipeRow = (): RecipeRow => ({
   unit: "",
   scaleTarget: null,
   qty: {},
+  exactQty: {},
 });
 
 const FIXED = "__fixed__";
@@ -60,6 +66,7 @@ interface Props {
   onChange: (rows: RecipeRow[]) => void;
   materials: Product[];
   groups: ModifierGroup[];
+  optionsByGroup: Record<string, ModifierOption[]>;
   loading?: boolean;
 }
 
@@ -151,10 +158,11 @@ export function PerSizeRecipeMatrix({
   onChange,
   materials,
   groups,
+  optionsByGroup,
   loading,
 }: Props) {
   const fnbGroups = useMemo(
-    () => groups.filter((g) => g.channel === "fnb"),
+    () => groups.filter((g) => g.channel === "fnb" || g.channel === "all"),
     [groups],
   );
   const matById = useMemo(() => {
@@ -165,14 +173,62 @@ export function PerSizeRecipeMatrix({
 
   const patch = (key: string, p: Partial<RecipeRow>) =>
     onChange(rows.map((r) => (r.key === key ? { ...r, ...p } : r)));
+  const setScaleTarget = (key: string, scaleTarget: string | null) =>
+    onChange(
+      rows.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              scaleTarget,
+              // Exact values belong to one group only. Clearing them prevents
+              // an accidental reuse after an operator switches to another group.
+              exactQty: row.scaleTarget === scaleTarget ? row.exactQty : {},
+            }
+          : row,
+      ),
+    );
   const setQty = (key: string, sk: string, val: number) =>
     onChange(
       rows.map((r) =>
         r.key === key ? { ...r, qty: { ...r.qty, [sk]: val } } : r,
       ),
     );
+  const setExactQty = (
+    key: string,
+    sizeKey: string,
+    optionId: string,
+    value: number,
+  ) =>
+    onChange(
+      rows.map((row) =>
+        row.key === key
+          ? {
+              ...row,
+              exactQty: {
+                ...row.exactQty,
+                [sizeKey]: {
+                  ...(row.exactQty[sizeKey] ?? {}),
+                  [optionId]: value,
+                },
+              },
+            }
+          : row,
+      ),
+    );
   const addRow = () => onChange([...rows, newRecipeRow()]);
   const removeRow = (key: string) => onChange(rows.filter((r) => r.key !== key));
+
+  const getGroupOptions = (groupId: string | null) =>
+    groupId ? optionsByGroup[groupId] ?? [] : [];
+  const getDefaultOption = (row: RecipeRow) =>
+    getGroupOptions(row.scaleTarget).find((option) => option.isDefault) ?? null;
+  const getQuantityForSize = (row: RecipeRow, sizeKey: string) => {
+    if (!row.scaleTarget) return row.qty[sizeKey] ?? 0;
+    const defaultOption = getDefaultOption(row);
+    return defaultOption
+      ? row.exactQty[sizeKey]?.[defaultOption.id] ?? 0
+      : 0;
+  };
 
   // Gợi ý: copy lượng size đầu sang các size khác còn trống.
   const copyFirst = () => {
@@ -180,6 +236,20 @@ export function PerSizeRecipeMatrix({
     const first = sizes[0].key;
     onChange(
       rows.map((r) => {
+        if (r.scaleTarget) {
+          const source = r.exactQty[first] ?? {};
+          if (Object.keys(source).length === 0) return r;
+          const nextExactQty = { ...r.exactQty };
+          for (const size of sizes) {
+            if (size.key === first) continue;
+            const current = { ...(nextExactQty[size.key] ?? {}) };
+            for (const [optionId, quantity] of Object.entries(source)) {
+              if (!(current[optionId] >= 0)) current[optionId] = quantity;
+            }
+            nextExactQty[size.key] = current;
+          }
+          return { ...r, exactQty: nextExactQty };
+        }
         const base = r.qty[first] ?? 0;
         if (base <= 0) return r;
         const nq = { ...r.qty };
@@ -200,7 +270,7 @@ export function PerSizeRecipeMatrix({
         const cost =
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (matById.get(r.materialId) as any)?.costPrice ?? 0;
-        sum += (cost || 0) * (r.qty[s.key] ?? 0);
+        sum += (cost || 0) * getQuantityForSize(r, s.key);
       }
       out[s.key] = sum;
     }
@@ -212,7 +282,7 @@ export function PerSizeRecipeMatrix({
     if (!sizes.length) return w;
     const valid = rows.filter((r) => r.materialId);
     const emptySizes = sizes.filter(
-      (s) => !valid.some((r) => (r.qty[s.key] ?? 0) > 0),
+      (s) => !valid.some((r) => getQuantityForSize(r, s.key) > 0),
     );
     if (emptySizes.length)
       w.push(
@@ -230,7 +300,7 @@ export function PerSizeRecipeMatrix({
       seen.add(k);
     }
     return w;
-  }, [rows, sizes]);
+  }, [rows, sizes, optionsByGroup]);
 
   if (sizes.filter((s) => s.name.trim()).length === 0) {
     return (
@@ -304,9 +374,10 @@ export function PerSizeRecipeMatrix({
                     <Select
                       value={row.scaleTarget ?? FIXED}
                       onValueChange={(v) =>
-                        patch(row.key, {
-                          scaleTarget: !v || v === FIXED ? null : v,
-                        })
+                        setScaleTarget(
+                          row.key,
+                          !v || v === FIXED ? null : v,
+                        )
                       }
                       items={[
                         { value: FIXED, label: "Cố định" },
@@ -342,17 +413,25 @@ export function PerSizeRecipeMatrix({
                   </td>
                   {sizes.map((s) => (
                     <td key={s.key} className="px-1 py-1.5">
-                      <Input
-                        type="number"
-                        step="any"
-                        inputMode="decimal"
-                        value={row.qty[s.key] ?? ""}
-                        onChange={(e) => {
-                          const n = parseFloat(e.target.value);
-                          setQty(row.key, s.key, Number.isFinite(n) ? n : 0);
-                        }}
-                        className="h-10 text-right text-sm"
-                      />
+                      {row.scaleTarget ? (
+                        <div className="min-h-10 rounded-md border bg-muted/30 px-2 py-1.5 text-right text-xs tabular-nums">
+                          {getDefaultOption(row)
+                            ? `${formatNumber(getQuantityForSize(row, s.key))} ${row.unit || ""}`
+                            : "Chọn nhóm có mặc định"}
+                        </div>
+                      ) : (
+                        <Input
+                          type="number"
+                          step="any"
+                          inputMode="decimal"
+                          value={row.qty[s.key] ?? ""}
+                          onChange={(e) => {
+                            const n = parseFloat(e.target.value);
+                            setQty(row.key, s.key, Number.isFinite(n) ? n : 0);
+                          }}
+                          className="h-10 text-right text-sm"
+                        />
+                      )}
                     </td>
                   ))}
                   <td className="px-1 py-1.5 text-center">
@@ -403,6 +482,84 @@ export function PerSizeRecipeMatrix({
         </table>
       </div>
 
+      {rows
+        .filter((row) => row.materialId && row.scaleTarget)
+        .map((row) => {
+          const material = matById.get(row.materialId);
+          const group = fnbGroups.find((candidate) => candidate.id === row.scaleTarget);
+          const options = getGroupOptions(row.scaleTarget);
+          return (
+            <section key={`${row.key}-exact`} className="overflow-hidden rounded-lg border bg-card">
+              <div className="border-b bg-muted/25 px-3 py-2">
+                <p className="text-sm font-medium">
+                  Định lượng riêng: {material?.name || "Nguyên liệu"}
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Nhập số đã cân cho từng cỡ và từng mức {group?.name || "lựa chọn"}.
+                  Lượng mặc định hiển thị ở bảng công thức và dùng làm giá vốn cơ sở.
+                </p>
+              </div>
+              {options.length === 0 ? (
+                <p className="px-3 py-3 text-xs text-destructive">
+                  Nhóm này chưa có lựa chọn đang bật hoặc chưa được áp dụng cho món.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                      <tr>
+                        <th className="min-w-28 px-3 py-2 text-left font-semibold">Lựa chọn</th>
+                        {sizes.map((size) => (
+                          <th key={size.key} className="min-w-32 px-2 py-2 text-left font-semibold">
+                            {size.name || "—"}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {options.map((option) => (
+                        <tr key={option.id} className="border-t">
+                          <td className="px-3 py-2 font-medium">
+                            {option.label}
+                            {option.isDefault && (
+                              <span className="ml-1.5 text-xs font-normal text-primary">mặc định</span>
+                            )}
+                          </td>
+                          {sizes.map((size) => (
+                            <td key={size.key} className="px-2 py-2">
+                              <div className="flex items-center gap-1.5">
+                                <Input
+                                  type="number"
+                                  step="any"
+                                  min="0"
+                                  inputMode="decimal"
+                                  value={row.exactQty[size.key]?.[option.id] ?? ""}
+                                  onChange={(event) => {
+                                    const quantity = parseFloat(event.target.value);
+                                    setExactQty(
+                                      row.key,
+                                      size.key,
+                                      option.id,
+                                      Number.isFinite(quantity) ? quantity : 0,
+                                    );
+                                  }}
+                                  className="h-9 min-w-0 text-right text-sm"
+                                  aria-label={`${material?.name || "Nguyên liệu"} ${option.label} cỡ ${size.name}`}
+                                />
+                                <span className="shrink-0 text-xs text-muted-foreground">{row.unit}</span>
+                              </div>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          );
+        })}
+
       {warnings.length > 0 && (
         <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 p-3 text-xs text-status-warning space-y-1">
           {warnings.map((w, i) => (
@@ -416,9 +573,9 @@ export function PerSizeRecipeMatrix({
 
       <p className="text-xs text-muted-foreground leading-relaxed">
         <Icon name="info" size={13} className="inline-block mr-1 align-text-bottom" />
-        Lượng nhập theo <b>đơn vị kho</b> của nguyên liệu (cột ĐVT tự hiện, sửa được).
-        Cho phép số lẻ (vd 0,5). Với đường/syrup, gắn “Theo tùy chọn = Mức đường”,
-        lưu rồi mở lại BOM để khai định lượng riêng cho từng mức đã cân.
+        Lượng cố định hoặc lượng đã cân theo từng lựa chọn đều nhập bằng <b>đơn vị pha chế</b>.
+        Hệ thống tự quy đổi về đơn vị tồn khi tính giá vốn, trừ kho và hoàn kho.
+        Với đường/syrup, chọn nhóm ở cột “Theo tùy chọn” rồi nhập từng mức ngay bên dưới.
         {loading ? " · Đang tải nguyên liệu…" : ""}
       </p>
     </div>

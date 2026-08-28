@@ -42,6 +42,11 @@ export interface FloorPlanZone {
 export interface TableLayout {
   id: string;
   zoneId: string | null;
+  /** Identity and service state are needed by the editor to render a usable table label. */
+  tableNumber?: number;
+  name?: string;
+  capacity?: number;
+  status?: "available" | "occupied" | "reserved" | "cleaning";
   shape: TableShape;
   width: number;
   height: number;
@@ -145,7 +150,7 @@ export async function getTablesByZone(zoneId: string): Promise<TableLayout[]> {
   const { data, error } = await (supabase as any)
     .from("restaurant_tables")
     .select(
-      "id, zone_id, shape, width, height, rotation, position_x, position_y, color, locked",
+      "id, zone_id, table_number, name, capacity, status, shape, width, height, rotation, position_x, position_y, color, locked",
     )
     .eq("tenant_id", ctx.tenantId)
     .eq("zone_id", zoneId)
@@ -155,6 +160,10 @@ export async function getTablesByZone(zoneId: string): Promise<TableLayout[]> {
   return (data ?? []).map((r: any) => ({
     id: r.id,
     zoneId: r.zone_id,
+    tableNumber: r.table_number,
+    name: r.name,
+    capacity: r.capacity,
+    status: r.status,
     shape: (r.shape ?? "round") as TableShape,
     width: r.width ?? 80,
     height: r.height ?? 80,

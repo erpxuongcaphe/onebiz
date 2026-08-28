@@ -13,8 +13,10 @@ import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts/toast-context";
 import {
+  getDecorationsByZone,
   getFloorPlanZones,
   getTablesByZone,
+  type FloorPlanDecoration,
   type FloorPlanZone,
 } from "@/lib/services";
 import type { CanvasTable } from "@/components/shared/floor-plan/floor-plan-canvas";
@@ -60,6 +62,10 @@ export function TableFloorPlan({
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
+  // POS and the editor share the exact same saved plan. POS renders these
+  // decorations read-only, so a cashier can orient themselves without being
+  // able to accidentally change the layout during service.
+  const [decorations, setDecorations] = useState<FloorPlanDecoration[]>([]);
   // Action sheet — tap bàn ở chế độ canvas mở dialog Mở đơn / Chuyển / Gộp
   const [actionTable, setActionTable] = useState<CanvasTable | null>(null);
 
@@ -111,10 +117,26 @@ export function TableFloorPlan({
   useEffect(() => {
     if (!activeZoneId) {
       setZoneTables([]);
+      setDecorations([]);
       return;
     }
-    getTablesByZone(activeZoneId)
-      .then((layoutTables) => {
+    let cancelled = false;
+    Promise.all([
+      getTablesByZone(activeZoneId),
+      getDecorationsByZone(activeZoneId).catch((err: unknown) => {
+        console.error("[FloorPlan] load decorations for zone failed:", err);
+        if (!cancelled) {
+          toast({
+            title: "Không tải được vật thể sơ đồ",
+            description: "Bàn vẫn hiển thị. Hãy tải lại trước khi dùng sơ đồ để định vị.",
+            variant: "warning",
+          });
+        }
+        return [] as FloorPlanDecoration[];
+      }),
+    ])
+      .then(([layoutTables, loadedDecorations]) => {
+        if (cancelled) return;
         const byId = new Map(tables.map((t) => [t.id, t]));
         const merged: CanvasTable[] = layoutTables
           .map((l) => {
@@ -139,10 +161,13 @@ export function TableFloorPlan({
           })
           .filter(Boolean) as CanvasTable[];
         setZoneTables(merged);
+        setDecorations(loadedDecorations);
       })
       .catch((err: unknown) => {
+        if (cancelled) return;
         console.error("[FloorPlan] load tables for zone failed:", err);
         setZoneTables([]);
+        setDecorations([]);
         toast({
           title: "Không tải được bàn trong khu vực",
           description:
@@ -152,6 +177,9 @@ export function TableFloorPlan({
           variant: "error",
         });
       });
+    return () => {
+      cancelled = true;
+    };
   }, [activeZoneId, tables, orderTimestamps, toast]);
 
   const activeZone = useMemo(
@@ -208,6 +236,7 @@ export function TableFloorPlan({
           <CanvasView
             zone={activeZone}
             tables={zoneTables}
+            decorations={decorations}
             onSelect={(ct) => setActionTable(ct)}
           />
         ) : (
@@ -267,10 +296,12 @@ export function TableFloorPlan({
 function CanvasView({
   zone,
   tables,
+  decorations,
   onSelect,
 }: {
   zone: FloorPlanZone;
   tables: CanvasTable[];
+  decorations: FloorPlanDecoration[];
   onSelect: (t: CanvasTable) => void;
 }) {
   const [width, setWidth] = useState(0);
@@ -291,6 +322,7 @@ function CanvasView({
         <FloorPlanCanvas
           zone={zone}
           tables={tables}
+          decorations={decorations}
           mode="view"
           onSelectTable={onSelect}
           containerWidth={width}

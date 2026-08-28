@@ -18,6 +18,7 @@ import {
   updateFloorPlanZone,
   deleteFloorPlanZone,
   getTablesByZone,
+  getTablesByBranch,
   updateTableLayout,
   createTable as createTableSvc,
   type FloorPlanZone,
@@ -185,16 +186,27 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     () => tables.find((t) => t.id === selectedTableId) ?? null,
     [tables, selectedTableId],
   );
+  const selectedDecoration = useMemo(
+    () => decorations.find((decoration) => decoration.id === selectedDecorationId) ?? null,
+    [decorations, selectedDecorationId],
+  );
 
   // ─── Thêm bàn mới từ palette ───
   const handleAddShape = async (preset: ShapePreset) => {
     if (!activeZone || !tenant?.id) return;
     try {
+      // Numbering is branch-wide, not per floor-plan zone. Reusing
+      // `tables.length + 1` made a new zone try to create an existing Bàn 1.
+      const branchTables = await getTablesByBranch(branchId);
+      const nextTableNumber = branchTables.reduce(
+        (largest, table) => Math.max(largest, table.tableNumber ?? 0),
+        0,
+      ) + 1;
       // RPC 00323: tạo bàn gán LUÔN khu + hình + vị trí trong một giao dịch
       const next = await createTableSvc({
         branchId,
-        tableNumber: tables.length + 1,
-        name: `Bàn ${tables.length + 1}`,
+        tableNumber: nextTableNumber,
+        name: `Bàn ${nextTableNumber}`,
         capacity: preset.seats,
         zone: activeZone.name,
         zoneId: activeZone.id,
@@ -593,16 +605,60 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 </button>
               ))}
             </div>
-            {selectedDecorationId && (
-              <button
+              {selectedDecorationId && (
+                <button
                 onClick={handleDeleteSelectedDecor}
                 className="w-full mt-2 px-2 py-1.5 rounded text-xs flex items-center justify-center gap-1 border border-status-error/30 text-status-error hover:bg-status-error/10"
               >
                 <Icon name="delete" size={12} />
                 Xoá vật đang chọn
-              </button>
-            )}
-          </div>
+                </button>
+              )}
+              {selectedDecoration && (
+                <div className="mt-2 space-y-2 rounded-md border border-border bg-background p-2">
+                  <p className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground">
+                    Vật đang chọn
+                  </p>
+                  <div>
+                    <Label htmlFor="decoration-label" className="text-[10px]">Tên hiển thị</Label>
+                    <Input
+                      id="decoration-label"
+                      value={selectedDecoration.label ?? ""}
+                      onChange={(event) =>
+                        setDecorations((previous) =>
+                          previous.map((decoration) =>
+                            decoration.id === selectedDecoration.id
+                              ? { ...decoration, label: event.target.value }
+                              : decoration,
+                          ),
+                        )
+                      }
+                      onBlur={(event) =>
+                        handleDecorChange(selectedDecoration.id, { label: event.target.value })
+                      }
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDecorChange(selectedDecoration.id, {
+                        locked: !selectedDecoration.locked,
+                      })
+                    }
+                    className={cn(
+                      "w-full px-2 py-1.5 rounded text-xs flex items-center justify-center gap-1 border",
+                      selectedDecoration.locked
+                        ? "bg-status-warning/10 border-status-warning/30 text-status-warning"
+                        : "border-border hover:bg-muted",
+                    )}
+                  >
+                    <Icon name={selectedDecoration.locked ? "lock" : "lock_open"} size={12} />
+                    {selectedDecoration.locked ? "Đang khoá vị trí" : "Khoá vị trí"}
+                  </button>
+                </div>
+              )}
+            </div>
 
           {/* Ảnh nền */}
           <div className="border-t pt-3">

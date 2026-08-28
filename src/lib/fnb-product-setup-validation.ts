@@ -9,6 +9,15 @@ export interface FnbRecipeSetupRow {
   materialId: string;
   unit: string;
   qty: Record<string, number>;
+  /** Group that chooses an exact measured amount, for example Mức đường. */
+  scaleTarget?: string | null;
+  /** Variant key → option id → measured preparation quantity. */
+  exactQty?: Record<string, Record<string, number>>;
+}
+
+export interface FnbModifierOptionSetup {
+  id: string;
+  isDefault: boolean;
 }
 
 export type FnbSetupIssueCode =
@@ -19,6 +28,9 @@ export type FnbSetupIssueCode =
   | "recipe_disabled"
   | "recipe_unit_required"
   | "recipe_quantity_invalid"
+  | "recipe_modifier_options_missing"
+  | "recipe_modifier_default_invalid"
+  | "recipe_modifier_quantity_invalid"
   | "variant_recipe_missing";
 
 export interface FnbSetupIssue {
@@ -31,12 +43,19 @@ interface ValidateFnbVariantSetupInput {
   variants: FnbVariantSetupDraft[];
   recipeEnabled: boolean;
   recipeRows: FnbRecipeSetupRow[];
+  modifierOptionsByGroup?: Record<string, FnbModifierOptionSetup[]>;
 }
 
 export function validateFnbVariantSetup(
   input: ValidateFnbVariantSetupInput,
 ): FnbSetupIssue[] {
-  const { isFnb, variants, recipeEnabled, recipeRows } = input;
+  const {
+    isFnb,
+    variants,
+    recipeEnabled,
+    recipeRows,
+    modifierOptionsByGroup = {},
+  } = input;
   if (!isFnb || variants.length === 0) return [];
 
   const issues: FnbSetupIssue[] = [];
@@ -93,9 +112,37 @@ export function validateFnbVariantSetup(
     });
   }
 
+  const getDefaultOption = (row: FnbRecipeSetupRow) => {
+    if (!row.scaleTarget) return null;
+    const options = modifierOptionsByGroup[row.scaleTarget] ?? [];
+    const defaults = options.filter((option) => option.isDefault);
+    return defaults.length === 1 ? defaults[0] : null;
+  };
+
+  const modifierRows = selectedRows.filter((row) => row.scaleTarget);
+  const missingModifierOptions = modifierRows.find(
+    (row) => (modifierOptionsByGroup[row.scaleTarget ?? ""] ?? []).length === 0,
+  );
+  if (missingModifierOptions) {
+    issues.push({
+      code: "recipe_modifier_options_missing",
+      message: "Nhóm tùy chọn gắn với công thức chưa có lựa chọn đang bật. Mở tab Tùy chọn FnB để kiểm tra lại.",
+    });
+  }
+
+  const invalidModifierDefault = modifierRows.find((row) => !getDefaultOption(row));
+  if (invalidModifierDefault) {
+    issues.push({
+      code: "recipe_modifier_default_invalid",
+      message: "Mỗi nhóm lựa chọn dùng trong công thức size phải có đúng một lựa chọn mặc định.",
+    });
+  }
+
   const invalidQuantity = selectedRows.some((row) =>
     variants.some((variant) => {
-      const quantity = row.qty[variant.key] ?? 0;
+      const quantity = row.scaleTarget
+        ? row.exactQty?.[variant.key]?.[getDefaultOption(row)?.id ?? ""] ?? 0
+        : row.qty[variant.key] ?? 0;
       return !Number.isFinite(quantity) || quantity < 0;
     }),
   );
@@ -106,10 +153,28 @@ export function validateFnbVariantSetup(
     });
   }
 
+  const invalidExactQuantity = modifierRows.some((row) => {
+    const options = modifierOptionsByGroup[row.scaleTarget ?? ""] ?? [];
+    return variants.some((variant) =>
+      options.some((option) => {
+        const quantity = row.exactQty?.[variant.key]?.[option.id];
+        return quantity === undefined || !Number.isFinite(quantity) || quantity < 0;
+      }),
+    );
+  });
+  if (invalidExactQuantity) {
+    issues.push({
+      code: "recipe_modifier_quantity_invalid",
+      message: "Nhập định lượng riêng cho mọi cỡ và mọi mức lựa chọn; nhập 0 khi mức đó không dùng nguyên liệu.",
+    });
+  }
+
   const missingRecipe = variants.find(
     (variant) =>
       !selectedRows.some((row) => {
-        const quantity = row.qty[variant.key] ?? 0;
+        const quantity = row.scaleTarget
+          ? row.exactQty?.[variant.key]?.[getDefaultOption(row)?.id ?? ""] ?? 0
+          : row.qty[variant.key] ?? 0;
         return Number.isFinite(quantity) && quantity > 0;
       }),
   );

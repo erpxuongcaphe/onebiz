@@ -52,6 +52,18 @@ export interface SidebarLeaf {
   permissions?: string[];
 }
 
+/**
+ * Navigation inside the ERP stays in the current tab. POS is the only
+ * workspace intentionally opened separately so the admin context is kept.
+ */
+export function getNavLinkTarget(mode?: SidebarLeaf["mode"]): "_self" | "_blank" {
+  return mode === "pos" ? "_blank" : "_self";
+}
+
+export function getNavLinkRel(mode?: SidebarLeaf["mode"]): string | undefined {
+  return mode === "pos" ? "noopener noreferrer" : undefined;
+}
+
 export interface SidebarSubGroup {
   label: string;
   icon?: string;
@@ -342,6 +354,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
       { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: "apartment", permission: "system.manage_branches" },
       { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: "chair", permission: "system.manage_branches" },
       { label: "Sơ đồ bàn", href: "/he-thong/so-do-ban", icon: "map", permission: "floor_plan.view" },
+      { label: "Cài đặt in ấn", href: "/cai-dat/in-an", icon: "print", permission: "system.manage_branches" },
       { label: "Thiết lập chung", href: "/he-thong/thiet-lap", icon: "settings", permission: "system.manage_roles" },
       { label: "Tích hợp", href: "/he-thong/tich-hop", icon: "power", comingSoon: true, permission: "system.manage_roles" },
       {

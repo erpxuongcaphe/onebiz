@@ -31,6 +31,7 @@ import { getUOMConversions } from "@/lib/services/supabase/uom";
 import type { UOMConversion } from "@/lib/types";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { Icon } from "@/components/ui/icon";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 
 interface EditingPO {
@@ -359,6 +360,48 @@ export function CreatePurchaseOrderDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  const { clearDraft } = useDurableFormDraft({
+    form: isEdit ? "purchase-receipt-edit" : "purchase-receipt-create",
+    open,
+    entityId: editingPO?.id ?? null,
+    autoRestore: !isEdit,
+    saveOnlyWhenChanged: isEdit,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: {
+      code,
+      supplierSearch,
+      selectedSupplier,
+      items,
+      shippingFee,
+      otherCost,
+      orderDiscount,
+      orderDiscountType,
+      notes,
+      paidAmount,
+    },
+    hasContent: (draft) =>
+      draft.items.length > 0 ||
+      !!draft.selectedSupplier ||
+      !!draft.supplierSearch.trim() ||
+      !!draft.notes.trim() ||
+      draft.shippingFee > 0 ||
+      draft.otherCost > 0 ||
+      draft.orderDiscount > 0 ||
+      draft.paidAmount > 0,
+    restore: (draft) => {
+      setCode(draft.code);
+      setSupplierSearch(draft.supplierSearch);
+      setSelectedSupplier(draft.selectedSupplier);
+      setItems(draft.items);
+      setShippingFee(draft.shippingFee);
+      setOtherCost(draft.otherCost);
+      setOrderDiscount(draft.orderDiscount);
+      setOrderDiscountType(draft.orderDiscountType);
+      setNotes(draft.notes);
+      setPaidAmount(draft.paidAmount);
+    },
+  });
+
   useEffect(() => {
     if (!supplierSearch || supplierSearch.length < 1) {
       setFilteredSuppliers([]);
@@ -533,6 +576,7 @@ export function CreatePurchaseOrderDialog({
           note: notes || null,
           paymentMethod: "cash",
         });
+        clearDraft();
         toast({
           title: "Đã cập nhật phiếu nhập",
           description: `Cập nhật "Đã thanh toán NCC" + Ghi chú cho ${editingPO.code}. Tồn kho không đổi.`,
@@ -569,6 +613,7 @@ export function CreatePurchaseOrderDialog({
 
       setCode(saveResult.code);
 
+      clearDraft();
       onOpenChange(false);
       if (mode === "receive") {
         toast({

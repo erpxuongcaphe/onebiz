@@ -34,6 +34,7 @@ import {
   normalizeSalesOrderReceiver,
   validateSalesOrderDraft,
 } from "@/lib/sales-order-form";
+import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 /** Đơn cần SỬA — truyền vào → dialog chuyển chế độ sửa (giữ mã, prefill, cảnh báo diff). */
 export interface EditOrderInput {
@@ -227,6 +228,55 @@ export function CreateOrderDialog({
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, editOrder?.id]);
+
+  const { clearDraft } = useDurableFormDraft({
+    form: isEdit ? "sales-order-edit" : "sales-order-create",
+    open,
+    branchId: activeBranchId,
+    entityId: editOrder?.id ?? null,
+    autoRestore: !isEdit,
+    saveOnlyWhenChanged: isEdit,
+    onRequestOpen: () => onOpenChange(true),
+    snapshot: {
+      code,
+      customerSearch,
+      selectedCustomer,
+      items,
+      selectedPartner,
+      shippingFee,
+      receiverName,
+      receiverPhone,
+      receiverAddress,
+      sameAsBuyer,
+      receiverCustomerId,
+      collectionMode,
+      notes,
+    },
+    hasContent: (draft) =>
+      draft.items.length > 0 ||
+      !!draft.selectedCustomer ||
+      !!draft.customerSearch.trim() ||
+      !!draft.notes.trim() ||
+      !!draft.receiverName.trim() ||
+      !!draft.receiverPhone.trim() ||
+      !!draft.receiverAddress.trim() ||
+      draft.shippingFee > 0,
+    restore: (draft) => {
+      setCode(draft.code);
+      setCustomerSearch(draft.customerSearch);
+      setSelectedCustomer(draft.selectedCustomer);
+      setItems(draft.items);
+      setSelectedPartner(draft.selectedPartner);
+      setShippingFee(draft.shippingFee);
+      setReceiverName(draft.receiverName);
+      setReceiverPhone(draft.receiverPhone);
+      setReceiverAddress(draft.receiverAddress);
+      setSameAsBuyer(draft.sameAsBuyer);
+      setReceiverCustomerId(draft.receiverCustomerId);
+      setCollectionMode(draft.collectionMode);
+      setNotes(draft.notes);
+    },
+  });
 
   useEffect(() => {
     if (!customerSearch || customerSearch.length < 1) {
@@ -461,6 +511,7 @@ export function CreateOrderDialog({
         })),
       });
 
+      clearDraft();
       onOpenChange(false);
       toast({
         title: "Tạo đơn đặt hàng thành công",
@@ -513,6 +564,7 @@ export function CreateOrderDialog({
         })),
       });
 
+      clearDraft();
       setPendingChanges(null);
       onOpenChange(false);
       toast({

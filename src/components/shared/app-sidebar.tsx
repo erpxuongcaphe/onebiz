@@ -10,6 +10,8 @@ import {
   sidebarNavGroups,
   isHrefActive,
   isGroupActive,
+  getNavLinkRel,
+  getNavLinkTarget,
   type SidebarGroup,
   type SidebarLeaf,
   type SidebarSubGroup,
@@ -157,7 +159,8 @@ function LeafLink({
       href={leaf.href}
       className={baseClass}
       style={{ paddingLeft: `${indent * 12 + 12}px` }}
-      target={leaf.mode === "pos" ? "_self" : undefined}
+      target={getNavLinkTarget(leaf.mode)}
+      rel={getNavLinkRel(leaf.mode)}
     >
       {inner}
     </Link>
