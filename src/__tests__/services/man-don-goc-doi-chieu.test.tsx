@@ -90,7 +90,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
     expect(screen.getByText("Đã huỷ")).toBeTruthy();
   });
 
-  it("bán vượt: hiện +chênh và cảnh báo nhẹ nói rõ KHÔNG chặn", async () => {
+  it("bán khác số đặt: hiện +chênh và cảnh báo nhẹ nói rõ KHÔNG chặn", async () => {
     getOrderReconciliation.mockResolvedValue({
       children: [donCon("c1", "NH000201", "completed")],
       rows: [dong("Cà phê sữa", 5, 8), dong("Bạc xỉu", 3, 3)],
@@ -98,10 +98,22 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
     render(<ChildSalesBlock orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("+3")).toBeTruthy());
-    expect(screen.getByText(/không chặn lưu hay thanh toán/)).toBeTruthy();
+    expect(screen.getByText(/không chặn lưu, thanh toán hay chốt hoàn tất/)).toBeTruthy();
   });
 
-  it("bán đủ không vượt: KHÔNG hiện cảnh báo", async () => {
+  it("bán ít hơn số đặt vẫn chỉ là điều chỉnh, không giữ trạng thái đang xử lý", async () => {
+    getOrderReconciliation.mockResolvedValue({
+      children: [donCon("c1", "NH000201", "completed")],
+      rows: [dong("Cà phê sữa", 5, 3)],
+    });
+    render(<ChildSalesBlock orderId="dh-1" />);
+
+    await waitFor(() => expect(screen.getByText("-2")).toBeTruthy());
+    expect(screen.getByText("Có điều chỉnh")).toBeTruthy();
+    expect(screen.getByText(/không chặn lưu, thanh toán hay chốt hoàn tất/)).toBeTruthy();
+  });
+
+  it("bán đúng số đặt: KHÔNG hiện cảnh báo điều chỉnh", async () => {
     getOrderReconciliation.mockResolvedValue({
       children: [donCon("c1", "NH000201", "completed")],
       rows: [dong("Cà phê sữa", 5, 5)],
@@ -109,7 +121,7 @@ describe("Màn đơn gốc — khối đơn bán con", () => {
     render(<ChildSalesBlock orderId="dh-1" />);
 
     await waitFor(() => expect(screen.getByText("Cà phê sữa")).toBeTruthy());
-    expect(screen.queryByText(/bán vượt số đặt/i)).toBeNull();
+    expect(screen.queryByText("Có điều chỉnh")).toBeNull();
   });
 
   it("Tạo thêm đơn bán: gọi service, xong tải lại đối chiếu", async () => {

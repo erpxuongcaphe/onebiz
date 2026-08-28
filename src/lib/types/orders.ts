@@ -195,6 +195,8 @@ export interface SalesOrder {
   fulfilledById?: string;
   /** Mã hóa đơn đã xuất (HD…) để hiện + đối chiếu. */
   fulfilledInvoiceCode?: string;
+  /** Tất cả hóa đơn con đã thanh toán và còn hiệu lực của đơn gốc. */
+  completedChildCodes?: string[];
   /**
    * 00331/00337 — SỐ ĐƠN BÁN CON ĐÃ THANH TOÁN và còn hiệu lực (không nháp,
    * không huỷ, không void, không xoá mềm).

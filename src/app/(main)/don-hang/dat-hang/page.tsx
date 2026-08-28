@@ -119,7 +119,7 @@ const statusFilterOptions = [
 const fulfillmentOptions = [
   { label: "Tất cả", value: "all" },
   { label: "Chờ xử lý", value: "pending" },
-  { label: "Đang xử lý", value: "processing" },
+  { label: "Đã có hóa đơn · Chưa chốt", value: "processing" },
   { label: "Hoàn tất", value: "fulfilled" },
 ];
 
@@ -181,17 +181,22 @@ function OrderDetail({
   // CEO 14/07: đơn đã xuất hóa đơn RIÊNG → hiện "Đã xuất hóa đơn" ở mọi nơi
   // trong chi tiết (không phải trạng thái bán, số bán thật ở hóa đơn kia).
   const mucXuLy = trangThaiXuLyDon(order);
+  const invoiceCodes = order.completedChildCodes?.length
+    ? order.completedChildCodes
+    : order.fulfilledInvoiceCode
+      ? [order.fulfilledInvoiceCode]
+      : [];
   const status =
     mucXuLy === "hoan_tat"
       ? {
-          label: order.fulfilledInvoiceCode
-            ? `Hoàn tất · ${order.fulfilledInvoiceCode}`
+          label: invoiceCodes.length
+            ? `Hoàn tất · ${invoiceCodes.join(" / ")}`
             : "Hoàn tất",
           variant: "default" as const,
         }
       : mucXuLy === "dang_xu_ly"
         ? {
-            label: `Đang xử lý · ${order.completedChildCount ?? 0} hóa đơn`,
+            label: `Đã có ${order.completedChildCount ?? 0} hóa đơn · Chưa chốt`,
             variant: "outline" as const,
           }
         : statusMap[order.status] ?? {
@@ -1018,11 +1023,16 @@ export default function DatHangPage() {
       header: "Trạng thái",
       cell: ({ row }) => {
         // Ba mức xử lý (CEO 21/08). Một đơn đặt hàng tạo được không giới hạn
-        // đơn bán con, nên đơn ĐÃ CÓ hóa đơn nhưng chưa gắn KHÔNG được gọi là
-        // "Chờ xử lý" nữa — nó là "Đang xử lý" và còn bán tiếp được.
+        // đơn bán con, nên đơn đã có hóa đơn nhưng chưa được nhân viên chốt
+        // không được gọi mơ hồ là "Đang xử lý" hoặc quay lại "Chờ xử lý".
         const muc = trangThaiXuLyDon(row.original);
         if (muc === "hoan_tat") {
-          return <FulfilledOrderStatus invoiceCode={row.original.fulfilledInvoiceCode} />;
+          const codes = row.original.completedChildCodes?.length
+            ? row.original.completedChildCodes
+            : row.original.fulfilledInvoiceCode
+              ? [row.original.fulfilledInvoiceCode]
+              : [];
+          return <FulfilledOrderStatus invoiceCodes={codes} />;
         }
         if (muc === "dang_xu_ly") {
           const n = row.original.completedChildCount ?? 0;
@@ -1032,7 +1042,7 @@ export default function DatHangPage() {
               className="bg-status-warning/10 text-status-warning border-status-warning/25"
               title={NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta}
             >
-              Đang xử lý · {n} hóa đơn
+              Đã có {n} hóa đơn · Chưa chốt
             </Badge>
           );
         }
