@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const read = (path: string) => readFileSync(resolve(process.cwd(), path), "utf8");
+const read = (path: string) =>
+  readFileSync(resolve(process.cwd(), path), "utf8").replaceAll("\r\n", "\n");
 const migration = read("supabase/migrations/00356_atomic_product_modifier_groups.sql");
 const rollback = read("supabase/migrations/00356_rollback_atomic_product_modifier_groups.sql");
 const preflight = read(
