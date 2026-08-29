@@ -118,6 +118,12 @@ describe("00350 - exact FnB modifier recipe quantities", () => {
     expect(honeyTeaBranchStockCheck).toContain("SKU-HTR-003");
     expect(honeyTeaBranchStockCheck).toContain("Xưởng Cà Phê - Xưởng Tư Búa");
     expect(honeyTeaBranchStockCheck).toContain("K4_THANH_TOAN_TRU_DUNG_KHO_CHI_NHANH");
+    expect(honeyTeaBranchStockCheck).toContain(
+      "bool_and(quantity is not null and quantity >= 0)",
+    );
+    expect(honeyTeaBranchStockCheck).not.toContain(
+      "bool_and(quantity is not null and quantity > 0)",
+    );
     expect(executable).not.toMatch(
       /\b(?:insert|update|delete|truncate|alter|create|drop|grant|revoke)\b/i,
     );
