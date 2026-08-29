@@ -28,6 +28,11 @@ import type {
   ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
 import { formatNumber } from "@/lib/format";
+import type { UOMConversion } from "@/lib/types";
+import {
+  getDirectConversionFactor,
+  getDirectConvertibleUnits,
+} from "@/lib/format-uom";
 
 export interface SizeCol {
   /** key ổn định để gắn lượng theo cột (kể cả size chưa lưu DB) */
@@ -67,7 +72,63 @@ interface Props {
   materials: Product[];
   groups: ModifierGroup[];
   optionsByGroup: Record<string, ModifierOption[]>;
+  conversionsByMaterial: Record<string, UOMConversion[]>;
   loading?: boolean;
+}
+
+export function getRecipeDefaultOption(
+  row: RecipeRow,
+  optionsByGroup: Record<string, ModifierOption[]>,
+): ModifierOption | null {
+  if (!row.scaleTarget) return null;
+  const defaults = (optionsByGroup[row.scaleTarget] ?? []).filter(
+    (option) => option.isDefault,
+  );
+  return defaults.length === 1 ? defaults[0] : null;
+}
+
+export function getRecipeQuantityForSize(
+  row: RecipeRow,
+  sizeKey: string,
+  optionsByGroup: Record<string, ModifierOption[]>,
+): number {
+  if (!row.scaleTarget) return row.qty[sizeKey] ?? 0;
+  const defaultOption = getRecipeDefaultOption(row, optionsByGroup);
+  return defaultOption
+    ? row.exactQty[sizeKey]?.[defaultOption.id] ?? 0
+    : 0;
+}
+
+export function calculateRecipeCostBySize(
+  sizes: SizeCol[],
+  rows: RecipeRow[],
+  materials: Product[],
+  optionsByGroup: Record<string, ModifierOption[]>,
+  conversionsByMaterial: Record<string, UOMConversion[]>,
+): Record<string, number> {
+  const materialById = new Map(materials.map((material) => [material.id, material]));
+  return Object.fromEntries(
+    sizes.map((size) => {
+      const cost = rows.reduce((sum, row) => {
+        const material = materialById.get(row.materialId);
+        if (!material) return sum;
+        const stockUnit = material.stockUnit || material.unit || "";
+        const factor = getDirectConversionFactor(
+          stockUnit,
+          row.unit,
+          conversionsByMaterial[row.materialId] ?? [],
+        );
+        if (factor == null) return sum;
+        return (
+          sum +
+          (material.costPrice || 0) *
+            getRecipeQuantityForSize(row, size.key, optionsByGroup) *
+            factor
+        );
+      }, 0);
+      return [size.key, cost];
+    }),
+  );
 }
 
 function MaterialSearchCell({
@@ -159,6 +220,7 @@ export function PerSizeRecipeMatrix({
   materials,
   groups,
   optionsByGroup,
+  conversionsByMaterial,
   loading,
 }: Props) {
   const fnbGroups = useMemo(
@@ -221,14 +283,9 @@ export function PerSizeRecipeMatrix({
   const getGroupOptions = (groupId: string | null) =>
     groupId ? optionsByGroup[groupId] ?? [] : [];
   const getDefaultOption = (row: RecipeRow) =>
-    getGroupOptions(row.scaleTarget).find((option) => option.isDefault) ?? null;
-  const getQuantityForSize = (row: RecipeRow, sizeKey: string) => {
-    if (!row.scaleTarget) return row.qty[sizeKey] ?? 0;
-    const defaultOption = getDefaultOption(row);
-    return defaultOption
-      ? row.exactQty[sizeKey]?.[defaultOption.id] ?? 0
-      : 0;
-  };
+    getRecipeDefaultOption(row, optionsByGroup);
+  const getQuantityForSize = (row: RecipeRow, sizeKey: string) =>
+    getRecipeQuantityForSize(row, sizeKey, optionsByGroup);
 
   // Gợi ý: copy lượng size đầu sang các size khác còn trống.
   const copyFirst = () => {
@@ -260,29 +317,27 @@ export function PerSizeRecipeMatrix({
     );
   };
 
-  // Giá vốn tự tính theo từng size = Σ (giá vốn NVL × lượng).
+  // Cost is normalized to the material stock unit before multiplication.
+  // Example: 16 G × 0.001 Kg/G × cost/Kg, never 16 × cost/Kg.
   const costBySize = useMemo(() => {
-    const out: Record<string, number> = {};
-    for (const s of sizes) {
-      let sum = 0;
-      for (const r of rows) {
-        if (!r.materialId) continue;
-        const cost =
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (matById.get(r.materialId) as any)?.costPrice ?? 0;
-        sum += (cost || 0) * getQuantityForSize(r, s.key);
-      }
-      out[s.key] = sum;
-    }
-    return out;
-  }, [sizes, rows, matById]);
+    return calculateRecipeCostBySize(
+      sizes,
+      rows,
+      materials,
+      optionsByGroup,
+      conversionsByMaterial,
+    );
+  }, [sizes, rows, materials, optionsByGroup, conversionsByMaterial]);
 
   const warnings = useMemo(() => {
     const w: string[] = [];
     if (!sizes.length) return w;
     const valid = rows.filter((r) => r.materialId);
     const emptySizes = sizes.filter(
-      (s) => !valid.some((r) => getQuantityForSize(r, s.key) > 0),
+      (s) =>
+        !valid.some(
+          (r) => getRecipeQuantityForSize(r, s.key, optionsByGroup) > 0,
+        ),
     );
     if (emptySizes.length)
       w.push(
@@ -298,9 +353,25 @@ export function PerSizeRecipeMatrix({
         break;
       }
       seen.add(k);
+
+      const material = matById.get(r.materialId);
+      if (material) {
+        const stockUnit = material.stockUnit || material.unit || "";
+        if (
+          getDirectConversionFactor(
+            stockUnit,
+            r.unit,
+            conversionsByMaterial[r.materialId] ?? [],
+          ) == null
+        ) {
+          w.push(
+            `${material.name}: chưa có quy đổi từ ${r.unit || "ĐVT pha chế"} sang ${stockUnit || "ĐVT tồn"}`,
+          );
+        }
+      }
     }
     return w;
-  }, [rows, sizes, optionsByGroup]);
+  }, [rows, sizes, optionsByGroup, matById, conversionsByMaterial]);
 
   if (sizes.filter((s) => s.name.trim()).length === 0) {
     return (
@@ -352,6 +423,12 @@ export function PerSizeRecipeMatrix({
           </thead>
           <tbody>
             {rows.map((row) => {
+              const material = matById.get(row.materialId);
+              const stockUnit = material?.stockUnit || material?.unit || "";
+              const unitOptions = getDirectConvertibleUnits(
+                stockUnit,
+                conversionsByMaterial[row.materialId] ?? [],
+              );
               return (
                 <tr key={row.key} className="border-t border-border">
                   <td className="px-2 py-1.5">
@@ -404,12 +481,25 @@ export function PerSizeRecipeMatrix({
                     </Select>
                   </td>
                   <td className="px-2 py-1.5">
-                    <Input
+                    <Select
                       value={row.unit}
-                      onChange={(e) => patch(row.key, { unit: e.target.value })}
-                      className="h-10 text-sm text-center px-1"
-                      placeholder="ĐVT"
-                    />
+                      onValueChange={(unit) => {
+                        if (unit) patch(row.key, { unit });
+                      }}
+                      items={unitOptions.map((unit) => ({ value: unit, label: unit }))}
+                      disabled={!row.materialId || unitOptions.length === 0}
+                    >
+                      <SelectTrigger className="h-10 min-w-20">
+                        <SelectValue placeholder="ĐVT" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {unitOptions.map((unit) => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </td>
                   {sizes.map((s) => (
                     <td key={s.key} className="px-1 py-1.5">
@@ -488,6 +578,7 @@ export function PerSizeRecipeMatrix({
           const material = matById.get(row.materialId);
           const group = fnbGroups.find((candidate) => candidate.id === row.scaleTarget);
           const options = getGroupOptions(row.scaleTarget);
+          const defaultCount = options.filter((option) => option.isDefault).length;
           return (
             <section key={`${row.key}-exact`} className="overflow-hidden rounded-lg border bg-card">
               <div className="border-b bg-muted/25 px-3 py-2">
@@ -503,6 +594,11 @@ export function PerSizeRecipeMatrix({
                 <p className="px-3 py-3 text-xs text-destructive">
                   Nhóm này chưa có lựa chọn đang bật hoặc chưa được áp dụng cho món.
                 </p>
+              ) : defaultCount !== 1 ? (
+                <div className="px-3 py-3 text-xs text-destructive">
+                  Nhóm {group?.name || "lựa chọn"} đang có {defaultCount} lựa chọn mặc định.
+                  Vào Danh mục → Tùy chọn món FnB và chỉ giữ đúng một mặc định rồi quay lại lưu món.
+                </div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
