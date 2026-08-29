@@ -424,9 +424,9 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
-      <div className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+      <div className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3 min-w-0">
-          <h2 className="font-semibold text-base flex items-center gap-2">
+          <h2 className="flex shrink-0 items-center gap-2 whitespace-nowrap text-base font-semibold">
             <Icon name="map" size={18} />
             Sơ đồ bàn
           </h2>
@@ -441,7 +441,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             </span>
           )}
         </div>
-        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0">
+        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 lg:w-auto lg:pb-0">
           {/* Tầng */}
           <Label htmlFor="floor-level" className="text-xs text-muted-foreground">Tầng</Label>
           <select
@@ -555,7 +555,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           type="button"
           onClick={() => setMobileToolsOpen((open) => !open)}
           className={cn(
-            "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-primary transition-colors md:hidden",
+            "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-primary transition-colors lg:hidden",
             mobileToolsOpen ? "bg-primary text-primary-foreground" : "hover:bg-primary/10",
           )}
           aria-expanded={mobileToolsOpen}
@@ -574,12 +574,12 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         )}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Palette mẫu bàn + đồ trang trí + ảnh nền */}
         <aside
           id="floor-plan-tools"
           className={cn(
-            "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-2 md:block md:w-40 md:border-r lg:w-52",
+            "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-2 lg:block lg:w-52 lg:border-r",
             mobileToolsOpen ? "block max-h-64 border-b" : "hidden",
           )}
         >
