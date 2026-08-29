@@ -64,6 +64,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const [selectedDecorationId, setSelectedDecorationId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploadingBg, setUploadingBg] = useState(false);
+  const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
 
   // ─── Undo/Redo stack ───
   type Snapshot = { tables: CanvasTable[]; decorations: FloorPlanDecoration[] };
@@ -420,15 +421,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     window.print();
   };
 
-  // Mobile phone (<640px) — không cho phép sửa sơ đồ, hướng dẫn dùng iPad/PC
-  if (isMobilePhone) {
-    return <MobileEditLockScreen branchName={branchName} />;
-  }
-
   return (
     <div className="flex flex-col h-full bg-card">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b shrink-0">
+      <div className="flex shrink-0 flex-col gap-2 border-b px-3 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-4">
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="font-semibold text-base flex items-center gap-2">
             <Icon name="map" size={18} />
@@ -445,7 +441,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             </span>
           )}
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0">
           {/* Tầng */}
           <Label htmlFor="floor-level" className="text-xs text-muted-foreground">Tầng</Label>
           <select
@@ -555,6 +551,18 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         >
           <Icon name="add" size={14} /> Khu vực
         </button>
+        <button
+          type="button"
+          onClick={() => setMobileToolsOpen((open) => !open)}
+          className={cn(
+            "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-primary transition-colors md:hidden",
+            mobileToolsOpen ? "bg-primary text-primary-foreground" : "hover:bg-primary/10",
+          )}
+          aria-expanded={mobileToolsOpen}
+          aria-controls="floor-plan-tools"
+        >
+          <Icon name="construction" size={14} /> Công cụ
+        </button>
         {activeZone && (
           <button
             onClick={handleDeleteZone}
@@ -566,9 +574,15 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         )}
       </div>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* Palette mẫu bàn + đồ trang trí + ảnh nền */}
-        <aside className="w-32 sm:w-40 lg:w-52 border-r p-2 overflow-y-auto bg-surface-container-lowest space-y-3 shrink-0">
+        <aside
+          id="floor-plan-tools"
+          className={cn(
+            "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-2 md:block md:w-40 md:border-r lg:w-52",
+            mobileToolsOpen ? "block max-h-64 border-b" : "hidden",
+          )}
+        >
           {/* Bàn */}
           <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
             Mẫu bàn
@@ -760,7 +774,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         {/* Canvas */}
         <div
           ref={containerRef}
-          className="flex-1 overflow-auto p-4 flex items-start justify-center bg-muted/30 min-h-0"
+          className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-muted/30 p-2 sm:p-4"
         >
           {loading || !activeZone ? (
             <CanvasSkeleton />
@@ -779,7 +793,8 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               onSelectedDecorationIdChange={setSelectedDecorationId}
               onTableLayoutChange={handleTableLayoutChange}
               onDecorationChange={handleDecorChange}
-              containerWidth={containerWidth - 32}
+              containerWidth={Math.max(0, containerWidth - (isMobilePhone ? 16 : 32))}
+              enableTouchZoom
             />
           )}
         </div>
@@ -792,40 +807,6 @@ function CanvasSkeleton() {
   return (
     <div className="flex items-center justify-center text-muted-foreground">
       <Icon name="progress_activity" className="animate-spin" size={20} />
-    </div>
-  );
-}
-
-/**
- * Mobile phone (<640px) không hỗ trợ sửa sơ đồ — sửa trên màn 5 inch là
- * tra tấn người dùng. Hướng dẫn chuyển sang iPad hoặc máy tính.
- *
- * Toast/OpenTable/iPOS đều áp dụng pattern này. Cashier vẫn XEM được
- * sơ đồ trên phone qua POS FnB (fallback grid sẽ implement riêng).
- */
-function MobileEditLockScreen({ branchName }: { branchName?: string }) {
-  return (
-    <div className="flex flex-col h-full items-center justify-center p-6 bg-card text-center">
-      <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-        <Icon name="tablet_mac" size={32} className="text-primary" />
-      </div>
-      <h2 className="text-lg font-bold mb-2">
-        Mở trên iPad hoặc máy tính để chỉnh sơ đồ
-      </h2>
-      <p className="text-sm text-muted-foreground max-w-xs mb-5">
-        Sửa sơ đồ bàn cần màn hình lớn để kéo thả chính xác.
-        {branchName ? ` Chi nhánh ${branchName}.` : ""}
-      </p>
-      <div className="flex flex-col gap-2 text-xs text-muted-foreground max-w-xs">
-        <div className="flex items-start gap-2 text-left">
-          <Icon name="check_circle" size={14} className="text-status-success mt-0.5 shrink-0" />
-          <span>Cashier vẫn xem được sơ đồ ở POS FnB</span>
-        </div>
-        <div className="flex items-start gap-2 text-left">
-          <Icon name="check_circle" size={14} className="text-status-success mt-0.5 shrink-0" />
-          <span>Tap bàn vẫn mở đơn / chuyển bàn được</span>
-        </div>
-      </div>
     </div>
   );
 }

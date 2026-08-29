@@ -43,6 +43,16 @@ describe("Sơ đồ bàn — hợp đồng vận hành editor", () => {
     expect(posFloorPlan).toContain('mode="view"');
   });
 
+  it("editor và POS dùng chung canvas responsive trên màn nhỏ", () => {
+    expect(editor).not.toContain("MobileEditLockScreen");
+    expect(editor).toContain('aria-controls="floor-plan-tools"');
+    expect(editor).toContain("enableTouchZoom");
+    expect(canvas).toContain('aria-label="Thu nhỏ sơ đồ"');
+    expect(canvas).toContain('aria-label="Đặt sơ đồ vừa màn hình"');
+    expect(canvas).toContain('aria-label="Phóng to sơ đồ"');
+    expect(posFloorPlan).toContain('className="flex-1 overflow-auto p-2 sm:p-4"');
+  });
+
   it("Cài đặt in ấn có lối vào trực tiếp từ menu Hệ thống", () => {
     expect(nav).toContain('label: "Cài đặt in ấn", href: "/cai-dat/in-an", icon: "print"');
   });

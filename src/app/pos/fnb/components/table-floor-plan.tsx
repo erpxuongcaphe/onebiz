@@ -231,7 +231,7 @@ export function TableFloorPlan({
       )}
 
       {/* Canvas hoặc Grid fallback */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 overflow-auto p-2 sm:p-4">
         {!useFallback && activeZone ? (
           <CanvasView
             zone={activeZone}
