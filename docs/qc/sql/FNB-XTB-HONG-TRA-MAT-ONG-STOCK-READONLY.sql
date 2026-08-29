@@ -1,5 +1,6 @@
 -- HONG TRA MAT ONG / XUONG TU BUA - KIEM TRA TRU KHO THEO CHI NHANH (CHI DOC)
--- K1-K4 phai true. I1 chi hien thi dinh luong da luu de doi chieu.
+-- K1-K4 phai true. Dinh luong 0 la hop le khi muc do khong dung duong.
+-- I1 chi hien thi dinh luong da luu de doi chieu.
 
 with target as (
   select '148e8ac5-b891-4de3-9055-cfa41f39ddb0'::uuid as tenant_id
@@ -66,8 +67,11 @@ with target as (
   select
     'K3_MOI_MUC_DUONG_CO_DINH_LUONG', 'DIEU_KIEN',
     (select count(*) from exact_rows) > 0
-      and (select bool_and(quantity is not null and quantity > 0) from exact_rows),
-    jsonb_build_object('so_muc', (select count(*) from exact_rows))
+      and (select bool_and(quantity is not null and quantity >= 0) from exact_rows),
+    jsonb_build_object(
+      'so_muc', (select count(*) from exact_rows),
+      'ghi_chu', '0 la dinh luong hop le: muc nay khong tru nguyen lieu'
+    )
   union all
   select
     'K4_THANH_TOAN_TRU_DUNG_KHO_CHI_NHANH', 'DIEU_KIEN',
