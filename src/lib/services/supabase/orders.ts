@@ -307,10 +307,26 @@ export async function getOrders(
     };
   });
 
-  // CEO 14/07: lấy mã HĐ đã xuất cho các đơn fulfilled (hiện trên badge "Đã
-  // xuất hóa đơn"). Chỉ query khi thực sự có đơn fulfilled (hiếm).
+  // Một đơn đặt hàng có thể tách thành nhiều hóa đơn. Đọc toàn bộ hóa đơn con
+  // hợp lệ cho cả trang để danh sách/chi tiết không chỉ hiện hóa đơn neo.
+  const tomTatDonCon = await layTomTatDonConHoanTat(orders.map((o) => o.id));
+  if (tomTatDonCon) {
+    for (const o of orders) {
+      const tomTat = tomTatDonCon.get(o.id);
+      o.completedChildCount = tomTat?.count ?? 0;
+      o.completedChildCodes = tomTat?.codes ?? [];
+    }
+  }
+
+  // Tương thích dữ liệu cũ: fulfilled_by_id có thể trỏ tới hóa đơn chuyển tại
+  // chỗ không mang source_order_id. Khi đó vẫn lấy mã neo như trước.
   const fulfilledIds = [
-    ...new Set(orders.map((o) => o.fulfilledById).filter(Boolean)),
+    ...new Set(
+      orders
+        .filter((o) => (o.completedChildCodes?.length ?? 0) === 0)
+        .map((o) => o.fulfilledById)
+        .filter(Boolean),
+    ),
   ] as string[];
   if (fulfilledIds.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -328,17 +344,9 @@ export async function getOrders(
     }
   }
 
-  // 00337 — ĐẾM ĐƠN BÁN CON ĐÃ THANH TOÁN cho các đơn chưa gắn hóa đơn, để
-  // phân biệt "Chờ xử lý" với "Đang xử lý". Đơn đã gắn thì đã là Hoàn tất, không
-  // cần đếm. Máy chủ chưa có cột ⇒ trả null ⇒ để undefined, màn quay về mô hình
-  // hai mức cũ thay vì đoán bừa.
-  const chuaGan = orders.filter((o) => !o.fulfilledById).map((o) => o.id);
-  if (chuaGan.length > 0) {
-    const dem = await demDonConHoanTat(chuaGan);
-    if (dem) {
-      for (const o of orders) {
-        if (!o.fulfilledById) o.completedChildCount = dem.get(o.id) ?? 0;
-      }
+  for (const o of orders) {
+    if ((o.completedChildCodes?.length ?? 0) > 0) {
+      o.fulfilledInvoiceCode = o.completedChildCodes?.[0];
     }
   }
 
@@ -1372,9 +1380,59 @@ export const NHAN_TRANG_THAI_XU_LY: Record<
   { nhan: string; mo_ta: string }
 > = {
   cho_xu_ly: { nhan: "Chờ xử lý", mo_ta: "Chưa có hóa đơn nào đã thanh toán" },
-  dang_xu_ly: { nhan: "Đang xử lý", mo_ta: "Đã có hóa đơn, còn bán tiếp được" },
+  dang_xu_ly: {
+    nhan: "Đã có hóa đơn · Chưa chốt",
+    mo_ta: "Đã có hóa đơn thanh toán nhưng nhân viên chưa xác nhận xử lý xong",
+  },
   hoan_tat: { nhan: "Hoàn tất", mo_ta: "Đã gắn hóa đơn vào đơn đặt hàng" },
 };
+
+export interface CompletedChildSummary {
+  count: number;
+  codes: string[];
+}
+
+/** Lấy số lượng + toàn bộ mã hóa đơn con còn hiệu lực cho các đơn gốc. */
+export async function layTomTatDonConHoanTat(
+  orderIds: string[],
+): Promise<Map<string, CompletedChildSummary> | null> {
+  if (orderIds.length === 0) return new Map();
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const tomTat = new Map<string, CompletedChildSummary>();
+  const CO_TRANG = 1000;
+  for (let tu = 0; ; tu += CO_TRANG) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("invoices")
+      .select("id, source_order_id, code, ngay_chung_tu")
+      .eq("tenant_id", tenantId)
+      .in("source_order_id", orderIds)
+      .eq("status", "completed")
+      .is("deleted_at", null)
+      .is("voided_at", null)
+      .is("cancelled_at", null)
+      .order("ngay_chung_tu", { ascending: true })
+      .order("id", { ascending: true })
+      .range(tu, tu + CO_TRANG - 1);
+    if (error) {
+      if (error.code === MA_LOI_CHUA_CO_COT) return null;
+      handleError(error, "layTomTatDonConHoanTat");
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows = (data ?? []) as any[];
+    for (const row of rows) {
+      const orderId = String(row.source_order_id);
+      const hienTai = tomTat.get(orderId) ?? { count: 0, codes: [] };
+      hienTai.count += 1;
+      const code = String(row.code ?? "").trim();
+      if (code && !hienTai.codes.includes(code)) hienTai.codes.push(code);
+      tomTat.set(orderId, hienTai);
+    }
+    if (rows.length < CO_TRANG) break;
+  }
+  return tomTat;
+}
 
 /**
  * Đếm đơn bán con ĐÃ THANH TOÁN và còn hiệu lực cho một loạt đơn gốc.
@@ -1385,39 +1443,10 @@ export const NHAN_TRANG_THAI_XU_LY: Record<
 export async function demDonConHoanTat(
   orderIds: string[],
 ): Promise<Map<string, number> | null> {
-  if (orderIds.length === 0) return new Map();
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
+  const tomTat = await layTomTatDonConHoanTat(orderIds);
+  if (!tomTat) return null;
   const dem = new Map<string, number>();
-  // Đọc theo TRANG cho tới hết. Không đặt trần rồi thôi: một đơn có rất nhiều
-  // hóa đơn con sẽ ăn hết quota và làm những đơn sau đếm thiếu — số đếm sai mà
-  // nhìn vẫn hợp lý là kiểu lỗi khó phát hiện nhất.
-  const CO_TRANG = 1000;
-  for (let tu = 0; ; tu += CO_TRANG) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase as any)
-      .from("invoices")
-      .select("source_order_id")
-      .eq("tenant_id", tenantId)
-      .in("source_order_id", orderIds)
-      .eq("status", "completed")
-      .is("deleted_at", null)
-      .is("voided_at", null)
-      .is("cancelled_at", null)
-      .order("id", { ascending: true })
-      .range(tu, tu + CO_TRANG - 1);
-    if (error) {
-      if (error.code === MA_LOI_CHUA_CO_COT) return null;
-      handleError(error, "demDonConHoanTat");
-    }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows = (data ?? []) as any[];
-    for (const row of rows) {
-      const k = String(row.source_order_id);
-      dem.set(k, (dem.get(k) ?? 0) + 1);
-    }
-    if (rows.length < CO_TRANG) break;
-  }
+  for (const [orderId, value] of tomTat) dem.set(orderId, value.count);
   return dem;
 }
 

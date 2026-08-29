@@ -179,7 +179,7 @@ export function ChildSalesBlock({
   // Máy chủ chưa bật 00331 → không vẽ gì, giữ màn cũ nguyên vẹn.
   if (!batTinhNang) return null;
 
-  const coBanVuot = rows.some((r) => r.delta > 0);
+  const coDieuChinh = rows.some((r) => r.delta !== 0);
 
   return (
     <div className="rounded-xl border p-4 space-y-3">
@@ -188,6 +188,11 @@ export function ChildSalesBlock({
           <Icon name="receipt_long" size={18} />
           Đơn bán từ đơn này
           <Badge variant="secondary">{children.length}</Badge>
+          {coDieuChinh ? (
+            <Badge variant="outline" className="border-status-warning/30 bg-status-warning/10 text-status-warning">
+              Có điều chỉnh
+            </Badge>
+          ) : null}
         </h3>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -257,8 +262,8 @@ export function ChildSalesBlock({
         <>
           {children.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Chưa có đơn bán nào. Bấm "Tạo thêm đơn bán", hoặc vào POS →
-              "Xử lý đặt hàng" chọn đơn này.
+              Chưa có đơn bán nào. Bấm &quot;Tạo thêm đơn bán&quot;, hoặc vào POS →
+              &quot;Xử lý đặt hàng&quot; chọn đơn này.
             </p>
           ) : (
             <div className="space-y-1.5">
@@ -334,10 +339,11 @@ export function ChildSalesBlock({
             </div>
           )}
 
-          {coBanVuot && (
+          {coDieuChinh && (
             <p className="rounded-md bg-status-warning/10 px-3 py-2 text-xs text-status-warning">
-              Có mặt hàng bán vượt số đặt — nghiệp vụ bình thường, chỉ để đối
-              chiếu, không chặn lưu hay thanh toán.
+              Số lượng thực bán khác đơn đặt ban đầu — đây có thể là thay đổi
+              của khách, chỉ để đối chiếu; không chặn lưu, thanh toán hay chốt
+              hoàn tất.
             </p>
           )}
         </>
@@ -347,7 +353,7 @@ export function ChildSalesBlock({
         open={confirmHoanTat}
         onOpenChange={setConfirmHoanTat}
         title="Hoàn tất xử lý đơn đặt hàng?"
-        description={`Đơn sẽ hiện "Đã xuất hóa đơn"${donConGan ? ` (gắn với ${donConGan.code})` : ""} và rời danh sách chờ ở POS. Doanh thu, kho, công nợ KHÔNG đổi — chỉ đơn bán con đã thanh toán mới có sổ. Sau này vẫn mở lại hoặc tạo thêm đơn bán được.`}
+        description={`Đơn sẽ hiện "Hoàn tất" cùng tất cả hóa đơn đã thanh toán${donConGan ? ` (neo tại ${donConGan.code})` : ""} và rời danh sách chờ ở POS. Chênh lệch số lượng chỉ là thông tin đối chiếu, không chặn chốt. Doanh thu, kho, công nợ KHÔNG đổi — chỉ các hóa đơn con đã thanh toán mới có sổ. Sau này vẫn mở lại hoặc tạo thêm đơn bán được.`}
         confirmLabel="Hoàn tất"
         cancelLabel="Chưa"
         onConfirm={() => {
