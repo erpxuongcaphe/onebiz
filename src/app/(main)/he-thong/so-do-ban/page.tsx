@@ -87,7 +87,7 @@ export default function SoDoBanPage() {
   const selectedBranch = branches.find((b) => b.id === selectedBranchId);
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-4 gap-3">
+    <div className="flex h-[calc(100dvh-4rem)] flex-col gap-2 p-2 sm:gap-3 sm:p-4">
       {/* Header — chọn chi nhánh */}
       <div className="flex items-center gap-3 flex-wrap">
         <h1 className="text-xl font-bold">Sơ đồ bàn</h1>
@@ -97,7 +97,7 @@ export default function SoDoBanPage() {
           disabled={!canEditGlobal || branches.length <= 1}
           items={branches.map((b) => ({ value: b.id, label: b.name }))}
         >
-          <SelectTrigger className="w-[260px]">
+          <SelectTrigger className="w-full sm:w-[260px]">
             <SelectValue placeholder="Chọn chi nhánh">
               {(v) => branches.find((b) => b.id === v)?.name ?? ""}
             </SelectValue>

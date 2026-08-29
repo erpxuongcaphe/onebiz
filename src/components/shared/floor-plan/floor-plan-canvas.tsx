@@ -92,6 +92,10 @@ export function FloorPlanCanvas({
   const lastTouchDistance = useRef<number | null>(null);
   const lastTouchCenter = useRef<{ x: number; y: number } | null>(null);
 
+  const setZoom = useCallback((nextScale: number) => {
+    setUserScale(Math.max(0.5, Math.min(3, nextScale)));
+  }, []);
+
   // Reset zoom khi đổi zone
   useEffect(() => {
     setUserScale(1);
@@ -245,19 +249,42 @@ export function FloorPlanCanvas({
       className="relative bg-surface-container-low rounded-lg overflow-hidden touch-none"
       style={{ width: stageW, height: stageH }}
     >
-      {/* Nút reset zoom (chỉ hiện khi đã zoom) */}
-      {touchEnabled && (userScale !== 1 || pan.x !== 0 || pan.y !== 0) && (
-        <button
-          type="button"
-          onClick={() => {
-            setUserScale(1);
-            setPan({ x: 0, y: 0 });
-          }}
-          className="absolute z-10 top-3 right-3 bg-card border shadow-md rounded-full h-9 px-3 text-xs font-medium flex items-center gap-1.5 hover:bg-muted"
-          aria-label="Đặt lại zoom"
-        >
-          <span aria-hidden>↺</span> {Math.round(userScale * 100)}%
-        </button>
+      {/* Cùng một bộ điều khiển cho POS và editor trên thiết bị cảm ứng. */}
+      {touchEnabled && (
+        <div className="absolute z-10 right-2 top-2 flex h-9 items-stretch overflow-hidden rounded-lg border bg-card shadow-md">
+          <button
+            type="button"
+            onClick={() => setZoom(userScale / 1.25)}
+            className="w-9 border-r text-lg font-medium hover:bg-muted disabled:opacity-40"
+            aria-label="Thu nhỏ sơ đồ"
+            title="Thu nhỏ"
+            disabled={userScale <= 0.5}
+          >
+            −
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setUserScale(1);
+              setPan({ x: 0, y: 0 });
+            }}
+            className="min-w-12 border-r px-2 text-[11px] font-semibold tabular-nums hover:bg-muted"
+            aria-label="Đặt sơ đồ vừa màn hình"
+            title="Vừa màn hình"
+          >
+            {Math.round(userScale * 100)}%
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(userScale * 1.25)}
+            className="w-9 text-lg font-medium hover:bg-muted disabled:opacity-40"
+            aria-label="Phóng to sơ đồ"
+            title="Phóng to"
+            disabled={userScale >= 3}
+          >
+            +
+          </button>
+        </div>
       )}
       <Stage
         ref={stageRef}
