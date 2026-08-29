@@ -30,6 +30,12 @@ describe("Sơ đồ bàn — hợp đồng vận hành editor", () => {
     expect(canvas).toContain("const minimum = selectedDecorationId ? 4 : 40");
   });
 
+  it("mọi hình trang trí có hit-area đầy đủ để chọn và kéo", () => {
+    expect(canvas).toContain("hitFunc={(context, shape) => {");
+    expect(canvas).toContain("context.rect(0, 0, w, h)");
+    expect(canvas).toContain("context.fillStrokeShape(shape)");
+  });
+
   it("POS chỉ đọc cùng vật thể đã lưu từ sơ đồ quản trị", () => {
     expect(posFloorPlan).toContain("getDecorationsByZone(activeZoneId)");
     expect(posFloorPlan).toContain("const [decorations, setDecorations]");
