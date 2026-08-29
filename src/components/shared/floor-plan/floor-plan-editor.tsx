@@ -443,7 +443,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         </div>
         <div className="flex w-full items-center gap-2 overflow-x-auto pb-1 lg:w-auto lg:pb-0">
           {/* Tầng */}
-          <Label htmlFor="floor-level" className="text-xs text-muted-foreground">Tầng</Label>
+          <Label htmlFor="floor-level" className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Tầng</Label>
           <select
             id="floor-level"
             value={activeZone?.floorLevel ?? 1}
@@ -456,7 +456,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             ))}
           </select>
           {/* Lưới */}
-          <Label htmlFor="grid-snap" className="text-xs text-muted-foreground">Lưới</Label>
+          <Label htmlFor="grid-snap" className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Lưới</Label>
           <select
             id="grid-snap"
             value={activeZone?.gridSize ?? 16}
@@ -470,7 +470,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             <option value={32}>32px</option>
           </select>
           {/* Phủ màu */}
-          <Label htmlFor="overlay-color" className="text-xs text-muted-foreground">Phủ màu</Label>
+          <Label htmlFor="overlay-color" className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">Phủ màu</Label>
           <input
             id="overlay-color"
             type="color"
@@ -516,6 +516,18 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
       {/* Tabs zone — nhóm theo tầng */}
       <div className="flex items-center gap-3 px-4 py-2 border-b overflow-x-auto shrink-0 bg-surface-container-lowest">
+        <button
+          type="button"
+          onClick={() => setMobileToolsOpen((open) => !open)}
+          className={cn(
+            "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1.5 text-xs text-primary transition-colors lg:hidden",
+            mobileToolsOpen ? "bg-primary text-primary-foreground" : "hover:bg-primary/10",
+          )}
+          aria-expanded={mobileToolsOpen}
+          aria-controls="floor-plan-tools"
+        >
+          <Icon name="construction" size={14} /> Công cụ
+        </button>
         {Array.from(new Set(zones.map((z) => z.floorLevel)))
           .sort((a, b) => a - b)
           .map((floor) => (
@@ -550,18 +562,6 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           className="px-2 py-1.5 rounded-lg text-xs text-primary hover:bg-primary/10 transition-colors flex items-center gap-1"
         >
           <Icon name="add" size={14} /> Khu vực
-        </button>
-        <button
-          type="button"
-          onClick={() => setMobileToolsOpen((open) => !open)}
-          className={cn(
-            "flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-primary transition-colors lg:hidden",
-            mobileToolsOpen ? "bg-primary text-primary-foreground" : "hover:bg-primary/10",
-          )}
-          aria-expanded={mobileToolsOpen}
-          aria-controls="floor-plan-tools"
-        >
-          <Icon name="construction" size={14} /> Công cụ
         </button>
         {activeZone && (
           <button
