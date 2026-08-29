@@ -742,6 +742,15 @@ function DecorationNode({
       height={h}
     >
       <DecorShape decoration={decoration} fill={fill} stroke={stroke} />
+      <Shape
+        sceneFunc={() => undefined}
+        hitFunc={(context, shape) => {
+          context.beginPath();
+          context.rect(0, 0, w, h);
+          context.closePath();
+          context.fillStrokeShape(shape);
+        }}
+      />
       {showLabel && (
         <Text
           text={decoration.label!}

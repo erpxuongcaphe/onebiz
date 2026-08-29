@@ -13,7 +13,7 @@ describe("Trạng thái chốt đơn đặt hàng nhiều hóa đơn", () => {
       />,
     );
 
-    expect(screen.getByText("Hoàn tất")).toBeTruthy();
+    expect(screen.getByText("Đã có hóa đơn số")).toBeTruthy();
     expect(screen.getAllByRole("link")).toHaveLength(2);
     expect(
       screen.getByRole("link", { name: "Mở hóa đơn HD001601" }),
@@ -23,12 +23,10 @@ describe("Trạng thái chốt đơn đặt hàng nhiều hóa đơn", () => {
     ).toHaveAttribute("href", "/don-hang/hoa-don?tim=HD001602&mo=1");
   });
 
-  it("trạng thái trung gian nói rõ đã có hóa đơn nhưng chưa chốt", () => {
-    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe(
-      "Đã có hóa đơn · Chưa chốt",
-    );
+  it("trạng thái nội bộ không dùng từ chưa chốt trên nhãn quản trị", () => {
+    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đã có hóa đơn");
     expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta).toContain(
-      "nhân viên chưa xác nhận",
+      "chưa xác nhận kết thúc xử lý nội bộ",
     );
   });
 });

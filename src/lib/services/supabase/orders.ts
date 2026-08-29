@@ -1381,10 +1381,13 @@ export const NHAN_TRANG_THAI_XU_LY: Record<
 > = {
   cho_xu_ly: { nhan: "Chờ xử lý", mo_ta: "Chưa có hóa đơn nào đã thanh toán" },
   dang_xu_ly: {
-    nhan: "Đã có hóa đơn · Chưa chốt",
-    mo_ta: "Đã có hóa đơn thanh toán nhưng nhân viên chưa xác nhận xử lý xong",
+    nhan: "Đã có hóa đơn",
+    mo_ta: "Đã có hóa đơn; chưa xác nhận kết thúc xử lý nội bộ",
   },
-  hoan_tat: { nhan: "Hoàn tất", mo_ta: "Đã gắn hóa đơn vào đơn đặt hàng" },
+  hoan_tat: {
+    nhan: "Đã có hóa đơn",
+    mo_ta: "Đã xác nhận kết thúc xử lý nội bộ",
+  },
 };
 
 export interface CompletedChildSummary {

@@ -48,10 +48,8 @@ describe("trangThaiXuLyDon — ba mức", () => {
 
   it("có đủ ba nhãn tiếng Việt", () => {
     expect(NHAN_TRANG_THAI_XU_LY.cho_xu_ly.nhan).toBe("Chờ xử lý");
-    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe(
-      "Đã có hóa đơn · Chưa chốt",
-    );
-    expect(NHAN_TRANG_THAI_XU_LY.hoan_tat.nhan).toBe("Hoàn tất");
+    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đã có hóa đơn");
+    expect(NHAN_TRANG_THAI_XU_LY.hoan_tat.nhan).toBe("Đã có hóa đơn");
   });
 });
 
@@ -107,9 +105,11 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
     );
     expect(khoi).toContain('{ label: "Chờ xử lý", value: "pending" }');
     expect(khoi).toContain(
-      '{ label: "Đã có hóa đơn · Chưa chốt", value: "processing" }',
+      '{ label: "Đã có hóa đơn - chưa xác nhận xử lý", value: "processing" }',
     );
-    expect(khoi).toContain('{ label: "Hoàn tất", value: "fulfilled" }');
+    expect(khoi).toContain(
+      '{ label: "Đã có hóa đơn - đã xác nhận xử lý", value: "fulfilled" }',
+    );
     // Nhãn cũ hai mức phải biến mất.
     expect(khoi).not.toContain("Chưa xuất hóa đơn");
   });
@@ -161,9 +161,10 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
     }
   });
 
-  it("danh sách nói rõ đã có hóa đơn nhưng nhân viên chưa chốt", () => {
-    expect(trang).toContain("Đã có {n} hóa đơn · Chưa chốt");
-    expect(trang).toContain('trangThaiXuLyDon(row.original)');
+  it("danh sách thống nhất theo việc có mã hóa đơn", () => {
+    expect(trang).toContain("getOrderInvoiceCodes(row.original)");
+    expect(trang).toContain('<FulfilledOrderStatus invoiceCodes={codes} />');
+    expect(trang).not.toContain("Đã có {n} hóa đơn · Chưa chốt");
   });
 });
 

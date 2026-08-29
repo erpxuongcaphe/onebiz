@@ -1,6 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { FulfilledOrderStatus } from "@/app/(main)/don-hang/dat-hang/order-fulfillment-status";
+import {
+  FulfilledOrderStatus,
+  getOrderInvoiceCodes,
+} from "@/app/(main)/don-hang/dat-hang/order-fulfillment-status";
 
 describe("FulfilledOrderStatus", () => {
   it("links the completed order to its child invoice without opening the row", () => {
@@ -24,10 +27,20 @@ describe("FulfilledOrderStatus", () => {
     expect(onRowClick).not.toHaveBeenCalled();
   });
 
-  it("still renders the completed state when no child invoice code is available", () => {
+  it("still renders the invoice state when no child invoice code is available", () => {
     render(<FulfilledOrderStatus />);
 
-    expect(screen.getByText("Hoàn tất")).toBeTruthy();
+    expect(screen.getByText("Đã có hóa đơn số")).toBeTruthy();
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("unifies child, anchored and legacy in-place invoice codes", () => {
+    expect(
+      getOrderInvoiceCodes({
+        completedChildCodes: ["HD001601", "HD001602"],
+        fulfilledInvoiceCode: "HD001601",
+        invoiceCode: "HD001599",
+      }),
+    ).toEqual(["HD001601", "HD001602", "HD001599"]);
   });
 });

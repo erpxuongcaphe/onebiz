@@ -17,6 +17,10 @@ const postflight = readFileSync(
   "docs/qc/sql/00350-FNB-EXACT-MODIFIER-POSTFLIGHT-READONLY.sql",
   "utf8",
 );
+const honeyTeaBranchStockCheck = readFileSync(
+  "docs/qc/sql/FNB-XTB-HONG-TRA-MAT-ONG-STOCK-READONLY.sql",
+  "utf8",
+);
 
 function withoutFunctionBodies(sql: string) {
   return sql
@@ -45,6 +49,19 @@ describe("00350 - exact FnB modifier recipe quantities", () => {
     expect(migration).toContain("v_exact_quantity * (1 + v_item.waste_percent / 100) * p_qty");
     expect(migration).toContain("else 'legacy_scale' end");
     expect(migration).toContain("v_item.quantity * (1 + v_item.waste_percent / 100) * p_qty * v_modifier_scale");
+  });
+
+  it("resolves and deducts the exact recipe inside the sale branch", () => {
+    expect(migration).toContain(
+      "public.get_active_bom_for_branch(p_sku_id, p_branch_id, p_variant_id)",
+    );
+    expect(migration).toContain("branch_id = p_branch_id");
+    expect(migration).toContain(
+      "public.upsert_branch_stock(p_tenant_id, p_branch_id, v_item.material_id, -v_consume_qty)",
+    );
+    expect(migration).toContain(
+      "public.allocate_lots_fifo(p_tenant_id, v_item.material_id, p_branch_id, v_consume_qty",
+    );
   });
 
   it("blocks an incomplete exact configuration before the kitchen order is written", () => {
@@ -94,5 +111,15 @@ describe("00350 - exact FnB modifier recipe quantities", () => {
     expect(executablePreflight).not.toMatch(/\b(?:insert|update|delete|truncate|alter|create|drop|grant|revoke)\b/i);
     expect(executablePostflight).not.toMatch(/\b(?:insert|update|delete|truncate|alter|create|drop|grant|revoke)\b/i);
     expect(postflight).toContain("K3_THANH_TOAN_DUNG_DINH_LUONG");
+  });
+
+  it("ships a read-only branch-stock check for Hồng Trà Mật Ong", () => {
+    const executable = honeyTeaBranchStockCheck.replace(/--.*$/gm, "");
+    expect(honeyTeaBranchStockCheck).toContain("SKU-HTR-003");
+    expect(honeyTeaBranchStockCheck).toContain("Xưởng Cà Phê - Xưởng Tư Búa");
+    expect(honeyTeaBranchStockCheck).toContain("K4_THANH_TOAN_TRU_DUNG_KHO_CHI_NHANH");
+    expect(executable).not.toMatch(
+      /\b(?:insert|update|delete|truncate|alter|create|drop|grant|revoke)\b/i,
+    );
   });
 });
