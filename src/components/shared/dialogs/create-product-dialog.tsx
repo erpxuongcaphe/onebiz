@@ -38,6 +38,7 @@ import { Icon } from "@/components/ui/icon";
 import { ProductImageUpload } from "@/components/shared/product-image-upload";
 import {
   PerSizeRecipeMatrix,
+  calculateRecipeCostBySize,
   newRecipeRow,
   type RecipeRow,
 } from "@/components/shared/dialogs/per-size-recipe-matrix";
@@ -50,6 +51,7 @@ import {
   getUOMConversions,
   replaceProductUOMConversions,
 } from "@/lib/services";
+import { getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
 // CEO 01/06/2026 — Sprint 2.4a
 import {
   getVariantsByProduct,
@@ -405,6 +407,9 @@ export function CreateProductDialog({
   // cách, lưu chung 1 lần. recipeRows = lưới NVL × size; recipeEnabled = toggle.
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
   const [recipeEnabled, setRecipeEnabled] = useState(false);
+  const [recipeConversionsByMaterial, setRecipeConversionsByMaterial] = useState<
+    Record<string, UOMConversion[]>
+  >({});
   // Track ID variants đã có sẵn ở DB để diff khi save (cũ nhưng user xoá).
   const [originalVariantIds, setOriginalVariantIds] = useState<Set<string>>(
     new Set(),
@@ -425,6 +430,23 @@ export function CreateProductDialog({
     .map((group) => group.id)
     .sort()
     .join(",");
+  const perSizeCostByKey = useMemo(
+    () =>
+      calculateRecipeCostBySize(
+        variantItems.map((variant) => ({ key: variant.key, name: variant.name })),
+        recipeRows,
+        materialOptions,
+        variantModifierOptionsByGroup,
+        recipeConversionsByMaterial,
+      ),
+    [
+      variantItems,
+      recipeRows,
+      materialOptions,
+      variantModifierOptionsByGroup,
+      recipeConversionsByMaterial,
+    ],
+  );
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -435,6 +457,7 @@ export function CreateProductDialog({
       loadedMenuScopeKeyRef.current = null;
       loadedVariantsKeyRef.current = null;
       setFnbMenuScopeDirty(false);
+      setRecipeConversionsByMaterial({});
       return;
     }
     if (initializedDialogKeyRef.current === dialogProductKey) return;
@@ -1287,7 +1310,7 @@ export function CreateProductDialog({
         id: v.id ?? undefined,
         name: v.name.trim() || "Default",
         sellPrice: v.sellPrice,
-        costPrice: v.costPrice,
+        costPrice: perSizeCostByKey[v.key] ?? v.costPrice,
         isDefault: v.isDefault,
         sortOrder: index,
         bomCode,
@@ -1350,6 +1373,44 @@ export function CreateProductDialog({
       cancelled = true;
     };
   }, [open, scope, hasBom, innerTab, materialOptions.length, channel]);
+
+  // Load the existing preparation-unit conversions for materials used by the
+  // size matrix. Cost preview and stock deduction must share the same factor.
+  useEffect(() => {
+    if (!open || innerTab !== "variants" || channel !== "fnb") return;
+    const materialIds = Array.from(
+      new Set(recipeRows.map((row) => row.materialId).filter(Boolean)),
+    );
+    const missingIds = materialIds.filter(
+      (materialId) => !(materialId in recipeConversionsByMaterial),
+    );
+    if (missingIds.length === 0) return;
+
+    let cancelled = false;
+    getUOMConversionsByProductIds(missingIds)
+      .then((conversions) => {
+        if (cancelled) return;
+        setRecipeConversionsByMaterial((current) => {
+          const next = { ...current };
+          for (const materialId of missingIds) {
+            next[materialId] = conversions.get(materialId) ?? [];
+          }
+          return next;
+        });
+      })
+      .catch((error) =>
+        console.warn("Load size recipe UOM conversions failed:", error),
+      );
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    open,
+    innerTab,
+    channel,
+    recipeRows,
+    recipeConversionsByMaterial,
+  ]);
 
   // Load categories mỗi khi scope đổi. Edit mode: KHÔNG reset categoryId (đã prefill).
   useEffect(() => {
@@ -1539,6 +1600,37 @@ export function CreateProductDialog({
       return;
     }
 
+    const invalidRecipeUnit = recipeRows.find((row) => {
+      if (!row.materialId) return false;
+      const material = materialOptions.find((candidate) => candidate.id === row.materialId);
+      if (!material) return true;
+      return (
+        getDirectConversionFactor(
+          material.stockUnit || material.unit || "",
+          row.unit,
+          recipeConversionsByMaterial[row.materialId] ?? [],
+        ) == null
+      );
+    });
+    if (
+      scope === "sku" &&
+      channel === "fnb" &&
+      variantItems.length > 0 &&
+      invalidRecipeUnit
+    ) {
+      const material = materialOptions.find(
+        (candidate) => candidate.id === invalidRecipeUnit.materialId,
+      );
+      setInnerTab("variants");
+      toast({
+        variant: "error",
+        title: "Chưa thể quy đổi đơn vị công thức",
+        description: `${material?.name || "Nguyên liệu"} chưa có quy đổi từ ${invalidRecipeUnit.unit || "ĐVT pha chế"} sang ${material?.stockUnit || material?.unit || "ĐVT tồn"}.`,
+        duration: 10000,
+      });
+      return;
+    }
+
     let inlineExactQuantityRows: ReturnType<typeof buildInlineExactQuantityRows> = [];
     try {
       // A standalone BOM is linked as-is. The inline table is only persisted
@@ -1597,6 +1689,13 @@ export function CreateProductDialog({
       // product BOM lookup; omitting the field would leave the old link in DB.
       const linkedBomCode =
         bomCodeTrim || (isEdit && initialData?.bomCode ? null : undefined);
+      const defaultVariant = variantItems.find((variant) => variant.isDefault);
+      const representativeSellPrice = defaultVariant
+        ? defaultVariant.sellPrice
+        : Number(sellPrice);
+      const representativeCostPrice = defaultVariant
+        ? perSizeCostByKey[defaultVariant.key] ?? defaultVariant.costPrice
+        : Number(costPrice) || 0;
 
       const commonPayload = {
         name,
@@ -1615,8 +1714,8 @@ export function CreateProductDialog({
         vatRate: vatRate ? Number(vatRate) : 0,
         minStock: minStock ? Number(minStock) : undefined,
         maxStock: maxStock ? Number(maxStock) : undefined,
-        sellPrice: scope === "sku" ? Number(sellPrice) : 0,
-        costPrice: Number(costPrice) || 0,
+        sellPrice: scope === "sku" ? representativeSellPrice : 0,
+        costPrice: representativeCostPrice,
         description: description || undefined,
         image: image ?? undefined,
         allowSale: scope === "sku" ? allowSale : false,
@@ -2514,6 +2613,16 @@ export function CreateProductDialog({
                 <span>
                   NVL là nguyên vật liệu nội bộ — không có giá bán. Chuyển sang
                   loại <strong>Hàng bán (SKU)</strong> nếu cần thiết lập giá bán.
+                </span>
+              </div>
+            )}
+
+            {scope === "sku" && variantItems.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3 text-xs">
+                <Icon name="straighten" size={14} className="mt-0.5 shrink-0 text-primary" />
+                <span>
+                  Món có quy cách: POS dùng giá bán và giá vốn của từng size.
+                  Giá đại diện của sản phẩm được đồng bộ theo size mặc định khi lưu.
                 </span>
               </div>
             )}
@@ -3456,6 +3565,30 @@ export function CreateProductDialog({
                 </div>
               </div>
 
+              {channel === "fnb" && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium">Chi nhánh bán món này</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Áp dụng chung cho mọi size. {fnbMenuScopeMode === "selected"
+                        ? `Chỉ bán tại ${fnbMenuBranchIds.size} chi nhánh đã chọn.`
+                        : fnbMenuScopeMode === "excluded"
+                          ? `Ẩn tại ${fnbMenuBranchIds.size} chi nhánh đã chọn.`
+                          : "Đang bán tại tất cả chi nhánh FnB."}
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setInnerTab("modifier")}
+                  >
+                    <Icon name="storefront" size={14} className="mr-1" />
+                    Chọn chi nhánh
+                  </Button>
+                </div>
+              )}
+
               {/* CEO 17/06/2026 (Phương án B): công thức theo size chuyển xuống
                   DƯỚI bảng size + gộp vào nút Lưu (xem cuối tab). */}
 
@@ -3485,10 +3618,10 @@ export function CreateProductDialog({
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold w-28">Tên</th>
                         <th className="text-right px-3 py-2 font-semibold w-32">Giá bán (đ)</th>
-                        {channel !== "fnb" && (
-                          <th className="text-right px-3 py-2 font-semibold w-32">Giá vốn (đ)</th>
-                        )}
-                        <th className="text-center px-3 py-2 font-semibold w-20">Mặc định</th>
+                        <th className="text-right px-3 py-2 font-semibold w-32">
+                          {channel === "fnb" ? "Giá vốn tự tính" : "Giá vốn (đ)"}
+                        </th>
+                        <th className="text-center px-3 py-2 font-semibold w-24">Size đại diện</th>
                         <th className="w-10"></th>
                       </tr>
                     </thead>
@@ -3525,7 +3658,7 @@ export function CreateProductDialog({
                               }}
                             />
                           </td>
-                          {channel !== "fnb" && (
+                          {channel !== "fnb" ? (
                             <td className="px-3 py-2">
                               <Input
                                 inputMode="numeric"
@@ -3542,6 +3675,10 @@ export function CreateProductDialog({
                                   );
                                 }}
                               />
+                            </td>
+                          ) : (
+                            <td className="px-3 py-2 text-right font-medium tabular-nums">
+                              {formatCurrency(perSizeCostByKey[v.key] ?? 0)}
                             </td>
                           )}
                           <td className="px-3 py-2 text-center">
@@ -3605,6 +3742,7 @@ export function CreateProductDialog({
                       materials={materialOptions}
                       groups={perSizeModifierGroups}
                       optionsByGroup={variantModifierOptionsByGroup}
+                      conversionsByMaterial={recipeConversionsByMaterial}
                       loading={
                         materialOptions.length === 0 ||
                         (perSizeModifierGroups.length > 0 &&

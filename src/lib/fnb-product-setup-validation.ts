@@ -134,7 +134,7 @@ export function validateFnbVariantSetup(
   if (invalidModifierDefault) {
     issues.push({
       code: "recipe_modifier_default_invalid",
-      message: "Mỗi nhóm lựa chọn dùng trong công thức size phải có đúng một lựa chọn mặc định.",
+      message: "Nhóm tùy chọn dùng trong công thức đang có 0 hoặc nhiều hơn 1 mặc định. Vào Danh mục → Tùy chọn món FnB và chỉ giữ đúng một lựa chọn mặc định.",
     });
   }
 
