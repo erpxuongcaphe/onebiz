@@ -24,6 +24,7 @@ import type { DeliveryPlatform } from "@/lib/types/fnb";
 export interface ProductPlatformPrice {
   id: string;
   productId: string;
+  variantId?: string;
   platform: DeliveryPlatform;
   overridePrice: number;
   setAt: string;
@@ -32,6 +33,7 @@ export interface ProductPlatformPrice {
 
 export interface ProductPlatformPriceUpsert {
   productId: string;
+  variantId?: string;
   platform: DeliveryPlatform;
   overridePrice: number;
 }
@@ -62,7 +64,7 @@ export async function getPlatformPricesForProduct(
 
   const { data, error } = await supabase
     .from("product_platform_prices")
-    .select("id, product_id, platform, override_price, set_at, set_by")
+    .select("id, product_id, variant_id, platform, override_price, set_at, set_by")
     .eq("tenant_id", tenantId)
     .eq("product_id", productId);
 
@@ -73,6 +75,7 @@ export async function getPlatformPricesForProduct(
   return (data ?? []).map((r: Record<string, unknown>) => ({
     id: String(r.id),
     productId: String(r.product_id),
+    variantId: r.variant_id ? String(r.variant_id) : undefined,
     platform: r.platform as DeliveryPlatform,
     overridePrice: Number(r.override_price),
     setAt: String(r.set_at),
@@ -118,6 +121,7 @@ export async function getProductsWithPlatformPrices(params?: {
     .from("product_platform_prices")
     .select("product_id, platform, override_price")
     .eq("tenant_id", tenantId)
+    .is("variant_id", null)
     .in("product_id", productIds);
 
   if (overErr) handleError(overErr, "getProductsWithPlatformPrices.overrides");
@@ -161,6 +165,7 @@ export async function upsertPlatformPrices(
     {
       p_rows: rows.map((r) => ({
         product_id: r.productId,
+        variant_id: r.variantId ?? null,
         platform: r.platform,
         override_price: r.overridePrice,
       })),
@@ -227,4 +232,27 @@ export function resolveProductPrice(
   if (!platform || platform === "direct") return basePrice;
   const override = platformOverrides[platform];
   return override !== undefined ? override : basePrice;
+}
+
+export interface ProductPlatformPriceBookEntry {
+  product: Partial<Record<DeliveryPlatform, number>>;
+  variants: Record<string, Partial<Record<DeliveryPlatform, number>>>;
+}
+
+/**
+ * Price order approved for FnB delivery platforms:
+ * variant override -> product override -> caller's branch/catalog fallback.
+ */
+export function resolvePlatformPrice(params: {
+  entry?: ProductPlatformPriceBookEntry;
+  platform?: DeliveryPlatform;
+  variantId?: string | null;
+}): number | null {
+  const { entry, platform, variantId } = params;
+  if (!entry || !platform || platform === "direct") return null;
+  if (variantId) {
+    const variantPrice = entry.variants[variantId]?.[platform];
+    if (variantPrice !== undefined) return variantPrice;
+  }
+  return entry.product[platform] ?? null;
 }

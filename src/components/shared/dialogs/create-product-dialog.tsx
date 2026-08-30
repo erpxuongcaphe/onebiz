@@ -153,6 +153,12 @@ interface InlineBomItem {
   modifierScaleTarget?: string | null;
 }
 
+function getBomComponentUnitPrice(product: Product, productChannel: string) {
+  return productChannel === "fnb"
+    ? Number(product.sellPrice) || 0
+    : Number(product.costPrice) || 0;
+}
+
 function formatRecipeQuantity(value: number): string {
   return new Intl.NumberFormat("vi-VN", {
     maximumFractionDigits: 4,
@@ -1374,6 +1380,29 @@ export function CreateProductDialog({
     };
   }, [open, scope, hasBom, innerTab, materialOptions.length, channel]);
 
+  // F&B cost is the Retail selling value of each component. Reprice loaded
+  // legacy BOM rows after the product catalogue arrives so the normal BOM and
+  // per-size matrix always show the same source of truth.
+  useEffect(() => {
+    if (channel !== "fnb" || materialOptions.length === 0 || bomItems.length === 0) return;
+    const retailPriceById = new Map(
+      materialOptions.map((material) => [
+        material.id,
+        getBomComponentUnitPrice(material, "fnb"),
+      ]),
+    );
+    setBomItems((previous) => {
+      let changed = false;
+      const next = previous.map((item) => {
+        const retailPrice = retailPriceById.get(item.materialId);
+        if (retailPrice == null || retailPrice === item.costPrice) return item;
+        changed = true;
+        return { ...item, costPrice: retailPrice };
+      });
+      return changed ? next : previous;
+    });
+  }, [channel, materialOptions, bomItems.length]);
+
   // Load the existing preparation-unit conversions for materials used by the
   // size matrix. Cost preview and stock deduction must share the same factor.
   useEffect(() => {
@@ -1598,6 +1627,31 @@ export function CreateProductDialog({
         duration: 10000,
       });
       return;
+    }
+
+    if (scope === "sku" && channel === "fnb") {
+      const usedMaterialIds = new Set<string>();
+      if (hasBom && !bomCodeTrim) {
+        for (const item of bomItems) usedMaterialIds.add(item.materialId);
+      }
+      if (recipeEnabled) {
+        for (const row of recipeRows) {
+          if (row.materialId) usedMaterialIds.add(row.materialId);
+        }
+      }
+      const missingRetailPrice = materialOptions.find(
+        (material) => usedMaterialIds.has(material.id) && !(Number(material.sellPrice) > 0),
+      );
+      if (missingRetailPrice) {
+        setInnerTab(variantItems.length > 0 ? "variants" : "bom");
+        toast({
+          variant: "error",
+          title: "Chưa thể tính giá vốn F&B",
+          description: `${missingRetailPrice.code} · ${missingRetailPrice.name} chưa có giá bán Retail lớn hơn 0. Hãy thiết lập giá Retail của thành phần trước khi lưu công thức.`,
+          duration: 10000,
+        });
+        return;
+      }
     }
 
     const invalidRecipeUnit = recipeRows.find((row) => {
@@ -3017,7 +3071,9 @@ export function CreateProductDialog({
                               Theo lựa chọn FnB
                             </th>
                           )}
-                          <th className="text-right px-3 py-2 font-semibold w-28">Cost/SP</th>
+                          <th className="text-right px-3 py-2 font-semibold w-28">
+                            {channel === "fnb" ? "Giá vốn F&B/SP" : "Cost/SP"}
+                          </th>
                           <th className="w-10"></th>
                         </tr>
                       </thead>
@@ -3136,7 +3192,9 @@ export function CreateProductDialog({
                             colSpan={channel === "fnb" ? 4 : 3}
                             className="px-3 py-2 text-right font-semibold text-sm"
                           >
-                            Tổng giá vốn (theo BOM):
+                            {channel === "fnb"
+                              ? "Tổng giá vốn F&B (giá Retail):"
+                              : "Tổng giá vốn (theo BOM):"}
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {formatCurrency(
@@ -4029,9 +4087,13 @@ export function CreateProductDialog({
                                         ` · ĐVT ${p.stockUnit || p.unit}`}
                                     </span>
                                   </span>
-                                  {p.costPrice ? (
+                                  {getBomComponentUnitPrice(p, channel) > 0 ? (
                                     <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-                                      {formatCurrency(p.costPrice)}
+                                      {formatCurrency(getBomComponentUnitPrice(p, channel))}
+                                    </span>
+                                  ) : channel === "fnb" ? (
+                                    <span className="text-[11px] text-destructive whitespace-nowrap">
+                                      Chưa có giá Retail
                                     </span>
                                   ) : null}
                                 </button>
@@ -4063,7 +4125,7 @@ export function CreateProductDialog({
                       materialId: m.id,
                       materialCode: m.code,
                       materialName: m.name,
-                      costPrice: m.costPrice ?? 0,
+                      costPrice: getBomComponentUnitPrice(m, channel),
                       unit: m.stockUnit || m.unit || "",
                       stockUnit: m.stockUnit || m.unit || "",
                       conversions: await getUOMConversions(m.id).catch(() => []),

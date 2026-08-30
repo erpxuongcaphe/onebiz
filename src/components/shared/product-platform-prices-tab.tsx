@@ -92,7 +92,12 @@ export function ProductPlatformPricesTab({
     try {
       const rows = await getPlatformPricesForProduct(productId);
       const map: Partial<Record<DeliveryPlatform, number>> = {};
-      for (const r of rows) map[r.platform] = r.overridePrice;
+      // This compact legacy tab edits product-level overrides only. Per-size
+      // rows live in the central price workspace and must never overwrite the
+      // product fallback while loading this form.
+      for (const r of rows) {
+        if (!r.variantId) map[r.platform] = r.overridePrice;
+      }
       setOriginal(map);
       // Init values từ original
       const initVals: Partial<Record<DeliveryPlatform, string>> = {};

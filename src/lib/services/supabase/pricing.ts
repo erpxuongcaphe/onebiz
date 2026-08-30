@@ -8,6 +8,7 @@
 
 import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 
 const supabase = getClient();
@@ -411,6 +412,18 @@ export async function getApplicableTier(context: {
   }
 
   if (context.channel === "fnb" && context.branchId) {
+    // 00363 resolves scheduled assignments by server time. Keep the old branch
+    // column only as a rollout fallback until every environment has migrated.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: resolvedTier, error: resolveError } = await (supabase.rpc as any)(
+      "resolve_branch_price_tier_00363",
+      { p_branch_id: context.branchId },
+    );
+    if (!resolveError) {
+      return (resolvedTier as string | null) ?? null;
+    }
+    if (!isRpcUnavailable(resolveError)) throw resolveError;
+
     const { data, error } = await supabase
       .from("branches")
       .select("price_tier_id")

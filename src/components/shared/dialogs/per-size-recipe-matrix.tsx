@@ -8,7 +8,8 @@
  * Component chỉ render + onChange; KHÔNG tự load/save (cha lo, để 1 nút Lưu).
  *
  * Hiển thị đầy đủ: mã SKU + tên NVL (ô tìm-kiếm), ĐVT theo NVL, lượng riêng
- * từng size (nhận số lẻ), và GIÁ VỐN tự tính theo size (Σ lượng × giá vốn NVL).
+ * từng size (nhận số lẻ), và GIÁ VỐN F&B tự tính theo size
+ * (tong luong x gia ban Retail cua thanh phan).
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -121,7 +122,7 @@ export function calculateRecipeCostBySize(
         if (factor == null) return sum;
         return (
           sum +
-          (material.costPrice || 0) *
+          (material.sellPrice || 0) *
             getRecipeQuantityForSize(row, size.key, optionsByGroup) *
             factor
         );
@@ -555,7 +556,7 @@ export function PerSizeRecipeMatrix({
                   colSpan={3}
                   className="px-2 py-2 text-right font-medium text-muted-foreground"
                 >
-                  Giá vốn / cỡ (tự tính)
+                  Giá vốn F&B / cỡ (theo giá bán Retail)
                 </td>
                 {sizes.map((s) => (
                   <td
