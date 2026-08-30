@@ -46,6 +46,14 @@ export interface ProductWithPlatformPrices {
   categoryName: string | null;
   basePrice: number; // sell_price (giá niêm yết)
   prices: Partial<Record<DeliveryPlatform, number>>;
+  variants: PlatformPriceVariant[];
+}
+
+export interface PlatformPriceVariant {
+  variantId: string;
+  variantName: string;
+  basePrice: number;
+  prices: Partial<Record<DeliveryPlatform, number>>;
 }
 
 // ============================================================
@@ -115,26 +123,53 @@ export async function getProductsWithPlatformPrices(params?: {
 
   if (!products || products.length === 0) return [];
 
-  // Step 2: batch query platform_prices cho các SP đó
+  // Step 2: load active sizes and every product/size override in two queries.
   const productIds = products.map((p: { id: string }) => p.id);
-  const { data: overrides, error: overErr } = await supabase
-    .from("product_platform_prices")
-    .select("product_id, platform, override_price")
-    .eq("tenant_id", tenantId)
-    .is("variant_id", null)
-    .in("product_id", productIds);
+  const [{ data: variants, error: variantErr }, { data: overrides, error: overErr }] =
+    await Promise.all([
+      supabase
+        .from("product_variants")
+        .select("id, product_id, name, sell_price, sort_order")
+        .eq("tenant_id", tenantId)
+        .eq("is_active", true)
+        .in("product_id", productIds)
+        .order("sort_order"),
+      supabase
+        .from("product_platform_prices")
+        .select("product_id, variant_id, platform, override_price")
+        .eq("tenant_id", tenantId)
+        .in("product_id", productIds),
+    ]);
 
+  if (variantErr) handleError(variantErr, "getProductsWithPlatformPrices.variants");
   if (overErr) handleError(overErr, "getProductsWithPlatformPrices.overrides");
 
-  // Step 3: group overrides by product_id
+  // Step 3: group overrides by exact target (product or size).
   const overrideMap = new Map<string, Partial<Record<DeliveryPlatform, number>>>();
   for (const o of overrides ?? []) {
     const row = o as Record<string, unknown>;
-    const pid = String(row.product_id);
-    if (!overrideMap.has(pid)) overrideMap.set(pid, {});
-    overrideMap.get(pid)![row.platform as DeliveryPlatform] = Number(
+    const key = row.variant_id
+      ? `${String(row.product_id)}:${String(row.variant_id)}`
+      : String(row.product_id);
+    if (!overrideMap.has(key)) overrideMap.set(key, {});
+    overrideMap.get(key)![row.platform as DeliveryPlatform] = Number(
       row.override_price,
     );
+  }
+
+  const variantsByProduct = new Map<string, PlatformPriceVariant[]>();
+  for (const raw of variants ?? []) {
+    const row = raw as Record<string, unknown>;
+    const productId = String(row.product_id);
+    const variantId = String(row.id);
+    const list = variantsByProduct.get(productId) ?? [];
+    list.push({
+      variantId,
+      variantName: String(row.name),
+      basePrice: Number(row.sell_price),
+      prices: overrideMap.get(`${productId}:${variantId}`) ?? {},
+    });
+    variantsByProduct.set(productId, list);
   }
 
   return products.map((p: Record<string, unknown>) => ({
@@ -144,7 +179,39 @@ export async function getProductsWithPlatformPrices(params?: {
     categoryName: (p.categories as { name?: string } | null)?.name ?? null,
     basePrice: Number(p.sell_price),
     prices: overrideMap.get(String(p.id)) ?? {},
+    variants: variantsByProduct.get(String(p.id)) ?? [],
   }));
+}
+
+export interface PlatformPriceDeleteTarget {
+  productId: string;
+  variantId?: string;
+  platform: DeliveryPlatform;
+}
+
+export async function deletePlatformPriceTargets(
+  rows: PlatformPriceDeleteTarget[],
+): Promise<{ deleted: number }> {
+  if (rows.length === 0) return { deleted: 0 };
+  const supabase = getClient();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "delete_platform_price_targets_00364",
+    {
+      p_rows: rows.map((row) => ({
+        product_id: row.productId,
+        variant_id: row.variantId ?? null,
+        platform: row.platform,
+      })),
+    },
+  );
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error("Chức năng xoá giá theo size chưa được cài (migration 00364).");
+    }
+    handleError(error, "deletePlatformPriceTargets");
+  }
+  return { deleted: Number((data as { deleted?: number })?.deleted ?? 0) };
 }
 
 /**

@@ -6,6 +6,10 @@ const migration = readFileSync(
   "supabase/migrations/00363_unified_sale_pricing.sql",
   "utf8",
 );
+const atomicScopeMigration = readFileSync(
+  "supabase/migrations/00364_atomic_price_tier_branch_scope.sql",
+  "utf8",
+);
 const fnbPos = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
 const pricingService = readFileSync(
   "src/lib/services/supabase/pricing.ts",
@@ -17,6 +21,14 @@ const productDialog = readFileSync(
 );
 const productPlatformTab = readFileSync(
   "src/components/shared/product-platform-prices-tab.tsx",
+  "utf8",
+);
+const branchScopeUi = readFileSync(
+  "src/components/shared/price-tier-branch-scope.tsx",
+  "utf8",
+);
+const platformBulkPage = readFileSync(
+  "src/app/(main)/cai-dat/bang-gia/platforms/page.tsx",
   "utf8",
 );
 
@@ -76,5 +88,22 @@ describe("unified sale pricing 00363", () => {
     expect(migration).toContain("calculate_fnb_bom_retail_cost_00363");
     expect(migration).toContain("FNB_COMPONENT_RETAIL_PRICE_MISSING");
     expect(migration).toContain("component_retail_sell_price");
+  });
+
+  it("replaces complete branch scope atomically with permission and overlap guards", () => {
+    expect(atomicScopeMigration).toContain("delete from public.branch_price_tier_assignments");
+    expect(atomicScopeMigration).toContain("PRICE_ASSIGNMENT_OVERLAP");
+    expect(atomicScopeMigration).toContain("products.manage_prices");
+    expect(atomicScopeMigration).toContain("price_assignment_replace");
+    expect(branchScopeUi).toContain("Không thời hạn");
+    expect(branchScopeUi).toContain("savePriceTierBranchAssignments");
+  });
+
+  it("manages delivery-platform prices for both product and size targets", () => {
+    expect(atomicScopeMigration).toContain("delete_platform_price_targets_00364");
+    expect(atomicScopeMigration).toContain("variant_id is not distinct from v_variant_id");
+    expect(platformBulkPage).toContain("product.variants.map");
+    expect(platformBulkPage).toContain("variantId: target.variantId");
+    expect(platformBulkPage).toContain("Giá riêng theo size");
   });
 });

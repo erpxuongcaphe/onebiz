@@ -29,11 +29,13 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import {
   getProductsWithPlatformPrices,
   upsertPlatformPrices,
-  deletePlatformPrices,
+  deletePlatformPriceTargets,
   type ProductWithPlatformPrices,
 } from "@/lib/services/supabase/platform-prices";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import type { DeliveryPlatform } from "@/lib/types/fnb";
+import { PERMISSIONS } from "@/lib/permissions/constants";
+import { usePermissions } from "@/lib/permissions/use-permission";
 
 const OVERRIDE_PLATFORMS: { code: DeliveryPlatform; label: string; icon: string; color: string }[] = [
   { code: "shopee_food", label: "Shopee Food", icon: "shopping_bag", color: "text-orange-600" },
@@ -42,11 +44,25 @@ const OVERRIDE_PLATFORMS: { code: DeliveryPlatform; label: string; icon: string;
   { code: "be", label: "Be", icon: "two_wheeler", color: "text-yellow-600" },
 ];
 
-/** edits[productId][platform] = string number ("" = không override) */
+/** edits[targetKey][platform] = string number ("" = không override) */
 type EditsMap = Record<string, Partial<Record<DeliveryPlatform, string>>>;
+
+interface PlatformPriceTarget {
+  key: string;
+  productId: string;
+  variantId?: string;
+  label: string;
+  code: string;
+  categoryName: string | null;
+  basePrice: number;
+  prices: Partial<Record<DeliveryPlatform, number>>;
+  isVariant: boolean;
+}
 
 export default function PlatformPricesBulkEditorPage() {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canManage = hasPermission(PERMISSIONS.PRODUCTS_MANAGE_PRICES);
   const [products, setProducts] = useState<ProductWithPlatformPrices[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -60,6 +76,38 @@ export default function PlatformPricesBulkEditorPage() {
   // Quick action state
   const [quickPlatform, setQuickPlatform] = useState<DeliveryPlatform>("shopee_food");
   const [quickAmount, setQuickAmount] = useState<string>("");
+
+  const targets = useMemo<PlatformPriceTarget[]>(
+    () =>
+      products.flatMap((product) => [
+        {
+          key: product.productId,
+          productId: product.productId,
+          label: product.productName,
+          code: product.productCode,
+          categoryName: product.categoryName,
+          basePrice: product.basePrice,
+          prices: product.prices,
+          isVariant: false,
+        },
+        ...product.variants.map((variant) => ({
+          key: `${product.productId}:${variant.variantId}`,
+          productId: product.productId,
+          variantId: variant.variantId,
+          label: variant.variantName,
+          code: product.productCode,
+          categoryName: product.categoryName,
+          basePrice: variant.basePrice,
+          prices: variant.prices,
+          isVariant: true,
+        })),
+      ]),
+    [products],
+  );
+  const targetByKey = useMemo(
+    () => new Map(targets.map((target) => [target.key, target])),
+    [targets],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -99,22 +147,22 @@ export default function PlatformPricesBulkEditorPage() {
 
   // Helpers: get/set cell value (edits ưu tiên, fallback original)
   const getCellValue = useCallback(
-    (productId: string, platform: DeliveryPlatform): string => {
-      const editVal = edits[productId]?.[platform];
+    (targetKey: string, platform: DeliveryPlatform): string => {
+      const editVal = edits[targetKey]?.[platform];
       if (editVal !== undefined) return editVal;
-      const original = products.find((p) => p.productId === productId)?.prices[platform];
+      const original = targetByKey.get(targetKey)?.prices[platform];
       return original !== undefined ? String(original) : "";
     },
-    [edits, products],
+    [edits, targetByKey],
   );
 
   const setCellValue = useCallback(
-    (productId: string, platform: DeliveryPlatform, value: string) => {
+    (targetKey: string, platform: DeliveryPlatform, value: string) => {
       const sanitized = value.replace(/[^\d]/g, "");
       setEdits((prev) => ({
         ...prev,
-        [productId]: {
-          ...prev[productId],
+        [targetKey]: {
+          ...prev[targetKey],
           [platform]: sanitized,
         },
       }));
@@ -135,31 +183,34 @@ export default function PlatformPricesBulkEditorPage() {
       return;
     }
     const next: EditsMap = { ...edits };
-    for (const p of products) {
-      const newPrice = p.basePrice + amount;
+    for (const target of targets) {
+      const newPrice = target.basePrice + amount;
       if (newPrice < 0) continue;
-      next[p.productId] = {
-        ...next[p.productId],
+      next[target.key] = {
+        ...next[target.key],
         [quickPlatform]: String(newPrice),
       };
     }
     setEdits(next);
     toast({
-      title: `Đã áp giá cho ${products.length} SP`,
+      title: `Đã áp giá cho ${targets.length} dòng giá`,
       description: `${OVERRIDE_PLATFORMS.find((x) => x.code === quickPlatform)?.label}: giá niêm yết + ${formatCurrency(amount)} (chưa lưu)`,
       variant: "success",
     });
   };
 
   const handleClearPlatformAll = async () => {
-    if (!confirm(`Xoá TẤT CẢ override ${OVERRIDE_PLATFORMS.find((x) => x.code === quickPlatform)?.label} cho ${products.length} SP đang hiện?`)) {
+    if (!confirm(`Xoá TẤT CẢ override ${OVERRIDE_PLATFORMS.find((x) => x.code === quickPlatform)?.label} cho ${targets.length} dòng sản phẩm/size đang hiện?`)) {
       return;
     }
     setSaving(true);
     try {
-      await deletePlatformPrices(
-        products.map((p) => p.productId),
-        quickPlatform,
+      await deletePlatformPriceTargets(
+        targets.map((target) => ({
+          productId: target.productId,
+          variantId: target.variantId,
+          platform: quickPlatform,
+        })),
       );
       toast({
         title: "Đã xoá override",
@@ -182,43 +233,51 @@ export default function PlatformPricesBulkEditorPage() {
   const dirtyCount = useMemo(() => {
     let count = 0;
     for (const pid of Object.keys(edits)) {
-      const prod = products.find((p) => p.productId === pid);
-      if (!prod) continue;
+      const target = targetByKey.get(pid);
+      if (!target) continue;
       for (const platform of OVERRIDE_PLATFORMS) {
         const newVal = edits[pid][platform.code];
         if (newVal === undefined) continue;
-        const oldVal = prod.prices[platform.code];
+        const oldVal = target.prices[platform.code];
         const newNum = newVal.trim() !== "" ? Number(newVal) : null;
         if (newNum === null && oldVal === undefined) continue; // both empty
         if (newNum !== oldVal) count++;
       }
     }
     return count;
-  }, [edits, products]);
+  }, [edits, targetByKey]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      const toUpsert: { productId: string; platform: DeliveryPlatform; overridePrice: number }[] = [];
-      const toDeleteMap: Partial<Record<DeliveryPlatform, string[]>> = {};
+      const toUpsert: { productId: string; variantId?: string; platform: DeliveryPlatform; overridePrice: number }[] = [];
+      const toDelete: { productId: string; variantId?: string; platform: DeliveryPlatform }[] = [];
 
       for (const pid of Object.keys(edits)) {
-        const prod = products.find((p) => p.productId === pid);
-        if (!prod) continue;
+        const target = targetByKey.get(pid);
+        if (!target) continue;
         for (const platform of OVERRIDE_PLATFORMS) {
           const newVal = edits[pid][platform.code];
           if (newVal === undefined) continue;
-          const oldVal = prod.prices[platform.code];
+          const oldVal = target.prices[platform.code];
           const newNum = newVal.trim() !== "" ? Number(newVal) : null;
 
           if (newNum !== null && newNum > 0) {
             if (oldVal !== newNum) {
-              toUpsert.push({ productId: pid, platform: platform.code, overridePrice: newNum });
+              toUpsert.push({
+                productId: target.productId,
+                variantId: target.variantId,
+                platform: platform.code,
+                overridePrice: newNum,
+              });
             }
           } else if (oldVal !== undefined) {
             // có override cũ, giờ xoá → batch delete
-            if (!toDeleteMap[platform.code]) toDeleteMap[platform.code] = [];
-            toDeleteMap[platform.code]!.push(pid);
+            toDelete.push({
+              productId: target.productId,
+              variantId: target.variantId,
+              platform: platform.code,
+            });
           }
         }
       }
@@ -230,9 +289,8 @@ export default function PlatformPricesBulkEditorPage() {
         const r = await upsertPlatformPrices(toUpsert);
         upsertCount = r.count;
       }
-      for (const platform of Object.keys(toDeleteMap) as DeliveryPlatform[]) {
-        const ids = toDeleteMap[platform]!;
-        const r = await deletePlatformPrices(ids, platform);
+      if (toDelete.length > 0) {
+        const r = await deletePlatformPriceTargets(toDelete);
         deleteCount += r.deleted;
       }
 
@@ -260,10 +318,17 @@ export default function PlatformPricesBulkEditorPage() {
         subtitle="Cà phê tại quán 25.000đ → Shopee Food 26.000đ. Để trống = dùng giá niêm yết. Setup hàng loạt cho nhiều SP × 4 nền tảng giao đồ ăn."
       />
 
+      {!canManage && (
+        <div className="flex items-center gap-2 border-b pb-3 text-sm text-muted-foreground">
+          <Icon name="lock" size={16} />
+          Bạn đang xem bảng giá. Cần quyền quản lý giá để thay đổi.
+        </div>
+      )}
+
       {/* Quick actions toolbar */}
       <div className="bg-surface border border-border rounded-xl p-3 space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-          Thao tác nhanh — áp cho tất cả SP đang hiện ({products.length})
+          Thao tác nhanh — áp cho sản phẩm và size đang hiện ({targets.length})
         </h3>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
@@ -271,6 +336,7 @@ export default function PlatformPricesBulkEditorPage() {
             <select
               value={quickPlatform}
               onChange={(e) => setQuickPlatform(e.target.value as DeliveryPlatform)}
+              disabled={!canManage}
               className="text-sm px-2 py-1.5 rounded-md border border-border bg-surface h-9 min-w-[150px]"
             >
               {OVERRIDE_PLATFORMS.map((p) => (
@@ -287,6 +353,7 @@ export default function PlatformPricesBulkEditorPage() {
               inputMode="numeric"
               value={quickAmount ? formatNumber(Number(quickAmount)) : ""}
               onChange={(e) => setQuickAmount(e.target.value.replace(/[^\d]/g, ""))}
+              disabled={!canManage}
               placeholder="vd 1000 (= +1.000đ)"
               className="h-9 max-w-[180px] font-mono tabular-nums"
             />
@@ -294,18 +361,18 @@ export default function PlatformPricesBulkEditorPage() {
           <Button
             size="sm"
             onClick={handleQuickApply}
-            disabled={!quickAmount || saving}
+            disabled={!canManage || !quickAmount || saving}
             className="h-9"
           >
             <Icon name="auto_fix_high" size={14} className="mr-1" />
-            Áp giá cho tất cả ({products.length} SP)
+            Áp giá cho tất cả ({targets.length} dòng)
           </Button>
           <div className="ml-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={handleClearPlatformAll}
-              disabled={saving}
+              disabled={!canManage || saving}
               className="h-9 text-status-error border-status-error/30 hover:bg-status-error/10"
             >
               <Icon name="delete_sweep" size={14} className="mr-1" />
@@ -380,36 +447,43 @@ export default function PlatformPricesBulkEditorPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {products.map((p) => (
-                  <tr key={p.productId} className="hover:bg-surface-container-low transition-colors">
-                    <td className="px-3 py-2">
-                      <div className="font-medium text-[13px] truncate max-w-[300px]" title={p.productName}>
-                        {p.productName}
+                {targets.map((target) => (
+                  <tr key={target.key} className={cn(
+                    "hover:bg-surface-container-low transition-colors",
+                    target.isVariant && "bg-muted/20",
+                  )}>
+                    <td className={cn("px-3 py-2", target.isVariant && "pl-8")}>
+                      <div className={cn(
+                        "font-medium text-[13px] truncate max-w-[300px]",
+                        target.isVariant && "flex items-center gap-1.5",
+                      )} title={target.label}>
+                        {target.isVariant && <Icon name="subdirectory_arrow_right" size={14} className="text-muted-foreground" />}
+                        {target.label}
                       </div>
                       <div className="text-[10px] text-muted-foreground">
-                        {p.productCode}
-                        {p.categoryName && <> · {p.categoryName}</>}
+                        {target.isVariant ? "Giá riêng theo size" : target.code}
+                        {!target.isVariant && target.categoryName && <> · {target.categoryName}</>}
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right font-mono text-[13px] tabular-nums text-muted-foreground">
-                      {formatCurrency(p.basePrice)}
+                      {formatCurrency(target.basePrice)}
                     </td>
                     {OVERRIDE_PLATFORMS.map((platform) => {
-                      const value = getCellValue(p.productId, platform.code);
+                      const value = getCellValue(target.key, platform.code);
                       const numValue = value !== "" ? Number(value) : null;
-                      const isOverride = numValue !== null && numValue !== p.basePrice;
+                      const isOverride = numValue !== null && numValue !== target.basePrice;
                       const isDirty =
-                        edits[p.productId]?.[platform.code] !== undefined &&
-                        (numValue ?? null) !== (p.prices[platform.code] ?? null);
+                        edits[target.key]?.[platform.code] !== undefined &&
+                        (numValue ?? null) !== (target.prices[platform.code] ?? null);
                       return (
                         <td key={platform.code} className="px-2 py-1.5">
                           <Input
                             type="text"
                             inputMode="numeric"
                             value={value ? formatNumber(Number(value)) : ""}
-                            onChange={(e) => setCellValue(p.productId, platform.code, e.target.value)}
-                            placeholder={formatCurrency(p.basePrice)}
-                            disabled={saving}
+                            onChange={(e) => setCellValue(target.key, platform.code, e.target.value)}
+                            placeholder={formatCurrency(target.basePrice)}
+                            disabled={!canManage || saving}
                             className={cn(
                               "h-8 text-right font-mono tabular-nums text-[12px]",
                               isOverride && "border-primary/50 bg-primary/5",

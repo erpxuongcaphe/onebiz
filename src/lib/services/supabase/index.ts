@@ -381,6 +381,15 @@ export {
   getProductPriceForCustomer, getTierPricesBatch,
   getApplicableTier, resolveAppliedTier,
 } from "./pricing";
+export type {
+  BranchPriceTierAssignment,
+  BranchPriceTierAssignmentInput,
+  PriceTierAssignmentMode,
+} from "./pricing";
+export {
+  getPriceTierBranchAssignments,
+  savePriceTierBranchAssignments,
+} from "./pricing";
 
 // Reports & Financial Intelligence
 export {
