@@ -1,6 +1,7 @@
 # Kế hoạch hợp nhất thiết lập sản phẩm F&B
 
-> Trạng thái: đề xuất để CEO duyệt, chưa triển khai UI hoặc thay đổi dữ liệu.
+> Trạng thái: CEO đã duyệt định hướng ngày 30/08/2026, có điều chỉnh về Bảng
+> giá riêng và nhãn tùy chọn tự do. Chưa triển khai UI hoặc thay đổi dữ liệu.
 > Ngày lập: 30/08/2026.
 
 ## 1. Mục tiêu
@@ -43,11 +44,16 @@ Nguồn:
 - Một topping có thể gắn nhiều món, tránh tạo bản sao.
 - Bài học áp dụng: **một đối tượng, một cơ chế trừ kho**; tái sử dụng nhóm/lựa
   chọn; đơn vị chọn từ dữ liệu chuẩn.
+- Giá nhiều chi nhánh được quản trị tại màn Bảng giá/Thiết lập giá riêng, có
+  phạm vi chi nhánh, khách hàng và thời gian; không nhồi ma trận giá chi nhánh
+  vào form thông tin của từng sản phẩm.
 
 Nguồn:
 
 - https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/fnb-thuc-don/topping/
 - https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/fnb-thuc-don/danh-sach-mon-trong-thuc-don/
+- https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/huong-dan-bar-cafe-nha-hang/quan-ly-bang-gia/
+- https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/fnb-hang-hoa/thiet-lap-gia/
 
 ### Toast
 
@@ -133,10 +139,12 @@ tab **Thiết lập F&B**.
 
 ### Tab Giá & trạng thái
 
-- Giá mặc định của món hoặc bảng tóm tắt giá theo size.
+- Giá niêm yết của món hoặc giá niêm yết theo size.
 - Trạng thái kinh doanh.
-- Giá theo bảng giá tiếp tục dùng hệ thống bảng giá hiện có; không tạo thêm một
-  cơ chế giá theo chi nhánh trong dự án này.
+- Chỉ hiển thị tóm tắt các Bảng giá đang chứa món và nút mở đúng màn **Bảng
+  giá**; không sửa giá theo chi nhánh trong form sản phẩm.
+- Giá theo chi nhánh tiếp tục dùng hệ thống Bảng giá hiện có; không tạo thêm
+  bảng dữ liệu hoặc cơ chế giá thứ ba.
 
 ### Tab Thiết lập F&B
 
@@ -191,6 +199,10 @@ thái vẫn nằm trong cùng một form và một draft.
 - **Topping nhập sẵn** trừ trực tiếp SKU/NVL theo phần.
 - **Mức đá/ghi chú pha chế** không trừ kho nếu không gắn nguyên liệu.
 - Một lựa chọn không được vừa scale BOM vừa trừ thẳng một SKU.
+- Tên lựa chọn là chữ hiển thị tự do, ví dụ **Bình thường**, **Ít ngọt**,
+  **Không đường**. Không suy định lượng hoặc trạng thái mặc định từ tên này.
+- `option_id` là định danh ổn định; tên hiển thị, lựa chọn mặc định và định lượng
+  nguyên liệu là ba dữ liệu độc lập.
 
 ### Cách nhập
 
@@ -199,12 +211,14 @@ Khi dòng nguyên liệu chọn “Theo Mức đường”, bảng chi tiết m�
 | Lựa chọn | Mặc định hoặc Size M | Size L |
 | --- | ---: | ---: |
 | Không đường | 0 g | 0 g |
-| 80% | 5 g | 7 g |
-| 100% (mặc định) | 6 g | 9 g |
-| 120% | 7 g | 11 g |
+| Ít ngọt | 5 g | 7 g |
+| Bình thường (mặc định) | 6 g | 9 g |
+| Thêm ngọt | 7 g | 11 g |
 
-Hệ thống không tự suy 80/120% từ món khác. Có thể có nút **Gợi ý từ 100%** để
-điền nháp, nhưng user phải xác nhận và được sửa từng ô trước khi lưu.
+Hệ thống không tự suy lượng từ tên hoặc từ món khác. Có thể có nút **Gợi ý theo
+mức chuẩn** để điền nháp theo tỷ lệ do user chọn, nhưng user phải xác nhận và
+được sửa từng ô trước khi lưu. Đổi tên lựa chọn không được làm đổi định lượng,
+mặc định hoặc lịch sử đơn hàng.
 
 ## 7. Chi nhánh và công thức
 
@@ -253,7 +267,68 @@ không ép `bom.branch_id` một giá trị phải giả vờ đại diện nhi�
 - Variant và sản phẩm cha được cập nhật giá vốn tính toán trong cùng giao dịch.
 - Thay đổi đơn vị pha chế phải tính lại lượng tồn và giá vốn ngay, không đổi giá
   bán.
-- Giá theo chi nhánh tiếp tục đi qua Bảng giá; không trộn vào công thức.
+- Giá theo chi nhánh tiếp tục đi qua màn **Bảng giá** riêng; không trộn vào công
+  thức và không sửa trực tiếp trong form sản phẩm.
+
+### Bảng giá nhiều chi nhánh
+
+OneBiz đã có `price_tiers`, `price_tier_items`, liên kết bảng giá mặc định trên
+chi nhánh và khả năng lưu giá theo `variant_id`. Phần này được hoàn thiện trên
+nền hiện có, không tạo bảng giá song song:
+
+- **Bảng giá chung** là giá niêm yết đang lưu trên sản phẩm/variant và là nguồn
+  fallback toàn hệ thống; không tạo thêm một bản sao toàn bộ giá chung.
+- Một SKU vẫn là một sản phẩm; không nhân bản SKU khi chi nhánh có giá khác.
+- **Bảng giá chi nhánh** là bảng ngoại lệ thưa: chỉ chứa SKU/size có giá khác
+  giá chung. Cùng một bảng ngoại lệ có thể được nhiều chi nhánh sử dụng.
+- Màn Bảng giá cho phép chọn một hoặc nhiều chi nhánh áp dụng và xem rõ chi
+  nhánh nào đang dùng bảng đó.
+- Trong một bảng giá, món có size hiển thị từng dòng/cột size; giá được lưu theo
+  đúng `variant_id`.
+- Cho phép sửa hàng loạt, nhân bản bảng giá, tìm theo món/size và đối chiếu với
+  giá niêm yết.
+- Một chi nhánh tại một thời điểm chỉ phân giải một bảng giá F&B ngoại lệ có
+  hiệu lực. Thứ tự phân giải bắt buộc là: `giá SKU+size trong bảng chi nhánh` ->
+  `giá SKU trong bảng chi nhánh` -> `giá niêm yết size` -> `giá niêm yết món`.
+- SKU/size không nằm trong bảng chi nhánh mặc nhiên lấy giá chung; không yêu cầu
+  copy lại toàn bộ menu vào mỗi bảng giá.
+- POS lưu snapshot giá và nguồn giá đã áp dụng để hóa đơn cũ không đổi khi bảng
+  giá được chỉnh về sau.
+- Form sản phẩm chỉ có tóm tắt “Đang thuộc N bảng giá” và liên kết mở màn Bảng
+  giá với bộ lọc sẵn theo SKU; không đặt ma trận chi nhánh trong popup sản phẩm.
+
+### Phân quyền và kiểm soát giá
+
+- Owner/Chủ doanh nghiệp được quyền theo cơ chế bypass hiện có.
+- Admin hoặc vai trò tùy chỉnh chỉ được tạo, sửa, nhân bản, gán chi nhánh, nhập
+  Excel hoặc xóa Bảng giá khi có `products.manage_prices`.
+- `products.edit` không đủ để sửa Bảng giá; quyền sửa giá tại POS
+  `pos_fnb.edit_price` cũng không cấp quyền quản trị Bảng giá.
+- UI ẩn/khóa lệnh không đủ: mọi RPC ghi Bảng giá phải kiểm lại tenant và
+  `user_has_permission(..., 'products.manage_prices')` trong database.
+- Gán Bảng giá cho chi nhánh đồng thời cần quyền quản lý giá; không dùng quyền
+  quản lý chi nhánh để đi vòng sửa giá.
+- Mọi thay đổi ghi audit gồm người sửa, thời điểm, bảng giá, phạm vi chi nhánh,
+  SKU/variant, giá cũ, giá mới và lý do khi sửa hàng loạt.
+- Nhân viên POS chỉ nhận giá đã phân giải; không thấy công cụ quản trị Bảng giá.
+
+### Kế hoạch hoàn thiện Bảng giá
+
+1. **Read model:** dựng màn hình gồm Bảng giá chung và các bảng ngoại lệ, hiển
+   thị chi nhánh áp dụng, số SKU/size khác giá và ngày cập nhật cuối.
+2. **Editor ngoại lệ:** ma trận sản phẩm/size, tìm kiếm, lọc nhóm hàng, thêm/xóa
+   dòng ngoại lệ, sửa hàng loạt và so sánh trực tiếp với giá chung.
+3. **Phạm vi chi nhánh:** chọn nhiều chi nhánh cho một bảng; cảnh báo trước khi
+   chuyển chi nhánh khỏi bảng cũ và không cho hai bảng F&B cùng hiệu lực.
+4. **RPC nguyên tử:** lưu item giá + assignment chi nhánh trong một giao dịch,
+   kiểm `products.manage_prices`, tenant, variant thuộc đúng sản phẩm và chống
+   trùng `(price_tier_id, product_id, variant_id, min_qty)`.
+5. **Resolver và audit:** dùng đúng chuỗi fallback, snapshot giá vào hóa đơn,
+   ghi nguồn `common/branch-tier`, audit thay đổi và contract test POS F&B.
+
+Các bước trên dùng `price_tiers`, `price_tier_items`, `branches.price_tier_id`
+và giá sản phẩm/variant hiện có. Chỉ thêm schema sau preflight nếu thiếu unique
+constraint, RPC hoặc trường audit; không tạo một hệ thống Bảng giá thứ hai.
 
 ## 10. POS, bếp, kho và in
 
@@ -300,7 +375,7 @@ không ép `bom.branch_id` một giá trị phải giả vờ đại diện nhi�
 
 ### Pha 0 - Chốt quyết định nghiệp vụ
 
-- CEO duyệt bốn điểm ở mục 14.
+- CEO đã duyệt bốn điểm ở mục 14.
 - Không thay đổi production.
 
 ### Pha 1 - Domain model và read adapter
@@ -309,12 +384,16 @@ không ép `bom.branch_id` một giá trị phải giả vờ đại diện nhi�
 - Adapter đọc BOM cha thành cột ảo Mặc định và BOM variant thành cột size.
 - Adapter đọc modifier, exact quantities, UOM, menu scope và cost.
 - Test dữ liệu cũ mở lên không đổi nghĩa.
+- Định nghĩa price resolver dùng chung cho POS, preview và kiểm tra trước lưu;
+  không để mỗi màn tự chọn fallback khác nhau.
 
 ### Pha 2 - Workspace UI trên Preview
 
 - Xây `FnbProductSetupWorkspace` thay cho ba bề mặt rời rạc.
 - Chưa xóa tab cũ; bật bằng feature flag trên Preview.
 - Kiểm desktop/tablet/mobile và draft persistence.
+- Hoàn thiện màn Bảng giá riêng: phạm vi nhiều chi nhánh, món/size, fallback và
+  liên kết lọc từ sản phẩm. Không đưa editor giá chi nhánh vào workspace F&B.
 
 ### Pha 3 - RPC lưu nguyên tử
 
@@ -322,6 +401,8 @@ không ép `bom.branch_id` một giá trị phải giả vờ đại diện nhi�
 - Migration bổ sung assignment công thức nhiều chi nhánh nếu CEO duyệt.
 - RPC validate toàn payload rồi lưu setup F&B trong một transaction.
 - RLS/permission/tenant guard và idempotency.
+- RPC Bảng giá riêng kiểm `products.manage_prices`, lưu assignment nhiều chi
+  nhánh và item SKU/variant nguyên tử, kèm audit trước/sau.
 - Rollback script và postflight read-only.
 
 ### Pha 4 - Nối luồng thực tế
@@ -360,20 +441,26 @@ Mỗi mẫu phải qua POS -> bếp -> thanh toán -> kho -> trả hàng -> báo
 - Chuyển section/tab/thiết bị không mất draft.
 - Một lần lưu không để lại dữ liệu một phần.
 - Một sản phẩm dùng được nhiều chi nhánh mà không nhân bản SKU.
+- SKU/size không có ngoại lệ chi nhánh luôn nhận đúng giá chung.
+- User chỉ có `products.edit` không thể sửa/gán Bảng giá; Owner hoặc user có
+  `products.manage_prices` mới thực hiện được.
+- Lịch sử hóa đơn giữ nguyên giá đã bán sau khi Bảng giá thay đổi.
 - Mỗi chi nhánh/size phân giải đúng một BOM.
 - POS, KDS, in, thanh toán, kho và hoàn trả khớp cùng snapshot.
 - Món cũ không size tiếp tục bán như trước.
 
-## 14. Bốn quyết định cần CEO duyệt
+## 14. Bốn quyết định CEO đã duyệt
 
 1. **Tên và cấu trúc:** dùng một tab `Thiết lập F&B` gồm Phạm vi bán -> Quy cách
-   -> Công thức -> Tùy chọn -> Kiểm tra. Đề xuất: **duyệt**.
+   -> Công thức -> Tùy chọn -> Kiểm tra. Trạng thái: **đã duyệt**.
 2. **Chi nhánh:** một công thức mặc định, chỉ tạo override khi khác; một override
-   gán được nhiều chi nhánh. Đề xuất: **duyệt**.
-3. **Giá:** giá size nằm trong Thiết lập F&B; giá theo chi nhánh vẫn dùng Bảng
-   giá, không tạo cơ chế giá thứ ba. Đề xuất: **duyệt**.
-4. **Gợi ý định lượng:** cho phép nút gợi ý 80/120% từ mức chuẩn nhưng không tự
-   lưu; user phải xác nhận/chỉnh số thực tế. Đề xuất: **duyệt có cảnh báo**.
+   gán được nhiều chi nhánh. Trạng thái: **đã duyệt**.
+3. **Giá:** giá niêm yết theo size nằm trong Thiết lập F&B; giá theo chi nhánh
+   quản trị tại màn Bảng giá riêng như cơ chế OneBiz đang có, không tạo cơ chế
+   giá thứ ba. Trạng thái: **đã duyệt sau điều chỉnh**.
+4. **Tên và gợi ý định lượng:** tên lựa chọn do user tự nhập như Bình thường/Ít
+   ngọt; mặc định và số gram lưu riêng. Nút gợi ý chỉ tạo nháp từ mức chuẩn,
+   không tự lưu. Trạng thái: **đã duyệt sau điều chỉnh**.
 
-Sau khi CEO duyệt bốn điểm, mới bắt đầu Pha 1. Không code schema/UI trước quyết
-định để tránh tiếp tục tạo thêm một luồng setup song song.
+Pha 1 chỉ bắt đầu trên domain thống nhất này. Không tạo thêm luồng setup sản
+phẩm hoặc luồng giá song song.
