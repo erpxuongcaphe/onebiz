@@ -42,6 +42,38 @@ export interface SavedFnbSizeSetupVariant {
   bomCode: string;
 }
 
+export interface AtomicFnbProductInput {
+  code: string;
+  name: string;
+  categoryId: string;
+  unit: string;
+  purchaseUnit?: string;
+  stockUnit?: string;
+  sellUnit?: string;
+  sellPrice: number;
+  costPrice: number;
+  minStock?: number;
+  maxStock?: number;
+  vatRate?: number;
+  barcode?: string;
+  weight?: number;
+  description?: string;
+  image?: string;
+  allowSale?: boolean;
+  groupCode?: string;
+  shelfLifeDays?: number;
+  shelfLifeUnit?: string;
+  supplierId?: string;
+  brand?: string;
+  bomCode?: string;
+}
+
+export interface AtomicFnbProductResult {
+  productId: string;
+  code: string;
+  variants: SavedFnbSizeSetupVariant[];
+}
+
 async function requireTenantProduct(productId: string, tenantId: string): Promise<void> {
   const { data, error } = await supabase
     .from("products")
@@ -223,6 +255,46 @@ export async function saveFnbSizeSetupAtomic(
     id: String(row.id ?? ""),
     bomCode: String(row.bomCode ?? ""),
   }));
+}
+
+/** 00365: create the parent FnB SKU and complete size setup in one transaction. */
+export async function createFnbProductWithSizeSetupAtomic(
+  product: AtomicFnbProductInput,
+  variants: FnbSizeSetupVariantInput[],
+  modifierGroupIds: string[],
+): Promise<AtomicFnbProductResult> {
+  if (!product.code || !product.name || !product.categoryId) {
+    throw new Error("Thiếu thông tin bắt buộc của sản phẩm FnB.");
+  }
+  if (variants.length === 0) {
+    throw new Error("Món có quy cách phải có ít nhất một size.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "create_fnb_product_with_size_setup_atomic",
+    {
+      p_product: product,
+      p_variants: variants,
+      p_modifier_group_ids: modifierGroupIds,
+    },
+  );
+  if (error) throw error;
+  if (!data?.productId || !data?.code) {
+    throw new Error("Máy chủ không trả kết quả tạo sản phẩm FnB hợp lệ.");
+  }
+
+  return {
+    productId: String(data.productId),
+    code: String(data.code),
+    variants: (Array.isArray(data.variants) ? data.variants : []).map(
+      (row: Record<string, unknown>) => ({
+        clientKey: String(row.clientKey ?? ""),
+        id: String(row.id ?? ""),
+        bomCode: String(row.bomCode ?? ""),
+      }),
+    ),
+  };
 }
 
 function mapVariant(row: Record<string, unknown>): ProductVariant {

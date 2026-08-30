@@ -59,6 +59,8 @@ import {
   updateVariant,
   deleteVariant,
   saveFnbSizeSetupAtomic,
+  createFnbProductWithSizeSetupAtomic,
+  type FnbSizeSetupVariantInput,
 } from "@/lib/services/supabase/variants";
 import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
@@ -1287,12 +1289,11 @@ export function CreateProductDialog({
     });
   }
 
-  async function syncFnbSizeSetup(
-    productId: string,
+  function buildFnbSizeSetupPayload(
     productCode: string,
-  ): Promise<void> {
+  ): FnbSizeSetupVariantInput[] {
     const valid = recipeRows.filter((r) => r.materialId);
-    const payload = variantItems.map((v, index) => {
+    return variantItems.map((v, index) => {
       const items = valid
         .map((r) => ({
           materialId: r.materialId,
@@ -1325,7 +1326,13 @@ export function CreateProductDialog({
         exactRows: buildPerSizeExactQuantityRows(v.key),
       };
     });
+  }
 
+  async function syncFnbSizeSetup(
+    productId: string,
+    productCode: string,
+  ): Promise<void> {
+    const payload = buildFnbSizeSetupPayload(productCode);
     const saved = await saveFnbSizeSetupAtomic(productId, payload);
     const savedByKey = new Map(saved.map((row) => [row.clientKey, row]));
     setVariantItems((current) =>
@@ -2005,16 +2012,57 @@ export function CreateProductDialog({
       // CREATE — sinh code mới theo groupCode.
       const prefix = scope === "nvl" ? "NVL" : "SKU";
       const code = await nextGroupCode(prefix, selectedCategory!.code!);
+      const createAtomicallyWithFnbSizes =
+        scope === "sku" &&
+        channel === "fnb" &&
+        recipeEnabled &&
+        variantItems.length > 0;
+      let created: { id: string };
 
-      const created = await createProduct({
-        ...commonPayload,
-        code,
-        productType: scope,
-        // NVL không có kênh bán (nội bộ). SKU bắt buộc fnb hoặc retail.
-        hasBom: scope === "sku" ? hasBom : false,
-        groupCode: selectedCategory!.code,
-        stock: Number(initialStock) || 0,
-      });
+      if (createAtomicallyWithFnbSizes) {
+        const atomicResult = await createFnbProductWithSizeSetupAtomic(
+          {
+            code,
+            name,
+            categoryId,
+            unit: finalUnit,
+            purchaseUnit: finalUnit,
+            stockUnit: finalUnit,
+            sellUnit: finalUnit,
+            sellPrice: representativeSellPrice,
+            costPrice: representativeCostPrice,
+            minStock: commonPayload.minStock,
+            maxStock: commonPayload.maxStock,
+            vatRate: commonPayload.vatRate,
+            barcode: commonPayload.barcode,
+            weight: commonPayload.weight,
+            description: commonPayload.description,
+            image: commonPayload.image,
+            allowSale: commonPayload.allowSale,
+            groupCode: selectedCategory!.code,
+            shelfLifeDays: commonPayload.shelfLifeDays,
+            shelfLifeUnit: commonPayload.shelfLifeUnit,
+            supplierId: commonPayload.supplierId,
+            brand: commonPayload.brand,
+            bomCode: bomCodeTrim || undefined,
+          },
+          buildFnbSizeSetupPayload(code),
+          modifierMode === "override"
+            ? Array.from(productModifierGroupIds)
+            : [],
+        );
+        created = { id: atomicResult.productId };
+      } else {
+        created = await createProduct({
+          ...commonPayload,
+          code,
+          productType: scope,
+          // NVL không có kênh bán (nội bộ). SKU bắt buộc fnb hoặc retail.
+          hasBom: scope === "sku" ? hasBom : false,
+          groupCode: selectedCategory!.code,
+          stock: Number(initialStock) || 0,
+        });
+      }
 
       // CEO 22/05/2026 (Task #3): Auto-set channel cho nhóm SKU nếu chưa
       // có. Khi user tạo SP đầu tiên cho nhóm channel=NULL + chọn channel
@@ -2047,6 +2095,7 @@ export function CreateProductDialog({
         created?.id &&
         scope === "sku" &&
         channel === "fnb" &&
+        !createAtomicallyWithFnbSizes &&
         modifierMode === "override" &&
         productModifierGroupIds.size > 0
       ) {
@@ -2077,7 +2126,14 @@ export function CreateProductDialog({
 
       // Day 18/05/2026 (CEO refactor): nếu SKU có BOM + items → tạo BOM ngay
       // sau khi tạo SP. Vẫn trong cùng dialog, không pop thêm dialog mới.
-      if (scope === "sku" && hasBom && created?.id && bomItems.length > 0 && !bomCodeTrim) {
+      if (
+        !createAtomicallyWithFnbSizes &&
+        scope === "sku" &&
+        hasBom &&
+        created?.id &&
+        bomItems.length > 0 &&
+        !bomCodeTrim
+      ) {
         try {
           const createdBom = await createBOM({
             productId: created.id,
@@ -2154,7 +2210,12 @@ export function CreateProductDialog({
       }
 
       // CEO 01/06/2026 — Sprint 2.4a: Sync variants khi tạo SKU.
-      if (created?.id && scope === "sku" && variantItems.length > 0) {
+      if (
+        !createAtomicallyWithFnbSizes &&
+        created?.id &&
+        scope === "sku" &&
+        variantItems.length > 0
+      ) {
         try {
           if (channel === "fnb" && recipeEnabled) {
             await syncFnbSizeSetup(created.id, code);
