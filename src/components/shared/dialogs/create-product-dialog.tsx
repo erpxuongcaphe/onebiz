@@ -412,8 +412,9 @@ export function CreateProductDialog({
   // Mỗi variant có giá riêng + BOM riêng (bom_code) — cho phép Size M dùng
   // 18g cà phê, Size L dùng 25g.
   const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
-  // CEO 17/06/2026 (Phương án B): công thức theo size gộp ngay trong tab Quy
-  // cách, lưu chung 1 lần. recipeRows = lưới NVL × size; recipeEnabled = toggle.
+  const [variantDataReady, setVariantDataReady] = useState(false);
+  // Công thức theo size quản lý tập trung tại tab BOM và lưu chung một lần.
+  // recipeRows = lưới NVL × size; recipeEnabled = toggle.
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
   const [recipeEnabled, setRecipeEnabled] = useState(false);
   const [recipeConversionsByMaterial, setRecipeConversionsByMaterial] = useState<
@@ -456,6 +457,13 @@ export function CreateProductDialog({
       recipeConversionsByMaterial,
     ],
   );
+  const hasFnbSizeVariants =
+    scope === "sku" &&
+    channel === "fnb" &&
+    variantDataReady &&
+    variantItems.length > 0;
+  const fnbVariantContextPending =
+    scope === "sku" && channel === "fnb" && isEdit && !variantDataReady;
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -465,6 +473,7 @@ export function CreateProductDialog({
       loadedModifierDraftKeyRef.current = null;
       loadedMenuScopeKeyRef.current = null;
       loadedVariantsKeyRef.current = null;
+      setVariantDataReady(false);
       setFnbMenuScopeDirty(false);
       setRecipeConversionsByMaterial({});
       return;
@@ -472,6 +481,7 @@ export function CreateProductDialog({
     if (initializedDialogKeyRef.current === dialogProductKey) return;
     initializedDialogKeyRef.current = dialogProductKey;
     if (initialData) {
+      setVariantDataReady(false);
       setBomDraftSourceReady(!initialData.hasBom);
       setUomDraftSourceReady(false);
       setScope(initialData.productType);
@@ -520,6 +530,7 @@ export function CreateProductDialog({
       setErrors({});
       setInnerTab("info");
     } else {
+      setVariantDataReady(true);
       setBomDraftSourceReady(true);
       setUomDraftSourceReady(true);
       setScope("nvl");
@@ -572,6 +583,15 @@ export function CreateProductDialog({
   useEffect(() => {
     if (!open || !initialData || initialData.productType !== "sku" || !initialData.hasBom) {
       return;
+    }
+    if (channel === "fnb") {
+      if (!variantDataReady) return;
+      // Món có size dùng ma trận variant/BOM bên dưới. Không được lấy BOM
+      // đầu tiên (thường là Size M) đưa vào form BOM đơn rồi gây hiểu nhầm.
+      if (variantItems.length > 0) {
+        setBomDraftSourceReady(true);
+        return;
+      }
     }
     if (loadedBomKeyRef.current === initialData.id) return;
     loadedBomKeyRef.current = initialData.id;
@@ -645,7 +665,15 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, initialData?.id, initialData?.productType, initialData?.hasBom]);
+  }, [
+    open,
+    initialData?.id,
+    initialData?.productType,
+    initialData?.hasBom,
+    channel,
+    variantDataReady,
+    variantItems.length,
+  ]);
 
   // Day 19/05/2026 (CEO UOM Smart Hybrid): load existing UOM conversion
   // khi edit SP — prefill 2 ô "Đóng gói" + "Hệ số quy đổi".
@@ -785,6 +813,7 @@ export function CreateProductDialog({
       setFnbMenuBranchIds(new Set(draft.fnbMenuBranchIds));
       setFnbMenuScopeDirty(draft.fnbMenuScopeDirty);
       setVariantItems(draft.variantItems);
+      setVariantDataReady(true);
       setRecipeRows(rekeyRecipeRows(draft.recipeRows));
       setRecipeEnabled(draft.recipeEnabled);
       loadedModifierDraftKeyRef.current = dialogProductKey;
@@ -888,7 +917,12 @@ export function CreateProductDialog({
   // every live choice. Load only the groups actually effective for this SKU;
   // this keeps both the setup screen and POS on the same configuration.
   useEffect(() => {
-    if (!open || scope !== "sku" || channel !== "fnb" || innerTab !== "variants") {
+    if (
+      !open ||
+      scope !== "sku" ||
+      channel !== "fnb" ||
+      (innerTab !== "bom" && innerTab !== "variants")
+    ) {
       if (!open) setVariantModifierOptionsByGroup({});
       return;
     }
@@ -1073,18 +1107,20 @@ export function CreateProductDialog({
     return draft;
   }
 
-  // CEO 01/06/2026 — Sprint 2.4a + Bước 1 (perf): LAZY load variants
-  // chỉ khi user bấm tab "Quy cách". Tránh fetch eager + dialog freeze.
+  // Sản phẩm nhiều size phải dùng cùng một dữ liệu ở Giá, BOM và Quy cách.
+  // Chỉ nạp ở ba bề mặt quản trị này để giữ dialog mở nhanh, nhưng tuyệt đối
+  // không cho BOM lấy dòng đầu tiên trước khi biết sản phẩm có variants không.
   useEffect(() => {
     if (!open || !initialData || initialData.productType !== "sku") {
       if (!open) {
         loadedVariantsKeyRef.current = null;
         setVariantItems([]);
         setOriginalVariantIds(new Set());
+        setVariantDataReady(false);
       }
       return;
     }
-    if (innerTab !== "variants") return;
+    if (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants") return;
     if (loadedVariantsKeyRef.current === initialData.id) return;
     loadedVariantsKeyRef.current = initialData.id;
     let cancelled = false;
@@ -1173,8 +1209,10 @@ export function CreateProductDialog({
           setRecipeRows(loaded);
           setRecipeEnabled(loaded.length > 0);
         }
+        if (!cancelled) setVariantDataReady(true);
       } catch (err) {
         console.warn("Load variants failed:", err);
+        loadedVariantsKeyRef.current = null;
       }
     })();
     return () => {
@@ -1371,7 +1409,10 @@ export function CreateProductDialog({
     // Load NVL khi: (a) tab BOM + hasBom, HOẶC (b) tab Quy cách + FnB (cho lưới
     // công thức theo size — Phương án B cần materials để chọn NVL + tính giá vốn).
     const needForBom = hasBom && innerTab === "bom";
-    const needForRecipe = channel === "fnb" && innerTab === "variants";
+    const needForRecipe =
+      channel === "fnb" &&
+      (innerTab === "bom" || innerTab === "variants") &&
+      variantItems.length > 0;
     if (!open || scope !== "sku" || (!needForBom && !needForRecipe)) return;
     if (materialOptions.length > 0) return; // dedup — đã load
     let cancelled = false;
@@ -1386,7 +1427,15 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, hasBom, innerTab, materialOptions.length, channel]);
+  }, [
+    open,
+    scope,
+    hasBom,
+    innerTab,
+    materialOptions.length,
+    channel,
+    variantItems.length,
+  ]);
 
   // F&B cost is the Retail selling value of each component. Reprice loaded
   // legacy BOM rows after the product catalogue arrives so the normal BOM and
@@ -1414,7 +1463,11 @@ export function CreateProductDialog({
   // Load the existing preparation-unit conversions for materials used by the
   // size matrix. Cost preview and stock deduction must share the same factor.
   useEffect(() => {
-    if (!open || innerTab !== "variants" || channel !== "fnb") return;
+    if (
+      !open ||
+      (innerTab !== "bom" && innerTab !== "variants") ||
+      channel !== "fnb"
+    ) return;
     const materialIds = Array.from(
       new Set(recipeRows.map((row) => row.materialId).filter(Boolean)),
     );
@@ -1627,11 +1680,20 @@ export function CreateProductDialog({
       modifierOptionsByGroup: variantModifierOptionsByGroup,
     });
     if (fnbSetupIssues.length > 0) {
-      setInnerTab("variants");
+      const firstIssue = fnbSetupIssues[0];
+      setInnerTab(
+        firstIssue.code === "variant_price_invalid"
+          ? "pricing"
+          : firstIssue.code === "variant_name_required" ||
+              firstIssue.code === "variant_name_duplicate" ||
+              firstIssue.code === "variant_default_invalid"
+            ? "variants"
+            : "bom",
+      );
       toast({
         variant: "error",
         title: "Chưa thể lưu quy cách FnB",
-        description: fnbSetupIssues[0].message,
+        description: firstIssue.message,
         duration: 10000,
       });
       return;
@@ -1639,7 +1701,7 @@ export function CreateProductDialog({
 
     if (scope === "sku" && channel === "fnb") {
       const usedMaterialIds = new Set<string>();
-      if (hasBom && !bomCodeTrim) {
+      if (hasBom && !bomCodeTrim && variantItems.length === 0) {
         for (const item of bomItems) usedMaterialIds.add(item.materialId);
       }
       if (recipeEnabled) {
@@ -1651,7 +1713,7 @@ export function CreateProductDialog({
         (material) => usedMaterialIds.has(material.id) && !(Number(material.sellPrice) > 0),
       );
       if (missingRetailPrice) {
-        setInnerTab(variantItems.length > 0 ? "variants" : "bom");
+        setInnerTab("bom");
         toast({
           variant: "error",
           title: "Chưa thể tính giá vốn F&B",
@@ -1683,7 +1745,7 @@ export function CreateProductDialog({
       const material = materialOptions.find(
         (candidate) => candidate.id === invalidRecipeUnit.materialId,
       );
-      setInnerTab("variants");
+      setInnerTab("bom");
       toast({
         variant: "error",
         title: "Chưa thể quy đổi đơn vị công thức",
@@ -1878,7 +1940,12 @@ export function CreateProductDialog({
 
         // Day 18/05/2026 (CEO refactor): sync BOM khi edit SKU
         if (scope === "sku") {
-          if (hasBom && bomItems.length > 0 && !bomCodeTrim) {
+          if (
+            variantItems.length === 0 &&
+            hasBom &&
+            bomItems.length > 0 &&
+            !bomCodeTrim
+          ) {
             // Update the existing BOM in place. Replacing it with a new BOM id
             // used to orphan the exact FnB option quantities configured here.
             try {
@@ -1941,7 +2008,7 @@ export function CreateProductDialog({
               onSuccess?.();
               return;
             }
-          } else if (!hasBom && bomExistingId) {
+          } else if (variantItems.length === 0 && !hasBom && bomExistingId) {
             // User tắt hasBom + có BOM existing → deactivate
             try {
               await deleteBOM(bomExistingId);
@@ -2130,6 +2197,7 @@ export function CreateProductDialog({
       if (
         !createAtomicallyWithFnbSizes &&
         scope === "sku" &&
+        variantItems.length === 0 &&
         hasBom &&
         created?.id &&
         bomItems.length > 0 &&
@@ -2733,19 +2801,97 @@ export function CreateProductDialog({
               </div>
             )}
 
-            {scope === "sku" && variantItems.length > 0 && (
+            {hasFnbSizeVariants && (
               <div className="flex items-start gap-2 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3 text-xs">
                 <Icon name="straighten" size={14} className="mt-0.5 shrink-0 text-primary" />
                 <span>
-                  Món có quy cách: POS dùng giá bán và giá vốn của từng size.
-                  Giá đại diện của sản phẩm được đồng bộ theo size mặc định khi lưu.
+                  Món có quy cách: quản lý giá theo từng size ở bảng dưới.
+                  Giá đại diện ngoài danh sách được đồng bộ theo size mặc định khi lưu.
                 </span>
               </div>
             )}
 
+            {fnbVariantContextPending && (
+              <div className="flex min-h-24 items-center justify-center rounded-lg border text-sm text-muted-foreground">
+                <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                Đang tải giá và công thức của các size...
+              </div>
+            )}
+
+            {hasFnbSizeVariants && (
+              <section className="space-y-2">
+                <div className="flex flex-wrap items-end justify-between gap-2">
+                  <div>
+                    <h3 className="text-sm font-medium">Giá theo quy cách</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Giá vốn lấy từ giá bán Retail của thành phần trong BOM từng size.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setInnerTab("bom")}>
+                    <Icon name="science" size={14} className="mr-1" />
+                    Xem công thức tất cả size
+                  </Button>
+                </div>
+                <div className="overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[680px] text-sm">
+                    <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold">Quy cách</th>
+                        <th className="w-40 px-3 py-2 text-right font-semibold">Giá bán (đ)</th>
+                        <th className="w-36 px-3 py-2 text-right font-semibold">Giá vốn F&B</th>
+                        <th className="px-3 py-2 text-left font-semibold">Mã BOM</th>
+                        <th className="w-28 px-3 py-2 text-center font-semibold">POS mặc định</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {variantItems.map((variant, index) => (
+                        <tr key={variant.key} className="border-t">
+                          <td className="px-3 py-2 font-medium">{variant.name || `Size ${index + 1}`}</td>
+                          <td className="px-3 py-2">
+                            <NumericInput
+                              value={variant.sellPrice || null}
+                              onChange={(value) =>
+                                setVariantItems((current) =>
+                                  current.map((item) =>
+                                    item.key === variant.key
+                                      ? { ...item, sellPrice: value ?? 0 }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              min={0}
+                              decimals={0}
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                            {formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0)}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-xs">
+                            {variant.bomCode || "Chưa tạo"}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {variant.isDefault ? (
+                              <span className="inline-flex rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                Mặc định
+                              </span>
+                            ) : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
+
             {/* Pricing — giá vốn / giá bán / VAT. Format số có dấu chấm ngăn cách. */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-2">
+            <div className={
+              hasFnbSizeVariants
+                ? "grid grid-cols-1 gap-4 sm:max-w-sm"
+                : "grid grid-cols-1 gap-4 sm:grid-cols-3"
+            }>
+              {!hasFnbSizeVariants && !fnbVariantContextPending && <div className="space-y-2">
                 <label className="text-sm font-medium">Giá vốn (₫)</label>
                 <NumericInput
                   value={costPrice === "" ? null : Number(costPrice)}
@@ -2764,8 +2910,8 @@ export function CreateProductDialog({
                     hoặc giá nguyên liệu thay đổi.
                   </p>
                 )}
-              </div>
-              <div className="space-y-2">
+              </div>}
+              {!hasFnbSizeVariants && !fnbVariantContextPending && <div className="space-y-2">
                 <label className="text-sm font-medium">
                   Giá bán (₫)
                   {/* CEO 22/05/2026: bỏ * cho SKU — cho phép tạo SKU rỗng
@@ -2790,7 +2936,7 @@ export function CreateProductDialog({
                 {errors.sellPrice && (
                   <p className="text-xs text-destructive">{errors.sellPrice}</p>
                 )}
-              </div>
+              </div>}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Thuế VAT (%)</label>
                 {vatCustom ? (
@@ -2971,10 +3117,101 @@ export function CreateProductDialog({
             <TabsContent value="bom" className="space-y-4 mt-0">
               <div className="rounded-md border border-primary/20 bg-primary/5 p-3 text-xs">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống
-                tự trừ NVL theo công thức này.
+                {hasFnbSizeVariants
+                  ? "Mỗi size có BOM riêng. Chỉnh cùng một ma trận để so sánh và tránh ghi nhầm công thức giữa các size."
+                  : "Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống tự trừ NVL theo công thức này."}
               </div>
 
+              {fnbVariantContextPending ? (
+                <div className="flex min-h-32 items-center justify-center rounded-lg border text-sm text-muted-foreground">
+                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                  Đang tải toàn bộ công thức theo size...
+                </div>
+              ) : hasFnbSizeVariants ? (
+                <div className="space-y-4">
+                  <section className="space-y-2">
+                    <div className="flex flex-wrap items-end justify-between gap-2">
+                      <div>
+                        <h3 className="text-sm font-medium">Tổng quan công thức theo size</h3>
+                        <p className="text-xs text-muted-foreground">
+                          Mỗi cột là một BOM độc lập; giá vốn được tính từ giá bán Retail của thành phần.
+                        </p>
+                      </div>
+                      <Button type="button" variant="outline" size="sm" onClick={() => setInnerTab("pricing")}>
+                        <Icon name="payments" size={14} className="mr-1" />
+                        Xem giá tất cả size
+                      </Button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {variantItems.map((variant) => (
+                        <div key={variant.key} className="rounded-lg border bg-background p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium break-words">{variant.name}</p>
+                              <p className="mt-1 font-mono text-xs text-muted-foreground break-all">
+                                {variant.bomCode || "Mã BOM sẽ tự tạo khi lưu"}
+                              </p>
+                            </div>
+                            {variant.isDefault && (
+                              <span className="shrink-0 rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary">
+                                POS mặc định
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                            <div>
+                              <span className="block text-muted-foreground">Giá bán</span>
+                              <span className="font-semibold tabular-nums">{formatCurrency(variant.sellPrice)}</span>
+                            </div>
+                            <div>
+                              <span className="block text-muted-foreground">Giá vốn F&B</span>
+                              <span className="font-semibold tabular-nums">
+                                {formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="space-y-3 rounded-lg border border-status-info/30 bg-status-info/5 p-3">
+                    <label className="flex flex-wrap items-center gap-2 text-sm font-medium cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={recipeEnabled}
+                        onChange={(event) => setRecipeEnabled(event.target.checked)}
+                        className="size-4"
+                      />
+                      Trừ kho theo công thức từng size
+                      <span className="text-xs font-normal text-muted-foreground">
+                        Bán size nào dùng đúng BOM và định lượng của size đó.
+                      </span>
+                    </label>
+                    {recipeEnabled ? (
+                      <PerSizeRecipeMatrix
+                        sizes={variantItems.map((variant) => ({ key: variant.key, name: variant.name }))}
+                        rows={recipeRows}
+                        onChange={setRecipeRows}
+                        materials={materialOptions}
+                        groups={perSizeModifierGroups}
+                        optionsByGroup={variantModifierOptionsByGroup}
+                        conversionsByMaterial={recipeConversionsByMaterial}
+                        loading={
+                          materialOptions.length === 0 ||
+                          (perSizeModifierGroups.length > 0 &&
+                            Object.keys(variantModifierOptionsByGroup).length === 0)
+                        }
+                      />
+                    ) : (
+                      <p className="rounded-md border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">
+                        Bật công thức từng size để khai nguyên liệu và định lượng cho tất cả quy cách.
+                      </p>
+                    )}
+                  </section>
+                </div>
+              ) : (
+                <>
               <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-1.5">
                 <p className="text-sm font-medium">Mã BOM</p>
                 <p className="font-mono text-sm font-semibold text-primary">
@@ -3376,6 +3613,8 @@ export function CreateProductDialog({
                   rows={2}
                 />
               </div>
+                </>
+              )}
             </TabsContent>
           )}
 
@@ -3674,14 +3913,22 @@ export function CreateProductDialog({
           {scope === "sku" && (
             <TabsContent value="variants" className="space-y-3 mt-0">
               <div className="rounded-lg border bg-status-info/5 p-3">
-                <div className="flex items-start gap-2">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-2">
                   <Icon name="straighten" size={16} className="text-status-info shrink-0 mt-0.5" />
                   <div className="flex-1">
                     <p className="text-sm font-medium">Quy cách / Cỡ (vd M, L, XL hoặc 250g, 500g)</p>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      Mỗi cỡ có giá bán riêng và công thức riêng. Khi bán, nhân viên chọn cỡ → máy POS dùng đúng giá + công thức của cỡ đó. Để trống nếu mặt hàng chỉ bán 1 loại.
+                      Quản lý tên, thứ tự và cỡ mặc định trên POS. Giá quản lý tại tab Giá & Tồn kho; công thức quản lý tại tab BOM.
                     </p>
                   </div>
+                  </div>
+                  {variantItems.length > 0 && (
+                    <Button type="button" variant="outline" size="sm" onClick={() => setInnerTab("pricing")}>
+                      <Icon name="payments" size={14} className="mr-1" />
+                      Thiết lập giá
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -3741,7 +3988,7 @@ export function CreateProductDialog({
                         <th className="text-right px-3 py-2 font-semibold w-32">
                           {channel === "fnb" ? "Giá vốn tự tính" : "Giá vốn (đ)"}
                         </th>
-                        <th className="text-center px-3 py-2 font-semibold w-24">Size đại diện</th>
+                        <th className="text-center px-3 py-2 font-semibold w-24">POS mặc định</th>
                         <th className="w-10"></th>
                       </tr>
                     </thead>
@@ -3762,21 +4009,11 @@ export function CreateProductDialog({
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <Input
-                              inputMode="numeric"
-                              value={v.sellPrice ? formatNumber(v.sellPrice) : ""}
-                              placeholder="0"
-                              className="h-9 text-right text-sm"
-                              onChange={(e) => {
-                                const digits = e.target.value.replace(/[^\d]/g, "");
-                                const n = digits ? parseInt(digits, 10) : 0;
-                                setVariantItems((prev) =>
-                                  prev.map((p, i) =>
-                                    i === idx ? { ...p, sellPrice: n } : p,
-                                  ),
-                                );
-                              }}
-                            />
+                            <div className="text-right font-medium tabular-nums">
+                              {v.sellPrice > 0 ? formatCurrency(v.sellPrice) : (
+                                <span className="text-status-warning">Chưa nhập</span>
+                              )}
+                            </div>
                           </td>
                           {channel !== "fnb" ? (
                             <td className="px-3 py-2">
@@ -3838,38 +4075,20 @@ export function CreateProductDialog({
                 </div>
               )}
 
-              {/* CEO 17/06/2026 (Phương án B): lưới công thức theo size — gộp
-                  ngay đây, lưu chung 1 nút. Chỉ FnB + khi đã có ít nhất 1 size. */}
+              {/* Công thức nằm tại đúng tab BOM để người quản lý có một nơi
+                  duy nhất xem/chỉnh NVL cho mọi size. */}
               {channel === "fnb" && variantItems.length > 0 && (
-                <div className="space-y-3 rounded-lg border border-status-info/30 bg-status-info/5 p-3">
-                  <label className="flex flex-wrap items-center gap-2 text-sm font-medium cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={recipeEnabled}
-                      onChange={(e) => setRecipeEnabled(e.target.checked)}
-                      className="size-4"
-                    />
-                    Trừ kho theo công thức từng cỡ
-                    <span className="text-xs font-normal text-muted-foreground">
-                      (cà phê/sữa/ly… — bán cỡ nào trừ đúng công thức cỡ đó)
-                    </span>
-                  </label>
-                  {recipeEnabled && (
-                    <PerSizeRecipeMatrix
-                      sizes={variantItems.map((v) => ({ key: v.key, name: v.name }))}
-                      rows={recipeRows}
-                      onChange={setRecipeRows}
-                      materials={materialOptions}
-                      groups={perSizeModifierGroups}
-                      optionsByGroup={variantModifierOptionsByGroup}
-                      conversionsByMaterial={recipeConversionsByMaterial}
-                      loading={
-                        materialOptions.length === 0 ||
-                        (perSizeModifierGroups.length > 0 &&
-                          Object.keys(variantModifierOptionsByGroup).length === 0)
-                      }
-                    />
-                  )}
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-info/30 bg-status-info/5 p-3">
+                  <div>
+                    <p className="text-sm font-medium">Công thức và định lượng theo size</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Được quản lý tập trung tại tab Công thức sản xuất (BOM), hiển thị đồng thời mọi size.
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setInnerTab("bom")}>
+                    <Icon name="science" size={14} className="mr-1" />
+                    Mở công thức tất cả size
+                  </Button>
                 </div>
               )}
             </TabsContent>
