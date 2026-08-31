@@ -905,54 +905,58 @@ export function FnbItemDialog({
             {hasDynamicModifiers && nhomDaSapXep.map(veNhom)}
 
             {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
-                thu ngân không mất thao tác quen. */}
-            {!hasConfiguredDynamicModifiers && (
-              <>
-                <section className={O_NHOM}>
-                  <Label className="text-[13px] font-medium">Mức đường</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {SWEETNESS_OPTIONS.map((s) => (
-                      <button
-                        key={s}
-                        type="button"
-                        onClick={() => setSweetness(sweetness === s ? "" : s)}
-                        aria-pressed={sweetness === s}
-                        className={cn(
-                          CHIP,
-                          sweetness === s
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "border-border hover:border-primary/40",
-                        )}
-                      >
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </section>
+                thu ngân không mất thao tác quen. Chỉ hiện sau khi máy chủ xác
+                nhận món không có cấu hình động; trong lúc tải, bộ cũ sẽ làm
+                nhân viên thấy lựa chọn sai trước khi nhóm thật xuất hiện. */}
+            {!modifiersLoading &&
+              !modifiersFailed &&
+              !hasConfiguredDynamicModifiers && (
+                <>
+                  <section className={O_NHOM}>
+                    <Label className="text-[13px] font-medium">Mức đường</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {SWEETNESS_OPTIONS.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => setSweetness(sweetness === s ? "" : s)}
+                          aria-pressed={sweetness === s}
+                          className={cn(
+                            CHIP,
+                            sweetness === s
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "border-border hover:border-primary/40",
+                          )}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
 
-                <section className={O_NHOM}>
-                  <Label className="text-[13px] font-medium">Mức đá</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {ICE_OPTIONS.map((i) => (
-                      <button
-                        key={i}
-                        type="button"
-                        onClick={() => setIceLevel(iceLevel === i ? "" : i)}
-                        aria-pressed={iceLevel === i}
-                        className={cn(
-                          CHIP,
-                          iceLevel === i
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "border-border hover:border-primary/40",
-                        )}
-                      >
-                        {i}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              </>
-            )}
+                  <section className={O_NHOM}>
+                    <Label className="text-[13px] font-medium">Mức đá</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {ICE_OPTIONS.map((i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setIceLevel(iceLevel === i ? "" : i)}
+                          aria-pressed={iceLevel === i}
+                          className={cn(
+                            CHIP,
+                            iceLevel === i
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "border-border hover:border-primary/40",
+                          )}
+                        >
+                          {i}
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </>
+              )}
           </div>
 
           {/* ══ TOPPING — nhóm DÀI, chiếm TOÀN chiều ngang ══
