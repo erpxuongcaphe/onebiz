@@ -112,6 +112,15 @@ const SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as c
 const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
 /**
+ * Quy cách thật (`product_variants`) là nguồn duy nhất cho cỡ, giá và BOM.
+ * Nhóm modifier `Size` là cấu hình cũ; nếu render cả hai, thu ngân có thể
+ * chọn Size M ở quy cách nhưng Size L ở modifier, tạo một dòng bán mâu thuẫn.
+ */
+function isLegacySizeModifierGroup(group: ModifierGroup): boolean {
+  return group.name.trim().toLocaleLowerCase("vi") === "size";
+}
+
+/**
  * 07/08 (CEO chốt) — VÙNG CHẠM CĂN THEO LOẠI CON TRỎ, KHÔNG THEO BỀ RỘNG.
  *
  * Bề rộng màn KHÔNG cho biết có phải thiết bị chạm hay không. Máy tính bảng
@@ -273,8 +282,19 @@ export function FnbItemDialog({
     new Map(),
   );
 
-  const hasDynamicModifiers =
-    dynamicModifiers && dynamicModifiers.groups.length > 0;
+  const coQuyCach = (variants?.length ?? 0) > 0;
+  const effectiveModifierGroups = useMemo(
+    () =>
+      (dynamicModifiers?.groups ?? []).filter(
+        (group) => !coQuyCach || !isLegacySizeModifierGroup(group),
+      ),
+    [coQuyCach, dynamicModifiers],
+  );
+  const hasDynamicModifiers = effectiveModifierGroups.length > 0;
+  // Có cấu hình động nhưng toàn bộ chỉ là nhóm Size cũ thì cũng không được
+  // rơi về bộ Đường/Đá hardcoded. Cấu hình động đã là nguồn dữ liệu của món.
+  const hasConfiguredDynamicModifiers =
+    (dynamicModifiers?.groups.length ?? 0) > 0;
 
   // 06/08 — 3 trạng thái tải tuỳ chọn. `undefined` = đang tải (tầng cha
   // chưa set); `failed` = tải hỏng. Cả hai đều KHÔNG cho xác nhận: lúc đó
@@ -318,14 +338,14 @@ export function FnbItemDialog({
    */
   const khoaTuyChon = useMemo(() => {
     if (!dynamicModifiers) return "chua-co";
-    const phanNhom = dynamicModifiers.groups
+    const phanNhom = effectiveModifierGroups
       .map((g) => {
         const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
         return `${g.id}:${opts.map((o) => o.id).join("+")}`;
       })
       .join("|");
     return `${dynamicModifiers.failed ? "loi" : "ok"}#${phanNhom}`;
-  }, [dynamicModifiers]);
+  }, [dynamicModifiers, effectiveModifierGroups]);
 
   useEffect(() => {
     if (open) {
@@ -363,7 +383,7 @@ export function FnbItemDialog({
       // CEO 01/06/2026 — Sprint 2.2e + 2.3a: reset dynamic choices.
       // Ưu tiên prefill từ initialSelection.modifierSelections (chế độ Sửa),
       // fallback default options của mỗi group (chế độ Thêm mới).
-      if (dynamicModifiers && dynamicModifiers.groups.length > 0) {
+      if (dynamicModifiers && effectiveModifierGroups.length > 0) {
         const initChoices = new Map<string, Set<string>>();
         const savedByGroup = new Map<string, Set<string>>();
         if (initialSelection?.modifierSelections) {
@@ -393,7 +413,7 @@ export function FnbItemDialog({
           const dau = opts.find((o) => ids.has(o.id));
           return new Set(dau ? [dau.id] : []);
         };
-        for (const g of dynamicModifiers.groups) {
+        for (const g of effectiveModifierGroups) {
           const saved = savedByGroup.get(g.id);
           if (saved && saved.size > 0) {
             initChoices.set(g.id, epChonMot(g, saved));
@@ -494,7 +514,7 @@ export function FnbItemDialog({
   const invalidModifierGroupIds = useMemo(() => {
     if (!hasDynamicModifiers || !dynamicModifiers) return new Set<string>();
     const missing = new Set<string>();
-    for (const g of dynamicModifiers.groups) {
+    for (const g of effectiveModifierGroups) {
       // Group có options? (nếu group rỗng coi như N/A)
       const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
       if (opts.length === 0) continue;
@@ -510,28 +530,27 @@ export function FnbItemDialog({
       }
     }
     return missing;
-  }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices]);
+  }, [hasDynamicModifiers, dynamicModifiers, dynamicChoices, effectiveModifierGroups]);
 
   /** Giữ đúng thứ tự liên kết do người quản lý đặt. */
   const nhomDaSapXep = useMemo(() => {
     if (!dynamicModifiers) return [] as ModifierGroup[];
     const soLuaChon = (g: ModifierGroup) =>
       dynamicModifiers.optionsByGroup.get(g.id)?.length ?? 0;
-    return [...dynamicModifiers.groups]
+    return [...effectiveModifierGroups]
       .filter((g) => soLuaChon(g) > 0)
       .sort(
         (a, b) =>
           (a.sortOrder ?? 0) - (b.sortOrder ?? 0) ||
           a.name.localeCompare(b.name, "vi"),
       );
-  }, [dynamicModifiers]);
+  }, [dynamicModifiers, effectiveModifierGroups]);
 
   // 06/08: thêm 2 điều kiện — chưa tải xong hoặc tải hỏng thì KHÔNG cho
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
   // Guard Size (3 tầng — tầng giao diện):
   //  · món có quy cách đang bật thì BẮT BUỘC chọn cỡ, không mặc định bừa;
   //  · giá của dòng phải > 0 — bán 0đ do quên nhập giá là mất tiền thật.
-  const coQuyCach = (variants?.length ?? 0) > 0;
   const thieuQuyCach = coQuyCach && !selectedVariant;
   const giaKhongHopLe = !variantsLoading && !thieuQuyCach && unitPrice <= 0;
 
@@ -567,7 +586,7 @@ export function FnbItemDialog({
 
     // CEO 01/06/2026 — Sprint 2.2e: dynamic choices ghi đè hardcoded sweetness/ice.
     if (hasDynamicModifiers && dynamicModifiers) {
-      for (const g of dynamicModifiers.groups) {
+      for (const g of effectiveModifierGroups) {
         const choices = dynamicChoices.get(g.id);
         if (!choices || choices.size === 0) continue;
         const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
@@ -598,7 +617,7 @@ export function FnbItemDialog({
     let modifierSelections: ModifierSelectionPayload[] | undefined;
     if (hasDynamicModifiers && dynamicModifiers) {
       const payload: ModifierSelectionPayload[] = [];
-      for (const g of dynamicModifiers.groups) {
+      for (const g of effectiveModifierGroups) {
         const choices = dynamicChoices.get(g.id);
         if (!choices || choices.size === 0) continue;
         const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
@@ -887,7 +906,7 @@ export function FnbItemDialog({
 
             {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
                 thu ngân không mất thao tác quen. */}
-            {!hasDynamicModifiers && (
+            {!hasConfiguredDynamicModifiers && (
               <>
                 <section className={O_NHOM}>
                   <Label className="text-[13px] font-medium">Mức đường</Label>
