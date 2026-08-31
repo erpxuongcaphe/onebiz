@@ -6,6 +6,13 @@ const source = readFileSync(
   resolve(process.cwd(), "src/components/shared/dialogs/create-product-dialog.tsx"),
   "utf8",
 ).replace(/\r\n/g, "\n");
+const parentSummaryMigration = readFileSync(
+  resolve(
+    process.cwd(),
+    "supabase/migrations/00369_sync_fnb_parent_from_default_size.sql",
+  ),
+  "utf8",
+).replace(/\r\n/g, "\n");
 
 describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => {
   it("tải variants trước khi mở Giá, BOM hoặc Quy cách", () => {
@@ -69,5 +76,26 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     expect(source).toContain(
       '!createAtomicallyWithFnbSizes &&\n        scope === "sku" &&\n        variantItems.length === 0 &&',
     );
+  });
+
+  it("chốt SKU cha theo size mặc định sau khi toàn bộ BOM size đã lưu", () => {
+    const atomicSave = parentSummaryMigration.indexOf(
+      "v_result := public.save_fnb_size_setup_atomic_00368",
+    );
+    const parentUpdate = parentSummaryMigration.indexOf(
+      "update public.products product",
+    );
+
+    expect(atomicSave).toBeGreaterThan(0);
+    expect(parentUpdate).toBeGreaterThan(atomicSave);
+    expect(parentSummaryMigration).toContain(
+      "sell_price = (v_default_variant->>'sellPrice')::numeric",
+    );
+    expect(parentSummaryMigration).toContain(
+      "cost_price = coalesce((v_default_variant->>'costPrice')::numeric, 0)",
+    );
+    expect(parentSummaryMigration).toContain("has_bom = true");
+    expect(parentSummaryMigration).toContain("product.tenant_id = v_tenant");
+    expect(parentSummaryMigration).toContain("to authenticated");
   });
 });
