@@ -3703,7 +3703,7 @@ export function CreateProductDialog({
                     onClick={() => setInnerTab("modifier")}
                   >
                     <Icon name="storefront" size={14} className="mr-1" />
-                    Chọn chi nhánh
+                    Thiết lập chi nhánh
                   </Button>
                 </div>
               )}
