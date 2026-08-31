@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(
   resolve(process.cwd(), "src/components/shared/dialogs/create-product-dialog.tsx"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => {
   it("tải variants trước khi mở Giá, BOM hoặc Quy cách", () => {
@@ -15,6 +15,18 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     expect(source).toContain("if (!variantDataReady) return;");
     expect(source).toContain("if (variantItems.length > 0) {");
     expect(source).toContain("setBomDraftSourceReady(true);");
+  });
+
+  it("không kẹt tải hoặc rơi về form một giá khi đổi tab giữa chừng", () => {
+    expect(source).toContain(
+      "if (!settled && loadedVariantsKeyRef.current === loadingProductId)",
+    );
+    expect(source).toContain("const restoredVariantDataReady =");
+    expect(source).toContain('draft.channel !== "fnb"');
+    expect(source).toContain("variantDataError ? (");
+    expect(source).toContain("Không tải được đầy đủ giá và công thức theo size");
+    expect(source).toContain("Thử lại");
+    expect(source).toContain("retryVariantDataLoad");
   });
 
   it("Giá hiển thị đủ quy cách, giá bán, giá vốn, BOM và mặc định POS", () => {

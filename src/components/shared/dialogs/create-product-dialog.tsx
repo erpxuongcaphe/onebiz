@@ -413,6 +413,8 @@ export function CreateProductDialog({
   // 18g cà phê, Size L dùng 25g.
   const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
   const [variantDataReady, setVariantDataReady] = useState(false);
+  const [variantDataError, setVariantDataError] = useState<string | null>(null);
+  const [variantReloadNonce, setVariantReloadNonce] = useState(0);
   // Công thức theo size quản lý tập trung tại tab BOM và lưu chung một lần.
   // recipeRows = lưới NVL × size; recipeEnabled = toggle.
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
@@ -474,6 +476,7 @@ export function CreateProductDialog({
       loadedMenuScopeKeyRef.current = null;
       loadedVariantsKeyRef.current = null;
       setVariantDataReady(false);
+      setVariantDataError(null);
       setFnbMenuScopeDirty(false);
       setRecipeConversionsByMaterial({});
       return;
@@ -482,6 +485,7 @@ export function CreateProductDialog({
     initializedDialogKeyRef.current = dialogProductKey;
     if (initialData) {
       setVariantDataReady(false);
+      setVariantDataError(null);
       setBomDraftSourceReady(!initialData.hasBom);
       setUomDraftSourceReady(false);
       setScope(initialData.productType);
@@ -531,6 +535,7 @@ export function CreateProductDialog({
       setInnerTab("info");
     } else {
       setVariantDataReady(true);
+      setVariantDataError(null);
       setBomDraftSourceReady(true);
       setUomDraftSourceReady(true);
       setScope("nvl");
@@ -813,12 +818,18 @@ export function CreateProductDialog({
       setFnbMenuBranchIds(new Set(draft.fnbMenuBranchIds));
       setFnbMenuScopeDirty(draft.fnbMenuScopeDirty);
       setVariantItems(draft.variantItems);
-      setVariantDataReady(true);
+      // Bản nháp FnB rỗng không chứng minh sản phẩm cũ không có size.
+      const restoredVariantDataReady =
+        !initialData || draft.channel !== "fnb" || draft.variantItems.length > 0;
+      setVariantDataReady(restoredVariantDataReady);
+      setVariantDataError(null);
       setRecipeRows(rekeyRecipeRows(draft.recipeRows));
       setRecipeEnabled(draft.recipeEnabled);
       loadedModifierDraftKeyRef.current = dialogProductKey;
       loadedMenuScopeKeyRef.current = initialData?.id ?? null;
-      loadedVariantsKeyRef.current = initialData?.id ?? null;
+      loadedVariantsKeyRef.current = restoredVariantDataReady
+        ? initialData?.id ?? null
+        : null;
     },
   });
 
@@ -1122,13 +1133,18 @@ export function CreateProductDialog({
         setVariantItems([]);
         setOriginalVariantIds(new Set());
         setVariantDataReady(false);
+        setVariantDataError(null);
       }
       return;
     }
     if (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants") return;
     if (loadedVariantsKeyRef.current === initialData.id) return;
-    loadedVariantsKeyRef.current = initialData.id;
+    const loadingProductId = initialData.id;
+    loadedVariantsKeyRef.current = loadingProductId;
+    setVariantDataReady(false);
+    setVariantDataError(null);
     let cancelled = false;
+    let settled = false;
     (async () => {
       try {
         const variants = await getVariantsByProduct(initialData.id);
@@ -1214,16 +1230,39 @@ export function CreateProductDialog({
           setRecipeRows(loaded);
           setRecipeEnabled(loaded.length > 0);
         }
-        if (!cancelled) setVariantDataReady(true);
+        if (!cancelled) {
+          settled = true;
+          setVariantDataReady(true);
+          setVariantDataError(null);
+        }
       } catch (err) {
+        if (cancelled) return;
         console.warn("Load variants failed:", err);
-        loadedVariantsKeyRef.current = null;
+        settled = true;
+        if (loadedVariantsKeyRef.current === loadingProductId) {
+          loadedVariantsKeyRef.current = null;
+        }
+        setVariantDataReady(false);
+        setVariantDataError(
+          "Không tải được đầy đủ giá và công thức theo size. Dữ liệu sản phẩm chưa bị thay đổi.",
+        );
       }
     })();
     return () => {
       cancelled = true;
+      // Đổi tab giữa lúc tải phải nhả khóa để tab kế tiếp nạp lại đầy đủ.
+      if (!settled && loadedVariantsKeyRef.current === loadingProductId) {
+        loadedVariantsKeyRef.current = null;
+      }
     };
-  }, [open, initialData?.id, initialData?.productType, innerTab, channel]);
+  }, [open, initialData?.id, initialData?.productType, innerTab, channel, variantReloadNonce]);
+
+  function retryVariantDataLoad() {
+    loadedVariantsKeyRef.current = null;
+    setVariantDataError(null);
+    setVariantDataReady(false);
+    setVariantReloadNonce((current) => current + 1);
+  }
 
   // Helper: add empty variant row.
   // CEO 01/06/2026: tên để trống mặc định — placeholder gợi ý M/L/XL/250ml/...,
@@ -2817,10 +2856,20 @@ export function CreateProductDialog({
             )}
 
             {fnbVariantContextPending && (
-              <div className="flex min-h-24 items-center justify-center rounded-lg border text-sm text-muted-foreground">
-                <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
-                Đang tải giá và công thức của các size...
-              </div>
+              variantDataError ? (
+                <div className="flex min-h-24 flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 text-center text-sm">
+                  <p className="text-destructive">{variantDataError}</p>
+                  <Button type="button" variant="outline" size="sm" onClick={retryVariantDataLoad}>
+                    <Icon name="refresh" size={14} className="mr-1" />
+                    Thử lại
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex min-h-24 items-center justify-center rounded-lg border text-sm text-muted-foreground">
+                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                  Đang tải giá và công thức của các size...
+                </div>
+              )
             )}
 
             {hasFnbSizeVariants && (
@@ -3128,10 +3177,20 @@ export function CreateProductDialog({
               </div>
 
               {fnbVariantContextPending ? (
-                <div className="flex min-h-32 items-center justify-center rounded-lg border text-sm text-muted-foreground">
-                  <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
-                  Đang tải toàn bộ công thức theo size...
-                </div>
+                variantDataError ? (
+                  <div className="flex min-h-32 flex-col items-center justify-center gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 text-center text-sm">
+                    <p className="text-destructive">{variantDataError}</p>
+                    <Button type="button" variant="outline" size="sm" onClick={retryVariantDataLoad}>
+                      <Icon name="refresh" size={14} className="mr-1" />
+                      Thử lại
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex min-h-32 items-center justify-center rounded-lg border text-sm text-muted-foreground">
+                    <Icon name="progress_activity" size={18} className="mr-2 animate-spin" />
+                    Đang tải toàn bộ công thức theo size...
+                  </div>
+                )
               ) : hasFnbSizeVariants ? (
                 <div className="space-y-4">
                   <section className="space-y-2">
