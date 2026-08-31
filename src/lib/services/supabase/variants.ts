@@ -247,7 +247,12 @@ export async function saveFnbSizeSetupAtomic(
     "save_fnb_size_setup_atomic",
     { p_product_id: productId, p_variants: variants },
   );
-  if (error) throw error;
+  if (error) {
+    const detail = [error.message, error.details, error.hint]
+      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+      .join(" | ");
+    throw new Error(detail || "Máy chủ không thể lưu quy cách FnB.");
+  }
 
   let payload: unknown = data;
   if (typeof payload === "string") {
