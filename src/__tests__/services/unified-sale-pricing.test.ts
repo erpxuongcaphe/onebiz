@@ -31,6 +31,14 @@ const platformBulkPage = readFileSync(
   "src/app/(main)/cai-dat/bang-gia/platforms/page.tsx",
   "utf8",
 );
+const tierItemDialog = readFileSync(
+  "src/components/shared/dialogs/add-price-tier-item-dialog.tsx",
+  "utf8",
+);
+const tierPage = readFileSync(
+  "src/app/(main)/hang-hoa/thiet-lap-gia/page.tsx",
+  "utf8",
+);
 
 describe("unified sale pricing 00363", () => {
   it("resolves platform size before product and keeps direct orders on normal pricing", () => {
@@ -105,5 +113,14 @@ describe("unified sale pricing 00363", () => {
     expect(platformBulkPage).toContain("product.variants.map");
     expect(platformBulkPage).toContain("variantId: target.variantId");
     expect(platformBulkPage).toContain("Giá riêng theo size");
+  });
+
+  it("lets managers configure and identify branch-tier prices per size", () => {
+    expect(tierItemDialog).toContain("getVariantsByProduct");
+    expect(tierItemDialog).toContain("Giá chung cho mọi size");
+    expect(tierItemDialog).toContain("variantId:");
+    expect(tierPage).toContain("item.variantName");
+    expect(pricingService).toContain("product_variants(name)");
+    expect(pricingService).toContain('deleteQuery.is("variant_id", null)');
   });
 });

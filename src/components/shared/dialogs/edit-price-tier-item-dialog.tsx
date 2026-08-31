@@ -104,6 +104,9 @@ export function EditPriceTierItemDialog({
             {item ? (
               <>
                 <strong>{item.productName ?? item.productCode}</strong>{" "}
+                {item.variantName && (
+                  <span className="font-medium">· {item.variantName} </span>
+                )}
                 {item.productCode && (
                   <span className="text-xs text-muted-foreground">
                     ({item.productCode})

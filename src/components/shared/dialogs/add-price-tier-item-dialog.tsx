@@ -13,10 +13,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/lib/contexts";
-import { addPriceTierItem, getProducts } from "@/lib/services";
+import { addPriceTierItem, getProducts, getVariantsByProduct } from "@/lib/services";
 import { formatCurrency } from "@/lib/format";
-import type { Product } from "@/lib/types";
+import type { PriceTierScope, Product, ProductVariant } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 
 interface AddPriceTierItemDialogProps {
@@ -24,6 +31,7 @@ interface AddPriceTierItemDialogProps {
   onOpenChange: (open: boolean) => void;
   tierId: string;
   tierName: string;
+  tierScope?: PriceTierScope;
   onSuccess?: () => void;
 }
 
@@ -32,6 +40,7 @@ export function AddPriceTierItemDialog({
   onOpenChange,
   tierId,
   tierName,
+  tierScope = "both",
   onSuccess,
 }: AddPriceTierItemDialogProps) {
   const { toast } = useToast();
@@ -39,6 +48,10 @@ export function AddPriceTierItemDialog({
   const [results, setResults] = useState<Product[]>([]);
   const [searching, setSearching] = useState(false);
   const [selected, setSelected] = useState<Product | null>(null);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [selectedVariantId, setSelectedVariantId] = useState<string>("product");
+  const [loadingVariants, setLoadingVariants] = useState(false);
+  const [variantLoadError, setVariantLoadError] = useState(false);
   const [price, setPrice] = useState("");
   const [minQty, setMinQty] = useState("1");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -49,6 +62,9 @@ export function AddPriceTierItemDialog({
     setSearch("");
     setResults([]);
     setSelected(null);
+    setVariants([]);
+    setSelectedVariantId("product");
+    setVariantLoadError(false);
     setPrice("");
     setMinQty("1");
     setErrors({});
@@ -68,7 +84,12 @@ export function AddPriceTierItemDialog({
           page: 0,
           pageSize: 8,
           search,
-          filters: { productType: "sku" },
+          filters: {
+            productType: "sku",
+            ...(tierScope === "fnb" || tierScope === "retail"
+              ? { channel: tierScope }
+              : {}),
+          },
         });
         if (!cancelled) setResults(r.data);
       } finally {
@@ -79,13 +100,26 @@ export function AddPriceTierItemDialog({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [search, open, selected]);
+  }, [search, open, selected, tierScope]);
 
-  function selectProduct(p: Product) {
+  async function selectProduct(p: Product) {
     setSelected(p);
     setSearch(p.name);
     setPrice(String(p.sellPrice));
     setResults([]);
+    setVariants([]);
+    setSelectedVariantId("product");
+    setVariantLoadError(false);
+    setLoadingVariants(true);
+    try {
+      const rows = await getVariantsByProduct(p.id);
+      setVariants(rows);
+    } catch {
+      setVariants([]);
+      setVariantLoadError(true);
+    } finally {
+      setLoadingVariants(false);
+    }
   }
 
   function validate(): boolean {
@@ -102,18 +136,26 @@ export function AddPriceTierItemDialog({
   }
 
   async function handleSave() {
-    if (!validate() || !selected) return;
+    if (!validate() || !selected || variantLoadError) return;
+    const selectedVariant = variants.find(
+      (variant) => variant.id === selectedVariantId,
+    );
     setSaving(true);
     try {
       await addPriceTierItem({
         priceTierId: tierId,
         productId: selected.id,
+        variantId: selectedVariantId === "product" ? undefined : selectedVariantId,
         price: Number(price),
         minQty: Number(minQty),
       });
       toast({
         title: "Đã thêm vào bảng giá",
-        description: `${selected.name} → ${formatCurrency(Number(price))}`,
+        description: `${selected.name}${
+          selectedVariant?.name
+            ? ` · ${selectedVariant.name}`
+            : ""
+        } → ${formatCurrency(Number(price))}`,
         variant: "success",
       });
       onOpenChange(false);
@@ -199,6 +241,70 @@ export function AddPriceTierItemDialog({
             </div>
           )}
 
+          {selected && (loadingVariants || variants.length > 0) && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Áp dụng cho</label>
+              <Select
+                value={selectedVariantId}
+                onValueChange={(nextId) => {
+                  if (!nextId) return;
+                  setSelectedVariantId(nextId);
+                  const variant = variants.find((row) => row.id === nextId);
+                  setPrice(String(variant?.sellPrice ?? selected.sellPrice));
+                }}
+                disabled={loadingVariants}
+                items={[
+                  { value: "product", label: "Giá chung cho mọi size" },
+                  ...variants.map((variant) => ({
+                    value: variant.id,
+                    label: `${variant.name} · ${formatCurrency(variant.sellPrice)}${
+                      variant.isDefault ? " · POS mặc định" : ""
+                    }`,
+                  })),
+                ]}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value) =>
+                      value === "product"
+                        ? "Giá chung cho mọi size"
+                        : variants.find((variant) => variant.id === value)?.name ??
+                          "Chọn size"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="product">Giá chung cho mọi size</SelectItem>
+                  {variants.map((variant) => (
+                    <SelectItem key={variant.id} value={variant.id}>
+                      {variant.name} · {formatCurrency(variant.sellPrice)}
+                      {variant.isDefault ? " · POS mặc định" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Giá riêng của size được ưu tiên; size chưa cài sẽ dùng giá chung.
+              </p>
+            </div>
+          )}
+
+          {selected && variantLoadError && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 p-3">
+              <p className="text-sm text-destructive">
+                Không tải được danh sách size. Chưa thể lưu giá an toàn.
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void selectProduct(selected)}
+              >
+                Thử lại
+              </Button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -263,7 +369,10 @@ export function AddPriceTierItemDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleSave} disabled={saving}>
+          <Button
+            onClick={handleSave}
+            disabled={saving || loadingVariants || variantLoadError}
+          >
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Thêm vào bảng giá
           </Button>
