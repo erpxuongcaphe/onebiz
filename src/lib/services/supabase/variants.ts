@@ -249,12 +249,52 @@ export async function saveFnbSizeSetupAtomic(
   );
   if (error) throw error;
 
-  const rows = Array.isArray(data?.variants) ? data.variants : [];
-  return rows.map((row: Record<string, unknown>) => ({
+  let payload: unknown = data;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      throw new Error("Máy chủ trả kết quả lưu quy cách không hợp lệ.");
+    }
+  }
+  const result = payload as
+    | { success?: boolean; variants?: Array<Record<string, unknown>> }
+    | null;
+  const rows = Array.isArray(result?.variants) ? result.variants : [];
+  const saved = rows.map((row: Record<string, unknown>) => ({
     clientKey: String(row.clientKey ?? ""),
     id: String(row.id ?? ""),
     bomCode: String(row.bomCode ?? ""),
   }));
+
+  const expectedKeys = new Set(variants.map((variant) => variant.clientKey));
+  const responseMatchesRequest =
+    result?.success === true &&
+    saved.length === variants.length &&
+    saved.every(
+      (row) => row.id && row.bomCode && expectedKeys.has(row.clientKey),
+    );
+  if (!responseMatchesRequest) {
+    throw new Error(
+      "Máy chủ chưa xác nhận đủ quy cách FnB. Dữ liệu vẫn được giữ để thử lưu lại.",
+    );
+  }
+
+  // Never let the dialog report success from the RPC response alone. Read the
+  // active rows back through the normal tenant-scoped path before clearing the
+  // operator's draft; this catches a stale schema or an unexpected rollback.
+  const confirmed = await getVariantsByProduct(productId);
+  const confirmedIds = new Set(confirmed.map((variant) => variant.id));
+  if (
+    confirmed.length !== variants.length ||
+    saved.some((row) => !confirmedIds.has(row.id))
+  ) {
+    throw new Error(
+      "Máy chủ chưa lưu đủ quy cách FnB. Dữ liệu vẫn được giữ để thử lưu lại.",
+    );
+  }
+
+  return saved;
 }
 
 /** 00365: create the parent FnB SKU and complete size setup in one transaction. */
