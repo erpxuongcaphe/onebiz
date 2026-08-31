@@ -81,4 +81,12 @@ describe("FnB exact modifier recipe UI", () => {
     expect(creationDialog).toContain("exactRows: buildPerSizeExactQuantityRows(v.key)");
     expect(creationDialog).not.toContain("async function syncPerSizeRecipes(");
   });
+
+  it("keeps long material names and incomplete exact quantities clear in the size editor", () => {
+    expect(perSizeMatrix).toContain('aria-label={`Đổi nguyên liệu ${selected.code} · ${selected.name}`}');
+    expect(perSizeMatrix).toContain("whitespace-normal break-words");
+    expect(perSizeMatrix).toContain("Còn {missingExactCount} ô chưa nhập");
+    expect(perSizeMatrix).toContain("Nhập 0 nếu mức đó không dùng nguyên liệu");
+    expect(creationDialog).toContain("Thiết lập chi nhánh");
+  });
 });

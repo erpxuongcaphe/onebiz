@@ -7,7 +7,15 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
-import { resolveAppliedTier } from "@/lib/services/supabase/pricing";
+import {
+  resolveAppliedTier,
+  resolveTierPrice,
+  type TierPriceRule,
+} from "@/lib/services/supabase/pricing";
+import {
+  resolvePlatformPrice,
+  type ProductPlatformPriceBookEntry,
+} from "@/lib/services/supabase/platform-prices";
 import {
   resolveAppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
@@ -275,7 +283,7 @@ function FnbPosPageInner() {
   // Key: productId, value: { shopee_food?: number, grab_food?: number, ... }
   // Load 1 lần khi mount + theo tab.deliveryPlatform → resolve giá đúng.
   const [platformPriceMap, setPlatformPriceMap] = useState<
-    Record<string, Partial<Record<string, number>>>
+    Record<string, ProductPlatformPriceBookEntry>
   >({});
   // Sprint POS-FNB-EXT-1 (CEO 08/05): platform commission settings + discount presets
   const [platformSettings, setPlatformSettings] = useState<DeliveryPlatformSettings | null>(null);
@@ -385,6 +393,7 @@ function FnbPosPageInner() {
     tierName: string;
     tierCode: string;
     priceMap: Map<string, number>;
+    rulesMap: Map<string, TierPriceRule[]>;
   } | null>(null);
   const userId = user?.id ?? "";
   const canCancelUnpaidOrder =
@@ -466,7 +475,7 @@ function FnbPosPageInner() {
                 // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
                 supabase
                   .from("product_platform_prices")
-                  .select("product_id, platform, override_price")
+                  .select("product_id, variant_id, platform, override_price")
                   .eq("tenant_id", tenantId),
               ])
             : Promise.resolve(null);
@@ -509,12 +518,21 @@ function FnbPosPageInner() {
           if (catalogResult) {
             const [cats, prodsResp, ppResp] = catalogResult;
             // CEO 13/05: build platform price map → resolve nhanh trong POS
-            const ppMap: Record<string, Partial<Record<string, number>>> = {};
+            const ppMap: Record<string, ProductPlatformPriceBookEntry> = {};
             for (const row of ppResp?.data ?? []) {
               const r = row as Record<string, unknown>;
               const pid = String(r.product_id);
-              if (!ppMap[pid]) ppMap[pid] = {};
-              ppMap[pid][String(r.platform)] = Number(r.override_price);
+              if (!ppMap[pid]) ppMap[pid] = { product: {}, variants: {} };
+              const platform = String(r.platform) as keyof ProductPlatformPriceBookEntry["product"];
+              const variantId = r.variant_id ? String(r.variant_id) : null;
+              if (variantId) {
+                if (!ppMap[pid].variants[variantId]) {
+                  ppMap[pid].variants[variantId] = {};
+                }
+                ppMap[pid].variants[variantId][platform] = Number(r.override_price);
+              } else {
+                ppMap[pid].product[platform] = Number(r.override_price);
+              }
             }
             setPlatformPriceMap(ppMap);
             const mappedCats = cats.map((c) => ({
@@ -1218,6 +1236,46 @@ function FnbPosPageInner() {
     };
   }, [branchId, products]);
 
+  const resolveConfiguredFnbPrice = useCallback(
+    (params: {
+      productId: string;
+      variantId?: string | null;
+      catalogPrice: number;
+    }): number => {
+      const platformPrice = resolvePlatformPrice({
+        entry: platformPriceMap[params.productId],
+        platform: pos.activeTab?.deliveryPlatform,
+        variantId: params.variantId,
+      });
+      if (platformPrice !== null) return platformPrice;
+
+      const tierRules = appliedTier?.rulesMap.get(params.productId);
+      const variantTierPrice = params.variantId
+        ? resolveTierPrice(tierRules, 1, params.variantId)
+        : null;
+      if (variantTierPrice !== null) return variantTierPrice;
+      const productTierPrice = resolveTierPrice(tierRules, 1, null);
+      return productTierPrice ?? params.catalogPrice;
+    },
+    [appliedTier, platformPriceMap, pos.activeTab?.deliveryPlatform],
+  );
+
+  const priceVariantsForActiveTab = useCallback(
+    (
+      productId: string,
+      variants: { id: string; label: string; sell_price: number; is_default?: boolean }[],
+    ) =>
+      variants.map((variant) => ({
+        ...variant,
+        sell_price: resolveConfiguredFnbPrice({
+          productId,
+          variantId: variant.id,
+          catalogPrice: variant.sell_price,
+        }),
+      })),
+    [resolveConfiguredFnbPrice],
+  );
+
   // ── Product select → quick-add hoặc open item dialog ──
   // Sprint POS-FNB-3 (CEO 06/05): SP đơn giản (không variant) → 1-tap add
   // cart, KHÔNG mở dialog. Pattern KiotViet: cà phê đen / nước suối / bánh
@@ -1239,10 +1297,16 @@ function FnbPosPageInner() {
       // fallback sell_price (25k).
       const activeTab = pos.activeTab;
       const platform = activeTab?.deliveryPlatform;
-      const override = platform && platform !== "direct"
-        ? platformPriceMap[product.id]?.[platform]
-        : undefined;
-      const resolvedPrice = override !== undefined ? override : product.sell_price;
+      const platformOverride = resolvePlatformPrice({
+        entry: platformPriceMap[product.id],
+        platform,
+      });
+      const catalogPrice = products.find((item) => item.id === product.id)?.sell_price
+        ?? product.sell_price;
+      const resolvedPrice = resolveConfiguredFnbPrice({
+        productId: product.id,
+        catalogPrice,
+      });
 
       const quickAdd = () => {
         if (itemLoadRequestRef.current !== requestId) return;
@@ -1265,7 +1329,7 @@ function FnbPosPageInner() {
           unitPrice: resolvedPrice,
           toppings: [],
         });
-        const overrideNote = override !== undefined
+        const overrideNote = platformOverride !== null
           ? ` (giá ${platform === "shopee_food" ? "Shopee Food" : platform === "grab_food" ? "Grab" : platform})`
           : "";
         toast({
@@ -1310,7 +1374,7 @@ function FnbPosPageInner() {
           return;
         }
         // SP có ≥1 biến thể → mở dialog cho user chọn size
-        setItemVariants(cached);
+        setItemVariants(priceVariantsForActiveTab(product.id, cached));
         setItemDialogOpen(true);
         return;
       }
@@ -1349,7 +1413,7 @@ function FnbPosPageInner() {
             return;
           }
         }
-        setItemVariants(mapped);
+        setItemVariants(priceVariantsForActiveTab(product.id, mapped));
       } catch (err) {
         console.error("getVariantsByProduct error:", err);
         if (itemLoadRequestRef.current !== requestId) return;
@@ -1365,7 +1429,17 @@ function FnbPosPageInner() {
         }
       }
     },
-    [toast, variantCacheRef, readModifierCache, loadModifierForProduct, pos, platformPriceMap],
+    [
+      toast,
+      variantCacheRef,
+      readModifierCache,
+      loadModifierForProduct,
+      pos,
+      platformPriceMap,
+      products,
+      resolveConfiguredFnbPrice,
+      priceVariantsForActiveTab,
+    ],
   );
 
   // ── Add to cart from item dialog ──
@@ -1440,7 +1514,7 @@ function FnbPosPageInner() {
 
       const cached = variantCacheRef.get(line.productId);
       if (cached) {
-        setItemVariants(cached);
+        setItemVariants(priceVariantsForActiveTab(line.productId, cached));
         setItemDialogOpen(true);
         return;
       }
@@ -1457,7 +1531,7 @@ function FnbPosPageInner() {
         }));
         variantCacheRef.set(line.productId, mapped);
         if (itemLoadRequestRef.current === requestId) {
-          setItemVariants(mapped);
+          setItemVariants(priceVariantsForActiveTab(line.productId, mapped));
         }
       } catch (err) {
         console.error("getVariantsByProduct error (edit):", err);
@@ -1467,7 +1541,7 @@ function FnbPosPageInner() {
         }
       }
     },
-    [products, toast, variantCacheRef, loadModifierForProduct]
+    [products, toast, variantCacheRef, loadModifierForProduct, priceVariantsForActiveTab]
   );
 
   // Compute initial selection for dialog when editing.

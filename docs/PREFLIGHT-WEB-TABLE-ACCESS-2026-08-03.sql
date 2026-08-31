@@ -24,6 +24,7 @@ with required(relation_name, operation) as (
     ('bom_items', 'insert'),
     ('bom_items', 'select'),
     ('bom_modifier_option_quantities', 'select'),
+    ('branch_price_tier_assignments', 'select'),
     ('branch_stock', 'select'),
     ('branches', 'insert'),
     ('branches', 'select'),

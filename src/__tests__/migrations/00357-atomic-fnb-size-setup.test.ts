@@ -39,6 +39,10 @@ describe("00357 atomic FnB size setup", () => {
 
   it("routes FnB per-size saves through the atomic RPC", () => {
     expect(service).toContain('"save_fnb_size_setup_atomic"');
+    expect(service).toContain("result?.success === true");
+    expect(service).toContain("saved.length === variants.length");
+    expect(service).toContain("await getvariantsbyproduct(productid)");
+    expect(service).toContain("error.details");
     expect(dialog).toContain("await savefnbsizesetupatomic(");
     expect(dialog).not.toContain("async function syncpersizerecipes");
     expect(dialog).toContain('setinnertab("variants")');

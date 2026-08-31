@@ -50,6 +50,9 @@ import {
 } from "@/components/ui/dialog";
 import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { PriceTierBranchScope } from "@/components/shared/price-tier-branch-scope";
+import { PERMISSIONS } from "@/lib/permissions/constants";
+import { usePermissions } from "@/lib/permissions/use-permission";
 
 type ScopeFilter = "all" | "retail" | "fnb";
 type ItemFilter = "all" | "with-items" | "empty";
@@ -87,10 +90,12 @@ function PriceTierDetail({
   tier,
   onClose,
   onChange,
+  canManage,
 }: {
   tier: PriceTier;
   onClose: () => void;
   onChange: () => void;
+  canManage: boolean;
 }) {
   const { toast } = useToast();
   const [items, setItems] = useState<PriceTierItem[]>([]);
@@ -151,11 +156,13 @@ function PriceTierDetail({
           subtitle={tier.description ?? "Không có mô tả"}
         />
 
+        <PriceTierBranchScope tier={tier} />
+
         <div className="flex items-center justify-between border-b pb-2 gap-2 flex-wrap">
           <h3 className="text-sm font-semibold">
             Sản phẩm áp dụng ({items.length})
           </h3>
-          <div className="flex items-center gap-2 flex-wrap">
+          {canManage && <div className="flex items-center gap-2 flex-wrap">
             <Button
               size="sm"
               variant="outline"
@@ -178,7 +185,7 @@ function PriceTierDetail({
               <Icon name="add" size={14} className="mr-1" />
               Thêm SP
             </Button>
-          </div>
+          </div>}
         </div>
 
         {loading ? (
@@ -190,10 +197,10 @@ function PriceTierDetail({
           <div className="flex flex-col items-center justify-center py-10 text-muted-foreground">
             <Icon name="inventory_2" size={40} className="mb-2 opacity-30" />
             <p className="text-sm">Chưa có sản phẩm nào trong bảng giá</p>
-            <Button size="sm" variant="outline" className="mt-3" onClick={() => setAddOpen(true)}>
+            {canManage && <Button size="sm" variant="outline" className="mt-3" onClick={() => setAddOpen(true)}>
               <Icon name="add" size={16} className="mr-1" />
               Thêm sản phẩm đầu tiên
-            </Button>
+            </Button>}
           </div>
         ) : (
           <div className="border rounded-lg overflow-hidden">
@@ -203,7 +210,9 @@ function PriceTierDetail({
                   <th className="text-left p-2 font-medium">Sản phẩm</th>
                   <th className="text-right p-2 font-medium">Giá riêng</th>
                   <th className="text-right p-2 font-medium">SL tối thiểu</th>
-                  <th className="text-right p-2 font-medium w-12"></th>
+                  {canManage && (
+                    <th className="text-right p-2 font-medium w-12"></th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -221,7 +230,7 @@ function PriceTierDetail({
                     <td className="p-2 text-right text-muted-foreground">
                       {item.minQty}
                     </td>
-                    <td className="p-2 text-right">
+                    {canManage && <td className="p-2 text-right">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => setEditingItem(item)}
@@ -238,7 +247,7 @@ function PriceTierDetail({
                           <Icon name="delete" size={14} />
                         </button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -247,7 +256,7 @@ function PriceTierDetail({
         )}
       </div>
 
-      <AddPriceTierItemDialog
+      {canManage && <AddPriceTierItemDialog
         open={addOpen}
         onOpenChange={setAddOpen}
         tierId={tier.id}
@@ -256,9 +265,9 @@ function PriceTierDetail({
           load();
           onChange();
         }}
-      />
+      />}
 
-      <EditPriceTierItemDialog
+      {canManage && <EditPriceTierItemDialog
         open={editingItem !== null}
         onOpenChange={(o) => {
           if (!o) setEditingItem(null);
@@ -268,10 +277,10 @@ function PriceTierDetail({
           load();
           onChange();
         }}
-      />
+      />}
 
       {/* Sprint 3: Bulk add theo nhóm */}
-      <BulkAddPriceTierItemsDialog
+      {canManage && <BulkAddPriceTierItemsDialog
         open={bulkAddOpen}
         onOpenChange={setBulkAddOpen}
         tierId={tier.id}
@@ -281,10 +290,10 @@ function PriceTierDetail({
           load();
           onChange();
         }}
-      />
+      />}
 
       {/* Sprint 3: Adjust % so với giá niêm yết */}
-      <AdjustPriceTierPercentDialog
+      {canManage && <AdjustPriceTierPercentDialog
         open={adjustOpen}
         onOpenChange={setAdjustOpen}
         tierId={tier.id}
@@ -294,9 +303,9 @@ function PriceTierDetail({
           load();
           onChange();
         }}
-      />
+      />}
 
-      <ConfirmDialog
+      {canManage && <ConfirmDialog
         open={deletingItem !== null}
         onOpenChange={(o) => {
           if (!o) setDeletingItem(null);
@@ -312,7 +321,7 @@ function PriceTierDetail({
         variant="destructive"
         loading={deleteBusy}
         onConfirm={handleDeleteItem}
-      />
+      />}
     </InlineDetailPanel>
   );
 }
@@ -323,6 +332,8 @@ function PriceTierDetail({
 
 export default function ThietLapGiaPage() {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
+  const canManagePrices = hasPermission(PERMISSIONS.PRODUCTS_MANAGE_PRICES);
   const [data, setData] = useState<PriceTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -602,7 +613,7 @@ export default function ThietLapGiaPage() {
         searchPlaceholder="Tìm tên, mã hoặc mô tả bảng giá..."
         searchValue={search}
         onSearchChange={setSearch}
-        actions={[
+        actions={canManagePrices ? [
           {
             label: "Tạo bảng giá",
             icon: <Icon name="add" size={16} />,
@@ -612,7 +623,7 @@ export default function ThietLapGiaPage() {
               setCreateOpen(true);
             },
           },
-        ]}
+        ] : []}
       />
 
       <div
@@ -697,9 +708,10 @@ export default function ThietLapGiaPage() {
               tier={tier}
               onClose={onClose}
               onChange={fetchData}
+              canManage={canManagePrices}
             />
           )}
-          rowActions={(row) => [
+          rowActions={(row) => canManagePrices ? [
               {
                 label: "Sửa",
                 icon: <Icon name="edit" size={16} />,
@@ -720,7 +732,7 @@ export default function ThietLapGiaPage() {
                 variant: "destructive",
                 separator: true,
               },
-          ]}
+          ] : []}
         />
       </div>
 
@@ -757,14 +769,14 @@ export default function ThietLapGiaPage() {
         </FilterGroup>
       </FilterPanel>
 
-      <PriceTierDialog
+      {canManagePrices && <PriceTierDialog
         open={createOpen}
         onOpenChange={setCreateOpen}
         tier={editingTier}
         onSuccess={fetchData}
-      />
+      />}
 
-      <ConfirmDialog
+      {canManagePrices && <ConfirmDialog
         open={deletingTier !== null}
         onOpenChange={(o) => {
           if (!o) setDeletingTier(null);
@@ -780,10 +792,10 @@ export default function ThietLapGiaPage() {
         variant="destructive"
         loading={deleteTierBusy}
         onConfirm={handleDelete}
-      />
+      />}
 
       {/* Clone dialog — Q3 */}
-      <Dialog
+      {canManagePrices && <Dialog
         open={cloningTier !== null}
         onOpenChange={(o) => {
           if (cloneBusy) return;
@@ -856,7 +868,7 @@ export default function ThietLapGiaPage() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </ListPageLayout>
   );
 }

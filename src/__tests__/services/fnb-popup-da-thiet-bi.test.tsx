@@ -124,6 +124,45 @@ describe("PR-B · ba trạng thái của nhóm tuỳ chọn", () => {
   });
 });
 
+describe("POS chỉ dùng một nguồn quy cách", () => {
+  it("có variant thì ẩn Size cũ nhưng giữ Mức đá trong hiển thị và payload", () => {
+    const onConfirm = vi.fn();
+    const gSize = nhom("g-size", "Size", "single_required", 0);
+    const gDa = nhom("g-da", "Mức đá", "single", 1);
+    const modifiers: DynamicModifierData = {
+      groups: [gSize, gDa],
+      optionsByGroup: new Map([
+        [gSize.id, [opt("size-m", gSize.id, "M"), opt("size-l", gSize.id, "L", 5000)]],
+        [gDa.id, [opt("da-it", gDa.id, "Ít đá")]],
+      ]),
+    };
+
+    moPopup({
+      variants: [
+        { id: "variant-m", label: "Size M", sell_price: 22000, is_default: true },
+        { id: "variant-l", label: "Size L", sell_price: 27000 },
+      ],
+      dynamicModifiers: modifiers,
+      onConfirm,
+    });
+
+    expect(screen.getByText("Kích cỡ")).toBeTruthy();
+    expect(screen.queryByText("Size", { selector: "span" })).toBeNull();
+    expect(screen.getByText("Mức đá")).toBeTruthy();
+    expect(screen.queryByText("Chưa chọn — bắt buộc")).toBeNull();
+
+    fireEvent.click(screen.getByText("Ít đá"));
+    fireEvent.click(screen.getByText(/Thêm vào đơn/));
+
+    expect(onConfirm).toHaveBeenCalledOnce();
+    const payload = onConfirm.mock.calls[0][0];
+    expect(payload.variantId).toBe("variant-m");
+    expect(payload.unitPrice).toBe(22000);
+    expect(payload.modifierSelections).toHaveLength(1);
+    expect(payload.modifierSelections[0].groupName).toBe("Mức đá");
+  });
+});
+
 describe("Giới hạn nhóm chọn nhiều", () => {
   it("chưa đạt tối thiểu thì chặn xác nhận và nói rõ số cần chọn", () => {
     moPopup({ dynamicModifiers: duLieuChonNhieu(2, 3) });

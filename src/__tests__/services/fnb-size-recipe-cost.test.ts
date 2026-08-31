@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest";
 import { calculateRecipeCostBySize } from "@/components/shared/dialogs/per-size-recipe-matrix";
 import type { Product, UOMConversion } from "@/lib/types";
 
-const product = (id: string, unit: string, costPrice: number): Product =>
+const product = (id: string, unit: string, retailPrice: number): Product =>
   ({
     id,
     code: id,
     name: id,
-    productType: "nvl",
+    productType: "sku",
+    channel: "retail",
     hasBom: false,
-    sellPrice: 0,
-    costPrice,
+    sellPrice: retailPrice,
+    costPrice: 1,
     stock: 0,
     ordered: 0,
     categoryId: "category",
@@ -38,7 +39,7 @@ const conversion = (
 });
 
 describe("FnB size recipe costing", () => {
-  it("converts preparation grams to each material stock unit before costing", () => {
+  it("uses Retail selling prices after converting preparation units", () => {
     const result = calculateRecipeCostBySize(
       [
         { key: "m", name: "M" },

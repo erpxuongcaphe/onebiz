@@ -42,6 +42,38 @@ export interface SavedFnbSizeSetupVariant {
   bomCode: string;
 }
 
+export interface AtomicFnbProductInput {
+  code: string;
+  name: string;
+  categoryId: string;
+  unit: string;
+  purchaseUnit?: string;
+  stockUnit?: string;
+  sellUnit?: string;
+  sellPrice: number;
+  costPrice: number;
+  minStock?: number;
+  maxStock?: number;
+  vatRate?: number;
+  barcode?: string;
+  weight?: number;
+  description?: string;
+  image?: string;
+  allowSale?: boolean;
+  groupCode?: string;
+  shelfLifeDays?: number;
+  shelfLifeUnit?: string;
+  supplierId?: string;
+  brand?: string;
+  bomCode?: string;
+}
+
+export interface AtomicFnbProductResult {
+  productId: string;
+  code: string;
+  variants: SavedFnbSizeSetupVariant[];
+}
+
 async function requireTenantProduct(productId: string, tenantId: string): Promise<void> {
   const { data, error } = await supabase
     .from("products")
@@ -215,14 +247,99 @@ export async function saveFnbSizeSetupAtomic(
     "save_fnb_size_setup_atomic",
     { p_product_id: productId, p_variants: variants },
   );
-  if (error) throw error;
+  if (error) {
+    const detail = [error.message, error.details, error.hint]
+      .filter((part): part is string => typeof part === "string" && part.trim().length > 0)
+      .join(" | ");
+    throw new Error(detail || "Máy chủ không thể lưu quy cách FnB.");
+  }
 
-  const rows = Array.isArray(data?.variants) ? data.variants : [];
-  return rows.map((row: Record<string, unknown>) => ({
+  let payload: unknown = data;
+  if (typeof payload === "string") {
+    try {
+      payload = JSON.parse(payload);
+    } catch {
+      throw new Error("Máy chủ trả kết quả lưu quy cách không hợp lệ.");
+    }
+  }
+  const result = payload as
+    | { success?: boolean; variants?: Array<Record<string, unknown>> }
+    | null;
+  const rows = Array.isArray(result?.variants) ? result.variants : [];
+  const saved = rows.map((row: Record<string, unknown>) => ({
     clientKey: String(row.clientKey ?? ""),
     id: String(row.id ?? ""),
     bomCode: String(row.bomCode ?? ""),
   }));
+
+  const expectedKeys = new Set(variants.map((variant) => variant.clientKey));
+  const responseMatchesRequest =
+    result?.success === true &&
+    saved.length === variants.length &&
+    saved.every(
+      (row) => row.id && row.bomCode && expectedKeys.has(row.clientKey),
+    );
+  if (!responseMatchesRequest) {
+    throw new Error(
+      "Máy chủ chưa xác nhận đủ quy cách FnB. Dữ liệu vẫn được giữ để thử lưu lại.",
+    );
+  }
+
+  // Never let the dialog report success from the RPC response alone. Read the
+  // active rows back through the normal tenant-scoped path before clearing the
+  // operator's draft; this catches a stale schema or an unexpected rollback.
+  const confirmed = await getVariantsByProduct(productId);
+  const confirmedIds = new Set(confirmed.map((variant) => variant.id));
+  if (
+    confirmed.length !== variants.length ||
+    saved.some((row) => !confirmedIds.has(row.id))
+  ) {
+    throw new Error(
+      "Máy chủ chưa lưu đủ quy cách FnB. Dữ liệu vẫn được giữ để thử lưu lại.",
+    );
+  }
+
+  return saved;
+}
+
+/** 00365: create the parent FnB SKU and complete size setup in one transaction. */
+export async function createFnbProductWithSizeSetupAtomic(
+  product: AtomicFnbProductInput,
+  variants: FnbSizeSetupVariantInput[],
+  modifierGroupIds: string[],
+): Promise<AtomicFnbProductResult> {
+  if (!product.code || !product.name || !product.categoryId) {
+    throw new Error("Thiếu thông tin bắt buộc của sản phẩm FnB.");
+  }
+  if (variants.length === 0) {
+    throw new Error("Món có quy cách phải có ít nhất một size.");
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc(
+    "create_fnb_product_with_size_setup_atomic",
+    {
+      p_product: product,
+      p_variants: variants,
+      p_modifier_group_ids: modifierGroupIds,
+    },
+  );
+  if (error) throw error;
+  if (!data?.productId || !data?.code) {
+    throw new Error("Máy chủ không trả kết quả tạo sản phẩm FnB hợp lệ.");
+  }
+
+  return {
+    productId: String(data.productId),
+    code: String(data.code),
+    variants: (Array.isArray(data.variants) ? data.variants : []).map(
+      (row: Record<string, unknown>) => ({
+        clientKey: String(row.clientKey ?? ""),
+        id: String(row.id ?? ""),
+        bomCode: String(row.bomCode ?? ""),
+      }),
+    ),
+  };
 }
 
 function mapVariant(row: Record<string, unknown>): ProductVariant {

@@ -8,10 +8,11 @@
  * Component chỉ render + onChange; KHÔNG tự load/save (cha lo, để 1 nút Lưu).
  *
  * Hiển thị đầy đủ: mã SKU + tên NVL (ô tìm-kiếm), ĐVT theo NVL, lượng riêng
- * từng size (nhận số lẻ), và GIÁ VỐN tự tính theo size (Σ lượng × giá vốn NVL).
+ * từng size (nhận số lẻ), và GIÁ VỐN F&B tự tính theo size
+ * (tong luong x gia ban Retail cua thanh phan).
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -53,14 +54,25 @@ export interface RecipeRow {
 }
 
 let _k = 0;
+const newRecipeRowKey = () => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `rr-${uuid}`;
+  _k += 1;
+  return `rr-${Date.now().toString(36)}-${_k.toString(36)}`;
+};
+
 export const newRecipeRow = (): RecipeRow => ({
-  key: `rr${++_k}`,
+  key: newRecipeRowKey(),
   materialId: "",
   unit: "",
   scaleTarget: null,
   qty: {},
   exactQty: {},
 });
+
+/** Draft keys can outlive a module reload, so always re-key restored UI rows. */
+export const rekeyRecipeRows = (rows: RecipeRow[]): RecipeRow[] =>
+  rows.map((row) => ({ ...row, key: newRecipeRowKey() }));
 
 const FIXED = "__fixed__";
 const fmtMoney = (n: number) => formatNumber(Math.round(n || 0));
@@ -121,7 +133,7 @@ export function calculateRecipeCostBySize(
         if (factor == null) return sum;
         return (
           sum +
-          (material.costPrice || 0) *
+          (material.sellPrice || 0) *
             getRecipeQuantityForSize(row, size.key, optionsByGroup) *
             factor
         );
@@ -144,10 +156,6 @@ function MaterialSearchCell({
   const [query, setQuery] = useState(selected ? `${selected.code} · ${selected.name}` : "");
   const [open, setOpen] = useState(false);
 
-  useEffect(() => {
-    if (!open) setQuery(selected ? `${selected.code} · ${selected.name}` : "");
-  }, [open, selected]);
-
   const results = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("vi");
     return materials
@@ -162,28 +170,49 @@ function MaterialSearchCell({
 
   return (
     <div className="min-w-[230px]">
-      <Input
-        value={query}
-        onFocus={() => {
-          setOpen(true);
-          if (selected) setQuery("");
-        }}
-        onChange={(event) => {
-          setQuery(event.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && results[0]) {
-            event.preventDefault();
-            onSelect(results[0]);
-            setOpen(false);
-          }
-          if (event.key === "Escape") setOpen(false);
-        }}
-        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-        placeholder="Nhập mã hoặc tên nguyên liệu..."
-        className="h-10"
-      />
+      {selected && !open ? (
+        <button
+          type="button"
+          title={`${selected.code} · ${selected.name}`}
+          aria-label={`Đổi nguyên liệu ${selected.code} · ${selected.name}`}
+          onClick={() => {
+            setQuery("");
+            setOpen(true);
+          }}
+          className="flex min-h-10 w-full flex-col justify-center rounded-md border border-input bg-transparent px-3 py-1.5 text-left hover:bg-muted/40 focus-visible:border-ring focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          <span className="whitespace-normal break-words text-sm font-medium leading-tight">
+            {selected.name}
+          </span>
+          <span className="mt-0.5 text-xs text-muted-foreground">
+            {selected.code} · {selected.stockUnit || selected.unit || "Chưa có ĐVT"}
+          </span>
+        </button>
+      ) : (
+        <Input
+          autoFocus={Boolean(selected)}
+          value={query}
+          onFocus={() => {
+            setOpen(true);
+            if (selected && query) setQuery("");
+          }}
+          onChange={(event) => {
+            setQuery(event.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && results[0]) {
+              event.preventDefault();
+              onSelect(results[0]);
+              setOpen(false);
+            }
+            if (event.key === "Escape") setOpen(false);
+          }}
+          onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+          placeholder="Nhập mã hoặc tên nguyên liệu..."
+          className="h-10"
+        />
+      )}
       {open && (
         <div className="mt-1 max-h-48 min-w-[280px] overflow-y-auto rounded-md border bg-popover shadow-sm">
           {results.length === 0 ? (
@@ -555,7 +584,7 @@ export function PerSizeRecipeMatrix({
                   colSpan={3}
                   className="px-2 py-2 text-right font-medium text-muted-foreground"
                 >
-                  Giá vốn / cỡ (tự tính)
+                  Giá vốn F&B / cỡ (theo giá bán Retail)
                 </td>
                 {sizes.map((s) => (
                   <td
@@ -579,6 +608,14 @@ export function PerSizeRecipeMatrix({
           const group = fnbGroups.find((candidate) => candidate.id === row.scaleTarget);
           const options = getGroupOptions(row.scaleTarget);
           const defaultCount = options.filter((option) => option.isDefault).length;
+          const missingExactCount = sizes.reduce(
+            (count, size) =>
+              count +
+              options.filter(
+                (option) => row.exactQty[size.key]?.[option.id] === undefined,
+              ).length,
+            0,
+          );
           return (
             <section key={`${row.key}-exact`} className="overflow-hidden rounded-lg border bg-card">
               <div className="border-b bg-muted/25 px-3 py-2">
@@ -650,6 +687,14 @@ export function PerSizeRecipeMatrix({
                       ))}
                     </tbody>
                   </table>
+                  {missingExactCount > 0 && (
+                    <div className="flex items-start gap-1.5 border-t border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
+                      <Icon name="warning" size={14} className="mt-0.5 shrink-0" />
+                      <span>
+                        Còn {missingExactCount} ô chưa nhập. Nhập 0 nếu mức đó không dùng nguyên liệu.
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
             </section>

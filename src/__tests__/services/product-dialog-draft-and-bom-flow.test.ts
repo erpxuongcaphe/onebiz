@@ -34,7 +34,10 @@ describe("product dialog draft and inline BOM flow", () => {
   });
 
   it("keeps the BOM aligned with unsaved FnB choice drafts while tabs change", () => {
-    expect(dialog).toContain('innerTab !== "modifier" && innerTab !== "bom" && innerTab !== "variants"');
+    expect(dialog).toContain('innerTab !== "modifier" &&');
+    expect(dialog).toContain('innerTab !== "pricing" &&');
+    expect(dialog).toContain('innerTab !== "bom" &&');
+    expect(dialog).toContain('innerTab !== "variants"');
     expect(dialog).toContain("The BOM must read the same draft modifier groups as the modifier tab.");
     expect(dialog).toContain("setBomModifierGroups(perSizeModifierGroups)");
     expect(dialog).toContain("const [bomExactQuantitiesReady, setBomExactQuantitiesReady]");

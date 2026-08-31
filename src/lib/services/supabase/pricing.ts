@@ -8,9 +8,102 @@
 
 import { getClient } from "./base";
 import { getCurrentTenantId } from "./base";
+import { isRpcUnavailable } from "./rpc-utils";
 import type { PriceTier, PriceTierItem, PriceTierScope } from "@/lib/types";
 
 const supabase = getClient();
+
+export type PriceTierAssignmentMode = "indefinite" | "fixed";
+
+export interface BranchPriceTierAssignment {
+  id: string;
+  priceTierId: string;
+  branchId: string;
+  validityMode: PriceTierAssignmentMode;
+  startsAt: string;
+  endsAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BranchPriceTierAssignmentInput {
+  branchId: string;
+  validityMode: PriceTierAssignmentMode;
+  startsAt: string;
+  endsAt?: string;
+}
+
+export async function getPriceTierBranchAssignments(
+  priceTierId: string
+): Promise<BranchPriceTierAssignment[]> {
+  await assertTierOwnership(priceTierId);
+  const tenantId = await getCurrentTenantId();
+  // Generated Supabase types are updated only after production migration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
+  const { data, error } = await client
+    .from("branch_price_tier_assignments")
+    .select("id, price_tier_id, branch_id, validity_mode, starts_at, ends_at, created_at, updated_at")
+    .eq("tenant_id", tenantId)
+    .eq("price_tier_id", priceTierId)
+    .order("starts_at", { ascending: true });
+
+  if (error) throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    priceTierId: row.price_tier_id,
+    branchId: row.branch_id,
+    validityMode: row.validity_mode as PriceTierAssignmentMode,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }));
+}
+
+export async function savePriceTierBranchAssignments(params: {
+  priceTierId: string;
+  assignments: BranchPriceTierAssignmentInput[];
+  reason?: string;
+}): Promise<{ count: number; batchId?: string }> {
+  await assertTierOwnership(params.priceTierId);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
+  const { data, error } = await client.rpc(
+    "save_branch_price_tier_assignments_00363",
+    {
+      p_price_tier_id: params.priceTierId,
+      p_assignments: params.assignments.map((assignment) => ({
+        branch_id: assignment.branchId,
+        validity_mode: assignment.validityMode,
+        starts_at: assignment.startsAt,
+        ends_at:
+          assignment.validityMode === "fixed"
+            ? assignment.endsAt ?? null
+            : null,
+      })),
+      p_reason: params.reason?.trim() || null,
+    }
+  );
+
+  if (error) {
+    if (isRpcUnavailable(error)) {
+      throw new Error(
+        "Chức năng phạm vi bảng giá chưa được cài trên cơ sở dữ liệu (cần chạy migration 00363 và 00364)."
+      );
+    }
+    if (/PRICE_ASSIGNMENT_OVERLAP/i.test(error.message ?? "")) {
+      throw new Error(
+        "Chi nhánh đã có bảng giá khác trùng thời gian. Hãy đổi thời gian hoặc bỏ phạm vi trùng."
+      );
+    }
+    throw error;
+  }
+
+  const result = (data ?? {}) as { count?: number; batch_id?: string };
+  return { count: result.count ?? 0, batchId: result.batch_id };
+}
 
 /**
  * Get all tiers — optional filter theo scope (retail/fnb/both).
@@ -411,6 +504,20 @@ export async function getApplicableTier(context: {
   }
 
   if (context.channel === "fnb" && context.branchId) {
+    // 00363 resolves scheduled assignments by server time. Keep the old branch
+    // column only as a rollout fallback until every environment has migrated.
+    if (typeof supabase.rpc === "function") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: resolvedTier, error: resolveError } = await (supabase.rpc as any)(
+        "resolve_branch_price_tier_00363",
+        { p_branch_id: context.branchId },
+      );
+      if (!resolveError) {
+        return (resolvedTier as string | null) ?? null;
+      }
+      if (!isRpcUnavailable(resolveError)) throw resolveError;
+    }
+
     const { data, error } = await supabase
       .from("branches")
       .select("price_tier_id")

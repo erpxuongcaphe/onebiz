@@ -280,6 +280,16 @@
    "product_id",
    "variant_id"
   ],
+  "bom_modifier_option_quantities": [
+   "bom_id",
+   "created_at",
+   "id",
+   "material_id",
+   "modifier_option_id",
+   "quantity",
+   "tenant_id",
+   "updated_at"
+  ],
   "sales_orders": [
    "branch_id",
    "code",
@@ -391,6 +401,19 @@
    "tenant_id",
    "updated_at"
   ],
+  "branch_price_tier_assignments": [
+   "branch_id",
+   "created_at",
+   "created_by",
+   "ends_at",
+   "id",
+   "price_tier_id",
+   "starts_at",
+   "tenant_id",
+   "updated_at",
+   "updated_by",
+   "validity_mode"
+  ],
   "pipeline_stages": [
    "code",
    "color",
@@ -408,6 +431,13 @@
    "id",
    "permission_code",
    "role_id"
+  ],
+  "fnb_product_branch_menu_policies": [
+   "created_at",
+   "id",
+   "mode",
+   "product_id",
+   "tenant_id"
   ],
   "coupon_usages": [
    "coupon_id",
@@ -428,6 +458,14 @@
    "total",
    "unit",
    "unit_price"
+  ],
+  "purchase_order_save_keys": [
+   "actor_id",
+   "created_at",
+   "purchase_order_id",
+   "request_hash",
+   "reserved_code",
+   "tenant_id"
   ],
   "pipeline_transitions": [
    "auto_trigger",
@@ -690,7 +728,8 @@
    "product_id",
    "set_at",
    "set_by",
-   "tenant_id"
+   "tenant_id",
+   "variant_id"
   ],
   "invoice_items": [
    "discount",
@@ -1147,6 +1186,13 @@
    "tenant_id",
    "updated_at",
    "ward"
+  ],
+  "fnb_product_branch_menu_scopes": [
+   "branch_id",
+   "created_at",
+   "id",
+   "product_id",
+   "tenant_id"
   ],
   "customer_groups": [
    "created_at",
@@ -1888,9 +1934,11 @@
    "is_active",
    "name",
    "priority",
+   "revision",
    "scope",
    "tenant_id",
-   "updated_at"
+   "updated_at",
+   "updated_by"
   ],
   "stock_transfer_items": [
    "created_at",
@@ -2077,9 +2125,15 @@
   "_create_sales_return_auth_impl_00244",
   "_current_caller_tenant",
   "_finalize_shift_atomic_00298",
+  "_fnb_cancel_unpaid_order_impl_00066",
   "_fnb_complete_payment_impl_00230",
+  "_fnb_complete_payment_impl_00343",
   "_fnb_send_to_kitchen_impl_00303",
+  "_fnb_send_to_kitchen_impl_00330",
+  "_fnb_send_to_kitchen_impl_00350",
+  "_fnb_send_to_kitchen_impl_00353",
   "_fnb_void_invoice_impl_00165",
+  "_fnb_void_invoice_impl_00329",
   "_receive_purchase_items_atomic_impl_00102",
   "_reconcile_product_lots_to_branch_00284",
   "_resolve_report_tenant",
@@ -2112,6 +2166,7 @@
   "bulk_delete_products_atomic",
   "bulk_force_delete_products_atomic",
   "calculate_bom_cost",
+  "calculate_fnb_bom_retail_cost_00363",
   "cancel_cash_transaction",
   "cancel_disposal_export_atomic_v2",
   "cancel_draft_invoice_atomic",
@@ -2142,6 +2197,7 @@
   "create_and_apply_inventory_check_atomic",
   "create_child_sale_from_order",
   "create_disposal_export_atomic",
+  "create_fnb_product_with_size_setup_atomic",
   "create_internal_export_atomic",
   "create_internal_sale_atomic",
   "create_manual_cash_transaction_atomic",
@@ -2150,6 +2206,7 @@
   "create_stock_transfer_atomic",
   "create_supplier_return_atomic",
   "delete_customer_atomic",
+  "delete_platform_price_targets_00364",
   "delete_product_atomic",
   "delete_product_platform_prices",
   "delete_role_atomic",
@@ -2363,17 +2420,26 @@
   "replace_product_uom_conversions_atomic",
   "report_cogs_by_bom",
   "report_nvl_consumption_by_branch",
+  "resolve_branch_price_tier_00363",
   "resolve_product_uom_factor",
+  "resolve_sale_price_00363",
   "restore_bom_for_return",
   "restore_product_atomic",
   "revert_production_materials",
   "revert_received_purchase_order_atomic",
+  "save_bom_modifier_option_quantities",
   "save_branch_atomic",
+  "save_branch_price_tier_assignments_00363",
+  "save_fnb_product_branch_menu_policy",
+  "save_fnb_product_branch_menu_scope",
+  "save_fnb_size_setup_atomic",
   "save_pos_draft_atomic",
   "save_pos_draft_atomic_v2",
   "save_pos_draft_atomic_v3",
+  "save_product_modifier_groups_atomic",
   "save_purchase_order_atomic",
   "save_purchase_order_with_uom_atomic",
+  "save_purchase_order_with_uom_atomic_v2",
   "save_role_atomic",
   "save_sales_order_atomic",
   "save_sales_order_atomic_v2",
@@ -2393,7 +2459,9 @@
   "show_trgm",
   "soft_delete_pos_draft_atomic",
   "split_kitchen_order_atomic",
+  "sync_product_bom_status_for_bom",
   "sync_product_cost_from_bom",
+  "sync_product_has_bom_from_active_bom",
   "toggle_favorite",
   "update_branch_settings_atomic",
   "update_draft_invoice_atomic",
@@ -2417,7 +2485,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 141,
- "soCot": 1778,
- "soRpc": 354
+ "soBang": 146,
+ "soCot": 1816,
+ "soRpc": 374
 }
