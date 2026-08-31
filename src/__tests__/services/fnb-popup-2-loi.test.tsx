@@ -80,6 +80,8 @@ describe("LỖI 1 — tải tuỳ chọn hỏng phải NÓI THẬT, không giả
     const nut = screen.getByText("Đang tải tuỳ chọn…").closest("button")!;
     expect(nut.disabled).toBe(true);
     expect(screen.queryByText(/BẮT BUỘC chưa chọn/)).toBeNull();
+    expect(screen.queryByText("Mức đường")).toBeNull();
+    expect(screen.queryByText("Không đá")).toBeNull();
   });
 
   it("tải xong, món thật sự KHÔNG có tuỳ chọn: cho thêm bình thường", () => {
