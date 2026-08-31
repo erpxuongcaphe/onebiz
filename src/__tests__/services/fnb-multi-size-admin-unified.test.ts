@@ -25,6 +25,12 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     expect(source).toContain("variantItems.map((variant, index)");
     expect(source).toContain("Giá quản lý tại tab Giá & Tồn kho");
     expect(source).toContain(
+      '(innerTab === "pricing" || innerTab === "bom" || innerTab === "variants")',
+    );
+    expect(source).toContain(
+      '(innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants")',
+    );
+    expect(source).toContain(
       'firstIssue.code === "variant_price_invalid"\n          ? "pricing"',
     );
   });

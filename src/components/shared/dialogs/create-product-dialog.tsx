@@ -856,7 +856,12 @@ export function CreateProductDialog({
       }
       return;
     }
-    if (innerTab !== "modifier" && innerTab !== "bom" && innerTab !== "variants") return;
+    if (
+      innerTab !== "modifier" &&
+      innerTab !== "pricing" &&
+      innerTab !== "bom" &&
+      innerTab !== "variants"
+    ) return;
     let cancelled = false;
     setLoadingModifierPicker(true);
     (async () => {
@@ -921,7 +926,7 @@ export function CreateProductDialog({
       !open ||
       scope !== "sku" ||
       channel !== "fnb" ||
-      (innerTab !== "bom" && innerTab !== "variants")
+      (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants")
     ) {
       if (!open) setVariantModifierOptionsByGroup({});
       return;
@@ -1406,12 +1411,12 @@ export function CreateProductDialog({
   // chỉ khi user bật hasBom + bấm tab "bom" (Công thức). Trước đây fetch eager
   // mỗi lần mở dialog → dialog freeze. Giờ chỉ tab BOM mới fetch.
   useEffect(() => {
-    // Load NVL khi: (a) tab BOM + hasBom, HOẶC (b) tab Quy cách + FnB (cho lưới
-    // công thức theo size — Phương án B cần materials để chọn NVL + tính giá vốn).
+    // Giá, BOM và Quy cách dùng chung một nguồn công thức theo size. Tab Giá
+    // cũng cần danh mục NVL để tính đúng giá vốn Retail của từng BOM.
     const needForBom = hasBom && innerTab === "bom";
     const needForRecipe =
       channel === "fnb" &&
-      (innerTab === "bom" || innerTab === "variants") &&
+      (innerTab === "pricing" || innerTab === "bom" || innerTab === "variants") &&
       variantItems.length > 0;
     if (!open || scope !== "sku" || (!needForBom && !needForRecipe)) return;
     if (materialOptions.length > 0) return; // dedup — đã load
@@ -1465,7 +1470,7 @@ export function CreateProductDialog({
   useEffect(() => {
     if (
       !open ||
-      (innerTab !== "bom" && innerTab !== "variants") ||
+      (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants") ||
       channel !== "fnb"
     ) return;
     const materialIds = Array.from(
