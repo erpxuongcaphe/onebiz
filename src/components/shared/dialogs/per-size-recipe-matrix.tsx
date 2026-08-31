@@ -54,14 +54,25 @@ export interface RecipeRow {
 }
 
 let _k = 0;
+const newRecipeRowKey = () => {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  if (uuid) return `rr-${uuid}`;
+  _k += 1;
+  return `rr-${Date.now().toString(36)}-${_k.toString(36)}`;
+};
+
 export const newRecipeRow = (): RecipeRow => ({
-  key: `rr${++_k}`,
+  key: newRecipeRowKey(),
   materialId: "",
   unit: "",
   scaleTarget: null,
   qty: {},
   exactQty: {},
 });
+
+/** Draft keys can outlive a module reload, so always re-key restored UI rows. */
+export const rekeyRecipeRows = (rows: RecipeRow[]): RecipeRow[] =>
+  rows.map((row) => ({ ...row, key: newRecipeRowKey() }));
 
 const FIXED = "__fixed__";
 const fmtMoney = (n: number) => formatNumber(Math.round(n || 0));

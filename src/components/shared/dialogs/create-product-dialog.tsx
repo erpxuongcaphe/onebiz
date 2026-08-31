@@ -40,6 +40,7 @@ import {
   PerSizeRecipeMatrix,
   calculateRecipeCostBySize,
   newRecipeRow,
+  rekeyRecipeRows,
   type RecipeRow,
 } from "@/components/shared/dialogs/per-size-recipe-matrix";
 import { getBOMByCode, getBOMById } from "@/lib/services/supabase/bom";
@@ -784,7 +785,7 @@ export function CreateProductDialog({
       setFnbMenuBranchIds(new Set(draft.fnbMenuBranchIds));
       setFnbMenuScopeDirty(draft.fnbMenuScopeDirty);
       setVariantItems(draft.variantItems);
-      setRecipeRows(draft.recipeRows);
+      setRecipeRows(rekeyRecipeRows(draft.recipeRows));
       setRecipeEnabled(draft.recipeEnabled);
       loadedModifierDraftKeyRef.current = dialogProductKey;
       loadedMenuScopeKeyRef.current = initialData?.id ?? null;
