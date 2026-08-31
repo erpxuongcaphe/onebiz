@@ -192,13 +192,14 @@ export async function getPriceTierItems(
 
   const { data, error } = await supabase
     .from("price_tier_items")
-    .select("*, products(name, code)")
+    .select("*, products(name, code), product_variants(name)")
     .eq("price_tier_id", tierId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
   return (data ?? []).map((row) => {
     const product = row.products as { name?: string; code?: string } | null;
+    const variant = row.product_variants as { name?: string } | null;
     return {
       id: row.id,
       priceTierId: row.price_tier_id,
@@ -209,6 +210,7 @@ export async function getPriceTierItems(
       createdAt: row.created_at,
       productName: product?.name,
       productCode: product?.code,
+      variantName: variant?.name,
     };
   });
 }
@@ -576,16 +578,20 @@ export async function bulkAddPriceTierItems(params: {
   if (params.items.length === 0) return { insertedCount: 0 };
   await assertTierOwnership(params.priceTierId);
 
-  // Step 1: Xoá các items cũ (cùng tier + cùng productId) để tránh
-  // duplicate. Pattern này an toàn với upsert vì không phụ thuộc unique
-  // constraint (price_tier_items không có).
-  const productIds = params.items.map((i) => i.productId);
-  const { error: deleteErr } = await supabase
-    .from("price_tier_items")
-    .delete()
-    .eq("price_tier_id", params.priceTierId)
-    .in("product_id", productIds);
-  if (deleteErr) throw deleteErr;
+  // Step 1: Chỉ thay đúng target product/size. Không được xoá toàn bộ dòng
+  // của product vì một lần cập nhật giá chung sẽ làm mất giá riêng Size M/L.
+  for (const item of params.items) {
+    let deleteQuery = supabase
+      .from("price_tier_items")
+      .delete()
+      .eq("price_tier_id", params.priceTierId)
+      .eq("product_id", item.productId);
+    deleteQuery = item.variantId
+      ? deleteQuery.eq("variant_id", item.variantId)
+      : deleteQuery.is("variant_id", null);
+    const { error: deleteErr } = await deleteQuery;
+    if (deleteErr) throw deleteErr;
+  }
 
   // Step 2: Bulk insert items mới
   const rows = params.items.map((it) => ({

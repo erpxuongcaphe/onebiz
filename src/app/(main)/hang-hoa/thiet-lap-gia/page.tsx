@@ -222,6 +222,7 @@ function PriceTierDetail({
                       <div className="font-medium">{item.productName ?? "—"}</div>
                       <div className="text-xs text-muted-foreground">
                         {item.productCode}
+                        {item.variantName ? ` · ${item.variantName}` : " · Giá chung"}
                       </div>
                     </td>
                     <td className="p-2 text-right font-medium">
@@ -261,6 +262,7 @@ function PriceTierDetail({
         onOpenChange={setAddOpen}
         tierId={tier.id}
         tierName={tier.name}
+        tierScope={tier.scope}
         onSuccess={() => {
           load();
           onChange();
