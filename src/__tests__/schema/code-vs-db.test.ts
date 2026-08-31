@@ -45,21 +45,11 @@ const RPC = new Set(schema.rpc as string[]);
  * chính bỏ qua ĐÚNG các tên này, và phép kiểm "danh sách chờ phải sạch" bên
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
-const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["save_bom_modifier_option_quantities", "00350"],
-  ["save_fnb_product_branch_menu_scope", "00353"],
-  ["save_fnb_product_branch_menu_policy", "00354"],
-  ["save_fnb_size_setup_atomic", "00357"],
-  ["save_product_modifier_groups_atomic", "00356"],
-]);
+const RPC_CHO_MIGRATION = new Map<string, string>([]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
-const BANG_CHO_MIGRATION = new Map<string, string>([
-  ["bom_modifier_option_quantities", "00350"],
-  ["fnb_product_branch_menu_scopes", "00353"],
-  ["fnb_product_branch_menu_policies", "00354"],
-]);
+const BANG_CHO_MIGRATION = new Map<string, string>([]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */
 function xoaGhiChu(s: string): string {
