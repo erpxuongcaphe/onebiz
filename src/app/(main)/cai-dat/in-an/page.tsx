@@ -34,6 +34,8 @@ import {
 import type { InvoiceFieldFlags } from "@/lib/print-templates";
 import type { PrintChannel, PrintDocType } from "@/lib/services";
 import Link from "next/link";
+import { PermissionPage } from "@/components/shared/permission-page";
+import { PERMISSIONS } from "@/lib/permissions";
 
 // ── Bật/tắt từng dòng thông tin trên phiếu bán (CEO 24/06) ──
 const INVOICE_FIELD_GROUPS: {
@@ -219,7 +221,7 @@ const NAV_ITEM_BY_ID: Record<string, NavItem> = Object.fromEntries(
   PRINT_NAV.flatMap((g) => g.items).map((it) => [it.id, it]),
 );
 
-export default function PrintSettingsPage() {
+function PrintSettingsPageContent() {
   const { settings, updateSettings } = useSettings();
   const print = settings.print;
   const { toast } = useToast();
@@ -1075,6 +1077,14 @@ export default function PrintSettingsPage() {
         </div>{/* /CỘT PHẢI */}
       </div>{/* /master–detail */}
     </div>
+  );
+}
+
+export default function PrintSettingsPage() {
+  return (
+    <PermissionPage requires={PERMISSIONS.SYSTEM_MANAGE_BRANCHES}>
+      <PrintSettingsPageContent />
+    </PermissionPage>
   );
 }
 

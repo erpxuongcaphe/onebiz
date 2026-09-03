@@ -403,6 +403,7 @@ function FnbPosPageInner() {
   // "cancel_unpaid_order" vì void paid phải hoàn kho + tạo phiếu chi.
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
+  const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -412,6 +413,7 @@ function FnbPosPageInner() {
     if (!tenantId) return;
     (async () => {
       setLoading(true);
+      let mustRefreshCatalog = false;
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
@@ -419,9 +421,21 @@ function FnbPosPageInner() {
           // nhánh) — cache đời NVL-TOP hoặc của quán khác thì toppings về
           // RỖNG, thà thiếu còn hơn hiện topping nguyên liệu giá túi/hộp.
           const cached = await getMenuFromCache(tenantId, branchId);
-          if (cached.products.length > 0) {
-            setCategories(cached.categories);
-            setProducts(cached.products);
+          const cachedProducts = cached.products.filter(
+            (product) =>
+              product.sell_price > 0 && Number.isFinite(product.sell_price),
+          );
+          mustRefreshCatalog = cachedProducts.length !== cached.products.length;
+          if (cachedProducts.length > 0) {
+            const categoryIds = new Set(
+              cachedProducts
+                .map((product) => product.category_id)
+                .filter((id): id is string => Boolean(id)),
+            );
+            setCategories(
+              cached.categories.filter((category) => categoryIds.has(category.id)),
+            );
+            setProducts(cachedProducts);
             // Cờ topping SKU đang tắt thì không đưa cache SKU-TPP vào state.
             // Luồng hiện tại vẫn dùng nhóm tuỳ chọn legacy; đọc cache mới ở đây
             // vừa thừa vừa dễ làm người bảo trì hiểu nhầm hai cơ chế cùng chạy.
@@ -449,11 +463,13 @@ function FnbPosPageInner() {
           // a cached catalog cannot stay valid after an admin isolates a SKU
           // to another branch.
           const menuScopes = await listFnbProductBranchMenuScopes(tenantId);
-          const needsRefresh = await shouldRefreshMenu(
-            tenantId,
-            branchId,
-            getFnbMenuScopeFingerprint(menuScopes),
-          ).catch(() => true);
+          const needsRefresh =
+            mustRefreshCatalog ||
+            (await shouldRefreshMenu(
+              tenantId,
+              branchId,
+              getFnbMenuScopeFingerprint(menuScopes),
+            ).catch(() => true));
           const supabase = getClient();
 
           // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
@@ -467,8 +483,10 @@ function FnbPosPageInner() {
                   .select("id, name, code, sell_price, image_url, stock, category_id, brand")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
+                  .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
+                  .gt("sell_price", 0)
                   .order("name")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
                 // CEO 13/05: load platform price overrides để resolve giá theo
@@ -535,18 +553,24 @@ function FnbPosPageInner() {
               }
             }
             setPlatformPriceMap(ppMap);
-            const mappedCats = cats.map((c) => ({
-              id: c.value,
-              name: c.label,
-              code: c.value,
-            }));
-            setCategories(mappedCats);
-
             const prods = filterFnbProductsForBranch(
               prodsResp.data ?? [],
               menuScopes,
               branchId,
             );
+            const categoryIds = new Set(
+              prods
+                .map((product) => product.category_id)
+                .filter((id): id is string => Boolean(id)),
+            );
+            const mappedCats = cats
+              .map((category) => ({
+                id: category.value,
+                name: category.label,
+                code: category.value,
+              }))
+              .filter((category) => categoryIds.has(category.id));
+            setCategories(mappedCats);
             setProducts(
               prods.map((p) => ({
                 id: p.id,
@@ -2457,12 +2481,20 @@ function FnbPosPageInner() {
 
   // ── Shift handlers ──
   const handleShiftClick = useCallback(() => {
+    if (!canCheckout) {
+      toast({
+        title: "Tài khoản không có quyền thu tiền",
+        description: "Bạn vẫn có thể nhận món, chọn bàn và gửi bếp. Thu ngân sẽ mở ca và thanh toán.",
+        variant: "warning",
+      });
+      return;
+    }
     if (currentShift) {
       setCloseShiftDialogOpen(true);
     } else {
       setOpenShiftDialogOpen(true);
     }
-  }, [currentShift]);
+  }, [canCheckout, currentShift, toast]);
 
   /**
    * 06/08 — MỘT cửa duy nhất để mở màn thanh toán (CEO chốt).
@@ -2476,6 +2508,14 @@ function FnbPosPageInner() {
    * vẫn KHÔNG bị chặn — bếp phải pha được kể cả khi chưa mở ca).
    */
   const requestPayment = useCallback((): boolean => {
+    if (!canCheckout) {
+      toast({
+        title: "Chỉ thu ngân được thanh toán",
+        description: "Đơn và món đã gửi bếp vẫn được giữ nguyên để thu ngân tiếp tục xử lý.",
+        variant: "warning",
+      });
+      return false;
+    }
     const tab = pos.activeTab;
     // Tab có thể vừa được mở từ sơ đồ bàn/máy khác nên chưa có snapshot local.
     // Nạp trước khi mở dialog để thu ngân không thấy 0đ rồi thu thiếu.
@@ -2542,10 +2582,18 @@ function FnbPosPageInner() {
       case "khong_lam_gi":
         return false;
     }
-  }, [pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab]);
+  }, [canCheckout, pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab]);
 
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
+      if (!canCheckout) {
+        toast({
+          title: "Chỉ thu ngân được mở ca",
+          description: "Liên hệ quản lý nếu tài khoản này cần được cấp quyền thu tiền.",
+          variant: "warning",
+        });
+        return;
+      }
       if (!branchId || !userId || !tenantId) return;
       const shift = await openShift({
         tenantId,
@@ -2565,7 +2613,7 @@ function FnbPosPageInner() {
         variant: "success",
       });
     },
-    [tenantId, branchId, userId, toast]
+    [canCheckout, tenantId, branchId, userId, toast]
   );
 
   const handleCloseShift = useCallback(
@@ -3242,7 +3290,7 @@ function FnbPosPageInner() {
         onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
         onSearch={() => setSearchModalOpen(true)}
         shift={currentShift}
-        onShiftClick={handleShiftClick}
+        onShiftClick={canCheckout ? handleShiftClick : undefined}
         viewMode={showFloorPlan ? "floorplan" : "menu"}
         onMenuClick={() => setSidenavOpen(true)}
         deliveryCountToday={deliveryCountToday}
@@ -3459,6 +3507,7 @@ function FnbPosPageInner() {
           onSendToKitchen={handleSendToKitchen}
           kitchenSubmitting={kitchenSubmitting}
           onPayment={requestPayment}
+          canCheckout={canCheckout}
           onSplitBill={handleOpenSplitBill}
           onChangeOrderType={pos.setActiveTabOrderType}
           onCustomerClick={() => setCustomerPickerOpen(true)}
@@ -3669,6 +3718,7 @@ function FnbPosPageInner() {
               }}
               kitchenSubmitting={kitchenSubmitting}
               onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
+              canCheckout={canCheckout}
               onSplitBill={handleOpenSplitBill}
               onChangeOrderType={pos.setActiveTabOrderType}
               onCustomerClick={() => setCustomerPickerOpen(true)}

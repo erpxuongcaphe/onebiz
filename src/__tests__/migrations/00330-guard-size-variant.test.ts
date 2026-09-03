@@ -87,7 +87,7 @@ describe("00330 — guard ở máy chủ", () => {
 
 describe("guard Size — tầng giao diện", () => {
   it("chọn cỡ mặc định theo cờ, không lấy phần tử đầu", () => {
-    expect(UI).toContain("variants?.find((v) => v.is_default)");
+    expect(UI).toContain("v.is_default && v.sell_price > 0");
     expect(UI).not.toContain("initVariant = variants?.[0]");
   });
 
