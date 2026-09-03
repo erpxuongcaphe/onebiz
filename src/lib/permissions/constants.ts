@@ -455,6 +455,15 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     ],
   },
   {
+    name: "Bếp / Bar",
+    description: "Xem và cập nhật tiến độ món tại màn hình bếp KDS",
+    legacyRole: "staff",
+    color: "bg-cyan-500",
+    permissions: [
+      PERMISSIONS.POS_FNB_VIEW_ORDERS,
+    ],
+  },
+  {
     name: "Kho vận",
     description: "Quản lý kho hàng, nhập xuất, kiểm kho",
     legacyRole: "staff",

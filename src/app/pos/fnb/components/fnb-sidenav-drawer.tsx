@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 
 interface FnbSidenavDrawerProps {
   open: boolean;
@@ -39,24 +40,25 @@ interface NavItem {
   label: string;
   /** Disable trên fnb subdomain (vì page không có ở fnb.*). */
   fnbExternal?: boolean;
+  permissions?: string[];
 }
 
 const POS_ITEMS: NavItem[] = [
-  { href: "/pos/fnb", icon: "restaurant", label: "POS FnB" },
-  { href: "/pos/fnb/kds", icon: "restaurant_menu", label: "Màn bếp (KDS)" },
-  { href: "/pos", icon: "point_of_sale", label: "POS Retail", fnbExternal: true },
+  { href: "/pos/fnb", icon: "restaurant", label: "POS FnB", permissions: [PERMISSIONS.POS_FNB_SEND_KITCHEN] },
+  { href: "/pos/fnb/kds", icon: "restaurant_menu", label: "Màn bếp (KDS)", permissions: [PERMISSIONS.POS_FNB_VIEW_ORDERS] },
+  { href: "/pos", icon: "point_of_sale", label: "POS Retail", fnbExternal: true, permissions: [PERMISSIONS.POS_RETAIL_CHECKOUT] },
 ];
 
 const MANAGE_ITEMS: NavItem[] = [
-  { href: "/hang-hoa", icon: "inventory_2", label: "Sản phẩm", fnbExternal: true },
-  { href: "/hang-hoa/ton-kho", icon: "warehouse", label: "Tồn kho", fnbExternal: true },
-  { href: "/khach-hang", icon: "person", label: "Khách hàng", fnbExternal: true },
-  { href: "/phan-tich/fnb", icon: "analytics", label: "Báo cáo F&B", fnbExternal: true },
+  { href: "/hang-hoa", icon: "inventory_2", label: "Sản phẩm", fnbExternal: true, permissions: [PERMISSIONS.PRODUCTS_VIEW] },
+  { href: "/hang-hoa/ton-kho", icon: "warehouse", label: "Tồn kho", fnbExternal: true, permissions: [PERMISSIONS.INVENTORY_VIEW] },
+  { href: "/khach-hang", icon: "person", label: "Khách hàng", fnbExternal: true, permissions: [PERMISSIONS.CUSTOMERS_VIEW] },
+  { href: "/phan-tich/fnb", icon: "analytics", label: "Báo cáo F&B", fnbExternal: true, permissions: [PERMISSIONS.REPORTS_FNB] },
 ];
 
 const SYSTEM_ITEMS: NavItem[] = [
-  { href: "/he-thong/quan-ly-ban", icon: "table_restaurant", label: "Quản lý bàn", fnbExternal: true },
-  { href: "/cai-dat", icon: "settings", label: "Cài đặt", fnbExternal: true },
+  { href: "/he-thong/quan-ly-ban", icon: "table_restaurant", label: "Quản lý bàn", fnbExternal: true, permissions: [PERMISSIONS.SYSTEM_MANAGE_BRANCHES] },
+  { href: "/cai-dat", icon: "settings", label: "Cài đặt", fnbExternal: true, permissions: [PERMISSIONS.SYSTEM_MANAGE_ROLES, PERMISSIONS.SYSTEM_MANAGE_BRANCHES] },
 ];
 
 export function FnbSidenavDrawer({
@@ -66,7 +68,7 @@ export function FnbSidenavDrawer({
   hasOpenShift,
   onSwitchUser,
 }: FnbSidenavDrawerProps) {
-  const { user, currentBranch, logout } = useAuth();
+  const { user, currentBranch, logout, hasPermission } = useAuth();
   const { isFnb } = useFnbSubdomain();
 
   // ESC key đóng drawer (redundant với parent handler nhưng an toàn nếu drawer
@@ -132,9 +134,9 @@ export function FnbSidenavDrawer({
 
         {/* Nav sections */}
         <div className="flex-1 overflow-y-auto py-2">
-          <NavSection label="POS" items={POS_ITEMS} isFnb={isFnb} onClose={onClose} />
-          <NavSection label="Quản lý" items={MANAGE_ITEMS} isFnb={isFnb} onClose={onClose} />
-          <NavSection label="Hệ thống" items={SYSTEM_ITEMS} isFnb={isFnb} onClose={onClose} />
+          <NavSection label="POS" items={POS_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />
+          <NavSection label="Quản lý" items={MANAGE_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />
+          <NavSection label="Hệ thống" items={SYSTEM_ITEMS} isFnb={isFnb} onClose={onClose} hasPermission={hasPermission} />
         </div>
 
         {/* Footer actions */}
@@ -189,16 +191,21 @@ function NavSection({
   items,
   isFnb,
   onClose,
+  hasPermission,
 }: {
   label: string;
   items: NavItem[];
   isFnb: boolean;
   onClose: () => void;
+  hasPermission: (permission: string) => boolean;
 }) {
   // Trên fnb subdomain, các page bên ngoài (hang-hoa, bao-cao, ...) có thể
   // không tồn tại do middleware rewrite. Ẩn item fnbExternal khỏi drawer khi
   // đang ở fnb subdomain — staff click sẽ bị 404.
-  const visibleItems = items.filter((it) => !isFnb || !it.fnbExternal);
+  const visibleItems = items.filter((it) =>
+    (!isFnb || !it.fnbExternal) &&
+    (!it.permissions?.length || it.permissions.some(hasPermission)),
+  );
   if (visibleItems.length === 0) return null;
 
   return (
