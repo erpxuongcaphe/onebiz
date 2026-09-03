@@ -19,7 +19,8 @@ describe("managed user multi-branch preservation", () => {
   });
 
   it("blocks browser writes to branch assignments", () => {
-    expect(migration).toContain("revoke insert, update, delete on table public.user_branches");
+    expect(migration).toContain("revoke all privileges on table public.user_branches");
+    expect(migration).toContain("privilege_type <> 'SELECT'");
     expect(migration).toContain("update_managed_user_atomic(uuid,jsonb,uuid[])");
     expect(migration).toContain("initialize_managed_user_atomic(uuid,text,text,text,uuid,uuid[])");
   });

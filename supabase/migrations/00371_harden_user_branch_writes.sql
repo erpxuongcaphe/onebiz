@@ -10,7 +10,9 @@ drop policy if exists "user_branches_insert" on public.user_branches;
 drop policy if exists "user_branches_delete" on public.user_branches;
 drop policy if exists "user_branches_update" on public.user_branches;
 
-revoke insert, update, delete on table public.user_branches
+-- Supabase may have granted TRUNCATE/REFERENCES/TRIGGER together with CRUD.
+-- Revoke the complete browser grant set, then restore the one required read.
+revoke all privileges on table public.user_branches
   from public, anon, authenticated;
 grant select on table public.user_branches to authenticated;
 
@@ -22,7 +24,7 @@ begin
     where table_schema = 'public'
       and table_name = 'user_branches'
       and grantee in ('PUBLIC', 'anon', 'authenticated')
-      and privilege_type in ('INSERT', 'UPDATE', 'DELETE', 'TRUNCATE')
+      and privilege_type <> 'SELECT'
   ) then
     raise exception '00371 that bai: user_branches van con quyen ghi truc tiep';
   end if;
