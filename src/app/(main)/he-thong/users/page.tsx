@@ -55,6 +55,7 @@ interface UserRow {
   roleId: string | null;
   roleName: string | null;
   branchId: string | null;
+  branchIds: string[];
   isActive: boolean;
   createdAt: string;
 }
@@ -340,8 +341,15 @@ function UsersPage() {
     }
   };
 
-  const getBranchName = (branchId: string | null) =>
-    branches.find((b) => b.id === branchId)?.name ?? "—";
+  const getBranchSummary = (managedUser: UserRow) => {
+    if (managedUser.role === "owner") return "Tất cả chi nhánh";
+    const names = managedUser.branchIds
+      .map((branchId) => branches.find((branch) => branch.id === branchId)?.name)
+      .filter((name): name is string => !!name);
+    if (names.length === 0) return "—";
+    if (names.length <= 2) return names.join(", ");
+    return `${names.slice(0, 2).join(", ")} +${names.length - 2}`;
+  };
 
   if (loading) {
     return (
@@ -422,7 +430,13 @@ function UsersPage() {
                   <tr key={user.id} className="border-b last:border-0">
                     <td className="py-3 font-medium">{user.fullName}</td>
                     <td className="py-3 text-muted-foreground">{user.email || "—"}</td>
-                    <td className="py-3 hidden md:table-cell">{getBranchName(user.branchId)}</td>
+                    <td className="py-3 hidden md:table-cell" title={user.branchIds
+                      .map((branchId) => branches.find((branch) => branch.id === branchId)?.name)
+                      .filter(Boolean)
+                      .join(", ")}
+                    >
+                      {getBranchSummary(user)}
+                    </td>
                     <td className="py-3">
                       {user.roleName ? (
                         <Badge variant="secondary" className="text-xs">
@@ -460,8 +474,10 @@ function UsersPage() {
                                 fullName: user.fullName,
                                 phone: user.phone ?? "",
                                 roleId: user.roleId ?? "",
-                                branchIds: user.branchId ? [user.branchId] : [],
-                                allBranches: false,
+                                branchIds: user.branchIds,
+                                allBranches:
+                                  user.role === "owner" ||
+                                  (branches.length > 0 && branches.every((branch) => user.branchIds.includes(branch.id))),
                                 newPassword: "",
                               });
                               setEditOpen(true);
@@ -848,7 +864,7 @@ function UsersPage() {
                 />
                 <span className="font-medium">Tất cả chi nhánh</span>
                 <span className="text-xs text-muted-foreground">
-                  (truy cập mọi chi nhánh hiện có và sau này)
+                  (truy cập mọi chi nhánh đang hoạt động hiện có)
                 </span>
               </label>
               {!createForm.allBranches && (

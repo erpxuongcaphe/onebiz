@@ -65,7 +65,7 @@ export function FnbReadinessBand({
 
   return (
     <section
-      aria-label="Mức sẵn sàng vận hành FnB"
+      aria-label="Kiểm tra dữ liệu món FnB"
       className={cn(
         "border-y px-3 py-2 text-sm",
         ready
@@ -80,7 +80,7 @@ export function FnbReadinessBand({
             size={18}
             className={ready ? "text-status-success" : "text-status-warning"}
           />
-          {ready ? "Cấu hình FnB đã sẵn sàng" : "Cấu hình FnB chưa hoàn tất"}
+          {ready ? "Dữ liệu món FnB đã đạt kiểm tra" : "Dữ liệu món FnB chưa hoàn tất"}
           {branchName && (
             <span className="font-normal text-muted-foreground">
               · {branchName}
@@ -146,6 +146,11 @@ export function FnbReadinessBand({
           Topping theo phần: {readiness.toppingSkuEnabled ? "đang bật" : "đang tắt"}
         </span>
       </div>
+      {ready && (
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Đây là kiểm tra dữ liệu món. Trước khi mở bán vẫn cần kiểm tra ca, nhân sự, tồn nguyên liệu, máy in và một đơn thử tại chi nhánh.
+        </p>
+      )}
 
       {!ready &&
         totalIssues > 0 && (

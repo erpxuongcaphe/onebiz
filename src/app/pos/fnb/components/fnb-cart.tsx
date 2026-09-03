@@ -54,6 +54,8 @@ interface FnbCartProps {
   onSendToKitchen: () => void;
   kitchenSubmitting?: boolean;
   onPayment: () => void;
+  /** Chỉ Thu ngân/Quản lý có quyền mở ca và thu tiền. */
+  canCheckout?: boolean;
   onSplitBill?: () => void;
   onCustomerClick?: () => void;
   onDiscountChange?: (discount: FnbDiscountInput | undefined) => void;
@@ -147,6 +149,7 @@ export function FnbCart({
   onSendToKitchen,
   kitchenSubmitting = false,
   onPayment,
+  canCheckout = true,
   onSplitBill,
   onCustomerClick,
   onDiscountChange,
@@ -975,14 +978,17 @@ export function FnbCart({
           <button
             type="button"
             onClick={onPayment}
-            disabled={isEmpty}
+            disabled={isEmpty || !canCheckout}
+            title={canCheckout ? "Thanh toán (F9)" : "Tài khoản này chỉ được nhận món và gửi bếp"}
             className={cn(
               "flex-[0.6] h-14 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm ambient-shadow",
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
             <Icon name="payments" size={18} />
-            <span className="text-sm font-bold leading-tight">Thanh toán (F9)</span>
+            <span className="text-sm font-bold leading-tight">
+              {canCheckout ? "Thanh toán (F9)" : "Chỉ thu ngân được thu tiền"}
+            </span>
           </button>
         </div>
       </div>

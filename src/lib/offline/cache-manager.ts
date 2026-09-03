@@ -87,8 +87,10 @@ export async function prefetchMenuData(
     .select("id, name, code, sell_price, image_url, stock, category_id")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
+    .eq("allow_sale", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
+    .gt("sell_price", 0)
     .order("name");
 
   // Scope rows are small but authoritative. Fetch them alongside the catalog
@@ -105,6 +107,11 @@ export async function prefetchMenuData(
     prods ?? [],
     scopes,
     branchId,
+  );
+  const visibleCategoryIds = new Set(
+    visibleProducts
+      .map((product) => product.category_id)
+      .filter((id): id is string => Boolean(id)),
   );
 
   // Write to IndexedDB — wrap với quota recovery vì menu có thể lớn (500+ SKU
@@ -127,7 +134,9 @@ export async function prefetchMenuData(
     }
 
     // Write categories
-    for (const c of cats ?? []) {
+    for (const c of (cats ?? []).filter((category) =>
+      visibleCategoryIds.has(category.id),
+    )) {
       await store.put({
         id: `cat_${cachedBranchId}_${c.id}`,
         tenantId,

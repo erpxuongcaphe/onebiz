@@ -245,6 +245,7 @@ export async function getTenantUsers(tenantId: string): Promise<{
   roleId: string | null;
   roleName: string | null;
   branchId: string | null;
+  branchIds: string[];
   isActive: boolean;
   createdAt: string;
 }[]> {
@@ -257,18 +258,42 @@ export async function getTenantUsers(tenantId: string): Promise<{
 
   if (error) handleError(error, "getTenantUsers");
 
-  return (data ?? []).map((p) => ({
-    id: p.id,
-    fullName: p.full_name,
-    email: p.email ?? "",
-    phone: p.phone,
-    role: p.role,
-    roleId: p.role_id,
-    roleName: (p.roles as { name: string } | null)?.name ?? null,
-    branchId: p.branch_id,
-    isActive: p.is_active,
-    createdAt: p.created_at,
-  }));
+  const userIds = (data ?? []).map((profile) => profile.id);
+  // `user_branches` is intentionally read-only to browser clients. Managed
+  // user writes continue through the guarded atomic RPCs below.
+  const { data: branchRows, error: branchError } = userIds.length
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ? await (supabase as any)
+        .from("user_branches")
+        .select("user_id, branch_id")
+        .in("user_id", userIds)
+    : { data: [], error: null };
+  if (branchError) handleError(branchError, "getTenantUsers:branches");
+
+  const branchIdsByUser = new Map<string, Set<string>>();
+  for (const row of branchRows ?? []) {
+    const assigned = branchIdsByUser.get(row.user_id) ?? new Set<string>();
+    assigned.add(row.branch_id);
+    branchIdsByUser.set(row.user_id, assigned);
+  }
+
+  return (data ?? []).map((p) => {
+    const assigned = branchIdsByUser.get(p.id) ?? new Set<string>();
+    if (p.branch_id) assigned.add(p.branch_id);
+    return {
+      id: p.id,
+      fullName: p.full_name,
+      email: p.email ?? "",
+      phone: p.phone,
+      role: p.role,
+      roleId: p.role_id,
+      roleName: (p.roles as { name: string } | null)?.name ?? null,
+      branchId: p.branch_id,
+      branchIds: [...assigned],
+      isActive: p.is_active,
+      createdAt: p.created_at,
+    };
+  });
 }
 
 // ── Invite Staff (DEPRECATED CEO 13/05/2026) ──

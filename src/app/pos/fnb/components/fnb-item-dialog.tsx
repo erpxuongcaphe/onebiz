@@ -353,13 +353,17 @@ export function FnbItemDialog({
       // thì rơi về defaults (chế độ thêm mới — y nguyên hành vi cũ).
       let initVariant: Variant | null = null;
       if (initialSelection?.variantId) {
-        initVariant = variants?.find((v) => v.id === initialSelection.variantId) ?? null;
+        initVariant =
+          variants?.find(
+            (v) => v.id === initialSelection.variantId && v.sell_price > 0,
+          ) ?? null;
       }
       // Guard Size: chọn đúng quy cách được đánh dấu mặc định. Trước đây lấy
       // phần tử đầu danh sách — sai khi thứ tự đổi, và mặc định M không được
       // tôn trọng. Không có cái nào đánh dấu thì để TRỐNG, buộc người bán chọn.
       if (!initVariant) {
-        initVariant = variants?.find((v) => v.is_default) ?? null;
+        initVariant =
+          variants?.find((v) => v.is_default && v.sell_price > 0) ?? null;
       }
       setSelectedVariant(initVariant);
 
@@ -881,21 +885,38 @@ export function FnbItemDialog({
               <section className={O_NHOM}>
                 <Label className="text-[13px] font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
-                  {variants.map((v) => (
-                    <button key={v.id} type="button" onClick={() => setSelectedVariant(v)}
-                      className={cn(
-                        CHIP, "active:scale-95",
-                        selectedVariant?.id === v.id
-                          ? "border-primary bg-primary text-primary-foreground"
-                          : "border-border hover:border-primary/50",
-                      )}>
-                      <span className="break-words">{v.label}</span>{" "}
-                      {/* Tiền KHÔNG bao giờ được cắt bằng "…" */}
-                      <span className="whitespace-nowrap tabular-nums">
-                        {formatCurrency(v.sell_price)}đ
-                      </span>
-                    </button>
-                  ))}
+                  {variants.map((v) => {
+                    const chuaCoGia = v.sell_price <= 0;
+                    return (
+                      <button
+                        key={v.id}
+                        type="button"
+                        disabled={chuaCoGia}
+                        onClick={() => setSelectedVariant(v)}
+                        title={
+                          chuaCoGia
+                            ? "Size chưa được thiết lập giá bán"
+                            : undefined
+                        }
+                        className={cn(
+                          CHIP,
+                          "active:scale-95",
+                          chuaCoGia && "cursor-not-allowed opacity-50",
+                          selectedVariant?.id === v.id
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "border-border hover:border-primary/50",
+                        )}
+                      >
+                        <span className="break-words">{v.label}</span>{" "}
+                        {/* Tiền KHÔNG bao giờ được cắt bằng "…" */}
+                        <span className="whitespace-nowrap tabular-nums">
+                          {chuaCoGia
+                            ? "Chưa có giá"
+                            : `${formatCurrency(v.sell_price)}đ`}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               </section>
             ) : null}

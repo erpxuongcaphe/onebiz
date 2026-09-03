@@ -11,6 +11,7 @@
 export const PERMISSIONS = {
   // POS FnB
   POS_FNB_SEND_KITCHEN: "pos_fnb.send_kitchen",
+  POS_FNB_CHECKOUT: "pos_fnb.checkout",
   POS_FNB_VOID: "pos_fnb.void",
   POS_FNB_CANCEL_UNPAID_ORDER: "pos_fnb.cancel_unpaid_order",
   POS_FNB_VOID_PAID_BILL: "pos_fnb.void_paid_bill",
@@ -181,6 +182,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "POS FnB",
     permissions: [
       { code: PERMISSIONS.POS_FNB_SEND_KITCHEN, label: "Gửi bếp" },
+      { code: PERMISSIONS.POS_FNB_CHECKOUT, label: "Thanh toán và mở ca" },
       { code: PERMISSIONS.POS_FNB_VOID, label: "Hủy hóa đơn" },
       { code: PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER, label: "Hủy đơn chưa thanh toán" },
       { code: PERMISSIONS.POS_FNB_VOID_PAID_BILL, label: "Hủy bill đã thanh toán" },
@@ -431,6 +433,7 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     color: "bg-green-500",
     permissions: [
       PERMISSIONS.POS_FNB_SEND_KITCHEN,
+      PERMISSIONS.POS_FNB_CHECKOUT,
       PERMISSIONS.POS_FNB_VIEW_ORDERS,
       PERMISSIONS.POS_FNB_SPLIT_BILL,
       PERMISSIONS.POS_FNB_TRANSFER_TABLE,

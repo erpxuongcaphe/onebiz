@@ -203,6 +203,7 @@ with required(relation_name, operation) as (
     ('uom_conversions', 'insert'),
     ('uom_conversions', 'select'),
     ('uom_conversions', 'update'),
+    ('user_branches', 'select'),
     ('user_permission_overrides', 'delete'),
     ('user_permission_overrides', 'insert'),
     ('user_permission_overrides', 'select'),
