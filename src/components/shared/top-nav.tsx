@@ -592,9 +592,10 @@ export function TopNav() {
   // Day 7 16/05/2026: RBAC — kiểm tra quyền truy cập POS Retail / POS FnB.
   // Owner/admin luôn thấy. Cashier chỉ thấy nếu có quyền checkout tương ứng.
   const { hasPermission } = useAuth();
-  const canSeeRetailPos = hasPermission("pos_retail.checkout");
-  const canSeeFnbPos = hasPermission("pos_fnb.send_kitchen");
-  const canSeePosDropdown = canSeeRetailPos || canSeeFnbPos;
+  const canSeeRetailPos = hasPermission(PERMISSIONS.POS_RETAIL_CHECKOUT);
+  const canSeeFnbPos = hasPermission(PERMISSIONS.POS_FNB_SEND_KITCHEN);
+  const canSeeKds = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS);
+  const canSeePosDropdown = canSeeRetailPos || canSeeFnbPos || canSeeKds;
 
   // Bell badge — load số notification chưa đọc của user hiện tại.
   // Trước đây hardcode "3" → CEO mở thấy 3 dù không có notification thật.
@@ -793,7 +794,7 @@ export function TopNav() {
                       </div>
                     </DropdownMenuItem>
                   )}
-                  {canSeeFnbPos && (
+                  {canSeeKds && (
                     <DropdownMenuItem
                       onClick={() => {
                         window.open(posFnbUrl("/kds"), "_blank", "noopener,noreferrer");

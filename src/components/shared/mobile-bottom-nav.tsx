@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { useAuth } from "@/lib/contexts";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import {
   sidebarNavGroups,
   isHrefActive,
@@ -38,6 +39,7 @@ interface TabItem {
   href: string;
   icon: string;
   match?: (pathname: string) => boolean;
+  permission?: string;
 }
 
 const PRIMARY_TABS: TabItem[] = [
@@ -55,6 +57,7 @@ const PRIMARY_TABS: TabItem[] = [
       p.startsWith("/hang-hoa") &&
       !p.startsWith("/hang-hoa/san-xuat") &&
       !p.startsWith("/hang-hoa/cong-thuc"),
+    permission: PERMISSIONS.INVENTORY_VIEW,
   },
   // POS nổi ở giữa, mở sheet chọn đúng chế độ bán.
   {
@@ -68,6 +71,7 @@ const PRIMARY_TABS: TabItem[] = [
     href: "/don-hang/hoa-don",
     icon: "receipt_long",
     match: (p) => p.startsWith("/don-hang"),
+    permission: PERMISSIONS.ORDERS_VIEW,
   },
 ];
 
@@ -144,6 +148,10 @@ export function MobileBottomNav() {
   const [searchQuery, setSearchQuery] = useState("");
   const { posFnbUrl } = useFnbSubdomain();
   const { hasPermission } = useAuth();
+  const canSeeRetailPos = hasPermission(PERMISSIONS.POS_RETAIL_CHECKOUT);
+  const canSeeFnbPos = hasPermission(PERMISSIONS.POS_FNB_SEND_KITCHEN);
+  const canSeeKds = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS);
+  const canSeeAnyPos = canSeeRetailPos || canSeeFnbPos || canSeeKds;
 
   // CEO 27/05/2026: Đóng sheet khi pathname đổi (navigate qua menu item).
   // Tránh trường hợp Link click → page chuyển → sheet vẫn open trong state.
@@ -195,6 +203,9 @@ export function MobileBottomNav() {
             const active = tab.match ? tab.match(pathname) : pathname === tab.href;
             const isB2B = tab.href === "/pos";
 
+            if (tab.permission && !hasPermission(tab.permission)) return null;
+            if (isB2B && !canSeeAnyPos) return null;
+
             if (isB2B) {
               return (
                 <div
@@ -216,7 +227,7 @@ export function MobileBottomNav() {
                       <SheetTitle className="px-5 py-4 border-b font-semibold shrink-0">Chọn chế độ POS</SheetTitle>
                       <div className="grid gap-3 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] overflow-y-auto">
                         {/* CEO 04/06/2026: mobile POS chooser cũng mở tab mới. */}
-                        <a
+                        {canSeeRetailPos && <a
                           href="/pos"
                           target="_blank"
                           rel="noopener noreferrer"
@@ -234,8 +245,8 @@ export function MobileBottomNav() {
                             <span className="block text-xs text-muted-foreground">Hàng đóng gói, bán tại quầy</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />
-                        </a>
-                        <a
+                        </a>}
+                        {canSeeFnbPos && <a
                           href={posFnbUrl()}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -253,8 +264,8 @@ export function MobileBottomNav() {
                             <span className="block text-xs text-muted-foreground">Quầy thu ngân quán cà phê</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />
-                        </a>
-                        <a
+                        </a>}
+                        {canSeeKds && <a
                           href={posFnbUrl("/kds")}
                           target="_blank"
                           rel="noopener noreferrer"
@@ -272,7 +283,7 @@ export function MobileBottomNav() {
                             <span className="block text-xs text-muted-foreground">Theo dõi món đang chờ làm</span>
                           </span>
                           <Icon name="chevron_right" size={18} className="text-muted-foreground" />
-                        </a>
+                        </a>}
                       </div>
                     </SheetContent>
                   </Sheet>
