@@ -69,15 +69,15 @@ export async function getAnyOpenShift(branchId: string): Promise<Shift | null> {
   return mapShift(data as unknown as Record<string, unknown>);
 }
 
-/** Open a new shift */
-export async function openShift(
+async function openShiftWithRpc(
   input: OpenShiftInput,
+  rpcName: "open_shift_atomic" | "fnb_open_shift_atomic",
 ): Promise<Shift & { alreadyOpen?: boolean }> {
   const supabase = getClient();
   // Actor and tenant are derived by the RPC. If another tab already opened
   // the shift, it returns that row instead of raising idx_shifts_open.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("open_shift_atomic", {
+  const { data, error } = await (supabase.rpc as any)(rpcName, {
     p_branch_id: input.branchId,
     p_starting_cash: input.startingCash,
   });
@@ -85,9 +85,9 @@ export async function openShift(
   if (error) {
     if (
       error.code === "PGRST202" ||
-      /open_shift_atomic|schema cache/i.test(error.message)
+      /open_shift_atomic|fnb_open_shift_atomic|schema cache/i.test(error.message)
     ) {
-      throw new Error("Chưa cập nhật SQL 00298 cho luồng mở/đóng ca.");
+      throw new Error("Chưa cập nhật SQL mở/đóng ca mới nhất.");
     }
     handleError(error, "openShift");
   }
@@ -98,6 +98,33 @@ export async function openShift(
     ...mapShift(row),
     alreadyOpen: Boolean(row.already_open),
   };
+}
+
+/** Open a Retail POS shift. Server requires pos_retail.checkout. */
+export async function openShift(
+  input: OpenShiftInput,
+): Promise<Shift & { alreadyOpen?: boolean }> {
+  return openShiftWithRpc(input, "open_shift_atomic");
+}
+
+/** Open an FnB POS shift. Server requires pos_fnb.checkout. */
+export async function openFnbShift(
+  input: OpenShiftInput,
+): Promise<Shift & { alreadyOpen?: boolean }> {
+  try {
+    return await openShiftWithRpc(input, "fnb_open_shift_atomic");
+  } catch (error) {
+    // Rolling-deploy compatibility: the web can arrive just before migration
+    // 00374. Only a missing RPC may use the old guarded FnB entry point;
+    // permission denials and all other errors must remain denied.
+    if (
+      error instanceof Error &&
+      error.message === "Chưa cập nhật SQL mở/đóng ca mới nhất."
+    ) {
+      return openShiftWithRpc(input, "open_shift_atomic");
+    }
+    throw error;
+  }
 }
 
 /**
