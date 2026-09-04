@@ -56,7 +56,7 @@ import { OtpApprovalDialog } from "@/components/shared/dialogs/otp-approval-dial
 import { OTP_ACTION_CODES } from "@/lib/services/supabase/manager-otp";
 import {
   getOpenShift,
-  openShift,
+  openFnbShift,
   closeShift,
   markOverdueShiftsForBranch,
 } from "@/lib/services/supabase/shifts";
@@ -2595,7 +2595,7 @@ function FnbPosPageInner() {
         return;
       }
       if (!branchId || !userId || !tenantId) return;
-      const shift = await openShift({
+      const shift = await openFnbShift({
         tenantId,
         branchId,
         cashierId: userId,

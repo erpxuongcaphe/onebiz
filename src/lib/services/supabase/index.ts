@@ -613,7 +613,7 @@ export {
 export type { SendToKitchenInput, SendToKitchenResult, FnbPaymentInput, FnbPaymentResult } from "./fnb-checkout";
 
 // Shift Management
-export { getOpenShift, getAnyOpenShift, openShift, closeShift, getShiftHistory } from "./shifts";
+export { getOpenShift, getAnyOpenShift, openShift, openFnbShift, closeShift, getShiftHistory } from "./shifts";
 
 // Split Bill
 export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-bill";
