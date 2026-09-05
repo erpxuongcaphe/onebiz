@@ -162,9 +162,12 @@ export function toppingsCacheConHieuLuc(
 
 /** Một dòng bom tối thiểu để xét "áp dụng được cho chi nhánh". */
 export interface DongBom {
+  id?: string;
   product_id: string | null;
   code: string | null;
   branch_id: string | null;
+  /** Readiness queries set this to false when a BOM header has no materials. */
+  has_items?: boolean;
 }
 
 /**

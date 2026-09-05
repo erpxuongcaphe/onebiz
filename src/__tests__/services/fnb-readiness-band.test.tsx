@@ -59,7 +59,7 @@ describe("FnbReadinessBand", () => {
     expect(screen.getByText("FNB-001 · Cà phê sữa")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa có trạm bếp đang bật")).not.toHaveLength(0);
     expect(screen.queryByText("SKU-TPP-012 · Trân Châu Trắng")).not.toBeInTheDocument();
-    expect(screen.queryByText("Thiếu giá bán · Thiếu công thức")).not.toBeInTheDocument();
+    expect(screen.queryByText("Thiếu giá bán · Thiếu công thức hoặc nguyên liệu")).not.toBeInTheDocument();
     expect(screen.getByText("Có nhiều lựa chọn mặc định")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Mở" })).toHaveAttribute(
       "href",

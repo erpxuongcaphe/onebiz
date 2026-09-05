@@ -88,7 +88,7 @@ export function FnbReadinessBand({
           )}
         </div>
         <span>
-          Món thực đơn: <strong>{readiness.menuTotal}</strong>
+          Món tại chi nhánh: <strong>{readiness.menuTotal}</strong>
         </span>
         {readiness.simpleProductsMissingPrice > 0 && (
           <span className="text-status-error">
@@ -97,7 +97,7 @@ export function FnbReadinessBand({
         )}
         {readiness.simpleProductsMissingBom > 0 && (
           <span className="text-status-error">
-            Món thiếu công thức: <strong>{readiness.simpleProductsMissingBom}</strong>
+            Món thiếu công thức/nguyên liệu: <strong>{readiness.simpleProductsMissingBom}</strong>
           </span>
         )}
         {readiness.variantsMissingPrice > 0 && (
@@ -107,7 +107,7 @@ export function FnbReadinessBand({
         )}
         {readiness.variantsMissingBom > 0 && (
           <span className="text-status-error">
-            Cỡ thiếu công thức: <strong>{readiness.variantsMissingBom}</strong>
+            Cỡ thiếu công thức/nguyên liệu: <strong>{readiness.variantsMissingBom}</strong>
           </span>
         )}
         {readiness.variantProductsWithInvalidDefaults > 0 && (
@@ -196,7 +196,7 @@ export function FnbReadinessBand({
                       {item.code} · {item.name}{item.variantName ? ` · ${item.variantName}` : ""}
                     </p>
                     <p className="text-xs text-status-error">
-                      {[item.missingPrice ? "Thiếu giá bán" : null, item.missingBom ? "Thiếu công thức riêng" : null]
+                      {[item.missingPrice ? "Thiếu giá bán" : null, item.missingBom ? "Thiếu công thức hoặc nguyên liệu" : null]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
@@ -223,7 +223,7 @@ export function FnbReadinessBand({
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium">{item.code} · {item.name}</p>
                     <p className="text-xs text-status-error">
-                      {[item.missingPrice ? "Thiếu giá bán" : null, item.missingBom ? "Thiếu công thức" : null]
+                      {[item.missingPrice ? "Thiếu giá bán" : null, item.missingBom ? "Thiếu công thức hoặc nguyên liệu" : null]
                         .filter(Boolean)
                         .join(" · ")}
                     </p>
