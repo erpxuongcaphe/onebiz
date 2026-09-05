@@ -70,6 +70,39 @@ describe("danhGiaFnbReadiness", () => {
     expect(result.toppingMissingBom).toBe(1);
   });
 
+  it("không tính một BOM rỗng là công thức sẵn sàng", () => {
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [
+        {
+          id: "drink-1",
+          code: "CF-001",
+          name: "Cà phê đen",
+          sell_price: 30_000,
+          bom_code: "BOM-CF-001",
+          has_bom: true,
+        },
+      ],
+      boms: [
+        {
+          id: "bom-empty",
+          product_id: "drink-1",
+          code: "BOM-CF-001",
+          branch_id: null,
+          has_items: false,
+        },
+      ],
+      groups: [],
+      options: [],
+      branchId: "branch-a",
+    });
+
+    expect(result.simpleProductsMissingBom).toBe(1);
+    expect(result.menuIssues).toEqual([
+      expect.objectContaining({ code: "CF-001", missingBom: true }),
+    ]);
+  });
+
   it("phát hiện nhiều mặc định, hai cách trừ kho và nhóm topping cũ", () => {
     const result = danhGiaFnbReadiness({
       products: [],

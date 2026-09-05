@@ -2,9 +2,12 @@ import { getClient } from "./base";
 import {
   CHE_DO_TOPPING_SKU,
   TIEN_TO_SKU_TOPPING,
-  locToppingHopLe,
   type DongBom,
 } from "./fnb-toppings";
+import {
+  filterFnbProductsForBranch,
+  listFnbProductBranchMenuScopes,
+} from "./fnb-product-branch-menu";
 
 interface SanPhamTopping {
   id: string;
@@ -94,10 +97,18 @@ function coBomApDung(
 
   if (product.bom_code) {
     return boms.some(
-      (bom) => bom.code === product.bom_code && dungChiNhanh(bom),
+      (bom) =>
+        bom.code === product.bom_code &&
+        dungChiNhanh(bom) &&
+        bom.has_items !== false,
     );
   }
-  return boms.some((bom) => bom.product_id === product.id && dungChiNhanh(bom));
+  return boms.some(
+    (bom) =>
+      bom.product_id === product.id &&
+      dungChiNhanh(bom) &&
+      bom.has_items !== false,
+  );
 }
 
 /** Lõi thuần để khóa cách tính bằng test, không ghi hoặc sửa dữ liệu. */
@@ -120,10 +131,10 @@ export function danhGiaFnbReadiness(input: {
     optionsByGroup.set(option.group_id, current);
   }
 
-  const toppingReady = locToppingHopLe(
-    input.products,
-    input.boms,
-    input.branchId,
+  const toppingReady = input.products.filter(
+    (product) =>
+      (product.sell_price ?? 0) > 0 &&
+      coBomApDung(product, input.boms, input.branchId),
   ).length;
   const groupById = new Map(input.groups.map((group) => [group.id, group]));
   const toppingIssues = input.products
@@ -291,7 +302,7 @@ export async function getFnbReadiness(
 ): Promise<FnbReadiness> {
   const supabase = getClient();
 
-  const [menuProductsResult, groupsResult] = await Promise.all([
+  const [menuProductsResult, groupsResult, menuScopes] = await Promise.all([
     supabase
       .from("products")
       .select("id, code, name, sell_price, bom_code, has_bom")
@@ -308,11 +319,17 @@ export async function getFnbReadiness(
       .eq("is_active", true)
       .in("channel", ["fnb", "all"])
       .limit(200),
+    listFnbProductBranchMenuScopes(tenantId),
   ]);
   if (menuProductsResult.error) throw menuProductsResult.error;
   if (groupsResult.error) throw groupsResult.error;
 
-  const menuProducts = (menuProductsResult.data ?? []) as unknown as SanPhamTopping[];
+  const allMenuProducts = (menuProductsResult.data ?? []) as unknown as SanPhamTopping[];
+  const menuProducts = filterFnbProductsForBranch(
+    allMenuProducts,
+    menuScopes,
+    branchId,
+  );
   const products = menuProducts.filter((product) =>
     product.code.startsWith(TIEN_TO_SKU_TOPPING),
   );
@@ -372,9 +389,9 @@ export async function getFnbReadiness(
 
   const bomsPromise = productIds.length
     ? (() => {
-        let query = supabase
+        let query = (supabase as any)
           .from("bom")
-          .select("product_id, code, branch_id")
+          .select("id, product_id, code, branch_id, bom_items(count)")
           .eq("tenant_id", tenantId)
           .eq("is_active", true)
           .or(
@@ -392,11 +409,19 @@ export async function getFnbReadiness(
   const bomsResult = await bomsPromise;
   if (bomsResult.error) throw bomsResult.error;
 
+  const rawBoms = (bomsResult.data ?? []) as unknown as Array<
+    DongBom & { id: string; bom_items?: Array<{ count: number }> }
+  >;
+  const boms = rawBoms.map(({ bom_items: itemCounts, ...bom }) => ({
+    ...bom,
+    has_items: (itemCounts?.[0]?.count ?? 0) > 0,
+  }));
+
   return danhGiaFnbReadiness({
     products,
     menuProducts,
     variants,
-    boms: (bomsResult.data ?? []) as unknown as DongBom[],
+    boms,
     groups,
     options: (optionsResult.data ?? []) as unknown as LuaChonTuyChon[],
     branchId,
