@@ -34,16 +34,20 @@ describe("product dialog draft and inline BOM flow", () => {
   });
 
   it("keeps the BOM aligned with unsaved FnB choice drafts while tabs change", () => {
-    expect(dialog).toContain('innerTab !== "modifier" &&');
-    expect(dialog).toContain('innerTab !== "pricing" &&');
-    expect(dialog).toContain('innerTab !== "bom" &&');
-    expect(dialog).toContain('innerTab !== "variants"');
-    expect(dialog).toContain("The BOM must read the same draft modifier groups as the modifier tab.");
+    expect(dialog).toContain("Load effective FnB groups in the background as soon as the product opens.");
+    expect(dialog).toContain("A single request supplies exact choices to both regular and per-size BOMs.");
     expect(dialog).toContain("setBomModifierGroups(perSizeModifierGroups)");
     expect(dialog).toContain("const [bomExactQuantitiesReady, setBomExactQuantitiesReady]");
     expect(dialog).toContain("const [bomExactOptionsReady, setBomExactOptionsReady]");
     expect(dialog).toContain("const bomExactRecipeReady = bomExactQuantitiesReady && bomExactOptionsReady");
     expect(dialog).not.toContain("getEffectiveModifierGroupsForProduct");
+  });
+
+  it("does not restart FnB recipe loading when the user changes tabs", () => {
+    expect(dialog).toContain('const shouldLoadVariantData =\n    channel === "fnb" ||');
+    expect(dialog).toContain("withFnbSetupTimeout(\n          getVariantsByProduct(initialData.id)");
+    expect(dialog).toContain("Đang tải các mức lựa chọn...");
+    expect(dialog).toContain("retryModifierOptionsLoad");
   });
 
   it("explains global recipes versus one-branch overrides without cloning recipes", () => {
@@ -100,5 +104,7 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(warningStart).toBeGreaterThan(-1);
     expect(warningFlow).toContain('setInnerTab("bom")');
     expect(warningFlow).not.toContain("onOpenChange(false)");
+    expect(warningFlow).toContain("getFnbSetupErrorMessage(");
+    expect(warningFlow).not.toContain("Lỗi không xác định");
   });
 });
