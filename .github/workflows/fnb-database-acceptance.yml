@@ -1,0 +1,36 @@
+name: FNB isolated database acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/fnb-isolated-db-acceptance]
+  pull_request:
+    paths:
+      - 'scripts/fnb-db-test/**'
+      - 'supabase/migrations/**'
+      - '.github/workflows/fnb-database-acceptance.yml'
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: onebiz_fnb_test
+          POSTGRES_USER: fnb_test
+          POSTGRES_PASSWORD: ephemeral-test-only
+        ports: ['55432:5432']
+        options: >-
+          --health-cmd "pg_isready -U fnb_test -d onebiz_fnb_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Run actual migration functions on synthetic stock
+        env:
+          FNB_EPHEMERAL_DB: onebiz_fnb_test
+        run: node scripts/fnb-db-test/run.mjs
