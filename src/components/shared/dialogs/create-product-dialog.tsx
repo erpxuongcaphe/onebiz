@@ -75,6 +75,10 @@ import {
   getRecipeQuantityInStockUnit,
 } from "@/lib/format-uom";
 import { validateFnbVariantSetup } from "@/lib/fnb-product-setup-validation";
+import {
+  getFnbSetupErrorMessage,
+  withFnbSetupTimeout,
+} from "@/lib/fnb-setup-error";
 // CEO 01/06/2026 — Sprint 2.2d: tab "Tuỳ chọn FnB" trong form SP.
 import {
   listModifierGroups,
@@ -289,6 +293,9 @@ export function CreateProductDialog({
   // saving an empty replacement over an already configured FnB recipe.
   const [bomExactQuantitiesReady, setBomExactQuantitiesReady] = useState(false);
   const [bomExactOptionsReady, setBomExactOptionsReady] = useState(false);
+  const [modifierGroupsReady, setModifierGroupsReady] = useState(false);
+  const [modifierOptionsError, setModifierOptionsError] = useState<string | null>(null);
+  const [modifierOptionsReloadNonce, setModifierOptionsReloadNonce] = useState(0);
   const bomExactRecipeReady = bomExactQuantitiesReady && bomExactOptionsReady;
   // Day 20/05/2026 (CEO BOM Phase 5): Mã BOM link với BOM có sẵn (standalone).
   // Khi user gõ Mã BOM → save sẽ verify + set products.bom_code (không tạo BOM
@@ -466,6 +473,11 @@ export function CreateProductDialog({
     variantItems.length > 0;
   const fnbVariantContextPending =
     scope === "sku" && channel === "fnb" && isEdit && !variantDataReady;
+  const shouldLoadVariantData =
+    channel === "fnb" ||
+    innerTab === "pricing" ||
+    innerTab === "bom" ||
+    innerTab === "variants";
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -477,6 +489,9 @@ export function CreateProductDialog({
       loadedVariantsKeyRef.current = null;
       setVariantDataReady(false);
       setVariantDataError(null);
+      setModifierOptionsError(null);
+      setModifierOptionsReloadNonce(0);
+      setModifierGroupsReady(false);
       setFnbMenuScopeDirty(false);
       setRecipeConversionsByMaterial({});
       return;
@@ -513,6 +528,8 @@ export function CreateProductDialog({
       setBomExactQuantityByKey({});
       setBomExactQuantitiesReady(!initialData.hasBom);
       setBomExactOptionsReady(false);
+      setModifierOptionsError(null);
+      setModifierGroupsReady(false);
       setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       // Day 20/05/2026 (CEO BOM Phase 5): prefill bomCode từ products.bom_code
@@ -562,6 +579,8 @@ export function CreateProductDialog({
       setBomExactQuantityByKey({});
       setBomExactQuantitiesReady(true);
       setBomExactOptionsReady(false);
+      setModifierOptionsError(null);
+      setModifierGroupsReady(false);
       setVariantModifierOptionsByGroup({});
       setFnbMenuScopeDirty(false);
       setBomCodeInput("");
@@ -853,9 +872,9 @@ export function CreateProductDialog({
 
   // CEO 01/06/2026 — Sprint 2.2d: Load modifier picker khi dialog mở cho SKU FnB.
   // Reset khi đóng / switch sang NVL / Retail.
-  // Load on demand for either FnB configuration surface. The size recipe
-  // editor needs the same effective groups as the modifier tab, otherwise an
-  // operator could configure a BOM against a group that never appears on POS.
+  // Load effective FnB groups in the background as soon as the product opens.
+  // BOM and modifier tabs share this draft, so tab switches never restart the
+  // request or make the recipe wait for a save/reopen cycle.
   useEffect(() => {
     if (!open || scope !== "sku" || channel !== "fnb") {
       setAvailableFnbModifierGroups([]);
@@ -867,18 +886,14 @@ export function CreateProductDialog({
       }
       return;
     }
-    if (
-      innerTab !== "modifier" &&
-      innerTab !== "pricing" &&
-      innerTab !== "bom" &&
-      innerTab !== "variants"
-    ) return;
     let cancelled = false;
     setLoadingModifierPicker(true);
+    setModifierGroupsReady(false);
+    setModifierOptionsError(null);
     (async () => {
       try {
         // 1. Load available groups (channel=fnb hoặc all)
-        const all = await listModifierGroups();
+        const all = await withFnbSetupTimeout(listModifierGroups());
         const fnbGroups = all.filter(
           (g) => g.channel === "fnb" || g.channel === "all",
         );
@@ -887,7 +902,7 @@ export function CreateProductDialog({
 
         // 2. Load inherited từ category
         if (categoryId) {
-          const links = await listCategoryModifierLinks(categoryId);
+          const links = await withFnbSetupTimeout(listCategoryModifierLinks(categoryId));
           if (cancelled) return;
           const inheritedIds = new Set(links.map((l) => l.modifierGroupId));
           setInheritedModifierGroups(
@@ -901,7 +916,9 @@ export function CreateProductDialog({
         // this tab must retain checkboxes the user has not saved yet.
         if (loadedModifierDraftKeyRef.current !== dialogProductKey) {
           if (initialData) {
-            const productLinks = await listProductModifierLinks(initialData.id);
+            const productLinks = await withFnbSetupTimeout(
+              listProductModifierLinks(initialData.id),
+            );
             if (cancelled) return;
             if (productLinks.length > 0) {
               setModifierMode("override");
@@ -918,8 +935,16 @@ export function CreateProductDialog({
           }
           loadedModifierDraftKeyRef.current = dialogProductKey;
         }
+        if (!cancelled) setModifierGroupsReady(true);
       } catch (err) {
         console.warn("Load modifier picker failed:", err);
+        if (!cancelled) {
+          setModifierGroupsReady(false);
+          setModifierOptionsError(getFnbSetupErrorMessage(
+            err,
+            "Không tải được nhóm lựa chọn F&B. Dữ liệu đã nhập chưa bị thay đổi.",
+          ));
+        }
       } finally {
         if (!cancelled) setLoadingModifierPicker(false);
       }
@@ -927,90 +952,77 @@ export function CreateProductDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, scope, channel, categoryId, dialogProductKey, initialData?.id, innerTab]);
-
-  // A size recipe with a target such as Mức đường must save exact amounts for
-  // every live choice. Load only the groups actually effective for this SKU;
-  // this keeps both the setup screen and POS on the same configuration.
-  useEffect(() => {
-    if (
-      !open ||
-      scope !== "sku" ||
-      channel !== "fnb" ||
-      (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants")
-    ) {
-      if (!open) setVariantModifierOptionsByGroup({});
-      return;
-    }
-    if (!perSizeModifierGroupKey) {
-      setVariantModifierOptionsByGroup({});
-      return;
-    }
-    let cancelled = false;
-    Promise.all(
-      perSizeModifierGroups.map(async (group) => [
-        group.id,
-        await listModifierOptions(group.id),
-      ] as const),
-    )
-      .then((entries) => {
-        if (!cancelled) setVariantModifierOptionsByGroup(Object.fromEntries(entries));
-      })
-      .catch((error) => {
-        console.warn("Load size recipe modifier options failed:", error);
-        if (!cancelled) setVariantModifierOptionsByGroup({});
-      });
-    return () => {
-      cancelled = true;
-    };
   }, [
     open,
     scope,
     channel,
-    innerTab,
-    perSizeModifierGroupKey,
-    perSizeModifierGroups,
+    categoryId,
+    dialogProductKey,
+    initialData?.id,
+    modifierOptionsReloadNonce,
   ]);
 
-  // The BOM must read the same draft modifier groups as the modifier tab.
-  // Otherwise a cashier-facing choice selected moments ago can disappear from
-  // the recipe before the user presses the single final Save button.
+  // A single request supplies exact choices to both regular and per-size BOMs.
+  // Keeping one source prevents 60/80/100 from appearing only after reopening
+  // and avoids duplicate requests racing each other during tab changes.
   useEffect(() => {
-    if (!open || scope !== "sku" || channel !== "fnb" || innerTab !== "bom") {
+    if (!open || scope !== "sku" || channel !== "fnb") {
       if (!open) {
+        setVariantModifierOptionsByGroup({});
         setBomModifierGroups([]);
         setBomModifierOptionsByGroup({});
         setBomExactOptionsReady(false);
+        setModifierOptionsError(null);
       }
       return;
     }
+    if (!modifierGroupsReady) {
+      setBomExactOptionsReady(false);
+      return;
+    }
     if (!perSizeModifierGroupKey) {
+      setVariantModifierOptionsByGroup({});
       setBomModifierGroups([]);
       setBomModifierOptionsByGroup({});
-      setBomExactOptionsReady(true);
+      setBomExactOptionsReady(modifierGroupsReady);
+      if (modifierGroupsReady) setModifierOptionsError(null);
       return;
     }
 
     let cancelled = false;
     setBomExactOptionsReady(false);
-    Promise.all(
-      perSizeModifierGroups.map(async (group) => [
-        group.id,
-        await listModifierOptions(group.id),
-      ] as const),
+    setModifierOptionsError(null);
+    withFnbSetupTimeout(
+      Promise.all(
+        perSizeModifierGroups.map(async (group) => [
+          group.id,
+          await listModifierOptions(group.id),
+        ] as const),
+      ),
+      undefined,
+      "Tải các mức lựa chọn quá lâu.",
     )
       .then((entries) => {
         if (cancelled) return;
+        const optionsByGroup = Object.fromEntries(entries);
+        setVariantModifierOptionsByGroup(optionsByGroup);
         setBomModifierGroups(perSizeModifierGroups);
-        setBomModifierOptionsByGroup(Object.fromEntries(entries));
+        setBomModifierOptionsByGroup(optionsByGroup);
         setBomExactOptionsReady(true);
       })
       .catch((error) => {
-        console.warn("Load BOM modifier options failed:", error);
+        console.warn("Load FnB recipe modifier options failed:", error);
         if (cancelled) return;
-        setBomModifierGroups([]);
+        setVariantModifierOptionsByGroup({});
+        setBomModifierGroups(perSizeModifierGroups);
         setBomModifierOptionsByGroup({});
         setBomExactOptionsReady(false);
+        setModifierOptionsError(
+          getFnbSetupErrorMessage(
+            error,
+            "Không tải được các mức lựa chọn. Dữ liệu đã nhập chưa bị thay đổi.",
+          ),
+        );
       });
     return () => {
       cancelled = true;
@@ -1019,9 +1031,9 @@ export function CreateProductDialog({
     open,
     scope,
     channel,
-    innerTab,
     perSizeModifierGroupKey,
     perSizeModifierGroups,
+    modifierGroupsReady,
   ]);
 
   // Lazy-load branch menu policy only when the FnB configuration tab is opened.
@@ -1124,8 +1136,8 @@ export function CreateProductDialog({
   }
 
   // Sản phẩm nhiều size phải dùng cùng một dữ liệu ở Giá, BOM và Quy cách.
-  // Chỉ nạp ở ba bề mặt quản trị này để giữ dialog mở nhanh, nhưng tuyệt đối
-  // không cho BOM lấy dòng đầu tiên trước khi biết sản phẩm có variants không.
+  // FnB loads once when the dialog opens; changing tabs must not cancel and
+  // restart the same request or leave the user on an endless loading screen.
   useEffect(() => {
     if (!open || !initialData || initialData.productType !== "sku") {
       if (!open) {
@@ -1137,7 +1149,7 @@ export function CreateProductDialog({
       }
       return;
     }
-    if (innerTab !== "pricing" && innerTab !== "bom" && innerTab !== "variants") return;
+    if (!shouldLoadVariantData) return;
     if (loadedVariantsKeyRef.current === initialData.id) return;
     const loadingProductId = initialData.id;
     loadedVariantsKeyRef.current = loadingProductId;
@@ -1147,7 +1159,11 @@ export function CreateProductDialog({
     let settled = false;
     (async () => {
       try {
-        const variants = await getVariantsByProduct(initialData.id);
+        const variants = await withFnbSetupTimeout(
+          getVariantsByProduct(initialData.id),
+          undefined,
+          "Tải giá và công thức theo size quá lâu.",
+        );
         if (cancelled) return;
         setVariantItems(
           variants.map((v: ProductVariant) => ({
@@ -1173,17 +1189,19 @@ export function CreateProductDialog({
           const getConversions = async (materialId: string) => {
             const cached = conversionCache.get(materialId);
             if (cached) return cached;
-            const conversions = await getUOMConversions(materialId).catch(() => []);
+            const conversions = await withFnbSetupTimeout(
+              getUOMConversions(materialId),
+            ).catch(() => []);
             conversionCache.set(materialId, conversions);
             return conversions;
           };
           for (const v of variants) {
             if (!v.bomCode) continue;
             try {
-              const boms = await getBOMByCode(v.bomCode);
+              const boms = await withFnbSetupTimeout(getBOMByCode(v.bomCode));
               const bom = boms.find((b) => !b.branchId) ?? boms[0];
               if (!bom) continue;
-              const full = await getBOMById(bom.id);
+              const full = await withFnbSetupTimeout(getBOMById(bom.id));
               const itemsByMaterial = new Map(
                 (full.items ?? []).map((item) => [item.materialId, item]),
               );
@@ -1200,7 +1218,9 @@ export function CreateProductDialog({
                 }
                 row.qty[v.id] = it.inputQuantity ?? it.quantity;
               }
-              const savedQuantities = await listBOMModifierOptionQuantities(bom.id);
+              const savedQuantities = await withFnbSetupTimeout(
+                listBOMModifierOptionQuantities(bom.id),
+              );
               for (const saved of savedQuantities) {
                 const item = itemsByMaterial.get(saved.materialId);
                 if (!item) continue;
@@ -1243,25 +1263,39 @@ export function CreateProductDialog({
           loadedVariantsKeyRef.current = null;
         }
         setVariantDataReady(false);
-        setVariantDataError(
+        setVariantDataError(getFnbSetupErrorMessage(
+          err,
           "Không tải được đầy đủ giá và công thức theo size. Dữ liệu sản phẩm chưa bị thay đổi.",
-        );
+        ));
       }
     })();
     return () => {
       cancelled = true;
-      // Đổi tab giữa lúc tải phải nhả khóa để tab kế tiếp nạp lại đầy đủ.
+      // Closing the dialog or changing product releases an unfinished load.
       if (!settled && loadedVariantsKeyRef.current === loadingProductId) {
         loadedVariantsKeyRef.current = null;
       }
     };
-  }, [open, initialData?.id, initialData?.productType, innerTab, channel, variantReloadNonce]);
+  }, [
+    open,
+    initialData?.id,
+    initialData?.productType,
+    channel,
+    shouldLoadVariantData,
+    variantReloadNonce,
+  ]);
 
   function retryVariantDataLoad() {
     loadedVariantsKeyRef.current = null;
     setVariantDataError(null);
     setVariantDataReady(false);
     setVariantReloadNonce((current) => current + 1);
+  }
+
+  function retryModifierOptionsLoad() {
+    setModifierOptionsError(null);
+    setBomExactOptionsReady(false);
+    setModifierOptionsReloadNonce((current) => current + 1);
   }
 
   // Helper: add empty variant row.
@@ -2045,7 +2079,10 @@ export function CreateProductDialog({
               toast({
                 variant: "warning",
                 title: "Sản phẩm đã lưu, công thức chưa hoàn tất",
-                description: bomErr instanceof Error ? bomErr.message : "Lỗi không xác định",
+                description: getFnbSetupErrorMessage(
+                  bomErr,
+                  "Không thể lưu công thức F&B. Dữ liệu sản phẩm chính đã được giữ lại.",
+                ),
                 duration: 10000,
               });
               setInnerTab("bom");
@@ -2275,9 +2312,10 @@ export function CreateProductDialog({
           toast({
             variant: "warning",
             title: "SP đã tạo nhưng BOM lỗi",
-            description: `${code} đã lưu. Lỗi BOM: ${
-              bomErr instanceof Error ? bomErr.message : "không xác định"
-            }. Vào /hang-hoa/cong-thuc tạo BOM thủ công.`,
+            description: `${code} đã lưu. ${getFnbSetupErrorMessage(
+              bomErr,
+              "Không thể lưu công thức F&B.",
+            )} Mở lại sản phẩm để hoàn tất công thức.`,
             duration: 10000,
           });
           onOpenChange(false);
@@ -3596,9 +3634,27 @@ export function CreateProductDialog({
                   </div>
 
                   {!bomExactRecipeReady ? (
-                    <p className="rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
-                      Chưa tải được định lượng riêng. Tải lại form trước khi lưu để giữ nguyên cấu hình hiện có.
-                    </p>
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
+                      <span className="flex min-w-0 items-center gap-2">
+                        <Icon
+                          name={modifierOptionsError ? "warning" : "progress_activity"}
+                          size={14}
+                          className={modifierOptionsError ? "shrink-0" : "shrink-0 animate-spin"}
+                        />
+                        {modifierOptionsError ?? "Đang tải các mức lựa chọn..."}
+                      </span>
+                      {modifierOptionsError && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={retryModifierOptionsLoad}
+                        >
+                          <Icon name="refresh" size={14} className="mr-1" />
+                          Thử lại
+                        </Button>
+                      )}
+                    </div>
                   ) : (
                     bomItems
                       .filter((item) => item.modifierScaleTarget)
