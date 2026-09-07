@@ -7,6 +7,24 @@ const STORAGE_PREFIX = "onebiz_form_draft_v1";
 const DEFAULT_TTL_MS = 24 * 60 * 60 * 1000;
 const SAVE_DELAY_MS = 250;
 
+function canAutomaticallyReopen(key: string): boolean {
+  try {
+    const navigation = performance.getEntriesByType("navigation")[0] as PerformanceNavigationTiming | undefined;
+    return navigation?.type === "reload" && window.sessionStorage.getItem(`open:${key}`) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function rememberOpenForm(key: string, open: boolean): void {
+  try {
+    if (open) window.sessionStorage.setItem(`open:${key}`, "1");
+    else window.sessionStorage.removeItem(`open:${key}`);
+  } catch {
+    // Storage restrictions must not block editing or saving the form.
+  }
+}
+
 interface DraftScope {
   tenantId: string;
   userId: string;
@@ -106,7 +124,7 @@ function readDraft<T>(key: string): StoredFormDraft<T> | null {
 
 export async function findLatestFormDraft<T>(
   form: string,
-  options: { branchId?: string | null; entityId?: string | null } = {},
+  options: { branchId?: string | null; entityId?: string | null; automaticReopenOnly?: boolean } = {},
 ): Promise<RecoverableFormDraft<T> | null> {
   const storage = safeStorage();
   if (!storage) return null;
@@ -116,6 +134,7 @@ export async function findLatestFormDraft<T>(
   for (let index = storage.length - 1; index >= 0; index -= 1) {
     const key = storage.key(index);
     if (!key?.startsWith(storagePrefix())) continue;
+    if (options.automaticReopenOnly && !canAutomaticallyReopen(key)) continue;
     const draft = parseDraft<T>(storage.getItem(key));
     if (!draft) continue;
     if (draft.expiresAt <= Date.now()) {
@@ -190,12 +209,18 @@ export function useDurableFormDraft<T>({
   const requestOpenRef = useRef(onRequestOpen);
   const openRef = useRef(open);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const previouslyOpenRef = useRef(open);
 
   snapshotRef.current = snapshot;
   restoreRef.current = restore;
   hasContentRef.current = hasContent;
   requestOpenRef.current = onRequestOpen;
   openRef.current = open;
+
+  useEffect(() => {
+    if (key && previouslyOpenRef.current && !open) rememberOpenForm(key, false);
+    previouslyOpenRef.current = open;
+  }, [key, open]);
 
   useEffect(() => {
     let cancelled = false;
@@ -215,7 +240,7 @@ export function useDurableFormDraft<T>({
         pendingDraftRef.current = existing?.data ?? null;
         setKey(nextKey);
         setLoaded(true);
-        if (existing && autoRestore && !openRef.current) {
+        if (existing && autoRestore && !openRef.current && canAutomaticallyReopen(nextKey)) {
           requestOpenRef.current?.();
         }
       })
@@ -275,6 +300,7 @@ export function useDurableFormDraft<T>({
     };
     try {
       storage.setItem(key, JSON.stringify(envelope));
+      rememberOpenForm(key, true);
     } catch {
       // Quota/private mode: the form remains usable; unload warning still works.
     }
@@ -319,7 +345,10 @@ export function useDurableFormDraft<T>({
 
   const clearDraft = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
-    if (key) safeStorage()?.removeItem(key);
+    if (key) {
+      safeStorage()?.removeItem(key);
+      rememberOpenForm(key, false);
+    }
     pendingDraftRef.current = null;
     setRestored(true);
   }, [key]);

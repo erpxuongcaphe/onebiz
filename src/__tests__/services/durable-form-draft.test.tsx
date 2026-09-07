@@ -19,7 +19,12 @@ import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 describe("durable ERP form drafts", () => {
   beforeEach(() => {
     localStorage.clear();
+    sessionStorage.clear();
     vi.restoreAllMocks();
+    Object.defineProperty(performance, "getEntriesByType", {
+      configurable: true,
+      value: vi.fn(() => [{ type: "navigate" }]),
+    });
   });
 
   it("isolates and restores a draft by tenant, user, branch and form", async () => {
@@ -61,7 +66,8 @@ describe("durable ERP form drafts", () => {
     expect(hasActiveFormWork()).toBe(false);
   });
 
-  it("reopens and restores an existing draft after a full remount", async () => {
+  it.each(["navigate", "reload"])("does not reopen another tab's draft on %s, but keeps manual recovery", async (navigationType) => {
+    vi.mocked(performance.getEntriesByType).mockReturnValue([{ type: navigationType }] as unknown as PerformanceEntry[]);
     localStorage.setItem(
       "onebiz_form_draft_v1:tenant-a:user-a:branch-xtb:order-create:new",
       JSON.stringify({
@@ -92,11 +98,28 @@ describe("durable ERP form drafts", () => {
       { initialProps: { open: false } },
     );
 
-    await waitFor(() => expect(requestOpen).toHaveBeenCalledTimes(1));
+    await act(async () => {});
+    expect(requestOpen).not.toHaveBeenCalled();
     rerender({ open: true });
     await waitFor(() =>
       expect(restore).toHaveBeenCalledWith({ note: "Giao buổi sáng" }),
     );
+  });
+
+  it("reopens after reload only when this tab previously saved the open form", async () => {
+    const requestOpen = vi.fn();
+    const first = renderHook(() => useDurableFormDraft({
+      form: "purchase-create", open: true, snapshot: { note: "keep me" },
+      hasContent: () => true, restore: vi.fn(),
+    }));
+    await waitFor(() => expect(localStorage.length).toBe(1));
+    first.unmount();
+    vi.mocked(performance.getEntriesByType).mockReturnValue([{ type: "reload" }] as unknown as PerformanceEntry[]);
+    renderHook(() => useDurableFormDraft({
+      form: "purchase-create", open: false, snapshot: { note: "" },
+      hasContent: () => false, restore: vi.fn(), onRequestOpen: requestOpen,
+    }));
+    await waitFor(() => expect(requestOpen).toHaveBeenCalledTimes(1));
   });
 
   it("does not revalidate a list while a form is open", async () => {

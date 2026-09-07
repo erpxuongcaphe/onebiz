@@ -14,6 +14,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 }));
 
 import { savePurchaseOrderAtomic, updatePurchaseOrderStatus } from "@/lib/services/supabase/purchase-orders";
+import { purchaseLineMoney } from "@/lib/purchase-line-money";
 
 const migration = readFileSync(
   "supabase/migrations/00261_atomic_purchase_order_save.sql",
@@ -271,14 +272,14 @@ describe("atomic purchase-order save", () => {
       { quantity: 72, unitPrice: 12_166.67 },
     ];
     const subtotal = items.reduce(
-      (sum, item) => sum + Math.ceil(item.quantity * item.unitPrice),
+      (sum, item) => sum + purchaseLineMoney({ price: item.unitPrice, quantity: item.quantity, vatRate: 0 }).subtotal,
       0,
     );
 
     expect(subtotal).toBe(1_369_001);
     expect(subtotal - 1).toBe(1_369_000);
     expect(dialog).toContain(
-      "return Math.ceil(lineEffectivePrice(item) * item.quantity)",
+      "return purchaseLineMoney(item).subtotal",
     );
     expect(
       roundingMigration.match(/:= ceil\(v_quantity \* v_unit_price\)/g),

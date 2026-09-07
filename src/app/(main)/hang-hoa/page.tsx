@@ -421,6 +421,7 @@ export default function HangHoaPage() {
     let cancelled = false;
     findLatestFormDraft<unknown>("product-edit", {
       branchId: activeBranchId,
+      automaticReopenOnly: true,
     })
       .then(async (draft) => {
         if (cancelled || !draft?.entityId) return;
