@@ -32,6 +32,7 @@ import type { UOMConversion } from "@/lib/types";
 import { nextEntityCode } from "@/lib/services/supabase/stock-adjustments";
 import { Icon } from "@/components/ui/icon";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
+import { purchaseLineMoney } from "@/lib/purchase-line-money";
 
 
 interface EditingPO {
@@ -130,20 +131,19 @@ function lineEffectivePrice(item: LineItem) {
 /**
  * CEO 05/06/2026: làm tròn LÊN để khử thập phân. NCC quote 125833.33 ×
  * 12 ra 1,509,999.96 — chuyển khoản phải tròn, không trả 0.96đ.
- * Math.ceil(price * qty) đảm bảo tổng dòng luôn là số nguyên.
+ * Dùng phép tính thập phân để không đội thêm 1đ vì sai số nhị phân.
  */
 function lineSubtotal(item: LineItem) {
-  return Math.ceil(lineEffectivePrice(item) * item.quantity);
+  return purchaseLineMoney(item).subtotal;
 }
 
 /** Tổng số tiền chiết khấu của dòng (đã làm tròn). */
 function lineDiscountTotal(item: LineItem) {
-  const beforeDisc = Math.ceil(item.price * item.quantity);
-  return Math.max(0, beforeDisc - lineSubtotal(item));
+  return purchaseLineMoney(item).discount;
 }
 
 function lineTax(item: LineItem) {
-  return Math.round((lineSubtotal(item) * item.vatRate) / 100);
+  return purchaseLineMoney(item).tax;
 }
 
 function lineTotal(item: LineItem) {
@@ -647,7 +647,9 @@ export function CreatePurchaseOrderDialog({
               : "Lỗi lưu phiếu tạm",
         description: resultNotConfirmed
           ? `Kết nối bị gián đoạn. Giữ nguyên popup và bấm lại nút vừa dùng để hệ thống đối chiếu mã ${code}; không nhập lại thành phiếu mới.`
-          : message,
+          : message.includes("PAID_AMOUNT_EXCEEDS_TOTAL")
+            ? "Số đã thanh toán lớn hơn tổng phiếu do máy chủ tính. Phiếu chưa được xác nhận nhập kho. Giữ nguyên bản nháp và đối chiếu tổng tiền, chiết khấu, đơn vị quy đổi. Mã lỗi: PAID_AMOUNT_EXCEEDS_TOTAL (22023)."
+            : message,
         variant: resultNotConfirmed ? "warning" : "error",
       });
     } finally {
