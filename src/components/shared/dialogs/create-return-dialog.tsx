@@ -18,6 +18,11 @@ import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createSalesReturnAtomic } from "@/lib/services/supabase/returns-completion";
 import { getOpenShift } from "@/lib/services/supabase/shifts";
 import { Icon } from "@/components/ui/icon";
+import {
+  roundSalesReturnMoney,
+  salesReturnLineTotal,
+  salesReturnTotal,
+} from "@/lib/sales-return-money";
 
 interface CreateReturnDialogProps {
   open: boolean;
@@ -201,9 +206,13 @@ export function CreateReturnDialog({
   const selectedItems = useMemo(() => invoiceItems.filter((item) => item.selected), [invoiceItems]);
 
   const returnTotal = useMemo(
-    // 28/07: nhân GIÁ THỰC (đã trừ chiết khấu), không phải giá niêm yết —
-    // trước đây khách mua giảm giá 70k trả lại được hoàn 100k.
-    () => selectedItems.reduce((sum, item) => sum + item.returnQty * item.effective_unit_price, 0),
+    // Match the database numeric calculation exactly. A fractional sold
+    // quantity can otherwise leave a tiny, invalid debt credit in JavaScript.
+    () => salesReturnTotal(selectedItems.map((item) => ({
+      lineTotal: item.total,
+      soldQuantity: item.quantity,
+      returnQuantity: item.returnQty,
+    }))),
     [selectedItems],
   );
 
@@ -215,10 +224,10 @@ export function CreateReturnDialog({
   const effectiveRefund = useMemo(() => {
     if (refundMode === "full") return returnTotal;
     if (refundMode === "debt_only") return 0;
-    return Math.max(0, Math.min(returnTotal, partialRefund));
+    return roundSalesReturnMoney(Math.max(0, Math.min(returnTotal, partialRefund)));
   }, [refundMode, returnTotal, partialRefund]);
 
-  const debtCredit = returnTotal - effectiveRefund;
+  const debtCredit = roundSalesReturnMoney(returnTotal - effectiveRefund);
   const refundPaymentMethodLabel = useMemo(
     () => REFUND_PAYMENT_METHODS.find((m) => m.value === refundPaymentMethod)?.label ?? "Tiền mặt",
     [refundPaymentMethod],
@@ -379,7 +388,7 @@ export function CreateReturnDialog({
                       onClick={() => {
                         setRefundMode(opt.value);
                         if (opt.value === "partial" && partialRefund === 0) {
-                          setPartialRefund(Math.round(returnTotal / 2));
+                          setPartialRefund(roundSalesReturnMoney(returnTotal / 2));
                         }
                       }}
                       className={`flex min-h-10 items-center justify-center gap-1.5 rounded-lg border px-2 py-2 text-xs font-semibold transition ${
@@ -436,7 +445,7 @@ export function CreateReturnDialog({
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">SL mua</span>
                 <span className="flex justify-end">SL trả</span>
-                <span className="flex justify-end">Đơn giá</span>
+                <span className="flex justify-end">Đơn giá hoàn</span>
                 <span className="flex justify-end">Thành tiền</span>
               </div>
 
@@ -494,10 +503,14 @@ export function CreateReturnDialog({
                         aria-label={`Số lượng trả ${item.product_name}`}
                       />
                       <div className="text-right text-sm tabular-nums">
-                        {formatCurrency(item.unit_price)}
+                        {formatCurrency(item.effective_unit_price)}
                       </div>
                       <div className="text-right text-sm font-bold tabular-nums text-primary">
-                        {formatCurrency(item.returnQty * item.unit_price)}
+                        {formatCurrency(salesReturnLineTotal({
+                          lineTotal: item.total,
+                          soldQuantity: item.quantity,
+                          returnQuantity: item.returnQty,
+                        }))}
                       </div>
                     </div>
                   ))}

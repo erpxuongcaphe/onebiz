@@ -7,6 +7,7 @@
  */
 
 import { getClient, handleError } from "./base";
+import { roundSalesReturnMoney } from "@/lib/sales-return-money";
 
 export type RefundPaymentMethod = "cash" | "transfer" | "card";
 
@@ -60,7 +61,7 @@ export async function createSalesReturnAtomic(
   const { data, error } = await (supabase.rpc as any)("create_sales_return_atomic", {
     p_invoice_id: input.invoiceId,
     p_items: input.items,
-    p_refund_amount: input.refundAmount,
+    p_refund_amount: roundSalesReturnMoney(input.refundAmount),
     p_refund_payment_method: input.refundPaymentMethod ?? "cash",
     p_reason: input.reason?.trim() || null,
     p_note: input.note?.trim() || null,
