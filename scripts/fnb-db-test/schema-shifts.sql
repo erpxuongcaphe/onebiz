@@ -8,7 +8,7 @@ do $$ begin
 end $$;
 
 create schema if not exists auth;
-create table test_actor_context(
+create table public.test_actor_context(
   actor_id uuid primary key,
   tenant_id uuid not null,
   branch_id uuid not null,
@@ -17,12 +17,12 @@ create table test_actor_context(
   can_reconcile_any boolean not null default false,
   can_reconcile_own_branch boolean not null default false
 );
-create table branches(
+create table public.branches(
   id uuid primary key,
   tenant_id uuid not null,
   is_active boolean not null default true
 );
-create table shifts(
+create table public.shifts(
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
   branch_id uuid not null,
@@ -39,9 +39,9 @@ create table shifts(
   sales_by_method jsonb not null default '{}'::jsonb,
   note text
 );
-create unique index idx_shifts_open on shifts(tenant_id, branch_id, cashier_id)
+create unique index idx_shifts_open on public.shifts(tenant_id, branch_id, cashier_id)
   where status = 'open';
-create table cash_transactions(
+create table public.cash_transactions(
   id uuid primary key default gen_random_uuid(),
   tenant_id uuid not null,
   branch_id uuid not null,
@@ -53,7 +53,7 @@ create table cash_transactions(
   reference_type text,
   reference_id uuid
 );
-create table invoices(
+create table public.invoices(
   id uuid primary key default gen_random_uuid(),
   shift_id uuid,
   status text not null
@@ -71,11 +71,11 @@ end $$;
 
 create or replace function get_user_tenant_id() returns uuid
 language sql stable
-as $$ select tenant_id from test_actor_context where actor_id = auth.uid() $$;
+as $$ select tenant_id from public.test_actor_context where actor_id = auth.uid() $$;
 
 create or replace function user_has_branch_access(p_actor uuid, p_branch uuid) returns boolean
 language sql stable
-as $$ select coalesce((select branch_id = p_branch from test_actor_context where actor_id = p_actor), false) $$;
+as $$ select coalesce((select branch_id = p_branch from public.test_actor_context where actor_id = p_actor), false) $$;
 
 create or replace function user_has_permission(p_actor uuid, p_permission text) returns boolean
 language sql stable
@@ -88,7 +88,7 @@ as $$
       when 'shifts.reconcile_own_branch' then can_reconcile_own_branch
       else false
     end
-    from test_actor_context where actor_id = p_actor
+    from public.test_actor_context where actor_id = p_actor
   ), false)
 $$;
 
