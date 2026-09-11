@@ -68,6 +68,30 @@ describe("createSalesReturnAtomic", () => {
     });
   });
 
+  it("rounds browser floating-point refund values before calling the RPC", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        return_id: "return-1",
+        code: "TH000001",
+        total: 690_000,
+        refunded: 690_000,
+        debt_credit: 0,
+        warnings: [],
+      },
+      error: null,
+    });
+
+    await createSalesReturnAtomic({
+      ...sampleInput,
+      refundAmount: 1_202_900 / 5.23 * 3,
+    });
+
+    expect(mockRpc).toHaveBeenCalledWith(
+      "create_sales_return_atomic",
+      expect.objectContaining({ p_refund_amount: 690_000 }),
+    );
+  });
+
   it("fails closed when the RPC is unavailable", async () => {
     mockRpc.mockResolvedValueOnce({
       data: null,
