@@ -34,3 +34,7 @@ jobs:
         env:
           FNB_EPHEMERAL_DB: onebiz_fnb_test
         run: node scripts/fnb-db-test/run.mjs
+      - name: Run actual shift functions on synthetic operations
+        env:
+          FNB_EPHEMERAL_DB: onebiz_fnb_test
+        run: node scripts/fnb-db-test/run-shifts.mjs
