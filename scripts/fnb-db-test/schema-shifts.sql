@@ -12,6 +12,8 @@ create table test_actor_context(
   actor_id uuid primary key,
   tenant_id uuid not null,
   branch_id uuid not null,
+  can_fnb_checkout boolean not null default false,
+  can_retail_checkout boolean not null default false,
   can_reconcile_any boolean not null default false,
   can_reconcile_own_branch boolean not null default false
 );
@@ -80,10 +82,23 @@ language sql stable
 as $$
   select coalesce((
     select case p_permission
+      when 'pos_fnb.checkout' then can_fnb_checkout
+      when 'pos_retail.checkout' then can_retail_checkout
       when 'shifts.reconcile_any' then can_reconcile_any
       when 'shifts.reconcile_own_branch' then can_reconcile_own_branch
       else false
     end
     from test_actor_context where actor_id = p_actor
   ), false)
+$$;
+
+create or replace function test_assert(ok boolean, label text) returns void
+language plpgsql
+as $$
+begin
+  if not coalesce(ok, false) then
+    raise exception 'FAIL: %', label;
+  end if;
+  raise notice 'PASS: %', label;
+end;
 $$;

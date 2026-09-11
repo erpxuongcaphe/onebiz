@@ -3,37 +3,58 @@ declare
   tenant uuid := gen_random_uuid();
   branch uuid := gen_random_uuid();
   other_branch uuid := gen_random_uuid();
-  cashier uuid := gen_random_uuid();
-  other_cashier uuid := gen_random_uuid();
+  fnb_cashier uuid := gen_random_uuid();
+  retail_cashier uuid := gen_random_uuid();
   shift_id uuid;
-  other_shift_id uuid;
+  retail_shift_id uuid;
   result jsonb;
 begin
   insert into branches(id, tenant_id) values (branch, tenant), (other_branch, tenant);
-  insert into test_actor_context(actor_id, tenant_id, branch_id) values
-    (cashier, tenant, branch),
-    (other_cashier, tenant, branch);
-  perform test_set_actor(cashier);
+  insert into test_actor_context(
+    actor_id, tenant_id, branch_id, can_fnb_checkout, can_retail_checkout
+  ) values
+    (fnb_cashier, tenant, branch, true, false),
+    (retail_cashier, tenant, branch, false, true);
+  perform test_set_actor(fnb_cashier);
 
-  result := open_shift_atomic(branch, 500000);
+  result := fnb_open_shift_atomic(branch, 500000);
   shift_id := (result->>'id')::uuid;
   perform test_assert((result->>'already_open')::boolean = false, 'first shift opening creates a shift');
   perform test_assert((select count(*) = 1 from shifts where id = shift_id), 'created shift is persisted once');
 
-  result := open_shift_atomic(branch, 999999);
+  result := fnb_open_shift_atomic(branch, 999999);
   perform test_assert((result->>'id')::uuid = shift_id, 'repeated opening returns same shift');
   perform test_assert((result->>'already_open')::boolean = true, 'repeated opening is marked idempotent');
   perform test_assert((select starting_cash = 500000 from shifts where id = shift_id), 'retry cannot replace starting cash');
 
   begin
-    perform open_shift_atomic(branch, -1);
+    perform open_shift_atomic(branch, 0);
+    raise exception 'FAIL: FNB cashier opened a Retail shift';
+  exception when sqlstate '42501' then
+    perform test_assert(sqlerrm = 'RETAIL_OPEN_SHIFT_DENIED', 'FNB cashier cannot open a Retail shift');
+  end;
+
+  perform test_set_actor(retail_cashier);
+  begin
+    perform fnb_open_shift_atomic(branch, 0);
+    raise exception 'FAIL: Retail cashier opened an FNB shift';
+  exception when sqlstate '42501' then
+    perform test_assert(sqlerrm = 'FNB_OPEN_SHIFT_DENIED', 'Retail cashier cannot open an FNB shift');
+  end;
+  result := open_shift_atomic(branch, 0);
+  retail_shift_id := (result->>'id')::uuid;
+  perform test_assert((result->>'already_open')::boolean = false, 'Retail cashier opens through the Retail endpoint');
+  perform test_set_actor(fnb_cashier);
+
+  begin
+    perform fnb_open_shift_atomic(branch, -1);
     raise exception 'FAIL: negative starting cash was accepted';
   exception when sqlstate '22023' then
     perform test_assert(sqlerrm = 'SHIFT_STARTING_CASH_INVALID', 'negative starting cash is rejected');
   end;
 
   begin
-    perform open_shift_atomic(other_branch, 0);
+    perform fnb_open_shift_atomic(other_branch, 0);
     raise exception 'FAIL: inaccessible branch was accepted';
   exception when sqlstate '42501' then
     perform test_assert(sqlerrm = 'SHIFT_BRANCH_DENIED', 'branch access is enforced');
@@ -64,12 +85,9 @@ begin
     perform test_assert(sqlerrm = 'SHIFT_NOT_OPEN', 'closed shift cannot be closed again');
   end;
 
-  perform test_set_actor(cashier);
-  other_shift_id := (open_shift_atomic(branch, 0)->>'id')::uuid;
-  update shifts set cashier_id = other_cashier where id = other_shift_id;
-  perform test_set_actor(cashier);
+  perform test_set_actor(fnb_cashier);
   begin
-    perform close_shift_atomic(other_shift_id, 0, null);
+    perform close_shift_atomic(retail_shift_id, 0, null);
     raise exception 'FAIL: cashier closed another cashier shift';
   exception when sqlstate '42501' then
     perform test_assert(sqlerrm = 'SHIFT_CLOSE_DENIED', 'explicit permission is required to close another shift');

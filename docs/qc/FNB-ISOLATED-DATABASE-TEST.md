@@ -12,6 +12,9 @@ existing products table. The service is discarded after the job.
 
 - Actual migration bodies: consume_bom_for_sale, get_active_bom_for_branch,
   upsert_branch_stock, increment_product_stock, allocate_lots_fifo.
+- Actual shift core from 00298 and the current channel-specific Retail/F&B
+  entry points from 00374.
+- Retail and F&B opening permissions stay isolated in both directions.
 - M/L recipes, four exact sweetness amounts, zero sugar, two-cup multiplication.
 - Display labels and fallback factors do not override exact amounts.
 - Branch stock, aggregate product stock, FIFO allocations, movement ledger.
