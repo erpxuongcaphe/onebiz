@@ -63,6 +63,11 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain("Dòng công thức cũ không phải SKU Retail");
     expect(dialog).toContain('channel !== "fnb" && <Button');
     expect(dialog).toContain("Không tạo mã NVL riêng cho quán");
+    expect(dialog).toContain("cấu hình các SKU Retail trừ kho cho món");
+    expect(dialog).toContain("POS sẽ trừ đúng các mã này tại chi nhánh bán món");
+    expect(dialog).toContain('channel === "fnb" ? "Xoá thành phần Retail" : "Xoá NVL"');
+    expect(dialog).toContain('channel === "fnb" ? "thành phần Retail" : "NVL"');
+    expect(dialog).toContain('channel === "fnb" ? "thành phần vào công thức" : "NVL vào công thức"');
   });
 
   it("generates and persists a BOM code for new or legacy inline recipes", () => {

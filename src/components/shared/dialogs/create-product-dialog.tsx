@@ -2155,7 +2155,9 @@ export function CreateProductDialog({
         toast({
           title: "Cập nhật hàng hóa thành công",
           description: hasBom && bomItems.length > 0
-            ? `Đã lưu ${name} (${initialData.code}) + cập nhật BOM ${bomItems.length} NVL`
+            ? channel === "fnb"
+              ? `Đã lưu ${name} (${initialData.code}) + cập nhật ${bomItems.length} thành phần Retail`
+              : `Đã lưu ${name} (${initialData.code}) + cập nhật BOM ${bomItems.length} NVL`
             : `Đã lưu thay đổi ${name} (${initialData.code})`,
           variant: "success",
         });
@@ -2404,7 +2406,9 @@ export function CreateProductDialog({
         title: "Tạo hàng hóa thành công",
         description:
           scope === "sku" && hasBom && bomItems.length > 0
-            ? `Đã thêm SKU ${name} (${code}) + công thức sản xuất (BOM) với ${bomItems.length} NVL`
+            ? channel === "fnb"
+              ? `Đã thêm món ${name} (${code}) + công thức với ${bomItems.length} thành phần Retail`
+              : `Đã thêm SKU ${name} (${code}) + công thức sản xuất (BOM) với ${bomItems.length} NVL`
             : `Đã thêm ${scope === "nvl" ? "NVL" : "SKU"} ${name} (${code})`,
         variant: "success",
       });
@@ -3204,7 +3208,11 @@ export function CreateProductDialog({
             {scope === "sku" && hasBom && (
               <div className="mt-2 rounded-md border border-primary/30 bg-primary/5 p-2.5 text-xs text-foreground">
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
-                Tab <b>&quot;Công thức sản xuất (BOM)&quot;</b> đã bật. Click qua tab đó để cấu hình NVL.
+                {channel === "fnb" ? (
+                  <>Tab <b>&quot;Công thức sản xuất (BOM)&quot;</b> đã bật. Chọn tab đó để cấu hình các SKU Retail trừ kho cho món.</>
+                ) : (
+                  <>Tab <b>&quot;Công thức sản xuất (BOM)&quot;</b> đã bật. Chọn tab đó để cấu hình NVL.</>
+                )}
               </div>
             )}
           </TabsContent>
@@ -3216,7 +3224,9 @@ export function CreateProductDialog({
                 <Icon name="info" size={14} className="inline-block mr-1 text-primary align-text-bottom" />
                 {hasFnbSizeVariants
                   ? "Mỗi size có BOM riêng. Chỉnh cùng một ma trận để so sánh và tránh ghi nhầm công thức giữa các size."
-                  : "Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống tự trừ NVL theo công thức này."}
+                  : channel === "fnb"
+                    ? "Chọn các SKU Retail và định lượng dùng cho một phần bán. POS sẽ trừ đúng các mã này tại chi nhánh bán món."
+                    : "Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống tự trừ NVL theo công thức này."}
               </div>
 
               {fnbVariantContextPending ? (
@@ -3480,7 +3490,7 @@ export function CreateProductDialog({
                           {channel === "fnb" && (
                             <th
                               className="text-left px-3 py-2 font-semibold w-40"
-                              title="Gắn nhóm lựa chọn cho dòng NVL và nhập định lượng thực tế theo từng lựa chọn ngay bên dưới."
+                              title="Gắn nhóm lựa chọn cho thành phần Retail và nhập định lượng thực tế theo từng lựa chọn ngay bên dưới."
                             >
                               Theo lựa chọn FnB
                             </th>
@@ -3603,7 +3613,7 @@ export function CreateProductDialog({
                                   type="button"
                                   onClick={() => setBomItems((prev) => prev.filter((_, i) => i !== idx))}
                                   className="text-muted-foreground hover:text-destructive"
-                                  aria-label="Xoá NVL"
+                                  aria-label={channel === "fnb" ? "Xoá thành phần Retail" : "Xoá NVL"}
                                 >
                                   <Icon name="delete" size={14} />
                                 </button>
@@ -4444,7 +4454,8 @@ export function CreateProductDialog({
                     </span>
                     {bomPickerSelected.size > 0 && (
                       <span className="text-primary font-medium">
-                        Đã tick <b>{bomPickerSelected.size}</b> NVL
+                        Đã chọn <b>{bomPickerSelected.size}</b>{" "}
+                        {channel === "fnb" ? "thành phần Retail" : "NVL"}
                       </span>
                     )}
                   </div>
@@ -4580,7 +4591,7 @@ export function CreateProductDialog({
               >
                 <Icon name="add" size={14} className="mr-1" />
                 Thêm {bomPickerSelected.size > 0 ? bomPickerSelected.size : ""}{" "}
-                NVL vào công thức
+                {channel === "fnb" ? "thành phần vào công thức" : "NVL vào công thức"}
               </Button>
             </DialogFooter>
           </DialogContent>
