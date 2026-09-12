@@ -572,7 +572,7 @@ export function PerSizeRecipeMatrix({
                       type="button"
                       onClick={() => removeRow(row.key)}
                       className="text-muted-foreground hover:text-destructive"
-                      aria-label="Xoá nguyên liệu"
+                      aria-label="Xoá thành phần Retail"
                     >
                       <Icon name="delete" size={15} />
                     </button>
