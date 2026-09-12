@@ -74,7 +74,7 @@ export function CreateInventoryCheckDialog({
   onSuccess,
 }: CreateInventoryCheckDialogProps) {
   const { toast } = useToast();
-  const { activeBranchId } = useAuth();
+  const { currentBranch, branches, activeBranchId } = useAuth();
   const [code, setCode] = useState("");
   const [notes, setNotes] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -108,14 +108,11 @@ export function CreateInventoryCheckDialog({
     const timer = setTimeout(async () => {
       const supabase = getClient();
       const ctx = await getCurrentContext();
-      const branchId = activeBranchId ?? ctx.branchId;
-      const { data: branch } = await supabase
-        .from("branches")
-        .select("branch_type")
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", branchId)
-        .maybeSingle();
-      const isOutlet = branch?.branch_type === "store";
+      const isOutlet =
+        currentBranch?.branchType === "store" ||
+        branches.some(
+          (branch) => branch.id === activeBranchId && branch.branchType === "store",
+        );
       // CEO 07/07/2026 (Cách B) — lọc SP kiểm kho theo VAI TRÒ + CHI NHÁNH:
       //  • LUÔN loại món menu F&B (fnb_menu_item) — không giữ tồn ở đâu.
       //  • Chi nhánh SẢN XUẤT (Kho/Xưởng): loại thêm has_bom (tồn nằm ở NVL) →
@@ -143,7 +140,7 @@ export function CreateInventoryCheckDialog({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [productSearch, activeBranchId]);
+  }, [productSearch, currentBranch?.branchType, branches, activeBranchId]);
 
   async function addProduct(product: ProductRow) {
     if (checkItems.some((item) => item.productId === product.id)) {
