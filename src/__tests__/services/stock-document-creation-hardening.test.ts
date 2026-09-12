@@ -36,6 +36,9 @@ describe("stock document creation hardening", () => {
     expect(dialog).toContain("const { currentBranch, branches, activeBranchId } = useAuth()");
     expect(dialog).toContain('currentBranch?.branchType === "store"');
     expect(dialog).toContain('branch.id === activeBranchId && branch.branchType === "store"');
+    expect(dialog).toContain(
+      '.or("inventory_role.is.null,inventory_role.neq.fnb_menu_item")',
+    );
     expect(dialog).toContain("if (!isOutlet)");
     expect(dialog).toContain("activeBranchId ?? ctx.branchId");
     expect(dialog).not.toContain("branchCascadeMode");

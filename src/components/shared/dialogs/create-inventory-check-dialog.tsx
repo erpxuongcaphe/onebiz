@@ -126,7 +126,9 @@ export function CreateInventoryCheckDialog({
         .select("id, code, name, unit, cost_price")
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
-        .neq("inventory_role", "fnb_menu_item");
+        // Postgres `NULL <> 'fnb_menu_item'` is unknown, so `.neq()` silently
+        // removed legacy Retail components whose inventory_role is not set.
+        .or("inventory_role.is.null,inventory_role.neq.fnb_menu_item");
       if (!isOutlet) {
         // production hoặc chưa xác định → an toàn: loại SKU cascade (tồn ở NVL).
         q = q.not("has_bom", "is", true);
