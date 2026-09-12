@@ -33,8 +33,10 @@ describe("stock document creation hardening", () => {
     expect(dialog).not.toContain('.from("inventory_checks").insert');
     expect(dialog).not.toContain('.from("inventory_check_items")');
     expect(dialog).not.toContain("system_stock: item.systemStock");
-    expect(dialog).toContain("const { currentBranch, activeBranchId } = useAuth()");
-    expect(dialog).toContain('currentBranch?.branchType !== "store"');
+    expect(dialog).toContain("const { activeBranchId } = useAuth()");
+    expect(dialog).toContain('.select("branch_type")');
+    expect(dialog).toContain('branch?.branch_type === "store"');
+    expect(dialog).toContain("if (!isOutlet)");
     expect(dialog).toContain("activeBranchId ?? ctx.branchId");
     expect(dialog).not.toContain("branchCascadeMode");
   });
