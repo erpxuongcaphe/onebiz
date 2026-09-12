@@ -11,7 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
-import { useToast } from "@/lib/contexts";
+import { useAuth, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
 import { pickBestConversion, getConversionText } from "@/lib/format-uom";
@@ -74,6 +74,7 @@ export function CreateInventoryCheckDialog({
   onSuccess,
 }: CreateInventoryCheckDialogProps) {
   const { toast } = useToast();
+  const { currentBranch, activeBranchId } = useAuth();
   const [code, setCode] = useState("");
   const [notes, setNotes] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -83,9 +84,6 @@ export function CreateInventoryCheckDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
-  // CEO 07/07/2026 (Cách B): cascade_mode của chi nhánh kiểm — quyết định có cho
-  // đếm SKU Retail thành phần (outlet) hay chỉ NVL (production).
-  const [branchCascadeMode, setBranchCascadeMode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -98,24 +96,6 @@ export function CreateInventoryCheckDialog({
     setCheckItems([]);
     setErrors({});
     setSaving(false);
-  }, [open]);
-
-  // CEO 07/07/2026: lấy cascade_mode chi nhánh kiểm để lọc SP theo vai trò.
-  useEffect(() => {
-    if (!open) return;
-    (async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      // cascade_mode (00123) chưa có trong generated types → cast any.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data } = await (supabase as any)
-        .from("branches")
-        .select("cascade_mode")
-        .eq("tenant_id", ctx.tenantId)
-        .eq("id", ctx.branchId)
-        .maybeSingle();
-      setBranchCascadeMode((data?.cascade_mode as string | null) ?? null);
-    })();
   }, [open]);
 
   useEffect(() => {
@@ -134,7 +114,7 @@ export function CreateInventoryCheckDialog({
       //    chỉ đếm NVL / hàng giữ tồn trực tiếp (giữ hành vi cũ 29/05).
       //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
       //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
-      // inventory_role/cascade_mode chưa có trong generated types → cast any.
+      // inventory_role chưa có trong generated types → cast any.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q: any = (supabase as any)
         .from("products")
@@ -142,7 +122,7 @@ export function CreateInventoryCheckDialog({
         .eq("tenant_id", ctx.tenantId)
         .eq("is_active", true)
         .neq("inventory_role", "fnb_menu_item");
-      if (branchCascadeMode !== "outlet") {
+      if (currentBranch?.branchType !== "store") {
         // production hoặc chưa xác định → an toàn: loại SKU cascade (tồn ở NVL).
         q = q.not("has_bom", "is", true);
       }
@@ -155,7 +135,7 @@ export function CreateInventoryCheckDialog({
     }, 250);
 
     return () => clearTimeout(timer);
-  }, [productSearch, branchCascadeMode]);
+  }, [productSearch, currentBranch?.branchType]);
 
   async function addProduct(product: ProductRow) {
     if (checkItems.some((item) => item.productId === product.id)) {
@@ -166,12 +146,13 @@ export function CreateInventoryCheckDialog({
 
     const supabase = getClient();
     const ctx = await getCurrentContext();
+    const branchId = activeBranchId ?? ctx.branchId;
     // branch_stock can have multiple base rows when variant_id is NULL; sum rows instead of maybeSingle().
     const { data: branchStockRows, error: stockErr } = await supabase
       .from("branch_stock")
       .select("quantity")
       .eq("tenant_id", ctx.tenantId)
-      .eq("branch_id", ctx.branchId)
+      .eq("branch_id", branchId)
       .eq("product_id", product.id)
       .is("variant_id", null);
 
@@ -306,6 +287,7 @@ export function CreateInventoryCheckDialog({
     try {
       const supabase = getClient();
       const ctx = await getCurrentContext();
+      const branchId = activeBranchId ?? ctx.branchId;
 
       // Tồn hệ thống được máy chủ đọc lại theo đúng chi nhánh ngay lúc hoàn tất.
       // Tạo phiếu, tạo dòng và cân bằng kho cùng một giao dịch.
@@ -313,7 +295,7 @@ export function CreateInventoryCheckDialog({
       const { data, error } = await (supabase.rpc as any)(
         "create_and_apply_inventory_check_atomic",
         {
-          p_branch_id: ctx.branchId,
+          p_branch_id: branchId,
           p_note: notes.trim() || null,
           p_items: checkItems.map((item) => ({
             product_id: item.productId,
@@ -386,7 +368,9 @@ export function CreateInventoryCheckDialog({
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
-                    <p className="text-[11px] text-muted-foreground">Chỉ hiện NVL / hàng giữ tồn (không gồm SKU)</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      NVL / hàng giữ tồn tại chi nhánh (không gồm món menu F&amp;B)
+                    </p>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(checkItems.length)} dòng</span>
                 </div>
@@ -407,7 +391,7 @@ export function CreateInventoryCheckDialog({
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Không tìm thấy NVL / hàng giữ tồn (SKU không kiểm kê)
+                          Không tìm thấy NVL / hàng giữ tồn phù hợp
                         </div>
                       ) : (
                         filteredProducts.map((product) => (
