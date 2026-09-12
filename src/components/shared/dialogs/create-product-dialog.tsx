@@ -67,6 +67,7 @@ import type { ProductVariant } from "@/lib/types";
 import { useAuth } from "@/lib/contexts/auth-context";
 import type { Product, BOMItem, UOMConversion } from "@/lib/types";
 import { formatNumber, formatCurrency } from "@/lib/format";
+import { isSelectableFnbBomComponent } from "@/lib/fnb-bom-components";
 import {
   buildUomConversion,
   getDirectConversionFactor,
@@ -354,6 +355,10 @@ export function CreateProductDialog({
   // Day 18/05/2026 (CEO): material options cho BOM picker — load tất cả SP
   // (cả NVL lẫn SKU vì Pattern A đa vai trò) để chọn làm NVL trong công thức.
   const [materialOptions, setMaterialOptions] = useState<Product[]>([]);
+  const selectableFnbComponentOptions = useMemo(
+    () => materialOptions.filter(isSelectableFnbBomComponent),
+    [materialOptions],
+  );
   const { branches } = useAuth();
 
   // Existing units list — dùng để cảnh báo case-insensitive duplicate khi
@@ -3296,6 +3301,7 @@ export function CreateProductDialog({
                         rows={recipeRows}
                         onChange={setRecipeRows}
                         materials={materialOptions}
+                        selectableMaterials={selectableFnbComponentOptions}
                         groups={perSizeModifierGroups}
                         optionsByGroup={variantModifierOptionsByGroup}
                         conversionsByMaterial={recipeConversionsByMaterial}
@@ -3438,7 +3444,8 @@ export function CreateProductDialog({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
-                    Nguyên vật liệu <span className="text-destructive">*</span>
+                    {channel === "fnb" ? "Thành phần Retail" : "Nguyên vật liệu"}{" "}
+                    <span className="text-destructive">*</span>
                   </label>
                   <Button
                     size="sm"
@@ -3447,20 +3454,26 @@ export function CreateProductDialog({
                     onClick={() => setBomPickerOpen(true)}
                   >
                     <Icon name="add" size={14} className="mr-1" />
-                    Thêm NVL
+                    {channel === "fnb" ? "Thêm thành phần" : "Thêm NVL"}
                   </Button>
                 </div>
 
                 {bomItems.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                    Chưa có NVL nào. Click <b>&quot;Thêm NVL&quot;</b> để bắt đầu.
+                    {channel === "fnb" ? (
+                      <>Chưa có thành phần. Chọn SKU Retail đang quản lý tồn tại chi nhánh.</>
+                    ) : (
+                      <>Chưa có NVL nào. Click <b>&quot;Thêm NVL&quot;</b> để bắt đầu.</>
+                    )}
                   </div>
                 ) : (
                   <div className="rounded-lg border border-border overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
-                          <th className="text-left px-3 py-2 font-semibold">NVL</th>
+                          <th className="text-left px-3 py-2 font-semibold">
+                            {channel === "fnb" ? "Thành phần Retail" : "NVL"}
+                          </th>
                           <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
                           {/* Nhóm chọn một dùng định lượng chính xác theo option. */}
@@ -3480,6 +3493,13 @@ export function CreateProductDialog({
                       </thead>
                       <tbody>
                         {bomItems.map((it, idx) => {
+                          const componentProduct = materialOptions.find(
+                            (product) => product.id === it.materialId,
+                          );
+                          const isLegacyFnbComponent =
+                            channel === "fnb" &&
+                            componentProduct != null &&
+                            !isSelectableFnbBomComponent(componentProduct);
                           const conversionFactor = getDirectConversionFactor(
                             it.stockUnit,
                             it.unit,
@@ -3498,6 +3518,11 @@ export function CreateProductDialog({
                               <td className="px-3 py-2">
                                 <div className="font-medium">{it.materialName}</div>
                                 <div className="text-xs text-muted-foreground">{it.materialCode}</div>
+                                {isLegacyFnbComponent && (
+                                  <div className="mt-1 text-xs text-status-warning">
+                                    Dòng công thức cũ không phải SKU Retail. Hệ thống vẫn giữ nguyên; nên thay bằng SKU Retail trước khi vận hành.
+                                  </div>
+                                )}
                                 {isConverted && stockQuantity != null && (
                                   <div className="mt-1 text-xs text-primary">
                                     Pha chế {formatRecipeQuantity(it.quantity)} {it.unit} · Trừ tồn {formatRecipeQuantity(stockQuantity)} {it.stockUnit}
@@ -4231,10 +4256,15 @@ export function CreateProductDialog({
         >
           <DialogContent className="sm:max-w-2xl max-h-[88vh] flex flex-col">
             <DialogHeader>
-              <DialogTitle>Thêm NVL vào công thức sản xuất (BOM)</DialogTitle>
+              <DialogTitle>
+                {channel === "fnb"
+                  ? "Thêm thành phần Retail vào công thức F&B"
+                  : "Thêm NVL vào công thức sản xuất (BOM)"}
+              </DialogTitle>
               <DialogDescription>
-                Chọn nguyên vật liệu hoặc SKU khác làm thành phần (vd: cà phê
-                rang 1kg làm NVL cho ly bạc xỉu).
+                {channel === "fnb"
+                  ? "Chọn SKU Retail đang quản lý tồn tại chi nhánh. Khi bán món, POS sẽ trừ đúng các mã này theo công thức."
+                  : "Chọn nguyên vật liệu hoặc SKU khác làm thành phần (vd: cà phê rang 1kg làm NVL cho ly bạc xỉu)."}
               </DialogDescription>
             </DialogHeader>
 
@@ -4255,7 +4285,7 @@ export function CreateProductDialog({
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-md border p-0.5 text-xs">
+                {channel !== "fnb" && <div className="inline-flex rounded-md border p-0.5 text-xs">
                   {(
                     [
                       { v: "all", l: "Tất cả" },
@@ -4276,7 +4306,7 @@ export function CreateProductDialog({
                       {o.l}
                     </button>
                   ))}
-                </div>
+                </div>}
                 <Select
                   value={bomPickerCategoryId || null}
                   onValueChange={(v) => setBomPickerCategoryId(v ?? "")}
@@ -4326,6 +4356,9 @@ export function CreateProductDialog({
             {(() => {
               // SP đã thêm vào BOM + chính SP đang sửa → loại khỏi list
               const available = materialOptions
+                .filter((product) =>
+                  channel === "fnb" ? isSelectableFnbBomComponent(product) : true,
+                )
                 .filter((p) => !bomItems.some((it) => it.materialId === p.id))
                 .filter((p) => !initialData || p.id !== initialData.id);
 
@@ -4364,14 +4397,17 @@ export function CreateProductDialog({
                       />
                     </div>
                     <h4 className="font-semibold text-sm mb-1">
-                      Chưa có NVL nào để chọn
+                      {channel === "fnb"
+                        ? "Chưa có SKU Retail để chọn"
+                        : "Chưa có NVL nào để chọn"}
                     </h4>
                     <p className="text-xs text-muted-foreground mb-5 max-w-sm">
-                      Tạo NVL trước rồi mới gắn vào công thức được. Anh có thể
-                      tạo ngay đây — không cần đóng dialog này.
+                      {channel === "fnb"
+                        ? "Hãy tạo hoặc nhập SKU Retail trước, rồi chọn mã đang quản lý tồn tại chi nhánh. Không tạo mã NVL riêng cho quán."
+                        : "Tạo NVL trước rồi mới gắn vào công thức được. Anh có thể tạo ngay đây, không cần đóng dialog này."}
                     </p>
                     <div className="flex items-center gap-2">
-                      <Button
+                      {channel !== "fnb" && <Button
                         size="sm"
                         onClick={() => {
                           setBomPickerOpen(false);
@@ -4380,7 +4416,7 @@ export function CreateProductDialog({
                       >
                         <Icon name="add" size={14} className="mr-1" />
                         Tạo NVL mới ngay
-                      </Button>
+                      </Button>}
                       <Button
                         variant="outline"
                         size="sm"

@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 const dialog = readFileSync(
   resolve(process.cwd(), "src/components/shared/dialogs/create-product-dialog.tsx"),
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 const bomService = readFileSync(
   resolve(process.cwd(), "src/lib/services/supabase/bom.ts"),
   "utf8",
@@ -55,6 +55,14 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain("Dùng chung cho mọi chi nhánh bán món này");
     expect(dialog).toContain("Ghi đè riêng:");
     expect(dialog).toContain("chọn nhiều quán tại tab Tùy chọn FnB");
+  });
+
+  it("uses existing Retail SKUs as F&B components without changing legacy rows", () => {
+    expect(dialog).toContain("Thêm thành phần Retail vào công thức F&B");
+    expect(dialog).toContain("isSelectableFnbBomComponent(product)");
+    expect(dialog).toContain("Dòng công thức cũ không phải SKU Retail");
+    expect(dialog).toContain('channel !== "fnb" && <Button');
+    expect(dialog).toContain("Không tạo mã NVL riêng cho quán");
   });
 
   it("generates and persists a BOM code for new or legacy inline recipes", () => {

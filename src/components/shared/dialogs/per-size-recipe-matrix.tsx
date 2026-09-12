@@ -34,6 +34,7 @@ import {
   getDirectConversionFactor,
   getDirectConvertibleUnits,
 } from "@/lib/format-uom";
+import { isSelectableFnbBomComponent } from "@/lib/fnb-bom-components";
 
 export interface SizeCol {
   /** key ổn định để gắn lượng theo cột (kể cả size chưa lưu DB) */
@@ -82,6 +83,7 @@ interface Props {
   rows: RecipeRow[];
   onChange: (rows: RecipeRow[]) => void;
   materials: Product[];
+  selectableMaterials?: Product[];
   groups: ModifierGroup[];
   optionsByGroup: Record<string, ModifierOption[]>;
   conversionsByMaterial: Record<string, UOMConversion[]>;
@@ -146,10 +148,12 @@ export function calculateRecipeCostBySize(
 function MaterialSearchCell({
   value,
   materials,
+  selectableMaterials,
   onSelect,
 }: {
   value: string;
   materials: Product[];
+  selectableMaterials: Product[];
   onSelect: (product: Product) => void;
 }) {
   const selected = materials.find((product) => product.id === value);
@@ -158,7 +162,7 @@ function MaterialSearchCell({
 
   const results = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("vi");
-    return materials
+    return selectableMaterials
       .filter(
         (product) =>
           !normalized ||
@@ -166,7 +170,7 @@ function MaterialSearchCell({
           product.name.toLocaleLowerCase("vi").includes(normalized),
       )
       .slice(0, 40);
-  }, [materials, query]);
+  }, [selectableMaterials, query]);
 
   return (
     <div className="min-w-[230px]">
@@ -247,6 +251,7 @@ export function PerSizeRecipeMatrix({
   rows,
   onChange,
   materials,
+  selectableMaterials = materials,
   groups,
   optionsByGroup,
   conversionsByMaterial,
@@ -385,6 +390,11 @@ export function PerSizeRecipeMatrix({
 
       const material = matById.get(r.materialId);
       if (material) {
+        if (!isSelectableFnbBomComponent(material)) {
+          w.push(
+            `${material.name}: dòng công thức cũ không phải SKU Retail; hệ thống vẫn giữ nguyên, nên thay trước khi vận hành`,
+          );
+        }
         const stockUnit = material.stockUnit || material.unit || "";
         if (
           getDirectConversionFactor(
@@ -424,7 +434,7 @@ export function PerSizeRecipeMatrix({
         </button>
         <Button type="button" variant="outline" size="sm" onClick={addRow}>
           <Icon name="add" size={14} className="mr-1" />
-          Thêm nguyên liệu
+          Thêm thành phần Retail
         </Button>
       </div>
 
@@ -433,7 +443,7 @@ export function PerSizeRecipeMatrix({
           <thead className="sticky top-0 z-10 bg-surface-container-low text-xs text-muted-foreground">
             <tr>
               <th className="px-2 py-2 text-left font-semibold min-w-[210px]">
-                Nguyên liệu (mã · tên)
+                Thành phần Retail (mã · tên)
               </th>
               <th className="px-2 py-2 text-left font-semibold w-28">
                 Theo tùy chọn
@@ -466,6 +476,10 @@ export function PerSizeRecipeMatrix({
                       materials={materials.filter(
                         (material) =>
                           material.id === row.materialId ||
+                          !rows.some((other) => other.key !== row.key && other.materialId === material.id),
+                      )}
+                      selectableMaterials={selectableMaterials.filter(
+                        (material) =>
                           !rows.some((other) => other.key !== row.key && other.materialId === material.id),
                       )}
                       onSelect={(material) =>
@@ -572,7 +586,7 @@ export function PerSizeRecipeMatrix({
                   colSpan={sizes.length + 4}
                   className="px-3 py-6 text-center text-sm text-muted-foreground"
                 >
-                  Chưa có nguyên liệu — bấm “Thêm nguyên liệu”.
+                  Chưa có thành phần Retail. Bấm “Thêm thành phần Retail”.
                 </td>
               </tr>
             )}
