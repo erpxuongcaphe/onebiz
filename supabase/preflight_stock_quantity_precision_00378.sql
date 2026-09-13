@@ -30,6 +30,15 @@ select 'P3_BOM_VA_FIFO_DA_DUNG_4_SO_LE', 'DIEU_KIEN',
          where table_schema='public' and table_name='product_lots' and column_name='current_qty'),
        jsonb_build_object('muc_tieu', 'dong bo stock ledger voi BOM va FIFO')
 union all
+select 'P4_GUARD_CAP_NHAT_TON_KHO_SAN_SANG', 'DIEU_KIEN',
+       exists (
+         select 1 from pg_trigger
+          where tgrelid = 'public.products'::regclass
+            and tgname = 'trg_guard_direct_product_stock_update_00288'
+            and not tgisinternal
+       ),
+       jsonb_build_object('trigger', 'trg_guard_direct_product_stock_update_00288')
+union all
 select 'I1_HOA_DON_UAT_CHUNG_MINH_LAM_TRON', 'THONG_TIN', null,
        jsonb_build_object(
          'hoa_don', 'HD001620',
