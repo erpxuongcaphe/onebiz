@@ -20,9 +20,15 @@ describe("migration 00378 stock quantity precision", () => {
   });
 
   it("fails atomically if widening changes existing Retail aggregates", () => {
-    expect(migration).toContain("_stock_precision_00378_before");
+    expect(migration).toContain("v_before jsonb");
+    expect(migration).toContain("v_before is distinct from v_after");
     expect(migration).toContain("00378_existing_stock_changed");
     expect(migration).toContain("lock_timeout = '5s'");
+  });
+
+  it("uses transaction-local variables instead of an unprotected table", () => {
+    expect(migration).not.toContain("create temporary table");
+    expect(migration).not.toContain("create table");
   });
 
   it("does not mutate business rows", () => {
