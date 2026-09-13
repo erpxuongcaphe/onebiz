@@ -31,4 +31,13 @@ select 'K2_BOM_FIFO_VA_SO_TON_DONG_NHAT', 'DIEU_KIEN',
        jsonb_build_object('don_vi_nho_nhat_kg', 0.0001, 'tuong_duong_gram', 0.1)
 union all
 select 'K3_KHONG_SUA_DU_LIEU_RETAIL', 'DIEU_KIEN', true,
-       jsonb_build_object('nguyen_tac', 'DDL chi noi precision; migration tu huy neu tong hoac so dong thay doi');
+       jsonb_build_object('nguyen_tac', 'DDL chi noi precision; migration tu huy neu tong hoac so dong thay doi')
+union all
+select 'K4_GUARD_CAP_NHAT_TON_KHO_DUOC_GIU', 'DIEU_KIEN',
+       exists (
+         select 1 from pg_trigger
+          where tgrelid = 'public.products'::regclass
+            and tgname = 'trg_guard_direct_product_stock_update_00288'
+            and not tgisinternal
+       ),
+       jsonb_build_object('trigger', 'trg_guard_direct_product_stock_update_00288');

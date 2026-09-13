@@ -31,6 +31,16 @@ describe("migration 00378 stock quantity precision", () => {
     expect(migration).not.toContain("create table");
   });
 
+  it("restores the existing direct stock update guard after changing its column", () => {
+    expect(migration).toContain(
+      "drop trigger trg_guard_direct_product_stock_update_00288",
+    );
+    expect(migration).toContain(
+      "create trigger trg_guard_direct_product_stock_update_00288",
+    );
+    expect(migration).toContain("00378_product_stock_guard_not_restored");
+  });
+
   it("does not mutate business rows", () => {
     expect(migration).not.toMatch(/update public\./);
     expect(migration).not.toMatch(/delete from public\./);

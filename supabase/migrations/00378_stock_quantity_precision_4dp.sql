@@ -17,6 +17,7 @@ do $migration$
 declare
   v_before jsonb;
   v_after jsonb;
+  v_had_stock_guard boolean := false;
 begin
   select jsonb_build_object(
     'products', (select jsonb_build_array(count(*), coalesce(sum(stock), 0),
@@ -29,6 +30,17 @@ begin
       coalesce(sum(system_stock), 0), coalesce(sum(actual_stock), 0),
       coalesce(sum(difference), 0)) from public.inventory_check_items)
   ) into v_before;
+
+  if exists (
+    select 1
+      from pg_trigger
+     where tgrelid = 'public.products'::regclass
+       and tgname = 'trg_guard_direct_product_stock_update_00288'
+       and not tgisinternal
+  ) then
+    execute 'drop trigger trg_guard_direct_product_stock_update_00288 on public.products';
+    v_had_stock_guard := true;
+  end if;
 
   execute 'alter table public.products
     alter column stock type numeric(18,4),
@@ -43,6 +55,14 @@ begin
     alter column system_stock type numeric(18,4),
     alter column actual_stock type numeric(18,4),
     alter column difference type numeric(18,4)';
+
+  if v_had_stock_guard then
+    execute 'create trigger trg_guard_direct_product_stock_update_00288
+      before update of stock on public.products
+      for each row
+      when (old.stock is distinct from new.stock)
+      execute function public.guard_direct_product_stock_update_00288()';
+  end if;
 
   select jsonb_build_object(
     'products', (select jsonb_build_array(count(*), coalesce(sum(stock), 0),
@@ -60,6 +80,17 @@ begin
     raise exception using errcode = 'P0001',
       message = '00378_EXISTING_STOCK_CHANGED',
       detail = jsonb_build_object('before', v_before, 'after', v_after)::text;
+  end if;
+
+  if v_had_stock_guard and not exists (
+    select 1
+      from pg_trigger
+     where tgrelid = 'public.products'::regclass
+       and tgname = 'trg_guard_direct_product_stock_update_00288'
+       and not tgisinternal
+  ) then
+    raise exception using errcode = 'P0001',
+      message = '00378_PRODUCT_STOCK_GUARD_NOT_RESTORED';
   end if;
 end;
 $migration$;
