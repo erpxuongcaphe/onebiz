@@ -44,6 +44,8 @@ import { formatNumber } from "@/lib/format";
 // ── Constants ──
 
 const POLL_INTERVAL = 30_000;
+const REALTIME_REFRESH_DEBOUNCE = 250;
+const QUICK_RETRY_DELAY = 3_000;
 const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready"];
 
 type FilterTab = "all" | "pending" | "preparing" | "ready";
@@ -390,10 +392,32 @@ function KdsPageInner() {
     };
   }, [fetchOrders]);
 
+  // Mot loi mang ngan khong nen de bep doi tron chu ky poll 30 giay. Thu lai
+  // dung mot lan sau 3 giay; neu van loi, poll dinh ky tiep tuc lam du phong.
+  // Effect khong lap vo han khi thong diep loi khong doi.
+  useEffect(() => {
+    if (!fetchError || document.visibilityState === "hidden") return;
+    const retry = window.setTimeout(() => {
+      void fetchOrders();
+    }, QUICK_RETRY_DELAY);
+    return () => window.clearTimeout(retry);
+  }, [fetchError, fetchOrders]);
+
   // ── Supabase Realtime subscription ──
   useEffect(() => {
     if (!branchId || !isStoreBranch) return;
     const client = getClient();
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRealtimeRefresh = () => {
+      // Mot thay doi mon thuong cap nhat ca kitchen_order_items va
+      // kitchen_orders trong cung giao dich. Gom cac tin hieu lien ke de tranh
+      // moi lan cham KDS tao nhieu cap truy van trung nhau.
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void fetchOrders();
+      }, REALTIME_REFRESH_DEBOUNCE);
+    };
 
     const channel = client
       .channel(`kds-${branchId}`)
@@ -405,9 +429,7 @@ function KdsPageInner() {
           table: "kitchen_orders",
           filter: `branch_id=eq.${branchId}`,
         },
-        () => {
-          fetchOrders();
-        }
+        scheduleRealtimeRefresh
       )
       // 04/08: lọc chéo-chi-nhánh cho món. Trước đây MỌI thay đổi món của mọi
       // quán/mọi doanh nghiệp đều làm màn bếp này gọi lại toàn bộ đơn.
@@ -428,7 +450,7 @@ function KdsPageInner() {
             | null;
           const orderId = row?.kitchen_order_id;
           if (orderId && !visibleOrderIdsRef.current.has(orderId)) return;
-          fetchOrders();
+          scheduleRealtimeRefresh();
         }
       )
       .subscribe((status) => {
@@ -436,6 +458,7 @@ function KdsPageInner() {
       });
 
     return () => {
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
       client.removeChannel(channel);
       setRealtimeConnected(false);
     };
@@ -971,7 +994,7 @@ function KdsPageInner() {
             </div>
             <div className="text-xs text-muted-foreground">
               {fetchError
-                ? `${fetchError}. Đang thử lại mỗi 30s - kiểm tra mạng hoặc Supabase.`
+                ? `${fetchError}. Đang thử lại nhanh, sau đó tiếp tục đồng bộ mỗi 30s.`
                 : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn chạy - món mới có thể chậm.`}
             </div>
           </div>
