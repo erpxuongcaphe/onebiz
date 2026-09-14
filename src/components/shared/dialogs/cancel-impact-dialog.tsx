@@ -57,6 +57,9 @@ interface CancelImpactDialogProps {
   onConfirm: (opts: CancelConfirmOptions) => Promise<void>;
   /** Gọi sau khi hủy thành công (refresh list). */
   onDone?: () => void;
+  /** RPC hủy chứng từ đã ghi sổ cần lý do để lưu vết kiểm toán. */
+  reasonRequired?: boolean;
+  reasonMinLength?: number;
 }
 
 const METHOD_LABELS: Record<RefundMethod, string> = {
@@ -70,6 +73,8 @@ export function CancelImpactDialog({
   onClose,
   onConfirm,
   onDone,
+  reasonRequired = false,
+  reasonMinLength = 3,
 }: CancelImpactDialogProps) {
   const { toast } = useToast();
   const [impact, setImpact] = useState<CancelImpact | null>(null);
@@ -112,6 +117,7 @@ export function CancelImpactDialog({
 
   const handleConfirm = async () => {
     if (!target || !impact) return;
+    if (reasonRequired && reason.trim().length < reasonMinLength) return;
     setSaving(true);
     try {
       await onConfirm({
@@ -141,6 +147,8 @@ export function CancelImpactDialog({
 
   const isInvoice = target?.type === "invoice";
   const docLabel = isInvoice ? "hóa đơn" : "phiếu nhập";
+  const reasonInvalid =
+    reasonRequired && reason.trim().length < reasonMinLength;
 
   return (
     <Dialog
@@ -278,14 +286,34 @@ export function CancelImpactDialog({
               </div>
             )}
 
-            {/* Lý do — 1 dòng gọn */}
-            <Input
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Lý do hủy (không bắt buộc)"
-              className="h-8 text-sm"
-              disabled={saving}
-            />
+            {/* Lý do — bắt buộc khi backend cần lưu vết hủy chứng từ đã ghi sổ. */}
+            <div className="space-y-1">
+              <Input
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder={
+                  reasonRequired
+                    ? `Lý do hủy * (tối thiểu ${reasonMinLength} ký tự)`
+                    : "Lý do hủy (không bắt buộc)"
+                }
+                aria-invalid={reasonInvalid}
+                aria-describedby={reasonRequired ? "cancel-reason-help" : undefined}
+                className="h-8 text-sm"
+                disabled={saving}
+              />
+              {reasonRequired && (
+                <p
+                  id="cancel-reason-help"
+                  className={
+                    reasonInvalid
+                      ? "text-xs text-destructive"
+                      : "text-xs text-muted-foreground"
+                  }
+                >
+                  Nhập ít nhất {reasonMinLength} ký tự để lưu vào lịch sử thao tác.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -296,7 +324,7 @@ export function CancelImpactDialog({
           <Button
             variant="destructive"
             size="sm"
-            disabled={saving || loadingImpact || !impact}
+            disabled={saving || loadingImpact || !impact || reasonInvalid}
             onClick={handleConfirm}
           >
             {saving && <Icon name="progress_activity" size={15} className="mr-1.5 animate-spin" />}
