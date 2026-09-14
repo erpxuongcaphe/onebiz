@@ -51,10 +51,16 @@ begin
     alter column reserved type numeric(18,4)';
   execute 'alter table public.stock_movements
     alter column quantity type numeric(18,4)';
+  -- difference is GENERATED from these two columns. PostgreSQL requires the
+  -- generated column to be rebuilt when either dependency changes type.
+  execute 'alter table public.inventory_check_items
+    drop column difference';
   execute 'alter table public.inventory_check_items
     alter column system_stock type numeric(18,4),
-    alter column actual_stock type numeric(18,4),
-    alter column difference type numeric(18,4)';
+    alter column actual_stock type numeric(18,4)';
+  execute 'alter table public.inventory_check_items
+    add column difference numeric(18,4)
+      generated always as (actual_stock - system_stock) stored';
 
   if v_had_stock_guard then
     execute 'create trigger trg_guard_direct_product_stock_update_00288
@@ -101,5 +107,7 @@ comment on column public.branch_stock.quantity is
   'Branch stock snapshot. 00378: numeric(18,4), aligned with BOM and FIFO precision.';
 comment on column public.products.stock is
   'Company stock snapshot. 00378: numeric(18,4), aligned with branch stock and ledger.';
+comment on column public.inventory_check_items.difference is
+  'Chenh lech = actual_stock - system_stock. GENERATED; 00378: numeric(18,4).';
 
 commit;

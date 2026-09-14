@@ -16,7 +16,8 @@ describe("migration 00378 stock quantity precision", () => {
     expect(migration).toContain("alter table public.branch_stock");
     expect(migration).toContain("alter table public.stock_movements");
     expect(migration).toContain("alter table public.inventory_check_items");
-    expect(migration.match(/type numeric\(18,4\)/g)).toHaveLength(9);
+    expect(migration.match(/type numeric\(18,4\)/g)).toHaveLength(8);
+    expect(migration).toContain("add column difference numeric(18,4)");
   });
 
   it("fails atomically if widening changes existing Retail aggregates", () => {
@@ -39,6 +40,24 @@ describe("migration 00378 stock quantity precision", () => {
       "create trigger trg_guard_direct_product_stock_update_00288",
     );
     expect(migration).toContain("00378_product_stock_guard_not_restored");
+  });
+
+  it("rebuilds the generated inventory difference around its source columns", () => {
+    const dropAt = migration.indexOf("drop column difference");
+    const sourceAlterAt = migration.indexOf(
+      "alter column system_stock type numeric(18,4)",
+    );
+    const generatedAt = migration.indexOf(
+      "generated always as (actual_stock - system_stock) stored",
+    );
+
+    expect(dropAt).toBeGreaterThan(-1);
+    expect(sourceAlterAt).toBeGreaterThan(dropAt);
+    expect(generatedAt).toBeGreaterThan(sourceAlterAt);
+    expect(rollback).toContain("drop column difference");
+    expect(rollback).toContain(
+      "generated always as (actual_stock - system_stock) stored",
+    );
   });
 
   it("does not mutate business rows", () => {
