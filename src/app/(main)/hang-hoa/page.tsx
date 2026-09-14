@@ -1850,7 +1850,10 @@ export default function HangHoaPage() {
               label: "Tạo mới",
               icon: <Icon name="add" size={16} />,
               variant: "default",
-              onClick: () => setCreateOpen(true),
+              onClick: () => {
+                setEditingProduct(null);
+                setCreateOpen(true);
+              },
             },
             {
               label: "Tải mẫu",
@@ -2321,10 +2324,7 @@ export default function HangHoaPage() {
 
       <CreateProductDialog
         open={createOpen}
-        onOpenChange={(open) => {
-          setCreateOpen(open);
-          if (!open) setEditingProduct(null);
-        }}
+        onOpenChange={setCreateOpen}
         onSuccess={fetchData}
         initialData={editingProduct}
       />
