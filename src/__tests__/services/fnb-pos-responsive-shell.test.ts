@@ -10,6 +10,7 @@ describe("POS FnB responsive shell", () => {
   const cart = doc("src/app/pos/fnb/components/fnb-cart.tsx");
   const itemDialog = doc("src/app/pos/fnb/components/fnb-item-dialog.tsx");
   const paymentDialog = doc("src/app/pos/fnb/components/fnb-payment-dialog.tsx");
+  const toast = doc("src/components/shared/toast.tsx");
 
   it("dung dynamic viewport height o moi trang thai cua POS", () => {
     expect(page).not.toContain("h-screen");
@@ -51,5 +52,13 @@ describe("POS FnB responsive shell", () => {
   it("nut thao tac nhanh cua popup thanh toan van du 44px tren man cam ung", () => {
     expect(paymentDialog.match(/pointer-coarse:min-h-11/g)?.length).toBeGreaterThanOrEqual(3);
     expect(paymentDialog).toContain("flex min-h-11 flex-col items-center justify-center");
+  });
+
+  it("toast FnB khong che cac nut gui bep va thanh toan o day gio hang", () => {
+    expect(toast).toContain('pathname.startsWith("/pos/fnb")');
+    expect(toast).toContain(
+      '"top-[calc(4.5rem+env(safe-area-inset-top))] bottom-auto"',
+    );
+    expect(toast).toContain(': "bottom-4 sm:bottom-6"');
   });
 });
