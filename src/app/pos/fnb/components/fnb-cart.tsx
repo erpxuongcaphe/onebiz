@@ -241,8 +241,8 @@ export function FnbCart({
         : "w-[390px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex border-l border-outline-variant/30"
     )}>
       {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
-      <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0">
-        <div className="flex items-center justify-between mb-3">
+      <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0 [@media(max-height:720px)]:p-3">
+        <div className="flex items-center justify-between mb-3 [@media(max-height:720px)]:mb-2">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
               {activeTab?.label ?? "Đơn hàng"}
@@ -367,7 +367,7 @@ export function FnbCart({
           ↔ takeaway ↔ delivery với 1 click ngay tại cart.
           Disable sau khi gửi bếp (kitchenOrderId tồn tại) để tránh
           đổi loại đơn đã in vé bếp gây phục vụ nhầm. */}
-      <div className="px-4 pt-3 pb-2 shrink-0">
+      <div className="px-4 pt-3 pb-2 shrink-0 [@media(max-height:720px)]:px-3 [@media(max-height:720px)]:pt-2 [@media(max-height:720px)]:pb-1.5">
         {onChangeOrderType && !activeTab?.kitchenOrderId ? (
           <div className="inline-flex items-center rounded-full p-0.5 bg-surface-container-low border border-outline-variant/30">
             {([
@@ -710,7 +710,7 @@ export function FnbCart({
           giảm giá/coupon/quà thì tóm tắt LUÔN hiện trên nút. Tổng "Khách cần
           trả" + Bếp/Thanh toán luôn thấy. State chỉ đổi class, không remount
           → ô coupon giữ focus + nội dung khi bàn phím mở. */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:540px)]:p-2.5 [@media(max-height:540px)]:space-y-2">
+      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:720px)]:p-3 [@media(max-height:720px)]:space-y-2.5 [@media(max-height:540px)]:p-2.5 [@media(max-height:540px)]:space-y-2">
         {/* Nút thu gọn — CHỈ hiện ở màn thấp (media), toggle vùng phụ */}
         <button
           type="button"
@@ -733,7 +733,7 @@ export function FnbCart({
           <Icon name={moPhanPhu ? "expand_less" : "expand_more"} size={16} className="shrink-0" />
         </button>
 
-        <div className={cn("space-y-3", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
+        <div className={cn("space-y-3 [@media(max-height:720px)]:space-y-2", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
@@ -875,7 +875,7 @@ export function FnbCart({
           if (!isPlatformOrder) {
             // Đơn tại quán / takeaway / direct: hiển thị như cũ
             return (
-              <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3">
+              <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3 [@media(max-height:720px)]:pt-2">
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   Khách cần trả
                 </span>
@@ -889,7 +889,7 @@ export function FnbCart({
 
           // Đơn online sàn (Shopee/Grab/...) — 3 hàng rõ ràng
           return (
-            <div className="border-t border-outline-variant/20 pt-3 space-y-2">
+            <div className="border-t border-outline-variant/20 pt-3 space-y-2 [@media(max-height:720px)]:pt-2">
               {/* Khách trả qua app — gross (audit only) */}
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">

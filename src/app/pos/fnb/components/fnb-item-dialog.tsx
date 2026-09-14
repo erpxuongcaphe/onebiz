@@ -775,12 +775,12 @@ export function FnbItemDialog({
           điện thoại 95vw · tablet dọc 42rem · tablet ngang 56rem · desktop
           68rem (1.088px, nằm trong khoảng 900–1.100 CEO chốt). Trần
           `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
         {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
             tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
             một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
             tổng tiền thì chỉ thấy ở nút dưới cùng. */}
-        <DialogHeader className="shrink-0 gap-1.5">
+        <DialogHeader className="shrink-0 gap-1.5 [@media(max-height:720px)]:gap-1">
           <DialogTitle className="text-[19px] leading-tight line-clamp-2">
             {product.name}
           </DialogTitle>
@@ -834,7 +834,7 @@ export function FnbItemDialog({
             DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
             Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
             còn nguyên. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
@@ -869,7 +869,7 @@ export function FnbItemDialog({
               O_NHOM). Size luôn ở ô đầu, nhìn thấy ngay khi mở popup, KHÔNG
               phải cuộn. (Nhóm tuỳ chọn ngắn render tiếp ngay dưới, xem khối
               `nhomNgan`.) */}
-          <div className="flex flex-wrap items-start gap-x-6 gap-y-3.5">
+          <div className="flex flex-wrap items-start gap-x-6 gap-y-3.5 [@media(max-height:720px)]:gap-y-2.5">
             {/* Size / Quy cách — POS-FIX-C3 giữ skeleton khi đang tải variants
                 để không ai tưởng món không có size rồi thêm với giá gốc. */}
             {variantsLoading && (!variants || variants.length === 0) ? (

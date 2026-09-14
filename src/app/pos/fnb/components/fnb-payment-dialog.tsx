@@ -166,13 +166,13 @@ export function FnbPaymentDialog({
       {/* 06/08 (CEO duyệt plan vòng 4): 3 phần — đầu cố định / thân cuộn /
           chân cố định. Trước đây dialog 720px trên màn 703px đã tràn 2 đầu;
           bàn phím ảo (autoFocus tiền mặt) còn che mất nút Hoàn tất. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-        <DialogHeader className="shrink-0">
+      <DialogContent className="max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
+        <DialogHeader className="shrink-0 [@media(max-height:720px)]:gap-1">
           <DialogTitle>Thanh toán{orderNumber ? ` — ${orderNumber}` : ""}</DialogTitle>
           <DialogDescription>{lineCount} món</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2">
+        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:py-1">
           {/* Order summary */}
           <div className="rounded-lg bg-muted px-3 py-2 space-y-1 text-sm">
             <div className="flex justify-between">
@@ -243,7 +243,7 @@ export function FnbPaymentDialog({
                   type="button"
                   onClick={() => setTipInput(btn.value > 0 ? String(btn.value) : "")}
                   className={cn(
-                    "px-3 py-2 rounded-lg text-xs font-medium border transition-colors tabular-nums",
+                    "min-h-9 pointer-coarse:min-h-11 px-3 py-2 rounded-lg text-xs font-medium border transition-colors tabular-nums",
                     (btn.value === 0 && tipAmount === 0) || (btn.value > 0 && tipAmount === btn.value)
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface-container-low border-border text-foreground hover:bg-surface-container",
@@ -273,7 +273,7 @@ export function FnbPaymentDialog({
             {METHODS.map(({ key, label, icon }) => (
               <button key={key} type="button" onClick={() => setMethod(key)}
                 className={cn(
-                  "flex flex-col items-center gap-1 rounded-lg border p-3 sm:p-2 text-sm sm:text-xs transition-colors",
+                  "flex min-h-11 flex-col items-center justify-center gap-1 rounded-lg border p-3 sm:p-2 text-sm sm:text-xs transition-colors [@media(max-height:720px)]:gap-0.5",
                   method === key
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border hover:border-primary/50 active:bg-muted",
@@ -303,13 +303,13 @@ export function FnbPaymentDialog({
               <div className="flex flex-wrap gap-2 sm:gap-2">
                 <button type="button"
                   onClick={() => setCashInput(String(total))}
-                  className="px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
+                  className="min-h-9 pointer-coarse:min-h-11 px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-status-success/25 bg-status-success/10 text-sm sm:text-xs font-medium text-status-success hover:bg-status-success/20 active:bg-status-success/30 transition-colors">
                   Đủ
                 </button>
                 {DENOMINATIONS.map((d) => (
                   <button key={d} type="button"
                     onClick={() => setCashInput(String(d))}
-                    className="px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
+                    className="min-h-9 pointer-coarse:min-h-11 px-3 py-2 sm:px-3 sm:py-2 rounded-lg border border-border bg-card text-sm sm:text-xs font-medium text-foreground hover:bg-muted active:bg-muted transition-colors tabular-nums">
                     {formatDenom(d)}
                   </button>
                 ))}
