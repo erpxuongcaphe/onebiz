@@ -112,6 +112,18 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
       /lg:hidden[\s\S]{0,240}<PosBranchSelector[\s\S]{0,160}filter=\{\["store"\]\}/,
     );
   });
+
+  it("ba luong chia het chieu ngang tren man hinh bep rong", () => {
+    expect(kds).toContain(
+      'className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"',
+    );
+    expect(kds).not.toContain("2xl:grid-cols-5");
+  });
+
+  it("dong ho don cu hien ngay va gio thay vi cong don hang nghin phut", () => {
+    expect(kds).toContain("const days = Math.floor(totalHours / 24)");
+    expect(kds).toContain("formatElapsed(order.createdAt, now)");
+  });
 });
 
 describe("Ô món POS FnB không cắt mất tên", () => {

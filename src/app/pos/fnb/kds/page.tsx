@@ -101,11 +101,24 @@ function getUrgency(createdAt: string): Urgency {
   return "overdue";
 }
 
-function formatElapsed(createdAt: string): string {
-  const ms = Date.now() - new Date(createdAt).getTime();
-  const m = Math.floor(ms / 60_000);
-  const s = Math.floor((ms % 60_000) / 1000);
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+function formatElapsed(createdAt: string, now: number): string {
+  const totalSeconds = Math.max(0, Math.floor((now - new Date(createdAt).getTime()) / 1000));
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (totalMinutes < 60) {
+    return `${String(totalMinutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) {
+    return `${String(totalHours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  return `${days}n ${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
 }
 
 function getOrderStage(order: KdsOrder): Exclude<FilterTab, "all"> {
@@ -1086,12 +1099,9 @@ function KdsPageInner() {
             </p>
           </div>
         ) : filter === "all" ? (
-          /* Responsive Sprint A4 (CEO 25/05/2026):
-             Trước đây grid-cols-1 (mobile) → lg:grid-cols-3 (desktop). Khoảng
-             768-1023px (iPad treo bếp) bị single-col → mỗi lane chiếm full
-             width, phải cuộn dọc 3+ lanes. Thêm md:grid-cols-2 cho tablet
-             + 2xl:grid-cols-5 cho TV bếp 1920px+ (4-5 lane 1 hàng đọc xa). */
-          <div className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+          /* Ba luồng cố định phải chia hết chiều ngang trên màn hình bếp.
+             Tablet vẫn dùng hai cột để thẻ đơn không bị quá hẹp. */
+          <div className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
             {KDS_LANES.map((lane) => (
               <KdsLane
                 key={lane.key}
@@ -1232,7 +1242,7 @@ function KdsLane({
 
 function KdsOrderCard({
   order,
-  now: _now,
+  now,
   pendingItemIds,
   isOrderPending,
   onItemToggle,
@@ -1341,7 +1351,7 @@ function KdsOrderCard({
             {/* Responsive Sprint A3 (CEO 25/05/2026): tăng size để bếp đọc
                 xa 2-3m trên TV 24"+. xl: ~30px, 2xl: ~36px. */}
             <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
-              {formatElapsed(order.createdAt)}
+              {formatElapsed(order.createdAt, now)}
             </span>
           </div>
         </div>
