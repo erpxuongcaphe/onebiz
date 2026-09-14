@@ -240,6 +240,16 @@ describe("PR-D · trang POS FnB dùng đúng nguồn chung", () => {
     expect(ma).toContain("setKitchenSubmitting(false)");
   });
 
+  it("in phiếu bếp không giữ khoá gửi bếp hoặc chặn luồng thanh toán", () => {
+    expect(ma).not.toContain("await printKitchenTicketsByStation(");
+    expect((ma.match(/void printKitchenTicketsByStation\(/g) ?? []).length).toBe(2);
+
+    const viTriDanhDauDaGui = ma.indexOf("pos.markActiveLinesSent()");
+    const viTriInPhieu = ma.indexOf("void printKitchenTicketsByStation(");
+    expect(viTriDanhDauDaGui).toBeGreaterThan(0);
+    expect(viTriInPhieu).toBeGreaterThan(viTriDanhDauDaGui);
+  });
+
   it("giỏ mobile chỉ đóng sau khi gửi bếp thành công", () => {
     expect(ma).toContain("const kitchenOrderId = await handleSendToKitchen()");
     expect(ma).toContain("if (kitchenOrderId) setMobileCartOpen(false)");

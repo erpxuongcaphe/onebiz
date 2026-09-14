@@ -1461,6 +1461,7 @@ export default function HoaDonPage() {
         }
         onClose={() => setCancellingItem(null)}
         onDone={taiLaiSauKhiDoiDuLieu}
+        reasonRequired={cancellingItem?.status === "completed"}
         onConfirm={async ({ refundMethod, reason }) => {
           if (!cancellingItem) return;
           if (cancellingItem.status === "completed") {

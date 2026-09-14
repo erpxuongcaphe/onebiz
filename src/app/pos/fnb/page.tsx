@@ -81,11 +81,10 @@ import {
 import {
   getEffectiveModifierGroupsForProduct,
   listModifierOptions,
-  type ModifierGroup,
   type ModifierOption,
 } from "@/lib/services/supabase/modifier-groups";
 import type { DynamicModifierData } from "./components/fnb-item-dialog";
-import { printKitchenTicketV2, printPreBill, printFnbReceipt } from "@/lib/print-fnb";
+import { printPreBill, printFnbReceipt } from "@/lib/print-fnb";
 // CEO 05/07: bill thanh toán đi qua ENGINE MẪU IN (fnb×sale_invoice×chi nhánh)
 // giống POS Retail; chưa có mẫu/lỗi → rớt về printFnbReceipt bill nhiệt cũ.
 import { printFnbBillWithTemplate } from "@/lib/print-fnb-template";
@@ -1657,46 +1656,44 @@ function FnbPosPageInner() {
         // In ticket bổ sung (đánh dấu "BỔ SUNG") — Sprint KITCHEN-1: split
         // theo station, mỗi station 1 phiếu với header lớn (BAR / BẾP / ...).
         if (settings.print.autoPrintKitchen && branchId) {
-          try {
-            await printKitchenTicketsByStation(
-              tab.lines.map((l) => ({
-                productId: l.productId,
-                productName: l.productName,
-                variantLabel: l.variantLabel,
-                quantity: l.quantity,
-                unitPrice: l.unitPrice,
-                toppings: l.toppings.map((t) => ({
-                  name: t.name,
-                  quantity: t.quantity,
-                  price: t.price,
-                })),
-                // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
-                modifierLabels: l.modifierSelections?.map(
-                  (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
-                ),
-                note: l.note,
+          void printKitchenTicketsByStation(
+            tab.lines.map((l) => ({
+              productId: l.productId,
+              productName: l.productName,
+              variantLabel: l.variantLabel,
+              quantity: l.quantity,
+              unitPrice: l.unitPrice,
+              toppings: l.toppings.map((t) => ({
+                name: t.name,
+                quantity: t.quantity,
+                price: t.price,
               })),
-              {
-                orderNumber: tab.label,
-                tableName: tab.label,
-                orderType: tab.orderType,
-                createdAt: new Date().toISOString(),
-                cashierName: user?.fullName,
-                style: settings.print.kitchenTicketStyle,
-                paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-                isOffline: !networkStatus.isOnline,
-                isSupplement: true,
-              },
-              branchId,
-            );
-          } catch (printError) {
+              // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp.
+              modifierLabels: l.modifierSelections?.map(
+                (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+              ),
+              note: l.note,
+            })),
+            {
+              orderNumber: tab.label,
+              tableName: tab.label,
+              orderType: tab.orderType,
+              createdAt: new Date().toISOString(),
+              cashierName: user?.fullName,
+              style: settings.print.kitchenTicketStyle,
+              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+              isOffline: !networkStatus.isOnline,
+              isSupplement: true,
+            },
+            branchId,
+          ).catch((printError) => {
             console.error("[FnB] in phiếu bổ sung thất bại sau khi đã gửi bếp:", printError);
             toast({
               title: "Món đã gửi bếp, nhưng in phiếu lỗi",
               description: "Không gửi lại món. Kiểm tra máy in rồi in lại từ đơn bếp.",
               variant: "warning",
             });
-          }
+          });
         }
 
         hapticSuccess();
@@ -1746,47 +1743,45 @@ function FnbPosPageInner() {
       // station 1 phiếu (Bar / Bếp / Quầy bánh...). Backward compat: tenant
       // chỉ có 1 station "Bar pha chế" → in 1 phiếu y hệt cũ.
       if (settings.print.autoPrintKitchen && branchId) {
-        try {
-          await printKitchenTicketsByStation(
-            tab.lines.map((l) => ({
-              productId: l.productId,
-              productName: l.productName,
-              variantLabel: l.variantLabel,
-              quantity: l.quantity,
-              unitPrice: l.unitPrice,
-              toppings: l.toppings.map((t) => ({
-                name: t.name,
-                quantity: t.quantity,
-                price: t.price,
-              })),
-              // PR 1 (08/08): luồng gửi bếp CHÍNH trước đây thiếu dòng này —
-              // màn KDS có Đường/Đá nhưng PHIẾU GIẤY thì không.
-              modifierLabels: l.modifierSelections?.map(
-                (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
-              ),
-              note: l.note,
+        void printKitchenTicketsByStation(
+          tab.lines.map((l) => ({
+            productId: l.productId,
+            productName: l.productName,
+            variantLabel: l.variantLabel,
+            quantity: l.quantity,
+            unitPrice: l.unitPrice,
+            toppings: l.toppings.map((t) => ({
+              name: t.name,
+              quantity: t.quantity,
+              price: t.price,
             })),
-            {
-              orderNumber: result.orderNumber ?? "—",
-              tableName: tab.label,
-              orderType: tab.orderType,
-              createdAt: new Date().toISOString(),
-              cashierName: user?.fullName,
-              style: settings.print.kitchenTicketStyle,
-              paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-              isOffline: !networkStatus.isOnline,
-              orderNote: tab.orderNote, // Sprint POS-FNB-EXT-1: in ghi chú đơn ra phiếu
-            },
-            branchId,
-          );
-        } catch (printError) {
+            // PR 1 (08/08): luồng gửi bếp CHÍNH trước đây thiếu dòng này —
+            // màn KDS có Đường/Đá nhưng PHIẾU GIẤY thì không.
+            modifierLabels: l.modifierSelections?.map(
+              (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
+            ),
+            note: l.note,
+          })),
+          {
+            orderNumber: result.orderNumber ?? "—",
+            tableName: tab.label,
+            orderType: tab.orderType,
+            createdAt: new Date().toISOString(),
+            cashierName: user?.fullName,
+            style: settings.print.kitchenTicketStyle,
+            paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
+            isOffline: !networkStatus.isOnline,
+            orderNote: tab.orderNote, // Sprint POS-FNB-EXT-1: in ghi chú đơn ra phiếu
+          },
+          branchId,
+        ).catch((printError) => {
           console.error("[FnB] in phiếu bếp thất bại sau khi đã gửi bếp:", printError);
           toast({
             title: "Đơn đã gửi bếp, nhưng in phiếu lỗi",
             description: "Không gửi lại món. Kiểm tra máy in rồi in lại từ đơn bếp.",
             variant: "warning",
           });
-        }
+        });
       }
 
       hapticSuccess();
