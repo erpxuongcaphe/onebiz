@@ -1,5 +1,6 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useToast, type ToastVariant } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -42,11 +43,20 @@ const variantStyles: Record<
 
 export function ToastContainer() {
   const { toasts, dismiss } = useToast();
+  const pathname = usePathname();
+  const isFnbPos = pathname.startsWith("/pos/fnb");
 
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-4 right-4 z-[100] flex flex-col gap-2 max-w-[420px] w-full pointer-events-none sm:bottom-6 sm:right-6">
+    <div
+      className={cn(
+        "fixed right-4 z-[100] flex w-full max-w-[420px] flex-col gap-2 pointer-events-none sm:right-6",
+        isFnbPos
+          ? "top-[calc(4.5rem+env(safe-area-inset-top))] bottom-auto"
+          : "bottom-4 sm:bottom-6",
+      )}
+    >
       {toasts.map((t) => {
         const style = variantStyles[t.variant];
         return (
