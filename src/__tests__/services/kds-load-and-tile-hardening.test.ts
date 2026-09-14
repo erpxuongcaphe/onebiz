@@ -56,6 +56,22 @@ describe("KDS không tải máy chủ vô ích", () => {
     expect(kds).toContain("activeBranchIdRef.current !== requestedBranchId");
     expect(kds).toContain("requestId !== fetchRequestIdRef.current");
   });
+
+  it("gom sự kiện realtime cùng giao dịch thành một lượt tải", () => {
+    expect(kds).toContain("REALTIME_REFRESH_DEBOUNCE = 250");
+    expect(kds).toContain("scheduleRealtimeRefresh");
+    expect(kds).toMatch(
+      /if \(refreshTimer !== null\) clearTimeout\(refreshTimer\)/,
+    );
+    expect(kds).toContain("}, REALTIME_REFRESH_DEBOUNCE)");
+  });
+
+  it("thử lại nhanh đúng một nhịp khi tải lỗi", () => {
+    expect(kds).toContain("QUICK_RETRY_DELAY = 3_000");
+    expect(kds).toContain('if (!fetchError || document.visibilityState === "hidden") return');
+    expect(kds).toContain("}, QUICK_RETRY_DELAY)");
+    expect(kds).toContain("Đang thử lại nhanh, sau đó tiếp tục đồng bộ mỗi 30s");
+  });
 });
 
 describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {
