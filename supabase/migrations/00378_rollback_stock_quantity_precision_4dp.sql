@@ -35,8 +35,15 @@ alter table public.branch_stock
 alter table public.stock_movements
   alter column quantity type numeric(15,2);
 alter table public.inventory_check_items
+  drop column difference;
+alter table public.inventory_check_items
   alter column system_stock type numeric(15,2),
-  alter column actual_stock type numeric(15,2),
-  alter column difference type numeric(15,2);
+  alter column actual_stock type numeric(15,2);
+alter table public.inventory_check_items
+  add column difference numeric(15,2)
+    generated always as (actual_stock - system_stock) stored;
+
+comment on column public.inventory_check_items.difference is
+  'Chenh lech = actual_stock - system_stock. GENERATED; DB tu tinh, client khong the ghi.';
 
 commit;
