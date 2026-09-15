@@ -4,6 +4,7 @@ import {
   formatDate,
   formatDateInputValue,
   formatNumber,
+  formatStockQuantity,
   formatShortDate,
   parseDateInput,
   parseNumberInput,
@@ -13,6 +14,12 @@ describe("format conventions", () => {
   it("formats numbers with en-US thousands and decimal separators", () => {
     expect(formatNumber(1234567.89)).toBe("1,234,567.89");
     expect(formatNumber(1234)).toBe("1,234");
+  });
+
+  it("preserves inventory quantities through 4 decimal places", () => {
+    expect(formatStockQuantity(0.0042)).toBe("0.0042");
+    expect(formatStockQuantity(0.02)).toBe("0.02");
+    expect(formatStockQuantity(22.9)).toBe("22.9");
   });
 
   it("parses strict en-US number input only", () => {

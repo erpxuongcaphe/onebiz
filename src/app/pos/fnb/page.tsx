@@ -99,7 +99,7 @@ import { printShiftReport } from "@/lib/print-shift-report";
 import type { RestaurantTable, FnbOrderLine, KitchenOrderItem } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format";
 import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { cn } from "@/lib/utils";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
@@ -2240,7 +2240,7 @@ function FnbPosPageInner() {
           for (const r of bomResults) {
             for (const m of r.result.consumed) {
               lines.push(
-                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${formatNumber(m.qty)}${m.unit ? ` ${m.unit}` : ""}`,
+                `• ${m.material_code ?? m.material_name ?? "NVL"}: ${formatStockQuantity(m.qty)}${m.unit ? ` ${m.unit}` : ""}`,
               );
             }
             if (r.result.warnings && r.result.warnings.length > 0) hasWarning = true;
