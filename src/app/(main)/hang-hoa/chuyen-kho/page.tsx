@@ -1322,7 +1322,10 @@ function CreateTransferDialog({
                 }}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn chi nhánh xuất" />
+                  <SelectValue>
+                    {branches.find((branch) => branch.id === fromBranch)?.name ??
+                      "Chọn chi nhánh xuất"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {branches.map((b) => (
@@ -1337,7 +1340,10 @@ function CreateTransferDialog({
               <Label className="text-xs">Kho nhận</Label>
               <Select value={toBranch} onValueChange={(v) => setToBranch(v ?? "")}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Chọn chi nhánh nhận" />
+                  <SelectValue>
+                    {branches.find((branch) => branch.id === toBranch)?.name ??
+                      "Chọn chi nhánh nhận"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {branches
