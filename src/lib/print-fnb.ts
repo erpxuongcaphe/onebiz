@@ -7,6 +7,7 @@
 
 import { formatCurrency, formatNumber, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
 import { printerService, type PrintReceiptPayload, type PrinterRole } from "@/lib/printer";
+import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 
 // ============================================================
 // Types
@@ -230,8 +231,9 @@ export function buildPreBillHtml(data: PreBillData): string {
       const label = item.modifierLabels.join(" • ");
       html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
     }
-    if (item.note) {
-      html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${item.note}</td></tr>`;
+    const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
+    if (freeTextNote) {
+      html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${freeTextNote}</td></tr>`;
     }
     return html;
   }).join("");
@@ -368,8 +370,9 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
         const label = item.modifierLabels.join(" • ");
         html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
       }
-      if (item.note) {
-        html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${item.note}</td></tr>`;
+      const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
+      if (freeTextNote) {
+        html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${freeTextNote}</td></tr>`;
       }
       return html;
     }).join("");
@@ -568,8 +571,9 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
     if (item.modifierLabels && item.modifierLabels.length > 0) {
       html += `<div class="modifier">▸ ${item.modifierLabels.join(" • ")}</div>`;
     }
-    if (item.note) {
-      html += `<div class="note">** ${item.note}</div>`;
+    const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
+    if (freeTextNote) {
+      html += `<div class="note">** ${freeTextNote}</div>`;
     }
     if (style === "detailed") {
       html += `<div class="price">${formatCurrency(item.unitPrice)} x ${item.quantity}</div>`;

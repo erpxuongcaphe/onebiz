@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
+import { buildFnbStoredItemNote } from "@/lib/fnb-item-note";
 import type { FnbCartTopping, ModifierSelectionPayload } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import type {
@@ -584,36 +585,23 @@ export function FnbItemDialog({
         price: t.price,
       }));
 
-    // Build composite note: modifier presets + free-text. Bếp đọc 1 dòng:
-    // vd "Ít đá, 70% đường — không cay nhé"
+    // Dynamic modifiers already have a structured snapshot. Only legacy
+    // hardcoded choices need to share the note field with free text.
     const modifierTags: string[] = [];
 
     // CEO 01/06/2026 — Sprint 2.2e: dynamic choices ghi đè hardcoded sweetness/ice.
-    if (hasDynamicModifiers && dynamicModifiers) {
-      for (const g of effectiveModifierGroups) {
-        const choices = dynamicChoices.get(g.id);
-        if (!choices || choices.size === 0) continue;
-        const opts = dynamicModifiers.optionsByGroup.get(g.id) ?? [];
-        const labels = opts
-          .filter((o) => choices.has(o.id))
-          .map((o) => o.label);
-        if (labels.length > 0) {
-          modifierTags.push(`${g.name}: ${labels.join("/")}`);
-        }
-      }
-    } else {
+    if (!hasDynamicModifiers) {
       // Backward compat: hardcoded R7
       if (iceLevel) modifierTags.push(iceLevel);
       if (sweetness) modifierTags.push(sweetness + " đường");
     }
 
     const trimmedNote = note.trim();
-    const composedNote = [
-      modifierTags.join(", "),
+    const composedNote = buildFnbStoredItemNote(
       trimmedNote,
-    ]
-      .filter(Boolean)
-      .join(" — ");
+      modifierTags,
+      hasDynamicModifiers,
+    );
 
     // CEO 01/06/2026 — Sprint 2.3a: build modifierSelections snapshot từ
     // dynamicChoices. RPC checkout (Sprint 2.3b) sẽ đọc snapshot này để

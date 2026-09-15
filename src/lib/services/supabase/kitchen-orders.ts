@@ -10,9 +10,11 @@ import type {
   KitchenItemStatus,
   ToppingAttachment,
   DeliveryPlatform,
+  ModifierSelectionPayload,
 } from "@/lib/types/fnb";
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 
 const KITCHEN_ORDER_SELECT =
   "*, restaurant_tables!kitchen_orders_table_id_fkey(name), profiles!kitchen_orders_created_by_fkey(full_name)";
@@ -55,6 +57,16 @@ function mapKitchenOrder(row: any): KitchenOrder {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKitchenItem(row: any): KitchenOrderItem {
+  const modifierSelections: ModifierSelectionPayload[] | undefined = Array.isArray(
+    row.modifier_selections,
+  )
+    ? row.modifier_selections
+    : undefined;
+  const modifierLabels = modifierSelections?.map(
+    (selection) =>
+      `${selection.groupName}: ${selection.options.map((option) => option.label).join("/")}`,
+  );
+
   return {
     id: row.id,
     kitchenOrderId: row.kitchen_order_id,
@@ -64,13 +76,11 @@ function mapKitchenItem(row: any): KitchenOrderItem {
     variantLabel: row.variant_label,
     quantity: row.quantity,
     unitPrice: Number(row.unit_price ?? 0),
-    note: row.note,
+    note: getFnbFreeTextNote(row.note, modifierLabels) ?? null,
     toppings: (row.toppings ?? []) as ToppingAttachment[],
     // CEO 01/06/2026 — Sprint 2.4b: snapshot modifier choices.
     // Cột mới từ migration 00122. Null/undefined cho item cũ tạo trước migration.
-    modifierSelections: Array.isArray(row.modifier_selections)
-      ? row.modifier_selections
-      : undefined,
+    modifierSelections,
     status: row.status,
     startedAt: row.started_at,
     completedAt: row.completed_at,
@@ -690,8 +700,8 @@ export async function setDeliveryDistanceTier(
   customFee?: number,
 ): Promise<void> {
   const supabase = getClient();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: order, error: readError } = await (supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .from("kitchen_orders") as any)
     .select("delivery_platform, delivery_fee, platform_commission_percent")
     .eq("id", kitchenOrderId)

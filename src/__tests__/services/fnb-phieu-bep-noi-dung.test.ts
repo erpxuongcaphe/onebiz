@@ -86,6 +86,21 @@ describe("A. Mẫu phiếu bếp in đủ Size · Topping · Đường · Đá �
     expect(tron).not.toContain("**");
   });
 
+  it("không in lặp tuỳ chọn từ note của dữ liệu cũ", () => {
+    const legacyHtml = buildKitchenTicketHtml({
+      ...PHIEU,
+      items: [
+        {
+          ...MON,
+          note: "Mức đường: 50%, Mức đá: Ít đá — Không ống hút",
+        },
+      ],
+    });
+
+    expect(legacyHtml.match(/Mức đường: 50%/g)).toHaveLength(1);
+    expect(legacyHtml).toContain("Không ống hút");
+  });
+
   it("kiểu Gọn vẫn in đủ thông tin pha chế, chỉ giảm mật độ trình bày", () => {
     const gon = buildKitchenTicketHtml({ ...PHIEU, style: "compact" });
     expect(gon).toContain("(Size L)");
