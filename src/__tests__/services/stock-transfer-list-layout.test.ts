@@ -302,4 +302,9 @@ describe("giao dien danh sach Chuyen kho", () => {
       'phamVi.mode === "branch" ? phamVi.branchId : undefined',
     );
   });
+
+  it("hien ten chi nhanh da chon thay vi UUID trong form tao phieu", () => {
+    expect(page).toContain("branch.id === fromBranch)?.name");
+    expect(page).toContain("branch.id === toBranch)?.name");
+  });
 });
