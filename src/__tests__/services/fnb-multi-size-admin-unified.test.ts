@@ -52,6 +52,9 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     expect(source).toContain(
       'firstIssue.code === "variant_price_invalid"\n          ? "pricing"',
     );
+    expect(source).toContain("const perSizeCostDataPending =");
+    expect(source).toContain("Đang tính…");
+    expect(source.match(/renderPerSizeCost\(/g)).toHaveLength(4);
   });
 
   it("chỉ có một ma trận công thức và ma trận nằm trong tab BOM", () => {

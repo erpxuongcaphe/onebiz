@@ -492,6 +492,20 @@ export function CreateProductDialog({
     channel === "fnb" &&
     variantDataReady &&
     variantItems.length > 0;
+  const perSizeCostDataPending =
+    hasFnbSizeVariants &&
+    recipeRows.length > 0 &&
+    (materialOptions.length === 0 ||
+      recipeRows.some(
+        (row) =>
+          !!row.materialId &&
+          !(row.materialId in recipeConversionsByMaterial),
+      ) ||
+      recipeRows.some(
+        (row) =>
+          !!row.scaleTarget &&
+          !(row.scaleTarget in variantModifierOptionsByGroup),
+      ));
   const fnbVariantContextPending =
     scope === "sku" && channel === "fnb" && isEdit && !variantDataReady;
   const shouldLoadVariantData =
@@ -499,6 +513,13 @@ export function CreateProductDialog({
     innerTab === "pricing" ||
     innerTab === "bom" ||
     innerTab === "variants";
+
+  function renderPerSizeCost(variant: InlineVariant) {
+    if (perSizeCostDataPending) {
+      return <span className="text-muted-foreground">Đang tính…</span>;
+    }
+    return formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0);
+  }
 
   // Reset form khi dialog mở. Nếu có initialData → prefill từ sản phẩm đang sửa.
   useEffect(() => {
@@ -2984,7 +3005,7 @@ export function CreateProductDialog({
                             />
                           </td>
                           <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                            {formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0)}
+                            {renderPerSizeCost(variant)}
                           </td>
                           <td className="px-3 py-2 font-mono text-xs">
                             {variant.bomCode || "Chưa tạo"}
@@ -3308,7 +3329,7 @@ export function CreateProductDialog({
                             <div>
                               <span className="block text-muted-foreground">Giá vốn F&B</span>
                               <span className="font-semibold tabular-nums">
-                                {formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0)}
+                                {renderPerSizeCost(variant)}
                               </span>
                             </div>
                           </div>
@@ -4207,7 +4228,7 @@ export function CreateProductDialog({
                             </td>
                           ) : (
                             <td className="px-3 py-2 text-right font-medium tabular-nums">
-                              {formatCurrency(perSizeCostByKey[v.key] ?? 0)}
+                              {renderPerSizeCost(v)}
                             </td>
                           )}
                           <td className="px-3 py-2 text-center">
