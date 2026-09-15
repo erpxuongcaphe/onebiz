@@ -88,7 +88,37 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
     renderGio([
       taoDong(1, {
         productName: "Trà Sữa Trân Châu Đường Đen Đặc Biệt Phiên Bản Giới Hạn",
-        variantLabel: "Size L · Đường 50% · Ít đá",
+        variantLabel: "Size L",
+        modifierSelections: [
+          {
+            groupId: "sugar",
+            groupName: "Mức đường",
+            rule: "single_required",
+            options: [
+              {
+                optionId: "sugar-50",
+                label: "50%",
+                scaleFactor: 0.5,
+                priceDelta: 0,
+                linkedProductId: null,
+              },
+            ],
+          },
+          {
+            groupId: "ice",
+            groupName: "Mức đá",
+            rule: "single_required",
+            options: [
+              {
+                optionId: "ice-less",
+                label: "Ít đá",
+                scaleFactor: null,
+                priceDelta: 0,
+                linkedProductId: null,
+              },
+            ],
+          },
+        ],
         toppings: [
           { name: "Trân châu đường đen", quantity: 2, price: 7000 },
           { name: "Pudding trứng nướng", quantity: 1, price: 10000 },
@@ -97,7 +127,8 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
         note: ghiChu,
       } as Partial<FnbOrderLine>),
     ]);
-    expect(screen.getByText(/Size L · Đường 50% · Ít đá/)).toBeInTheDocument();
+    expect(screen.getByText("Size L")).toBeInTheDocument();
+    expect(screen.getByText("Mức đường: 50% · Mức đá: Ít đá")).toBeInTheDocument();
     expect(screen.getByText(/Trân châu đường đen/)).toBeInTheDocument();
     expect(screen.getByText(/Pudding trứng nướng/)).toBeInTheDocument();
     expect(screen.getByText(/Kem cheese/)).toBeInTheDocument();
