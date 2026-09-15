@@ -75,7 +75,7 @@ export function PendingShiftAlertSection({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-4 left-4 z-40 flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/15 px-4 py-2 text-sm font-semibold text-status-warning shadow-lg backdrop-blur transition-colors hover:bg-status-warning/25 press-scale-sm"
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 z-40 flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/15 px-4 py-2 text-sm font-semibold text-status-warning shadow-lg backdrop-blur transition-colors hover:bg-status-warning/25 press-scale-sm md:bottom-4"
         title="Có ca chưa đối chiếu — bấm để chốt số liệu"
       >
         <Icon name="warning" size={18} />
