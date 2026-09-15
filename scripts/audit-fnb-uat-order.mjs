@@ -79,6 +79,16 @@ const cashTransactions = await many(
   "id,tenant_id,branch_id,type,category,amount,payment_method,reference_type,reference_id,status,shift_id,created_at",
   (q) => q.eq("reference_id", invoice.id).order("created_at").order("id"),
 );
+const auditEntries = await many(
+  "audit_log",
+  "id,tenant_id,user_id,action,entity_type,entity_id,old_data,new_data,created_at",
+  (q) => q
+    .eq("tenant_id", invoice.tenant_id)
+    .in("action", ["void_paid_invoice", "cancel"])
+    .gte("created_at", invoice.created_at)
+    .order("created_at")
+    .order("id"),
+);
 const materialIds = [...new Set(movements.map((row) => row.product_id))];
 const materials = materialIds.length
   ? await many("products", "id,code,name,unit,channel,product_type", (q) => q.in("id", materialIds))
@@ -95,23 +105,111 @@ const branchStock = materialIds.length
       (q) => q.eq("branch_id", invoice.branch_id).in("product_id", materialIds).is("variant_id", null),
     )
   : [];
+const productLots = materialIds.length
+  ? await many(
+      "product_lots",
+      "id,product_id,branch_id,current_qty,status",
+      (q) => q
+        .eq("branch_id", invoice.branch_id)
+        .in("product_id", materialIds)
+        .in("status", ["active", "expired"]),
+    )
+  : [];
 
-const checks = {
+const saleMovements = movements.filter(
+  (row) => row.type === "out" && row.reference_type !== "invoice_void",
+);
+const voidMovements = movements.filter(
+  (row) => row.type === "in" && row.reference_type === "invoice_void",
+);
+const quantityByProduct = (rows) => {
+  const totals = new Map();
+  for (const row of rows) {
+    totals.set(row.product_id, (totals.get(row.product_id) ?? 0) + Number(row.quantity));
+  }
+  return totals;
+};
+const saleQuantityByProduct = quantityByProduct(saleMovements);
+const voidQuantityByProduct = quantityByProduct(voidMovements);
+const stockRestoredExactly = saleQuantityByProduct.size > 0
+  && saleQuantityByProduct.size === voidQuantityByProduct.size
+  && [...saleQuantityByProduct].every(
+    ([productId, quantity]) => Math.abs(quantity - (voidQuantityByProduct.get(productId) ?? Number.NaN)) < 1e-9,
+  );
+const lotQuantityByProduct = quantityByProduct(productLots.map((row) => ({
+  product_id: row.product_id,
+  quantity: row.current_qty,
+})));
+const branchStockByProduct = quantityByProduct(branchStock);
+const lotLedgerMatchesBranchStock = materialIds.length > 0
+  && materialIds.every((productId) => {
+    const stockQuantity = branchStockByProduct.get(productId) ?? 0;
+    const lotQuantity = lotQuantityByProduct.get(productId) ?? 0;
+    if (stockQuantity < -0.0001) return lotQuantity === 0;
+    return Math.abs(stockQuantity - lotQuantity) <= 0.0001;
+  });
+const receipts = cashTransactions.filter(
+  (row) => row.type === "receipt" && row.status === "completed",
+);
+const refunds = cashTransactions.filter(
+  (row) => row.type === "payment"
+    && row.status === "completed"
+    && row.category === "Hoàn trả"
+    && ["invoice", "invoice_void"].includes(row.reference_type),
+);
+const cancelAudit = auditEntries.find(
+  (row) => row.entity_type === "invoice"
+    && ["void_paid_invoice", "cancel"].includes(row.action)
+    && (row.entity_id === invoice.id
+      || row.new_data?.invoice_code === invoice.code
+      || row.old_data?.code === invoice.code),
+);
+const commonChecks = {
   invoice_is_fnb: invoice.source === "fnb",
-  invoice_completed_and_paid: invoice.status === "completed" && Number(invoice.paid) === Number(invoice.total) && Number(invoice.debt) === 0,
   order_links_invoice: order.invoice_id === invoice.id,
   same_tenant_and_branch: order.tenant_id === invoice.tenant_id && order.branch_id === invoice.branch_id,
   all_movements_in_invoice_branch: movements.length > 0 && movements.every((row) => row.branch_id === invoice.branch_id),
-  all_movements_are_out: movements.length > 0 && movements.every((row) => row.type === "out" && Number(row.quantity) >= 0),
+  all_movements_in_invoice_tenant: movements.length > 0 && movements.every((row) => row.tenant_id === invoice.tenant_id),
   no_retail_sale_movement: movements.every((row) => !["invoice", "sale", "pos_sale"].includes(row.reference_type)),
-  cash_receipt_matches_invoice: cashTransactions.length === 1
-    && cashTransactions[0].tenant_id === invoice.tenant_id
-    && cashTransactions[0].branch_id === invoice.branch_id
-    && cashTransactions[0].type === "receipt"
-    && cashTransactions[0].status === "completed"
-    && cashTransactions[0].payment_method === invoice.payment_method
-    && Number(cashTransactions[0].amount) === Number(invoice.paid),
 };
+const completedChecks = {
+  ...commonChecks,
+  invoice_completed_and_paid: invoice.status === "completed" && Number(invoice.paid) === Number(invoice.total) && Number(invoice.debt) === 0,
+  order_not_cancelled: order.status !== "cancelled",
+  all_movements_are_sale_outputs: saleMovements.length > 0 && movements.length === saleMovements.length,
+  cash_receipt_matches_invoice: receipts.length === 1
+    && cashTransactions.length === 1
+    && receipts[0].tenant_id === invoice.tenant_id
+    && receipts[0].branch_id === invoice.branch_id
+    && receipts[0].payment_method === invoice.payment_method
+    && Number(receipts[0].amount) === Number(invoice.paid),
+};
+const cancelledChecks = {
+  ...commonChecks,
+  invoice_cancelled: invoice.status === "cancelled",
+  kitchen_order_cancelled: order.status === "cancelled",
+  stock_restored_exactly_by_material: stockRestoredExactly,
+  lot_ledger_matches_branch_stock: lotLedgerMatchesBranchStock,
+  cash_receipt_and_refund_are_paired: receipts.length === 1
+    && refunds.length === 1
+    && receipts[0].tenant_id === invoice.tenant_id
+    && refunds[0].tenant_id === invoice.tenant_id
+    && receipts[0].branch_id === invoice.branch_id
+    && refunds[0].branch_id === invoice.branch_id
+    && receipts[0].shift_id === invoice.shift_id
+    && refunds[0].shift_id === invoice.shift_id
+    && Number(receipts[0].amount) === Number(refunds[0].amount)
+    && Number(refunds[0].amount) === Number(invoice.paid),
+  cancellation_audit_has_reason: Boolean(
+    cancelAudit
+    && cancelAudit.tenant_id === invoice.tenant_id
+    && (cancelAudit.new_data?.status === "cancelled" || cancelAudit.action === "void_paid_invoice")
+    && typeof cancelAudit.new_data?.reason === "string"
+    && cancelAudit.new_data.reason.trim().length >= 3,
+  ),
+};
+const mode = invoice.status === "cancelled" ? "cancelled" : "completed";
+const checks = mode === "cancelled" ? cancelledChecks : completedChecks;
 
 console.log(JSON.stringify({
   invoice: {
@@ -124,6 +222,7 @@ console.log(JSON.stringify({
     source: invoice.source,
     branch: `${branch.code} - ${branch.name}`,
   },
+  audit_mode: mode,
   order: {
     order_number: order.order_number,
     status: order.status,
@@ -169,15 +268,35 @@ console.log(JSON.stringify({
       branch_matches_invoice: row.branch_id === invoice.branch_id,
     };
   }),
+  active_lot_totals_after: materialIds.map((productId) => {
+    const material = materialById.get(productId);
+    return {
+      material: material ? `${material.code} - ${material.name}` : productId,
+      lot_quantity: lotQuantityByProduct.get(productId) ?? 0,
+      branch_stock_quantity: branchStockByProduct.get(productId) ?? 0,
+      matches: Math.abs(
+        (lotQuantityByProduct.get(productId) ?? 0) - (branchStockByProduct.get(productId) ?? 0),
+      ) <= 0.0001,
+    };
+  }),
   cash_transactions: cashTransactions.map((row) => ({
     type: row.type,
     category: row.category,
     amount: Number(row.amount),
     payment_method: row.payment_method,
     status: row.status,
+    reference_type: row.reference_type,
     branch_matches_invoice: row.branch_id === invoice.branch_id,
     shift_matches_invoice: row.shift_id === invoice.shift_id,
   })),
+  cancellation_audit: cancelAudit ? {
+    action: cancelAudit.action,
+    reason: cancelAudit.new_data?.reason ?? null,
+    refund_method: cancelAudit.new_data?.refund_method ?? null,
+    atomic_marker: cancelAudit.new_data?.atomic === true,
+    tenant_matches_invoice: cancelAudit.tenant_id === invoice.tenant_id,
+    created_at: cancelAudit.created_at,
+  } : null,
   movement_branches: movementBranches.map((row) => `${row.code} - ${row.name}`),
   checks,
   passed: Object.values(checks).every(Boolean),
