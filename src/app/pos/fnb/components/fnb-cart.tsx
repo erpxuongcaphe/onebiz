@@ -133,6 +133,18 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "Giao hàng",
 };
 
+function formatModifierSummary(line: FnbOrderLine): string {
+  return (line.modifierSelections ?? [])
+    .filter((selection) => selection.options.length > 0)
+    .map(
+      (selection) =>
+        `${selection.groupName}: ${selection.options
+          .map((option) => option.label)
+          .join(", ")}`,
+    )
+    .join(" · ");
+}
+
 export function FnbCart({
   activeTab,
   subtotal,
@@ -1211,6 +1223,8 @@ function CartLineItem({
   /** Dòng đã nằm trên đơn bếp: chỉ đọc để không sửa/gửi trùng. */
   sentToKitchen?: boolean;
 }) {
+  const modifierSummary = formatModifierSummary(line);
+
   // Stitch FnB mockup cart line:
   // - Wrap card: bg-surface-container-low rounded-lg p-3
   // - Name font-heading semibold + line-total text-primary
@@ -1227,6 +1241,11 @@ function CartLineItem({
           {line.variantLabel && (
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {line.variantLabel}
+            </p>
+          )}
+          {modifierSummary && (
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug break-words">
+              {modifierSummary}
             </p>
           )}
           {sentToKitchen && (
