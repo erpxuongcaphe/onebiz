@@ -17,6 +17,7 @@ import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
 import { printDocument, type DocumentPrintData } from "@/lib/print-document";
 import { formatCurrency } from "@/lib/format";
+import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 
 export interface FnbBillTemplatePayload {
   branchId: string | null | undefined;
@@ -75,7 +76,8 @@ export async function printFnbBillWithTemplate(
     // Mỗi topping là 1 dòng riêng (giữ đúng số học: tổng dòng = tạm tính).
     const items: NonNullable<DocumentPrintData["items"]> = [];
     for (const it of p.items) {
-      const itemNote = [...(it.modifierLabels ?? []), ...(it.note ? [it.note] : [])]
+      const freeTextNote = getFnbFreeTextNote(it.note, it.modifierLabels);
+      const itemNote = [...(it.modifierLabels ?? []), ...(freeTextNote ? [freeTextNote] : [])]
         .filter(Boolean)
         .join(" • ");
       items.push({

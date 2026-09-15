@@ -276,6 +276,44 @@ describe("getKitchenOrdersWithItems", () => {
     expect(orders[0].items).toHaveLength(2);
     expect(orders[0].items[0].kitchenOrderId).toBe("ko-1");
   });
+
+  it("removes duplicated legacy modifier text but keeps the cashier note", async () => {
+    const modifierSelections = [
+      {
+        groupId: "ice",
+        groupName: "Mức đá",
+        options: [{ optionId: "normal", label: "Bình thường", priceDelta: 0 }],
+      },
+      {
+        groupId: "sugar",
+        groupName: "Mức đường",
+        options: [{ optionId: "80", label: "80%", priceDelta: 0 }],
+      },
+    ];
+    mockFromHandler = (table: string) => {
+      if (table === "kitchen_orders") {
+        return createChain({ data: [ORDER_ROW], error: null });
+      }
+      if (table === "kitchen_order_items") {
+        return createChain({
+          data: [
+            {
+              ...ITEM_ROWS[0],
+              note: "Mức đá: Bình thường, Mức đường: 80% — Không ống hút",
+              modifier_selections: modifierSelections,
+            },
+          ],
+          error: null,
+        });
+      }
+      return createChain();
+    };
+
+    const orders = await getKitchenOrdersWithItems("b1", ["pending"]);
+
+    expect(orders[0].items[0].modifierSelections).toEqual(modifierSelections);
+    expect(orders[0].items[0].note).toBe("Không ống hút");
+  });
 });
 
 describe("getKitchenOrderById", () => {
