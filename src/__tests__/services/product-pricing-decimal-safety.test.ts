@@ -18,7 +18,10 @@ describe("Giá vốn SKU có phần lẻ", () => {
     expect(dialogSource).toContain(
       'import { NumericInput } from "@/components/ui/numeric-input";',
     );
-    expect(dialogSource).toContain('value={costPrice === "" ? null : Number(costPrice)}');
+    expect(dialogSource).toContain("channel === \"fnb\" && hasBom");
+    expect(dialogSource).toContain("? inlineFnbBomCost");
+    expect(dialogSource).toContain('costPrice === ""');
+    expect(dialogSource).toContain("Number(costPrice)");
     expect(dialogSource).toContain("decimals={4}");
     expect(dialogSource).not.toContain("function formatVnd");
     expect(dialogSource).not.toContain("function parseVnd");
