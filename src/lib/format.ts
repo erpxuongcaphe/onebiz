@@ -35,6 +35,17 @@ export function formatNumber(n: number | null | undefined): string {
 }
 
 /**
+ * Format quantities stored at inventory precision (up to 4 decimals).
+ * Use this for conversions where a real quantity such as 0.0042 must not show as 0.
+ */
+export function formatStockQuantity(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "0";
+  return new Intl.NumberFormat(NUMBER_LOCALE, {
+    maximumFractionDigits: 4,
+  }).format(n);
+}
+
+/**
  * Format số với SỐ DECIMAL CHỈ ĐỊNH (force).
  * - `formatDecimal(1234.5, 2)` → `"1,234.50"` (force 2 decimals)
  * - `formatDecimal(1234, 2)` → `"1,234.00"`
