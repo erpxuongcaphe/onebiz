@@ -78,6 +78,15 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     );
   });
 
+  it("món FnB một size lưu và hiển thị giá vốn trực tiếp từ BOM Retail", () => {
+    expect(source).toContain("const inlineFnbBomCost = useMemo(");
+    expect(source).toContain(
+      'channel === "fnb" && hasBom && bomItems.length > 0\n          ? inlineFnbBomCost',
+    );
+    expect(source).toContain('disabled={channel === "fnb" && hasBom}');
+    expect(source).toContain("formatCurrency(\n                              inlineFnbBomCost,");
+  });
+
   it("chốt SKU cha theo size mặc định sau khi toàn bộ BOM size đã lưu", () => {
     const atomicSave = parentSummaryMigration.indexOf(
       "v_result := public.save_fnb_size_setup_atomic_00368",
