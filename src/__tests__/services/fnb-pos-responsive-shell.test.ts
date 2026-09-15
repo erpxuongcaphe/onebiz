@@ -10,6 +10,9 @@ describe("POS FnB responsive shell", () => {
   const cart = doc("src/app/pos/fnb/components/fnb-cart.tsx");
   const itemDialog = doc("src/app/pos/fnb/components/fnb-item-dialog.tsx");
   const paymentDialog = doc("src/app/pos/fnb/components/fnb-payment-dialog.tsx");
+  const pendingShiftAlert = doc(
+    "src/components/shared/shift/pending-shift-alert.tsx",
+  );
   const toast = doc("src/components/shared/toast.tsx");
 
   it("dung dynamic viewport height o moi trang thai cua POS", () => {
@@ -60,5 +63,12 @@ describe("POS FnB responsive shell", () => {
       '"top-[calc(4.5rem+env(safe-area-inset-top))] bottom-auto"',
     );
     expect(toast).toContain(': "bottom-4 sm:bottom-6"');
+  });
+
+  it("canh bao ca cho doi chieu khong de len thanh gio hang mobile", () => {
+    expect(pendingShiftAlert).toContain(
+      "bottom-[calc(5.5rem+env(safe-area-inset-bottom))]",
+    );
+    expect(pendingShiftAlert).toContain("md:bottom-4");
   });
 });
