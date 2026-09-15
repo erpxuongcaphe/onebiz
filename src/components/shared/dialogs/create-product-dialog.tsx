@@ -471,6 +471,22 @@ export function CreateProductDialog({
       recipeConversionsByMaterial,
     ],
   );
+  const inlineFnbBomCost = useMemo(
+    () =>
+      bomItems.reduce(
+        (sum, item) =>
+          sum +
+          item.quantity *
+            (getDirectConversionFactor(
+              item.stockUnit,
+              item.unit,
+              item.conversions,
+            ) ?? 0) *
+            item.costPrice,
+        0,
+      ),
+    [bomItems],
+  );
   const hasFnbSizeVariants =
     scope === "sku" &&
     channel === "fnb" &&
@@ -1902,7 +1918,9 @@ export function CreateProductDialog({
         : Number(sellPrice);
       const representativeCostPrice = defaultVariant
         ? perSizeCostByKey[defaultVariant.key] ?? defaultVariant.costPrice
-        : Number(costPrice) || 0;
+        : channel === "fnb" && hasBom && bomItems.length > 0
+          ? inlineFnbBomCost
+          : Number(costPrice) || 0;
 
       const commonPayload = {
         name,
@@ -2995,13 +3013,20 @@ export function CreateProductDialog({
               {!hasFnbSizeVariants && !fnbVariantContextPending && <div className="space-y-2">
                 <label className="text-sm font-medium">Giá vốn (₫)</label>
                 <NumericInput
-                  value={costPrice === "" ? null : Number(costPrice)}
+                  value={
+                    channel === "fnb" && hasBom && bomItems.length > 0
+                      ? inlineFnbBomCost
+                      : costPrice === ""
+                        ? null
+                        : Number(costPrice)
+                  }
                   onChange={(value) =>
                     setCostPrice(value == null ? "" : String(value))
                   }
                   min={0}
                   decimals={4}
                   placeholder="0"
+                  disabled={channel === "fnb" && hasBom}
                 />
                 {/* Có công thức thì giá vốn do công thức quyết định (00236) —
                     nói rõ để không ai sửa tay rồi tưởng bị mất số. */}
@@ -3634,15 +3659,7 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {formatCurrency(
-                              bomItems.reduce((sum, item) => (
-                                sum + item.quantity * (
-                                  getDirectConversionFactor(
-                                    item.stockUnit,
-                                    item.unit,
-                                    item.conversions,
-                                  ) ?? 0
-                                ) * item.costPrice
-                              ), 0),
+                              inlineFnbBomCost,
                             )}
                           </td>
                           <td></td>
