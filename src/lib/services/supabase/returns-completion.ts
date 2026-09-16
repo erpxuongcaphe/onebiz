@@ -32,6 +32,8 @@ export interface SalesReturnAtomicResult {
   total: number;
   refunded: number;
   debtCredit: number;
+  invoiceDebtReduction: number;
+  customerCredit: number;
   warnings: Array<{
     code: string;
     invoice_item_id?: string;
@@ -84,6 +86,8 @@ export async function createSalesReturnAtomic(
     total: Number(result.total ?? 0),
     refunded: Number(result.refunded ?? 0),
     debtCredit: Number(result.debt_credit ?? 0),
+    invoiceDebtReduction: Number(result.invoice_debt_reduction ?? 0),
+    customerCredit: Number(result.customer_credit ?? 0),
     warnings: Array.isArray(result.warnings)
       ? (result.warnings as SalesReturnAtomicResult["warnings"])
       : [],
