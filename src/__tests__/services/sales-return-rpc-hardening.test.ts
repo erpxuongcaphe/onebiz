@@ -16,6 +16,16 @@ const returnDialog = readFileSync(
   "utf8",
 );
 
+const returnPage = readFileSync(
+  join(process.cwd(), "src/app/(main)/don-hang/tra-hang/page.tsx"),
+  "utf8",
+);
+
+const invoicePage = readFileSync(
+  join(process.cwd(), "src/app/(main)/don-hang/hoa-don/page.tsx"),
+  "utf8",
+);
+
 describe("migration 00244 atomic sales return", () => {
   it("derives actor, tenant and branch access on the server", () => {
     expect(sql).toContain("auth.uid()");
@@ -65,5 +75,19 @@ describe("migration 00244 atomic sales return", () => {
     expect(returnDialog).not.toContain('.from("sales_returns").insert');
     expect(returnDialog).not.toContain('.from("return_items").insert');
     expect(returnDialog).not.toContain("completeReturn(");
+  });
+
+  it("looks up returnable invoices in the branch selected in the app", () => {
+    expect(returnDialog).toContain("useBranchFilter");
+    expect(returnDialog).toContain(".eq(\"branch_id\", activeBranchId)");
+    expect(returnDialog).toContain("Chọn một chi nhánh cụ thể trước khi tìm hóa đơn để trả.");
+    expect(returnDialog).toContain("Không thể tải hóa đơn:");
+  });
+
+  it("carries the selected invoice into the return flow and clears it after closing", () => {
+    expect(invoicePage).toContain('`/don-hang/tra-hang?invoice=${encodeURIComponent(row.code)}`');
+    expect(returnPage).toContain('const initialInvoiceCode = searchParams.get("invoice")?.trim() || undefined;');
+    expect(returnPage).toContain("if (initialInvoiceCode) setCreateOpen(true);");
+    expect(returnPage).toContain('router.replace("/don-hang/tra-hang")');
   });
 });

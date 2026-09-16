@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ColumnDef } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -253,6 +254,9 @@ function ReturnDetail({
 // --- Page ---
 
 export default function TraHangPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialInvoiceCode = searchParams.get("invoice")?.trim() || undefined;
   const { toast } = useToast();
   const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
@@ -273,6 +277,20 @@ export default function TraHangPage() {
   const [exporting, setExporting] = useState(false);
   // Sprint UX-1 Stage 4: Audit log dialog
   const [auditDialogTarget, setAuditDialogTarget] = useState<ReturnOrder | null>(null);
+
+  // Đi từ menu của một hóa đơn thì mở ngay phiếu trả, đã gắn đúng hóa đơn đó.
+  // Đóng popup sẽ bỏ query để lần tạo tiếp theo không lấy nhầm hóa đơn cũ.
+  useEffect(() => {
+    if (initialInvoiceCode) setCreateOpen(true);
+  }, [initialInvoiceCode]);
+
+  const handleCreateOpenChange = useCallback(
+    (open: boolean) => {
+      setCreateOpen(open);
+      if (!open && initialInvoiceCode) router.replace("/don-hang/tra-hang");
+    },
+    [initialInvoiceCode, router],
+  );
 
   // Filters
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
@@ -1002,8 +1020,9 @@ export default function TraHangPage() {
 
     <CreateReturnDialog
       open={createOpen}
-      onOpenChange={setCreateOpen}
+      onOpenChange={handleCreateOpenChange}
       onSuccess={fetchData}
+      initialInvoiceCode={initialInvoiceCode}
     />
 
     {printerDialog}
