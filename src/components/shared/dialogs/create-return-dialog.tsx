@@ -16,6 +16,7 @@ import { formatCurrency, formatNumber } from "@/lib/format";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createSalesReturnAtomic } from "@/lib/services/supabase/returns-completion";
+import { getInvoices } from "@/lib/services/supabase/invoices";
 import { getOpenShift } from "@/lib/services/supabase/shifts";
 import { Icon } from "@/components/ui/icon";
 import {
@@ -131,24 +132,21 @@ export function CreateReturnDialog({
 
     const timer = setTimeout(async () => {
       try {
-        const supabase = getClient();
-        const ctx = await getCurrentContext();
-        const { data, error } = await supabase
-          .from("invoices")
-          .select("id, code, customer_id, customer_name, debt")
-          .ilike("code", `%${invoiceSearch}%`)
-          .eq("tenant_id", ctx.tenantId)
-          .eq("branch_id", activeBranchId)
-          .eq("status", "completed")
-          .limit(8);
+        const result = await getInvoices({
+          page: 0,
+          pageSize: 8,
+          search: invoiceSearch,
+          searchField: "code",
+          branchId: activeBranchId,
+          filters: { status: ["completed"], delivery: "all" },
+        });
 
-        if (error) throw error;
-        setFilteredInvoices((data ?? []).map((inv) => ({
+        setFilteredInvoices(result.data.map((inv) => ({
           id: inv.id,
           code: inv.code,
-          customer_id: inv.customer_id,
-          customer_name: inv.customer_name,
-          debt: Number(inv.debt ?? 0),
+          customer_id: inv.customerId || null,
+          customer_name: inv.customerName,
+          debt: Number(inv.debt),
         })));
         setInvoiceLookupMessage(null);
       } catch (err) {
@@ -281,7 +279,9 @@ export function CreateReturnDialog({
       // the return document, stock, refund, debt and audit transaction.
       let openShiftId: string | null = null;
       try {
-        const shift = await getOpenShift(ctx.branchId, ctx.userId);
+        const shift = activeBranchId
+          ? await getOpenShift(activeBranchId, ctx.userId)
+          : null;
         openShiftId = shift?.id ?? null;
       } catch (err) {
         console.warn("[create-return] getOpenShift failed:", err);

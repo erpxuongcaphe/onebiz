@@ -79,9 +79,15 @@ describe("migration 00244 atomic sales return", () => {
 
   it("looks up returnable invoices in the branch selected in the app", () => {
     expect(returnDialog).toContain("useBranchFilter");
-    expect(returnDialog).toContain(".eq(\"branch_id\", activeBranchId)");
+    expect(returnDialog).toContain("getInvoices({");
+    expect(returnDialog).toContain("branchId: activeBranchId");
+    expect(returnDialog).toContain('filters: { status: ["completed"], delivery: "all" }');
     expect(returnDialog).toContain("Chọn một chi nhánh cụ thể trước khi tìm hóa đơn để trả.");
     expect(returnDialog).toContain("Không thể tải hóa đơn:");
+  });
+
+  it("links a sales return to an open shift from the active branch", () => {
+    expect(returnDialog).toContain("getOpenShift(activeBranchId, ctx.userId)");
   });
 
   it("carries the selected invoice into the return flow and clears it after closing", () => {
