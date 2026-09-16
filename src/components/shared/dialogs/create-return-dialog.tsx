@@ -13,7 +13,7 @@ import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createSalesReturnAtomic } from "@/lib/services/supabase/returns-completion";
 import { getOpenShift } from "@/lib/services/supabase/shifts";
@@ -28,6 +28,8 @@ interface CreateReturnDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
+  /** Mã hoá đơn khi người dùng bắt đầu từ danh sách Hoá đơn. */
+  initialInvoiceCode?: string;
 }
 
 interface InvoiceResult {
@@ -74,12 +76,15 @@ export function CreateReturnDialog({
   open,
   onOpenChange,
   onSuccess,
+  initialInvoiceCode,
 }: CreateReturnDialogProps) {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
   const [code, setCode] = useState("");
   const [invoiceSearch, setInvoiceSearch] = useState("");
   const [showInvoiceDropdown, setShowInvoiceDropdown] = useState(false);
   const [filteredInvoices, setFilteredInvoices] = useState<InvoiceResult[]>([]);
+  const [invoiceLookupMessage, setInvoiceLookupMessage] = useState<string | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceResult | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceLineItem[]>([]);
   const [reason, setReason] = useState("");
@@ -94,9 +99,10 @@ export function CreateReturnDialog({
     if (!open) return;
 
     setCode("TH...");
-    setInvoiceSearch("");
-    setShowInvoiceDropdown(false);
+    setInvoiceSearch(initialInvoiceCode ?? "");
+    setShowInvoiceDropdown(Boolean(initialInvoiceCode));
     setFilteredInvoices([]);
+    setInvoiceLookupMessage(null);
     setSelectedInvoice(null);
     setInvoiceItems([]);
     setReason("");
@@ -106,37 +112,58 @@ export function CreateReturnDialog({
     setRefundMode("full");
     setPartialRefund(0);
     setRefundPaymentMethod("cash");
-  }, [open]);
+  }, [open, initialInvoiceCode]);
 
   useEffect(() => {
     if (!invoiceSearch || invoiceSearch.length < 1) {
       setFilteredInvoices([]);
+      setInvoiceLookupMessage(null);
+      return;
+    }
+
+    // Trả hàng luôn thuộc một quán cụ thể. Không rơi về chi nhánh gắn trong
+    // hồ sơ, vì người quản trị có thể đang đổi sang quán khác trên switcher.
+    if (!activeBranchId) {
+      setFilteredInvoices([]);
+      setInvoiceLookupMessage("Chọn một chi nhánh cụ thể trước khi tìm hóa đơn để trả.");
       return;
     }
 
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      const { data } = await supabase
-        .from("invoices")
-        .select("id, code, customer_id, customer_name, debt")
-        .ilike("code", `%${invoiceSearch}%`)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("branch_id", ctx.branchId)
-        .eq("status", "completed")
-        .limit(8);
+      try {
+        const supabase = getClient();
+        const ctx = await getCurrentContext();
+        const { data, error } = await supabase
+          .from("invoices")
+          .select("id, code, customer_id, customer_name, debt")
+          .ilike("code", `%${invoiceSearch}%`)
+          .eq("tenant_id", ctx.tenantId)
+          .eq("branch_id", activeBranchId)
+          .eq("status", "completed")
+          .limit(8);
 
-      setFilteredInvoices((data ?? []).map((inv) => ({
-        id: inv.id,
-        code: inv.code,
-        customer_id: inv.customer_id,
-        customer_name: inv.customer_name,
-        debt: Number(inv.debt ?? 0),
-      })));
+        if (error) throw error;
+        setFilteredInvoices((data ?? []).map((inv) => ({
+          id: inv.id,
+          code: inv.code,
+          customer_id: inv.customer_id,
+          customer_name: inv.customer_name,
+          debt: Number(inv.debt ?? 0),
+        })));
+        setInvoiceLookupMessage(null);
+      } catch (err) {
+        console.error("[create-return] invoice lookup failed:", err);
+        setFilteredInvoices([]);
+        setInvoiceLookupMessage(
+          err instanceof Error
+            ? `Không thể tải hóa đơn: ${err.message}`
+            : "Không thể tải hóa đơn. Vui lòng thử lại.",
+        );
+      }
     }, 300);
 
     return () => clearTimeout(timer);
-  }, [invoiceSearch]);
+  }, [activeBranchId, invoiceSearch]);
 
   async function loadInvoiceItems(invoiceId: string) {
     const supabase = getClient();
@@ -336,6 +363,7 @@ export function CreateReturnDialog({
                     onChange={(e) => {
                       setInvoiceSearch(e.target.value);
                       setShowInvoiceDropdown(true);
+                      setInvoiceLookupMessage(null);
                     }}
                     onFocus={() => setShowInvoiceDropdown(true)}
                     onBlur={() => setTimeout(() => setShowInvoiceDropdown(false), 200)}
@@ -347,7 +375,7 @@ export function CreateReturnDialog({
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
                       {filteredInvoices.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
-                          Không tìm thấy hóa đơn
+                          {invoiceLookupMessage ?? "Không tìm thấy hóa đơn"}
                         </div>
                       ) : (
                         filteredInvoices.map((inv) => (

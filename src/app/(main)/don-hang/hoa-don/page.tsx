@@ -1329,7 +1329,7 @@ export default function HoaDonPage() {
               // Trả hàng (redirect)
               onReturn: () => {
                 toast({ variant: "info", title: "Chuyển đến trang trả hàng" });
-                router.push("/don-hang/tra-hang");
+                router.push(`/don-hang/tra-hang?invoice=${encodeURIComponent(row.code)}`);
               },
               // Thu nợ — chỉ debt > 0
               onPayment: row.debt > 0 ? () => setPayingItem(row) : undefined,
