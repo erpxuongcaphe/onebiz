@@ -203,17 +203,31 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   }, [branchId, tabs, activeTabId]);
 
   // R12: Restore persisted tabs khi branch change. Tabs cũ hơn 24h tự bỏ
-  // qua. Nếu không có persist → giữ tab default đã init.
+  // qua. Nếu không có persist → giữ tab default đã init. Một thao tác tại
+  // quầy có thể xảy ra trước khi IndexedDB trả về: phải ưu tiên thao tác mới,
+  // không để snapshot cũ tải muộn ghi đè lên giỏ hiện tại.
   const restoredBranchRef = useRef<string | undefined>(undefined);
+  const tabsMutationVersionRef = useRef(0);
   useEffect(() => {
     if (!branchId) return;
     if (restoredBranchRef.current === branchId) return; // đã restore branch này
     restoredBranchRef.current = branchId;
+    const mutationVersionAtStart = tabsMutationVersionRef.current;
+    let cancelled = false;
     loadPersistedTabs(branchId).then((restored) => {
-      if (!restored) return;
+      if (
+        cancelled ||
+        !restored ||
+        tabsMutationVersionRef.current !== mutationVersionAtStart
+      ) {
+        return;
+      }
       setTabs(restored.tabs);
       setActiveTabId(restored.activeTabId);
     });
+    return () => {
+      cancelled = true;
+    };
   }, [branchId]);
 
   // R12: Auto-save tabs sau mỗi thay đổi (debounced 400ms để không spam).
@@ -244,6 +258,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
         customerName: "Khách lẻ",
         lines: [],
       };
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) => [...prev, newTab]);
       setActiveTabId(id);
       return id;
@@ -252,11 +267,13 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   );
 
   const switchTab = useCallback((tabId: string) => {
+    tabsMutationVersionRef.current += 1;
     setActiveTabId(tabId);
   }, []);
 
   const closeTab = useCallback(
     (tabId: string) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) => {
         const next = prev.filter((t) => t.id !== tabId);
         if (next.length === 0) {
@@ -317,6 +334,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
         >
       >,
     ) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) => (t.id === tabId ? { ...t, ...meta } : t))
       );
@@ -329,6 +347,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // theo "Tại quán" thì khách không thể đổi qua "Mang về" giữa chừng (sai
   // luồng phục vụ). UI guard ở fnb-cart.tsx, hook này guard backup.
   const setActiveTabOrderType = useCallback((next: OrderType) => {
+    tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTabId && !t.kitchenOrderId
@@ -342,6 +361,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   const updateActiveTab = useCallback(
     (updater: (lines: FnbOrderLine[]) => FnbOrderLine[]) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === activeTabId ? { ...t, lines: updater(t.lines) } : t
@@ -437,6 +457,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   }, [updateActiveTab]);
 
   const markActiveLinesSent = useCallback(() => {
+    tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((tab) => {
         if (tab.id !== activeTabId || tab.lines.length === 0) return tab;
@@ -453,6 +474,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // vì tách bill phải rót món vào tab con trong khi thu ngân vẫn đứng ở tab gốc.
   const loadLinesIntoTab = useCallback(
     (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId
@@ -473,6 +495,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   const loadSentLinesIntoTab = useCallback(
     (tabId: string, lines: Omit<FnbOrderLine, "id" | "lineTotal">[]) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((tab) =>
           tab.id === tabId
@@ -495,6 +518,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   const setOrderDiscount = useCallback(
     (tabId: string, discount: FnbDiscountInput | undefined) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId
@@ -517,6 +541,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // Day 3 16/05/2026: lưu otpId + reason để service checkout ghi audit log
   const attachDiscountAudit = useCallback(
     (tabId: string, ctx: { otpId: string; reason: string }) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId ? { ...t, discountAuditCtx: ctx } : t,
@@ -529,6 +554,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // ── Sprint POS-FNB-EXT-1: Order metadata (note + delivery) ──
 
   const setOrderNote = useCallback((tabId: string, note: string) => {
+    tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((t) => (t.id === tabId ? { ...t, orderNote: note } : t)),
     );
@@ -540,6 +566,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       platform: import("@/lib/types/fnb").DeliveryPlatform,
       commissionPercent?: number,
     ) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId
@@ -560,6 +587,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   );
 
   const setDeliveryFee = useCallback((tabId: string, fee: number) => {
+    tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((t) =>
         t.id === tabId ? { ...t, deliveryFee: Math.max(0, fee) } : t,
@@ -569,6 +597,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
 
   const setPlatformCommissionPercent = useCallback(
     (tabId: string, percent: number) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId
@@ -586,6 +615,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // Day 21/05/2026 (CEO): delivery staff + tier
   const setDeliveryStaff = useCallback(
     (tabId: string, staffId: string | undefined) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId ? { ...t, deliveryStaffId: staffId } : t,
@@ -601,6 +631,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       tier: "near" | "mid" | "far" | "custom",
       fee?: number,
     ) => {
+      tabsMutationVersionRef.current += 1;
       setTabs((prev) =>
         prev.map((t) =>
           t.id === tabId

@@ -16,8 +16,22 @@ vi.mock("@/app/pos/fnb/hooks/persist-tabs", () => ({
 }));
 
 import { useFnbPosState } from "@/app/pos/fnb/hooks/use-fnb-pos-state";
+import type { FnbTabSnapshot } from "@/lib/types/fnb";
 
 const branchId = "branch-xdc";
+
+type PersistedTabs = {
+  tabs: FnbTabSnapshot[];
+  activeTabId: string;
+};
+
+function createDeferredRestore() {
+  let resolve!: (value: PersistedTabs) => void;
+  const promise = new Promise<PersistedTabs>((nextResolve) => {
+    resolve = nextResolve;
+  });
+  return { promise, resolve };
+}
 
 function makeLine() {
   return {
@@ -115,6 +129,101 @@ describe("bàn giao PIN F&B giữ giỏ theo chi nhánh", () => {
     expect(result.current.activeTab?.lines).toEqual([
       expect.objectContaining({ productId: "americano", quantity: 2 }),
     ]);
+    unmount();
+  });
+
+  it("không để snapshot tải chậm ghi đè đơn nhân viên vừa tạo", async () => {
+    const deferredRestore = createDeferredRestore();
+    loadPersistedTabs.mockReturnValueOnce(deferredRestore.promise);
+
+    const { result, unmount } = renderHook(() => useFnbPosState(branchId));
+
+    await waitFor(() => {
+      expect(loadPersistedTabs).toHaveBeenCalledWith(branchId);
+    });
+
+    let newTabId = "";
+    act(() => {
+      newTabId = result.current.createTab("Mang về #2", "takeaway");
+    });
+
+    await act(async () => {
+      deferredRestore.resolve({
+        tabs: [
+          {
+            id: "tab-cu",
+            label: "Đơn cũ",
+            orderType: "takeaway",
+            customerName: "Khách lẻ",
+            lines: [],
+          },
+        ],
+        activeTabId: "tab-cu",
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.tabs).toHaveLength(2);
+    expect(result.current.activeTabId).toBe(newTabId);
+    expect(result.current.tabs.map((tab) => tab.id)).not.toContain("tab-cu");
+    unmount();
+  });
+
+  it("bỏ lượt khôi phục của chi nhánh cũ sau khi đã chuyển quán", async () => {
+    const oldBranchRestore = createDeferredRestore();
+    const newBranchRestore = createDeferredRestore();
+    loadPersistedTabs
+      .mockReturnValueOnce(oldBranchRestore.promise)
+      .mockReturnValueOnce(newBranchRestore.promise);
+
+    const { result, rerender, unmount } = renderHook(
+      ({ currentBranchId }) => useFnbPosState(currentBranchId),
+      { initialProps: { currentBranchId: "branch-cu" } },
+    );
+
+    await waitFor(() => {
+      expect(loadPersistedTabs).toHaveBeenCalledWith("branch-cu");
+    });
+
+    rerender({ currentBranchId: "branch-moi" });
+    await waitFor(() => {
+      expect(loadPersistedTabs).toHaveBeenCalledWith("branch-moi");
+    });
+
+    await act(async () => {
+      newBranchRestore.resolve({
+        tabs: [
+          {
+            id: "tab-moi",
+            label: "Giỏ quán mới",
+            orderType: "takeaway",
+            customerName: "Khách lẻ",
+            lines: [],
+          },
+        ],
+        activeTabId: "tab-moi",
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      oldBranchRestore.resolve({
+        tabs: [
+          {
+            id: "tab-cu",
+            label: "Giỏ quán cũ",
+            orderType: "takeaway",
+            customerName: "Khách lẻ",
+            lines: [],
+          },
+        ],
+        activeTabId: "tab-cu",
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.activeTabId).toBe("tab-moi");
+    expect(result.current.tabs.map((tab) => tab.id)).not.toContain("tab-cu");
     unmount();
   });
 });
