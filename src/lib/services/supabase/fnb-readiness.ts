@@ -196,9 +196,7 @@ export function danhGiaFnbReadiness(input: {
     (product) => (product.sell_price ?? 0) <= 0,
   );
   const simpleProductsMissingBom = simpleProducts.filter(
-    (product) =>
-      product.has_bom === true &&
-      !coBomApDung(product, input.boms, input.branchId),
+    (product) => !coBomApDung(product, input.boms, input.branchId),
   );
   const variantsMissingPrice = variants.filter(
     (variant) => (variant.sell_price ?? 0) <= 0,
@@ -242,9 +240,10 @@ export function danhGiaFnbReadiness(input: {
         code: product.code,
         name: product.name,
         missingPrice: (product.sell_price ?? 0) <= 0,
-        missingBom:
-          product.has_bom === true &&
-          !coBomApDung(product, input.boms, input.branchId),
+        // Quy tắc vận hành OneBiz FnB: mọi món bán đều phải có công thức.
+        // Không dựa vào has_bom vì chính việc quên bật cờ này cũng là lỗi setup
+        // cần được màn kiểm tra phát hiện trước khi mở bán.
+        missingBom: !coBomApDung(product, input.boms, input.branchId),
       }))
       .filter((product) => product.missingPrice || product.missingBom),
     ...variantIssueById.values(),
