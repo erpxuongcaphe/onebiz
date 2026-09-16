@@ -1,5 +1,5 @@
 -- ============================================================================
--- 00381 -- Drill-down bao cao ban hang: Theo ngay va Theo hoa don
+-- 00382 -- Drill-down bao cao ban hang: Theo ngay va Theo hoa don
 -- ============================================================================
 -- Hai ham nay chi doc. Ngay ban hang luon dung invoices.issued_at; ngay tra
 -- hang dung sales_returns.created_at, vi day la thoi diem nghiep vu phat sinh.
