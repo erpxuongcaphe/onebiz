@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve("supabase/migrations/00382_sales_report_drilldown_views.sql"),
   "utf8",
 );
+const paginationFix = readFileSync(
+  resolve("supabase/migrations/00383_fix_sales_report_invoice_pagination.sql"),
+  "utf8",
+);
 const salesPage = readFileSync(
   resolve("src/app/(main)/phan-tich/ban-hang/page.tsx"),
   "utf8",
@@ -36,7 +40,10 @@ describe("Sales report drill-down views", () => {
     expect(migration).toContain("p_limit integer default 50");
     expect(migration).toContain("offset greatest(coalesce(p_offset, 0), 0)");
     expect(migration).toContain("limit v_limit + 1");
-    expect(migration).toContain("'has_more', (select count(*) from paged_invoices) > v_limit");
+    expect(migration).toContain("into v_rows, v_has_more");
+    expect(migration).toContain("'has_more', coalesce(v_has_more, false)");
+    expect(paginationFix).toContain("into v_rows, v_has_more");
+    expect(paginationFix).toContain("invoice_report_pagination_fixed");
     expect(analyticsService).toContain("getSalesReportInvoiceDetailPage");
     expect(analyticsService).toContain("p_limit: Math.min(Math.max(1, limit), 200)");
   });
