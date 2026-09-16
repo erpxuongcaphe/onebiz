@@ -264,7 +264,7 @@ export {
   // Overview
   getOverviewKpis, getDailyRevenue, getRevenueByCategory,
   // Sales
-  getSalesKpis, getSalesReportSummary, getSalesInvoiceExportRows, getRevenueByWeekday as getSalesRevenueByWeekday, getRevenueByHour as getSalesRevenueByHour, getTopInvoices,
+  getSalesKpis, getSalesReportSummary, getSalesReportDailyRows, getSalesReportInvoiceDetailPage, getSalesInvoiceExportRows, getRevenueByWeekday as getSalesRevenueByWeekday, getRevenueByHour as getSalesRevenueByHour, getTopInvoices,
   // End of day
   getEndOfDayStats, getTodayTopProducts,
   // Orders
@@ -298,6 +298,9 @@ export type {
   CustomerProductDetailRow,
   CustomerProductDetailPage,
   CustomerProductExportRow,
+  SalesReportDailyRow,
+  SalesReportInvoiceDetailRow,
+  SalesReportInvoiceDetailPage,
 } from "./analytics";
 export { getPurchaseForecast } from "./purchase-forecast";
 export type {
