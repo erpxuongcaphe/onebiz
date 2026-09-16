@@ -133,7 +133,9 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
     expect(kds).toContain(
       '"grid auto-rows-max grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"',
     );
-    expect(kds).toContain('density === "compact" ? "text-xl" : "text-4xl md:text-5xl"');
+    expect(kds).toContain("#{order.orderNumber}");
+    expect(kds).toContain("compactModifierGroupName(selection.groupName)");
+    expect(kds).toContain('allReady || density === "comfortable"');
     expect(kds).toContain('density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3"');
   });
 

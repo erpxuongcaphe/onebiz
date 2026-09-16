@@ -139,6 +139,10 @@ function getOrderStage(order: KdsOrder): Exclude<FilterTab, "all"> {
   return "pending";
 }
 
+function compactModifierGroupName(groupName: string): string {
+  return groupName.replace(/^Mức\s+/i, "").replace(/\s+-\s+.*$/, "");
+}
+
 // ── Sound helper ──
 // CEO 29/05/2026: dùng 1 AudioContext dùng chung (lazy) thay vì tạo mới mỗi
 // lần beep — trước đây mỗi beep `new AudioContext()` → rò rỉ, trình duyệt chặn
@@ -1370,56 +1374,92 @@ function KdsOrderCard({
         order.status === "served" && "opacity-50"
       )}
     >
-      <div className={cn("flex shrink-0 items-start justify-between border-b border-border bg-card", density === "compact" ? "gap-2 p-2.5" : "gap-3 p-4")}>
-        <div className={cn("min-w-0", density === "compact" ? "space-y-1" : "space-y-2")}>
+      {density === "compact" ? (
+        <div className="shrink-0 space-y-1.5 border-b border-border bg-card p-2.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="min-w-0 flex-1 truncate font-heading text-lg font-extrabold tracking-tight text-foreground">
+              #{order.orderNumber}
+            </span>
+            <span className={cn("shrink-0 rounded-md bg-surface-container px-2 py-1 font-heading text-sm font-bold tabular-nums", timerTextClass)}>
+              {formatElapsed(order.createdAt, now)}
+            </span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPrintTicket();
+              }}
+              className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
+              title="In lại phiếu bếp"
+              aria-label="In lại phiếu bếp"
+            >
+              <Icon name="print" size={14} />
+            </button>
+          </div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold", statusPillClass)}>
+              {typeLabel}
+            </span>
+            {order.invoiceId && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+                <Icon name="paid" size={12} />
+                Đã thu
+              </span>
+            )}
+          </div>
+        </div>
+      ) : (
+      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card p-4">
+        <div className="min-w-0 space-y-2">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={cn("inline-flex items-center rounded-full border font-bold", density === "compact" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]", statusPillClass)}>
+            <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
               {typeLabelCaption}
             </span>
             {/* 29/07: khách trả tiền trước thì đơn VẪN nằm trên màn bếp (xem
                 00229). Gắn dấu để bếp biết đơn này đã thu tiền — làm xong là
                 giao luôn, không phải hỏi thu ngân. */}
             {order.invoiceId && (
-              <span className={cn("inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 font-bold text-emerald-600 dark:text-emerald-400", density === "compact" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]")}>
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                 <Icon name="paid" size={13} />
-                {density === "compact" ? "Đã thu" : "ĐÃ THANH TOÁN"}
+                ĐÃ THANH TOÁN
               </span>
             )}
           </div>
           <div className="space-y-1">
-            <span className={cn("block truncate font-heading font-extrabold leading-none tracking-tight text-foreground", density === "compact" ? "text-xl" : "text-4xl md:text-5xl")}>
+            <span className="block truncate font-heading text-4xl font-extrabold leading-none tracking-tight text-foreground md:text-5xl">
               {typeLabel}
             </span>
-            <span className={cn("block font-bold tracking-wide text-muted-foreground", density === "compact" ? "text-xs" : "text-sm")}>
+            <span className="block text-sm font-bold tracking-wide text-muted-foreground">
               #{order.orderNumber}
             </span>
           </div>
         </div>
-        <div className={cn("flex shrink-0 items-end text-right", density === "compact" ? "flex-row-reverse gap-1.5" : "flex-col gap-2")}>
+        <div className="flex shrink-0 flex-col items-end gap-2 text-right">
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPrintTicket();
             }}
-            className={cn("flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground", density === "compact" ? "size-10" : "size-11 md:size-10")}
+            className="flex size-11 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground md:size-10"
             title="In lại phiếu bếp"
             aria-label="In lại phiếu bếp"
           >
             <Icon name="print" size={14} />
           </button>
-          <div className={cn("rounded-lg bg-surface-container", density === "compact" ? "px-2 py-1" : "px-2.5 py-1.5")}>
-            <span className={cn("text-[10px] font-bold uppercase text-muted-foreground", density === "compact" ? "sr-only" : "block")}>
+          <div className="rounded-lg bg-surface-container px-2.5 py-1.5">
+            <span className="block text-[10px] font-bold uppercase text-muted-foreground">
               Thời gian
             </span>
             {/* Responsive Sprint A3 (CEO 25/05/2026): tăng size để bếp đọc
                 xa 2-3m trên TV 24"+. xl: ~30px, 2xl: ~36px. */}
-            <span className={cn("font-heading font-bold tabular-nums", density === "compact" ? "text-base" : "text-xl md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
+            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
               {formatElapsed(order.createdAt, now)}
             </span>
           </div>
         </div>
       </div>
+      )}
 
       {/* ── Items list ── */}
       <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-container-lowest", density === "compact" ? "gap-1 p-1.5" : "gap-2 p-2")}>
@@ -1464,7 +1504,7 @@ function KdsOrderCard({
             <Icon name="check_circle" size={16} />
             Đã phục vụ
           </div>
-        ) : (
+        ) : allReady || density === "comfortable" ? (
           <button
             type="button"
             onClick={onServed}
@@ -1486,7 +1526,7 @@ function KdsOrderCard({
             />
             {isOrderPending ? "Đang cập nhật..." : allReady ? "Xong" : `Còn ${pendingCount} món`}
           </button>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -1534,6 +1574,11 @@ function KdsItemRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
+            {density === "compact" && item.quantity > 1 && (
+              <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
+                x{formatNumber(item.quantity)}
+              </span>
+            )}
             <span
               className={cn(
                 "font-heading font-bold leading-tight",
@@ -1566,7 +1611,7 @@ function KdsItemRow({
                 .join(" • ")}
             </div>
           )}
-          {item.quantity > 1 && (
+          {density === "comfortable" && item.quantity > 1 && (
             <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
               x{formatNumber(item.quantity)}
             </span>
@@ -1626,6 +1671,11 @@ function KdsItemRow({
       {/* Item body */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-2">
+          {density === "compact" && item.quantity > 1 && (
+            <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
+              x{formatNumber(item.quantity)}
+            </span>
+          )}
           <span
             className={cn(
               // Responsive Sprint A3 (CEO 25/05/2026): tăng font item KDS
@@ -1656,17 +1706,30 @@ function KdsItemRow({
         {/* CEO 01/06/2026 — Sprint 2.4b: Dynamic modifier choices.
             Bếp đọc 1 dòng compact: "Mức đường: 70% • Mức đá: Ít • Topping: Trân châu" */}
         {item.modifierSelections && item.modifierSelections.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            {item.modifierSelections.map((sel, idx) => (
-              <span
-                key={idx}
-                className="inline-flex items-center gap-1 rounded-md bg-status-info/10 px-1.5 py-0.5 text-[11px] text-status-info font-medium"
-              >
-                <span className="opacity-70">{sel.groupName}:</span>
-                <span>{sel.options.map((o) => o.label).join("/")}</span>
-              </span>
-            ))}
-          </div>
+          density === "compact" ? (
+            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-status-info">
+              {item.modifierSelections
+                .map(
+                  (selection) =>
+                    `${compactModifierGroupName(selection.groupName)}: ${selection.options
+                      .map((option) => option.label)
+                      .join("/")}`,
+                )
+                .join(" · ")}
+            </p>
+          ) : (
+            <div className="mt-1 flex flex-wrap gap-1">
+              {item.modifierSelections.map((sel, idx) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1 rounded-md bg-status-info/10 px-1.5 py-0.5 text-[11px] font-medium text-status-info"
+                >
+                  <span className="opacity-70">{sel.groupName}:</span>
+                  <span>{sel.options.map((o) => o.label).join("/")}</span>
+                </span>
+              ))}
+            </div>
+          )
         )}
         {/* Note */}
         {item.note && (
@@ -1676,7 +1739,7 @@ function KdsItemRow({
           </p>
         )}
         {/* Quantity badge */}
-        {item.quantity > 1 && (
+        {density === "comfortable" && item.quantity > 1 && (
           <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
             x{formatNumber(item.quantity)}
           </span>
