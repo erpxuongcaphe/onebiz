@@ -206,7 +206,7 @@ describe("danhGiaFnbReadiness", () => {
     ]);
   });
 
-  it("không biến topping SKU đang tắt thành điều kiện chặn vận hành", () => {
+  it("không chặn vì topping SKU đang tắt nhưng vẫn bắt buộc BOM cho món bán", () => {
     const result = danhGiaFnbReadiness({
       products: [
         { id: "t1", code: "SKU-TPP-001", name: "Trân châu", sell_price: 0, bom_code: null },
@@ -224,6 +224,35 @@ describe("danhGiaFnbReadiness", () => {
 
     expect(result.toppingMissingPrice).toBe(1);
     expect(result.toppingSkuEnabled).toBe(false);
-    expect(result.menuIssues).toEqual([]);
+    expect(result.simpleProductsMissingBom).toBe(1);
+    expect(result.menuIssues).toEqual([
+      expect.objectContaining({ code: "CF-001", missingBom: true }),
+    ]);
+  });
+
+  it("phát hiện món một giá thiếu BOM ngay cả khi quên bật cờ has_bom", () => {
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [
+        {
+          id: "drink",
+          code: "HT-001",
+          name: "Hồng trà",
+          sell_price: 30_000,
+          bom_code: null,
+          has_bom: false,
+        },
+      ],
+      variants: [],
+      boms: [],
+      groups: [],
+      options: [],
+      activeKitchenStations: 1,
+    });
+
+    expect(result.simpleProductsMissingBom).toBe(1);
+    expect(result.menuIssues).toEqual([
+      expect.objectContaining({ code: "HT-001", missingPrice: false, missingBom: true }),
+    ]);
   });
 });
