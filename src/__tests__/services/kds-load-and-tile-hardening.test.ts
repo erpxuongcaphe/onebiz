@@ -72,6 +72,12 @@ describe("KDS không tải máy chủ vô ích", () => {
     expect(kds).toContain("}, QUICK_RETRY_DELAY)");
     expect(kds).toContain("Đang thử lại nhanh, sau đó tiếp tục đồng bộ mỗi 30s");
   });
+
+  it("không nói sai rằng poll vẫn chạy khi màn KDS đang bị ẩn", () => {
+    expect(kds).toContain('document.visibilityState === "hidden"');
+    expect(kds).toContain("Màn bếp đang chạy nền nên tạm dừng đồng bộ để giảm tải");
+    expect(kds).toContain("Dữ liệu sẽ tải lại ngay khi mở lại màn này");
+  });
 });
 
 describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {

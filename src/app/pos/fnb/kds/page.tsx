@@ -257,6 +257,10 @@ function KdsPageInner() {
   // Banner shows khi hoặc fetch vừa lỗi HOẶC chưa thấy update > 60s (stale).
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [lastFetchAt, setLastFetchAt] = useState<number | null>(null);
+  // Polling được tạm dừng khi tab KDS bị che để không tạo tải nền. Dùng để
+  // nói đúng trạng thái thực tế trong banner stale, thay vì báo sai là poll vẫn chạy.
+  const isScreenHidden =
+    typeof document !== "undefined" && document.visibilityState === "hidden";
   const prevOrderIdsRef = useRef<Set<string>>(new Set());
   const overdueAlertedRef = useRef<Set<string>>(new Set());
   const fetchErrorShownRef = useRef(false);
@@ -1154,7 +1158,9 @@ function KdsPageInner() {
             <div className="text-xs text-muted-foreground">
               {fetchError
                 ? `${fetchError}. Đang thử lại nhanh, sau đó tiếp tục đồng bộ mỗi 30s.`
-                : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn chạy - món mới có thể chậm.`}
+                : isScreenHidden
+                  ? "Màn bếp đang chạy nền nên tạm dừng đồng bộ để giảm tải. Dữ liệu sẽ tải lại ngay khi mở lại màn này."
+                  : `Chưa update ${Math.floor((now - (lastFetchAt ?? now)) / 1000)}s. Poll 30s vẫn đang thử lại - món mới có thể chậm.`}
             </div>
           </div>
           <button
