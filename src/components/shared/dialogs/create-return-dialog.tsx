@@ -262,9 +262,13 @@ export function CreateReturnDialog({
     const newErrors: Record<string, string> = {};
     if (!selectedInvoice) newErrors.invoice = "Vui lòng chọn hóa đơn gốc";
     if (selectedItems.length === 0) newErrors.items = "Vui lòng chọn ít nhất một sản phẩm để trả";
-    if (selectedInvoice && debtCredit > selectedInvoice.debt) {
+    if (
+      selectedInvoice &&
+      debtCredit > selectedInvoice.debt &&
+      !selectedInvoice.customer_id
+    ) {
       newErrors.refund =
-        "Ph\u1ea7n c\u1ea5n tr\u1eeb c\u00f4ng n\u1ee3 v\u01b0\u1ee3t qu\u00e1 s\u1ed1 n\u1ee3 c\u00f2n l\u1ea1i c\u1ee7a h\u00f3a \u0111\u01a1n";
+        "Kho\u1ea3n ghi c\u00f3 v\u01b0\u1ee3t n\u1ee3 h\u00f3a \u0111\u01a1n c\u1ea7n g\u1eafn v\u1edbi kh\u00e1ch h\u00e0ng. H\u00f3a \u0111\u01a1n kh\u00e1ch l\u1ebb kh\u00f4ng th\u1ec3 t\u1ea1o s\u1ed1 d\u01b0 c\u00f3.";
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -307,8 +311,11 @@ export function CreateReturnDialog({
       if (effectiveRefund > 0) {
         descParts.push(`hoàn ${formatCurrency(effectiveRefund)} qua ${refundPaymentMethodLabel.toLowerCase()}`);
       }
-      if (debtCredit > 0) {
-        descParts.push(`trừ ${formatCurrency(debtCredit)} công nợ`);
+      if (result.invoiceDebtReduction > 0) {
+        descParts.push(`bù ${formatCurrency(result.invoiceDebtReduction)} nợ hóa đơn`);
+      }
+      if (result.customerCredit > 0) {
+        descParts.push(`ghi có ${formatCurrency(result.customerCredit)} cho khách`);
       }
       toast({
         title: "Tạo phiếu trả hàng thành công",
@@ -403,12 +410,12 @@ export function CreateReturnDialog({
               </section>
 
               <section className="rounded-xl border bg-white p-3 shadow-sm">
-                <h3 className="mb-2 text-sm font-semibold">Hoàn tiền / công nợ</h3>
+                <h3 className="mb-2 text-sm font-semibold">Hoàn tiền / số dư khách hàng</h3>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { value: "full" as const, label: "Hoàn đủ", icon: "payments" },
                     { value: "partial" as const, label: "Một phần", icon: "pie_chart" },
-                    { value: "debt_only" as const, label: "Công nợ", icon: "account_balance_wallet" },
+                    { value: "debt_only" as const, label: "Ghi có khách", icon: "account_balance_wallet" },
                   ].map((opt) => (
                     <button
                       key={opt.value}
@@ -430,6 +437,11 @@ export function CreateReturnDialog({
                     </button>
                   ))}
                 </div>
+                {debtCredit > 0 && (
+                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
+                    Bù tối đa số nợ còn lại của hóa đơn. Phần vượt được ghi có vào số dư khách hàng.
+                  </p>
+                )}
                 {refundMode === "partial" && (
                   <NumericInput
                     value={partialRefund}
@@ -578,7 +590,7 @@ export function CreateReturnDialog({
               <FooterMetric label="Tổng SL trả" value={formatNumber(returnQuantity)} />
               <FooterMetric label="Tổng tiền trả" value={formatCurrency(returnTotal)} strong />
               <FooterMetric label="Hoàn tiền" value={formatCurrency(effectiveRefund)} />
-              <FooterMetric label="Trừ công nợ" value={formatCurrency(debtCredit)} />
+              <FooterMetric label="Bù nợ / ghi có" value={formatCurrency(debtCredit)} />
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>

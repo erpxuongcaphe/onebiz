@@ -64,6 +64,8 @@ describe("createSalesReturnAtomic", () => {
       total: 250_000,
       refunded: 250_000,
       debtCredit: 0,
+      invoiceDebtReduction: 0,
+      customerCredit: 0,
       warnings: [],
     });
   });
