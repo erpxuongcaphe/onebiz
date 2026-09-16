@@ -1380,9 +1380,18 @@ function KdsOrderCard({
             <span className="min-w-0 flex-1 truncate font-heading text-lg font-extrabold tracking-tight text-foreground">
               #{order.orderNumber}
             </span>
-            <span className={cn("shrink-0 rounded-md bg-surface-container px-2 py-1 font-heading text-sm font-bold tabular-nums", timerTextClass)}>
-              {formatElapsed(order.createdAt, now)}
-            </span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onPrintTicket();
+              }}
+              className="flex size-8 shrink-0 items-center justify-center rounded-md border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
+              title="In lại phiếu bếp"
+              aria-label="In lại phiếu bếp"
+            >
+              <Icon name="print" size={14} />
+            </button>
           </div>
           <div className="flex min-w-0 items-center gap-1.5">
             <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold", statusPillClass)}>
@@ -1394,18 +1403,9 @@ function KdsOrderCard({
                 Đã thu
               </span>
             )}
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onPrintTicket();
-              }}
-              className="ml-auto flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
-              title="In lại phiếu bếp"
-              aria-label="In lại phiếu bếp"
-            >
-              <Icon name="print" size={14} />
-            </button>
+            <span className={cn("ml-auto shrink-0 rounded-md bg-surface-container px-2 py-1 font-heading text-sm font-bold tabular-nums", timerTextClass)}>
+              {formatElapsed(order.createdAt, now)}
+            </span>
           </div>
         </div>
       ) : (
