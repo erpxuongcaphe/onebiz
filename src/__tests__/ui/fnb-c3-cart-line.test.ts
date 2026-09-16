@@ -57,39 +57,33 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
   });
 });
 
-describe("C3 — footer màn thấp: THU GỌN có nút mở, KHÔNG ẩn cứng (CEO 18/08)", () => {
-  it("nhóm hàng phụ chỉ ẩn KHI CHƯA MỞ (!moPhanPhu) — xoay ngang/bàn phím vẫn mở lại được", () => {
+describe("C3 — footer ưu tiên danh sách món, vùng phụ mở khi cần", () => {
+  it("nhóm hàng phụ chỉ ẩn KHI CHƯA MỞ (!moPhanPhu) — luôn có nút mở lại", () => {
     const footer = CART.slice(CART.indexOf("Footer: totals + discount + actions"));
     // Ẩn phải là ĐIỀU KIỆN theo state, không phải class cứng.
-    expect(footer).toContain('!moPhanPhu && "[@media(max-height:540px)]:hidden"');
-    // Cấm ẩn cứng quay lại (chuỗi class liền không qua cn điều kiện), mọi ngưỡng.
-    expect(footer).not.toMatch(/"space-y-3 \[@media\(max-height:\d+px\)\]:hidden"/);
-    expect(footer).not.toMatch(/"flex gap-2 \[@media\(max-height:\d+px\)\]:hidden"/);
+    expect(footer).toContain('!moPhanPhu && "hidden"');
+    expect(footer).toContain("aria-expanded={moPhanPhu}");
   });
 
-  it("C3.1: HAI ngưỡng đúng vai — 540 thu gọn (5 chỗ), 620 CHỈ cuộn dự phòng", () => {
-    // 4 class thu gọn cùng ngưỡng 540: p-2.5 + space-y-2 + toggle flex + 2× hidden.
-    expect((CART.match(/max-height:540px/g) ?? []).length).toBe(5);
-    // 620 còn lại DUY NHẤT ở cuộn dự phòng container (C1) — 541–620px hiện
-    // đầy đủ thì nội dung dài hơn màn, phải cuộn tới được Bếp/Thanh toán.
+  it("màn thấp vẫn cuộn dự phòng tới nút chính", () => {
     expect((CART.match(/max-height:620px/g) ?? []).length).toBe(1);
     expect(CART).toContain("[@media(max-height:620px)]:overflow-y-auto");
   });
 
   it("có nút thu gọn với aria-expanded + tóm tắt ưu đãi luôn hiện khi có", () => {
     expect(CART).toContain("aria-expanded={moPhanPhu}");
-    expect(CART).toContain("Ưu đãi &amp; thêm");
+    expect(CART).toContain("Ưu đãi &amp; thao tác");
     expect(CART).toMatch(/coUuDai =\s*\n?\s*orderDiscountAmount > 0 \|\| !!appliedCouponCode/);
-    // CEO 19/08: nút thu gọn vùng chạm ≥44px (min-h-11).
-    expect(CART).toMatch(/aria-expanded=\{moPhanPhu\}[\s\S]{0,220}min-h-11/);
+    // Màn cảm ứng giữ vùng chạm 44px, desktop vẫn dùng bản gọn.
+    expect(CART).toMatch(/aria-expanded=\{moPhanPhu\}[\s\S]{0,240}min-h-11 lg:min-h-8/);
   });
 
-  it("tổng Khách cần trả nằm NGOÀI nhóm thu gọn + footer bó padding màn thấp", () => {
+  it("tổng Khách cần trả và nút chính nằm ngoài vùng phụ", () => {
     const footer = CART.slice(CART.indexOf("Footer: totals + discount + actions"));
-    const dongNhom = footer.indexOf("</div>\n\n        {(() => {");
     const tong = footer.indexOf("Khách cần trả");
-    expect(dongNhom).toBeGreaterThan(-1);
-    expect(tong).toBeGreaterThan(dongNhom);
+    const hanhDongChinh = footer.indexOf("Primary actions row");
+    expect(tong).toBeGreaterThan(-1);
+    expect(hanhDongChinh).toBeGreaterThan(tong);
     expect(CART).toContain("[@media(max-height:540px)]:p-2.5");
   });
 

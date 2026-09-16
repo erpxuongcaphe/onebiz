@@ -198,17 +198,9 @@ export function FnbCart({
   const pendingLines = activeTab?.lines ?? [];
   const lines = [...sentLines, ...pendingLines];
   const isEmpty = lines.length === 0;
-  // C3 (CEO 18/08): màn THẤP (bàn phím mở HOẶC điện thoại xoay ngang) không
-  // được ẨN CỨNG nhóm ưu đãi — chỉ THU GỌN, có nút mở lại. State đổi class,
-  // không remount → ô coupon đang gõ giữ nguyên focus + nội dung khi bàn
-  // phím mở làm màn thấp đi.
-  // C3.1 (CEO 19/08): HAI ngưỡng khác nhau, đừng "đồng bộ" chúng:
-  //   • 540px = THU GỌN (4 class p-2.5/space-y-2/toggle/hidden) — chỉ khi bàn
-  //     phím mở (~380–500px) hoặc xoay ngang (~390px). Điện thoại DỌC bình
-  //     thường (~550–620px khả dụng sau thanh trình duyệt) phải hiện ĐẦY ĐỦ
-  //     — ngưỡng 620 cũ từng gập nhầm ở đó, CEO bắt trên máy thật.
-  //   • 620px = CUỘN DỰ PHÒNG (overflow-y-auto ở container) — vùng 541–620px
-  //     hiện đầy đủ thì nội dung dài hơn màn, phải cuộn được tới Bếp/TT.
+  // Vùng ưu đãi/coupon/in tạm ít dùng hơn danh sách món nên mặc định thu gọn
+  // trên mọi màn hình. State chỉ đổi class, không remount: mở lại vẫn giữ nội
+  // dung mã đang gõ. Tổng tiền, gửi bếp và thanh toán luôn hiển thị.
   const [moPhanPhu, setMoPhanPhu] = useState(false);
   const coUuDai =
     orderDiscountAmount > 0 || !!appliedCouponCode || (freeItems?.length ?? 0) > 0;
@@ -249,12 +241,14 @@ export function FnbCart({
         // liền khối full-height, ranh giới = 1px border-l + nền trắng lowest
         // khác nền khu món (container-low). Bề rộng vào dải 390–440.
         //   md (768-1023, portrait) → hidden, FAB hiển thị
-        //   lg (1024+) 390px · xl (1280+) 400px · 2xl (1536+) 440px
-        : "w-[390px] xl:w-[400px] 2xl:w-[440px] hidden lg:flex border-l border-outline-variant/30"
+        //   lg (1024+) 390px · xl (1280+) 460px · 2xl (1536+) 520px.
+        // Một giỏ đông món cần giữ trọn tên, cỡ và tuỳ chọn pha chế; chỉ màn
+        // lớn mới lấy thêm chiều ngang để lưới menu vẫn có không gian thao tác.
+        : "w-[390px] xl:w-[460px] 2xl:w-[520px] hidden lg:flex border-l border-outline-variant/30"
     )}>
-      {/* ── Header (Sprint UI-5: gradient subtle để tróc khỏi nền + ambient depth) ── */}
-      <div className="p-4 border-b border-outline-variant/20 bg-gradient-to-b from-surface-container/50 to-surface-container-lowest shrink-0 [@media(max-height:720px)]:p-3">
-        <div className="flex items-center justify-between mb-3 [@media(max-height:720px)]:mb-2">
+      {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
+      <div className="p-3 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0 [@media(max-height:720px)]:p-2.5">
+        <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
               {activeTab?.label ?? "Đơn hàng"}
@@ -321,7 +315,7 @@ export function FnbCart({
         <button
           type="button"
           onClick={onCustomerClick}
-          className="w-full flex items-center gap-2 px-3 py-2 rounded-lg bg-surface-container-low text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
+          className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
         >
           <Icon name="person" size={16} className="text-muted-foreground shrink-0" />
           <span className="truncate flex-1 text-left">
@@ -379,7 +373,7 @@ export function FnbCart({
           ↔ takeaway ↔ delivery với 1 click ngay tại cart.
           Disable sau khi gửi bếp (kitchenOrderId tồn tại) để tránh
           đổi loại đơn đã in vé bếp gây phục vụ nhầm. */}
-      <div className="px-4 pt-3 pb-2 shrink-0 [@media(max-height:720px)]:px-3 [@media(max-height:720px)]:pt-2 [@media(max-height:720px)]:pb-1.5">
+      <div className="px-3 pt-2 pb-1.5 shrink-0 [@media(max-height:720px)]:px-2.5 [@media(max-height:720px)]:pt-1.5 [@media(max-height:720px)]:pb-1">
         {onChangeOrderType && !activeTab?.kitchenOrderId ? (
           <div className="inline-flex items-center rounded-full p-0.5 bg-surface-container-low border border-outline-variant/30">
             {([
@@ -696,7 +690,7 @@ export function FnbCart({
         // cho danh sách co dưới chiều cao nội dung, giỏ nhiều món đẩy footer
         // (Bếp/Thanh toán) tràn khỏi màn (điện thoại 812px hụt 126px).
         <ScrollArea className="flex-1 min-h-0">
-          <div className="p-3 flex flex-col gap-2">
+          <div className="p-2.5 flex flex-col gap-1.5">
             {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
                 data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}
             {[...lines].reverse().map((line) => {
@@ -716,23 +710,20 @@ export function FnbCart({
         </ScrollArea>
       )}
 
-      {/* ── Footer: totals + discount + actions ──
-          C3 (sửa theo CEO): màn thấp (bàn phím mở HOẶC xoay ngang) nhóm hàng
-          phụ THU GỌN — không ẩn cứng. Nút "Ưu đãi & thêm" mở lại; đang có
-          giảm giá/coupon/quà thì tóm tắt LUÔN hiện trên nút. Tổng "Khách cần
-          trả" + Bếp/Thanh toán luôn thấy. State chỉ đổi class, không remount
-          → ô coupon giữ focus + nội dung khi bàn phím mở. */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-4 shrink-0 space-y-3 [@media(max-height:720px)]:p-3 [@media(max-height:720px)]:space-y-2.5 [@media(max-height:540px)]:p-2.5 [@media(max-height:540px)]:space-y-2">
-        {/* Nút thu gọn — CHỈ hiện ở màn thấp (media), toggle vùng phụ */}
+      {/* ── Footer: totals + discount + actions — secondary tools collapse ── */}
+      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-3 shrink-0 space-y-2 [@media(max-height:720px)]:p-3 [@media(max-height:540px)]:p-2.5">
+        {/* Thao tác ít dùng không được chiếm chiều cao danh sách món. Tổng tiền
+            và hai nút chính luôn nằm ngoài vùng thu gọn. */}
+        {!isEmpty && (
         <button
           type="button"
           onClick={() => setMoPhanPhu((v) => !v)}
           aria-expanded={moPhanPhu}
-          className="hidden [@media(max-height:540px)]:flex w-full min-h-11 items-center justify-between gap-2 rounded-lg bg-surface-container-low px-3 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+          className="flex w-full min-h-11 lg:min-h-8 items-center justify-between gap-2 rounded-md bg-surface-container-low px-2.5 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Icon name="sell" size={13} className="shrink-0" />
-            <span className="shrink-0">Ưu đãi &amp; thêm</span>
+            <span className="shrink-0">Ưu đãi &amp; thao tác</span>
             {/* Tóm tắt luôn hiện để thu ngân biết tổng đổi vì đâu */}
             {coUuDai && (
               <span className="truncate text-status-warning font-semibold tabular-nums">
@@ -744,8 +735,9 @@ export function FnbCart({
           </span>
           <Icon name={moPhanPhu ? "expand_less" : "expand_more"} size={16} className="shrink-0" />
         </button>
+        )}
 
-        <div className={cn("space-y-3 [@media(max-height:720px)]:space-y-2", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
+        <div className={cn("space-y-3 [@media(max-height:720px)]:space-y-2", !moPhanPhu && "hidden")}>
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
@@ -891,7 +883,7 @@ export function FnbCart({
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   Khách cần trả
                 </span>
-                <span className="font-heading text-3xl font-black text-primary tabular-nums tracking-tight leading-none">
+                <span className="font-heading text-2xl font-black text-primary tabular-nums tracking-tight leading-none">
                   {formatCurrency(total)}
                   <span className="text-base font-bold ml-1">đ</span>
                 </span>
@@ -927,7 +919,7 @@ export function FnbCart({
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   💰 Quán thực thu
                 </span>
-                <span className="font-heading text-3xl font-black text-status-success tabular-nums tracking-tight leading-none">
+                <span className="font-heading text-2xl font-black text-status-success tabular-nums tracking-tight leading-none">
                   {formatCurrency(netReceived)}
                   <span className="text-base font-bold ml-1">đ</span>
                 </span>
@@ -937,7 +929,7 @@ export function FnbCart({
         })()}
 
         {!isEmpty && (
-          <div className={cn("flex gap-2", !moPhanPhu && "[@media(max-height:540px)]:hidden")}>
+          <div className={cn("flex gap-2", !moPhanPhu && "hidden")}>
             {onPrintPreBill && (
               <Button
                 variant="outline"
@@ -1231,7 +1223,7 @@ function CartLineItem({
   // - Qty controls: pill group bg-surface-container rounded-full
   // - Remove: subtle icon top-right, visible on hover
   return (
-    <div className="group relative bg-surface-container-low rounded-lg p-3 hover:bg-surface-container transition-colors">
+    <div className="group relative bg-surface-container-low rounded-lg p-2.5 hover:bg-surface-container transition-colors">
       <div className="flex items-start justify-between gap-2">
         {/* Name + variant — C3: tên tối đa 2 dòng, tuỳ chọn ở dòng phụ riêng */}
         <div className="flex-1 min-w-0">
@@ -1290,7 +1282,7 @@ function CartLineItem({
       {/* Qty controls + remove — Stitch pill group.
           POS-FIX-C1: tăng touch target lên 36px md+, 44px touch device.
           Trước đây size-7 (28px) — barista đeo găng tap nhầm sang nút xoá. */}
-      <div className="flex items-center justify-between mt-3">
+      <div className="flex items-center justify-between mt-2">
         {sentToKitchen ? (
           <span className="text-xs text-muted-foreground">Không sửa trực tiếp sau khi gửi bếp</span>
         ) : (
