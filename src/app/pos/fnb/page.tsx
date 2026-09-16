@@ -2274,6 +2274,10 @@ function FnbPosPageInner() {
         // Bọc print trong try/catch riêng: lỗi in KHÔNG được làm hỏng
         // flow thanh toán (payment đã success → không được hiển thị "Thanh toán thất bại").
         if (settings.print.autoPrintReceipt) {
+          // In hóa đơn là việc phụ sau khi RPC đã chốt tiền. Không được await
+          // tác vụ này ở luồng quầy: popup/mẫu in hoặc mạng chậm từng làm POS
+          // giữ nguyên giỏ dù hóa đơn đã `completed` trên máy chủ.
+          void (async () => {
           try {
             const tipAmount = payload.tipAmount ?? 0;
             // Migration 00070: total trên bill = NET (quán thực thu) cho đơn sàn.
@@ -2375,6 +2379,7 @@ function FnbPosPageInner() {
               variant: "warning",
             });
           }
+          })();
         }
 
         // Cập nhật trạng thái bàn ngay (optimistic) để floor plan không còn
