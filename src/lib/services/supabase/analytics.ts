@@ -97,6 +97,30 @@ export interface SalesInvoiceExportRow {
   createdAt: string;
 }
 
+export interface SalesReportDailyRow {
+  date: string;
+  orderCount: number;
+  soldQty: number;
+  grossRevenue: number;
+  returnAmount: number;
+  netRevenue: number;
+  paid: number;
+  debt: number;
+}
+
+export interface SalesReportInvoiceDetailRow extends SalesInvoiceExportRow {
+  id: string;
+  itemCount: number;
+  soldQty: number;
+  returnAmount: number;
+  netAmount: number;
+}
+
+export interface SalesReportInvoiceDetailPage {
+  rows: SalesReportInvoiceDetailRow[];
+  hasMore: boolean;
+}
+
 
 // === Cuối ngày (End of Day) ===
 
@@ -754,6 +778,126 @@ export async function getSalesReportSummary(
         ? String(error.message)
         : "Máy chủ không trả kết quả";
     throw new Error(`Không thể tải báo cáo bán hàng: ${message}`);
+  }
+}
+
+function salesReportNumber(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function salesReportText(value: unknown, fallback = ""): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+type ReportRpc = (
+  functionName: string,
+  arguments_: Record<string, unknown>,
+) => Promise<{ data: unknown; error: unknown }>;
+
+function getReportRpc() {
+  return getClient().rpc as unknown as ReportRpc;
+}
+
+/**
+ * Daily sales and return movements for the selected report period. Aggregation
+ * remains in PostgreSQL so table totals cannot be clipped by a client row limit.
+ */
+export async function getSalesReportDailyRows(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<SalesReportDailyRow[]> {
+  const resolved = resolveRange(range, thisMonthRange());
+
+  try {
+    // RPC is added by migration 00382 and is not yet present in generated types.
+    const { data, error } = await getReportRpc()(
+      "get_sales_report_daily_rows",
+      {
+        p_date_from: resolved.start,
+        p_date_to: resolved.end,
+        p_branch_id: branchId ?? null,
+      },
+    );
+    if (error) throw error;
+
+    const rows = Array.isArray(data) ? data : [];
+    return rows.map((row) => ({
+      date: salesReportText(row?.date),
+      orderCount: salesReportNumber(row?.order_count),
+      soldQty: salesReportNumber(row?.sold_qty),
+      grossRevenue: salesReportNumber(row?.gross_revenue),
+      returnAmount: salesReportNumber(row?.return_amount),
+      netRevenue: salesReportNumber(row?.net_revenue),
+      paid: salesReportNumber(row?.paid),
+      debt: salesReportNumber(row?.debt),
+    }));
+  } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "May chu khong tra ket qua";
+    throw new Error("Khong the tai bao cao theo ngay: " + message);
+  }
+}
+
+/**
+ * Bounded invoice drill-down for the on-screen report. Unlike the explicit
+ * Excel export, this never reads every invoice into the browser.
+ */
+export async function getSalesReportInvoiceDetailPage(
+  branchId?: string,
+  range?: { from: string; to: string },
+  offset = 0,
+  limit = 50,
+): Promise<SalesReportInvoiceDetailPage> {
+  const resolved = resolveRange(range, thisMonthRange());
+
+  try {
+    // RPC is added by migration 00382 and is not yet present in generated types.
+    const { data, error } = await getReportRpc()(
+      "get_sales_report_invoice_detail_page",
+      {
+        p_date_from: resolved.start,
+        p_date_to: resolved.end,
+        p_branch_id: branchId ?? null,
+        p_offset: Math.max(0, offset),
+        p_limit: Math.min(Math.max(1, limit), 200),
+      },
+    );
+    if (error) throw error;
+
+    const payload = data as {
+      rows?: Array<Record<string, unknown>>;
+      has_more?: boolean;
+    } | null;
+    return {
+      rows: (payload?.rows ?? []).map((row) => ({
+        id: salesReportText(row.id),
+        code: salesReportText(row.code),
+        branchId: salesReportText(row.branch_id),
+        customerName: salesReportText(row.customer_name, "Khach le"),
+        subtotal: salesReportNumber(row.subtotal),
+        discountAmount: salesReportNumber(row.discount_amount),
+        deliveryFee: salesReportNumber(row.delivery_fee),
+        total: salesReportNumber(row.total),
+        paid: salesReportNumber(row.paid),
+        debt: salesReportNumber(row.debt),
+        paymentMethod: salesReportText(row.payment_method),
+        createdAt: salesReportText(row.issued_at),
+        itemCount: salesReportNumber(row.item_count),
+        soldQty: salesReportNumber(row.sold_qty),
+        returnAmount: salesReportNumber(row.return_amount),
+        netAmount: salesReportNumber(row.net_amount),
+      })),
+      hasMore: Boolean(payload?.has_more),
+    };
+  } catch (error) {
+    const message =
+      error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "May chu khong tra ket qua";
+    throw new Error("Khong the tai bao cao theo hoa don: " + message);
   }
 }
 

@@ -25,12 +25,16 @@ import {
 } from "@/lib/format";
 import {
   getSalesInvoiceExportRows,
+  getSalesReportDailyRows,
+  getSalesReportInvoiceDetailPage,
   getSalesReportSummary,
 } from "@/lib/services";
 import type {
   MonthlyRevenuePoint,
   ChartPoint,
   SalesKpis,
+  SalesReportDailyRow,
+  SalesReportInvoiceDetailRow,
   TopInvoice,
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
@@ -70,6 +74,19 @@ const DAY_COLORS = [
   "#16a34a",
   "#16a34a",
 ];
+
+type SalesTableMode = "daily" | "invoices";
+
+function formatReportDate(value: string) {
+  const [year, month, day] = value.split("-");
+  return year && month && day ? [day, month, year].join("/") : value;
+}
+
+function formatReportDateTime(value: string) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("vi-VN");
+}
 
 // === Custom Tooltips ===
 
@@ -153,7 +170,14 @@ export default function BanHangPage() {
   const [revenueByWeekday, setRevenueByWeekday] = useState<ChartPoint[]>([]);
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topInvoicesList, setTopInvoicesList] = useState<TopInvoice[]>([]);
+  const [tableMode, setTableMode] = useState<SalesTableMode>("daily");
+  const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
+  const [invoiceRows, setInvoiceRows] = useState<SalesReportInvoiceDetailRow[]>([]);
+  const [invoiceRowsHasMore, setInvoiceRowsHasMore] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const detailRequestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -184,6 +208,68 @@ export default function BanHangPage() {
     fetchData();
   }, [fetchData, isReady]);
 
+  const fetchDailyRows = useCallback(async () => {
+    const requestId = ++detailRequestIdRef.current;
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const rows = await getSalesReportDailyRows(activeBranchId, range);
+      if (requestId !== detailRequestIdRef.current) return;
+      setDailyRows(rows);
+    } catch (error) {
+      if (requestId !== detailRequestIdRef.current) return;
+      const message =
+        error instanceof Error ? error.message : "Vui long thu lai.";
+      setDetailError(message);
+      toast({
+        title: "Loi tai bao cao theo ngay",
+        description: message,
+        variant: "error",
+      });
+    } finally {
+      if (requestId === detailRequestIdRef.current) setDetailLoading(false);
+    }
+  }, [activeBranchId, range, toast]);
+
+  const fetchInvoiceRows = useCallback(async (offset: number) => {
+    const requestId = ++detailRequestIdRef.current;
+    setDetailLoading(true);
+    setDetailError(null);
+    try {
+      const page = await getSalesReportInvoiceDetailPage(
+        activeBranchId,
+        range,
+        offset,
+      );
+      if (requestId !== detailRequestIdRef.current) return;
+      setInvoiceRows((current) =>
+        offset === 0 ? page.rows : [...current, ...page.rows],
+      );
+      setInvoiceRowsHasMore(page.hasMore);
+    } catch (error) {
+      if (requestId !== detailRequestIdRef.current) return;
+      const message =
+        error instanceof Error ? error.message : "Vui long thu lai.";
+      setDetailError(message);
+      toast({
+        title: "Loi tai bao cao theo hoa don",
+        description: message,
+        variant: "error",
+      });
+    } finally {
+      if (requestId === detailRequestIdRef.current) setDetailLoading(false);
+    }
+  }, [activeBranchId, range, toast]);
+
+  useEffect(() => {
+    if (!isReady || viewMode !== "table") return;
+    if (tableMode === "daily") {
+      fetchDailyRows();
+      return;
+    }
+    fetchInvoiceRows(0);
+  }, [fetchDailyRows, fetchInvoiceRows, isReady, tableMode, viewMode]);
+
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
 
@@ -192,40 +278,92 @@ export default function BanHangPage() {
     if (!kpis) return;
     if (viewMode === "table") {
       const tableTitleRows = buildReportTitleRows({
-        title: "Doanh thu theo ngày",
+        title:
+          tableMode === "daily"
+            ? "Báo cáo bán hàng theo ngày"
+            : "Báo cáo bán hàng theo hóa đơn",
         range,
         branchName,
         generatedAt: new Date(),
       });
+      const tableSheet =
+        tableMode === "daily"
+          ? {
+              name: "Theo ngày",
+              titleRows: tableTitleRows,
+              tablePreferenceKey: "report.ban-hang.daily-revenue",
+              columns: [
+                { label: "Ngày", key: "date", width: 14 },
+                { label: "Đơn", key: "orderCount", width: 10 },
+                { label: "SL bán", key: "soldQty", width: 12 },
+                { label: "Bán gộp", key: "grossRevenue", width: 18, format: "currency" as const },
+                { label: "Trả trong ngày", key: "returnAmount", width: 18, format: "currency" as const },
+                { label: "Doanh thu thuần", key: "netRevenue", width: 18, format: "currency" as const },
+                { label: "Đã thu", key: "paid", width: 18, format: "currency" as const },
+                { label: "Còn nợ", key: "debt", width: 18, format: "currency" as const },
+              ],
+              rows: dailyRows.map((row) => ({
+                date: formatReportDate(row.date),
+                orderCount: row.orderCount,
+                soldQty: row.soldQty,
+                grossRevenue: row.grossRevenue,
+                returnAmount: row.returnAmount,
+                netRevenue: row.netRevenue,
+                paid: row.paid,
+                debt: row.debt,
+              })),
+              footerLabel: "Tổng cộng",
+              footer: {
+                grossRevenue: dailyRows.reduce((sum, row) => sum + row.grossRevenue, 0),
+                returnAmount: dailyRows.reduce((sum, row) => sum + row.returnAmount, 0),
+                netRevenue: dailyRows.reduce((sum, row) => sum + row.netRevenue, 0),
+                paid: dailyRows.reduce((sum, row) => sum + row.paid, 0),
+                debt: dailyRows.reduce((sum, row) => sum + row.debt, 0),
+              },
+            }
+          : {
+              name: "Theo hóa đơn",
+              titleRows: tableTitleRows,
+              tablePreferenceKey: "report.ban-hang.invoice-drilldown",
+              columns: [
+                { label: "Mã hóa đơn", key: "code", width: 16 },
+                { label: "Thời gian", key: "createdAt", width: 20 },
+                { label: "Khách hàng", key: "customerName", width: 28 },
+                { label: "Dòng", key: "itemCount", width: 10 },
+                { label: "SL bán", key: "soldQty", width: 12 },
+                { label: "Tổng đơn", key: "total", width: 18, format: "currency" as const },
+                { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" as const },
+                { label: "Thuần", key: "netAmount", width: 18, format: "currency" as const },
+                { label: "Đã thu", key: "paid", width: 18, format: "currency" as const },
+                { label: "Còn nợ", key: "debt", width: 18, format: "currency" as const },
+              ],
+              rows: invoiceRows.map((row) => ({
+                code: row.code,
+                createdAt: formatReportDateTime(row.createdAt),
+                customerName: row.customerName,
+                itemCount: row.itemCount,
+                soldQty: row.soldQty,
+                total: row.total,
+                returnAmount: row.returnAmount,
+                netAmount: row.netAmount,
+                paid: row.paid,
+                debt: row.debt,
+              })),
+              footerLabel: "Tổng các hóa đơn đã tải",
+              footer: {
+                total: invoiceRows.reduce((sum, row) => sum + row.total, 0),
+                returnAmount: invoiceRows.reduce((sum, row) => sum + row.returnAmount, 0),
+                netAmount: invoiceRows.reduce((sum, row) => sum + row.netAmount, 0),
+                paid: invoiceRows.reduce((sum, row) => sum + row.paid, 0),
+                debt: invoiceRows.reduce((sum, row) => sum + row.debt, 0),
+              },
+            };
       await exportReportToExcel({
         kind: "ban-hang",
         mode: "view",
         range,
         branchName,
-        sheets: [
-          {
-            name: "Doanh thu theo ngày",
-            titleRows: tableTitleRows,
-            tablePreferenceKey: "report.ban-hang.daily-revenue",
-            columns: [
-              { label: "Ngày", key: "date", width: 14 },
-              {
-                label: "Doanh thu",
-                key: "revenue",
-                width: 18,
-                format: "currency",
-              },
-            ],
-            rows: dailyRevenue.map((row) => ({
-              date: row.date,
-              revenue: row.revenue,
-            })),
-            footerLabel: "Tổng cộng",
-            footer: {
-              revenue: dailyRevenue.reduce((sum, row) => sum + row.revenue, 0),
-            },
-          },
-        ],
+        sheets: [tableSheet],
       });
       return;
     }
@@ -261,7 +399,7 @@ export default function BanHangPage() {
         },
       ],
     });
-  }, [branchName, dailyRevenue, kpis, range, viewMode]);
+  }, [branchName, dailyRows, invoiceRows, kpis, range, tableMode, viewMode]);
 
   const handleExportFull = useCallback(async () => {
     if (!kpis) return;
@@ -475,14 +613,122 @@ export default function BanHangPage() {
     ? calcChangePct(kpis.returnRate, kpis.prevReturnRate)
     : { text: "0%", positive: true };
 
-  // Table mode columns
-  const dailyColumns: DataTableColumn<MonthlyRevenuePoint>[] = [
-    { label: "Ngày", key: "date", align: "left" },
+  const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+  const dailyColumns: DataTableColumn<SalesReportDailyRow>[] = [
     {
-      label: "Doanh thu",
-      key: "revenue",
+      label: "Ngày",
+      key: "date",
+      align: "left",
+      sticky: true,
+      cell: (row) => formatReportDate(row.date),
+    },
+    {
+      label: "Đơn",
+      key: "orderCount",
       align: "right",
-      cell: (r) => formatCurrency(r.revenue) + "đ",
+      cell: (row) => formatNumber(row.orderCount),
+    },
+    {
+      label: "SL bán",
+      key: "soldQty",
+      align: "right",
+      cell: (row) => formatNumber(row.soldQty),
+    },
+    {
+      label: "Bán gộp",
+      key: "grossRevenue",
+      align: "right",
+      cell: (row) => formatCurrency(row.grossRevenue) + "đ",
+    },
+    {
+      label: "Trả trong ngày",
+      key: "returnAmount",
+      align: "right",
+      cell: (row) => formatCurrency(row.returnAmount) + "đ",
+    },
+    {
+      label: "Doanh thu thuần",
+      key: "netRevenue",
+      align: "right",
+      hideable: false,
+      cell: (row) => formatCurrency(row.netRevenue) + "đ",
+    },
+    {
+      label: "Đã thu",
+      key: "paid",
+      align: "right",
+      cell: (row) => formatCurrency(row.paid) + "đ",
+    },
+    {
+      label: "Còn nợ",
+      key: "debt",
+      align: "right",
+      cell: (row) => formatCurrency(row.debt) + "đ",
+    },
+  ];
+
+  const invoiceColumns: DataTableColumn<SalesReportInvoiceDetailRow>[] = [
+    {
+      label: "Mã hóa đơn",
+      key: "code",
+      align: "left",
+      sticky: true,
+      hideable: false,
+      cell: (row) => <span className="font-mono text-xs text-primary">{row.code}</span>,
+    },
+    {
+      label: "Thời gian",
+      key: "createdAt",
+      align: "left",
+      cell: (row) => formatReportDateTime(row.createdAt),
+    },
+    {
+      label: "Khách hàng",
+      key: "customerName",
+      align: "left",
+    },
+    {
+      label: "Chi nhánh",
+      key: "branchId",
+      align: "left",
+      cell: (row) => branchNames.get(row.branchId) ?? row.branchId,
+    },
+    {
+      label: "Dòng / SL",
+      key: "soldQty",
+      align: "right",
+      cell: (row) => formatNumber(row.itemCount) + " / " + formatNumber(row.soldQty),
+    },
+    {
+      label: "Tổng đơn",
+      key: "total",
+      align: "right",
+      cell: (row) => formatCurrency(row.total) + "đ",
+    },
+    {
+      label: "Trả trong kỳ",
+      key: "returnAmount",
+      align: "right",
+      cell: (row) => formatCurrency(row.returnAmount) + "đ",
+    },
+    {
+      label: "Thuần",
+      key: "netAmount",
+      align: "right",
+      hideable: false,
+      cell: (row) => formatCurrency(row.netAmount) + "đ",
+    },
+    {
+      label: "Đã thu",
+      key: "paid",
+      align: "right",
+      cell: (row) => formatCurrency(row.paid) + "đ",
+    },
+    {
+      label: "Còn nợ",
+      key: "debt",
+      align: "right",
+      cell: (row) => formatCurrency(row.debt) + "đ",
     },
   ];
 
@@ -547,20 +793,103 @@ export default function BanHangPage() {
           />
         </div>
 
-        {/* Table mode early return — only doanh thu theo ngày */}
+        {/* Drill-down data stays separate from the chart overview. */}
         {viewMode === "table" ? (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
-            <ReportDataTable<MonthlyRevenuePoint>
-              columns={dailyColumns}
-              tablePreferenceKey="report.ban-hang.daily-revenue"
-              rows={dailyRevenue}
-              getRowKey={(r) => r.date}
-              subtotalLabel={`Tổng cộng: ${formatCurrency(
-                dailyRevenue.reduce((s, r) => s + r.revenue, 0),
-              )}đ`}
-              emptyState="Chưa có doanh thu trong kỳ này"
-            />
-          </div>
+          <section className="border border-border bg-surface-container-lowest">
+            <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-base font-semibold">Chi tiết bán hàng</h2>
+                <p className="text-sm text-muted-foreground">
+                  {tableMode === "daily"
+                    ? "Bán, trả và công nợ theo ngày phát sinh."
+                    : "Mỗi hóa đơn hiển thị một dòng, có thể tải thêm khi cần."}
+                </p>
+              </div>
+              <div
+                className="inline-flex w-fit border border-border bg-muted/30 p-1"
+                role="tablist"
+                aria-label="Góc nhìn báo cáo bán hàng"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tableMode === "daily"}
+                  onClick={() => setTableMode("daily")}
+                  className={
+                    tableMode === "daily"
+                      ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                      : "px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  }
+                >
+                  Theo ngày
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={tableMode === "invoices"}
+                  onClick={() => setTableMode("invoices")}
+                  className={
+                    tableMode === "invoices"
+                      ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                      : "px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+                  }
+                >
+                  Theo hóa đơn
+                </button>
+              </div>
+            </div>
+
+            {detailError ? (
+              <div className="px-4 py-8 text-sm text-destructive">{detailError}</div>
+            ) : detailLoading ? (
+              <div className="flex min-h-48 items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
+                <Icon name="progress_activity" size={20} className="animate-spin" />
+                Đang tải dữ liệu chi tiết...
+              </div>
+            ) : tableMode === "daily" ? (
+              <ReportDataTable<SalesReportDailyRow>
+                columns={dailyColumns}
+                tablePreferenceKey="report.ban-hang.daily-revenue"
+                rows={dailyRows}
+                getRowKey={(row) => row.date}
+                subtotalLabel={
+                  "Doanh thu thuần: " +
+                  formatCurrency(
+                    dailyRows.reduce((sum, row) => sum + row.netRevenue, 0),
+                  ) +
+                  "đ"
+                }
+                emptyState="Chưa có doanh thu hoặc trả hàng trong kỳ này"
+              />
+            ) : (
+              <div>
+                <ReportDataTable<SalesReportInvoiceDetailRow>
+                  columns={invoiceColumns}
+                  tablePreferenceKey="report.ban-hang.invoice-drilldown"
+                  rows={invoiceRows}
+                  getRowKey={(row) => row.id || row.code}
+                  subtotalLabel={
+                    "Đã tải " +
+                    formatNumber(invoiceRows.length) +
+                    " hóa đơn"
+                  }
+                  emptyState="Chưa có hóa đơn hoàn thành trong kỳ này"
+                  paginationThreshold={100}
+                />
+                {invoiceRowsHasMore && (
+                  <div className="border-t border-border p-3 text-center">
+                    <button
+                      type="button"
+                      onClick={() => fetchInvoiceRows(invoiceRows.length)}
+                      className="border border-border px-3 py-2 text-sm font-medium hover:bg-muted"
+                    >
+                      Tải thêm hóa đơn
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
         ) : null}
 
         {/* Daily Revenue Trend (chart mode) — CEO 22/05/2026 (UX P1 #4):
