@@ -796,7 +796,8 @@ type ReportRpc = (
 ) => Promise<{ data: unknown; error: unknown }>;
 
 function getReportRpc() {
-  return getClient().rpc as unknown as ReportRpc;
+  const client = getClient();
+  return client.rpc.bind(client) as unknown as ReportRpc;
 }
 
 /**

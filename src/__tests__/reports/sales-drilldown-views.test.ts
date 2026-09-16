@@ -41,6 +41,10 @@ describe("Sales report drill-down views", () => {
     expect(analyticsService).toContain("p_limit: Math.min(Math.max(1, limit), 200)");
   });
 
+  it("keeps the Supabase client context when calling report RPCs", () => {
+    expect(analyticsService).toContain("client.rpc.bind(client)");
+  });
+
   it("keeps daily and invoice reporting as separate table views", () => {
     expect(salesPage).toContain('type SalesTableMode = "daily" | "invoices"');
     expect(salesPage).toContain("Theo ngày");
