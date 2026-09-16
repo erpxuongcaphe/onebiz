@@ -113,11 +113,28 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
     );
   });
 
-  it("ba luong chia het chieu ngang tren man hinh bep rong", () => {
+  it("ba luong chia het chieu ngang, moi luong co them cot tren man hinh lon", () => {
+    expect(kds).toContain('"grid min-h-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3"');
     expect(kds).toContain(
-      'className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3"',
+      '"grid auto-rows-max grid-cols-1 items-start gap-2 2xl:grid-cols-2"',
     );
-    expect(kds).not.toContain("2xl:grid-cols-5");
+  });
+
+  it("co che do gon mac dinh va nho lua chon theo thiet bi", () => {
+    expect(kds).toContain('const KDS_DENSITY_KEY = "onebiz_kds_density"');
+    expect(kds).toContain('useState<KdsDensity>("compact")');
+    expect(kds).toContain("window.localStorage.getItem(KDS_DENSITY_KEY)");
+    expect(kds).toContain("window.localStorage.setItem(KDS_DENSITY_KEY, next)");
+    expect(kds).toContain('aria-label="Mật độ phiếu bếp"');
+    expect(kds).toContain('aria-pressed={density === option.key}');
+  });
+
+  it("loc mot luong co the hien toi nam cot ticket tren man rong", () => {
+    expect(kds).toContain(
+      '"grid auto-rows-max grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"',
+    );
+    expect(kds).toContain('density === "compact" ? "text-xl" : "text-4xl md:text-5xl"');
+    expect(kds).toContain('density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3"');
   });
 
   it("dong ho don cu hien ngay va gio thay vi cong don hang nghin phut", () => {

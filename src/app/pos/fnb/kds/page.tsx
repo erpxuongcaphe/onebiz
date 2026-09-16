@@ -47,8 +47,10 @@ const POLL_INTERVAL = 30_000;
 const REALTIME_REFRESH_DEBOUNCE = 250;
 const QUICK_RETRY_DELAY = 3_000;
 const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready"];
+const KDS_DENSITY_KEY = "onebiz_kds_density";
 
 type FilterTab = "all" | "pending" | "preparing" | "ready";
+type KdsDensity = "compact" | "comfortable";
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "Tất cả" },
   { key: "pending", label: "Chờ" },
@@ -215,6 +217,7 @@ function KdsPageInner() {
   }, [orders]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
+  const [density, setDensity] = useState<KdsDensity>("compact");
   // Sprint KITCHEN-1 (CEO 07/05): filter theo trạm chế biến.
   // null = "Tất cả trạm" (hiện hết). string = id của 1 station.
   const [stationFilter, setStationFilter] = useState<string | null>(null);
@@ -238,6 +241,24 @@ function KdsPageInner() {
   const pendingOrderIdsRef = useRef<Set<string>>(new Set());
   const [pendingItemIds, setPendingItemIds] = useState<Set<string>>(new Set());
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(KDS_DENSITY_KEY);
+      if (stored === "compact" || stored === "comfortable") setDensity(stored);
+    } catch {
+      // Local storage can be unavailable on locked-down kitchen devices.
+    }
+  }, []);
+
+  const changeDensity = useCallback((next: KdsDensity) => {
+    setDensity(next);
+    try {
+      window.localStorage.setItem(KDS_DENSITY_KEY, next);
+    } catch {
+      // Keep the current session usable even when persistence is blocked.
+    }
+  }, []);
 
   const setItemsPending = useCallback((ids: string[], pending: boolean) => {
     for (const id of ids) {
@@ -774,7 +795,7 @@ function KdsPageInner() {
               Chọn chi nhánh để xem đơn bếp
             </h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Bấm chip <strong className="text-foreground">"Chọn chi nhánh"</strong> trên header để chọn quán đang trực bếp. Mỗi quán có hàng đợi đơn riêng.
+              Bấm chip <strong className="text-foreground">&quot;Chọn chi nhánh&quot;</strong> trên header để chọn quán đang trực bếp. Mỗi quán có hàng đợi đơn riêng.
             </p>
           </div>
         </div>
@@ -954,6 +975,34 @@ function KdsPageInner() {
             </div>
           )}
 
+          <div
+            className="hidden shrink-0 items-center rounded-lg border border-border bg-surface-container p-1 md:flex"
+            role="group"
+            aria-label="Mật độ phiếu bếp"
+          >
+            {([
+              { key: "compact" as const, label: "Gọn", icon: "view_comfy_alt" },
+              { key: "comfortable" as const, label: "Dễ đọc", icon: "view_agenda" },
+            ]).map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => changeDensity(option.key)}
+                aria-pressed={density === option.key}
+                className={cn(
+                  "flex h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors press-scale-sm",
+                  density === option.key
+                    ? "bg-card text-foreground shadow-sm"
+                    : "text-muted-foreground hover:bg-card hover:text-foreground",
+                )}
+                title={option.key === "compact" ? "Hiện nhiều phiếu hơn" : "Chữ lớn để đọc từ xa"}
+              >
+                <Icon name={option.icon} size={15} />
+                <span className="hidden xl:inline">{option.label}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="flex shrink-0 items-center gap-2">
             <div className="rounded-lg border border-border bg-card px-3 py-1.5 font-heading text-xl font-bold tabular-nums tracking-tight text-foreground md:text-2xl">
               {wallClock}
@@ -1079,7 +1128,7 @@ function KdsPageInner() {
       )}
 
       {/* ── KDS Board ── */}
-      <div className="flex-1 overflow-auto bg-background p-3 md:p-5">
+      <div className={cn("flex-1 overflow-auto bg-background", density === "compact" ? "p-2 md:p-3" : "p-3 md:p-5")}>
         {filtered.length === 0 ? (
           /* CEO 29/05/2026: empty-state TỔNG THỂ — 0 đơn thì hiện 1 trạng thái
              "bếp rảnh" gọn giữa màn, thay vì để 3 ô rỗng gần giống nhau trông
@@ -1101,7 +1150,7 @@ function KdsPageInner() {
         ) : filter === "all" ? (
           /* Ba luồng cố định phải chia hết chiều ngang trên màn hình bếp.
              Tablet vẫn dùng hai cột để thẻ đơn không bị quá hẹp. */
-          <div className="grid min-h-full grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className={cn("grid min-h-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3", density === "compact" ? "gap-2" : "gap-3")}>
             {KDS_LANES.map((lane) => (
               <KdsLane
                 key={lane.key}
@@ -1111,6 +1160,7 @@ function KdsPageInner() {
                 accentClass={lane.accentClass}
                 orders={laneOrders(lane.key)}
                 now={now}
+                density={density}
                 pendingItemIds={pendingItemIds}
                 pendingOrderIds={pendingOrderIds}
                 onItemToggle={handleItemToggle}
@@ -1129,6 +1179,7 @@ function KdsPageInner() {
             accentClass={selectedLane?.accentClass ?? "text-primary bg-primary-subtle border-primary/20"}
             orders={filtered}
             now={now}
+            density={density}
             wide
             pendingItemIds={pendingItemIds}
             pendingOrderIds={pendingOrderIds}
@@ -1155,6 +1206,7 @@ function KdsLane({
   accentClass,
   orders,
   now,
+  density,
   pendingItemIds,
   pendingOrderIds,
   wide = false,
@@ -1170,6 +1222,7 @@ function KdsLane({
   accentClass: string;
   orders: KdsOrder[];
   now: number;
+  density: KdsDensity;
   pendingItemIds: ReadonlySet<string>;
   pendingOrderIds: ReadonlySet<string>;
   wide?: boolean;
@@ -1181,9 +1234,9 @@ function KdsLane({
 }) {
   return (
     <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-sm">
-      <header className="flex shrink-0 items-center gap-3 border-b border-border bg-card px-3 py-3">
-        <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg border", accentClass)}>
-          <Icon name={icon} size={20} />
+      <header className={cn("flex shrink-0 items-center border-b border-border bg-card", density === "compact" ? "gap-2 px-2.5 py-2" : "gap-3 px-3 py-3")}>
+        <div className={cn("flex shrink-0 items-center justify-center rounded-lg border", density === "compact" ? "size-8" : "size-10", accentClass)}>
+          <Icon name={icon} size={density === "compact" ? 17 : 20} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -1194,7 +1247,7 @@ function KdsLane({
               {orders.length}
             </span>
           </div>
-          <p className="truncate text-xs text-muted-foreground">
+          <p className={cn("truncate text-xs text-muted-foreground", density === "compact" && "hidden 2xl:block")}>
             {description}
           </p>
         </div>
@@ -1202,10 +1255,15 @@ function KdsLane({
 
       <div
         className={cn(
-          "flex-1 overflow-y-auto p-3",
+          "flex-1 overflow-y-auto",
+          density === "compact" ? "p-2" : "p-3",
           wide
-            ? "grid auto-rows-max grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3"
-            : "space-y-3",
+            ? density === "compact"
+              ? "grid auto-rows-max grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+              : "grid auto-rows-max grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3"
+            : density === "compact"
+              ? "grid auto-rows-max grid-cols-1 items-start gap-2 2xl:grid-cols-2"
+              : "space-y-3",
         )}
       >
         {orders.length === 0 ? (
@@ -1221,6 +1279,7 @@ function KdsLane({
               key={order.id}
               order={order}
               now={now}
+              density={density}
               pendingItemIds={pendingItemIds}
               isOrderPending={pendingOrderIds.has(order.id)}
               onItemToggle={onItemToggle}
@@ -1243,6 +1302,7 @@ function KdsLane({
 function KdsOrderCard({
   order,
   now,
+  density,
   pendingItemIds,
   isOrderPending,
   onItemToggle,
@@ -1253,6 +1313,7 @@ function KdsOrderCard({
 }: {
   order: KdsOrder;
   now: number;
+  density: KdsDensity;
   pendingItemIds: ReadonlySet<string>;
   isOrderPending: boolean;
   onItemToggle: (item: KitchenOrderItem) => void;
@@ -1301,56 +1362,59 @@ function KdsOrderCard({
   return (
     <div
       className={cn(
-        "relative flex max-h-full w-full flex-col overflow-hidden rounded-lg border border-border border-t-4 bg-card shadow-sm",
+        "relative flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+        density === "compact"
+          ? "max-h-[min(68dvh,36rem)] border-t-[3px]"
+          : "max-h-full border-t-4",
         cardAccentClass,
         order.status === "served" && "opacity-50"
       )}
     >
-      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card p-4">
-        <div className="min-w-0 space-y-2">
+      <div className={cn("flex shrink-0 items-start justify-between border-b border-border bg-card", density === "compact" ? "gap-2 p-2.5" : "gap-3 p-4")}>
+        <div className={cn("min-w-0", density === "compact" ? "space-y-1" : "space-y-2")}>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
+            <span className={cn("inline-flex items-center rounded-full border font-bold", density === "compact" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]", statusPillClass)}>
               {typeLabelCaption}
             </span>
             {/* 29/07: khách trả tiền trước thì đơn VẪN nằm trên màn bếp (xem
                 00229). Gắn dấu để bếp biết đơn này đã thu tiền — làm xong là
                 giao luôn, không phải hỏi thu ngân. */}
             {order.invoiceId && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className={cn("inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 font-bold text-emerald-600 dark:text-emerald-400", density === "compact" ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]")}>
                 <Icon name="paid" size={13} />
-                ĐÃ THANH TOÁN
+                {density === "compact" ? "Đã thu" : "ĐÃ THANH TOÁN"}
               </span>
             )}
           </div>
           <div className="space-y-1">
-            <span className="block truncate font-heading text-4xl font-extrabold leading-none tracking-tight text-foreground md:text-5xl">
+            <span className={cn("block truncate font-heading font-extrabold leading-none tracking-tight text-foreground", density === "compact" ? "text-xl" : "text-4xl md:text-5xl")}>
               {typeLabel}
             </span>
-            <span className="block text-sm font-bold tracking-wide text-muted-foreground">
+            <span className={cn("block font-bold tracking-wide text-muted-foreground", density === "compact" ? "text-xs" : "text-sm")}>
               #{order.orderNumber}
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+        <div className={cn("flex shrink-0 items-end text-right", density === "compact" ? "flex-row-reverse gap-1.5" : "flex-col gap-2")}>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onPrintTicket();
             }}
-            className="flex size-11 md:size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground"
+            className={cn("flex items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground", density === "compact" ? "size-10" : "size-11 md:size-10")}
             title="In lại phiếu bếp"
             aria-label="In lại phiếu bếp"
           >
             <Icon name="print" size={14} />
           </button>
-          <div className="rounded-lg bg-surface-container px-2.5 py-1.5">
-            <span className="block text-[10px] font-bold uppercase text-muted-foreground">
+          <div className={cn("rounded-lg bg-surface-container", density === "compact" ? "px-2 py-1" : "px-2.5 py-1.5")}>
+            <span className={cn("text-[10px] font-bold uppercase text-muted-foreground", density === "compact" ? "sr-only" : "block")}>
               Thời gian
             </span>
             {/* Responsive Sprint A3 (CEO 25/05/2026): tăng size để bếp đọc
                 xa 2-3m trên TV 24"+. xl: ~30px, 2xl: ~36px. */}
-            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
+            <span className={cn("font-heading font-bold tabular-nums", density === "compact" ? "text-base" : "text-xl md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
               {formatElapsed(order.createdAt, now)}
             </span>
           </div>
@@ -1358,11 +1422,12 @@ function KdsOrderCard({
       </div>
 
       {/* ── Items list ── */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto bg-surface-container-lowest p-2">
+      <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-container-lowest", density === "compact" ? "gap-1 p-1.5" : "gap-2 p-2")}>
         {order.items.map((item) => (
           <KdsItemRow
             key={item.id}
             item={item}
+            density={density}
             isPending={isOrderPending || pendingItemIds.has(item.id)}
             onToggle={() => onItemToggle(item)}
             onRecall={() => onItemRecall(item)}
@@ -1371,7 +1436,7 @@ function KdsOrderCard({
       </div>
 
       {/* ── Action buttons ── */}
-      <div className="shrink-0 space-y-2 border-t border-border bg-card p-3">
+      <div className={cn("shrink-0 border-t border-border bg-card", density === "compact" ? "space-y-1 p-2" : "space-y-2 p-3")}>
         {/* Bulk "Sẵn sàng hết" — only when there are still pending items */}
         {order.status !== "served" && pendingCount > 0 && (
           <button
@@ -1380,7 +1445,8 @@ function KdsOrderCard({
             disabled={isOrderPending}
             aria-busy={isOrderPending}
             className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle py-3 text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm disabled:cursor-wait disabled:opacity-70"
+              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm disabled:cursor-wait disabled:opacity-70",
+              density === "compact" ? "min-h-10 py-2" : "py-3",
             )}
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
           >
@@ -1405,7 +1471,8 @@ function KdsOrderCard({
             disabled={!allReady || isOrderPending}
             aria-busy={isOrderPending}
             className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg py-4 text-base font-bold transition-all press-scale-sm",
+              "flex w-full items-center justify-center gap-2 rounded-lg font-bold transition-all press-scale-sm",
+              density === "compact" ? "min-h-10 py-2 text-sm" : "py-4 text-base",
               allReady && !isOrderPending
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
                 : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75",
@@ -1431,11 +1498,13 @@ function KdsOrderCard({
 
 function KdsItemRow({
   item,
+  density,
   isPending,
   onToggle,
   onRecall,
 }: {
   item: KitchenOrderItem;
+  density: KdsDensity;
   isPending: boolean;
   onToggle: () => void;
   onRecall: () => void;
@@ -1449,12 +1518,14 @@ function KdsItemRow({
     return (
       <div
         className={cn(
-          "flex w-full items-start gap-3 rounded-lg border border-status-success/20 bg-status-success/5 p-3 text-left"
+          "flex w-full items-start rounded-lg border border-status-success/20 bg-status-success/5 text-left",
+          density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3",
         )}
       >
         <div
           className={cn(
-            "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all",
+            "mt-0.5 flex shrink-0 items-center justify-center rounded-lg border-2 transition-all",
+            density === "compact" ? "size-5" : "size-6",
             "bg-status-success border-status-success"
           )}
         >
@@ -1465,7 +1536,8 @@ function KdsItemRow({
           <div className="flex items-start gap-2">
             <span
               className={cn(
-                "font-heading text-sm font-bold leading-tight md:text-base",
+                "font-heading font-bold leading-tight",
+                density === "compact" ? "text-sm" : "text-sm md:text-base",
                 "line-through text-muted-foreground"
               )}
             >
@@ -1529,7 +1601,8 @@ function KdsItemRow({
       disabled={isPending}
       aria-busy={isPending}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-3 rounded-lg border p-3 text-left transition-colors press-scale-sm disabled:cursor-wait disabled:opacity-70",
+        "flex w-full cursor-pointer items-start rounded-lg border text-left transition-colors press-scale-sm disabled:cursor-wait disabled:opacity-70",
+        density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3",
         isPreparing
           ? "border-status-warning/30 bg-status-warning/10 hover:bg-status-warning/15"
           : "border-border bg-card hover:bg-surface-container"
@@ -1538,7 +1611,8 @@ function KdsItemRow({
       {/* Checkbox — Stitch style */}
       <div
         className={cn(
-          "mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-lg border-2 transition-all",
+          "mt-0.5 flex shrink-0 items-center justify-center rounded-lg border-2 transition-all",
+          density === "compact" ? "size-5" : "size-6",
           isPreparing
             ? "bg-status-warning/20 border-status-warning"
             : "border-outline-variant"
@@ -1556,7 +1630,8 @@ function KdsItemRow({
             className={cn(
               // Responsive Sprint A3 (CEO 25/05/2026): tăng font item KDS
               // để bếp đọc rõ trên TV/iPad treo bếp từ 1.5-3m.
-              "font-heading text-lg font-bold leading-tight tracking-tight md:text-xl xl:text-2xl",
+              "font-heading font-bold leading-tight tracking-tight",
+              density === "compact" ? "text-sm md:text-base" : "text-lg md:text-xl xl:text-2xl",
               "text-foreground"
             )}
           >
