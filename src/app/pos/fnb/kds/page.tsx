@@ -21,6 +21,14 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
 import { PermissionPage } from "@/components/shared/permission-page";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { PERMISSIONS } from "@/lib/permissions";
 import {
   getKitchenOrdersWithItems,
@@ -29,6 +37,10 @@ import {
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
+import {
+  getBranchSettings,
+  updateBranchSettings,
+} from "@/lib/services/supabase/branches";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { hapticTap, hapticSuccess } from "@/lib/offline";
 import { printKitchenTicketV2 } from "@/lib/print-fnb";
@@ -40,6 +52,11 @@ import type {
 } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber } from "@/lib/format";
+import {
+  DEFAULT_KDS_DISPLAY_PREFERENCES,
+  prepareKdsItemGroups,
+  type KdsDisplayPreferences,
+} from "./kds-display";
 
 // ── Constants ──
 
@@ -47,10 +64,8 @@ const POLL_INTERVAL = 30_000;
 const REALTIME_REFRESH_DEBOUNCE = 250;
 const QUICK_RETRY_DELAY = 3_000;
 const ACTIVE_STATUSES: KitchenOrderStatus[] = ["pending", "preparing", "ready"];
-const KDS_DENSITY_KEY = "onebiz_kds_density";
 
 type FilterTab = "all" | "pending" | "preparing" | "ready";
-type KdsDensity = "compact" | "comfortable";
 const FILTER_TABS: { key: FilterTab; label: string }[] = [
   { key: "all", label: "Tất cả" },
   { key: "pending", label: "Chờ" },
@@ -202,7 +217,7 @@ interface KdsOrder extends KitchenOrder {
 // ── Page ──
 
 function KdsPageInner() {
-  const { branches, currentBranch, switchBranch, user } = useAuth();
+  const { branches, currentBranch, switchBranch, user, hasPermission } = useAuth();
   // Sprint UI-FIX (CEO 08/05): link "Quay về POS" dùng fnbPath để
   // trên subdomain fnb.* trỏ về "/" thay vì "/pos/fnb" (URL bar đẹp hơn).
   const { fnbPath } = useFnbSubdomain();
@@ -221,7 +236,14 @@ function KdsPageInner() {
   }, [orders]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
-  const [density, setDensity] = useState<KdsDensity>("compact");
+  const [displayPreferences, setDisplayPreferences] = useState<KdsDisplayPreferences>(
+    DEFAULT_KDS_DISPLAY_PREFERENCES,
+  );
+  const [draftPreferences, setDraftPreferences] = useState<KdsDisplayPreferences>(
+    DEFAULT_KDS_DISPLAY_PREFERENCES,
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
   // Sprint KITCHEN-1 (CEO 07/05): filter theo trạm chế biến.
   // null = "Tất cả trạm" (hiện hết). string = id của 1 station.
   const [stationFilter, setStationFilter] = useState<string | null>(null);
@@ -247,22 +269,81 @@ function KdsPageInner() {
   const [pendingOrderIds, setPendingOrderIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(KDS_DENSITY_KEY);
-      if (stored === "compact" || stored === "comfortable") setDensity(stored);
-    } catch {
-      // Local storage can be unavailable on locked-down kitchen devices.
+    let active = true;
+    if (!branchId) {
+      setDisplayPreferences(DEFAULT_KDS_DISPLAY_PREFERENCES);
+      return () => {
+        active = false;
+      };
     }
-  }, []);
 
-  const changeDensity = useCallback((next: KdsDensity) => {
-    setDensity(next);
+    void getBranchSettings(branchId)
+      .then((branchSettings) => {
+        if (!active) return;
+        const next: KdsDisplayPreferences = {
+          combineIdenticalItems:
+            branchSettings.kdsCombineIdenticalItems ??
+            DEFAULT_KDS_DISPLAY_PREFERENCES.combineIdenticalItems,
+          itemSort:
+            branchSettings.kdsItemSort ?? DEFAULT_KDS_DISPLAY_PREFERENCES.itemSort,
+          modifierLayout:
+            branchSettings.kdsModifierLayout ??
+            DEFAULT_KDS_DISPLAY_PREFERENCES.modifierLayout,
+          showOrderType:
+            branchSettings.kdsShowOrderType ??
+            DEFAULT_KDS_DISPLAY_PREFERENCES.showOrderType,
+          showPaymentStatus:
+            branchSettings.kdsShowPaymentStatus ??
+            DEFAULT_KDS_DISPLAY_PREFERENCES.showPaymentStatus,
+          showItemNotes:
+            branchSettings.kdsShowItemNotes ??
+            DEFAULT_KDS_DISPLAY_PREFERENCES.showItemNotes,
+        };
+        setDisplayPreferences(next);
+        setDraftPreferences(next);
+      })
+      .catch(() => {
+        if (!active) return;
+        setDisplayPreferences(DEFAULT_KDS_DISPLAY_PREFERENCES);
+        setDraftPreferences(DEFAULT_KDS_DISPLAY_PREFERENCES);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [branchId]);
+
+  const canManageKds = hasPermission(PERMISSIONS.SYSTEM_MANAGE_BRANCHES);
+
+  const saveDisplayPreferences = useCallback(async () => {
+    if (!branchId || !canManageKds || settingsSaving) return;
+    setSettingsSaving(true);
     try {
-      window.localStorage.setItem(KDS_DENSITY_KEY, next);
-    } catch {
-      // Keep the current session usable even when persistence is blocked.
+      await updateBranchSettings(branchId, {
+        kdsCombineIdenticalItems: draftPreferences.combineIdenticalItems,
+        kdsItemSort: draftPreferences.itemSort,
+        kdsModifierLayout: draftPreferences.modifierLayout,
+        kdsShowOrderType: draftPreferences.showOrderType,
+        kdsShowPaymentStatus: draftPreferences.showPaymentStatus,
+        kdsShowItemNotes: draftPreferences.showItemNotes,
+      });
+      setDisplayPreferences(draftPreferences);
+      setSettingsOpen(false);
+      toast({
+        title: "Đã lưu hiển thị KDS",
+        description: "Cấu hình áp dụng cho màn bếp của chi nhánh này.",
+        variant: "success",
+      });
+    } catch (error) {
+      toast({
+        title: "Không lưu được cài đặt KDS",
+        description: error instanceof Error ? error.message : "Lỗi không xác định",
+        variant: "error",
+      });
+    } finally {
+      setSettingsSaving(false);
     }
-  }, []);
+  }, [branchId, canManageKds, draftPreferences, settingsSaving, toast]);
 
   const setItemsPending = useCallback((ids: string[], pending: boolean) => {
     for (const id of ids) {
@@ -538,9 +619,12 @@ function KdsPageInner() {
 
   // ── Item status toggle ──
   const handleItemToggle = useCallback(
-    async (item: KitchenOrderItem) => {
+    async (items: KitchenOrderItem[]) => {
+      const item = items[0];
+      if (!item || items.some((candidate) => candidate.status !== item.status)) return;
+      const itemIds = items.map((candidate) => candidate.id);
       if (
-        pendingItemIdsRef.current.has(item.id) ||
+        itemIds.some((id) => pendingItemIdsRef.current.has(id)) ||
         pendingOrderIdsRef.current.has(item.kitchenOrderId)
       ) return;
 
@@ -552,7 +636,7 @@ function KdsPageInner() {
       const next = nextStatus[item.status];
       if (next === item.status) return;
 
-      setItemsPending([item.id], true);
+      setItemsPending(itemIds, true);
       hapticTap();
       // Optimistic UI trước cho phản hồi tức thì.
       setOrders((prev) =>
@@ -561,7 +645,7 @@ function KdsPageInner() {
             ? {
                 ...o,
                 items: o.items.map((i) =>
-                  i.id === item.id ? { ...i, status: next } : i
+                  itemIds.includes(i.id) ? { ...i, status: next } : i
                 ),
               }
             : o
@@ -570,7 +654,13 @@ function KdsPageInner() {
       // CEO 29/05/2026: bọc try/catch + rollback — mất mạng giữa chừng (wifi
       // bếp hay rớt) trước đây làm UI lệch DB, 30s sau tự revert → tưởng mất tay.
       try {
-        await updateKitchenItemStatus(item.id, next);
+        const results = await Promise.allSettled(
+          itemIds.map((id) => updateKitchenItemStatus(id, next)),
+        );
+        const failed = results.find(
+          (result): result is PromiseRejectedResult => result.status === "rejected",
+        );
+        if (failed) throw failed.reason;
       } catch (err) {
         await fetchOrders(); // rollback về đúng trạng thái server
         toast({
@@ -579,7 +669,7 @@ function KdsPageInner() {
           variant: "error",
         });
       } finally {
-        setItemsPending([item.id], false);
+        setItemsPending(itemIds, false);
       }
     },
     [fetchOrders, setItemsPending, toast]
@@ -671,23 +761,31 @@ function KdsPageInner() {
   );
 
   // ── Recall item: ready → preparing (lỡ tay đánh dấu xong) ──
-  const handleItemRecall = useCallback(async (item: KitchenOrderItem) => {
-    if (item.status !== "ready") return;
+  const handleItemRecall = useCallback(async (items: KitchenOrderItem[]) => {
+    const item = items[0];
+    if (!item || items.some((candidate) => candidate.status !== "ready")) return;
+    const itemIds = items.map((candidate) => candidate.id);
     if (
-      pendingItemIdsRef.current.has(item.id) ||
+      itemIds.some((id) => pendingItemIdsRef.current.has(id)) ||
       pendingOrderIdsRef.current.has(item.kitchenOrderId)
     ) return;
-    setItemsPending([item.id], true);
+    setItemsPending(itemIds, true);
     hapticTap();
     try {
-      await updateKitchenItemStatus(item.id, "preparing");
+      const results = await Promise.allSettled(
+        itemIds.map((id) => updateKitchenItemStatus(id, "preparing")),
+      );
+      const failed = results.find(
+        (result): result is PromiseRejectedResult => result.status === "rejected",
+      );
+      if (failed) throw failed.reason;
       setOrders((prev) =>
         prev.map((o) =>
           o.id === item.kitchenOrderId
             ? {
                 ...o,
                 items: o.items.map((i) =>
-                  i.id === item.id ? { ...i, status: "preparing" as KitchenItemStatus } : i
+                  itemIds.includes(i.id) ? { ...i, status: "preparing" as KitchenItemStatus } : i
                 ),
               }
             : o
@@ -700,7 +798,7 @@ function KdsPageInner() {
         variant: "error",
       });
     } finally {
-      setItemsPending([item.id], false);
+      setItemsPending(itemIds, false);
     }
   }, [setItemsPending, toast]);
 
@@ -979,34 +1077,6 @@ function KdsPageInner() {
             </div>
           )}
 
-          <div
-            className="hidden shrink-0 items-center rounded-lg border border-border bg-surface-container p-1 md:flex"
-            role="group"
-            aria-label="Mật độ phiếu bếp"
-          >
-            {([
-              { key: "compact" as const, label: "Gọn", icon: "view_comfy_alt" },
-              { key: "comfortable" as const, label: "Dễ đọc", icon: "view_agenda" },
-            ]).map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => changeDensity(option.key)}
-                aria-pressed={density === option.key}
-                className={cn(
-                  "flex h-10 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold transition-colors press-scale-sm",
-                  density === option.key
-                    ? "bg-card text-foreground shadow-sm"
-                    : "text-muted-foreground hover:bg-card hover:text-foreground",
-                )}
-                title={option.key === "compact" ? "Hiện nhiều phiếu hơn" : "Chữ lớn để đọc từ xa"}
-              >
-                <Icon name={option.icon} size={15} />
-                <span className="hidden xl:inline">{option.label}</span>
-              </button>
-            ))}
-          </div>
-
           <div className="flex shrink-0 items-center gap-2">
             <div className="rounded-lg border border-border bg-card px-3 py-1.5 font-heading text-xl font-bold tabular-nums tracking-tight text-foreground md:text-2xl">
               {wallClock}
@@ -1032,9 +1102,32 @@ function KdsPageInner() {
             >
               <Icon name={soundOn ? "volume_up" : "volume_off"} size={18} />
             </button>
+            {canManageKds && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftPreferences(displayPreferences);
+                  setSettingsOpen(true);
+                }}
+                className="flex size-10 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground press-scale-sm"
+                title="Cài đặt hiển thị KDS"
+                aria-label="Cài đặt hiển thị KDS"
+              >
+                <Icon name="settings" size={18} />
+              </button>
+            )}
           </div>
         </div>
       </header>
+
+      <KdsDisplaySettingsDialog
+        open={settingsOpen}
+        preferences={draftPreferences}
+        saving={settingsSaving}
+        onOpenChange={setSettingsOpen}
+        onChange={setDraftPreferences}
+        onSave={saveDisplayPreferences}
+      />
 
       {/* Dien thoai va tablet van phai doi duoc dung quan. Desktop da co bo chon
           trong header; hang rieng nay tranh chen dong ho va bo loc bep. */}
@@ -1132,7 +1225,7 @@ function KdsPageInner() {
       )}
 
       {/* ── KDS Board ── */}
-      <div className={cn("flex-1 overflow-auto bg-background", density === "compact" ? "p-2 md:p-3" : "p-3 md:p-5")}>
+      <div className="flex-1 overflow-auto bg-background p-2 md:p-3">
         {filtered.length === 0 ? (
           /* CEO 29/05/2026: empty-state TỔNG THỂ — 0 đơn thì hiện 1 trạng thái
              "bếp rảnh" gọn giữa màn, thay vì để 3 ô rỗng gần giống nhau trông
@@ -1154,7 +1247,7 @@ function KdsPageInner() {
         ) : filter === "all" ? (
           /* Ba luồng cố định phải chia hết chiều ngang trên màn hình bếp.
              Tablet vẫn dùng hai cột để thẻ đơn không bị quá hẹp. */
-          <div className={cn("grid min-h-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3", density === "compact" ? "gap-2" : "gap-3")}>
+          <div className="grid min-h-full grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3">
             {KDS_LANES.map((lane) => (
               <KdsLane
                 key={lane.key}
@@ -1164,7 +1257,7 @@ function KdsPageInner() {
                 accentClass={lane.accentClass}
                 orders={laneOrders(lane.key)}
                 now={now}
-                density={density}
+                preferences={displayPreferences}
                 pendingItemIds={pendingItemIds}
                 pendingOrderIds={pendingOrderIds}
                 onItemToggle={handleItemToggle}
@@ -1183,7 +1276,7 @@ function KdsPageInner() {
             accentClass={selectedLane?.accentClass ?? "text-primary bg-primary-subtle border-primary/20"}
             orders={filtered}
             now={now}
-            density={density}
+            preferences={displayPreferences}
             wide
             pendingItemIds={pendingItemIds}
             pendingOrderIds={pendingOrderIds}
@@ -1210,7 +1303,7 @@ function KdsLane({
   accentClass,
   orders,
   now,
-  density,
+  preferences,
   pendingItemIds,
   pendingOrderIds,
   wide = false,
@@ -1226,21 +1319,21 @@ function KdsLane({
   accentClass: string;
   orders: KdsOrder[];
   now: number;
-  density: KdsDensity;
+  preferences: KdsDisplayPreferences;
   pendingItemIds: ReadonlySet<string>;
   pendingOrderIds: ReadonlySet<string>;
   wide?: boolean;
-  onItemToggle: (item: KitchenOrderItem) => void;
-  onItemRecall: (item: KitchenOrderItem) => void;
+  onItemToggle: (items: KitchenOrderItem[]) => void;
+  onItemRecall: (items: KitchenOrderItem[]) => void;
   onPrintTicket: (order: KdsOrder) => void;
   onServed: (orderId: string) => void;
   onMarkAllReady: (orderId: string) => void;
 }) {
   return (
     <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-sm">
-      <header className={cn("flex shrink-0 items-center border-b border-border bg-card", density === "compact" ? "gap-2 px-2.5 py-2" : "gap-3 px-3 py-3")}>
-        <div className={cn("flex shrink-0 items-center justify-center rounded-lg border", density === "compact" ? "size-8" : "size-10", accentClass)}>
-          <Icon name={icon} size={density === "compact" ? 17 : 20} />
+      <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-2.5 py-2">
+        <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg border", accentClass)}>
+          <Icon name={icon} size={17} />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -1251,7 +1344,7 @@ function KdsLane({
               {orders.length}
             </span>
           </div>
-          <p className={cn("truncate text-xs text-muted-foreground", density === "compact" && "hidden 2xl:block")}>
+          <p className="hidden truncate text-xs text-muted-foreground 2xl:block">
             {description}
           </p>
         </div>
@@ -1260,14 +1353,10 @@ function KdsLane({
       <div
         className={cn(
           "flex-1 overflow-y-auto",
-          density === "compact" ? "p-2" : "p-3",
+          "p-2",
           wide
-            ? density === "compact"
-              ? "grid auto-rows-max grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
-              : "grid auto-rows-max grid-cols-1 items-start gap-3 md:grid-cols-2 xl:grid-cols-3"
-            : density === "compact"
-              ? "grid auto-rows-max grid-cols-1 items-start gap-2 2xl:grid-cols-2"
-              : "space-y-3",
+            ? "grid auto-rows-max grid-cols-1 items-start gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5"
+            : "grid auto-rows-max grid-cols-1 items-start gap-2 2xl:grid-cols-2",
         )}
       >
         {orders.length === 0 ? (
@@ -1283,7 +1372,7 @@ function KdsLane({
               key={order.id}
               order={order}
               now={now}
-              density={density}
+              preferences={preferences}
               pendingItemIds={pendingItemIds}
               isOrderPending={pendingOrderIds.has(order.id)}
               onItemToggle={onItemToggle}
@@ -1306,7 +1395,7 @@ function KdsLane({
 function KdsOrderCard({
   order,
   now,
-  density,
+  preferences,
   pendingItemIds,
   isOrderPending,
   onItemToggle,
@@ -1317,11 +1406,11 @@ function KdsOrderCard({
 }: {
   order: KdsOrder;
   now: number;
-  density: KdsDensity;
+  preferences: KdsDisplayPreferences;
   pendingItemIds: ReadonlySet<string>;
   isOrderPending: boolean;
-  onItemToggle: (item: KitchenOrderItem) => void;
-  onItemRecall: (item: KitchenOrderItem) => void;
+  onItemToggle: (items: KitchenOrderItem[]) => void;
+  onItemRecall: (items: KitchenOrderItem[]) => void;
   onPrintTicket: () => void;
   onServed: () => void;
   onMarkAllReady: () => void;
@@ -1338,8 +1427,7 @@ function KdsOrderCard({
       : order.orderType === "takeaway"
         ? "Mang về"
         : "Giao";
-  const typeLabelCaption =
-    order.orderType === "dine_in" ? "Bàn tại quán" : order.orderType === "takeaway" ? "Mang về" : "Giao hàng";
+  const itemGroups = prepareKdsItemGroups(order.items, preferences);
 
   // Header color theme based on urgency
   const cardAccentClass =
@@ -1367,15 +1455,12 @@ function KdsOrderCard({
     <div
       className={cn(
         "relative flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm",
-        density === "compact"
-          ? "max-h-[min(68dvh,36rem)] border-t-[3px]"
-          : "max-h-full border-t-4",
+        "max-h-[min(68dvh,36rem)] border-t-[3px]",
         cardAccentClass,
         order.status === "served" && "opacity-50"
       )}
     >
-      {density === "compact" ? (
-        <div className="shrink-0 space-y-1.5 border-b border-border bg-card p-2.5">
+      <div className="shrink-0 space-y-1.5 border-b border-border bg-card p-2.5">
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="min-w-0 flex-1 truncate font-heading text-lg font-extrabold tracking-tight text-foreground">
               #{order.orderNumber}
@@ -1394,10 +1479,12 @@ function KdsOrderCard({
             </button>
           </div>
           <div className="flex min-w-0 items-center gap-1.5">
-            <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold", statusPillClass)}>
-              {typeLabel}
-            </span>
-            {order.invoiceId && (
+            {preferences.showOrderType && (
+              <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold", statusPillClass)}>
+                {typeLabel}
+              </span>
+            )}
+            {preferences.showPaymentStatus && order.invoiceId && (
               <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
                 <Icon name="paid" size={12} />
                 Đã thu
@@ -1407,76 +1494,25 @@ function KdsOrderCard({
               {formatElapsed(order.createdAt, now)}
             </span>
           </div>
-        </div>
-      ) : (
-      <div className="flex shrink-0 items-start justify-between gap-3 border-b border-border bg-card p-4">
-        <div className="min-w-0 space-y-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className={cn("inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-bold", statusPillClass)}>
-              {typeLabelCaption}
-            </span>
-            {/* 29/07: khách trả tiền trước thì đơn VẪN nằm trên màn bếp (xem
-                00229). Gắn dấu để bếp biết đơn này đã thu tiền — làm xong là
-                giao luôn, không phải hỏi thu ngân. */}
-            {order.invoiceId && (
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                <Icon name="paid" size={13} />
-                ĐÃ THANH TOÁN
-              </span>
-            )}
-          </div>
-          <div className="space-y-1">
-            <span className="block truncate font-heading text-4xl font-extrabold leading-none tracking-tight text-foreground md:text-5xl">
-              {typeLabel}
-            </span>
-            <span className="block text-sm font-bold tracking-wide text-muted-foreground">
-              #{order.orderNumber}
-            </span>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-col items-end gap-2 text-right">
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onPrintTicket();
-            }}
-            className="flex size-11 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-surface-container hover:text-foreground md:size-10"
-            title="In lại phiếu bếp"
-            aria-label="In lại phiếu bếp"
-          >
-            <Icon name="print" size={14} />
-          </button>
-          <div className="rounded-lg bg-surface-container px-2.5 py-1.5">
-            <span className="block text-[10px] font-bold uppercase text-muted-foreground">
-              Thời gian
-            </span>
-            {/* Responsive Sprint A3 (CEO 25/05/2026): tăng size để bếp đọc
-                xa 2-3m trên TV 24"+. xl: ~30px, 2xl: ~36px. */}
-            <span className={cn("font-heading text-xl font-bold tabular-nums md:text-2xl xl:text-3xl 2xl:text-4xl", timerTextClass)}>
-              {formatElapsed(order.createdAt, now)}
-            </span>
-          </div>
-        </div>
       </div>
-      )}
 
       {/* ── Items list ── */}
-      <div className={cn("flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-container-lowest", density === "compact" ? "gap-1 p-1.5" : "gap-2 p-2")}>
-        {order.items.map((item) => (
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-surface-container-lowest p-1.5">
+        {itemGroups.map((group) => (
           <KdsItemRow
-            key={item.id}
-            item={item}
-            density={density}
-            isPending={isOrderPending || pendingItemIds.has(item.id)}
-            onToggle={() => onItemToggle(item)}
-            onRecall={() => onItemRecall(item)}
+            key={group.key}
+            item={group.representative}
+            quantity={group.quantity}
+            preferences={preferences}
+            isPending={isOrderPending || group.items.some((item) => pendingItemIds.has(item.id))}
+            onToggle={() => onItemToggle(group.items)}
+            onRecall={() => onItemRecall(group.items)}
           />
         ))}
       </div>
 
       {/* ── Action buttons ── */}
-      <div className={cn("shrink-0 border-t border-border bg-card", density === "compact" ? "space-y-1 p-2" : "space-y-2 p-3")}>
+      <div className="shrink-0 space-y-1 border-t border-border bg-card p-2">
         {/* Bulk "Sẵn sàng hết" — only when there are still pending items */}
         {order.status !== "served" && pendingCount > 0 && (
           <button
@@ -1484,10 +1520,7 @@ function KdsOrderCard({
             onClick={onMarkAllReady}
             disabled={isOrderPending}
             aria-busy={isOrderPending}
-            className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm disabled:cursor-wait disabled:opacity-70",
-              density === "compact" ? "min-h-10 py-2" : "py-3",
-            )}
+            className="flex min-h-10 w-full items-center justify-center gap-2 rounded-lg border border-primary/25 bg-primary-subtle py-2 text-xs font-semibold text-primary transition-all hover:bg-primary-fixed press-scale-sm disabled:cursor-wait disabled:opacity-70"
             title={`Đánh dấu sẵn sàng ${pendingCount} món còn lại`}
           >
             <Icon
@@ -1504,15 +1537,14 @@ function KdsOrderCard({
             <Icon name="check_circle" size={16} />
             Đã phục vụ
           </div>
-        ) : allReady || density === "comfortable" ? (
+        ) : allReady ? (
           <button
             type="button"
             onClick={onServed}
             disabled={!allReady || isOrderPending}
             aria-busy={isOrderPending}
             className={cn(
-              "flex w-full items-center justify-center gap-2 rounded-lg font-bold transition-all press-scale-sm",
-              density === "compact" ? "min-h-10 py-2 text-sm" : "py-4 text-base",
+              "flex min-h-10 w-full items-center justify-center gap-2 rounded-lg py-2 text-sm font-bold transition-all press-scale-sm",
               allReady && !isOrderPending
                 ? "bg-status-success text-white hover:bg-status-success/90 ambient-shadow"
                 : "cursor-not-allowed bg-surface-container text-muted-foreground opacity-75",
@@ -1538,13 +1570,15 @@ function KdsOrderCard({
 
 function KdsItemRow({
   item,
-  density,
+  quantity,
+  preferences,
   isPending,
   onToggle,
   onRecall,
 }: {
   item: KitchenOrderItem;
-  density: KdsDensity;
+  quantity: number;
+  preferences: KdsDisplayPreferences;
   isPending: boolean;
   onToggle: () => void;
   onRecall: () => void;
@@ -1558,14 +1592,13 @@ function KdsItemRow({
     return (
       <div
         className={cn(
-          "flex w-full items-start rounded-lg border border-status-success/20 bg-status-success/5 text-left",
-          density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3",
+          "flex min-h-11 w-full items-start gap-2 rounded-lg border border-status-success/20 bg-status-success/5 p-2 text-left",
         )}
       >
         <div
           className={cn(
             "mt-0.5 flex shrink-0 items-center justify-center rounded-lg border-2 transition-all",
-            density === "compact" ? "size-5" : "size-6",
+            "size-5",
             "bg-status-success border-status-success"
           )}
         >
@@ -1574,15 +1607,15 @@ function KdsItemRow({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
-            {density === "compact" && item.quantity > 1 && (
+            {quantity > 1 && (
               <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
-                x{formatNumber(item.quantity)}
+                x{formatNumber(quantity)}
               </span>
             )}
             <span
               className={cn(
                 "font-heading font-bold leading-tight",
-                density === "compact" ? "text-sm" : "text-sm md:text-base",
+                "text-sm",
                 "line-through text-muted-foreground"
               )}
             >
@@ -1604,17 +1637,33 @@ function KdsItemRow({
             </div>
           )}
           {/* Sprint 2.4b: modifier choices (completed view — line-through) */}
-          {item.modifierSelections && item.modifierSelections.length > 0 && (
-            <div className="mt-0.5 text-[11px] text-muted-foreground line-through">
-              {item.modifierSelections
-                .map((s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`)
-                .join(" • ")}
-            </div>
-          )}
-          {density === "comfortable" && item.quantity > 1 && (
-            <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-success/20 text-status-success text-[10px] font-bold">
-              x{formatNumber(item.quantity)}
-            </span>
+          {item.modifierSelections && item.modifierSelections.length > 0 &&
+            (preferences.modifierLayout === "inline" ? (
+              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground line-through">
+                {item.modifierSelections
+                  .map(
+                    (selection) =>
+                      `${compactModifierGroupName(selection.groupName)}: ${selection.options
+                        .map((option) => option.label)
+                        .join("/")}`,
+                  )
+                  .join(" · ")}
+              </p>
+            ) : (
+              <div className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground line-through">
+                {item.modifierSelections.map((selection) => (
+                  <span key={selection.groupId} className="block">
+                    {compactModifierGroupName(selection.groupName)}:{" "}
+                    {selection.options.map((option) => option.label).join("/")}
+                  </span>
+                ))}
+              </div>
+            ))}
+          {preferences.showItemNotes && item.note && (
+            <p className="mt-1 flex items-start gap-1 text-xs italic text-status-warning line-through">
+              <Icon name="sticky_note_2" size={14} className="mt-0.5 shrink-0" />
+              {item.note}
+            </p>
           )}
         </div>
 
@@ -1646,8 +1695,7 @@ function KdsItemRow({
       disabled={isPending}
       aria-busy={isPending}
       className={cn(
-        "flex w-full cursor-pointer items-start rounded-lg border text-left transition-colors press-scale-sm disabled:cursor-wait disabled:opacity-70",
-        density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3",
+        "flex min-h-11 w-full cursor-pointer items-start gap-2 rounded-lg border p-2 text-left transition-colors press-scale-sm disabled:cursor-wait disabled:opacity-70",
         isPreparing
           ? "border-status-warning/30 bg-status-warning/10 hover:bg-status-warning/15"
           : "border-border bg-card hover:bg-surface-container"
@@ -1657,7 +1705,7 @@ function KdsItemRow({
       <div
         className={cn(
           "mt-0.5 flex shrink-0 items-center justify-center rounded-lg border-2 transition-all",
-          density === "compact" ? "size-5" : "size-6",
+          "size-5",
           isPreparing
             ? "bg-status-warning/20 border-status-warning"
             : "border-outline-variant"
@@ -1671,9 +1719,9 @@ function KdsItemRow({
       {/* Item body */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-2">
-          {density === "compact" && item.quantity > 1 && (
+          {quantity > 1 && (
             <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
-              x{formatNumber(item.quantity)}
+              x{formatNumber(quantity)}
             </span>
           )}
           <span
@@ -1681,7 +1729,7 @@ function KdsItemRow({
               // Responsive Sprint A3 (CEO 25/05/2026): tăng font item KDS
               // để bếp đọc rõ trên TV/iPad treo bếp từ 1.5-3m.
               "font-heading font-bold leading-tight tracking-tight",
-              density === "compact" ? "text-sm md:text-base" : "text-lg md:text-xl xl:text-2xl",
+              "text-sm md:text-base",
               "text-foreground"
             )}
           >
@@ -1706,7 +1754,7 @@ function KdsItemRow({
         {/* CEO 01/06/2026 — Sprint 2.4b: Dynamic modifier choices.
             Bếp đọc 1 dòng compact: "Mức đường: 70% • Mức đá: Ít • Topping: Trân châu" */}
         {item.modifierSelections && item.modifierSelections.length > 0 && (
-          density === "compact" ? (
+          preferences.modifierLayout === "inline" ? (
             <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-status-info">
               {item.modifierSelections
                 .map(
@@ -1718,33 +1766,215 @@ function KdsItemRow({
                 .join(" · ")}
             </p>
           ) : (
-            <div className="mt-1 flex flex-wrap gap-1">
+            <div className="mt-0.5 space-y-0.5 text-[11px] leading-4 text-status-info">
               {item.modifierSelections.map((sel, idx) => (
                 <span
                   key={idx}
-                  className="inline-flex items-center gap-1 rounded-md bg-status-info/10 px-1.5 py-0.5 text-[11px] font-medium text-status-info"
+                  className="block"
                 >
-                  <span className="opacity-70">{sel.groupName}:</span>
-                  <span>{sel.options.map((o) => o.label).join("/")}</span>
+                  {compactModifierGroupName(sel.groupName)}: {sel.options.map((o) => o.label).join("/")}
                 </span>
               ))}
             </div>
           )
         )}
         {/* Note */}
-        {item.note && (
+        {preferences.showItemNotes && item.note && (
           <p className="text-xs text-status-warning italic mt-1 flex items-start gap-1">
             <Icon name="sticky_note_2" size={14} className="mt-0.5 shrink-0" />
             {item.note}
           </p>
         )}
-        {/* Quantity badge */}
-        {density === "comfortable" && item.quantity > 1 && (
-          <span className="inline-flex items-center gap-0.5 mt-2 px-2 py-0.5 rounded-full bg-status-info/20 text-status-info text-[10px] font-bold">
-            x{formatNumber(item.quantity)}
-          </span>
-        )}
       </div>
+    </button>
+  );
+}
+
+function KdsDisplaySettingsDialog({
+  open,
+  preferences,
+  saving,
+  onOpenChange,
+  onChange,
+  onSave,
+}: {
+  open: boolean;
+  preferences: KdsDisplayPreferences;
+  saving: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (preferences: KdsDisplayPreferences) => void;
+  onSave: () => void;
+}) {
+  const update = <K extends keyof KdsDisplayPreferences>(
+    key: K,
+    value: KdsDisplayPreferences[K],
+  ) => onChange({ ...preferences, [key]: value });
+
+  return (
+    <Dialog open={open} onOpenChange={(nextOpen) => !saving && onOpenChange(nextOpen)}>
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Cài đặt hiển thị KDS</DialogTitle>
+          <DialogDescription>
+            Áp dụng riêng cho chi nhánh đang chọn. Thiết lập này chỉ thay đổi cách
+            bếp nhìn phiếu, không thay đổi hóa đơn hay tồn kho.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="divide-y divide-border border-y border-border">
+          <section className="space-y-3 py-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Thứ tự món</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Giữ thứ tự nhân viên nhập trên POS hoặc sắp theo tên để bếp dễ quét.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 rounded-lg border border-border bg-surface-container p-1">
+              {([
+                ["entry", "Theo thứ tự POS"],
+                ["name", "Theo tên A-Z"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => update("itemSort", value)}
+                  className={cn(
+                    "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
+                    preferences.itemSort === value
+                      ? "bg-card text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-pressed={preferences.itemSort === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-1 py-3">
+            <KdsSettingsToggle
+              label="Gom món giống nhau"
+              description="Chỉ gom khi món, size, topping, tùy chọn, ghi chú và trạng thái giống hệt nhau."
+              checked={preferences.combineIdenticalItems}
+              onChange={(checked) => update("combineIdenticalItems", checked)}
+            />
+            <KdsSettingsToggle
+              label="Hiện loại đơn"
+              description="Hiện bàn, mang về hoặc giao hàng trên đầu phiếu."
+              checked={preferences.showOrderType}
+              onChange={(checked) => update("showOrderType", checked)}
+            />
+            <KdsSettingsToggle
+              label="Hiện trạng thái đã thu"
+              description="Cho bếp biết hóa đơn đã được thanh toán."
+              checked={preferences.showPaymentStatus}
+              onChange={(checked) => update("showPaymentStatus", checked)}
+            />
+            <KdsSettingsToggle
+              label="Hiện ghi chú món"
+              description="Giữ các lưu ý riêng mà thu ngân gửi cho bếp."
+              checked={preferences.showItemNotes}
+              onChange={(checked) => update("showItemNotes", checked)}
+            />
+          </section>
+
+          <section className="space-y-3 py-4">
+            <div>
+              <h3 className="text-sm font-semibold text-foreground">Tùy chọn pha chế</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Một dòng tiết kiệm chỗ; từng dòng phù hợp màn hình đặt xa khu pha chế.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 rounded-lg border border-border bg-surface-container p-1">
+              {([
+                ["inline", "Một dòng"],
+                ["stacked", "Từng dòng"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => update("modifierLayout", value)}
+                  className={cn(
+                    "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
+                    preferences.modifierLayout === value
+                      ? "bg-card text-primary shadow-sm"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                  aria-pressed={preferences.modifierLayout === value}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <DialogFooter>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={saving}
+            className="min-h-10 rounded-lg border border-border bg-card px-4 text-sm font-semibold text-foreground hover:bg-surface-container disabled:opacity-60"
+          >
+            Hủy
+          </button>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={saving}
+            className="flex min-h-10 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:cursor-wait disabled:opacity-70"
+          >
+            {saving && <Icon name="progress_activity" size={16} className="animate-spin" />}
+            {saving ? "Đang lưu..." : "Lưu cài đặt"}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function KdsSettingsToggle({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className="flex w-full items-center gap-4 rounded-md px-1 py-3 text-left hover:bg-surface-container"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-foreground">{label}</span>
+        <span className="mt-0.5 block text-xs leading-5 text-muted-foreground">
+          {description}
+        </span>
+      </span>
+      <span
+        aria-hidden="true"
+        className={cn(
+          "relative h-6 w-11 shrink-0 rounded-full border transition-colors",
+          checked
+            ? "border-primary bg-primary"
+            : "border-outline-variant bg-surface-container-high",
+        )}
+      >
+        <span
+          className={cn(
+            "absolute top-0.5 size-4 rounded-full bg-white shadow-sm transition-transform",
+            checked ? "translate-x-5" : "translate-x-0.5",
+          )}
+        />
+      </span>
     </button>
   );
 }

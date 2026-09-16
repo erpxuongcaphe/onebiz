@@ -76,10 +76,10 @@ describe("KDS không tải máy chủ vô ích", () => {
 
 describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {
   it("khóa ngay theo món và theo đơn trước khi gọi máy chủ", () => {
-    expect(kds).toContain("pendingItemIdsRef.current.has(item.id)");
+    expect(kds).toContain("itemIds.some((id) => pendingItemIdsRef.current.has(id))");
     expect(kds).toContain("pendingOrderIdsRef.current.has(item.kitchenOrderId)");
     expect(kds).toContain("pendingOrderIdsRef.current.has(orderId)");
-    expect(kds).toContain("setItemsPending([item.id], true)");
+    expect(kds).toContain("setItemsPending(itemIds, true)");
     expect(kds).toContain("setOrderPending(orderId, true)");
   });
 
@@ -90,7 +90,9 @@ describe("KDS khóa thao tác lặp và đồng bộ an toàn", () => {
   });
 
   it("nút món và nút đơn hiển thị trạng thái bận, không cho bấm tiếp", () => {
-    expect(kds).toContain("isPending={isOrderPending || pendingItemIds.has(item.id)}");
+    expect(kds).toContain(
+      "isPending={isOrderPending || group.items.some((item) => pendingItemIds.has(item.id))}",
+    );
     expect(kds).toContain("disabled={isPending}");
     expect(kds).toContain("disabled={isOrderPending}");
     expect(kds).toContain("disabled={!allReady || isOrderPending}");
@@ -114,19 +116,21 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
   });
 
   it("ba luong chia het chieu ngang, moi luong co them cot tren man hinh lon", () => {
-    expect(kds).toContain('"grid min-h-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3"');
+    expect(kds).toContain(
+      '"grid min-h-full grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-3"',
+    );
     expect(kds).toContain(
       '"grid auto-rows-max grid-cols-1 items-start gap-2 2xl:grid-cols-2"',
     );
   });
 
-  it("co che do gon mac dinh va nho lua chon theo thiet bi", () => {
-    expect(kds).toContain('const KDS_DENSITY_KEY = "onebiz_kds_density"');
-    expect(kds).toContain('useState<KdsDensity>("compact")');
-    expect(kds).toContain("window.localStorage.getItem(KDS_DENSITY_KEY)");
-    expect(kds).toContain("window.localStorage.setItem(KDS_DENSITY_KEY, next)");
-    expect(kds).toContain('aria-label="Mật độ phiếu bếp"');
-    expect(kds).toContain('aria-pressed={density === option.key}');
+  it("chỉ còn một bố cục gọn và cài đặt quản trị theo chi nhánh", () => {
+    expect(kds).not.toContain("KDS_DENSITY_KEY");
+    expect(kds).not.toContain("Dễ đọc");
+    expect(kds).toContain('aria-label="Cài đặt hiển thị KDS"');
+    expect(kds).toContain("canManageKds &&");
+    expect(kds).toContain("updateBranchSettings(branchId");
+    expect(kds).toContain("KdsDisplaySettingsDialog");
   });
 
   it("loc mot luong co the hien toi nam cot ticket tren man rong", () => {
@@ -135,8 +139,8 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
     );
     expect(kds).toContain("#{order.orderNumber}");
     expect(kds).toContain("compactModifierGroupName(selection.groupName)");
-    expect(kds).toContain('allReady || density === "comfortable"');
-    expect(kds).toContain('density === "compact" ? "min-h-11 gap-2 p-2" : "gap-3 p-3"');
+    expect(kds).toContain("prepareKdsItemGroups(order.items, preferences)");
+    expect(kds).toContain('"flex min-h-11 w-full cursor-pointer items-start gap-2 rounded-lg border p-2');
   });
 
   it("dong ho don cu hien ngay va gio thay vi cong don hang nghin phut", () => {

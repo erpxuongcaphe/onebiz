@@ -215,6 +215,16 @@ export interface BranchSettings {
   posCanvasHeight?: number;
   /** Cart position trên POS view (Sprint sau implement). */
   posCartPosition?: "right" | "bottom";
+  /** Gom các dòng KDS có cùng món, quy cách, tuỳ chọn, ghi chú và trạng thái. */
+  kdsCombineIdenticalItems?: boolean;
+  /** Thứ tự món trong từng phiếu bếp. */
+  kdsItemSort?: "entry" | "name";
+  /** Cách trình bày tuỳ chọn pha chế. */
+  kdsModifierLayout?: "inline" | "stacked";
+  /** Các thông tin phụ có thể ẩn trên màn hình bếp của chi nhánh. */
+  kdsShowOrderType?: boolean;
+  kdsShowPaymentStatus?: boolean;
+  kdsShowItemNotes?: boolean;
 }
 
 export async function getBranchSettings(
@@ -257,6 +267,30 @@ export async function getBranchSettings(
       raw.pos_cart_position === "right" || raw.pos_cart_position === "bottom"
         ? raw.pos_cart_position
         : undefined,
+    kdsCombineIdenticalItems:
+      typeof raw.kds_combine_identical_items === "boolean"
+        ? raw.kds_combine_identical_items
+        : undefined,
+    kdsItemSort:
+      raw.kds_item_sort === "entry" || raw.kds_item_sort === "name"
+        ? raw.kds_item_sort
+        : undefined,
+    kdsModifierLayout:
+      raw.kds_modifier_layout === "inline" || raw.kds_modifier_layout === "stacked"
+        ? raw.kds_modifier_layout
+        : undefined,
+    kdsShowOrderType:
+      typeof raw.kds_show_order_type === "boolean"
+        ? raw.kds_show_order_type
+        : undefined,
+    kdsShowPaymentStatus:
+      typeof raw.kds_show_payment_status === "boolean"
+        ? raw.kds_show_payment_status
+        : undefined,
+    kdsShowItemNotes:
+      typeof raw.kds_show_item_notes === "boolean"
+        ? raw.kds_show_item_notes
+        : undefined,
   };
 }
 
@@ -274,6 +308,18 @@ export async function updateBranchSettings(
   if (patch.posCanvasWidth !== undefined) payload.pos_canvas_width = patch.posCanvasWidth;
   if (patch.posCanvasHeight !== undefined) payload.pos_canvas_height = patch.posCanvasHeight;
   if (patch.posCartPosition !== undefined) payload.pos_cart_position = patch.posCartPosition;
+  if (patch.kdsCombineIdenticalItems !== undefined) {
+    payload.kds_combine_identical_items = patch.kdsCombineIdenticalItems;
+  }
+  if (patch.kdsItemSort !== undefined) payload.kds_item_sort = patch.kdsItemSort;
+  if (patch.kdsModifierLayout !== undefined) {
+    payload.kds_modifier_layout = patch.kdsModifierLayout;
+  }
+  if (patch.kdsShowOrderType !== undefined) payload.kds_show_order_type = patch.kdsShowOrderType;
+  if (patch.kdsShowPaymentStatus !== undefined) {
+    payload.kds_show_payment_status = patch.kdsShowPaymentStatus;
+  }
+  if (patch.kdsShowItemNotes !== undefined) payload.kds_show_item_notes = patch.kdsShowItemNotes;
 
   const { error } = await (supabase.rpc as any)("update_branch_settings_atomic", {
     p_branch_id: branchId,
