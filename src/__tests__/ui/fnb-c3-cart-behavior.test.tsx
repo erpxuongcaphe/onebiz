@@ -85,7 +85,7 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
   it("dòng phụ hiện đủ, không mất lựa chọn quan trọng", () => {
     const ghiChu =
       "Ít ngọt thôi, nhiều đá, để riêng trân châu, giao trước 5 giờ chiều cho chị Hằng ở quầy lễ tân toà nhà B";
-    renderGio([
+    const { container } = renderGio([
       taoDong(1, {
         productName: "Trà Sữa Trân Châu Đường Đen Đặc Biệt Phiên Bản Giới Hạn",
         variantLabel: "Size L",
@@ -118,6 +118,20 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
               },
             ],
           },
+          {
+            groupId: "temperature",
+            groupName: "Nhiệt độ",
+            rule: "single_required",
+            options: [
+              {
+                optionId: "temperature-cold",
+                label: "Lạnh",
+                scaleFactor: null,
+                priceDelta: 0,
+                linkedProductId: null,
+              },
+            ],
+          },
         ],
         toppings: [
           { name: "Trân châu đường đen", quantity: 2, price: 7000 },
@@ -128,11 +142,22 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
       } as Partial<FnbOrderLine>),
     ]);
     expect(screen.getByText("Size L")).toBeInTheDocument();
-    expect(screen.getByText("Mức đường: 50% · Mức đá: Ít đá")).toBeInTheDocument();
+    expect(screen.getByText("Đường:")).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("Đá:")).toBeInTheDocument();
+    expect(screen.getByText("Ít đá")).toBeInTheDocument();
+    expect(screen.getByText("Nhiệt độ:")).toBeInTheDocument();
+    expect(screen.getByText("Lạnh")).toBeInTheDocument();
+    const modifierGrid = screen.getByTestId("fnb-line-modifiers");
+    const modifierCells = screen.getAllByTestId("fnb-line-modifier");
+    expect(modifierGrid.className).toContain("grid-cols-2");
+    expect(modifierCells).toHaveLength(3);
+    expect(modifierCells[2].className).toContain("col-span-2");
     expect(screen.getByText(/Trân châu đường đen/)).toBeInTheDocument();
     expect(screen.getByText(/Pudding trứng nướng/)).toBeInTheDocument();
     expect(screen.getByText(/Kem cheese/)).toBeInTheDocument();
     expect(screen.getByText(new RegExp(ghiChu.slice(0, 30)))).toBeInTheDocument();
+    expect(container.querySelector('[data-testid="fnb-line-modifiers"]')).toBe(modifierGrid);
   });
 });
 

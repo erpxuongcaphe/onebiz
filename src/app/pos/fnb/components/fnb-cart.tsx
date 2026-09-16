@@ -133,16 +133,29 @@ const ORDER_TYPE_LABEL: Record<string, string> = {
   delivery: "Giao hàng",
 };
 
-function formatModifierSummary(line: FnbOrderLine): string {
+type CartModifierDetail = {
+  id: string;
+  label: string;
+  value: string;
+};
+
+function getCartModifierLabel(groupName: string): string {
+  const normalizedName = groupName.toLocaleLowerCase("vi-VN");
+
+  if (normalizedName.includes("mức đường")) return "Đường";
+  if (normalizedName.includes("mức đá")) return "Đá";
+
+  return groupName;
+}
+
+function getCartModifierDetails(line: FnbOrderLine): CartModifierDetail[] {
   return (line.modifierSelections ?? [])
     .filter((selection) => selection.options.length > 0)
-    .map(
-      (selection) =>
-        `${selection.groupName}: ${selection.options
-          .map((option) => option.label)
-          .join(", ")}`,
-    )
-    .join(" · ");
+    .map((selection) => ({
+      id: selection.groupId,
+      label: getCartModifierLabel(selection.groupName),
+      value: selection.options.map((option) => option.label).join(", "),
+    }));
 }
 
 export function FnbCart({
@@ -1215,7 +1228,7 @@ function CartLineItem({
   /** Dòng đã nằm trên đơn bếp: chỉ đọc để không sửa/gửi trùng. */
   sentToKitchen?: boolean;
 }) {
-  const modifierSummary = formatModifierSummary(line);
+  const modifierDetails = getCartModifierDetails(line);
 
   // Stitch FnB mockup cart line:
   // - Wrap card: bg-surface-container-low rounded-lg p-3
@@ -1225,7 +1238,7 @@ function CartLineItem({
   return (
     <div className="group relative bg-surface-container-low rounded-lg p-2.5 hover:bg-surface-container transition-colors">
       <div className="flex items-start justify-between gap-2">
-        {/* Name + variant — C3: tên tối đa 2 dòng, tuỳ chọn ở dòng phụ riêng */}
+        {/* Tên/size ở hàng chính; lựa chọn luôn dùng toàn bộ chiều ngang bên dưới. */}
         <div className="flex-1 min-w-0">
           <p className="font-heading text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words">
             {line.productName}
@@ -1233,16 +1246,6 @@ function CartLineItem({
           {line.variantLabel && (
             <p className="text-[11px] text-muted-foreground mt-0.5">
               {line.variantLabel}
-            </p>
-          )}
-          {modifierSummary && (
-            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug break-words">
-              {modifierSummary}
-            </p>
-          )}
-          {sentToKitchen && (
-            <p className="mt-1 text-[11px] font-medium text-status-info">
-              Đã gửi bếp
             </p>
           )}
         </div>
@@ -1260,6 +1263,33 @@ function CartLineItem({
         </div>
       </div>
 
+      {modifierDetails.length > 0 && (
+        <div
+          className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 border-l-2 border-primary/35 pl-2 text-xs leading-snug"
+          aria-label="Tùy chọn món"
+          data-testid="fnb-line-modifiers"
+        >
+          {modifierDetails.map((detail, index) => {
+            const isLastOddItem =
+              modifierDetails.length % 2 === 1 && index === modifierDetails.length - 1;
+
+            return (
+              <p
+                key={detail.id}
+                className={cn(
+                  "min-w-0 break-words text-muted-foreground",
+                  isLastOddItem && "col-span-2",
+                )}
+                data-testid="fnb-line-modifier"
+              >
+                <span className="text-foreground/70">{detail.label}: </span>
+                <span className="font-medium text-foreground">{detail.value}</span>
+              </p>
+            );
+          })}
+        </div>
+      )}
+
       {/* Toppings */}
       {line.toppings.length > 0 && (
         <div className="mt-2 space-y-0.5">
@@ -1274,8 +1304,14 @@ function CartLineItem({
         </div>
       )}
       {line.note && (
-        <p className="text-[11px] text-status-warning mt-1 italic">
-          &ldquo;{line.note}&rdquo;
+        <div className="mt-1.5 flex items-start gap-1.5 border-l-2 border-status-warning pl-2 text-[11px] leading-snug text-status-warning">
+          <Icon name="sticky_note_2" size={14} className="mt-px shrink-0" />
+          <p className="min-w-0 whitespace-pre-wrap break-words">{line.note}</p>
+        </div>
+      )}
+      {sentToKitchen && (
+        <p className="mt-1.5 text-[11px] font-medium text-status-info">
+          Đã gửi bếp
         </p>
       )}
 
