@@ -122,6 +122,7 @@ export default function CongNoPage() {
     partyName: string;
     partyCode?: string;
     estimatedDebt: number;
+    availableAdvance: number;
   } | null>(null);
   const [advanceTarget, setAdvanceTarget] = useState<{
     mode: "customer" | "supplier";
@@ -335,6 +336,7 @@ export default function CongNoPage() {
                   partyName: row.original.name,
                   partyCode: row.original.code,
                   estimatedDebt: debt,
+                  availableAdvance: row.original.advance,
                 })
               }
               title="Xem chi tiết HĐ đang nợ"
@@ -480,6 +482,7 @@ export default function CongNoPage() {
                   partyName: row.original.name,
                   partyCode: row.original.code,
                   estimatedDebt: debt,
+                  availableAdvance: row.original.advance,
                 })
               }
               title="Xem chi tiết PO đang nợ"
@@ -1234,6 +1237,11 @@ export default function CongNoPage() {
           partyName={detailTarget.partyName}
           partyCode={detailTarget.partyCode}
           estimatedDebt={detailTarget.estimatedDebt}
+          availableAdvance={detailTarget.availableAdvance}
+          onSuccess={() => {
+            setDetailTarget(null);
+            fetchData();
+          }}
         />
       )}
 

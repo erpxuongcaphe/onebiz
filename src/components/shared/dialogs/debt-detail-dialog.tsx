@@ -24,6 +24,8 @@ import {
 } from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ApplyAdvanceDialog } from "@/components/shared/dialogs/apply-advance-dialog";
 import { formatCurrency } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import {
@@ -44,6 +46,9 @@ interface DebtDetailDialogProps {
   partyCode?: string;
   /** Tổng nợ ước tính từ aggregate — hiển thị nhanh trước khi load list */
   estimatedDebt?: number;
+  /** Tiền ứng/đặt cọc còn lại, cùng phạm vi chi nhánh của dòng công nợ. */
+  availableAdvance?: number;
+  onSuccess?: () => void;
 }
 
 type DocLine = OpenInvoiceLine | OpenPurchaseLine;
@@ -57,10 +62,13 @@ export function DebtDetailDialog({
   partyName,
   partyCode,
   estimatedDebt = 0,
+  availableAdvance = 0,
+  onSuccess,
 }: DebtDetailDialogProps) {
   const { toast } = useToast();
   const [docs, setDocs] = useState<DocLine[]>([]);
   const [loading, setLoading] = useState(false);
+  const [applyTarget, setApplyTarget] = useState<DocLine | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -97,6 +105,9 @@ export function DebtDetailDialog({
 
   const docLabel = mode === "customer" ? "Hóa đơn" : "Phiếu nhập";
   const detailRoute = mode === "customer" ? "/don-hang/hoa-don" : "/hang-hoa/nhap-hang";
+  // The summary can span many branches, but an allocation must never do so.
+  // Keep the action unavailable until the manager narrows the page scope.
+  const canApplyAdvance = Boolean(branchId) && availableAdvance > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -152,6 +163,12 @@ export function DebtDetailDialog({
           </div>
         )}
 
+        {!branchId && availableAdvance > 0 && (
+          <div className="mx-6 mt-3 rounded-md border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning">
+            Chọn một chi nhánh cụ thể tại thanh phạm vi để cấn tiền ứng vào chứng từ. Số dư đang xem là tổng hợp toàn hệ thống.
+          </div>
+        )}
+
         {/* List HD/PO */}
         <div className="px-6 py-4 overflow-y-auto flex-1 min-h-0">
           {loading ? (
@@ -202,14 +219,11 @@ export function DebtDetailDialog({
                 const paidPercent = d.total > 0 ? Math.round((d.paid / d.total) * 100) : 0;
 
                 return (
-                  <a
+                  <div
                     key={d.id}
-                    href={`${detailRoute}?focus=${d.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
                     className={cn(
                       "block border rounded-lg p-3 space-y-2.5 transition-all",
-                      "hover:border-primary hover:shadow-md hover:bg-primary/5 cursor-pointer",
+                      "hover:border-primary hover:shadow-md hover:bg-primary/5",
                       d.ageDays > 90 && "border-status-error/30",
                     )}
                   >
@@ -232,11 +246,28 @@ export function DebtDetailDialog({
                           {ageBadge.label}
                         </Badge>
                       </div>
-                      <Icon
-                        name="open_in_new"
-                        size={16}
-                        className="text-muted-foreground shrink-0"
-                      />
+                      <div className="flex items-center gap-1">
+                        {canApplyAdvance && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 px-2 text-xs text-status-success"
+                            onClick={() => setApplyTarget(d)}
+                          >
+                            <Icon name="link" size={13} />
+                            Dùng tiền ứng
+                          </Button>
+                        )}
+                        <a
+                          href={`${detailRoute}?focus=${d.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-muted"
+                          title={`Mở ${docLabel.toLowerCase()} ${d.code}`}
+                        >
+                          <Icon name="open_in_new" size={16} />
+                        </a>
+                      </div>
                     </div>
 
                     {/* Info 3 cột */}
@@ -274,13 +305,29 @@ export function DebtDetailDialog({
                         style={{ width: `${paidPercent}%` }}
                       />
                     </div>
-                  </a>
+                  </div>
                 );
               })}
             </div>
           )}
         </div>
       </DialogContent>
+      {applyTarget && (
+        <ApplyAdvanceDialog
+          open={!!applyTarget}
+          onOpenChange={(nextOpen) => !nextOpen && setApplyTarget(null)}
+          mode={mode}
+          partyName={partyName}
+          referenceId={applyTarget.id}
+          referenceCode={applyTarget.code}
+          debt={applyTarget.debt}
+          availableAdvance={availableAdvance}
+          onSuccess={() => {
+            setApplyTarget(null);
+            onSuccess?.();
+          }}
+        />
+      )}
     </Dialog>
   );
 }
