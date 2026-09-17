@@ -852,6 +852,7 @@ export default function CongNoPage() {
           onOpenChange={(o) => !o && setSettleTarget(null)}
           mode={settleTarget.mode}
           partyId={settleTarget.partyId}
+          branchId={activeBranchId}
           partyName={settleTarget.partyName}
           estimatedDebt={settleTarget.estimatedDebt}
           onSuccess={() => {

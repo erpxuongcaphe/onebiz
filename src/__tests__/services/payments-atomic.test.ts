@@ -67,6 +67,8 @@ describe("payment RPC atomic", () => {
       cashCode: "PT000042",
       newPaid: 50000,
       newDebt: 0,
+      appliedAmount: 50000,
+      advanceAmount: 0,
     });
     expect(mockFrom).not.toHaveBeenCalled();
   });
@@ -98,6 +100,33 @@ describe("payment RPC atomic", () => {
     );
     expect(result.cashCode).toBe("PC000011");
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("trả về riêng phần tất toán và phần ứng trước nhà cung cấp", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: {
+        cash_transaction_id: "cash-uuid-advance",
+        cash_code: "PC000012",
+        new_paid: 100000,
+        new_debt: 0,
+        applied_amount: 100000,
+        advance_amount: 25000,
+      },
+      error: null,
+    });
+
+    const result = await recordPurchasePayment({
+      referenceId: "po-uuid-advance",
+      amount: 125000,
+      paymentMethod: "transfer",
+      note: "Ứng trước lô hàng kế tiếp",
+    });
+
+    expect(result).toMatchObject({
+      newDebt: 0,
+      appliedAmount: 100000,
+      advanceAmount: 25000,
+    });
   });
 
   it("dừng an toàn khi RPC chưa có, không rơi về ghi nhiều bước", async () => {

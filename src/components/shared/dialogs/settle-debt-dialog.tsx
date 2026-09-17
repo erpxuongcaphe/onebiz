@@ -53,6 +53,8 @@ interface SettleDebtDialogProps {
   mode: "customer" | "supplier";
   /** ID của KH hoặc NCC. */
   partyId: string;
+  /** Chi nhánh đang xem công nợ; không phân bổ chéo chi nhánh. */
+  branchId?: string | null;
   /** Tên hiển thị header (vd tên KH). */
   partyName: string;
   /** Tổng nợ ước tính (hiển thị, FE refetch khi mở). */
@@ -78,6 +80,7 @@ export function SettleDebtDialog({
   onOpenChange,
   mode,
   partyId,
+  branchId,
   partyName,
   estimatedDebt,
   onSuccess,
@@ -105,8 +108,8 @@ export function SettleDebtDialog({
     setLoading(true);
     const fetcher =
       mode === "customer"
-        ? getOpenInvoicesByCustomer(partyId)
-        : getOpenPurchasesBySupplier(partyId);
+        ? getOpenInvoicesByCustomer(partyId, branchId)
+        : getOpenPurchasesBySupplier(partyId, branchId);
     fetcher
       .then((rows) => {
         if (cancelled) return;
@@ -126,7 +129,7 @@ export function SettleDebtDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, mode, partyId, toast]);
+  }, [open, mode, partyId, branchId, toast]);
 
   // Auto-allocate FIFO mỗi khi totalAmount thay đổi
   const allocatedDocs = useMemo<DocLine[]>(() => {
@@ -154,10 +157,18 @@ export function SettleDebtDialog({
       });
       return;
     }
-    if (amount > totalDebt) {
+    if (mode === "customer" && amount > totalDebt) {
       toast({
         title: "Số tiền vượt tổng nợ",
         description: `Tổng nợ chỉ ${formatCurrency(totalDebt)}. Nhập số nhỏ hơn hoặc bằng.`,
+        variant: "error",
+      });
+      return;
+    }
+    if (mode === "supplier" && amount > totalDebt && note.trim().length < 3) {
+      toast({
+        title: "Cần ghi lý do ứng trước",
+        description: "Nhập ghi chú để đối soát phần thanh toán vượt công nợ.",
         variant: "error",
       });
       return;
@@ -176,7 +187,7 @@ export function SettleDebtDialog({
       let okCount = 0;
       const failures: string[] = [];
       // Sequential — đảm bảo audit log đúng thứ tự, không spam RPC
-      for (const d of docsToPay) {
+      for (const [index, d] of docsToPay.entries()) {
         try {
           if (mode === "customer") {
             await recordInvoicePayment({
@@ -188,9 +199,12 @@ export function SettleDebtDialog({
                 : `Thu nợ tổng KH ${partyName} — HĐ ${d.code}`,
             });
           } else {
+            const isLastAllocation = index === docsToPay.length - 1;
             await recordPurchasePayment({
               referenceId: d.id,
-              amount: d.allocate,
+              amount:
+                d.allocate +
+                (isLastAllocation ? Math.max(0, remainder) : 0),
               paymentMethod,
               note: note
                 ? `${note} — phân bổ PO ${d.code}`
@@ -206,7 +220,10 @@ export function SettleDebtDialog({
       if (okCount > 0 && failures.length === 0) {
         toast({
           title: mode === "customer" ? "Đã thu nợ" : "Đã trả nợ",
-          description: `Phân bổ vào ${okCount} chứng từ — tổng ${formatCurrency(totalAlloc)}.`,
+          description:
+            mode === "supplier" && remainder > 0
+              ? `Đã trả ${formatCurrency(totalAlloc)} công nợ và ghi nhận ${formatCurrency(remainder)} ứng trước NCC.`
+              : `Phân bổ vào ${okCount} chứng từ — tổng ${formatCurrency(totalAlloc)}.`,
           variant: "success",
         });
         onOpenChange(false);
@@ -240,6 +257,7 @@ export function SettleDebtDialog({
     onOpenChange,
     onSuccess,
     totalAlloc,
+    remainder,
   ]);
 
   const titleLabel = mode === "customer" ? "Thu tiền khách" : "Trả tiền nhà cung cấp";
@@ -309,7 +327,9 @@ export function SettleDebtDialog({
                   )}
                 >
                   {remainder > 0
-                    ? `Còn dư ${formatCurrency(remainder)} chưa phân bổ — hệ thống chỉ phân tối đa = tổng nợ.`
+                    ? mode === "supplier"
+                      ? `${formatCurrency(remainder)} sẽ được ghi nhận là tiền ứng trước NCC.`
+                      : `Còn dư ${formatCurrency(remainder)} chưa phân bổ — không được thu vượt công nợ khách hàng.`
                     : `Phân bổ đủ vào ${docsCount} chứng từ.`}
                 </p>
               )}
@@ -338,12 +358,18 @@ export function SettleDebtDialog({
               </Select>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="settle-note">Ghi chú (tuỳ chọn)</Label>
+              <Label htmlFor="settle-note">
+                Ghi chú {mode === "supplier" && remainder > 0 ? "*" : "(tuỳ chọn)"}
+              </Label>
               <Input
                 id="settle-note"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                placeholder="VD: Khách trả qua VCB ngày 03/06"
+                placeholder={
+                  mode === "supplier"
+                    ? "VD: Ứng trước cho lô hàng tháng 9"
+                    : "VD: Khách trả qua VCB ngày 03/06"
+                }
               />
             </div>
           </div>
