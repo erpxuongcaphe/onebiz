@@ -72,7 +72,12 @@ export function RecordPaymentDialog({
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (amount <= 0) newErrors.amount = "Số tiền phải lớn hơn 0";
-    if (amount > currentDebt) newErrors.amount = `Vượt quá công nợ (${formatCurrency(currentDebt)})`;
+    if (isInvoice && amount > currentDebt) {
+      newErrors.amount = `Vượt quá công nợ (${formatCurrency(currentDebt)})`;
+    }
+    if (!isInvoice && amount > currentDebt && note.trim().length < 3) {
+      newErrors.note = "Cần ghi lý do cho khoản ứng trước nhà cung cấp";
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -95,7 +100,10 @@ export function RecordPaymentDialog({
       onOpenChange(false);
       toast({
         title: isInvoice ? "Thu nợ thành công" : "Trả nợ NCC thành công",
-        description: `${result.cashCode} — ${formatCurrency(amount)}. Công nợ còn lại: ${formatCurrency(result.newDebt)}`,
+        description:
+          result.advanceAmount > 0
+            ? `${result.cashCode} — trả nợ ${formatCurrency(result.appliedAmount)}, ứng trước NCC ${formatCurrency(result.advanceAmount)}.`
+            : `${result.cashCode} — ${formatCurrency(amount)}. Công nợ còn lại: ${formatCurrency(result.newDebt)}`,
         variant: "success",
       });
       onSuccess?.();
@@ -156,6 +164,16 @@ export function RecordPaymentDialog({
                 Thanh toán hết nợ
               </p>
             )}
+            {!isInvoice && amount > currentDebt && (
+              <div className="rounded-md border border-status-warning/30 bg-status-warning/10 p-2 text-xs">
+                <p className="font-medium text-status-warning">
+                  Trả hết nợ: {formatCurrency(currentDebt)}
+                </p>
+                <p className="mt-1 text-muted-foreground">
+                  Ứng trước NCC: {formatCurrency(amount - currentDebt)}. Khoản này được theo dõi riêng, không làm công nợ phiếu nhập thành số âm.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Payment method */}
@@ -179,10 +197,16 @@ export function RecordPaymentDialog({
             <textarea
               className="flex min-h-[50px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
               value={note}
-              onChange={(e) => setNote(e.target.value)}
+              onChange={(e) => {
+                setNote(e.target.value);
+                if (errors.note) setErrors((prev) => ({ ...prev, note: "" }));
+              }}
               placeholder="Ghi chú thanh toán"
               rows={2}
             />
+            {errors.note && (
+              <p className="text-xs text-destructive">{errors.note}</p>
+            )}
           </div>
         </div>
 

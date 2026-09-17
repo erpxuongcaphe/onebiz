@@ -27,6 +27,8 @@ export interface RecordPaymentResult {
   cashCode: string;
   newPaid: number;
   newDebt: number;
+  appliedAmount: number;
+  advanceAmount: number;
 }
 
 /**
@@ -66,6 +68,8 @@ export async function recordInvoicePayment(
     cashCode: result.cash_code as string,
     newPaid: Number(result.new_paid ?? 0),
     newDebt: Number(result.new_debt ?? 0),
+    appliedAmount: Number(result.applied_amount ?? input.amount),
+    advanceAmount: 0,
   };
 }
 
@@ -101,6 +105,8 @@ export async function recordPurchasePayment(
     cashCode: result.cash_code as string,
     newPaid: Number(result.new_paid ?? 0),
     newDebt: Number(result.new_debt ?? 0),
+    appliedAmount: Number(result.applied_amount ?? input.amount),
+    advanceAmount: Number(result.advance_amount ?? 0),
   };
 }
 
