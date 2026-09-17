@@ -1,6 +1,7 @@
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { FnbReadiness } from "@/lib/services/supabase/fnb-readiness";
+import { FnbSetupWorkQueue } from "./fnb-setup-work-queue";
 
 const ISSUE_LABEL = {
   many_defaults: "Có nhiều lựa chọn mặc định",
@@ -210,9 +211,9 @@ export function FnbReadinessBand({
                 </div>
               ))}
               {readiness.menuIssues.length > menuIssuesToShow.length && (
-                <p className="px-1 text-xs text-muted-foreground">
-                  Còn {readiness.menuIssues.length - menuIssuesToShow.length} món/cỡ cần cấu hình.
-                </p>
+                <div className="border border-status-warning/30 bg-status-warning/5 px-2.5 py-2 text-xs text-muted-foreground lg:col-span-2">
+                  Còn {readiness.menuIssues.length - menuIssuesToShow.length} món/cỡ cần cấu hình. Xem đầy đủ trong hàng đợi bên dưới để lọc và xử lý lần lượt.
+                </div>
               )}
               {readiness.toppingSkuEnabled && readiness.toppingIssues.map((item) => (
                 <div
@@ -253,6 +254,11 @@ export function FnbReadinessBand({
             </div>
           </details>
         )}
+      {!ready && readiness.menuIssues.length > 0 && (
+        <div className="mt-3">
+          <FnbSetupWorkQueue issues={readiness.menuIssues} />
+        </div>
+      )}
     </section>
   );
 }

@@ -208,7 +208,8 @@ export function danhGiaFnbReadiness(input: {
         (bom) =>
           bom.code === variant.bom_code &&
           (bom.branch_id === null ||
-            (!!input.branchId && bom.branch_id === input.branchId)),
+            (!!input.branchId && bom.branch_id === input.branchId)) &&
+          bom.has_items !== false,
       ),
   );
   const variantProductsWithInvalidDefaults = [...variantsByProductId.values()].filter(

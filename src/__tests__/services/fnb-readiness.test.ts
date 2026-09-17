@@ -206,6 +206,42 @@ describe("danhGiaFnbReadiness", () => {
     ]);
   });
 
+  it("không coi cỡ có BOM rỗng là đã có công thức", () => {
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [
+        { id: "tea", code: "TRA-001", name: "Trà", sell_price: 0, bom_code: null },
+      ],
+      variants: [
+        {
+          id: "tea-l",
+          product_id: "tea",
+          name: "Size L",
+          sell_price: 35_000,
+          bom_code: "BOM-TRA-L",
+          is_default: true,
+        },
+      ],
+      boms: [
+        {
+          id: "bom-empty",
+          product_id: "tea",
+          code: "BOM-TRA-L",
+          branch_id: null,
+          has_items: false,
+        },
+      ],
+      groups: [],
+      options: [],
+      activeKitchenStations: 1,
+    });
+
+    expect(result.variantsMissingBom).toBe(1);
+    expect(result.menuIssues).toEqual([
+      expect.objectContaining({ code: "TRA-001", variantName: "Size L", missingBom: true }),
+    ]);
+  });
+
   it("không chặn vì topping SKU đang tắt nhưng vẫn bắt buộc BOM cho món bán", () => {
     const result = danhGiaFnbReadiness({
       products: [
