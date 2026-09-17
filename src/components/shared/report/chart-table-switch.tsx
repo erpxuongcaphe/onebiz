@@ -15,14 +15,26 @@ import {
 } from "@/components/ui/select";
 import type { ReportViewMode } from "@/lib/types/report";
 
+export interface ReportViewOption {
+  label: string;
+  icon: string;
+}
+
+export type ReportViewOptions = Partial<Record<ReportViewMode, ReportViewOption>>;
+
 interface ChartTableSwitchProps {
   value: ReportViewMode;
   onChange: (next: ReportViewMode) => void;
   /** Disable toggle (force one mode) */
   disabled?: boolean;
+  /**
+   * A report can name its two views by the job they support instead of the
+   * generic visualization type. For example: "Tổng quan" / "Danh sách".
+   */
+  options?: ReportViewOptions;
 }
 
-const OPTIONS: { key: ReportViewMode; label: string; icon: string }[] = [
+const DEFAULT_OPTIONS: { key: ReportViewMode; label: string; icon: string }[] = [
   { key: "chart", label: "Biểu đồ", icon: "show_chart" },
   { key: "table", label: "Bảng số liệu", icon: "table_rows" },
 ];
@@ -31,8 +43,13 @@ export function ChartTableSwitch({
   value,
   onChange,
   disabled,
+  options: customOptions,
 }: ChartTableSwitchProps) {
-  const selected = OPTIONS.find((option) => option.key === value) ?? OPTIONS[0];
+  const options = DEFAULT_OPTIONS.map((option) => ({
+    ...option,
+    ...customOptions?.[option.key],
+  }));
+  const selected = options.find((option) => option.key === value) ?? options[0];
 
   return (
     <Select
@@ -53,7 +70,7 @@ export function ChartTableSwitch({
         </SelectValue>
       </SelectTrigger>
       <SelectContent align="end" className="min-w-44">
-        {OPTIONS.map((option) => (
+        {options.map((option) => (
           <SelectItem key={option.key} value={option.key}>
             <Icon name={option.icon} size={15} />
             {option.label}
