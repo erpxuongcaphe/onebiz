@@ -45,6 +45,18 @@ export interface RecordAdvanceResult {
   advanceAmount: number;
 }
 
+export interface ApplyAdvanceInput {
+  referenceId: string;
+  amount: number;
+  note: string;
+}
+
+export interface ApplyAdvanceResult {
+  appliedAmount: number;
+  remainingDebt: number;
+  allocationCount: number;
+}
+
 async function recordPartyAdvance(
   type: "customer" | "supplier",
   input: RecordAdvanceInput,
@@ -85,6 +97,49 @@ export function recordCustomerAdvance(input: RecordAdvanceInput) {
 /** Ghi nhận tiền ứng trước nhà cung cấp, không cần có phiếu nhập. */
 export function recordSupplierAdvance(input: RecordAdvanceInput) {
   return recordPartyAdvance("supplier", input);
+}
+
+async function applyPartyAdvance(
+  type: "customer" | "supplier",
+  input: ApplyAdvanceInput,
+): Promise<ApplyAdvanceResult> {
+  const supabase = getClient();
+  await getCurrentContext();
+
+  const rpcName =
+    type === "customer"
+      ? "apply_customer_advance_to_invoice"
+      : "apply_supplier_advance_to_purchase_order";
+  const referenceKey =
+    type === "customer" ? "p_invoice_id" : "p_purchase_order_id";
+  const { data, error } = await supabase.rpc(
+    rpcName as never,
+    {
+      [referenceKey]: input.referenceId,
+      p_amount: input.amount,
+      p_note: input.note,
+    } as never,
+  );
+  if (error) handleError(error, `${rpcName}.rpc`);
+  if (!data) throw new Error("Không nhận được kết quả phân bổ tiền ứng");
+
+  const result = data as unknown as Record<string, unknown>;
+  const allocations = result.allocations;
+  return {
+    appliedAmount: Number(result.applied_amount ?? input.amount),
+    remainingDebt: Number(result.remaining_debt ?? 0),
+    allocationCount: Array.isArray(allocations) ? allocations.length : 0,
+  };
+}
+
+/** Cấn tiền khách đã trả trước vào một hóa đơn hoàn tất cùng chi nhánh. */
+export function applyCustomerAdvanceToInvoice(input: ApplyAdvanceInput) {
+  return applyPartyAdvance("customer", input);
+}
+
+/** Cấn tiền đã ứng trước NCC vào một phiếu nhập cùng chi nhánh. */
+export function applySupplierAdvanceToPurchaseOrder(input: ApplyAdvanceInput) {
+  return applyPartyAdvance("supplier", input);
 }
 
 /**
