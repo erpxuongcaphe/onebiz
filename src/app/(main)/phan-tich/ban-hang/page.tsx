@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -49,6 +49,12 @@ import {
   exportReportToExcel,
   buildReportTitleRows,
 } from "@/lib/utils/excel-export";
+import {
+  buildSalesOverviewRows,
+  getSalesOverviewInsights,
+  SALES_OVERVIEW_METRICS,
+  type SalesOverviewMetric,
+} from "@/lib/reports/sales-overview";
 
 // === Helpers ===
 
@@ -90,21 +96,30 @@ function formatReportDateTime(value: string) {
 
 // === Custom Tooltips ===
 
-function RevenueTooltip({
+function SalesOverviewTooltip({
   active,
   payload,
   label,
+  metric,
 }: {
   active?: boolean;
   payload?: Array<{ value: number }>;
   label?: string;
+  metric: SalesOverviewMetric;
 }) {
   if (!active || !payload?.length) return null;
+  const selectedMetric = SALES_OVERVIEW_METRICS[metric];
+  const value = payload[0].value;
   return (
     <div className="rounded-lg border bg-background p-3 shadow-md">
       <p className="text-xs text-muted-foreground mb-1">Ngày {label}</p>
       <p className="text-sm font-bold text-primary">
-        {formatChartTooltipCurrency(payload[0].value)}
+        {metric === "netRevenue"
+          ? formatChartTooltipCurrency(value)
+          : `${formatNumber(value)} ${metric === "orderCount" ? "đơn" : "món"}`}
+      </p>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        {selectedMetric.label}
       </p>
     </div>
   );
@@ -171,13 +186,18 @@ export default function BanHangPage() {
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topInvoicesList, setTopInvoicesList] = useState<TopInvoice[]>([]);
   const [tableMode, setTableMode] = useState<SalesTableMode>("daily");
+  const [overviewMetric, setOverviewMetric] =
+    useState<SalesOverviewMetric>("netRevenue");
   const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
   const [invoiceRows, setInvoiceRows] = useState<SalesReportInvoiceDetailRow[]>([]);
   const [invoiceRowsHasMore, setInvoiceRowsHasMore] = useState(false);
-  const [detailLoading, setDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(false);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [dailyError, setDailyError] = useState<string | null>(null);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
-  const detailRequestIdRef = useRef(0);
+  const dailyRequestIdRef = useRef(0);
+  const invoiceRequestIdRef = useRef(0);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -209,66 +229,70 @@ export default function BanHangPage() {
   }, [fetchData, isReady]);
 
   const fetchDailyRows = useCallback(async () => {
-    const requestId = ++detailRequestIdRef.current;
-    setDetailLoading(true);
-    setDetailError(null);
+    const requestId = ++dailyRequestIdRef.current;
+    setDailyLoading(true);
+    setDailyError(null);
     try {
       const rows = await getSalesReportDailyRows(activeBranchId, range);
-      if (requestId !== detailRequestIdRef.current) return;
+      if (requestId !== dailyRequestIdRef.current) return;
       setDailyRows(rows);
     } catch (error) {
-      if (requestId !== detailRequestIdRef.current) return;
+      if (requestId !== dailyRequestIdRef.current) return;
       const message =
         error instanceof Error ? error.message : "Vui long thu lai.";
-      setDetailError(message);
+      setDailyError(message);
       toast({
         title: "Loi tai bao cao theo ngay",
         description: message,
         variant: "error",
       });
     } finally {
-      if (requestId === detailRequestIdRef.current) setDetailLoading(false);
+      if (requestId === dailyRequestIdRef.current) setDailyLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
   const fetchInvoiceRows = useCallback(async (offset: number) => {
-    const requestId = ++detailRequestIdRef.current;
-    setDetailLoading(true);
-    setDetailError(null);
+    const requestId = ++invoiceRequestIdRef.current;
+    setInvoiceLoading(true);
+    setInvoiceError(null);
     try {
       const page = await getSalesReportInvoiceDetailPage(
         activeBranchId,
         range,
         offset,
       );
-      if (requestId !== detailRequestIdRef.current) return;
+      if (requestId !== invoiceRequestIdRef.current) return;
       setInvoiceRows((current) =>
         offset === 0 ? page.rows : [...current, ...page.rows],
       );
       setInvoiceRowsHasMore(page.hasMore);
     } catch (error) {
-      if (requestId !== detailRequestIdRef.current) return;
+      if (requestId !== invoiceRequestIdRef.current) return;
       const message =
         error instanceof Error ? error.message : "Vui long thu lai.";
-      setDetailError(message);
+      setInvoiceError(message);
       toast({
         title: "Loi tai bao cao theo hoa don",
         description: message,
         variant: "error",
       });
     } finally {
-      if (requestId === detailRequestIdRef.current) setDetailLoading(false);
+      if (requestId === invoiceRequestIdRef.current) setInvoiceLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
+  // Daily rows power both the detailed table and the operational chart. Loading
+  // once per range keeps the two modes consistent instead of showing two
+  // different revenue definitions.
   useEffect(() => {
-    if (!isReady || viewMode !== "table") return;
-    if (tableMode === "daily") {
-      fetchDailyRows();
-      return;
-    }
+    if (!isReady) return;
+    fetchDailyRows();
+  }, [fetchDailyRows, isReady]);
+
+  useEffect(() => {
+    if (!isReady || viewMode !== "table" || tableMode !== "invoices") return;
     fetchInvoiceRows(0);
-  }, [fetchDailyRows, fetchInvoiceRows, isReady, tableMode, viewMode]);
+  }, [fetchInvoiceRows, isReady, tableMode, viewMode]);
 
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
@@ -560,6 +584,10 @@ export default function BanHangPage() {
       onCustomRangeChange={setCustomRange}
       viewMode={viewMode}
       onViewModeChange={setViewMode}
+      viewOptions={{
+        chart: { label: "Tổng quan", icon: "analytics" },
+        table: { label: "Danh sách", icon: "table_rows" },
+      }}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
       exportDisabled={loading || exporting}
@@ -614,6 +642,17 @@ export default function BanHangPage() {
     : { text: "0%", positive: true };
 
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
+  const overviewRows = useMemo(
+    () => buildSalesOverviewRows(dailyRows, overviewMetric),
+    [dailyRows, overviewMetric],
+  );
+  const overviewInsights = useMemo(
+    () => getSalesOverviewInsights(dailyRows, revenueByHour, overviewMetric),
+    [dailyRows, revenueByHour, overviewMetric],
+  );
+  const overviewMetricMeta = SALES_OVERVIEW_METRICS[overviewMetric];
+  const selectedDetailError = tableMode === "daily" ? dailyError : invoiceError;
+  const selectedDetailLoading = tableMode === "daily" ? dailyLoading : invoiceLoading;
   const dailyColumns: DataTableColumn<SalesReportDailyRow>[] = [
     {
       label: "Ngày",
@@ -839,9 +878,9 @@ export default function BanHangPage() {
               </div>
             </div>
 
-            {detailError ? (
-              <div className="px-4 py-8 text-sm text-destructive">{detailError}</div>
-            ) : detailLoading ? (
+            {selectedDetailError ? (
+              <div className="px-4 py-8 text-sm text-destructive">{selectedDetailError}</div>
+            ) : selectedDetailLoading ? (
               <div className="flex min-h-48 items-center justify-center gap-2 px-4 py-8 text-sm text-muted-foreground">
                 <Icon name="progress_activity" size={20} className="animate-spin" />
                 Đang tải dữ liệu chi tiết...
@@ -892,14 +931,79 @@ export default function BanHangPage() {
           </section>
         ) : null}
 
-        {/* Daily Revenue Trend (chart mode) — CEO 22/05/2026 (UX P1 #4):
-            check `some(revenue > 0)` thay vì chỉ `length > 0` để KHÔNG
-            render chart khi backend trả mảng rows toàn revenue=0 (vd kỳ
-            báo cáo chưa có giao dịch — vẫn có rows ngày nhưng số = 0). */}
-        {viewMode === "chart" && dailyRevenue.some((d) => d.revenue > 0) && (
+        {viewMode === "chart" && (
+          <section className="border-y border-border bg-surface-container-low px-4 py-3 lg:px-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-sm font-semibold text-foreground">Tín hiệu điều hành</h2>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Tóm tắt từ dữ liệu trong kỳ đang chọn, không phải số liệu ước tính.
+                </p>
+              </div>
+              <div
+                className="inline-flex w-fit border border-border bg-background p-1"
+                role="tablist"
+                aria-label="Chỉ tiêu xem trong tổng quan"
+              >
+                {(Object.keys(SALES_OVERVIEW_METRICS) as SalesOverviewMetric[]).map((metric) => (
+                  <button
+                    key={metric}
+                    type="button"
+                    role="tab"
+                    aria-selected={overviewMetric === metric}
+                    onClick={() => setOverviewMetric(metric)}
+                    className={
+                      overviewMetric === metric
+                        ? "bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+                        : "px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                    }
+                  >
+                    {SALES_OVERVIEW_METRICS[metric].shortLabel}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="border border-border bg-background px-3 py-2">
+                <p className="text-[11px] font-medium text-muted-foreground">Ngày có phát sinh</p>
+                <p className="mt-1 text-lg font-semibold tabular-nums">{formatNumber(overviewInsights.activeDays)}</p>
+              </div>
+              <div className="border border-border bg-background px-3 py-2">
+                <p className="text-[11px] font-medium text-muted-foreground">Ngày cao nhất</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {overviewInsights.bestDay
+                    ? `${formatReportDate(overviewInsights.bestDay.date)} · ${
+                        overviewMetric === "netRevenue"
+                          ? `${formatCurrency(overviewInsights.bestDay.value)}đ`
+                          : `${formatNumber(overviewInsights.bestDay.value)} ${overviewMetric === "orderCount" ? "đơn" : "món"}`
+                      }`
+                    : "Chưa có"}
+                </p>
+              </div>
+              <div className="border border-border bg-background px-3 py-2">
+                <p className="text-[11px] font-medium text-muted-foreground">Giờ doanh thu cao nhất</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {overviewInsights.peakHour
+                    ? `${overviewInsights.peakHour.label} · ${formatCurrency(overviewInsights.peakHour.value)}đ`
+                    : "Chưa có"}
+                </p>
+              </div>
+              <div className="border border-border bg-background px-3 py-2">
+                <p className="text-[11px] font-medium text-muted-foreground">Trả hàng trong kỳ</p>
+                <p className="mt-1 text-sm font-semibold text-status-warning">
+                  {formatCurrency(overviewInsights.returnAmount)}đ
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* The chart changes with the selected operational metric. The detailed
+            daily RPC is the source, so overview and list never disagree. */}
+        {viewMode === "chart" && overviewRows.some((row) => row.value > 0) && (
           <ChartCard
-            title="Xu hướng doanh thu trong kỳ"
-            subtitle="Dữ liệu thực tế"
+            title={`Xu hướng ${overviewMetricMeta.label.toLocaleLowerCase("vi-VN")} trong kỳ`}
+            subtitle="Chọn chỉ tiêu ở phần Tín hiệu điều hành để đổi góc nhìn"
           >
             <div className="h-56 md:h-72">
               <ResponsiveContainer
@@ -910,7 +1014,7 @@ export default function BanHangPage() {
                 initialDimension={{ width: 320, height: 224 }}
               >
                 <LineChart
-                  data={dailyRevenue}
+                  data={overviewRows}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -922,21 +1026,25 @@ export default function BanHangPage() {
                     interval={4}
                   />
                   <YAxis
-                    tickFormatter={(v: number) => formatChartCurrency(v)}
+                    tickFormatter={(v: number) =>
+                      overviewMetric === "netRevenue"
+                        ? formatChartCurrency(v)
+                        : formatNumber(v)
+                    }
                     tick={{ fontSize: 11 }}
                     tickLine={false}
                     axisLine={false}
                     width={50}
                   />
-                  <Tooltip content={<RevenueTooltip />} />
+                  <Tooltip content={<SalesOverviewTooltip metric={overviewMetric} />} />
                   <Line
                     type="monotone"
-                    dataKey="revenue"
-                    stroke="#004AC6"
+                    dataKey="value"
+                    stroke={overviewMetricMeta.color}
                     strokeWidth={2}
                     dot={false}
-                    activeDot={{ r: 5, fill: "#004AC6" }}
-                    name="Doanh thu"
+                    activeDot={{ r: 5, fill: overviewMetricMeta.color }}
+                    name={overviewMetricMeta.label}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -946,11 +1054,11 @@ export default function BanHangPage() {
 
         {/* CEO 22/05/2026 (UX P1 #4): Empty state khi kỳ không có giao dịch.
             Thay vì để chart trống với axis 1-4 vô nghĩa. */}
-        {viewMode === "chart" && !dailyRevenue.some((d) => d.revenue > 0) && (
-          <ChartCard title="Xu hướng doanh thu trong kỳ" subtitle="Dữ liệu thực tế">
+        {viewMode === "chart" && !dailyLoading && !overviewRows.some((row) => row.value > 0) && (
+          <ChartCard title={`Xu hướng ${overviewMetricMeta.label.toLocaleLowerCase("vi-VN")} trong kỳ`} subtitle="Dữ liệu thực tế">
             <div className="h-56 md:h-72 flex flex-col items-center justify-center gap-2 text-muted-foreground">
               <Icon name="show_chart" size={32} className="opacity-40" />
-              <p className="text-sm font-medium">Chưa có giao dịch trong kỳ</p>
+              <p className="text-sm font-medium">Chưa có dữ liệu cho chỉ tiêu này trong kỳ</p>
               <p className="text-xs">Đổi kỳ báo cáo hoặc chi nhánh để xem dữ liệu khác.</p>
             </div>
           </ChartCard>

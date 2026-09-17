@@ -24,7 +24,7 @@ import type {
   ReportViewMode,
 } from "@/lib/types/report";
 import { ReportDateRangePicker } from "./report-date-range-picker";
-import { ChartTableSwitch } from "./chart-table-switch";
+import { ChartTableSwitch, type ReportViewOptions } from "./chart-table-switch";
 import { useAuth } from "@/lib/contexts";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { ReportScopeSelector } from "./report-scope-selector";
@@ -40,6 +40,8 @@ interface ReportPageHeaderProps {
   /** View mode toggle (omit để ẩn toggle) */
   viewMode?: ReportViewMode;
   onViewModeChange?: (next: ReportViewMode) => void;
+  /** Tên theo nghiệp vụ của hai góc nhìn, khi "Biểu đồ/Bảng" quá chung chung. */
+  viewOptions?: ReportViewOptions;
   /** Export handlers — provide cả 2 hoặc chỉ 1 (dropdown sẽ adapt) */
   onExportView?: () => void;
   onExportFull?: () => void;
@@ -63,6 +65,7 @@ export function ReportPageHeader({
   onCustomRangeChange,
   viewMode,
   onViewModeChange,
+  viewOptions,
   onExportView,
   onExportFull,
   exportDisabled,
@@ -93,7 +96,11 @@ export function ReportPageHeader({
         <div className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:justify-end xl:px-0 xl:pb-0 [&>*]:shrink-0">
           {!hideBranchScope && <ReportScopeSelector />}
           {showSwitch && (
-            <ChartTableSwitch value={viewMode} onChange={onViewModeChange} />
+            <ChartTableSwitch
+              value={viewMode}
+              onChange={onViewModeChange}
+              options={viewOptions}
+            />
           )}
           {!hideDateRange && (
             <ReportDateRangePicker
