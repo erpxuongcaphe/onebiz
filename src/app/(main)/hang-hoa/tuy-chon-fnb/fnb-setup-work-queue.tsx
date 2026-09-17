@@ -1,35 +1,27 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
+import { matchesFnbSetupIssueFilter, type FnbSetupIssueFilter } from "@/lib/fnb/setup-work-queue";
 import { cn } from "@/lib/utils";
 import type { FnbMenuIssue } from "@/lib/services/supabase/fnb-readiness";
 
-type IssueFilter = "all" | "price" | "recipe" | "both";
-
-const FILTERS: Array<{ value: IssueFilter; label: string }> = [
+const FILTERS: Array<{ value: FnbSetupIssueFilter; label: string }> = [
   { value: "all", label: "Tất cả" },
   { value: "price", label: "Thiếu giá" },
   { value: "recipe", label: "Thiếu công thức" },
   { value: "both", label: "Thiếu cả hai" },
 ];
 
-function matchesFilter(issue: FnbMenuIssue, filter: IssueFilter) {
-  if (filter === "price") return issue.missingPrice && !issue.missingBom;
-  if (filter === "recipe") return !issue.missingPrice && issue.missingBom;
-  if (filter === "both") return issue.missingPrice && issue.missingBom;
-  return true;
-}
-
 export function FnbSetupWorkQueue({ issues }: { issues: FnbMenuIssue[] }) {
-  const [filter, setFilter] = useState<IssueFilter>("all");
+  const [filter, setFilter] = useState<FnbSetupIssueFilter>("all");
   const [query, setQuery] = useState("");
   const filteredIssues = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase("vi-VN");
     return issues.filter((issue) => {
-      if (!matchesFilter(issue, filter)) return false;
+      if (!matchesFnbSetupIssueFilter(issue, filter)) return false;
       if (!normalizedQuery) return true;
       return `${issue.code} ${issue.name} ${issue.variantName ?? ""}`
         .toLocaleLowerCase("vi-VN")
