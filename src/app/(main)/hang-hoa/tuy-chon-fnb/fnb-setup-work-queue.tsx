@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -47,18 +47,14 @@ export function FnbSetupWorkQueue({ issues }: { issues: FnbMenuIssue[] }) {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button asChild type="button" variant="outline" size="sm">
-            <a href="/hang-hoa/thiet-lap-gia">
-              <Icon name="payments" size={16} className="mr-1.5" />
-              Thiết lập bảng giá
-            </a>
-          </Button>
-          <Button asChild type="button" variant="outline" size="sm">
-            <a href="/hang-hoa/cong-thuc">
-              <Icon name="science" size={16} className="mr-1.5" />
-              Danh sách công thức
-            </a>
-          </Button>
+          <a href="/hang-hoa/thiet-lap-gia" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Icon name="payments" size={16} className="mr-1.5" />
+            Thiết lập bảng giá
+          </a>
+          <a href="/hang-hoa/cong-thuc" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            <Icon name="science" size={16} className="mr-1.5" />
+            Danh sách công thức
+          </a>
         </div>
       </div>
 
@@ -124,11 +120,12 @@ export function FnbSetupWorkQueue({ issues }: { issues: FnbMenuIssue[] }) {
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right align-top">
-                    <Button asChild type="button" variant="ghost" size="sm">
-                      <a href={`/hang-hoa?scope=sku&search=${encodeURIComponent(issue.code)}`}>
-                        Mở món <Icon name="arrow_forward" size={14} className="ml-1" />
-                      </a>
-                    </Button>
+                    <a
+                      href={`/hang-hoa?scope=sku&search=${encodeURIComponent(issue.code)}`}
+                      className={buttonVariants({ variant: "ghost", size: "sm" })}
+                    >
+                      Mở món <Icon name="arrow_forward" size={14} className="ml-1" />
+                    </a>
                   </td>
                 </tr>
               ))}
