@@ -6,6 +6,7 @@ import {
   type ReceivableAgingRow,
 } from "./finance-marketing-reports";
 import type { DebtAgingReport } from "./debt";
+import { isRpcUnavailable } from "./rpc-utils";
 
 export interface DebtPartyRow {
   id: string;
@@ -13,6 +14,8 @@ export interface DebtPartyRow {
   name: string;
   phone?: string;
   debt: number;
+  advance: number;
+  netBalance: number;
   documentCount: number;
   ageDays: number;
   bucket: string;
@@ -26,6 +29,8 @@ export interface DebtWorkspace {
     customerCount: number;
     supplierDebtTotal: number;
     supplierCount: number;
+    customerAdvanceTotal: number;
+    supplierAdvanceTotal: number;
   };
   aging: DebtAgingReport;
   receivables: DebtPartyRow[];
@@ -75,24 +80,73 @@ function positivePayables(rows: PayableAgingRow[]) {
   return rows.filter((row) => Number(row.outstanding) > 0);
 }
 
+interface PartyBalanceSummaryRow {
+  partyId: string;
+  debt: number;
+  advance: number;
+}
+
+async function getCounterpartyBalanceSummary(branchId?: string | null) {
+  const supabase = getClient();
+  // Generated database types intentionally lag optional forward migrations.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    "get_counterparty_balance_summary",
+    { p_branch_id: branchId ?? null },
+  );
+  if (error) {
+    if (isRpcUnavailable(error)) return null;
+    handleError(error, "getCounterpartyBalanceSummary");
+  }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapRows = (rows: any[]): PartyBalanceSummaryRow[] =>
+    (rows ?? []).map((row) => ({
+      partyId: String(row.party_id),
+      debt: Number(row.debt ?? 0),
+      advance: Number(row.advance ?? 0),
+    }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const raw = (data ?? {}) as any;
+  return {
+    customers: mapRows(raw.customers),
+    suppliers: mapRows(raw.suppliers),
+  };
+}
+
 export async function getDebtWorkspace(
   branchId?: string | null,
 ): Promise<DebtWorkspace> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const [receivableReport, payableReport] = await Promise.all([
+  const [receivableReport, payableReport, balanceSummary] = await Promise.all([
     getReceivableAgingReport({ branchId: branchId ?? null }),
     getPayableAgingReport({ branchId: branchId ?? null }),
+    getCounterpartyBalanceSummary(branchId),
   ]);
 
   const receivableRows = positiveReceivables(receivableReport.rows);
   const payableRows = positivePayables(payableReport.rows);
-  const customerIds = receivableRows
-    .map((row) => row.customerId)
-    .filter((id) => id && !id.startsWith("walk-in:"));
-  const supplierIds = payableRows
-    .map((row) => row.supplierId)
-    .filter((id): id is string => Boolean(id));
+  const customerBalanceMap = new Map(
+    (balanceSummary?.customers ?? []).map((row) => [row.partyId, row]),
+  );
+  const supplierBalanceMap = new Map(
+    (balanceSummary?.suppliers ?? []).map((row) => [row.partyId, row]),
+  );
+  const receivableMap = new Map(
+    receivableRows.map((row) => [row.customerId, row]),
+  );
+  const payableMap = new Map(payableRows.map((row) => [row.supplierId, row]));
+
+  const customerRowIds = Array.from(
+    new Set([...receivableMap.keys(), ...customerBalanceMap.keys()]),
+  );
+  const supplierRowIds = Array.from(
+    new Set([...payableMap.keys(), ...supplierBalanceMap.keys()]),
+  );
+  const customerIds = customerRowIds.filter(
+    (id) => id && !id.startsWith("walk-in:"),
+  );
+  const supplierIds = supplierRowIds.filter((id): id is string => Boolean(id));
 
   const [customersResult, suppliersResult] = await Promise.all([
     customerIds.length > 0
@@ -125,43 +179,54 @@ export async function getDebtWorkspace(
     (suppliersResult.data ?? []).map((row) => [row.id, row]),
   );
 
-  const receivables: DebtPartyRow[] = receivableRows
-    .map((row) => {
-      const meta = customerMeta.get(row.customerId);
+  const receivables: DebtPartyRow[] = customerRowIds
+    .map((customerId) => {
+      const row = receivableMap.get(customerId);
+      const balance = customerBalanceMap.get(customerId);
+      const debt = balance?.debt ?? Number(row?.outstanding ?? 0);
+      const advance = balance?.advance ?? 0;
+      const meta = customerMeta.get(customerId);
       return {
-        id: row.customerId,
+        id: customerId,
         code:
-          meta?.code ??
-          (row.customerId.startsWith("walk-in:") ? "KHACH-LE" : "—"),
-        name: meta?.name ?? row.customerName,
+          meta?.code ?? (customerId.startsWith("walk-in:") ? "KHACH-LE" : "—"),
+        name: meta?.name ?? row?.customerName ?? "Khách hàng",
         phone: meta?.phone ?? undefined,
-        debt: Number(row.outstanding),
-        documentCount: Number(row.invoiceCount),
-        ageDays: Number(row.oldestDays),
-        bucket: bucketLabel(Number(row.oldestDays)),
+        debt,
+        advance,
+        netBalance: debt - advance,
+        documentCount: Number(row?.invoiceCount ?? 0),
+        ageDays: Number(row?.oldestDays ?? 0),
+        bucket: bucketLabel(Number(row?.oldestDays ?? 0)),
         type: "customer" as const,
-        oldestDocumentDate: row.oldestInvoiceDate,
+        oldestDocumentDate: row?.oldestInvoiceDate,
       };
     })
-    .sort((a, b) => b.debt - a.debt);
+    .sort((a, b) => Math.max(b.debt, b.advance) - Math.max(a.debt, a.advance));
 
-  const payables: DebtPartyRow[] = payableRows
-    .map((row) => {
-      const meta = supplierMeta.get(row.supplierId);
+  const payables: DebtPartyRow[] = supplierRowIds
+    .map((supplierId) => {
+      const row = payableMap.get(supplierId);
+      const balance = supplierBalanceMap.get(supplierId);
+      const debt = balance?.debt ?? Number(row?.outstanding ?? 0);
+      const advance = balance?.advance ?? 0;
+      const meta = supplierMeta.get(supplierId);
       return {
-        id: row.supplierId,
+        id: supplierId,
         code: meta?.code ?? "—",
-        name: meta?.name ?? row.supplierName,
+        name: meta?.name ?? row?.supplierName ?? "Nhà cung cấp",
         phone: meta?.phone ?? undefined,
-        debt: Number(row.outstanding),
-        documentCount: Number(row.documentCount),
-        ageDays: Number(row.oldestDays),
-        bucket: bucketLabel(Number(row.oldestDays)),
+        debt,
+        advance,
+        netBalance: debt - advance,
+        documentCount: Number(row?.documentCount ?? 0),
+        ageDays: Number(row?.oldestDays ?? 0),
+        bucket: bucketLabel(Number(row?.oldestDays ?? 0)),
         type: "supplier" as const,
-        oldestDocumentDate: row.oldestDocumentDate,
+        oldestDocumentDate: row?.oldestDocumentDate,
       };
     })
-    .sort((a, b) => b.debt - a.debt);
+    .sort((a, b) => Math.max(b.debt, b.advance) - Math.max(a.debt, a.advance));
 
   const buckets = BUCKETS.map((definition) => {
     const customerAmount = receivableRows.reduce(
@@ -187,33 +252,39 @@ export async function getDebtWorkspace(
     };
   });
 
-  const customerDebtTotal = receivables.reduce(
-    (sum, row) => sum + row.debt,
+  const customerDebtTotal = receivables.reduce((sum, row) => sum + row.debt, 0);
+  const supplierDebtTotal = payables.reduce((sum, row) => sum + row.debt, 0);
+  const customerAdvanceTotal = receivables.reduce(
+    (sum, row) => sum + row.advance,
     0,
   );
-  const supplierDebtTotal = payables.reduce(
-    (sum, row) => sum + row.debt,
+  const supplierAdvanceTotal = payables.reduce(
+    (sum, row) => sum + row.advance,
     0,
   );
 
   return {
     totals: {
       customerDebtTotal,
-      customerCount: receivables.length,
+      customerCount: receivables.filter((row) => row.debt > 0).length,
       supplierDebtTotal,
-      supplierCount: payables.length,
+      supplierCount: payables.filter((row) => row.debt > 0).length,
+      customerAdvanceTotal,
+      supplierAdvanceTotal,
     },
     aging: {
       buckets,
       totalCustomerDebt: customerDebtTotal,
       totalSupplierDebt: supplierDebtTotal,
       totalDebt: customerDebtTotal + supplierDebtTotal,
-      customersWithDebt: receivables.length,
-      suppliersWithDebt: payables.length,
+      customersWithDebt: receivables.filter((row) => row.debt > 0).length,
+      suppliersWithDebt: payables.filter((row) => row.debt > 0).length,
     },
     receivables,
     payables,
     generatedAt:
-      receivableReport.generatedAt || payableReport.generatedAt || new Date().toISOString(),
+      receivableReport.generatedAt ||
+      payableReport.generatedAt ||
+      new Date().toISOString(),
   };
 }

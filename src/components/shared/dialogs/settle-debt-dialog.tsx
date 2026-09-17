@@ -93,6 +93,7 @@ export function SettleDebtDialog({
     "cash" | "transfer" | "card" | "ewallet"
   >("cash");
   const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState("");
   const [saving, setSaving] = useState(false);
 
   // Reset khi đóng/mở
@@ -102,6 +103,7 @@ export function SettleDebtDialog({
       setTotalAmount("");
       setPaymentMethod("cash");
       setNote("");
+      setNoteError("");
       return;
     }
     let cancelled = false;
@@ -166,6 +168,7 @@ export function SettleDebtDialog({
       return;
     }
     if (mode === "supplier" && amount > totalDebt && note.trim().length < 3) {
+      setNoteError("Nhập lý do để đối soát khoản ứng trước nhà cung cấp.");
       toast({
         title: "Cần ghi lý do ứng trước",
         description: "Nhập ghi chú để đối soát phần thanh toán vượt công nợ.",
@@ -203,8 +206,7 @@ export function SettleDebtDialog({
             await recordPurchasePayment({
               referenceId: d.id,
               amount:
-                d.allocate +
-                (isLastAllocation ? Math.max(0, remainder) : 0),
+                d.allocate + (isLastAllocation ? Math.max(0, remainder) : 0),
               paymentMethod,
               note: note
                 ? `${note} — phân bổ PO ${d.code}`
@@ -260,7 +262,8 @@ export function SettleDebtDialog({
     remainder,
   ]);
 
-  const titleLabel = mode === "customer" ? "Thu tiền khách" : "Trả tiền nhà cung cấp";
+  const titleLabel =
+    mode === "customer" ? "Thu tiền khách" : "Trả tiền nhà cung cấp";
   const docLabel = mode === "customer" ? "Hóa đơn" : "Phiếu nhập";
   const actionVerb = mode === "customer" ? "Thu" : "Trả";
 
@@ -272,13 +275,18 @@ export function SettleDebtDialog({
             <Icon
               name={mode === "customer" ? "payments" : "account_balance_wallet"}
               size={20}
-              className={mode === "customer" ? "text-status-success" : "text-status-warning"}
+              className={
+                mode === "customer"
+                  ? "text-status-success"
+                  : "text-status-warning"
+              }
             />
             {titleLabel} — {partyName}
           </DialogTitle>
           <DialogDescription>
-            Nhập số tiền tổng → hệ thống tự phân bổ vào {docLabel.toLowerCase()} cũ nhất trước (FIFO).
-            Mỗi {docLabel.toLowerCase()} sẽ tạo 1 phiếu {mode === "customer" ? "thu" : "chi"} riêng có audit log.
+            Nhập số tiền tổng → hệ thống tự phân bổ vào {docLabel.toLowerCase()}{" "}
+            cũ nhất trước (FIFO). Mỗi {docLabel.toLowerCase()} sẽ tạo 1 phiếu{" "}
+            {mode === "customer" ? "thu" : "chi"} riêng có audit log.
           </DialogDescription>
         </DialogHeader>
 
@@ -306,7 +314,8 @@ export function SettleDebtDialog({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="settle-amount">
-                Số tiền {actionVerb.toLowerCase()} <span className="text-destructive">*</span>
+                Số tiền {actionVerb.toLowerCase()}{" "}
+                <span className="text-destructive">*</span>
               </Label>
               <Input
                 id="settle-amount"
@@ -323,7 +332,9 @@ export function SettleDebtDialog({
                 <p
                   className={cn(
                     "text-xs",
-                    remainder > 0 ? "text-status-warning" : "text-status-success",
+                    remainder > 0
+                      ? "text-status-warning"
+                      : "text-status-success",
                   )}
                 >
                   {remainder > 0
@@ -339,13 +350,17 @@ export function SettleDebtDialog({
               <Select
                 value={paymentMethod}
                 onValueChange={(v) =>
-                  setPaymentMethod(v as "cash" | "transfer" | "card" | "ewallet")
+                  setPaymentMethod(
+                    v as "cash" | "transfer" | "card" | "ewallet",
+                  )
                 }
                 items={[...PAYMENT_METHODS]}
               >
                 <SelectTrigger id="settle-method" className="w-full">
                   <SelectValue placeholder="Chọn hình thức">
-                    {(v) => PAYMENT_METHODS.find((m) => m.value === v)?.label ?? ""}
+                    {(v) =>
+                      PAYMENT_METHODS.find((m) => m.value === v)?.label ?? ""
+                    }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -359,18 +374,32 @@ export function SettleDebtDialog({
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="settle-note">
-                Ghi chú {mode === "supplier" && remainder > 0 ? "*" : "(tuỳ chọn)"}
+                Ghi chú{" "}
+                {mode === "supplier" && remainder > 0 ? "*" : "(tuỳ chọn)"}
               </Label>
               <Input
                 id="settle-note"
                 value={note}
-                onChange={(e) => setNote(e.target.value)}
+                onChange={(e) => {
+                  setNote(e.target.value);
+                  if (noteError) setNoteError("");
+                }}
+                aria-invalid={Boolean(noteError)}
                 placeholder={
                   mode === "supplier"
                     ? "VD: Ứng trước cho lô hàng tháng 9"
                     : "VD: Khách trả qua VCB ngày 03/06"
                 }
               />
+              {mode === "supplier" && remainder > 0 && !noteError && (
+                <p className="text-xs text-status-warning">
+                  Bắt buộc nhập lý do vì {formatCurrency(remainder)} sẽ được
+                  treo là ứng trước NCC.
+                </p>
+              )}
+              {noteError && (
+                <p className="text-xs text-destructive">{noteError}</p>
+              )}
             </div>
           </div>
 
@@ -381,18 +410,25 @@ export function SettleDebtDialog({
                 Phân bổ FIFO theo {docLabel.toLowerCase()} cũ nhất
               </h4>
               <span className="text-xs text-muted-foreground">
-                Tổng phân bổ: <span className="font-semibold tabular-nums">{formatCurrency(totalAlloc)}</span>
+                Tổng phân bổ:{" "}
+                <span className="font-semibold tabular-nums">
+                  {formatCurrency(totalAlloc)}
+                </span>
               </span>
             </div>
 
             {loading ? (
               <div className="border rounded-lg p-6 text-center text-sm text-muted-foreground">
-                <Icon name="progress_activity" className="animate-spin inline mr-1" />
+                <Icon
+                  name="progress_activity"
+                  className="animate-spin inline mr-1"
+                />
                 Đang tải...
               </div>
             ) : docs.length === 0 ? (
               <div className="border border-dashed rounded-lg p-6 text-center text-sm text-muted-foreground">
-                Không có {docLabel.toLowerCase()} nào còn nợ. Có thể đã được thanh toán hết.
+                Không có {docLabel.toLowerCase()} nào còn nợ. Có thể đã được
+                thanh toán hết.
               </div>
             ) : (
               /* CEO 06/06/2026: redesign từ table 6 cột dính nhau thành
@@ -486,21 +522,32 @@ export function SettleDebtDialog({
           <Button
             onClick={handleConfirm}
             disabled={saving || loading || docs.length === 0 || totalAlloc <= 0}
-            className={mode === "customer" ? "" : "bg-status-warning hover:bg-status-warning/90"}
+            className={
+              mode === "customer"
+                ? ""
+                : "bg-status-warning hover:bg-status-warning/90"
+            }
           >
             {saving ? (
               <>
-                <Icon name="progress_activity" className="animate-spin mr-1" size={16} />
+                <Icon
+                  name="progress_activity"
+                  className="animate-spin mr-1"
+                  size={16}
+                />
                 Đang xử lý...
               </>
             ) : (
               <>
                 <Icon
-                  name={mode === "customer" ? "payments" : "account_balance_wallet"}
+                  name={
+                    mode === "customer" ? "payments" : "account_balance_wallet"
+                  }
                   size={16}
                   className="mr-1"
                 />
-                {actionVerb} {formatCurrency(totalAlloc)} vào {docsCount} chứng từ
+                {actionVerb} {formatCurrency(totalAlloc)} vào {docsCount} chứng
+                từ
               </>
             )}
           </Button>

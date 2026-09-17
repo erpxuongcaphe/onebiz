@@ -20,12 +20,7 @@ import {
   RadioFilter,
   RangeFilter,
 } from "@/components/shared/filter-sidebar";
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
@@ -42,13 +37,15 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
 import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
+import { RecordAdvanceDialog } from "@/components/shared/dialogs/record-advance-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { downloadTemplate } from "@/lib/excel";
 import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportDebtOpening } from "@/lib/services/supabase/excel-import";
 
 type Mode = "customer" | "supplier" | "aging";
-type AgingBucketFilter = "all" | "0-30 ngày" | "31-60 ngày" | "61-90 ngày" | "90+ ngày";
+type AgingBucketFilter =
+  "all" | "0-30 ngày" | "31-60 ngày" | "61-90 ngày" | "90+ ngày";
 
 const AGING_BUCKET_OPTIONS = [
   { label: "Tất cả", value: "all" },
@@ -126,6 +123,11 @@ export default function CongNoPage() {
     partyCode?: string;
     estimatedDebt: number;
   } | null>(null);
+  const [advanceTarget, setAdvanceTarget] = useState<{
+    mode: "customer" | "supplier";
+    partyId?: string;
+    partyName?: string;
+  } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
@@ -163,6 +165,8 @@ export default function CongNoPage() {
   const totalSupplierDebt = workspace?.totals.supplierDebtTotal ?? 0;
   const customerDebtCount = workspace?.totals.customerCount ?? 0;
   const supplierDebtCount = workspace?.totals.supplierCount ?? 0;
+  const customerAdvanceTotal = workspace?.totals.customerAdvanceTotal ?? 0;
+  const supplierAdvanceTotal = workspace?.totals.supplierAdvanceTotal ?? 0;
 
   const { receivableDebtors, payableDebtors } = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
@@ -174,8 +178,12 @@ export default function CongNoPage() {
         row.name.toLocaleLowerCase("vi").includes(keyword) ||
         (row.phone ?? "").includes(keyword)) &&
       (agingBucketFilter === "all" || row.bucket === agingBucketFilter) &&
-      (minimum === null || !Number.isFinite(minimum) || row.debt >= minimum) &&
-      (maximum === null || !Number.isFinite(maximum) || row.debt <= maximum);
+      (minimum === null ||
+        !Number.isFinite(minimum) ||
+        Math.max(row.debt, row.advance) >= minimum) &&
+      (maximum === null ||
+        !Number.isFinite(maximum) ||
+        Math.max(row.debt, row.advance) <= maximum);
 
     return {
       receivableDebtors: (workspace?.receivables ?? []).filter(matches),
@@ -213,7 +221,9 @@ export default function CongNoPage() {
     setMaximumDebt("");
   }, []);
 
-  const overdue90Total = aging?.buckets.find((bucket) => bucket.range === "90+ ngày");
+  const overdue90Total = aging?.buckets.find(
+    (bucket) => bucket.range === "90+ ngày",
+  );
 
   const customerColumns: ColumnDef<DebtPartyRow, unknown>[] = [
     {
@@ -241,13 +251,46 @@ export default function CongNoPage() {
     },
     {
       accessorKey: "debt",
-      header: "Công nợ hiện tại",
+      header: "Khách còn nợ",
       size: 160,
       cell: ({ row }) => (
         <span className="font-semibold text-destructive">
           {formatCurrency(row.original.debt)}
         </span>
       ),
+    },
+    {
+      accessorKey: "advance",
+      header: "Khách trả trước",
+      size: 160,
+      cell: ({ row }) => (
+        <span className="font-semibold text-status-success">
+          {formatCurrency(row.original.advance)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "netBalance",
+      header: "Số dư ròng",
+      size: 160,
+      cell: ({ row }) => {
+        const net = row.original.netBalance;
+        return (
+          <span
+            className={
+              net > 0
+                ? "font-semibold text-destructive"
+                : "font-semibold text-status-success"
+            }
+          >
+            {net > 0
+              ? `Còn thu ${formatCurrency(net)}`
+              : net < 0
+                ? `Còn giữ ${formatCurrency(-net)}`
+                : "Đã cân"}
+          </span>
+        );
+      },
     },
     {
       accessorKey: "documentCount",
@@ -266,7 +309,7 @@ export default function CongNoPage() {
     {
       id: "debt_actions",
       header: "Thao tác",
-      size: 220,
+      size: 300,
       enableSorting: false,
       cell: ({ row }) => {
         const debt = row.original.debt;
@@ -317,8 +360,26 @@ export default function CongNoPage() {
                 Thu
               </Button>
             ) : (
-              <span className="text-[11px] text-muted-foreground italic">đã trả đủ</span>
+              <span className="text-[11px] text-muted-foreground italic">
+                đã trả đủ
+              </span>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() =>
+                setAdvanceTarget({
+                  mode: "customer",
+                  partyId: row.original.id,
+                  partyName: row.original.name,
+                })
+              }
+              title="Ghi nhận khách đặt cọc hoặc thanh toán trước"
+            >
+              <Icon name="savings" size={14} />
+              Nhận trước
+            </Button>
           </div>
         );
       },
@@ -360,6 +421,39 @@ export default function CongNoPage() {
       ),
     },
     {
+      accessorKey: "advance",
+      header: "Đã ứng trước",
+      size: 160,
+      cell: ({ row }) => (
+        <span className="font-semibold text-status-success">
+          {formatCurrency(row.original.advance)}
+        </span>
+      ),
+    },
+    {
+      accessorKey: "netBalance",
+      header: "Số dư ròng",
+      size: 170,
+      cell: ({ row }) => {
+        const net = row.original.netBalance;
+        return (
+          <span
+            className={
+              net > 0
+                ? "font-semibold text-status-warning"
+                : "font-semibold text-status-success"
+            }
+          >
+            {net > 0
+              ? `Còn trả ${formatCurrency(net)}`
+              : net < 0
+                ? `NCC giữ ${formatCurrency(-net)}`
+                : "Đã cân"}
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: "documentCount",
       header: "Phiếu còn nợ",
       size: 160,
@@ -369,7 +463,7 @@ export default function CongNoPage() {
     {
       id: "debt_actions",
       header: "Thao tác",
-      size: 220,
+      size: 300,
       enableSorting: false,
       cell: ({ row }) => {
         const debt = row.original.debt;
@@ -411,8 +505,26 @@ export default function CongNoPage() {
                 Trả
               </Button>
             ) : (
-              <span className="text-[11px] text-muted-foreground italic">đã trả đủ</span>
+              <span className="text-[11px] text-muted-foreground italic">
+                đã trả đủ
+              </span>
             )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 px-2 text-xs gap-1"
+              onClick={() =>
+                setAdvanceTarget({
+                  mode: "supplier",
+                  partyId: row.original.id,
+                  partyName: row.original.name,
+                })
+              }
+              title="Ghi nhận đặt cọc hoặc ứng trước nhà cung cấp"
+            >
+              <Icon name="account_balance_wallet" size={14} />
+              Ứng trước
+            </Button>
           </div>
         );
       },
@@ -506,53 +618,101 @@ export default function CongNoPage() {
             onClick: () => setImportOpen(true),
           },
         ]}
-        onExport={mode !== "aging" ? {
-          excel: () => {
-            // Xuất theo schema "Công nợ đầu kỳ" → import lại không mất field
-            const today = new Date();
-            const rows: DebtOpeningImportRow[] =
-              mode === "customer"
-                ? receivableDebtors
-                    .filter((c) => c.debt !== 0)
-                    .map((c) => ({
-                      partyType: "customer",
-                      partyCode: c.code,
-                      partyName: c.name,
-                      openingDebt: c.debt,
-                      openingDate: today,
-                    }))
-                : payableDebtors
-                    .filter((s) => s.debt !== 0)
-                    .map((s) => ({
-                      partyType: "supplier",
-                      partyCode: s.code,
-                      partyName: s.name,
-                      openingDebt: s.debt,
-                      openingDate: today,
-                    }));
-            exportToExcelFromSchema(rows, debtOpeningExcelSchema);
-          },
-          csv: () => {
-            if (mode === "customer") {
-              const cols = [
-                { header: "Mã KH", key: "code", width: 15 },
-                { header: "Tên KH", key: "name", width: 25 },
-                { header: "SĐT", key: "phone", width: 15 },
-                { header: "Công nợ", key: "debt", width: 18, format: (v: number) => v },
-                { header: "Hóa đơn còn nợ", key: "documentCount", width: 18, format: (v: number) => v },
-              ];
-              exportToCsv(receivableDebtors, cols, "cong-no-khach-hang");
-            } else {
-              const cols = [
-                { header: "Mã NCC", key: "code", width: 15 },
-                { header: "Tên NCC", key: "name", width: 25 },
-                { header: "Cần trả NCC", key: "debt", width: 18, format: (v: number) => v },
-                { header: "Phiếu còn nợ", key: "documentCount", width: 18, format: (v: number) => v },
-              ];
-              exportToCsv(payableDebtors, cols, "cong-no-nha-cung-cap");
-            }
-          },
-        } : undefined}
+        onExport={
+          mode !== "aging"
+            ? {
+                excel: () => {
+                  // Xuất theo schema "Công nợ đầu kỳ" → import lại không mất field
+                  const today = new Date();
+                  const rows: DebtOpeningImportRow[] =
+                    mode === "customer"
+                      ? receivableDebtors
+                          .filter((c) => c.debt !== 0)
+                          .map((c) => ({
+                            partyType: "customer",
+                            partyCode: c.code,
+                            partyName: c.name,
+                            openingDebt: c.debt,
+                            openingDate: today,
+                          }))
+                      : payableDebtors
+                          .filter((s) => s.debt !== 0)
+                          .map((s) => ({
+                            partyType: "supplier",
+                            partyCode: s.code,
+                            partyName: s.name,
+                            openingDebt: s.debt,
+                            openingDate: today,
+                          }));
+                  exportToExcelFromSchema(rows, debtOpeningExcelSchema);
+                },
+                csv: () => {
+                  if (mode === "customer") {
+                    const cols = [
+                      { header: "Mã KH", key: "code", width: 15 },
+                      { header: "Tên KH", key: "name", width: 25 },
+                      { header: "SĐT", key: "phone", width: 15 },
+                      {
+                        header: "Công nợ",
+                        key: "debt",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Khách trả trước",
+                        key: "advance",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Số dư ròng",
+                        key: "netBalance",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Hóa đơn còn nợ",
+                        key: "documentCount",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                    ];
+                    exportToCsv(receivableDebtors, cols, "cong-no-khach-hang");
+                  } else {
+                    const cols = [
+                      { header: "Mã NCC", key: "code", width: 15 },
+                      { header: "Tên NCC", key: "name", width: 25 },
+                      {
+                        header: "Cần trả NCC",
+                        key: "debt",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Đã ứng trước",
+                        key: "advance",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Số dư ròng",
+                        key: "netBalance",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                      {
+                        header: "Phiếu còn nợ",
+                        key: "documentCount",
+                        width: 18,
+                        format: (v: number) => v,
+                      },
+                    ];
+                    exportToCsv(payableDebtors, cols, "cong-no-nha-cung-cap");
+                  }
+                },
+              }
+            : undefined
+        }
       />
 
       <div
@@ -580,6 +740,23 @@ export default function CongNoPage() {
           loading={loading}
         />
         <ListMetric
+          label="Khách trả trước"
+          value={formatCurrency(customerAdvanceTotal)}
+          hint="Tiền đang giữ của khách"
+          icon={<Icon name="savings" size={16} />}
+          onClick={() => setMode("customer")}
+          loading={loading}
+          tone="primary"
+        />
+        <ListMetric
+          label="Ứng trước NCC"
+          value={formatCurrency(supplierAdvanceTotal)}
+          hint="Tiền NCC đang giữ"
+          icon={<Icon name="account_balance_wallet" size={16} />}
+          onClick={() => setMode("supplier")}
+          loading={loading}
+        />
+        <ListMetric
           label="Trên 90 ngày"
           value={formatCurrency(overdue90Total?.totalAmount ?? 0)}
           hint={`${(overdue90Total?.customerCount ?? 0) + (overdue90Total?.supplierCount ?? 0)} đối tượng`}
@@ -599,6 +776,33 @@ export default function CongNoPage() {
             <Icon name="location_on" size={14} className="mr-1 inline" />
             Phạm vi số liệu: {branchLabel}
           </span>
+          {mode !== "aging" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              onClick={() =>
+                setAdvanceTarget({
+                  mode,
+                })
+              }
+              disabled={!activeBranchId}
+              title={
+                activeBranchId
+                  ? undefined
+                  : "Chọn một chi nhánh cụ thể để ghi nhận trả trước"
+              }
+            >
+              <Icon
+                name={
+                  mode === "customer" ? "savings" : "account_balance_wallet"
+                }
+                size={15}
+              />
+              {mode === "customer" ? "Nhận tiền trước" : "Ứng trước NCC"}
+            </Button>
+          )}
           <Button
             type="button"
             variant="outline"
@@ -639,17 +843,28 @@ export default function CongNoPage() {
         className="flex flex-1 flex-col min-h-0 px-3 pt-2"
       >
         <TabsList className="grid w-full grid-cols-3 sm:flex sm:w-fit">
-          <TabsTrigger value="customer" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+          <TabsTrigger
+            value="customer"
+            className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3"
+          >
             <Icon name="group" size={16} className="shrink-0" />
             <span className="sm:hidden">Phải thu</span>
-            <span className="hidden sm:inline">KH còn nợ ({customerDebtCount})</span>
+            <span className="hidden sm:inline">
+              KH còn nợ ({customerDebtCount})
+            </span>
           </TabsTrigger>
-          <TabsTrigger value="supplier" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+          <TabsTrigger
+            value="supplier"
+            className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3"
+          >
             <Icon name="local_shipping" size={16} className="shrink-0" />
             <span className="sm:hidden">Phải trả</span>
             <span className="hidden sm:inline">NCC ({supplierDebtCount})</span>
           </TabsTrigger>
-          <TabsTrigger value="aging" className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3">
+          <TabsTrigger
+            value="aging"
+            className="min-w-0 gap-1 px-2 sm:gap-2 sm:px-3"
+          >
             <Icon name="bar_chart" size={16} className="shrink-0" />
             <span className="sm:hidden">Tuổi nợ</span>
             <span className="hidden sm:inline">Phân tích tuổi nợ</span>
@@ -711,7 +926,10 @@ export default function CongNoPage() {
           />
         </TabsContent>
 
-        <TabsContent value="aging" className="flex-1 min-h-0 overflow-auto pb-4">
+        <TabsContent
+          value="aging"
+          className="flex-1 min-h-0 overflow-auto pb-4"
+        >
           {loading ? (
             <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
               Đang tải phân tích...
@@ -719,8 +937,12 @@ export default function CongNoPage() {
           ) : loadError ? (
             <div className="flex h-40 flex-col items-center justify-center gap-3 rounded-md border border-dashed text-center">
               <div>
-                <p className="text-sm font-medium">Không tải được phân tích tuổi nợ</p>
-                <p className="mt-1 text-xs text-muted-foreground">{loadError}</p>
+                <p className="text-sm font-medium">
+                  Không tải được phân tích tuổi nợ
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {loadError}
+                </p>
               </div>
               <Button size="sm" variant="outline" onClick={fetchData}>
                 <Icon name="refresh" size={15} />
@@ -737,8 +959,14 @@ export default function CongNoPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Icon name="trending_up" size={16} className="text-status-success" />
-                      <h3 className="text-sm font-semibold">Phải thu khách hàng</h3>
+                      <Icon
+                        name="trending_up"
+                        size={16}
+                        className="text-status-success"
+                      />
+                      <h3 className="text-sm font-semibold">
+                        Phải thu khách hàng
+                      </h3>
                     </div>
                     <p className="mt-1 text-xl font-bold text-status-success">
                       {formatCurrency(aging.totalCustomerDebt)}
@@ -759,7 +987,11 @@ export default function CongNoPage() {
                           { header: "Tên khách hàng", key: "name", width: 28 },
                           { header: "SĐT", key: "phone", width: 16 },
                           { header: "Phải thu", key: "debt", width: 18 },
-                          { header: "Tuổi nợ (ngày)", key: "ageDays", width: 16 },
+                          {
+                            header: "Tuổi nợ (ngày)",
+                            key: "ageDays",
+                            width: 16,
+                          },
                           { header: "Nhóm tuổi nợ", key: "bucket", width: 16 },
                         ],
                         "tuoi-no-phai-thu",
@@ -778,7 +1010,9 @@ export default function CongNoPage() {
                       className="flex items-center justify-between gap-3 border-b px-4 py-2.5 sm:odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
                     >
                       <div>
-                        <p className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}>
+                        <p
+                          className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}
+                        >
                           {bucket.range}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -815,8 +1049,14 @@ export default function CongNoPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3 border-b px-4 py-3">
                   <div>
                     <div className="flex items-center gap-2">
-                      <Icon name="trending_down" size={16} className="text-status-warning" />
-                      <h3 className="text-sm font-semibold">Phải trả nhà cung cấp</h3>
+                      <Icon
+                        name="trending_down"
+                        size={16}
+                        className="text-status-warning"
+                      />
+                      <h3 className="text-sm font-semibold">
+                        Phải trả nhà cung cấp
+                      </h3>
                     </div>
                     <p className="mt-1 text-xl font-bold text-status-warning">
                       {formatCurrency(aging.totalSupplierDebt)}
@@ -834,10 +1074,18 @@ export default function CongNoPage() {
                         payableDebtors,
                         [
                           { header: "Mã NCC", key: "code", width: 14 },
-                          { header: "Tên nhà cung cấp", key: "name", width: 28 },
+                          {
+                            header: "Tên nhà cung cấp",
+                            key: "name",
+                            width: 28,
+                          },
                           { header: "SĐT", key: "phone", width: 16 },
                           { header: "Phải trả", key: "debt", width: 18 },
-                          { header: "Tuổi nợ (ngày)", key: "ageDays", width: 16 },
+                          {
+                            header: "Tuổi nợ (ngày)",
+                            key: "ageDays",
+                            width: 16,
+                          },
                           { header: "Nhóm tuổi nợ", key: "bucket", width: 16 },
                         ],
                         "tuoi-no-phai-tra",
@@ -856,7 +1104,9 @@ export default function CongNoPage() {
                       className="flex items-center justify-between gap-3 border-b px-4 py-2.5 sm:odd:border-r sm:[&:nth-last-child(-n+2)]:border-b-0"
                     >
                       <div>
-                        <p className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}>
+                        <p
+                          className={`text-xs font-semibold ${BUCKET_TEXT_COLORS[idx]}`}
+                        >
                           {bucket.range}
                         </p>
                         <p className="text-xs text-muted-foreground">
@@ -902,13 +1152,17 @@ export default function CongNoPage() {
       >
         <FilterGroup
           label="Tuổi nợ"
-          activeHint={agingBucketFilter === "all" ? undefined : agingBucketFilter}
+          activeHint={
+            agingBucketFilter === "all" ? undefined : agingBucketFilter
+          }
         >
           <RadioFilter
             name="debt-aging-bucket"
             options={AGING_BUCKET_OPTIONS}
             value={agingBucketFilter}
-            onChange={(value) => setAgingBucketFilter(value as AgingBucketFilter)}
+            onChange={(value) =>
+              setAgingBucketFilter(value as AgingBucketFilter)
+            }
           />
         </FilterGroup>
         <FilterGroup
@@ -980,6 +1234,21 @@ export default function CongNoPage() {
           partyName={detailTarget.partyName}
           partyCode={detailTarget.partyCode}
           estimatedDebt={detailTarget.estimatedDebt}
+        />
+      )}
+
+      {advanceTarget && (
+        <RecordAdvanceDialog
+          open={!!advanceTarget}
+          onOpenChange={(nextOpen) => !nextOpen && setAdvanceTarget(null)}
+          mode={advanceTarget.mode}
+          partyId={advanceTarget.partyId}
+          partyName={advanceTarget.partyName}
+          branchId={activeBranchId}
+          onSuccess={() => {
+            setAdvanceTarget(null);
+            fetchData();
+          }}
         />
       )}
     </ListPageLayout>

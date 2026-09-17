@@ -31,6 +31,62 @@ export interface RecordPaymentResult {
   advanceAmount: number;
 }
 
+export interface RecordAdvanceInput {
+  partyId: string;
+  branchId: string;
+  amount: number;
+  paymentMethod: "cash" | "transfer" | "card" | "ewallet";
+  note: string;
+}
+
+export interface RecordAdvanceResult {
+  cashTransactionId: string;
+  cashCode: string;
+  advanceAmount: number;
+}
+
+async function recordPartyAdvance(
+  type: "customer" | "supplier",
+  input: RecordAdvanceInput,
+): Promise<RecordAdvanceResult> {
+  const supabase = getClient();
+  await getCurrentContext();
+
+  const rpcName =
+    type === "customer" ? "record_customer_advance" : "record_supplier_advance";
+  const partyKey = type === "customer" ? "p_customer_id" : "p_supplier_id";
+  const { data, error } = await supabase.rpc(
+    rpcName as never,
+    {
+      [partyKey]: input.partyId,
+      p_amount: input.amount,
+      p_payment_method: input.paymentMethod,
+      p_note: input.note,
+      p_branch_id: input.branchId,
+      p_user_id: null,
+    } as never,
+  );
+  if (error) handleError(error, `${rpcName}.rpc`);
+  if (!data) throw new Error("Không nhận được kết quả ghi nhận tiền trả trước");
+
+  const result = data as unknown as Record<string, unknown>;
+  return {
+    cashTransactionId: result.cash_transaction_id as string,
+    cashCode: result.cash_code as string,
+    advanceAmount: Number(result.advance_amount ?? input.amount),
+  };
+}
+
+/** Ghi nhận tiền khách đặt cọc/trả trước, không cần có hóa đơn. */
+export function recordCustomerAdvance(input: RecordAdvanceInput) {
+  return recordPartyAdvance("customer", input);
+}
+
+/** Ghi nhận tiền ứng trước nhà cung cấp, không cần có phiếu nhập. */
+export function recordSupplierAdvance(input: RecordAdvanceInput) {
+  return recordPartyAdvance("supplier", input);
+}
+
 /**
  * Ghi nhận thanh toán cho hóa đơn bán (KH trả nợ).
  *
@@ -40,7 +96,7 @@ export interface RecordPaymentResult {
  * 4. Update customers.debt -= amount (if customer_id exists)
  */
 export async function recordInvoicePayment(
-  input: RecordPaymentInput
+  input: RecordPaymentInput,
 ): Promise<RecordPaymentResult> {
   const supabase = getClient();
   await getCurrentContext();
@@ -78,7 +134,7 @@ export async function recordInvoicePayment(
  * Toàn bộ kiểm tra và cập nhật chạy trong một giao dịch Postgres.
  */
 export async function recordPurchasePayment(
-  input: RecordPaymentInput
+  input: RecordPaymentInput,
 ): Promise<RecordPaymentResult> {
   const supabase = getClient();
   await getCurrentContext();
@@ -143,7 +199,9 @@ export async function getOpenInvoicesByCustomer(
     .eq("status", "completed");
 
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query.order("ngay_chung_tu", { ascending: true });
+  const { data, error } = await query.order("ngay_chung_tu", {
+    ascending: true,
+  });
 
   if (error) handleError(error, "getOpenInvoicesByCustomer");
 
@@ -218,7 +276,7 @@ export async function getOpenPurchasesBySupplier(
  */
 export async function getPaymentHistory(
   referenceType: "invoice" | "purchase_order",
-  referenceId: string
+  referenceId: string,
 ) {
   const supabase = getClient();
   const ctx = await getCurrentContext();
