@@ -198,6 +198,16 @@ export default function BanHangPage() {
   const requestIdRef = useRef(0);
   const dailyRequestIdRef = useRef(0);
   const invoiceRequestIdRef = useRef(0);
+  // These derive from state even while the report is loading. They must remain
+  // before all early returns so the component always calls hooks in one order.
+  const overviewRows = useMemo(
+    () => buildSalesOverviewRows(dailyRows, overviewMetric),
+    [dailyRows, overviewMetric],
+  );
+  const overviewInsights = useMemo(
+    () => getSalesOverviewInsights(dailyRows, revenueByHour, overviewMetric),
+    [dailyRows, revenueByHour, overviewMetric],
+  );
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -642,14 +652,6 @@ export default function BanHangPage() {
     : { text: "0%", positive: true };
 
   const branchNames = new Map(branches.map((branch) => [branch.id, branch.name]));
-  const overviewRows = useMemo(
-    () => buildSalesOverviewRows(dailyRows, overviewMetric),
-    [dailyRows, overviewMetric],
-  );
-  const overviewInsights = useMemo(
-    () => getSalesOverviewInsights(dailyRows, revenueByHour, overviewMetric),
-    [dailyRows, revenueByHour, overviewMetric],
-  );
   const overviewMetricMeta = SALES_OVERVIEW_METRICS[overviewMetric];
   const selectedDetailError = tableMode === "daily" ? dailyError : invoiceError;
   const selectedDetailLoading = tableMode === "daily" ? dailyLoading : invoiceLoading;
