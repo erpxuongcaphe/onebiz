@@ -1,5 +1,14 @@
 {
  "bang": {
+  "fnb_supply_catalog_audit": [
+   "action",
+   "actor_id",
+   "branch_id",
+   "created_at",
+   "id",
+   "product_id",
+   "tenant_id"
+  ],
   "modifier_options": [
    "created_at",
    "group_id",
@@ -202,6 +211,8 @@
   ],
   "customer_debt_adjustments": [
    "amount",
+   "branch_id",
+   "cash_transaction_id",
    "created_at",
    "created_by",
    "customer_id",
@@ -432,6 +443,30 @@
    "permission_code",
    "role_id"
   ],
+  "supplier_advances": [
+   "branch_id",
+   "cancelled_at",
+   "cancelled_by",
+   "cash_transaction_id",
+   "created_at",
+   "created_by",
+   "id",
+   "note",
+   "original_amount",
+   "remaining_amount",
+   "source_purchase_order_id",
+   "status",
+   "supplier_id",
+   "tenant_id",
+   "updated_at"
+  ],
+  "fnb_supply_catalog": [
+   "branch_id",
+   "created_at",
+   "created_by",
+   "product_id",
+   "tenant_id"
+  ],
   "fnb_product_branch_menu_policies": [
    "created_at",
    "id",
@@ -458,6 +493,17 @@
    "total",
    "unit",
    "unit_price"
+  ],
+  "supplier_advance_allocations": [
+   "amount",
+   "branch_id",
+   "created_at",
+   "created_by",
+   "id",
+   "note",
+   "purchase_order_id",
+   "supplier_advance_id",
+   "tenant_id"
   ],
   "purchase_order_save_keys": [
    "actor_id",
@@ -1007,6 +1053,18 @@
    "task_title",
    "tenant_id",
    "work_package_id"
+  ],
+  "customer_advance_allocations": [
+   "adjustment_id",
+   "amount",
+   "branch_id",
+   "created_at",
+   "created_by",
+   "customer_advance_id",
+   "id",
+   "invoice_id",
+   "note",
+   "tenant_id"
   ],
   "pipeline_automations": [
    "action_config",
@@ -1986,6 +2044,23 @@
    "variant_id",
    "variant_label"
   ],
+  "customer_advances": [
+   "adjustment_id",
+   "branch_id",
+   "cancelled_at",
+   "cancelled_by",
+   "cash_transaction_id",
+   "created_at",
+   "created_by",
+   "customer_id",
+   "id",
+   "note",
+   "original_amount",
+   "remaining_amount",
+   "status",
+   "tenant_id",
+   "updated_at"
+  ],
   "purchase_orders": [
    "branch_id",
    "close_reason",
@@ -2123,17 +2198,21 @@
   "_create_and_apply_stock_export_00268",
   "_create_internal_sale_auth_impl_00243",
   "_create_sales_return_auth_impl_00244",
+  "_create_sales_return_auth_impl_00244_pre_00381",
   "_current_caller_tenant",
   "_finalize_shift_atomic_00298",
   "_fnb_cancel_unpaid_order_impl_00066",
+  "_fnb_complete_payment_checkout_impl_00345",
   "_fnb_complete_payment_impl_00230",
   "_fnb_complete_payment_impl_00343",
   "_fnb_send_to_kitchen_impl_00303",
   "_fnb_send_to_kitchen_impl_00330",
   "_fnb_send_to_kitchen_impl_00350",
   "_fnb_send_to_kitchen_impl_00353",
+  "_fnb_send_to_kitchen_impl_before_00377",
   "_fnb_void_invoice_impl_00165",
   "_fnb_void_invoice_impl_00329",
+  "_open_shift_checkout_impl_00298",
   "_receive_purchase_items_atomic_impl_00102",
   "_reconcile_product_lots_to_branch_00284",
   "_resolve_report_tenant",
@@ -2141,6 +2220,7 @@
   "_revert_received_po_impl_00214",
   "_revert_received_purchase_order_impl_00214",
   "_update_purchase_order_prices_impl_00234",
+  "_void_completed_invoice_atomic_v2_impl_00250",
   "_void_completed_invoice_impl_00161",
   "_void_disposal_export_auth_impl_00246",
   "_void_disposal_export_impl_00228",
@@ -2150,10 +2230,12 @@
   "adopt_pos_draft_session_atomic_v2",
   "allocate_lots_fifo",
   "apply_coupon_atomic",
+  "apply_customer_advance_to_invoice",
   "apply_disposal_export_atomic",
   "apply_internal_export_atomic",
   "apply_inventory_check_atomic",
   "apply_manual_stock_movement_atomic",
+  "apply_supplier_advance_to_purchase_order",
   "apply_weighted_avg_cost",
   "assert_pos_stock_available",
   "assert_report_access",
@@ -2222,6 +2304,7 @@
   "fnb_floor_layout_update_atomic",
   "fnb_floor_plan_object_writable",
   "fnb_floor_zone_config_atomic",
+  "fnb_open_shift_atomic",
   "fnb_send_to_kitchen_atomic",
   "fnb_send_to_kitchen_atomic_v2",
   "fnb_set_delivery_pricing_v2",
@@ -2237,6 +2320,7 @@
   "get_branch_profit_and_loss_report",
   "get_cash_book_list_workspace",
   "get_consolidated_profit_and_loss_report",
+  "get_counterparty_balance_summary",
   "get_customer_cohort_report",
   "get_customer_list_workspace",
   "get_customer_product_detail_page",
@@ -2276,6 +2360,8 @@
   "get_rfm_report",
   "get_rfm_report_unsecured_legacy",
   "get_sales_order_list_summary",
+  "get_sales_report_daily_rows",
+  "get_sales_report_invoice_detail_page",
   "get_sales_report_invoice_page",
   "get_sales_report_summary",
   "get_sales_return_report",
@@ -2412,9 +2498,11 @@
   "recompute_customer_last_purchase",
   "recompute_supplier_debt",
   "reconcile_pending_shift",
+  "record_customer_advance",
   "record_discount_audit",
   "record_invoice_payment",
   "record_purchase_payment",
+  "record_supplier_advance",
   "redeem_loyalty_points",
   "remove_user_pos_pin",
   "replace_product_uom_conversions_atomic",
@@ -2433,6 +2521,10 @@
   "save_fnb_product_branch_menu_policy",
   "save_fnb_product_branch_menu_scope",
   "save_fnb_size_setup_atomic",
+  "save_fnb_size_setup_atomic_00357",
+  "save_fnb_size_setup_atomic_00367",
+  "save_fnb_size_setup_atomic_00368",
+  "save_fnb_supply_catalog",
   "save_pos_draft_atomic",
   "save_pos_draft_atomic_v2",
   "save_pos_draft_atomic_v3",
@@ -2485,7 +2577,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 146,
- "soCot": 1816,
- "soRpc": 374
+ "soBang": 152,
+ "soCot": 1879,
+ "soRpc": 391
 }
