@@ -149,6 +149,14 @@
    "title",
    "updated_at"
   ],
+  "fnb_supply_branch_scopes": [
+   "branch_id",
+   "enforcement_enabled",
+   "note",
+   "tenant_id",
+   "updated_at",
+   "updated_by"
+  ],
   "mkt_campaign_readiness_items": [
    "campaign_id",
    "confirmed_at",
@@ -1725,6 +1733,15 @@
    "updated_at",
    "variant_id"
   ],
+  "fnb_supply_branch_scope_audit": [
+   "actor_id",
+   "branch_id",
+   "created_at",
+   "enforcement_enabled",
+   "id",
+   "note",
+   "tenant_id"
+  ],
   "price_books": [
    "created_at",
    "end_date",
@@ -2540,6 +2557,7 @@
   "seed_internal_entities",
   "seed_tenant_foundation",
   "set_branch_print_brand_atomic",
+  "set_fnb_supply_branch_enforcement",
   "set_input_invoice_state_atomic",
   "set_purchase_order_state_atomic",
   "set_stock_transfer_state_atomic",
@@ -2577,7 +2595,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 152,
- "soCot": 1879,
- "soRpc": 391
+ "soBang": 154,
+ "soCot": 1892,
+ "soRpc": 392
 }
