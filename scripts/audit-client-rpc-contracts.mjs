@@ -40,7 +40,9 @@ for (const file of sourceFiles) {
 }
 
 const definitions = new Map();
-const definitionPattern = /create\s+or\s+replace\s+function\s+(?:public\.)?([a-zA-Z0-9_]+)\s*\(/gi;
+// Both CREATE FUNCTION (first definition) and CREATE OR REPLACE FUNCTION
+// (subsequent replacement) are valid versioned migration definitions.
+const definitionPattern = /create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-zA-Z0-9_]+)\s*\(/gi;
 for (const file of migrationFiles) {
   const source = readFileSync(join(cwd, file), "utf8");
   for (const match of source.matchAll(definitionPattern)) {
