@@ -10,13 +10,19 @@ vi.mock("@/lib/contexts", () => ({
   useAuth: () => ({ hasPermission: mocks.permission }), useToast: () => ({ toast: mocks.toast }),
 }));
 vi.mock("@/lib/services", () => ({ getBranches: async () => [
-  { id: "a", code: "A", name: "Quán A" }, { id: "b", code: "B", name: "Quán B" },
+  { id: "a", code: "A", name: "Quán A", branchType: "store" },
+  { id: "b", code: "B", name: "Quán B", branchType: "store" },
+  { id: "warehouse", code: "KHO", name: "Kho tổng", branchType: "warehouse" },
 ] }));
 vi.mock("@/lib/services/supabase/internal-sale-products", () => ({ searchInternalSaleProducts: mocks.search }));
 vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({ listFnbSupplyCatalog: mocks.list, saveFnbSupplyCatalog: mocks.save }));
 vi.mock("@/components/shared/page-header", () => ({ PageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => <header>{title}<p>{subtitle}</p></header> }));
 vi.mock("@/components/ui/icon", () => ({ Icon: () => <span /> }));
-vi.mock("@/components/ui/button", () => ({ Button: ({ variant: _variant, size: _size, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => <button {...props} /> }));
+vi.mock("@/components/ui/button", () => ({ Button: ({ variant, size, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => {
+  void variant;
+  void size;
+  return <button {...props} />;
+} }));
 vi.mock("@/components/ui/input", () => ({ Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => <input {...props} /> }));
 
 describe("F&B supply setup screen", () => {
@@ -48,7 +54,7 @@ describe("F&B supply setup screen", () => {
     mocks.permission.mockImplementation((permission: string) => permission !== "system.manage_branches");
     render(<Page />);
     expect(screen.queryByLabelText("Tìm SKU Retail")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Chi nhánh xem cấu hình")).toBeInTheDocument();
+    expect(screen.getByLabelText("Quán xem cấu hình")).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("option", { name: "A · Quán A" })).toBeInTheDocument());
   });
 
@@ -57,12 +63,33 @@ describe("F&B supply setup screen", () => {
     mocks.list.mockImplementation((branch: string) => branch === "a" ? new Promise((resolve) => { resolveOld = resolve; }) : Promise.resolve({ rows: [], count: 0 }));
     render(<Page />);
     await screen.findByRole("option", { name: "A · Quán A" });
-    const selector = screen.getByLabelText("Chi nhánh xem cấu hình");
+    const selector = screen.getByLabelText("Quán xem cấu hình");
     fireEvent.change(selector, { target: { value: "a" } });
     await waitFor(() => expect(mocks.list).toHaveBeenCalled());
     fireEvent.change(selector, { target: { value: "b" } });
     await screen.findByText("Chưa có hàng trong danh sách cấp của chi nhánh này.");
     resolveOld({ rows: [{ product_id: "old", products: { code: "OLD", name: "Old item", unit: "Box", is_active: true } }], count: 1 });
     await waitFor(() => expect(screen.queryByText("OLD")).not.toBeInTheDocument());
+  });
+
+  it("keeps warehouse branches out of the default F&B supply selection", async () => {
+    render(<Page />);
+    await screen.findByRole("option", { name: "A · Quán A" });
+    expect(screen.queryByRole("checkbox", { name: /KHO.*Kho tổng/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /KHO.*Kho tổng/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Hiện chi nhánh khác" })[0]);
+    const warehouse = screen.getByRole("checkbox", { name: /KHO.*Kho tổng.*warehouse/ });
+    expect(warehouse).toBeInTheDocument();
+    fireEvent.click(warehouse);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "Ẩn chi nhánh ngoài quán" })[0]);
+    expect(screen.queryByRole("checkbox", { name: /KHO.*Kho tổng/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "A · Quán A" }));
+    fireEvent.change(screen.getByLabelText("Tìm SKU Retail"), { target: { value: "sữa" } });
+    fireEvent.click(await screen.findByRole("checkbox", { name: /SKU-SUA-001/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Thêm 1 hàng cho 1 chi nhánh" }));
+    await waitFor(() => expect(mocks.save).toHaveBeenLastCalledWith(["box"], ["a"], "add"));
   });
 });
