@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast, useAuth } from "@/lib/contexts";
-import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
+import { searchInternalSaleProducts, type InternalSaleProduct } from "@/lib/services/supabase/internal-sale-products";
 import { createInternalSale, getBranches, syncInternalEntities } from "@/lib/services";
 import type { BranchDetail } from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
@@ -26,22 +26,11 @@ interface CreateInternalSaleDialogProps {
   onSuccess?: () => void;
 }
 
-interface ProductResult {
-  id: string;
-  code: string;
-  name: string;
-  unit: string;
-  stock: number;
-  sell_price: number;
-  vat_rate: number;
-}
-
 interface SaleItem {
   productId: string;
   productCode: string;
   productName: string;
   unit: string;
-  stock: number;
   quantity: number;
   unitPrice: number;
   vatRate: number;
@@ -60,7 +49,9 @@ export function CreateInternalSaleDialog({
   const [paymentMethod, setPaymentMethod] = useState<"transfer" | "cash" | "debt">("transfer");
   const [productSearch, setProductSearch] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const [filteredProducts, setFilteredProducts] = useState<ProductResult[]>([]);
+  const [filteredProducts, setFilteredProducts] = useState<InternalSaleProduct[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
   const [items, setItems] = useState<SaleItem[]>([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -84,36 +75,31 @@ export function CreateInternalSaleDialog({
 
   // Product search debounce
   useEffect(() => {
-    if (!productSearch || productSearch.length < 1) {
-      setFilteredProducts([]);
+    setFilteredProducts([]);
+    setSearchError("");
+    if (!open || !productSearch.trim()) {
+      setSearchLoading(false);
       return;
     }
+    const controller = new AbortController();
+    setSearchLoading(true);
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      const { data } = await supabase
-        .from("products")
-        .select("id, code, name, unit, stock, sell_price, vat_rate")
-        .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
-        .eq("tenant_id", ctx.tenantId)
-        .eq("is_active", true)
-        .limit(8);
-      setFilteredProducts(
-        (data ?? []).map((p) => ({
-          id: p.id,
-          code: p.code,
-          name: p.name,
-          unit: p.unit,
-          stock: p.stock,
-          sell_price: p.sell_price,
-          vat_rate: p.vat_rate ?? 0,
-        })),
-      );
+      try {
+        const products = await searchInternalSaleProducts(productSearch, controller.signal);
+        if (!controller.signal.aborted) setFilteredProducts(products);
+      } catch {
+        if (!controller.signal.aborted) setSearchError("Không tải được sản phẩm. Vui lòng tìm lại.");
+      } finally {
+        if (!controller.signal.aborted) setSearchLoading(false);
+      }
     }, 300);
-    return () => clearTimeout(timer);
-  }, [productSearch]);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, productSearch]);
 
-  function addProduct(p: ProductResult) {
+  function addProduct(p: InternalSaleProduct) {
     if (items.some((i) => i.productId === p.id)) return;
     setItems([
       ...items,
@@ -122,7 +108,6 @@ export function CreateInternalSaleDialog({
         productCode: p.code,
         productName: p.name,
         unit: p.unit,
-        stock: p.stock,
         quantity: 1,
         unitPrice: p.sell_price,
         vatRate: p.vat_rate,
@@ -299,22 +284,26 @@ export function CreateInternalSaleDialog({
             />
             {showDropdown && productSearch && (
               <div className="absolute z-50 mt-1 w-full bg-background border rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                {filteredProducts.length === 0 ? (
+                {searchLoading ? (
+                  <div role="status" className="px-3 py-2 text-sm text-muted-foreground">Đang tìm sản phẩm...</div>
+                ) : searchError ? (
+                  <div role="alert" className="px-3 py-2 text-sm text-destructive">{searchError}</div>
+                ) : filteredProducts.length === 0 ? (
                   <div className="px-3 py-2 text-sm text-muted-foreground">Không tìm thấy sản phẩm</div>
                 ) : (
                   filteredProducts.map((p) => (
                     <button
                       key={p.id}
                       type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex justify-between gap-3"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => addProduct(p)}
                     >
                       <span>
                         <strong>{p.code}</strong> — {p.name}
                       </span>
-                      <span className="text-muted-foreground">
-                        Kho: {formatNumber(p.stock)} {p.unit} | {formatCurrency(p.sell_price)}
+                      <span className="text-muted-foreground shrink-0">
+                        {formatCurrency(p.sell_price)} / {p.unit}
                       </span>
                     </button>
                   ))
@@ -346,7 +335,7 @@ export function CreateInternalSaleDialog({
                     <td className="p-2">
                       <div className="font-medium">{item.productName}</div>
                       <div className="text-xs text-muted-foreground">
-                        {item.productCode} · Kho: {formatNumber(item.stock)}
+                        {item.productCode}
                       </div>
                     </td>
                     <td className="p-2 text-center">
