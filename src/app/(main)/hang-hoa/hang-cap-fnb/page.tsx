@@ -2,13 +2,20 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
+import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { useAuth, useToast } from "@/lib/contexts";
 import { getBranches, type BranchDetail } from "@/lib/services";
 import { searchInternalSaleProducts, type InternalSaleProduct } from "@/lib/services/supabase/internal-sale-products";
-import { listFnbSupplyCatalog, saveFnbSupplyCatalog, type FnbSupplyRow } from "@/lib/services/supabase/fnb-supply-catalog";
+import {
+  getFnbSupplyBranchScope,
+  listFnbSupplyCatalog,
+  saveFnbSupplyCatalog,
+  setFnbSupplyBranchScope,
+  type FnbSupplyRow,
+} from "@/lib/services/supabase/fnb-supply-catalog";
 
 export default function FnbSupplyCatalogPage() {
   const { hasPermission } = useAuth();
@@ -25,6 +32,10 @@ export default function FnbSupplyCatalogPage() {
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [rows, setRows] = useState<FnbSupplyRow[]>([]);
+  const [scopeEnabled, setScopeEnabled] = useState(false);
+  const [scopeBusy, setScopeBusy] = useState(false);
+  const [scopeError, setScopeError] = useState("");
+  const [scopeConfirmation, setScopeConfirmation] = useState<boolean | null>(null);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -71,6 +82,19 @@ export default function FnbSupplyCatalogPage() {
   }, [canView, branchId, page, revision]);
 
   useEffect(() => {
+    setScopeEnabled(false); setScopeError("");
+    if (!canView || !branchId) { setScopeBusy(false); return; }
+    const controller = new AbortController();
+    setScopeBusy(true);
+    getFnbSupplyBranchScope(branchId, controller.signal).then((scope) => {
+      if (!controller.signal.aborted) setScopeEnabled(scope.enforcementEnabled);
+    }).catch(() => {
+      if (!controller.signal.aborted) setScopeError("Không tải được trạng thái kiểm soát SKU.");
+    }).finally(() => { if (!controller.signal.aborted) setScopeBusy(false); });
+    return () => controller.abort();
+  }, [canView, branchId, revision]);
+
+  useEffect(() => {
     setMatches([]); setSearchError("");
     if (!canEdit || !search.trim()) { setSearchBusy(false); return; }
     const controller = new AbortController();
@@ -96,6 +120,19 @@ export default function FnbSupplyCatalogPage() {
     } catch (cause) {
       toast({ title: "Chưa lưu được cấu hình", description: cause instanceof Error ? cause.message : "Vui lòng thử lại.", variant: "error" });
     } finally { saveLock.current = false; setSaving(false); }
+  }
+
+  async function saveScope() {
+    if (scopeConfirmation === null || !branchId || !canEdit) return;
+    const nextEnabled = scopeConfirmation;
+    setScopeBusy(true);
+    try {
+      setScopeEnabled(await setFnbSupplyBranchScope(branchId, nextEnabled));
+      toast({ title: nextEnabled ? "Đã bật kiểm soát SKU cấp hàng" : "Đã tắt kiểm soát SKU cấp hàng" });
+      setScopeConfirmation(null);
+    } catch (cause) {
+      toast({ title: "Chưa cập nhật được kiểm soát SKU", description: cause instanceof Error ? cause.message : "Vui lòng thử lại.", variant: "error" });
+    } finally { setScopeBusy(false); }
   }
 
   if (!canView) return <p className="p-6">Bạn chưa có quyền xem sản phẩm.</p>;
@@ -165,6 +202,19 @@ export default function FnbSupplyCatalogPage() {
         </div>
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {busy ? <p role="status">Đang tải cấu hình...</p> : branchId && !error && <>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-y py-3">
+            <div>
+              <h3 className="font-medium">Kiểm soát SKU cấp hàng</h3>
+              <p className="text-sm text-muted-foreground">
+                {scopeBusy ? "Đang tải trạng thái..." : scopeEnabled ? "Đang áp dụng cho quán này" : "Chưa áp dụng cho quán này"}
+              </p>
+            </div>
+            {canEdit && <Button variant={scopeEnabled ? "outline" : "default"} disabled={scopeBusy || (!scopeEnabled && count === 0)}
+              onClick={() => setScopeConfirmation(!scopeEnabled)}>
+              {scopeEnabled ? "Tắt kiểm soát" : "Bật kiểm soát"}
+            </Button>}
+          </div>
+          {scopeError && <p role="alert" className="text-destructive">{scopeError}</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b"><tr><th className="p-2">Mã hàng</th><th className="p-2">Tên hàng</th><th className="p-2">Đơn vị</th><th className="p-2">Trạng thái</th><th /></tr></thead>
@@ -185,5 +235,12 @@ export default function FnbSupplyCatalogPage() {
         </>}
       </section>
     </div>
+    <ConfirmDialog open={scopeConfirmation !== null} onOpenChange={(open) => { if (!open) setScopeConfirmation(null); }}
+      title={scopeConfirmation ? "Bật kiểm soát SKU cấp hàng" : "Tắt kiểm soát SKU cấp hàng"}
+      description={scopeConfirmation
+        ? "Bán nội bộ chuỗi cấp vào quán này sẽ chỉ nhận SKU nằm trong danh sách đã cấu hình. Không thay đổi tồn kho, BOM, giá hoặc chứng từ hiện có."
+        : "Bán nội bộ chuỗi vào quán này sẽ không còn bị giới hạn bởi danh sách SKU cấp hàng."}
+      confirmLabel={scopeConfirmation ? "Bật kiểm soát" : "Tắt kiểm soát"}
+      loading={scopeBusy} onConfirm={saveScope} />
   </>;
 }

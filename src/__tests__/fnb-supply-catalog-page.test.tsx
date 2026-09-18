@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import Page from "@/app/(main)/hang-hoa/hang-cap-fnb/page";
 
 const mocks = vi.hoisted(() => ({
-  permission: vi.fn(), save: vi.fn(), list: vi.fn(), search: vi.fn(), toast: vi.fn(),
+  permission: vi.fn(), save: vi.fn(), list: vi.fn(), scope: vi.fn(), setScope: vi.fn(), search: vi.fn(), toast: vi.fn(),
 }));
 vi.mock("@/lib/contexts", () => ({
   useAuth: () => ({ hasPermission: mocks.permission }), useToast: () => ({ toast: mocks.toast }),
@@ -15,7 +15,11 @@ vi.mock("@/lib/services", () => ({ getBranches: async () => [
   { id: "warehouse", code: "KHO", name: "Kho tổng", branchType: "warehouse" },
 ] }));
 vi.mock("@/lib/services/supabase/internal-sale-products", () => ({ searchInternalSaleProducts: mocks.search }));
-vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({ listFnbSupplyCatalog: mocks.list, saveFnbSupplyCatalog: mocks.save }));
+vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({
+  listFnbSupplyCatalog: mocks.list, saveFnbSupplyCatalog: mocks.save,
+  getFnbSupplyBranchScope: mocks.scope, setFnbSupplyBranchScope: mocks.setScope,
+}));
+vi.mock("@/components/shared/dialogs/confirm-dialog", () => ({ ConfirmDialog: ({ open, title, onConfirm }: { open: boolean; title: string; onConfirm: () => void }) => open ? <div><p>{title}</p><button onClick={onConfirm}>Xác nhận kiểm soát</button></div> : null }));
 vi.mock("@/components/shared/page-header", () => ({ PageHeader: ({ title, subtitle }: { title: string; subtitle: string }) => <header>{title}<p>{subtitle}</p></header> }));
 vi.mock("@/components/ui/icon", () => ({ Icon: () => <span /> }));
 vi.mock("@/components/ui/button", () => ({ Button: ({ variant, size, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string; size?: string }) => {
@@ -31,6 +35,8 @@ describe("F&B supply setup screen", () => {
     vi.clearAllMocks();
     mocks.permission.mockReturnValue(true);
     mocks.list.mockResolvedValue({ rows: [], count: 0 });
+    mocks.scope.mockResolvedValue({ enforcementEnabled: false });
+    mocks.setScope.mockResolvedValue(true);
     mocks.save.mockResolvedValue(2);
     mocks.search.mockResolvedValue([
       { id: "box", code: "SKU-SUA-001", name: "Sữa hộp", unit: "Hộp" },
@@ -91,5 +97,18 @@ describe("F&B supply setup screen", () => {
     fireEvent.click(await screen.findByRole("checkbox", { name: /SKU-SUA-001/ }));
     fireEvent.click(screen.getByRole("button", { name: "Thêm 1 hàng cho 1 chi nhánh" }));
     await waitFor(() => expect(mocks.save).toHaveBeenLastCalledWith(["box"], ["a"], "add"));
+  });
+
+  it("requires an explicit confirmation before enabling a configured store", async () => {
+    mocks.list.mockResolvedValue({ rows: [], count: 1 });
+    render(<Page />);
+    await screen.findByRole("option", { name: "A · Quán A" });
+    fireEvent.change(screen.getByLabelText("Quán xem cấu hình"), { target: { value: "a" } });
+    await screen.findByRole("button", { name: "Bật kiểm soát" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Bật kiểm soát" }));
+    expect(mocks.setScope).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận kiểm soát" }));
+    await waitFor(() => expect(mocks.setScope).toHaveBeenCalledWith("a", true));
   });
 });

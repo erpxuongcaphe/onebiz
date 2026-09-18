@@ -6,6 +6,10 @@ export interface FnbSupplyRow {
   products: { code: string; name: string; unit: string; is_active: boolean };
 }
 
+export interface FnbSupplyBranchScope {
+  enforcementEnabled: boolean;
+}
+
 export async function listFnbSupplyCatalog(branchId: string, page: number, signal?: AbortSignal) {
   const tenantId = await getCurrentTenantId();
   // New migration types remain local until the generated schema is refreshed.
@@ -32,4 +36,27 @@ export async function saveFnbSupplyCatalog(productIds: string[], branchIds: stri
   });
   if (error) handleError(error, "saveFnbSupplyCatalog");
   return Number(data ?? 0);
+}
+
+export async function getFnbSupplyBranchScope(branchId: string, signal?: AbortSignal): Promise<FnbSupplyBranchScope> {
+  const tenantId = await getCurrentTenantId();
+  // New migration types remain local until the generated schema is refreshed.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (getClient() as any).from("fnb_supply_branch_scopes")
+    .select("enforcement_enabled")
+    .eq("tenant_id", tenantId).eq("branch_id", branchId);
+  if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query.maybeSingle();
+  if (signal?.aborted) return { enforcementEnabled: false };
+  if (error) handleError(error, "getFnbSupplyBranchScope");
+  return { enforcementEnabled: Boolean(data?.enforcement_enabled) };
+}
+
+export async function setFnbSupplyBranchScope(branchId: string, enabled: boolean): Promise<boolean> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient() as any).rpc("set_fnb_supply_branch_enforcement", {
+    p_branch_id: branchId, p_enabled: enabled, p_note: null,
+  });
+  if (error) handleError(error, "setFnbSupplyBranchScope");
+  return Boolean(data);
 }

@@ -17,7 +17,9 @@
 - [x] Add tenant-scoped search, cancellation, explicit loading/error states.
 - [x] Draft catalog UI, additive bulk assignment, removal, service and migration written.
 - [x] Run the approved production migration `00386` and verify its structure, RLS, grants and RPC execution boundary. No product, inventory, financial or Retail data was written.
-- [ ] Activate branch-approved catalog enforcement after reviewing existing usage.
+- [x] Audit the existing internal-sale lifecycle: source stock-out, destination stock-in and linked sale/purchase documents are already written in one atomic RPC. Do not add a second receipt workflow.
+- [ ] Run and verify opt-in enforcement migration `00387`; it defaults every branch to off and must be enabled explicitly per configured F&B store.
+- [ ] Enable catalog enforcement for Xưởng Tư Búa only after its catalog has been reviewed and the controlled supply test is approved.
 - [ ] Bulk setup from current Retail SKUs and existing F&B BOM usage.
 - [ ] Integrate catalog into recipe selection and internal supply on enabled branches.
 - [ ] Audit source shipment/destination receipt timing before changing document flow.
@@ -39,6 +41,22 @@ every selected branch at the RPC. Reading requires product view and branch acces
 The server derives tenant and actor, rejects NVL/menu/inactive SKUs on add, records
 only changed links in its audit table, and denies direct browser table writes.
 Removal permits inactive records so stale assignments can be cleaned up.
+
+## Opt-in enforcement ready for review
+
+Migration `00387_fnb_supply_catalog_opt_in_enforcement.sql` is prepared but has
+not been run. It adds an administrator-only per-store switch, defaulting to
+off for every branch. Enabling a store requires at least one approved catalog
+SKU. Before the existing atomic internal-sale implementation is called, the
+wrapper checks every destination SKU against that store's catalog. It then
+preserves the current single transaction: source stock-out, destination
+stock-in, invoice, input invoice, money postings and FIFO reconciliation still
+come only from the existing implementation.
+
+Do not use the legacy `cancel_internal_sale_atomic` function to reverse a
+completed internal sale: it intentionally permits only draft/confirmed records
+and does not change stock. A completed supply needs a separate, auditable
+reversal workflow before it can be offered in the F&B rollout.
 
 Use additive assignments, not whole-list replacement: another manager's changes
 cannot be erased by a stale form. SKU and unit remain visible in search and review.
