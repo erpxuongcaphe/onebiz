@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ export default function FnbSupplyCatalogPage() {
   const canView = hasPermission("products.view");
   const canEdit = hasPermission("products.edit") && hasPermission("system.manage_branches");
   const [branches, setBranches] = useState<BranchDetail[]>([]);
+  const [showOtherBranches, setShowOtherBranches] = useState(false);
   const [branchId, setBranchId] = useState("");
   const [targets, setTargets] = useState<string[]>([]);
   const [selected, setSelected] = useState<InternalSaleProduct[]>([]);
@@ -31,6 +32,22 @@ export default function FnbSupplyCatalogPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const saveLock = useRef(false);
+  const storeBranches = useMemo(
+    () => branches.filter((branch) => branch.branchType === "store" || !branch.branchType),
+    [branches],
+  );
+  const visibleBranches = showOtherBranches ? branches : storeBranches;
+
+  function toggleOtherBranchVisibility() {
+    setShowOtherBranches((showing) => {
+      if (showing) {
+        const storeBranchIds = new Set(storeBranches.map((branch) => branch.id));
+        setTargets((ids) => ids.filter((id) => storeBranchIds.has(id)));
+        setBranchId((id) => storeBranchIds.has(id) ? id : "");
+      }
+      return !showing;
+    });
+  }
 
   useEffect(() => {
     if (!canView) return;
@@ -108,16 +125,23 @@ export default function FnbSupplyCatalogPage() {
               onClick={() => setSelected((items) => items.filter((p) => p.id !== product.id))}><Icon name="close" size={16} /></Button>
           </li>)}
         </ul>}
-        <fieldset disabled={saving} className="space-y-2">
-          <legend className="text-sm font-medium">Chi nhánh nhận hàng</legend>
+        <div className="space-y-2" role="group" aria-labelledby="fnb-supply-targets-heading">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 id="fnb-supply-targets-heading" className="text-sm font-medium">Quán nhận hàng</h3>
+            <Button type="button" variant="ghost" size="sm" disabled={saving}
+              aria-pressed={showOtherBranches} onClick={toggleOtherBranchVisibility}>
+              <Icon name={showOtherBranches ? "visibility_off" : "visibility"} size={16} />
+              {showOtherBranches ? "Ẩn chi nhánh ngoài quán" : "Hiện chi nhánh khác"}
+            </Button>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {branches.map((branch) => <label key={branch.id} className="flex items-start gap-2 text-sm">
-              <input type="checkbox" checked={targets.includes(branch.id)} onChange={(event) => setTargets((ids) => event.target.checked
+            {visibleBranches.map((branch) => <label key={branch.id} className="flex items-start gap-2 text-sm">
+              <input type="checkbox" disabled={saving} checked={targets.includes(branch.id)} onChange={(event) => setTargets((ids) => event.target.checked
                 ? [...ids, branch.id] : ids.filter((id) => id !== branch.id))} />
-              <span>{branch.code} · {branch.name}</span>
+              <span>{branch.code} · {branch.name}{branch.branchType !== "store" && branch.branchType ? ` (${branch.branchType})` : ""}</span>
             </label>)}
           </div>
-        </fieldset>
+        </div>
         <Button disabled={saving || !selected.length || !targets.length || targets.length > 100}
           onClick={() => save(selected.map((p) => p.id), targets, "add")}>
           <Icon name="add" size={16} /> {saving ? "Đang lưu..." : `Thêm ${selected.length} hàng cho ${targets.length} chi nhánh`}
@@ -126,11 +150,16 @@ export default function FnbSupplyCatalogPage() {
       <section className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
           <h2 className="text-base font-semibold">Danh sách đã cấu hình</h2>
-          <select aria-label="Chi nhánh xem cấu hình" className="min-w-0 max-w-full rounded-md border bg-background p-2 text-sm"
+          <select aria-label="Quán xem cấu hình" className="min-w-0 max-w-full rounded-md border bg-background p-2 text-sm"
             value={branchId} disabled={saving} onChange={(event) => { setBranchId(event.target.value); setPage(0); }}>
-            <option value="">Chọn chi nhánh</option>
-            {branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} · {branch.name}</option>)}
+            <option value="">Chọn quán</option>
+            {visibleBranches.map((branch) => <option key={branch.id} value={branch.id}>{branch.code} · {branch.name}{branch.branchType !== "store" && branch.branchType ? ` (${branch.branchType})` : ""}</option>)}
           </select>
+          <Button type="button" variant="ghost" size="sm" aria-pressed={showOtherBranches}
+            onClick={toggleOtherBranchVisibility}>
+            <Icon name={showOtherBranches ? "visibility_off" : "visibility"} size={16} />
+            {showOtherBranches ? "Ẩn chi nhánh ngoài quán" : "Hiện chi nhánh khác"}
+          </Button>
           <Button variant="ghost" title="Tải lại" aria-label="Tải lại" disabled={busy || !branchId}
             onClick={() => setRevision((value) => value + 1)}><Icon name="refresh" size={16} /></Button>
         </div>

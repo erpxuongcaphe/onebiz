@@ -16,17 +16,19 @@
 - [x] Remove misleading global product stock from this selector.
 - [x] Add tenant-scoped search, cancellation, explicit loading/error states.
 - [x] Draft catalog UI, additive bulk assignment, removal, service and migration written.
-- [ ] Run migration in an isolated database and verify permissions/RLS with real roles.
+- [x] Run the approved production migration `00386` and verify its structure, RLS, grants and RPC execution boundary. No product, inventory, financial or Retail data was written.
 - [ ] Activate branch-approved catalog enforcement after reviewing existing usage.
 - [ ] Bulk setup from current Retail SKUs and existing F&B BOM usage.
 - [ ] Integrate catalog into recipe selection and internal supply on enabled branches.
 - [ ] Audit source shipment/destination receipt timing before changing document flow.
 - [ ] Verify Retail SKU sales history separately from F&B stock card.
-- [ ] Preview UI and end-to-end tests; controlled activation at Xuong Tu Bua.
+- [ ] Finish preview UI checks and controlled activation at Xuong Tu Bua.
 - [ ] Advanced SKU conversion document, only after explicit equivalence approval.
 
-The search patch is groundwork, not completion of the catalog feature. No SQL has
-been executed and no production inventory or financial document has been written.
+The search patch is groundwork, not completion of the catalog feature. Migration
+`00386` has been applied after approval and structurally verified in production;
+it created only the catalog/audit tables and RPC. No production inventory,
+financial document, Retail product, Retail BOM, price or stock data was written.
 
 ## Draft catalog delivery
 
@@ -42,10 +44,10 @@ Use additive assignments, not whole-list replacement: another manager's changes
 cannot be erased by a stale form. SKU and unit remain visible in search and review.
 Existing Retail product metadata is only read. No default assignment or backfill.
 
-Before deploying, run migration in an isolated test database, exercise explicit
-permissions, cross-tenant IDs, inaccessible branches, retries, concurrent add/remove,
-and verify the actual UI at desktop/mobile sizes. The read-only SQL check file
-only verifies structure and grants; it does not prove business behavior.
+Before enabling enforcement, exercise explicit permissions, cross-tenant IDs,
+inaccessible branches, retries, concurrent add/remove, and verify the actual UI
+at desktop/mobile sizes. The read-only SQL check file verifies structure and
+grants; it does not prove business behavior.
 
 ## Setup UX and ownership
 
@@ -54,8 +56,11 @@ them. Each row identifies a specific Retail SKU and packaging, allowed F&B
 branches, recipe usage and readiness. NVL source is read-only derived information
 from the Retail BOM, potentially containing multiple lines.
 
-Administrators select existing SKUs, review unit conversions, select branches in
-bulk and activate. A newly created Retail SKU is not silently enabled everywhere.
+Administrators select existing SKUs, review unit conversions, and select F&B
+stores in bulk. The screen shows `store` branches by default; warehouse, office
+and factory branches require an explicit reveal and retain their type label. This
+is a UX guard only, not server-side F&B activation inference. A newly created
+Retail SKU is not silently enabled everywhere.
 The same setup must be accessible from a recipe's component picker without losing
 the unsaved recipe. Zero inventory must not prevent recipe setup.
 
