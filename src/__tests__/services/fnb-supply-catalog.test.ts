@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listFnbSupplyCatalog, saveFnbSupplyCatalog } from "@/lib/services/supabase/fnb-supply-catalog";
+import {
+  getFnbSupplyBranchScope,
+  listFnbSupplyCatalog,
+  saveFnbSupplyCatalog,
+  setFnbSupplyBranchScope,
+} from "@/lib/services/supabase/fnb-supply-catalog";
 
 const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({
@@ -53,5 +58,23 @@ describe("F&B supply catalog service", () => {
     expect(query.eq).toHaveBeenCalledWith("branch_id", "branch-b");
     expect(query.range).toHaveBeenCalledWith(30, 59);
     expect(query.order).toHaveBeenCalledWith("product_id");
+  });
+
+  it("reads missing opt-in scope as disabled", async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    };
+    mocks.from.mockReturnValue(query);
+    await expect(getFnbSupplyBranchScope("branch-a")).resolves.toEqual({ enforcementEnabled: false });
+    expect(mocks.from).toHaveBeenCalledWith("fnb_supply_branch_scopes");
+  });
+
+  it("changes enforcement through the dedicated RPC only", async () => {
+    mocks.rpc.mockResolvedValue({ data: true, error: null });
+    await expect(setFnbSupplyBranchScope("branch-a", true)).resolves.toBe(true);
+    expect(mocks.rpc).toHaveBeenCalledWith("set_fnb_supply_branch_enforcement", {
+      p_branch_id: "branch-a", p_enabled: true, p_note: null,
+    });
   });
 });
