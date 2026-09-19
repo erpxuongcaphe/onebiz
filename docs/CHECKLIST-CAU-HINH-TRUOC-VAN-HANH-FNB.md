@@ -48,6 +48,9 @@ Chưa nhân sang món thứ hai nếu một mẫu chưa qua UAT.
 ## Bước 2.5 - Duyệt SKU Retail được phép cấp cho quán
 
 - Vào **Hàng hóa → Hàng cấp cho quán**, tìm SKU Retail và chọn quán nhận.
+- Chạy trước [báo cáo đối chiếu BOM và danh mục cấp](../supabase/verify/00388_fnb_supply_catalog_setup_readiness.sql)
+  cho Xưởng Tư Búa. Báo cáo chỉ đọc, dùng để rà SKU thành phần đang được BOM
+  tham chiếu trước khi thêm bất kỳ mã nào.
 - Rà lại mã, đơn vị và quy cách từng SKU trước khi thêm. Ví dụ SKU hộp và SKU
   thùng là hai mã độc lập, dù cùng nguồn NVL.
 - Sau khi danh mục đã được người quản trị duyệt, chọn quán tại phần **Danh sách
