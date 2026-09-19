@@ -137,7 +137,7 @@ export default function FnbSupplyCatalogPage() {
 
   if (!canView) return <p className="p-6">Bạn chưa có quyền xem sản phẩm.</p>;
   return <>
-    <PageHeader title="Hàng cấp cho quán" subtitle="Cấu hình dự thảo · Chưa áp dụng chặn giao dịch" />
+    <PageHeader title="Hàng cấp cho quán" subtitle="Chọn SKU Retail được phép cấp; chỉ quán được bật mới chặn giao dịch." />
     <div className="space-y-5 p-4 md:p-6">
       {canEdit && <section className="space-y-3 border-b pb-5">
         <h2 className="text-base font-semibold">Thêm hàng vào danh sách cấp</h2>
