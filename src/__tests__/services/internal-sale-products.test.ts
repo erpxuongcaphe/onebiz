@@ -14,7 +14,7 @@ function queryResult(data: unknown[] = [], error: unknown = null) {
   const query = {
     select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
     or: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(),
-    limit: vi.fn().mockReturnThis(), abortSignal: vi.fn().mockReturnThis(),
+    limit: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(), abortSignal: vi.fn().mockReturnThis(),
     then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data, error }).then(resolve),
   };
   mocks.from.mockReturnValue(query);
@@ -80,5 +80,15 @@ describe("internal supply product search", () => {
     query.eq.mockClear();
     await searchInternalSaleProducts("milk");
     expect(query.eq).not.toHaveBeenCalledWith("product_type", "sku");
+  });
+
+  it("filters to exact approved catalog IDs only when an enabled destination passes them", async () => {
+    const query = queryResult();
+    await searchInternalSaleProducts("milk", undefined, false, ["box", "carton"]);
+    expect(query.in).toHaveBeenCalledWith("id", ["box", "carton"]);
+
+    mocks.from.mockClear();
+    expect(await searchInternalSaleProducts("milk", undefined, false, [])).toEqual([]);
+    expect(mocks.from).not.toHaveBeenCalled();
   });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalog,
+  listFnbSupplyCatalogProductIds,
   saveFnbSupplyCatalog,
   setFnbSupplyBranchScope,
 } from "@/lib/services/supabase/fnb-supply-catalog";
@@ -58,6 +59,22 @@ describe("F&B supply catalog service", () => {
     expect(query.eq).toHaveBeenCalledWith("branch_id", "branch-b");
     expect(query.range).toHaveBeenCalledWith(30, 59);
     expect(query.order).toHaveBeenCalledWith("product_id");
+  });
+
+  it("loads only exact catalog IDs for an enabled outlet picker", async () => {
+    const query = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({
+        data: [{ product_id: "box" }, { product_id: "box" }, { product_id: "carton" }], error: null,
+      }).then(resolve),
+    };
+    mocks.from.mockReturnValue(query);
+    await expect(listFnbSupplyCatalogProductIds("branch-a")).resolves.toEqual(["box", "carton"]);
+    expect(mocks.from).toHaveBeenCalledWith("fnb_supply_catalog");
+    expect(query.eq).toHaveBeenCalledWith("tenant_id", "tenant-a");
+    expect(query.eq).toHaveBeenCalledWith("branch_id", "branch-a");
+    expect(query.limit).toHaveBeenCalledWith(1000);
   });
 
   it("reads missing opt-in scope as disabled", async () => {
