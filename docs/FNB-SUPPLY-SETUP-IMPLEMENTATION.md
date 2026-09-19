@@ -21,8 +21,9 @@
 - [x] Run and verify opt-in enforcement migration `00387`; it defaults every branch to off and must be enabled explicitly per configured F&B store. Production postflight verified its RLS, grants, opt-in wrapper, atomic implementation and FIFO reconciliation on 18/09/2026.
 - [ ] Enable catalog enforcement for Xưởng Tư Búa only after its catalog has been reviewed and the controlled supply test is approved.
 - [ ] Bulk setup from current Retail SKUs and existing F&B BOM usage.
-- [ ] Integrate catalog into recipe selection and internal supply on enabled branches.
-- [ ] Audit source shipment/destination receipt timing before changing document flow.
+- [x] Mirror the approved catalog in internal-supply search and submit validation for enabled branches; server enforcement remains the final authority.
+- [ ] Surface catalog context in the F&B recipe component setup without blocking setup before a branch has been supplied.
+- [x] Add a read-only source shipment/destination receipt lifecycle audit before changing document flow.
 - [ ] Verify Retail SKU sales history separately from F&B stock card.
 - [ ] Finish preview UI checks and controlled activation at Xuong Tu Bua.
 - [ ] Advanced SKU conversion document, only after explicit equivalence approval.
