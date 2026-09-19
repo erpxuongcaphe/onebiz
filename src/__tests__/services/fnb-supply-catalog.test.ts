@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalog,
+  listFnbSupplyBomSuggestions,
   listFnbSupplyCatalogProductIds,
   saveFnbSupplyCatalog,
   setFnbSupplyBranchScope,
@@ -75,6 +76,30 @@ describe("F&B supply catalog service", () => {
     expect(query.eq).toHaveBeenCalledWith("tenant_id", "tenant-a");
     expect(query.eq).toHaveBeenCalledWith("branch_id", "branch-a");
     expect(query.limit).toHaveBeenCalledWith(1000);
+  });
+
+  it("suggests only unassigned Retail SKU components from active F&B BOMs", async () => {
+    const makeQuery = (result: unknown) => ({
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
+    });
+    mocks.from.mockImplementation((table: string) => {
+      if (table === "fnb_supply_catalog") return makeQuery({ data: [{ product_id: "already" }], error: null });
+      if (table === "bom") return makeQuery({ data: [{ id: "bom-1" }], error: null });
+      if (table === "bom_items") return makeQuery({ data: [{ material_id: "already" }, { material_id: "box" }], error: null });
+      if (table === "products") {
+        const callCount = mocks.from.mock.calls.filter(([name]: [string]) => name === "products").length;
+        return callCount === 1
+          ? makeQuery({ data: [{ id: "menu-1" }], error: null })
+          : makeQuery({ data: [{ id: "box", code: "SKU-BOX", name: "Hộp sữa", unit: "Hộp" }], error: null });
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await expect(listFnbSupplyBomSuggestions("branch-a")).resolves.toEqual([
+      { id: "box", code: "SKU-BOX", name: "Hộp sữa", unit: "Hộp" },
+    ]);
   });
 
   it("reads missing opt-in scope as disabled", async () => {

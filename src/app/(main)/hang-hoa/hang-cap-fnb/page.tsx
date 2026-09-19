@@ -12,6 +12,7 @@ import { searchInternalSaleProducts, type InternalSaleProduct } from "@/lib/serv
 import {
   getFnbSupplyBranchScope,
   listFnbSupplyCatalog,
+  listFnbSupplyBomSuggestions,
   saveFnbSupplyCatalog,
   setFnbSupplyBranchScope,
   type FnbSupplyRow,
@@ -31,6 +32,7 @@ export default function FnbSupplyCatalogPage() {
   const [matches, setMatches] = useState<InternalSaleProduct[]>([]);
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [suggestionBusy, setSuggestionBusy] = useState(false);
   const [rows, setRows] = useState<FnbSupplyRow[]>([]);
   const [scopeEnabled, setScopeEnabled] = useState(false);
   const [scopeBusy, setScopeBusy] = useState(false);
@@ -122,6 +124,39 @@ export default function FnbSupplyCatalogPage() {
     } finally { saveLock.current = false; setSaving(false); }
   }
 
+  async function addBomSuggestions() {
+    if (!branchId || !canEdit || suggestionBusy || saving) return;
+    setSuggestionBusy(true);
+    try {
+      const suggestions = await listFnbSupplyBomSuggestions(branchId);
+      const selectedIds = new Set(selected.map((product) => product.id));
+      const additions = suggestions
+        .filter((product) => !selectedIds.has(product.id))
+        .slice(0, Math.max(0, 200 - selected.length));
+      if (additions.length) {
+        setSelected((items) => [
+          ...items,
+          ...additions.map((product) => ({ ...product, sell_price: 0, vat_rate: 0 })),
+        ]);
+        setTargets((ids) => ids.includes(branchId) ? ids : [...ids, branchId]);
+      }
+      toast({
+        title: additions.length
+          ? `Đã thêm ${additions.length} SKU gợi ý vào vùng chọn`
+          : "Không có SKU BOM mới cần thêm",
+        description: "Chưa có dữ liệu nào được lưu. Rà danh sách và bấm Thêm hàng để xác nhận.",
+      });
+    } catch (cause) {
+      toast({
+        title: "Chưa tải được gợi ý BOM",
+        description: cause instanceof Error ? cause.message : "Vui lòng thử lại.",
+        variant: "error",
+      });
+    } finally {
+      setSuggestionBusy(false);
+    }
+  }
+
   async function saveScope() {
     if (scopeConfirmation === null || !branchId || !canEdit) return;
     const nextEnabled = scopeConfirmation;
@@ -199,7 +234,14 @@ export default function FnbSupplyCatalogPage() {
           </Button>
           <Button variant="ghost" title="Tải lại" aria-label="Tải lại" disabled={busy || !branchId}
             onClick={() => setRevision((value) => value + 1)}><Icon name="refresh" size={16} /></Button>
+          {canEdit && <Button type="button" variant="outline" size="sm" disabled={!branchId || busy || saving || suggestionBusy}
+            onClick={addBomSuggestions}>
+            <Icon name="auto_awesome" size={16} /> {suggestionBusy ? "Đang đọc BOM..." : "Gợi ý SKU từ BOM"}
+          </Button>}
         </div>
+        {branchId && canEdit && <p className="text-xs text-muted-foreground">
+          Gợi ý chỉ lấy SKU Retail đang có trong các BOM món F&B hoạt động và chưa nằm trong danh sách của quán này. Hệ thống không tự lưu hoặc tự bật kiểm soát.
+        </p>}
         {error && <p role="alert" className="text-destructive">{error}</p>}
         {busy ? <p role="status">Đang tải cấu hình...</p> : branchId && !error && <>
           <div className="flex flex-wrap items-center justify-between gap-3 border-y py-3">
