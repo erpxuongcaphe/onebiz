@@ -70,6 +70,12 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain('channel === "fnb" ? "thành phần vào công thức" : "NVL vào công thức"');
   });
 
+  it("keeps the F&B recipe setup explicit about the exact Retail SKU and outlet supply review", () => {
+    expect(dialog).toContain("SKU Retail trong công thức = tồn F&B sẽ trừ");
+    expect(dialog).toContain("Mã này không tự đổi sang SKU khác dù cùng một NVL nguồn.");
+    expect(dialog).toContain("Hàng cấp cho quán");
+  });
+
   it("generates and persists a BOM code for new or legacy inline recipes", () => {
     expect(dialog).toContain("function getAutomaticBomCode(");
     expect(dialog).toContain("Hệ thống tự sinh khi lưu công thức mới");

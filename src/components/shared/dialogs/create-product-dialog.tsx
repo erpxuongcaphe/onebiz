@@ -3496,6 +3496,25 @@ export function CreateProductDialog({
                 </div>
               </div>
 
+              {channel === "fnb" && (
+                <div className="rounded-lg border border-status-info/30 bg-status-info/5 px-3 py-2.5 text-sm">
+                  <div className="flex items-start gap-2">
+                    <Icon name="inventory_2" size={16} className="mt-0.5 shrink-0 text-status-info" />
+                    <div className="space-y-1">
+                      <p className="font-medium">SKU Retail trong công thức = tồn F&B sẽ trừ</p>
+                      <p className="text-xs leading-5 text-muted-foreground">
+                        Chọn đúng mã Retail mà quán sẽ nhận và tồn kho, ví dụ mã Hộp hoặc Thùng đã chốt.
+                        Mã này không tự đổi sang SKU khác dù cùng một NVL nguồn. Sau khi lưu món và bật bán tại quán,
+                        quản trị duyệt mã đó tại <span className="font-medium text-foreground">Hàng cấp cho quán</span>
+                        {bomBranchId
+                          ? ` cho ${branches.find((branch) => branch.id === bomBranchId)?.name ?? "chi nhánh này"}`
+                          : " cho từng quán bán món"}.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Items table */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
