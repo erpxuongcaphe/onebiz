@@ -20,7 +20,7 @@
 - [x] Audit the existing internal-sale lifecycle: source stock-out, destination stock-in and linked sale/purchase documents are already written in one atomic RPC. Do not add a second receipt workflow.
 - [x] Run and verify opt-in enforcement migration `00387`; it defaults every branch to off and must be enabled explicitly per configured F&B store. Production postflight verified its RLS, grants, opt-in wrapper, atomic implementation and FIFO reconciliation on 18/09/2026.
 - [ ] Enable catalog enforcement for Xưởng Tư Búa only after its catalog has been reviewed and the controlled supply test is approved.
-- [ ] Bulk setup from current Retail SKUs and existing F&B BOM usage.
+- [x] Add BOM-based SKU suggestions to the supply catalog; suggestions require explicit administrator review and save.
 - [x] Mirror the approved catalog in internal-supply search and submit validation for enabled branches; server enforcement remains the final authority.
 - [ ] Surface catalog context in the F&B recipe component setup without blocking setup before a branch has been supplied.
 - [x] Add a read-only source shipment/destination receipt lifecycle audit before changing document flow.
