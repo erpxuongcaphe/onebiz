@@ -41,6 +41,20 @@ Chưa nhân sang món thứ hai nếu một mẫu chưa qua UAT.
 - Mỗi dòng BOM có nguyên liệu, đơn vị và định lượng lớn hơn 0.
 - Định lượng được cân/đo thực tế; không ước lượng bằng mắt.
 - Món bán nguyên trạng dùng công thức 1:1 đúng đơn vị và đúng chi nhánh.
+- SKU Retail cấp vào quán được chọn trong **Hàng hóa → Hàng cấp cho quán**.
+  Chỉ chọn đúng SKU mà quán sẽ giữ tồn; không thay bằng SKU khác có cùng NVL
+  hoặc khác quy cách đóng gói. Danh mục này không tự tạo tồn kho.
+
+## Bước 2.5 - Duyệt SKU Retail được phép cấp cho quán
+
+- Vào **Hàng hóa → Hàng cấp cho quán**, tìm SKU Retail và chọn quán nhận.
+- Rà lại mã, đơn vị và quy cách từng SKU trước khi thêm. Ví dụ SKU hộp và SKU
+  thùng là hai mã độc lập, dù cùng nguồn NVL.
+- Sau khi danh mục đã được người quản trị duyệt, chọn quán tại phần **Danh sách
+  đã cấu hình** rồi bật **Kiểm soát SKU cấp hàng**.
+- Việc bật chỉ áp dụng cho phiếu bán nội bộ phát sinh sau đó vào đúng quán này;
+  không sửa Retail NVL, BOM, tồn, giá, lịch sử hay chứng từ cũ.
+- Không bật ở kho tổng, văn phòng hoặc quán chưa có danh mục hoàn chỉnh.
 
 ## Bước 3 - Nhập giá và quy cách
 
