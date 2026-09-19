@@ -24,7 +24,7 @@
 - [x] Mirror the approved catalog in internal-supply search and submit validation for enabled branches; server enforcement remains the final authority.
 - [ ] Surface catalog context in the F&B recipe component setup without blocking setup before a branch has been supplied.
 - [x] Add a read-only source shipment/destination receipt lifecycle audit before changing document flow.
-- [ ] Verify Retail SKU sales history separately from F&B stock card.
+- [x] Add a read-only Retail-sales versus F&B-stock-card boundary report for Xưởng Tư Búa.
 - [ ] Finish preview UI checks and controlled activation at Xuong Tu Bua.
 - [ ] Advanced SKU conversion document, only after explicit equivalence approval.
 
