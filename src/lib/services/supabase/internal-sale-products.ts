@@ -20,8 +20,10 @@ export async function searchInternalSaleProducts(
   search: string,
   signal?: AbortSignal,
   retailSkuOnly = false,
+  approvedProductIds?: string[],
 ): Promise<InternalSaleProduct[]> {
   if (!search.trim() || signal?.aborted) return [];
+  if (approvedProductIds && approvedProductIds.length === 0) return [];
   const ctx = await getCurrentContext();
   if (signal?.aborted) return [];
   let query = getClient()
@@ -35,6 +37,7 @@ export async function searchInternalSaleProducts(
     .order("code")
     .limit(8);
   if (retailSkuOnly) query = query.eq("product_type", "sku");
+  if (approvedProductIds) query = query.in("id", approvedProductIds);
   if (signal) query = query.abortSignal(signal);
   const { data, error } = await query;
   if (signal?.aborted) return [];

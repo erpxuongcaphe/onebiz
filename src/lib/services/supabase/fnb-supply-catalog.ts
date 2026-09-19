@@ -27,6 +27,21 @@ export async function listFnbSupplyCatalog(branchId: string, page: number, signa
   return { rows: (data ?? []) as FnbSupplyRow[], count: Number(count ?? 0) };
 }
 
+/** IDs only: used to constrain an enabled outlet's internal-sale picker. */
+export async function listFnbSupplyCatalogProductIds(branchId: string, signal?: AbortSignal): Promise<string[]> {
+  const tenantId = await getCurrentTenantId();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let query = (getClient() as any).from("fnb_supply_catalog")
+    .select("product_id")
+    .eq("tenant_id", tenantId).eq("branch_id", branchId)
+    .order("product_id").limit(1000);
+  if (signal) query = query.abortSignal(signal);
+  const { data, error } = await query;
+  if (signal?.aborted) return [];
+  if (error) handleError(error, "listFnbSupplyCatalogProductIds");
+  return [...new Set((data ?? []).map((row: { product_id: string }) => row.product_id))];
+}
+
 export async function saveFnbSupplyCatalog(productIds: string[], branchIds: string[], action: "add" | "remove") {
   if (!productIds.length || !branchIds.length) throw new Error("Chọn hàng và chi nhánh trước khi lưu.");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

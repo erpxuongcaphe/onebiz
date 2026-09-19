@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast, useAuth } from "@/lib/contexts";
 import { searchInternalSaleProducts, type InternalSaleProduct } from "@/lib/services/supabase/internal-sale-products";
+import { getFnbSupplyBranchScope, listFnbSupplyCatalogProductIds } from "@/lib/services/supabase/fnb-supply-catalog";
 import { createInternalSale, getBranches, syncInternalEntities } from "@/lib/services";
 import type { BranchDetail } from "@/lib/services";
 import { Icon } from "@/components/ui/icon";
@@ -36,6 +37,13 @@ interface SaleItem {
   vatRate: number;
 }
 
+interface DestinationCatalogState {
+  loading: boolean;
+  error: boolean;
+  enforcementEnabled: boolean;
+  productIds: string[];
+}
+
 export function CreateInternalSaleDialog({
   open,
   onOpenChange,
@@ -52,6 +60,9 @@ export function CreateInternalSaleDialog({
   const [filteredProducts, setFilteredProducts] = useState<InternalSaleProduct[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
+  const [destinationCatalog, setDestinationCatalog] = useState<DestinationCatalogState>({
+    loading: false, error: false, enforcementEnabled: false, productIds: [],
+  });
   const [items, setItems] = useState<SaleItem[]>([]);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -66,6 +77,7 @@ export function CreateInternalSaleDialog({
     setProductSearch("");
     setShowDropdown(false);
     setFilteredProducts([]);
+    setDestinationCatalog({ loading: false, error: false, enforcementEnabled: false, productIds: [] });
     setItems([]);
     setNote("");
     setSaving(false);
@@ -73,10 +85,45 @@ export function CreateInternalSaleDialog({
     getBranches().then(setBranches).catch(() => {});
   }, [open]);
 
+  // The database RPC remains the authority. This only makes the opt-in rule
+  // visible before the user builds an internal-sale document.
+  useEffect(() => {
+    if (!open || !toBranchId) {
+      setDestinationCatalog({ loading: false, error: false, enforcementEnabled: false, productIds: [] });
+      return;
+    }
+    const controller = new AbortController();
+    setDestinationCatalog({ loading: true, error: false, enforcementEnabled: false, productIds: [] });
+    void (async () => {
+      try {
+        const scope = await getFnbSupplyBranchScope(toBranchId, controller.signal);
+        if (controller.signal.aborted) return;
+        if (!scope.enforcementEnabled) {
+          setDestinationCatalog({ loading: false, error: false, enforcementEnabled: false, productIds: [] });
+          return;
+        }
+        const productIds = await listFnbSupplyCatalogProductIds(toBranchId, controller.signal);
+        if (!controller.signal.aborted) {
+          setDestinationCatalog({ loading: false, error: false, enforcementEnabled: true, productIds });
+        }
+      } catch {
+        if (!controller.signal.aborted) {
+          setDestinationCatalog({ loading: false, error: true, enforcementEnabled: false, productIds: [] });
+        }
+      }
+    })();
+    return () => controller.abort();
+  }, [open, toBranchId]);
+
   // Product search debounce
   useEffect(() => {
     setFilteredProducts([]);
     setSearchError("");
+    if (destinationCatalog.error) {
+      setSearchLoading(false);
+      setSearchError("Không kiểm tra được danh mục cấp hàng của quán. Chưa thể chọn sản phẩm.");
+      return;
+    }
     if (!open || !productSearch.trim()) {
       setSearchLoading(false);
       return;
@@ -85,7 +132,12 @@ export function CreateInternalSaleDialog({
     setSearchLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const products = await searchInternalSaleProducts(productSearch, controller.signal);
+        const products = await searchInternalSaleProducts(
+          productSearch,
+          controller.signal,
+          false,
+          destinationCatalog.enforcementEnabled ? destinationCatalog.productIds : undefined,
+        );
         if (!controller.signal.aborted) setFilteredProducts(products);
       } catch {
         if (!controller.signal.aborted) setSearchError("Không tải được sản phẩm. Vui lòng tìm lại.");
@@ -97,7 +149,7 @@ export function CreateInternalSaleDialog({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [open, productSearch]);
+  }, [open, productSearch, destinationCatalog.error, destinationCatalog.enforcementEnabled, destinationCatalog.productIds]);
 
   function addProduct(p: InternalSaleProduct) {
     if (items.some((i) => i.productId === p.id)) return;
@@ -146,6 +198,25 @@ export function CreateInternalSaleDialog({
     if (items.length === 0) {
       toast({ title: "Thêm ít nhất 1 sản phẩm", variant: "error" });
       return;
+    }
+    if (destinationCatalog.loading) {
+      toast({ title: "Đang kiểm tra danh mục cấp hàng của quán", variant: "error" });
+      return;
+    }
+    if (destinationCatalog.error) {
+      toast({ title: "Chưa kiểm tra được danh mục cấp hàng của quán", variant: "error" });
+      return;
+    }
+    if (destinationCatalog.enforcementEnabled) {
+      const unapproved = items.filter((item) => !destinationCatalog.productIds.includes(item.productId));
+      if (unapproved.length > 0) {
+        toast({
+          title: "Có SKU chưa được duyệt cấp cho quán này",
+          description: unapproved.map((item) => item.productCode).join(", "),
+          variant: "error",
+        });
+        return;
+      }
     }
 
     saveLockRef.current = true;
@@ -269,12 +340,22 @@ export function CreateInternalSaleDialog({
         {/* Product search */}
         <div className="space-y-2">
           <label className="text-sm font-medium">Thêm sản phẩm</label>
+          {destinationCatalog.loading ? (
+            <p className="text-xs text-muted-foreground">Đang kiểm tra danh mục cấp hàng của quán...</p>
+          ) : destinationCatalog.error ? (
+            <p role="alert" className="text-xs text-destructive">Không kiểm tra được danh mục cấp hàng. Thử lại trước khi tạo phiếu.</p>
+          ) : destinationCatalog.enforcementEnabled ? (
+            <p className="text-xs text-muted-foreground">
+              Quán này đang kiểm soát SKU cấp hàng: chỉ tìm trong {formatNumber(destinationCatalog.productIds.length)} mã đã duyệt.
+            </p>
+          ) : null}
           <div className="relative">
             <Icon name="search" size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               className="pl-9"
               placeholder="Tìm sản phẩm theo tên hoặc mã..."
               value={productSearch}
+              disabled={destinationCatalog.loading || destinationCatalog.error}
               onChange={(e) => {
                 setProductSearch(e.target.value);
                 setShowDropdown(true);
