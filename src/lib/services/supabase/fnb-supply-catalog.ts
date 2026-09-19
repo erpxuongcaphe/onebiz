@@ -39,7 +39,8 @@ export async function listFnbSupplyCatalogProductIds(branchId: string, signal?: 
   const { data, error } = await query;
   if (signal?.aborted) return [];
   if (error) handleError(error, "listFnbSupplyCatalogProductIds");
-  return [...new Set((data ?? []).map((row: { product_id: string }) => row.product_id))];
+  const rows = (data ?? []) as Array<{ product_id: string }>;
+  return [...new Set<string>(rows.map((row) => row.product_id))];
 }
 
 export async function saveFnbSupplyCatalog(productIds: string[], branchIds: string[], action: "add" | "remove") {
