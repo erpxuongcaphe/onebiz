@@ -75,6 +75,12 @@ select
       then 'Khớp phiếu cấp nội bộ hoàn tất'
     when internal_sale_id is not null
       then 'Có liên kết phiếu cấp nhưng cần rà trạng thái'
+    when loai_tham_chieu = 'bom_consume'
+      then 'Xuất theo BOM F&B; đối chiếu hóa đơn bán khi cần'
+    when loai_tham_chieu in ('invoice_void', 'return_bom_restore')
+      then 'Hoàn kho F&B từ hủy/trả hóa đơn'
+    when loai_tham_chieu in ('inventory_check', 'initial_stock_reset', 'stock_adjustment')
+      then 'Tồn đầu hoặc điều chỉnh; cần biên bản/ý nghĩa vận hành rõ ràng'
     else 'Không gắn phiếu cấp nội bộ; rà loại tham chiếu và chứng từ nguồn'
   end as ket_luan_ra_soat
 from su_kien_the_kho
@@ -82,5 +88,6 @@ order by created_at desc, ma_sku_retail, stock_movement_id;
 
 -- Expected review practice:
 -- 1) completed internal-sale references are normal supply evidence;
--- 2) other source references must be understood before remediation;
--- 3) never delete, reverse, or recreate historical movements from this report.
+-- 2) BOM consumption and paired void/return rows are normal F&B operations;
+-- 3) opening/adjustment rows need an auditable operational explanation;
+-- 4) never delete, reverse, or recreate historical movements from this report.

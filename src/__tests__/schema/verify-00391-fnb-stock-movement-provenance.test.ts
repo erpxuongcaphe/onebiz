@@ -19,6 +19,9 @@ describe("00391 F&B stock movement provenance", () => {
     expect(sql).toContain("public.internal_sales noi_bo");
     expect(sql).toContain("public.input_invoices pn");
     expect(sql).toContain("Không gắn phiếu cấp nội bộ");
+    expect(sql).toContain("Xuất theo BOM F&B");
+    expect(sql).toContain("Hoàn kho F&B từ hủy/trả hóa đơn");
+    expect(sql).toContain("Tồn đầu hoặc điều chỉnh");
   });
 
   it("remains strictly read-only", () => {
