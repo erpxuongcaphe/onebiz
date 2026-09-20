@@ -26,6 +26,16 @@ describe("danhGiaFnbReadiness", () => {
     expect(locMonFnbDangMoBan(products)).toEqual([products[0]]);
   });
 
+  it("vẫn kiểm tra SKU topping có giá khi POS bán như một món độc lập", () => {
+    const products = [
+      { code: "SKU-TPP-005", sell_price: 10_000, allow_sale: true },
+      { code: "SKU-TPP-006", sell_price: 0, allow_sale: true },
+    ];
+
+    expect(locMonFnbDangMoBan(products)).toEqual([products[0]]);
+    expect(locMonFnbCanhBao(products, false)).toEqual([]);
+  });
+
   it("đếm riêng topping thiếu giá, thiếu BOM và topping dùng được", () => {
     const result = danhGiaFnbReadiness({
       products: [
