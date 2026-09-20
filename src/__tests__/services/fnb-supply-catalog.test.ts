@@ -8,15 +8,29 @@ import {
   setFnbSupplyBranchScope,
 } from "@/lib/services/supabase/fnb-supply-catalog";
 
-const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn() }));
+const mocks = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), menuScopes: vi.fn() }));
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => mocks,
   getCurrentTenantId: async () => "tenant-a",
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
+vi.mock("@/lib/services/supabase/fnb-product-branch-menu", () => ({
+  filterFnbProductsForBranch: <T extends { id: string }>(
+    products: T[],
+    scopes: Array<{ productId: string; branchId: string; mode: "only" | "except" }>,
+    branchId: string,
+  ) => products.filter((product) => {
+    const scope = scopes.find((item) => item.productId === product.id);
+    return !scope || (scope.mode === "only" ? scope.branchId === branchId : scope.branchId !== branchId);
+  }),
+  listFnbProductBranchMenuScopes: mocks.menuScopes,
+}));
 
 describe("F&B supply catalog service", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.menuScopes.mockResolvedValue([]);
+  });
 
   it("deduplicates explicit assignments and only calls the configuration RPC", async () => {
     mocks.rpc.mockResolvedValue({ data: 2, error: null });
@@ -100,6 +114,36 @@ describe("F&B supply catalog service", () => {
     await expect(listFnbSupplyBomSuggestions("branch-a")).resolves.toEqual([
       { id: "box", code: "SKU-BOX", name: "Hộp sữa", unit: "Hộp" },
     ]);
+  });
+
+  it("suggests only the BOM components used by the selected outlet menu and its applicable BOM", async () => {
+    const bomQuery = {
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [{ id: "bom-a" }], error: null }).then(resolve),
+    };
+    const query = (result: unknown) => ({
+      select: vi.fn().mockReturnThis(), eq: vi.fn().mockReturnThis(), in: vi.fn().mockReturnThis(),
+      or: vi.fn().mockReturnThis(), order: vi.fn().mockReturnThis(), limit: vi.fn().mockReturnThis(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve(result).then(resolve),
+    });
+    mocks.menuScopes.mockResolvedValue([{ productId: "hidden-menu", branchId: "other-store", mode: "only" }]);
+    mocks.from.mockImplementation((table: string) => {
+      if (table === "fnb_supply_catalog") return query({ data: [], error: null });
+      if (table === "bom") return bomQuery;
+      if (table === "bom_items") return query({ data: [{ material_id: "box" }], error: null });
+      if (table === "products") {
+        const calls = mocks.from.mock.calls.filter(([name]: [string]) => name === "products").length;
+        return calls === 1
+          ? query({ data: [{ id: "visible-menu" }, { id: "hidden-menu" }], error: null })
+          : query({ data: [{ id: "box", code: "SKU-SUA-001", name: "Sữa hộp", unit: "Hộp" }], error: null });
+      }
+      throw new Error(`Unexpected table ${table}`);
+    });
+
+    await listFnbSupplyBomSuggestions("branch-a");
+    expect(bomQuery.in).toHaveBeenCalledWith("product_id", ["visible-menu"]);
+    expect(bomQuery.or).toHaveBeenCalledWith("branch_id.eq.branch-a,branch_id.is.null");
   });
 
   it("reads missing opt-in scope as disabled", async () => {
