@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { danhGiaFnbReadiness } from "@/lib/services/supabase/fnb-readiness";
+import {
+  danhGiaFnbReadiness,
+  locMonFnbCanhBao,
+} from "@/lib/services/supabase/fnb-readiness";
 
 describe("danhGiaFnbReadiness", () => {
+  it("không đưa SKU topping nháp vào hàng đợi món khi chế độ topping theo phần đang tắt", () => {
+    const products = [
+      { code: "SKU-CAP-001", name: "Cà phê" },
+      { code: "SKU-TPP-001", name: "Trân châu" },
+    ];
+
+    expect(locMonFnbCanhBao(products, false)).toEqual([products[0]]);
+    expect(locMonFnbCanhBao(products, true)).toEqual(products);
+  });
+
   it("đếm riêng topping thiếu giá, thiếu BOM và topping dùng được", () => {
     const result = danhGiaFnbReadiness({
       products: [

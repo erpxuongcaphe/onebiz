@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   permission: vi.fn(), save: vi.fn(), list: vi.fn(), scope: vi.fn(), setScope: vi.fn(), search: vi.fn(), toast: vi.fn(),
 }));
 vi.mock("@/lib/contexts", () => ({
-  useAuth: () => ({ hasPermission: mocks.permission }), useToast: () => ({ toast: mocks.toast }),
+  useAuth: () => ({ hasPermission: mocks.permission, activeBranchId: "a" }), useToast: () => ({ toast: mocks.toast }),
 }));
 vi.mock("@/lib/services", () => ({ getBranches: async () => [
   { id: "a", code: "A", name: "Quán A", branchType: "store" },
@@ -44,6 +44,13 @@ describe("F&B supply setup screen", () => {
     ]);
   });
   afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+
+  it("mở sẵn cấu hình của quán đang làm việc nhưng không tự chọn quán nhận", async () => {
+    render(<Page />);
+    const selector = await screen.findByLabelText("Quán xem cấu hình");
+    await waitFor(() => expect(selector).toHaveValue("a"));
+    expect(screen.getByRole("checkbox", { name: "A · Quán A" })).not.toBeChecked();
+  });
 
   it("saves the exact selected SKU to multiple branches without substituting packaging", async () => {
     render(<Page />);

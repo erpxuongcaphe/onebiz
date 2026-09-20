@@ -218,6 +218,7 @@ function FnbPosPageInner() {
   // POS-FIX-C3: track loading state cho variant dialog — khi cache miss
   // mà network đang fetch, hiện skeleton thay vì empty (UX "tưởng đơ").
   const [itemVariantsLoading, setItemVariantsLoading] = useState(false);
+  const [itemVariantsFailed, setItemVariantsFailed] = useState(false);
   // CEO 01/06/2026 — Sprint 2.2e: Dynamic modifier groups cho SP đang mở dialog.
   // Cache per-product để tránh re-fetch khi cashier quay lại cùng món.
   const [itemModifierData, setItemModifierData] = useState<
@@ -1313,6 +1314,7 @@ function FnbPosPageInner() {
       setEditingLineId(null);
       setSelectedProduct(product);
       setItemModifierData(undefined);
+      setItemVariantsFailed(false);
 
       // Helper: quick-add với product price chuẩn (không variant, không topping)
       // CEO 13/05: resolve giá theo tab.deliveryPlatform — nếu có override
@@ -1441,9 +1443,10 @@ function FnbPosPageInner() {
         console.error("getVariantsByProduct error:", err);
         if (itemLoadRequestRef.current !== requestId) return;
         setItemVariants([]);
+        setItemVariantsFailed(true);
         toast({
           title: "Không tải được size/biến thể",
-          description: "Món sẽ được thêm với giá chuẩn.",
+          description: "Chưa thể xác định quy cách. Kiểm tra mạng rồi bấm Thử lại.",
           variant: "warning",
         });
       } finally {
@@ -1506,6 +1509,11 @@ function FnbPosPageInner() {
     );
     setItemModifierData(data);
   }, [selectedProduct, loadModifierForProduct]);
+
+  const handleRetryVariants = useCallback(() => {
+    if (!selectedProduct) return;
+    void handleSelectProduct(selectedProduct);
+  }, [handleSelectProduct, selectedProduct]);
 
   // Tải variants từ cache (cùng cơ chế handleSelectProduct), set
   // editingLineId để confirm rơi vào nhánh updateLine.
@@ -3555,6 +3563,7 @@ function FnbPosPageInner() {
             product={selectedProduct}
             variants={itemVariants.length > 0 ? itemVariants : undefined}
             variantsLoading={itemVariantsLoading}
+            variantsFailed={itemVariantsFailed}
             // 08/08 (CEO): HAI cơ chế topping không được cùng hiện. Cờ TẮT
             // (mặc định) → giấu khu topping SKU, giữ nguyên nhóm tuỳ chọn
             // như hệ thống hiện tại; BẬT → hiện topping SKU + ẩn nhóm
@@ -3571,6 +3580,7 @@ function FnbPosPageInner() {
             dynamicModifiers={duLieuTuyChonPopup}
             // 06/08: tải tuỳ chọn hỏng → dialog hiện lỗi + nút này
             onRetryModifiers={handleRetryModifiers}
+            onRetryVariants={handleRetryVariants}
           />
         </Suspense>
       )}

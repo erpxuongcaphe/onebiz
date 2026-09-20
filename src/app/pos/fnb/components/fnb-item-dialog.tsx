@@ -83,6 +83,10 @@ interface FnbItemDialogProps {
   variants?: Variant[];
   /** True khi đang fetch variants (cache miss). Hiện skeleton thay vì empty. */
   variantsLoading?: boolean;
+  /** Không cho thêm món khi không thể xác định món có quy cách hay không. */
+  variantsFailed?: boolean;
+  /** Gọi khi cashier bấm thử tải lại quy cách sau một lỗi mạng. */
+  onRetryVariants?: () => void | Promise<void>;
   toppings?: Topping[];
   onConfirm: (payload: FnbItemConfirmPayload) => void;
   /**
@@ -263,8 +267,9 @@ function NhanNhomTuyChon({
 }
 
 export function FnbItemDialog({
-  open, onOpenChange, product, variants, variantsLoading, toppings, onConfirm,
-  initialSelection, confirmLabel, dynamicModifiers, onRetryModifiers,
+  open, onOpenChange, product, variants, variantsLoading, variantsFailed,
+  toppings, onConfirm, initialSelection, confirmLabel, dynamicModifiers,
+  onRetryModifiers, onRetryVariants,
 }: FnbItemDialogProps) {
   const [selectedVariant, setSelectedVariant] = useState<Variant | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -561,7 +566,7 @@ export function FnbItemDialog({
 
   const canConfirm =
     invalidModifierGroupIds.size === 0 && !modifiersLoading && !modifiersFailed
-    && !thieuQuyCach && !giaKhongHopLe;
+    && !variantsLoading && !variantsFailed && !thieuQuyCach && !giaKhongHopLe;
 
   const lyDoChan = thieuQuyCach
     ? "Vui lòng chọn cỡ trước khi thêm món."
@@ -852,6 +857,30 @@ export function FnbItemDialog({
               )}
             </div>
           )}
+          {variantsFailed && (
+            <div className="rounded-lg border border-status-error/30 bg-status-error/10 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <Icon name="error" size={16} className="mt-0.5 shrink-0 text-status-error" />
+                <div className="text-sm">
+                  <div className="font-medium text-status-error">Không tải được quy cách của món</div>
+                  <div className="text-muted-foreground">
+                    Chưa biết món này có size hay không nên tạm khoá nút thêm.
+                    Kiểm tra mạng rồi bấm Thử lại.
+                  </div>
+                </div>
+              </div>
+              {onRetryVariants && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full min-h-11"
+                  onClick={() => void onRetryVariants()}
+                >
+                  <Icon name="refresh" size={16} /> Thử lại
+                </Button>
+              )}
+            </div>
+          )}
           {/* ══ KHU LỰA CHỌN CHÍNH — Size đầu tiên, rồi Đường/Đá ══
               Xếp hàng ngang tự xuống dòng, MỖI Ô RỘNG THEO NỘI DUNG (xem
               O_NHOM). Size luôn ở ô đầu, nhìn thấy ngay khi mở popup, KHÔNG
@@ -1048,7 +1077,9 @@ export function FnbItemDialog({
             title={
               modifiersFailed
                 ? "Chưa tải được tuỳ chọn — bấm Thử lại ở trên"
-                : modifiersLoading
+                : variantsFailed
+                  ? "Chưa tải được quy cách — bấm Thử lại ở trên"
+                : modifiersLoading || variantsLoading
                   ? "Đang tải tuỳ chọn của món"
                   : lyDoChan
                     ? lyDoChan
@@ -1059,8 +1090,12 @@ export function FnbItemDialog({
           >
             {modifiersFailed
               ? "Chưa tải được tuỳ chọn"
+              : variantsFailed
+                ? "Chưa tải được quy cách"
               : modifiersLoading
                 ? "Đang tải tuỳ chọn…"
+                : variantsLoading
+                  ? "Đang tải quy cách…"
                 : invalidModifierGroupIds.size > 0
                   ? `Còn ${invalidModifierGroupIds.size} nhóm tuỳ chọn chưa hợp lệ`
                   : lyDoChan
