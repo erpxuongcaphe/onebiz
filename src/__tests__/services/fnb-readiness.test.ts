@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   danhGiaFnbReadiness,
   locMonFnbCanhBao,
+  locMonFnbDangMoBan,
 } from "@/lib/services/supabase/fnb-readiness";
 
 describe("danhGiaFnbReadiness", () => {
@@ -13,6 +14,16 @@ describe("danhGiaFnbReadiness", () => {
 
     expect(locMonFnbCanhBao(products, false)).toEqual([products[0]]);
     expect(locMonFnbCanhBao(products, true)).toEqual(products);
+  });
+
+  it("chỉ đưa đúng món POS có thể bán vào kiểm tra vận hành", () => {
+    const products = [
+      { code: "FNB-READY", sell_price: 30_000, allow_sale: true },
+      { code: "FNB-DRAFT", sell_price: 0, allow_sale: true },
+      { code: "FNB-LOCKED", sell_price: 25_000, allow_sale: false },
+    ];
+
+    expect(locMonFnbDangMoBan(products)).toEqual([products[0]]);
   });
 
   it("đếm riêng topping thiếu giá, thiếu BOM và topping dùng được", () => {
