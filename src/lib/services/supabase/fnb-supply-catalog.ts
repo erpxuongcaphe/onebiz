@@ -1,4 +1,8 @@
 import { getClient, getCurrentTenantId, handleError } from "./base";
+import {
+  filterFnbProductsForBranch,
+  listFnbProductBranchMenuScopes,
+} from "./fnb-product-branch-menu";
 
 export interface FnbSupplyRow {
   product_id: string;
@@ -88,12 +92,18 @@ export async function listFnbSupplyBomSuggestions(
     .eq("is_active", true)
     .limit(1000);
   if (signal) menuQuery = menuQuery.abortSignal(signal);
-  const { data: menuRows, error: menuError } = await menuQuery;
+  const [menuResult, menuScopes] = await Promise.all([
+    menuQuery,
+    listFnbProductBranchMenuScopes(tenantId),
+  ]);
+  const { data: menuRows, error: menuError } = await menuResult;
   if (signal?.aborted) return [];
   if (menuError) handleError(menuError, "listFnbSupplyBomSuggestions.menu");
-  const menuIds = [...new Set<string>(
-    ((menuRows ?? []) as Array<{ id: string }>).map((row) => row.id),
-  )];
+  const menuIds = filterFnbProductsForBranch(
+    ((menuRows ?? []) as Array<{ id: string; code: string }>),
+    menuScopes,
+    branchId,
+  ).map((row) => row.id);
   if (!menuIds.length) return [];
 
   let bomQuery = client.from("bom")
@@ -101,6 +111,7 @@ export async function listFnbSupplyBomSuggestions(
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .in("product_id", menuIds)
+    .or(`branch_id.eq.${branchId},branch_id.is.null`)
     .limit(5000);
   if (signal) bomQuery = bomQuery.abortSignal(signal);
   const { data: bomRows, error: bomError } = await bomQuery;
