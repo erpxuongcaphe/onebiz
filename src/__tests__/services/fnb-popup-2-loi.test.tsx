@@ -34,6 +34,43 @@ function duLieuLoi(): DynamicModifierData {
 }
 
 describe("LỖI 1 — tải tuỳ chọn hỏng phải NÓI THẬT, không giả vờ 'không có tuỳ chọn'", () => {
+  it("đang tải quy cách: khóa nút thêm để không bán nhầm giá mặc định", () => {
+    render(
+      <FnbItemDialog
+        open
+        onOpenChange={() => {}}
+        product={SP}
+        onConfirm={() => {}}
+        dynamicModifiers={duLieuOK()}
+        variantsLoading
+      />,
+    );
+
+    const nut = screen.getByText("Đang tải quy cách…").closest("button")!;
+    expect(nut.disabled).toBe(true);
+  });
+
+  it("tải quy cách hỏng: hiện Thử lại và khóa nút thêm", () => {
+    const retry = vi.fn();
+    render(
+      <FnbItemDialog
+        open
+        onOpenChange={() => {}}
+        product={SP}
+        onConfirm={() => {}}
+        dynamicModifiers={duLieuOK()}
+        variantsFailed
+        onRetryVariants={retry}
+      />,
+    );
+
+    expect(screen.getByText("Không tải được quy cách của món")).toBeTruthy();
+    fireEvent.click(screen.getByText("Thử lại"));
+    expect(retry).toHaveBeenCalledTimes(1);
+    const nut = screen.getByText("Chưa tải được quy cách").closest("button")!;
+    expect(nut.disabled).toBe(true);
+  });
+
   it("tải hỏng: hiện thông báo lỗi + nút Thử lại, KHOÁ nút thêm", () => {
     render(
       <FnbItemDialog
