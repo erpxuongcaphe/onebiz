@@ -42,6 +42,15 @@ hoa_don_fnb_con_hieu_luc as (
     and i.status <> 'cancelled'
     and i.deleted_at is null
     and i.voided_at is null
+    -- A completed F&B invoice is no longer operationally active once every
+    -- sold line has been returned. Keep its accounting history, but do not
+    -- flag it as an unfinished UAT sale.
+    and exists (
+      select 1
+      from public.invoice_items ii
+      where ii.invoice_id = i.id
+        and coalesce(ii.returned_qty, 0) < ii.quantity
+    )
 ),
 phieu_noi_bo_hoan_tat as (
   select count(*) as so_phieu,
