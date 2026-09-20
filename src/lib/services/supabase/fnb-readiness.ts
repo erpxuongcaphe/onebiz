@@ -87,6 +87,21 @@ export interface FnbReadiness {
   configurationIssues: FnbConfigurationIssue[];
 }
 
+/**
+ * SKU topping is not part of the drink menu until the dedicated topping mode
+ * is enabled. Keeping this pure makes the readiness boundary testable and
+ * prevents draft toppings from inflating an outlet's setup backlog.
+ */
+export function locMonFnbCanhBao<T extends { code: string }>(
+  products: T[],
+  toppingSkuEnabled: boolean,
+): T[] {
+  if (toppingSkuEnabled) return products;
+  return products.filter(
+    (product) => !product.code.startsWith(TIEN_TO_SKU_TOPPING),
+  );
+}
+
 function coBomApDung(
   product: Pick<SanPhamTopping, "id" | "bom_code">,
   boms: readonly DongBom[],
@@ -325,13 +340,19 @@ export async function getFnbReadiness(
   if (groupsResult.error) throw groupsResult.error;
 
   const allMenuProducts = (menuProductsResult.data ?? []) as unknown as SanPhamTopping[];
-  const menuProducts = filterFnbProductsForBranch(
+  const branchMenuProducts = filterFnbProductsForBranch(
     allMenuProducts,
     menuScopes,
     branchId,
   );
-  const products = menuProducts.filter((product) =>
+  const products = branchMenuProducts.filter((product) =>
     product.code.startsWith(TIEN_TO_SKU_TOPPING),
+  );
+  // SKU-TPP is a separate sales mechanism. While it is off, those draft
+  // toppings must not make the outlet's drink setup queue look incomplete.
+  const menuProducts = locMonFnbCanhBao(
+    branchMenuProducts,
+    CHE_DO_TOPPING_SKU,
   );
   const groups = (groupsResult.data ?? []) as unknown as NhomTuyChon[];
   const productIds = menuProducts.map((product) => product.id);

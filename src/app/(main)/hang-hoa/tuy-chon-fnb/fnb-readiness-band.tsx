@@ -144,7 +144,7 @@ export function FnbReadinessBand({
           </span>
         )}
         <span className="ml-auto text-xs text-muted-foreground">
-          Topping theo phần: {readiness.toppingSkuEnabled ? "đang bật" : "đang tắt"}
+          Topping theo phần: {readiness.toppingSkuEnabled ? "đang bật" : "đang tắt - chưa đưa vào hàng đợi"}
         </span>
       </div>
       {ready && (
