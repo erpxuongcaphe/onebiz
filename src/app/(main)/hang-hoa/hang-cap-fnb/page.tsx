@@ -19,7 +19,7 @@ import {
 } from "@/lib/services/supabase/fnb-supply-catalog";
 
 export default function FnbSupplyCatalogPage() {
-  const { hasPermission } = useAuth();
+  const { hasPermission, activeBranchId } = useAuth();
   const { toast } = useToast();
   const canView = hasPermission("products.view");
   const canEdit = hasPermission("products.edit") && hasPermission("system.manage_branches");
@@ -45,6 +45,7 @@ export default function FnbSupplyCatalogPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const saveLock = useRef(false);
+  const didDefaultActiveBranch = useRef(false);
   const storeBranches = useMemo(
     () => branches.filter((branch) => branch.branchType === "store" || !branch.branchType),
     [branches],
@@ -69,6 +70,16 @@ export default function FnbSupplyCatalogPage() {
       .catch(() => { if (active) setError("Không tải được chi nhánh. Vui lòng tải lại trang."); });
     return () => { active = false; };
   }, [canView]);
+
+  // Trang này phục vụ cấu hình theo quán. Mặc định đúng quán đang làm việc
+  // giảm một bước lặp lại, nhưng tuyệt đối không tự chọn "quán nhận hàng"
+  // hoặc tự lưu SKU nào.
+  useEffect(() => {
+    if (didDefaultActiveBranch.current || !activeBranchId || !branches.length) return;
+    if (!storeBranches.some((branch) => branch.id === activeBranchId)) return;
+    setBranchId(activeBranchId);
+    didDefaultActiveBranch.current = true;
+  }, [activeBranchId, branches.length, storeBranches]);
 
   useEffect(() => {
     setRows([]); setCount(0);
