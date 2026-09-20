@@ -370,12 +370,16 @@ export async function getFnbReadiness(
   );
   // SKU-TPP is a separate sales mechanism. While it is off, those draft
   // toppings must not make the outlet's drink setup queue look incomplete.
-  const menuCandidates = locMonFnbCanhBao(
+  const draftMenuCandidates = locMonFnbCanhBao(
     branchMenuProducts,
     CHE_DO_TOPPING_SKU,
   );
-  const menuProducts = locMonFnbDangMoBan(menuCandidates);
-  const draftMenuTotal = menuCandidates.length - menuProducts.length;
+  // POS vẫn hiển thị SKU-TPP có giá như một món bán độc lập ngay cả khi chế
+  // độ topping theo phần đang tắt. Vì vậy menu vận hành phải bám đúng toàn bộ
+  // catalog POS; chỉ các SKU-TPP giá 0 mới được bỏ khỏi số bản nháp cần làm.
+  const menuProducts = locMonFnbDangMoBan(branchMenuProducts);
+  const draftMenuTotal =
+    draftMenuCandidates.length - locMonFnbDangMoBan(draftMenuCandidates).length;
   const groups = (groupsResult.data ?? []) as unknown as NhomTuyChon[];
   const productIds = menuProducts.map((product) => product.id);
   const productBomCodes = menuProducts
