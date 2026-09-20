@@ -89,8 +89,14 @@ export function FnbReadinessBand({
           )}
         </div>
         <span>
-          Món tại chi nhánh: <strong>{readiness.menuTotal}</strong>
+          Món đang mở bán: <strong>{readiness.menuTotal}</strong>
         </span>
+        {readiness.draftMenuTotal > 0 && (
+          <span className="text-muted-foreground">
+            Bản nháp chưa mở bán: <strong>{readiness.draftMenuTotal}</strong>
+            <span> · không chặn vận hành</span>
+          </span>
+        )}
         {readiness.simpleProductsMissingPrice > 0 && (
           <span className="text-status-error">
             Món thiếu giá: <strong>{readiness.simpleProductsMissingPrice}</strong>
@@ -149,7 +155,7 @@ export function FnbReadinessBand({
       </div>
       {ready && (
         <p className="mt-1.5 text-xs text-muted-foreground">
-          Đây là kiểm tra dữ liệu món. Trước khi mở bán vẫn cần kiểm tra ca, nhân sự, tồn nguyên liệu, máy in và một đơn thử tại chi nhánh.
+          Chỉ các món đang xuất hiện trên POS mới chặn vận hành. Bản nháp giá 0 hoặc chưa cho phép bán được giữ riêng để hoàn thiện sau. Trước khi mở bán vẫn cần kiểm tra ca, nhân sự, tồn nguyên liệu, máy in và một đơn thử tại chi nhánh.
         </p>
       )}
 

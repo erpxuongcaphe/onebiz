@@ -5,6 +5,7 @@ import type { FnbReadiness } from "@/lib/services/supabase/fnb-readiness";
 
 const readiness: FnbReadiness = {
   menuTotal: 124,
+  draftMenuTotal: 102,
   simpleProductsMissingPrice: 123,
   simpleProductsMissingBom: 0,
   variantsTotal: 2,
@@ -56,6 +57,8 @@ describe("FnbReadinessBand", () => {
     );
 
     expect(screen.getByText("Xem việc cần xử lý (3)")).toBeInTheDocument();
+    expect(screen.getByText("Bản nháp chưa mở bán:")).toBeInTheDocument();
+    expect(screen.getByText("· không chặn vận hành")).toBeInTheDocument();
     expect(screen.getByText("FNB-001 · Cà phê sữa")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa có trạm bếp đang bật")).not.toHaveLength(0);
     expect(screen.queryByText("SKU-TPP-012 · Trân Châu Trắng")).not.toBeInTheDocument();

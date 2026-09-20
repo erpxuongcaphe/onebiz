@@ -14,6 +14,7 @@ interface SanPhamTopping {
   code: string;
   name: string;
   sell_price: number | null;
+  allow_sale?: boolean | null;
   bom_code: string | null;
   has_bom?: boolean | null;
 }
@@ -66,6 +67,7 @@ export interface FnbConfigurationIssue {
 
 export interface FnbReadiness {
   menuTotal: number;
+  draftMenuTotal: number;
   simpleProductsMissingPrice: number;
   simpleProductsMissingBom: number;
   variantsTotal: number;
@@ -99,6 +101,22 @@ export function locMonFnbCanhBao<T extends { code: string }>(
   if (toppingSkuEnabled) return products;
   return products.filter(
     (product) => !product.code.startsWith(TIEN_TO_SKU_TOPPING),
+  );
+}
+
+/**
+ * Đồng bộ đúng biên menu mà POS FnB đang dùng. SKU giá 0 hoặc chưa cho phép
+ * bán vẫn là bản nháp trong danh mục, nhưng không được biến thành lỗi vận hành
+ * của chi nhánh vì thu ngân không nhìn thấy các SKU đó trên POS.
+ */
+export function locMonFnbDangMoBan<
+  T extends { sell_price: number | null; allow_sale?: boolean | null },
+>(products: T[]): T[] {
+  return products.filter(
+    (product) =>
+      product.allow_sale === true &&
+      Number.isFinite(product.sell_price) &&
+      (product.sell_price ?? 0) > 0,
   );
 }
 
@@ -138,6 +156,7 @@ export function danhGiaFnbReadiness(input: {
   toppingSkuEnabled?: boolean;
   activeKitchenStations?: number;
   activeTables?: number;
+  draftMenuTotal?: number;
 }): FnbReadiness {
   const optionsByGroup = new Map<string, LuaChonTuyChon[]>();
   for (const option of input.options) {
@@ -267,6 +286,7 @@ export function danhGiaFnbReadiness(input: {
 
   return {
     menuTotal: menuProducts.length,
+    draftMenuTotal: input.draftMenuTotal ?? 0,
     simpleProductsMissingPrice: simpleProductsMissingPrice.length,
     simpleProductsMissingBom: simpleProductsMissingBom.length,
     variantsTotal: variants.length,
@@ -320,7 +340,7 @@ export async function getFnbReadiness(
   const [menuProductsResult, groupsResult, menuScopes] = await Promise.all([
     supabase
       .from("products")
-      .select("id, code, name, sell_price, bom_code, has_bom")
+      .select("id, code, name, sell_price, allow_sale, bom_code, has_bom")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .eq("product_type", "sku")
@@ -350,10 +370,12 @@ export async function getFnbReadiness(
   );
   // SKU-TPP is a separate sales mechanism. While it is off, those draft
   // toppings must not make the outlet's drink setup queue look incomplete.
-  const menuProducts = locMonFnbCanhBao(
+  const menuCandidates = locMonFnbCanhBao(
     branchMenuProducts,
     CHE_DO_TOPPING_SKU,
   );
+  const menuProducts = locMonFnbDangMoBan(menuCandidates);
+  const draftMenuTotal = menuCandidates.length - menuProducts.length;
   const groups = (groupsResult.data ?? []) as unknown as NhomTuyChon[];
   const productIds = menuProducts.map((product) => product.id);
   const productBomCodes = menuProducts
@@ -448,5 +470,6 @@ export async function getFnbReadiness(
     branchId,
     activeKitchenStations: stationsResult.count ?? 0,
     activeTables: tablesResult.count ?? 0,
+    draftMenuTotal,
   });
 }
