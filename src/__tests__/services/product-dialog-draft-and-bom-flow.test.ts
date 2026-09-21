@@ -10,6 +10,14 @@ const bomService = readFileSync(
   resolve(process.cwd(), "src/lib/services/supabase/bom.ts"),
   "utf8",
 );
+const perSizeMatrix = readFileSync(
+  resolve(process.cwd(), "src/components/shared/dialogs/per-size-recipe-matrix.tsx"),
+  "utf8",
+);
+const readinessAudit = readFileSync(
+  resolve(process.cwd(), "scripts/audit-fnb-readiness.mjs"),
+  "utf8",
+);
 
 describe("product dialog draft and inline BOM flow", () => {
   it("keeps FnB choices in one product draft until the final Save", () => {
@@ -74,6 +82,28 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(dialog).toContain("SKU Retail trong công thức = tồn F&B sẽ trừ");
     expect(dialog).toContain("Mã này không tự đổi sang SKU khác dù cùng một NVL nguồn.");
     expect(dialog).toContain("Hàng cấp cho quán");
+  });
+
+  it("checks supply approval in both regular and per-size recipes without writing catalog data", () => {
+    expect(dialog).toContain("listFnbSupplyCatalogProductIds");
+    expect(dialog).toContain("getFnbSupplyBranchScope");
+    expect(dialog).toContain("SKU thành phần chưa được duyệt đủ");
+    expect(dialog).toContain("Kiểm tra Hàng cấp cho quán");
+    expect(dialog).toContain("supplyStatusByProductId={supplyStatusByProductId}");
+    expect(perSizeMatrix).toContain("Đã duyệt cấp cho");
+    expect(perSizeMatrix).toContain("Chưa duyệt");
+    expect(dialog).not.toContain("saveFnbSupplyCatalog(");
+  });
+
+  it("supports a branch-scoped read-only audit matching the POS menu boundary", () => {
+    expect(readinessAudit).toContain('argument.startsWith("--branch=")');
+    expect(readinessAudit).toContain("fnb_product_branch_menu_policies");
+    expect(readinessAudit).toContain("mon_dang_mo_ban");
+    expect(readinessAudit).toContain("sku_bom_chua_duyet");
+    expect(readinessAudit).not.toContain(".insert(");
+    expect(readinessAudit).not.toContain(".update(");
+    expect(readinessAudit).not.toContain(".delete(");
+    expect(readinessAudit).not.toContain(".rpc(");
   });
 
   it("generates and persists a BOM code for new or legacy inline recipes", () => {

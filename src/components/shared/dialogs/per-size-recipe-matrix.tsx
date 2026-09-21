@@ -87,7 +87,32 @@ interface Props {
   groups: ModifierGroup[];
   optionsByGroup: Record<string, ModifierOption[]>;
   conversionsByMaterial: Record<string, UOMConversion[]>;
+  supplyStatusByProductId?: Record<
+    string,
+    { approvedBranches: number; requiredBranches: number }
+  >;
   loading?: boolean;
+}
+
+function SupplyCatalogBadge({
+  status,
+}: {
+  status?: { approvedBranches: number; requiredBranches: number };
+}) {
+  if (!status || status.requiredBranches === 0) return null;
+  const ready = status.approvedBranches === status.requiredBranches;
+  return (
+    <span
+      className={`mt-1 inline-flex w-fit items-center gap-1 text-[11px] font-medium ${
+        ready ? "text-status-success" : "text-status-warning"
+      }`}
+    >
+      <Icon name={ready ? "verified" : "warning"} size={12} />
+      {ready
+        ? `Đã duyệt cấp cho ${status.requiredBranches} quán`
+        : `Chưa duyệt ${status.requiredBranches - status.approvedBranches}/${status.requiredBranches} quán`}
+    </span>
+  );
 }
 
 export function getRecipeDefaultOption(
@@ -149,11 +174,13 @@ function MaterialSearchCell({
   value,
   materials,
   selectableMaterials,
+  supplyStatusByProductId,
   onSelect,
 }: {
   value: string;
   materials: Product[];
   selectableMaterials: Product[];
+  supplyStatusByProductId?: Props["supplyStatusByProductId"];
   onSelect: (product: Product) => void;
 }) {
   const selected = materials.find((product) => product.id === value);
@@ -191,6 +218,7 @@ function MaterialSearchCell({
           <span className="mt-0.5 text-xs text-muted-foreground">
             {selected.code} · {selected.stockUnit || selected.unit || "Chưa có ĐVT"}
           </span>
+          <SupplyCatalogBadge status={supplyStatusByProductId?.[selected.id]} />
         </button>
       ) : (
         <Input
@@ -237,6 +265,7 @@ function MaterialSearchCell({
                 <span className="block truncate text-xs text-muted-foreground">
                   {product.code} · {product.stockUnit || product.unit || "Chưa có ĐVT"}
                 </span>
+                <SupplyCatalogBadge status={supplyStatusByProductId?.[product.id]} />
               </button>
             ))
           )}
@@ -255,6 +284,7 @@ export function PerSizeRecipeMatrix({
   groups,
   optionsByGroup,
   conversionsByMaterial,
+  supplyStatusByProductId,
   loading,
 }: Props) {
   const fnbGroups = useMemo(
@@ -482,6 +512,7 @@ export function PerSizeRecipeMatrix({
                         (material) =>
                           !rows.some((other) => other.key !== row.key && other.materialId === material.id),
                       )}
+                      supplyStatusByProductId={supplyStatusByProductId}
                       onSelect={(material) =>
                         patch(row.key, {
                           materialId: material.id,
