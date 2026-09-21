@@ -23,6 +23,16 @@ const readiness: FnbReadiness = {
       missingBom: false,
     },
   ],
+  setupIssues: [
+    {
+      id: "draft-1",
+      code: "FNB-DRAFT-001",
+      name: "Món đang setup",
+      missingPrice: true,
+      missingBom: true,
+      isDraft: true,
+    },
+  ],
   toppingTotal: 14,
   toppingReady: 0,
   toppingMissingPrice: 14,
@@ -62,7 +72,9 @@ describe("FnbReadinessBand", () => {
     expect(screen.getByText("FNB-001 · Cà phê sữa")).toBeInTheDocument();
     expect(screen.getAllByText("Chưa có trạm bếp đang bật")).not.toHaveLength(0);
     expect(screen.queryByText("SKU-TPP-012 · Trân Châu Trắng")).not.toBeInTheDocument();
-    expect(screen.queryByText("Thiếu giá bán · Thiếu công thức hoặc nguyên liệu")).not.toBeInTheDocument();
+    expect(screen.getByText("Gồm cả món đang bán và bản nháp chưa hoàn tất. Bản nháp không chặn POS cho đến khi được mở bán.")).toBeInTheDocument();
+    expect(screen.getByText("Món đang setup")).toBeInTheDocument();
+    expect(screen.getByText("Bản nháp")).toBeInTheDocument();
     expect(screen.getByText("Có nhiều lựa chọn mặc định")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Mở" })).toHaveAttribute(
       "href",
@@ -84,5 +96,33 @@ describe("FnbReadinessBand", () => {
     expect(
       screen.getByText("2 món có nhiều cỡ phải chọn đúng một cỡ mặc định."),
     ).toBeInTheDocument();
+  });
+
+  it("vẫn hiện hàng đợi bản nháp khi dữ liệu vận hành đã đạt", () => {
+    render(
+      <FnbReadinessBand
+        readiness={{
+          ...readiness,
+          menuTotal: 1,
+          draftMenuTotal: 1,
+          simpleProductsMissingPrice: 0,
+          simpleProductsMissingBom: 0,
+          variantsTotal: 0,
+          variantsMissingPrice: 0,
+          variantsMissingBom: 0,
+          activeKitchenStations: 1,
+          menuIssues: [],
+          configurationIssues: [],
+          singleGroupsWithManyDefaults: 0,
+          conflictingStockOptions: 0,
+          legacyToppingGroups: 0,
+        }}
+        loading={false}
+        error={false}
+      />,
+    );
+
+    expect(screen.getByText("Dữ liệu món FnB đã đạt kiểm tra")).toBeInTheDocument();
+    expect(screen.getByText("Món đang setup")).toBeInTheDocument();
   });
 });

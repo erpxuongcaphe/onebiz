@@ -325,4 +325,51 @@ describe("danhGiaFnbReadiness", () => {
       expect.objectContaining({ code: "HT-001", missingPrice: false, missingBom: true }),
     ]);
   });
+
+  it("giữ món nháp trong hàng đợi setup nhưng không đưa vào lỗi vận hành", () => {
+    const liveProduct = {
+      id: "live",
+      code: "FNB-LIVE",
+      name: "Món đang bán",
+      sell_price: 30_000,
+      allow_sale: true,
+      bom_code: "BOM-LIVE",
+    };
+    const draftProduct = {
+      id: "draft",
+      code: "FNB-DRAFT",
+      name: "Món đang setup",
+      sell_price: 0,
+      allow_sale: false,
+      bom_code: null,
+    };
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [liveProduct],
+      setupMenuProducts: [liveProduct, draftProduct],
+      boms: [
+        {
+          id: "bom-live",
+          product_id: "live",
+          code: "BOM-LIVE",
+          branch_id: null,
+          has_items: true,
+        },
+      ],
+      groups: [],
+      options: [],
+      activeKitchenStations: 1,
+      draftMenuTotal: 1,
+    });
+
+    expect(result.menuIssues).toEqual([]);
+    expect(result.setupIssues).toEqual([
+      expect.objectContaining({
+        code: "FNB-DRAFT",
+        missingPrice: true,
+        missingBom: true,
+        isDraft: true,
+      }),
+    ]);
+  });
 });

@@ -260,9 +260,9 @@ export function FnbReadinessBand({
             </div>
           </details>
         )}
-      {!ready && readiness.menuIssues.length > 0 && (
+      {readiness.setupIssues.length > 0 && (
         <div className="mt-3">
-          <FnbSetupWorkQueue issues={readiness.menuIssues} />
+          <FnbSetupWorkQueue issues={readiness.setupIssues} />
         </div>
       )}
     </section>
