@@ -99,6 +99,10 @@ import {
   saveFnbProductBranchMenuPolicy,
   type FnbProductBranchMenuPolicy,
 } from "@/lib/services/supabase/fnb-product-branch-menu";
+import {
+  getFnbSupplyBranchScope,
+  listFnbSupplyCatalogProductIds,
+} from "@/lib/services/supabase/fnb-supply-catalog";
 import { invalidateMenuCache } from "@/lib/offline";
 import { useDurableFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
@@ -171,6 +175,70 @@ function formatRecipeQuantity(value: number): string {
   return new Intl.NumberFormat("vi-VN", {
     maximumFractionDigits: 4,
   }).format(value);
+}
+
+function FnbSupplyCatalogNote({
+  targetBranches,
+  enforcedBranches,
+  missingComponents,
+  loading,
+  error,
+}: {
+  targetBranches: number;
+  enforcedBranches: number;
+  missingComponents: number;
+  loading: boolean;
+  error: string | null;
+}) {
+  let icon = "inventory_2";
+  let tone = "border-status-info/30 bg-status-info/5 text-status-info";
+  let message = "Danh mục cấp hàng sẽ được đối chiếu theo các quán mở bán món này.";
+
+  if (loading) {
+    icon = "progress_activity";
+    message = "Đang đối chiếu SKU thành phần với danh mục cấp hàng của quán...";
+  } else if (error) {
+    icon = "warning";
+    tone = "border-status-warning/30 bg-status-warning/5 text-status-warning";
+    message = "Chưa đọc được danh mục cấp hàng. Có thể lưu bản nháp, nhưng cần kiểm tra lại trước khi mở bán.";
+  } else if (targetBranches === 0) {
+    icon = "warning";
+    tone = "border-status-warning/30 bg-status-warning/5 text-status-warning";
+    message = "Chưa xác định quán áp dụng. Chọn quán bán món tại tab Tùy chọn F&B trước khi nghiệm thu.";
+  } else if (enforcedBranches === 0) {
+    message = `Có ${targetBranches} quán áp dụng nhưng chưa quán nào bật kiểm soát danh mục cấp hàng.`;
+  } else if (missingComponents > 0) {
+    icon = "warning";
+    tone = "border-status-warning/30 bg-status-warning/5 text-status-warning";
+    message = `${missingComponents} SKU thành phần chưa được duyệt đủ cho ${enforcedBranches} quán đang kiểm soát.`;
+  } else {
+    icon = "verified";
+    tone = "border-status-success/30 bg-status-success/5 text-status-success";
+    message = `Các SKU đã chọn đều được duyệt cho ${enforcedBranches} quán đang kiểm soát.`;
+  }
+
+  return (
+    <div className={`rounded-md border px-3 py-2 text-xs ${tone}`}>
+      <div className="flex items-start gap-2">
+        <Icon
+          name={icon}
+          size={14}
+          className={`mt-0.5 shrink-0 ${loading ? "animate-spin" : ""}`}
+        />
+        <div className="min-w-0 text-foreground">
+          <p>{message}</p>
+          <a
+            href="/hang-hoa/hang-cap-fnb"
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex font-medium text-primary hover:underline"
+          >
+            Kiểm tra Hàng cấp cho quán
+          </a>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // VAT phổ biến ở VN: 0% (không chịu), 5% (giảm thuế hoặc nông sản), 8%
@@ -411,6 +479,54 @@ export function CreateProductDialog({
   // by the main Save button, never by changing tabs or opening the section.
   const [fnbMenuScopeDirty, setFnbMenuScopeDirty] = useState(false);
   const [fnbMenuScopeError, setFnbMenuScopeError] = useState<string | null>(null);
+  const fnbTargetBranches = useMemo(() => {
+    if (bomBranchId) {
+      return branches.filter((branch) => branch.id === bomBranchId);
+    }
+    const stores = branches.filter((branch) => branch.branchType === "store");
+    if (fnbMenuScopeMode === "selected") {
+      return stores.filter((branch) => fnbMenuBranchIds.has(branch.id));
+    }
+    if (fnbMenuScopeMode === "excluded") {
+      return stores.filter((branch) => !fnbMenuBranchIds.has(branch.id));
+    }
+    return stores;
+  }, [bomBranchId, branches, fnbMenuBranchIds, fnbMenuScopeMode]);
+  const fnbTargetBranchKey = fnbTargetBranches
+    .map((branch) => branch.id)
+    .sort()
+    .join("|");
+  const [supplyCatalogByBranch, setSupplyCatalogByBranch] = useState<
+    Record<string, { enabled: boolean; productIds: string[] }>
+  >({});
+  const [supplyCatalogLoading, setSupplyCatalogLoading] = useState(false);
+  const [supplyCatalogError, setSupplyCatalogError] = useState<string | null>(null);
+  const enforcedFnbTargetBranches = useMemo(
+    () =>
+      fnbTargetBranches.filter(
+        (branch) => supplyCatalogByBranch[branch.id]?.enabled,
+      ),
+    [fnbTargetBranches, supplyCatalogByBranch],
+  );
+  const supplyStatusByProductId = useMemo(() => {
+    const result: Record<
+      string,
+      { approvedBranches: number; requiredBranches: number }
+    > = {};
+    for (const product of selectableFnbComponentOptions) {
+      result[product.id] = {
+        approvedBranches: enforcedFnbTargetBranches.filter((branch) =>
+          supplyCatalogByBranch[branch.id]?.productIds.includes(product.id),
+        ).length,
+        requiredBranches: enforcedFnbTargetBranches.length,
+      };
+    }
+    return result;
+  }, [
+    enforcedFnbTargetBranches,
+    selectableFnbComponentOptions,
+    supplyCatalogByBranch,
+  ]);
 
   // A product dialog is a draft. Lazy loaders may run when the user changes
   // tabs, but they must never overwrite choices made in the same open dialog.
@@ -431,6 +547,30 @@ export function CreateProductDialog({
   // recipeRows = lưới NVL × size; recipeEnabled = toggle.
   const [recipeRows, setRecipeRows] = useState<RecipeRow[]>([]);
   const [recipeEnabled, setRecipeEnabled] = useState(false);
+  const missingBomSupplyComponents = useMemo(
+    () =>
+      new Set(
+        bomItems
+          .map((item) => item.materialId)
+          .filter((productId) => {
+            const status = supplyStatusByProductId[productId];
+            return status && status.approvedBranches < status.requiredBranches;
+          }),
+      ).size,
+    [bomItems, supplyStatusByProductId],
+  );
+  const missingRecipeSupplyComponents = useMemo(
+    () =>
+      new Set(
+        recipeRows
+          .map((row) => row.materialId)
+          .filter((productId) => {
+            const status = supplyStatusByProductId[productId];
+            return status && status.approvedBranches < status.requiredBranches;
+          }),
+      ).size,
+    [recipeRows, supplyStatusByProductId],
+  );
   const [recipeConversionsByMaterial, setRecipeConversionsByMaterial] = useState<
     Record<string, UOMConversion[]>
   >({});
@@ -1521,6 +1661,53 @@ export function CreateProductDialog({
       cancelled = true;
     };
   }, [open]);
+
+  // Chỉ đọc danh mục cấp hàng của đúng các quán mà món/công thức áp dụng.
+  // Đây là guard hướng dẫn setup: không tự thêm SKU và không thay đổi phạm vi
+  // kiểm soát của bất kỳ chi nhánh nào.
+  useEffect(() => {
+    const shouldLoad =
+      open &&
+      channel === "fnb" &&
+      hasBom &&
+      ["pricing", "bom", "variants"].includes(innerTab);
+    const branchIds = fnbTargetBranchKey ? fnbTargetBranchKey.split("|") : [];
+    if (!shouldLoad || branchIds.length === 0) {
+      setSupplyCatalogByBranch({});
+      setSupplyCatalogLoading(false);
+      setSupplyCatalogError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSupplyCatalogLoading(true);
+    setSupplyCatalogError(null);
+    Promise.all(
+      branchIds.map(async (branchId) => {
+        const [scope, productIds] = await Promise.all([
+          getFnbSupplyBranchScope(branchId, controller.signal),
+          listFnbSupplyCatalogProductIds(branchId, controller.signal),
+        ]);
+        return [branchId, { enabled: scope.enforcementEnabled, productIds }] as const;
+      }),
+    )
+      .then((entries) => {
+        if (controller.signal.aborted) return;
+        setSupplyCatalogByBranch(Object.fromEntries(entries));
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setSupplyCatalogByBranch({});
+        setSupplyCatalogError(
+          error instanceof Error ? error.message : "Không đọc được danh mục cấp hàng",
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSupplyCatalogLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [channel, fnbTargetBranchKey, hasBom, innerTab, open]);
 
   // CEO 01/06/2026 — Bước 1 (perf): LAZY load material options (1000 SP, ~100KB)
   // chỉ khi user bật hasBom + bấm tab "bom" (Công thức). Trước đây fetch eager
@@ -3352,21 +3539,31 @@ export function CreateProductDialog({
                       </span>
                     </label>
                     {recipeEnabled ? (
-                      <PerSizeRecipeMatrix
-                        sizes={variantItems.map((variant) => ({ key: variant.key, name: variant.name }))}
-                        rows={recipeRows}
-                        onChange={setRecipeRows}
-                        materials={materialOptions}
-                        selectableMaterials={selectableFnbComponentOptions}
-                        groups={perSizeModifierGroups}
-                        optionsByGroup={variantModifierOptionsByGroup}
-                        conversionsByMaterial={recipeConversionsByMaterial}
-                        loading={
-                          materialOptions.length === 0 ||
-                          (perSizeModifierGroups.length > 0 &&
-                            Object.keys(variantModifierOptionsByGroup).length === 0)
-                        }
-                      />
+                      <div className="space-y-2">
+                        <FnbSupplyCatalogNote
+                          targetBranches={fnbTargetBranches.length}
+                          enforcedBranches={enforcedFnbTargetBranches.length}
+                          missingComponents={missingRecipeSupplyComponents}
+                          loading={supplyCatalogLoading || loadingFnbMenuScope}
+                          error={supplyCatalogError || fnbMenuScopeError}
+                        />
+                        <PerSizeRecipeMatrix
+                          sizes={variantItems.map((variant) => ({ key: variant.key, name: variant.name }))}
+                          rows={recipeRows}
+                          onChange={setRecipeRows}
+                          materials={materialOptions}
+                          selectableMaterials={selectableFnbComponentOptions}
+                          groups={perSizeModifierGroups}
+                          optionsByGroup={variantModifierOptionsByGroup}
+                          conversionsByMaterial={recipeConversionsByMaterial}
+                          supplyStatusByProductId={supplyStatusByProductId}
+                          loading={
+                            materialOptions.length === 0 ||
+                            (perSizeModifierGroups.length > 0 &&
+                              Object.keys(variantModifierOptionsByGroup).length === 0)
+                          }
+                        />
+                      </div>
                     ) : (
                       <p className="rounded-md border border-dashed bg-background px-3 py-4 text-sm text-muted-foreground">
                         Bật công thức từng size để khai nguyên liệu và định lượng cho tất cả quy cách.
@@ -3517,6 +3714,15 @@ export function CreateProductDialog({
 
               {/* Items table */}
               <div className="space-y-2">
+                {channel === "fnb" && (
+                  <FnbSupplyCatalogNote
+                    targetBranches={fnbTargetBranches.length}
+                    enforcedBranches={enforcedFnbTargetBranches.length}
+                    missingComponents={missingBomSupplyComponents}
+                    loading={supplyCatalogLoading || loadingFnbMenuScope}
+                    error={supplyCatalogError || fnbMenuScopeError}
+                  />
+                )}
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
                     {channel === "fnb" ? "Thành phần Retail" : "Nguyên vật liệu"}{" "}
@@ -3593,6 +3799,34 @@ export function CreateProductDialog({
                               <td className="px-3 py-2">
                                 <div className="font-medium">{it.materialName}</div>
                                 <div className="text-xs text-muted-foreground">{it.materialCode}</div>
+                                {channel === "fnb" &&
+                                  (supplyStatusByProductId[it.materialId]?.requiredBranches ?? 0) > 0 && (
+                                    <div
+                                      className={`mt-1 inline-flex items-center gap-1 text-xs font-medium ${
+                                        supplyStatusByProductId[it.materialId].approvedBranches ===
+                                        supplyStatusByProductId[it.materialId].requiredBranches
+                                          ? "text-status-success"
+                                          : "text-status-warning"
+                                      }`}
+                                    >
+                                      <Icon
+                                        name={
+                                          supplyStatusByProductId[it.materialId].approvedBranches ===
+                                          supplyStatusByProductId[it.materialId].requiredBranches
+                                            ? "verified"
+                                            : "warning"
+                                        }
+                                        size={12}
+                                      />
+                                      {supplyStatusByProductId[it.materialId].approvedBranches ===
+                                      supplyStatusByProductId[it.materialId].requiredBranches
+                                        ? `Đã duyệt cấp cho ${supplyStatusByProductId[it.materialId].requiredBranches} quán`
+                                        : `Chưa duyệt ${
+                                            supplyStatusByProductId[it.materialId].requiredBranches -
+                                            supplyStatusByProductId[it.materialId].approvedBranches
+                                          }/${supplyStatusByProductId[it.materialId].requiredBranches} quán`}
+                                    </div>
+                                  )}
                                 {isLegacyFnbComponent && (
                                   <div className="mt-1 text-xs text-status-warning">
                                     Dòng công thức cũ không phải SKU Retail. Hệ thống vẫn giữ nguyên; nên thay bằng SKU Retail trước khi vận hành.
@@ -4591,6 +4825,34 @@ export function CreateProductDialog({
                                       {(p.stockUnit || p.unit) &&
                                         ` · ĐVT ${p.stockUnit || p.unit}`}
                                     </span>
+                                    {channel === "fnb" &&
+                                      (supplyStatusByProductId[p.id]?.requiredBranches ?? 0) > 0 && (
+                                        <span
+                                          className={`mt-0.5 flex items-center gap-1 text-[10px] font-medium ${
+                                            supplyStatusByProductId[p.id].approvedBranches ===
+                                            supplyStatusByProductId[p.id].requiredBranches
+                                              ? "text-status-success"
+                                              : "text-status-warning"
+                                          }`}
+                                        >
+                                          <Icon
+                                            name={
+                                              supplyStatusByProductId[p.id].approvedBranches ===
+                                              supplyStatusByProductId[p.id].requiredBranches
+                                                ? "verified"
+                                                : "warning"
+                                            }
+                                            size={11}
+                                          />
+                                          {supplyStatusByProductId[p.id].approvedBranches ===
+                                          supplyStatusByProductId[p.id].requiredBranches
+                                            ? "Đã duyệt cấp hàng"
+                                            : `Thiếu ${
+                                                supplyStatusByProductId[p.id].requiredBranches -
+                                                supplyStatusByProductId[p.id].approvedBranches
+                                              } quán`}
+                                        </span>
+                                      )}
                                   </span>
                                   {getBomComponentUnitPrice(p, channel) > 0 ? (
                                     <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
