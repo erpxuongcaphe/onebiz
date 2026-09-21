@@ -390,6 +390,7 @@ export function CreateProductDialog({
   const [bomConfirmDeleteOpen, setBomConfirmDeleteOpen] = useState(false);
   // Kênh bán — chỉ áp dụng cho SKU. NVL luôn null.
   const [channel, setChannel] = useState<ProductChannel>("fnb");
+  const [isFnbStockItem, setIsFnbStockItem] = useState(false);
   const [barcode, setBarcode] = useState("");
   const [brand, setBrand] = useState("");
   const [supplierId, setSupplierId] = useState<string>("");
@@ -718,6 +719,7 @@ export function CreateProductDialog({
       setBomCodeInput(initialData.bomCode ?? "");
       setBomCodeValid(initialData.bomCode ? true : null);
       setChannel((initialData.channel as ProductChannel) || "fnb");
+      setIsFnbStockItem(initialData.isFnbStockItem === true);
       // Prefill các field mới để edit "sửa được toàn bộ" như CEO yêu cầu.
       setBarcode(initialData.barcode || "");
       setBrand(initialData.brand || "");
@@ -729,7 +731,7 @@ export function CreateProductDialog({
       setMaxStock(initialData.maxStock ? String(initialData.maxStock) : "");
       setDescription(initialData.description || "");
       setImage(initialData.image || null);
-      setAllowSale(true);
+      setAllowSale(initialData.isFnbStockItem === true ? false : true);
       setErrors({});
       setInnerTab("info");
     } else {
@@ -768,6 +770,7 @@ export function CreateProductDialog({
       setBomCodeInput("");
       setBomCodeValid(null);
       setChannel("fnb");
+      setIsFnbStockItem(false);
       setBarcode("");
       setBrand("");
       setSupplierId("");
@@ -2151,7 +2154,10 @@ export function CreateProductDialog({
         costPrice: representativeCostPrice,
         description: description || undefined,
         image: image ?? undefined,
-        allowSale: scope === "sku" ? allowSale : false,
+        allowSale: scope === "sku" ? (isFnbStockItem ? false : allowSale) : false,
+        ...(scope === "sku" && (isFnbStockItem || initialData?.isFnbStockItem)
+          ? { isFnbStockItem }
+          : {}),
         // Day 20/05/2026: link với BOM standalone qua code
         bomCode: linkedBomCode,
       };
@@ -2453,6 +2459,7 @@ export function CreateProductDialog({
       if (
         scope === "sku" &&
         channel &&
+        !isFnbStockItem &&
         selectedCategory &&
         !selectedCategory.channel
       ) {
@@ -2894,8 +2901,18 @@ export function CreateProductDialog({
                 Kênh bán <span className="text-destructive">*</span>
               </label>
               <Select
-                value={channel}
-                onValueChange={(v) => setChannel(v as ProductChannel)}
+                value={isFnbStockItem ? "fnb_stock" : channel}
+                onValueChange={(v) => {
+                  if (v === "fnb_stock") {
+                    setChannel("retail");
+                    setIsFnbStockItem(true);
+                    setAllowSale(false);
+                    setHasBom(true);
+                    return;
+                  }
+                  setIsFnbStockItem(false);
+                  setChannel(v as ProductChannel);
+                }}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -2907,10 +2924,15 @@ export function CreateProductDialog({
                   <SelectItem value="retail">
                     Bán lẻ / Sỉ — đóng gói (Rang xay 250g, Hộp quà, Syrup chai…)
                   </SelectItem>
+                  <SelectItem value="fnb_stock">
+                    Bán thành phẩm tại quán — nấu/sơ chế rồi giữ tồn
+                  </SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">
-                {channel === "fnb"
+                {isFnbStockItem
+                  ? "Không hiện trên POS. Quán sản xuất theo mẻ, nhập tồn và các món FnB trừ theo định lượng."
+                  : channel === "fnb"
                   ? "Chỉ hiện trên POS FnB của quán."
                   : "Chỉ hiện trên POS Retail của kho tổng."}
               </p>
@@ -3424,9 +3446,10 @@ export function CreateProductDialog({
                 <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                   <Checkbox
                     checked={allowSale}
+                    disabled={isFnbStockItem}
                     onCheckedChange={(c) => setAllowSale(!!c)}
                   />
-                  Cho phép bán
+                  {isFnbStockItem ? "Không bán trực tiếp" : "Cho phép bán"}
                 </label>
                 <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                   <Checkbox
@@ -4820,7 +4843,11 @@ export function CreateProductDialog({
                                       {p.name}
                                     </span>
                                     <span className="text-[10px] text-muted-foreground">
-                                      {p.productType === "sku" ? "SKU" : "NVL"}
+                                      {p.inventoryRole === "fnb_stock_item"
+                                        ? "Bán thành phẩm F&B"
+                                        : p.productType === "sku"
+                                          ? "SKU"
+                                          : "NVL"}
                                       {p.categoryName && ` · ${p.categoryName}`}
                                       {(p.stockUnit || p.unit) &&
                                         ` · ĐVT ${p.stockUnit || p.unit}`}
