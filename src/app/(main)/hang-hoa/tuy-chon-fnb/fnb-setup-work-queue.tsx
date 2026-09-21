@@ -35,7 +35,7 @@ export function FnbSetupWorkQueue({ issues }: { issues: FnbMenuIssue[] }) {
         <div>
           <h3 className="text-sm font-semibold">Hàng đợi setup món FnB</h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Chỉ hiện món/cỡ chưa đạt. Mở từng SKU để lưu giá và công thức theo dữ liệu vận hành thực tế.
+            Gồm cả món đang bán và bản nháp chưa hoàn tất. Bản nháp không chặn POS cho đến khi được mở bán.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -109,6 +109,7 @@ export function FnbSetupWorkQueue({ issues }: { issues: FnbMenuIssue[] }) {
                     <div className="flex flex-wrap gap-1.5">
                       {issue.missingPrice && <span className="border border-status-warning/30 bg-status-warning/10 px-1.5 py-0.5 text-xs text-status-warning">Thiếu giá</span>}
                       {issue.missingBom && <span className="border border-status-error/30 bg-status-error/10 px-1.5 py-0.5 text-xs text-status-error">Thiếu công thức</span>}
+                      {issue.isDraft && <span className="border border-border bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">Bản nháp</span>}
                     </div>
                   </td>
                   <td className="px-3 py-2 text-right align-top">

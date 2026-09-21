@@ -35,6 +35,7 @@ export interface FnbMenuIssue {
   variantName?: string;
   missingPrice: boolean;
   missingBom: boolean;
+  isDraft?: boolean;
 }
 
 interface NhomTuyChon {
@@ -77,6 +78,7 @@ export interface FnbReadiness {
   activeKitchenStations: number;
   activeTables: number;
   menuIssues: FnbMenuIssue[];
+  setupIssues: FnbMenuIssue[];
   toppingTotal: number;
   toppingReady: number;
   toppingMissingPrice: number;
@@ -148,7 +150,9 @@ function coBomApDung(
 export function danhGiaFnbReadiness(input: {
   products: SanPhamTopping[];
   menuProducts?: SanPhamTopping[];
+  setupMenuProducts?: SanPhamTopping[];
   variants?: QuyCachFnb[];
+  setupVariants?: QuyCachFnb[];
   boms: DongBom[];
   groups: NhomTuyChon[];
   options: LuaChonTuyChon[];
@@ -215,7 +219,9 @@ export function danhGiaFnbReadiness(input: {
   }
 
   const menuProducts = input.menuProducts ?? [];
+  const setupMenuProducts = input.setupMenuProducts ?? menuProducts;
   const variants = input.variants ?? [];
+  const setupVariants = input.setupVariants ?? variants;
   const variantsByProductId = new Map<string, QuyCachFnb[]>();
   for (const variant of variants) {
     const current = variantsByProductId.get(variant.product_id) ?? [];
@@ -284,6 +290,56 @@ export function danhGiaFnbReadiness(input: {
     ...variantIssueById.values(),
   ].sort((a, b) => a.code.localeCompare(b.code, "vi"));
 
+  const operatingProductIds = new Set(menuProducts.map((product) => product.id));
+  const setupVariantsByProductId = new Map<string, QuyCachFnb[]>();
+  for (const variant of setupVariants) {
+    const current = setupVariantsByProductId.get(variant.product_id) ?? [];
+    current.push(variant);
+    setupVariantsByProductId.set(variant.product_id, current);
+  }
+  const setupIssues: FnbMenuIssue[] = setupMenuProducts
+    .flatMap((product) => {
+      const productVariants = setupVariantsByProductId.get(product.id) ?? [];
+      const isDraft = !operatingProductIds.has(product.id);
+      if (productVariants.length === 0) {
+        const issue = {
+          id: product.id,
+          code: product.code,
+          name: product.name,
+          missingPrice: (product.sell_price ?? 0) <= 0,
+          missingBom: !coBomApDung(product, input.boms, input.branchId),
+          isDraft,
+        };
+        return issue.missingPrice || issue.missingBom ? [issue] : [];
+      }
+      return productVariants.flatMap((variant) => {
+        const missingPrice = (variant.sell_price ?? 0) <= 0;
+        const missingBom =
+          !variant.bom_code ||
+          !input.boms.some(
+            (bom) =>
+              bom.code === variant.bom_code &&
+              (bom.branch_id === null ||
+                (!!input.branchId && bom.branch_id === input.branchId)) &&
+              bom.has_items !== false,
+          );
+        return missingPrice || missingBom
+          ? [
+              {
+                id: variant.id,
+                code: product.code,
+                name: product.name,
+                variantName: variant.name,
+                missingPrice,
+                missingBom,
+                isDraft,
+              },
+            ]
+          : [];
+      });
+    })
+    .sort((a, b) => a.code.localeCompare(b.code, "vi"));
+
   return {
     menuTotal: menuProducts.length,
     draftMenuTotal: input.draftMenuTotal ?? 0,
@@ -296,6 +352,7 @@ export function danhGiaFnbReadiness(input: {
     activeKitchenStations: input.activeKitchenStations ?? 0,
     activeTables: input.activeTables ?? 0,
     menuIssues,
+    setupIssues,
     toppingTotal: input.products.length,
     toppingReady,
     toppingMissingPrice: input.products.filter(
@@ -381,19 +438,31 @@ export async function getFnbReadiness(
   const draftMenuTotal =
     draftMenuCandidates.length - locMonFnbDangMoBan(draftMenuCandidates).length;
   const groups = (groupsResult.data ?? []) as unknown as NhomTuyChon[];
-  const productIds = menuProducts.map((product) => product.id);
-  const productBomCodes = menuProducts
+  // Hàng đợi gồm bản nháp cần hoàn thiện và mọi món POS đang bán. Phép hợp
+  // này giữ SKU topping bán độc lập trong hàng đợi dù chế độ topping theo
+  // phần đang tắt, nhưng vẫn loại các SKU topping nháp chưa dùng.
+  const setupMenuProducts = [
+    ...new Map(
+      [...draftMenuCandidates, ...menuProducts].map((product) => [
+        product.id,
+        product,
+      ]),
+    ).values(),
+  ];
+  const setupProductIds = setupMenuProducts.map((product) => product.id);
+  const operatingProductIds = new Set(menuProducts.map((product) => product.id));
+  const productBomCodes = setupMenuProducts
     .map((product) => product.bom_code)
     .filter((code): code is string => !!code);
   const groupIds = groups.map((group) => group.id);
 
-  const variantsPromise = productIds.length
+  const variantsPromise = setupProductIds.length
     ? (supabase as any)
         .from("product_variants")
         .select("id, product_id, name, sell_price, bom_code, is_default")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
-        .in("product_id", productIds)
+        .in("product_id", setupProductIds)
         .limit(1000)
     : Promise.resolve({ data: [], error: null });
 
@@ -425,16 +494,19 @@ export async function getFnbReadiness(
   if (stationsResult.error) throw stationsResult.error;
   if (tablesResult.error) throw tablesResult.error;
 
-  const variants = (variantsResult.data ?? []) as QuyCachFnb[];
+  const setupVariants = (variantsResult.data ?? []) as QuyCachFnb[];
+  const variants = setupVariants.filter((variant) =>
+    operatingProductIds.has(variant.product_id),
+  );
   const bomCodes = [
     ...productBomCodes,
-    ...variants
+    ...setupVariants
       .map((variant) => variant.bom_code)
       .filter((code): code is string => !!code),
   ];
   const uniqueBomCodes = [...new Set(bomCodes)];
 
-  const bomsPromise = productIds.length
+  const bomsPromise = setupProductIds.length
     ? (() => {
         let query = (supabase as any)
           .from("bom")
@@ -443,8 +515,8 @@ export async function getFnbReadiness(
           .eq("is_active", true)
           .or(
             uniqueBomCodes.length
-              ? `product_id.in.(${productIds.join(",")}),code.in.(${uniqueBomCodes.map((code) => `"${code}"`).join(",")})`
-              : `product_id.in.(${productIds.join(",")})`,
+              ? `product_id.in.(${setupProductIds.join(",")}),code.in.(${uniqueBomCodes.map((code) => `"${code}"`).join(",")})`
+              : `product_id.in.(${setupProductIds.join(",")})`,
           );
         query = branchId
           ? query.or(`branch_id.eq.${branchId},branch_id.is.null`)
@@ -467,7 +539,9 @@ export async function getFnbReadiness(
   return danhGiaFnbReadiness({
     products,
     menuProducts,
+    setupMenuProducts,
     variants,
+    setupVariants,
     boms,
     groups,
     options: (optionsResult.data ?? []) as unknown as LuaChonTuyChon[],
