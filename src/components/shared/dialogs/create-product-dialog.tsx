@@ -326,6 +326,9 @@ export function CreateProductDialog({
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
+  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const categoryPickerRef = useRef<HTMLDivElement>(null);
 
   const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
@@ -1848,6 +1851,45 @@ export function CreateProductDialog({
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
   const selectedCategoryCode = selectedCategory?.code;
+  const visibleCategories = useMemo(() => {
+    const normalizedQuery = categoryQuery.trim().toLocaleLowerCase("vi");
+
+    return [...categories]
+      .filter((category) => {
+        if (!normalizedQuery) return true;
+        return `${category.label} ${category.code ?? ""}`
+          .toLocaleLowerCase("vi")
+          .includes(normalizedQuery);
+      })
+      .sort(
+        (left, right) =>
+          left.label.localeCompare(right.label, "vi", { sensitivity: "base" }) ||
+          (left.code ?? "").localeCompare(right.code ?? "", "vi", {
+            sensitivity: "base",
+          }),
+      );
+  }, [categories, categoryQuery]);
+
+  useEffect(() => {
+    if (!categoryPickerOpen) return;
+
+    const closeWhenClickingAway = (event: MouseEvent) => {
+      if (
+        categoryPickerRef.current &&
+        !categoryPickerRef.current.contains(event.target as Node)
+      ) {
+        setCategoryPickerOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", closeWhenClickingAway);
+    return () => document.removeEventListener("mousedown", closeWhenClickingAway);
+  }, [categoryPickerOpen]);
+
+  useEffect(() => {
+    setCategoryPickerOpen(false);
+    setCategoryQuery("");
+  }, [open, scope]);
 
   // Case-insensitive dup check cho 3 ô ĐVT
   const purchaseUnitDup = findCaseInsensitiveDup(purchaseUnit, existingUnits);
@@ -2787,45 +2829,97 @@ export function CreateProductDialog({
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
-              <Select
-                // CEO 23/05/2026: key={scope} buộc Select REMOUNT khi user
-                // switch NVL ↔ SKU trong dialog tạo mới. Trước đây Base UI
-                // Select reuse cùng instance giữa 2 scope → state internal
-                // (popper position, items list) bị stale → click trigger
-                // không expand được dropdown ở scope thứ 2. Force remount
-                // = state fresh = dropdown sổ đúng mỗi lần.
-                key={`category-select-${scope}`}
-                value={categoryId || null}
-                onValueChange={(v) => setCategoryId(v ?? "")}
-                // items cho phép Base UI tự resolve UUID -> label, tránh trigger hiện UUID
-                // khi value set trước khi SelectContent mount (edit mode async load).
-                items={categories.map((cat) => ({
-                  value: cat.value,
-                  label: cat.code ? `${cat.code} — ${cat.label}` : cat.label,
-                }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={loadingCats ? "Đang tải..." : "Chọn nhóm hàng"}>
-                    {(v) => {
-                      const match = categories.find((c) => c.value === v);
-                      if (match) {
-                        return match.code ? `${match.code} — ${match.label}` : match.label;
-                      }
-                      // Value đặt nhưng chưa match (đang load hoặc category đã xoá) →
-                      // hiện placeholder thay vì UUID thô.
-                      return loadingCats ? "Đang tải..." : "Chọn nhóm hàng";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.code ? `${cat.code} — ` : ""}
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div ref={categoryPickerRef} className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-9 w-full justify-between px-3 text-left font-normal"
+                  aria-expanded={categoryPickerOpen}
+                  aria-haspopup="listbox"
+                  onClick={() => setCategoryPickerOpen((isOpen) => !isOpen)}
+                >
+                  <span className={selectedCategory ? "truncate" : "text-muted-foreground"}>
+                    {selectedCategory
+                      ? selectedCategory.label
+                      : loadingCats
+                        ? "Đang tải..."
+                        : "Chọn nhóm hàng"}
+                  </span>
+                  <Icon name="expand_more" size={18} className="shrink-0 text-muted-foreground" />
+                </Button>
+                {categoryPickerOpen && (
+                  <div
+                    role="dialog"
+                    aria-label="Tìm và chọn nhóm hàng"
+                    className="absolute z-50 mt-1 w-full rounded-lg border bg-popover p-2 shadow-lg"
+                  >
+                    <div className="relative">
+                      <Icon
+                        name="search"
+                        size={16}
+                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      />
+                      <Input
+                        autoFocus
+                        value={categoryQuery}
+                        onChange={(event) => setCategoryQuery(event.target.value)}
+                        placeholder="Tìm tên hoặc mã nhóm"
+                        className="h-8 pl-8"
+                        onKeyDown={(event) => {
+                          if (event.key === "Escape") {
+                            setCategoryPickerOpen(false);
+                          }
+                        }}
+                      />
+                    </div>
+                    <div
+                      role="listbox"
+                      className="mt-2 max-h-64 overflow-y-scroll overscroll-contain pr-1 [scrollbar-gutter:stable]"
+                    >
+                      {visibleCategories.length > 0 ? (
+                        visibleCategories.map((category) => {
+                          const isSelected = category.value === categoryId;
+                          return (
+                            <button
+                              key={category.value}
+                              type="button"
+                              role="option"
+                              aria-selected={isSelected}
+                              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
+                              onClick={() => {
+                                setCategoryId(category.value);
+                                setCategoryPickerOpen(false);
+                                setCategoryQuery("");
+                              }}
+                            >
+                              <span className="min-w-0 flex-1 truncate font-medium">
+                                {category.label}
+                              </span>
+                              {category.code && (
+                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                                  {category.code}
+                                </span>
+                              )}
+                              {isSelected && (
+                                <Icon name="check" size={16} className="shrink-0 text-primary" />
+                              )}
+                            </button>
+                          );
+                        })
+                      ) : (
+                        <p className="px-2 py-5 text-center text-sm text-muted-foreground">
+                          Không tìm thấy nhóm phù hợp.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {selectedCategory?.code && (
+                <p className="text-xs text-muted-foreground">
+                  Mã nhóm: <span className="font-mono text-foreground">{selectedCategory.code}</span>
+                </p>
+              )}
               {errors.category && (
                 <p className="text-xs text-destructive">{errors.category}</p>
               )}
