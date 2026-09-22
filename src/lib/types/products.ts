@@ -27,6 +27,8 @@ export interface Product {
   inventoryRole?: InventoryRole;
   /** Ban thanh pham duoc nau/so che va giu ton tai chi nhanh F&B. */
   isFnbStockItem?: boolean;
+  /** Explicit opt-in for a direct-sale FnB SKU at 0d. */
+  allowFreeSale?: boolean;
   hasBom: boolean;
   /**
    * Day 20/05/2026 (CEO): Mã BOM mà SKU này dùng (text reference đến bom.code).

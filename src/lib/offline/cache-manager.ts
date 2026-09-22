@@ -84,13 +84,12 @@ export async function prefetchMenuData(
   // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
     .from("products")
-    .select("id, name, code, sell_price, image_url, stock, category_id")
+    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .eq("allow_sale", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
-    .gt("sell_price", 0)
     .order("name");
 
   // Scope rows are small but authoritative. Fetch them alongside the catalog
@@ -104,9 +103,12 @@ export async function prefetchMenuData(
     getToppingPhanHopLe(tenantId, branchId),
   ]);
   const visibleProducts = filterFnbProductsForBranch(
-    prods ?? [],
+    // Generated DB types are refreshed after migration 00391.
+    (prods ?? []) as any[],
     scopes,
     branchId,
+  ).filter(
+    (product) => product.sell_price > 0 || product.allow_free_sale === true,
   );
   const visibleCategoryIds = new Set(
     visibleProducts
@@ -158,6 +160,7 @@ export async function prefetchMenuData(
           name: p.name,
           code: p.code,
           sell_price: p.sell_price,
+          allow_free_sale: p.allow_free_sale,
           image_url: (p as Record<string, unknown>).image_url,
           stock: p.stock,
           category_id: p.category_id,

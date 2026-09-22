@@ -37,9 +37,9 @@ describe("FnB checkout permission", () => {
     expect(migration).toContain("revoke all on function public._open_shift_checkout_impl_00298");
   });
 
-  it("hides unfinished products and gates both desktop and mobile payment", () => {
+  it("hides unfinished products, admits only explicit free FnB items, and gates payment", () => {
     expect(posPage).toContain('.eq("allow_sale", true)');
-    expect(posPage).toContain('.gt("sell_price", 0)');
+    expect(posPage).toContain("product.allow_free_sale === true");
     expect(posPage.match(/canCheckout=\{canCheckout\}/g)).toHaveLength(2);
     expect(posPage).toContain("hasPermission(PERMISSIONS.POS_FNB_CHECKOUT)");
   });
@@ -48,7 +48,7 @@ describe("FnB checkout permission", () => {
     expect(posPage).toContain("mustRefreshCatalog");
     expect(posPage).toContain("cachedProducts.length !== cached.products.length");
     expect(menuCache).toContain('.eq("allow_sale", true)');
-    expect(menuCache).toContain('.gt("sell_price", 0)');
+    expect(menuCache).toContain("product.allow_free_sale === true");
   });
 
   it("keeps variants without a selling price visible but unavailable", () => {

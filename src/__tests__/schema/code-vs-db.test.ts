@@ -52,6 +52,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["products.allow_free_sale", "00391"],
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([

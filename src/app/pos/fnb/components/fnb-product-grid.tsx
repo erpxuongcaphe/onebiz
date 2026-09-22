@@ -17,6 +17,8 @@ export interface FnbProduct {
   category_id: string | null;
   /** Sprint UI-4: dùng cho sub-category pills (group by brand). Null nếu chưa gán. */
   brand?: string | null;
+  /** Explicitly allows this direct-sale FnB SKU to be sold at 0d. */
+  allow_free_sale?: boolean;
 }
 
 interface FnbProductGridProps {

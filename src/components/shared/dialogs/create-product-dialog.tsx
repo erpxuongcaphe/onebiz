@@ -408,6 +408,7 @@ export function CreateProductDialog({
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<string | null>(null);
   const [allowSale, setAllowSale] = useState(true);
+  const [allowFreeSale, setAllowFreeSale] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [bomDraftSourceReady, setBomDraftSourceReady] = useState(
@@ -727,7 +728,9 @@ export function CreateProductDialog({
       setScope(initialData.productType);
       setCategoryId(initialData.categoryId || "");
       setName(initialData.name);
-      setSellPrice(initialData.sellPrice ? String(initialData.sellPrice) : "");
+      setSellPrice(
+        initialData.sellPrice === undefined ? "" : String(initialData.sellPrice),
+      );
       setCostPrice(initialData.costPrice ? String(initialData.costPrice) : "");
       setInitialStock(initialData.stock ? String(initialData.stock) : "");
       setPurchaseUnit(initialData.purchaseUnit || "");
@@ -770,6 +773,7 @@ export function CreateProductDialog({
       setDescription(initialData.description || "");
       setImage(initialData.image || null);
       setAllowSale(initialData.isFnbStockItem === true ? false : true);
+      setAllowFreeSale(initialData.allowFreeSale === true);
       setErrors({});
       setInnerTab("info");
     } else {
@@ -820,6 +824,7 @@ export function CreateProductDialog({
       setDescription("");
       setImage(null);
       setAllowSale(true);
+      setAllowFreeSale(false);
       setErrors({});
       setInnerTab("info");
     }
@@ -1000,6 +1005,7 @@ export function CreateProductDialog({
       maxStock,
       description,
       allowSale,
+      allowFreeSale,
       innerTab,
       modifierMode,
       productModifierGroupIds: Array.from(productModifierGroupIds),
@@ -1053,6 +1059,7 @@ export function CreateProductDialog({
       setMaxStock(draft.maxStock);
       setDescription(draft.description);
       setAllowSale(draft.allowSale);
+      setAllowFreeSale(draft.allowFreeSale);
       setInnerTab(draft.innerTab);
       setModifierMode(draft.modifierMode);
       setProductModifierGroupIds(new Set(draft.productModifierGroupIds));
@@ -2110,6 +2117,17 @@ export function CreateProductDialog({
       return;
     }
 
+    if (allowFreeSale && variantItems.length > 0) {
+      setInnerTab("pricing");
+      toast({
+        variant: "error",
+        title: "Chưa thể bán miễn phí theo quy cách",
+        description: "Bán miễn phí (0đ) hiện áp dụng cho món F&B không có quy cách. Các size phải có giá bán riêng lớn hơn 0.",
+        duration: 10000,
+      });
+      return;
+    }
+
     if (scope === "sku" && usesFnbRecipeCosts) {
       const usedMaterialIds = new Set<string>();
       if (hasBom && !bomCodeTrim && variantItems.length === 0) {
@@ -2262,6 +2280,10 @@ export function CreateProductDialog({
         description: description || undefined,
         image: image ?? undefined,
         allowSale: scope === "sku" ? (isFnbStockItem ? false : allowSale) : false,
+        allowFreeSale:
+          scope === "sku" && channel === "fnb" && !isFnbStockItem
+            ? allowFreeSale
+            : false,
         ...(scope === "sku" && (isFnbStockItem || initialData?.isFnbStockItem)
           ? { isFnbStockItem }
           : {}),
@@ -3522,6 +3544,19 @@ export function CreateProductDialog({
                   />
                   {isFnbStockItem ? "Không bán trực tiếp" : "Cho phép bán"}
                 </label>
+                {channel === "fnb" && !isFnbStockItem && (
+                  <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                    <Checkbox
+                      checked={allowFreeSale}
+                      onCheckedChange={(checked) => {
+                        const enabled = !!checked;
+                        setAllowFreeSale(enabled);
+                        if (enabled) setSellPrice("0");
+                      }}
+                    />
+                    Bán miễn phí (0đ)
+                  </label>
+                )}
                 <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
                   <Checkbox
                     checked={hasBom}
