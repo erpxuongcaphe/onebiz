@@ -27,4 +27,11 @@ describe("F&B prepared stock UI", () => {
     );
     expect(products).not.toContain('.eq("is_fnb_stock_item", false)');
   });
+
+  it("makes category selection searchable and ordered by the operator-facing name", () => {
+    expect(dialog).toContain('placeholder="Tìm tên hoặc mã nhóm"');
+    expect(dialog).toContain('left.label.localeCompare(right.label, "vi"');
+    expect(dialog).toContain('overflow-y-scroll');
+    expect(dialog).toContain('Mã nhóm:');
+  });
 });
