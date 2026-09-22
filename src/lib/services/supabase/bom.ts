@@ -62,7 +62,7 @@ export async function getAllBOMs(params?: {
   const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("bom")
-    .select("*, products!bom_product_id_fkey(name, code), branches:branch_id(name)")
+    .select("*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("branch_id", { ascending: true, nullsFirst: true })
@@ -139,7 +139,7 @@ export async function getBOMByCode(code: string): Promise<BOM[]> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom")
-    .select("*, branches:branch_id(name), products:product_id(name, code)")
+    .select("*, branches:branch_id(name), products:product_id(name, code, channel, is_fnb_stock_item)")
     .eq("tenant_id", tenantId)
     .eq("code", code.trim())
     .eq("is_active", true)
@@ -309,7 +309,7 @@ export async function getBOMById(id: string): Promise<BOM> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom")
-    .select("*")
+    .select("*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -523,6 +523,39 @@ export async function calculateBOMCost(
   };
 }
 
+/**
+ * Giá vốn thực tế của BOM F&B tại một quán.
+ *
+ * Không dùng products.cost_price: giá vốn được lấy từ sổ giá bình quân của
+ * chính chi nhánh, gồm giá cấp nội bộ thực tế và giá vốn BTP sau từng mẻ.
+ */
+export async function calculateFnbBOMBranchCost(
+  bomId: string,
+  branchId: string,
+): Promise<BOMCostBreakdown> {
+  const { data, error } = await supabase.rpc(
+    "calculate_fnb_bom_branch_cost_00390",
+    { p_bom_id: bomId, p_branch_id: branchId },
+  );
+
+  if (error) throw error;
+  const raw = data as Record<string, unknown>;
+  return {
+    bomId: raw.bom_id as string,
+    totalCost: Number(raw.total_cost ?? 0),
+    items: ((raw.items as Record<string, unknown>[] | null) ?? []).map((item) => ({
+      materialId: item.material_id as string,
+      materialName: item.name as string,
+      materialCode: item.code as string,
+      quantity: Number(item.quantity ?? 0),
+      unit: "",
+      wastePercent: Number(item.waste_percent ?? 0),
+      costPrice: Number(item.branch_unit_cost ?? 0),
+      lineCost: Number(item.line_cost ?? 0),
+    })),
+  };
+}
+
 function mapBOM(row: Record<string, unknown>): BOM {
   const product = row.products as Record<string, unknown> | undefined;
   const branch = row.branches as Record<string, unknown> | undefined;
@@ -545,6 +578,8 @@ function mapBOM(row: Record<string, unknown>): BOM {
     updatedAt: row.updated_at as string,
     productName: product?.name as string | undefined,
     productCode: product?.code as string | undefined,
+    productChannel: (product?.channel as 'fnb' | 'retail' | null | undefined) ?? null,
+    isFnbStockItem: Boolean(product?.is_fnb_stock_item),
     branchName: branch?.name as string | undefined,
   };
 }

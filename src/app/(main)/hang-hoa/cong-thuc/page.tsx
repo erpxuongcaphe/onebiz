@@ -35,12 +35,13 @@ import { bomExcelSchema, type BOMImportRow } from "@/lib/excel/schemas";
 import { bulkImportBOMs } from "@/lib/services/supabase/excel-import";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   getAllBOMs,
   getBOMById,
   getBOMProductionHistory,
   calculateBOMCost,
+  calculateFnbBOMBranchCost,
   deleteBOM,
   getBranches,
   cloneBOMForBranch,
@@ -73,11 +74,15 @@ function BOMDetail({
   onClose,
   onEdit,
   onDelete,
+  activeBranchId,
+  activeBranchName,
 }: {
   bomId: string;
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  activeBranchId?: string;
+  activeBranchName?: string;
 }) {
   const [bom, setBom] = useState<BOM | null>(null);
   const [cost, setCost] = useState<BOMCostBreakdown | null>(null);
@@ -93,21 +98,47 @@ function BOMDetail({
       createdAt: string;
     }>
   >([]);
+  const [costUnavailable, setCostUnavailable] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setCost(null);
+      setCostUnavailable(null);
       try {
-        const [fullBom, costBreakdown, hist] = await Promise.all([
+        const [fullBom, hist] = await Promise.all([
           getBOMById(bomId),
-          calculateBOMCost(bomId).catch(() => null),
           getBOMProductionHistory(bomId, 30).catch(() => []),
         ]);
         if (cancelled) return;
+
+        const isFnbBom = fullBom.productChannel === "fnb" || fullBom.isFnbStockItem;
+        let costBreakdown: BOMCostBreakdown | null = null;
+        let unavailable: string | null = null;
+        if (isFnbBom) {
+          if (!activeBranchId) {
+            unavailable = "Chọn chi nhánh F&B để xem giá vốn thực tế.";
+          } else {
+            try {
+              costBreakdown = await calculateFnbBOMBranchCost(bomId, activeBranchId);
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "";
+              unavailable = message.includes("FNB_BRANCH_COST_REQUIRED")
+                ? "Chưa đủ giá vốn tại quán cho toàn bộ nguyên liệu. Hãy chốt giá vốn đầu kỳ hoặc nhận hàng trước khi sản xuất."
+                : message.includes("FNB_BRANCH_COST_SCOPE_DISABLED")
+                  ? "Chi nhánh đang chọn chưa bật theo dõi giá vốn F&B."
+                  : "Chưa thể tính giá vốn thực tế tại quán này.";
+            }
+          }
+        } else {
+          costBreakdown = await calculateBOMCost(bomId).catch(() => null);
+        }
+        if (cancelled) return;
         setBom(fullBom);
         setCost(costBreakdown);
+        setCostUnavailable(unavailable);
         setHistory(hist);
       } finally {
         if (!cancelled) setLoading(false);
@@ -116,7 +147,7 @@ function BOMDetail({
     return () => {
       cancelled = true;
     };
-  }, [bomId]);
+  }, [bomId, activeBranchId]);
 
   if (loading || !bom) {
     return (
@@ -127,6 +158,9 @@ function BOMDetail({
   }
 
   const completedCount = history.filter((h) => h.status === "completed").length;
+  const isFnbBom = bom.productChannel === "fnb" || bom.isFnbStockItem;
+  const costLabel = isFnbBom ? "Giá vốn tại quán" : "Giá vốn NVL";
+  const totalCostLabel = isFnbBom ? "Tổng giá vốn tại quán" : "Tổng giá vốn NVL";
 
   return (
     <InlineDetailPanel
@@ -160,13 +194,13 @@ function BOMDetail({
                     },
                     { label: "Batch size", value: formatNumber(bom.batchSize) },
                     {
-                      label: "Tổng giá vốn NVL",
+                      label: totalCostLabel,
                       value: cost
                         ? <span className="font-semibold">{formatCurrency(cost.totalCost)}</span>
-                        : "—",
+                        : costUnavailable ?? "—",
                     },
                     {
-                      label: "Giá vốn / đơn vị",
+                      label: isFnbBom ? "Giá vốn / đơn vị tại quán" : "Giá vốn / đơn vị",
                       value: cost && bom.yieldQty > 0
                         ? formatCurrency(cost.totalCost / bom.yieldQty)
                         : "—",
@@ -187,6 +221,16 @@ function BOMDetail({
             label: `Nguyên vật liệu (${bom.items?.length ?? 0})`,
             content: (
               <div className="space-y-2">
+                {isFnbBom && (
+                  <p className="text-xs text-muted-foreground">
+                    Bình quân tại {activeBranchName ?? "chi nhánh đang chọn"}; không dùng giá vốn toàn cục của Retail.
+                  </p>
+                )}
+                {costUnavailable && (
+                  <div className="rounded-md border border-status-warning/30 bg-status-warning/5 p-3 text-sm text-status-warning">
+                    {costUnavailable}
+                  </div>
+                )}
                 {(bom.items ?? []).length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">
                     Chưa có NVL trong công thức.
@@ -199,7 +243,7 @@ function BOMDetail({
                           <th className="text-left p-2 font-medium">NVL</th>
                           <th className="text-right p-2 font-medium">Định lượng</th>
                           <th className="text-right p-2 font-medium">Hao hụt</th>
-                          <th className="text-right p-2 font-medium">Giá vốn NVL</th>
+                          <th className="text-right p-2 font-medium">{costLabel}</th>
                           <th className="text-right p-2 font-medium">Chi phí dòng</th>
                         </tr>
                       </thead>
@@ -309,6 +353,7 @@ function BOMDetail({
 
 export default function CongThucPage() {
   const { toast } = useToast();
+  const { activeBranchId, currentBranch } = useBranchFilter();
   const [data, setData] = useState<BOM[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -662,6 +707,8 @@ export default function CongThucPage() {
           renderDetail={(row, onClose) => (
               <BOMDetail
                 bomId={row.id}
+                activeBranchId={activeBranchId}
+                activeBranchName={currentBranch?.name}
                 onClose={onClose}
                 onEdit={() => {
                   setEditingId(row.id);
