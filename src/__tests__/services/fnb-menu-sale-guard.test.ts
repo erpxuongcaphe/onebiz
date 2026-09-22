@@ -25,4 +25,14 @@ describe("kiemTraGiaBanThemNhanhFnb", () => {
       kiemTraGiaBanThemNhanhFnb({ catalogPrice: 35_000, resolvedPrice: 40_000 }),
     ).toEqual({ dat: true });
   });
+
+  it("chỉ cho SKU FnB đã bật cờ mới được bán miễn phí", () => {
+    expect(
+      kiemTraGiaBanThemNhanhFnb({
+        catalogPrice: 0,
+        resolvedPrice: 0,
+        allowFreeSale: true,
+      }),
+    ).toEqual({ dat: true });
+  });
 });

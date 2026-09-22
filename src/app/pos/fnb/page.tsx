@@ -423,7 +423,8 @@ function FnbPosPageInner() {
           const cached = await getMenuFromCache(tenantId, branchId);
           const cachedProducts = cached.products.filter(
             (product) =>
-              product.sell_price > 0 && Number.isFinite(product.sell_price),
+              Number.isFinite(product.sell_price) &&
+              (product.sell_price > 0 || product.allow_free_sale === true),
           );
           mustRefreshCatalog = cachedProducts.length !== cached.products.length;
           if (cachedProducts.length > 0) {
@@ -480,13 +481,12 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
-                  .gt("sell_price", 0)
                   .order("name")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
                 // CEO 13/05: load platform price overrides để resolve giá theo
@@ -557,6 +557,8 @@ function FnbPosPageInner() {
               prodsResp.data ?? [],
               menuScopes,
               branchId,
+            ).filter(
+              (product) => product.sell_price > 0 || product.allow_free_sale === true,
             );
             const categoryIds = new Set(
               prods
@@ -581,6 +583,7 @@ function FnbPosPageInner() {
                 stock: p.stock,
                 category_id: p.category_id,
                 brand: ((p as Record<string, unknown>).brand as string | null) ?? null,
+                allow_free_sale: (p as Record<string, unknown>).allow_free_sale === true,
               }))
             );
 
@@ -1338,6 +1341,7 @@ function FnbPosPageInner() {
         const giaBan = kiemTraGiaBanThemNhanhFnb({
           catalogPrice: product.sell_price,
           resolvedPrice,
+          allowFreeSale: product.allow_free_sale === true,
         });
         if (!giaBan.dat) {
           toast({

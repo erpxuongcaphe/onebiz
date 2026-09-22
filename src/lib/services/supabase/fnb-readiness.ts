@@ -15,6 +15,7 @@ interface SanPhamTopping {
   name: string;
   sell_price: number | null;
   allow_sale?: boolean | null;
+  allow_free_sale?: boolean | null;
   bom_code: string | null;
   has_bom?: boolean | null;
 }
@@ -112,14 +113,19 @@ export function locMonFnbCanhBao<T extends { code: string }>(
  * của chi nhánh vì thu ngân không nhìn thấy các SKU đó trên POS.
  */
 export function locMonFnbDangMoBan<
-  T extends { sell_price: number | null; allow_sale?: boolean | null },
+  T extends { sell_price: number | null; allow_sale?: boolean | null; allow_free_sale?: boolean | null },
 >(products: T[]): T[] {
   return products.filter(
     (product) =>
       product.allow_sale === true &&
       Number.isFinite(product.sell_price) &&
-      (product.sell_price ?? 0) > 0,
+      ((product.sell_price ?? 0) > 0 || product.allow_free_sale === true),
   );
+}
+
+function thieuGiaFnb(product: Pick<SanPhamTopping, "sell_price" | "allow_free_sale">): boolean {
+  const price = product.sell_price ?? 0;
+  return price < 0 || (price === 0 && product.allow_free_sale !== true);
 }
 
 function coBomApDung(
@@ -180,7 +186,7 @@ export function danhGiaFnbReadiness(input: {
       id: product.id,
       code: product.code,
       name: product.name,
-      missingPrice: (product.sell_price ?? 0) <= 0,
+      missingPrice: thieuGiaFnb(product),
       missingBom: !coBomApDung(product, input.boms, input.branchId),
     }))
     .filter((product) => product.missingPrice || product.missingBom)
@@ -233,7 +239,7 @@ export function danhGiaFnbReadiness(input: {
     (product) => (variantsByProductId.get(product.id) ?? []).length === 0,
   );
   const simpleProductsMissingPrice = simpleProducts.filter(
-    (product) => (product.sell_price ?? 0) <= 0,
+    (product) => thieuGiaFnb(product),
   );
   const simpleProductsMissingBom = simpleProducts.filter(
     (product) => !coBomApDung(product, input.boms, input.branchId),
@@ -280,7 +286,7 @@ export function danhGiaFnbReadiness(input: {
         id: product.id,
         code: product.code,
         name: product.name,
-        missingPrice: (product.sell_price ?? 0) <= 0,
+        missingPrice: thieuGiaFnb(product),
         // Quy tắc vận hành OneBiz FnB: mọi món bán đều phải có công thức.
         // Không dựa vào has_bom vì chính việc quên bật cờ này cũng là lỗi setup
         // cần được màn kiểm tra phát hiện trước khi mở bán.
@@ -306,7 +312,7 @@ export function danhGiaFnbReadiness(input: {
           id: product.id,
           code: product.code,
           name: product.name,
-          missingPrice: (product.sell_price ?? 0) <= 0,
+          missingPrice: thieuGiaFnb(product),
           missingBom: !coBomApDung(product, input.boms, input.branchId),
           isDraft,
         };
@@ -397,7 +403,7 @@ export async function getFnbReadiness(
   const [menuProductsResult, groupsResult, menuScopes] = await Promise.all([
     supabase
       .from("products")
-      .select("id, code, name, sell_price, allow_sale, bom_code, has_bom")
+      .select("id, code, name, sell_price, allow_sale, allow_free_sale, bom_code, has_bom")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
       .eq("product_type", "sku")

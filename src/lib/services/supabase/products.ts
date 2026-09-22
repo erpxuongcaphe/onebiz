@@ -1245,6 +1245,7 @@ function mapProduct(row: any): Product {
     channel: row.channel ?? undefined,
     inventoryRole: row.inventory_role ?? undefined,
     isFnbStockItem: row.is_fnb_stock_item ?? false,
+    allowFreeSale: row.allow_free_sale ?? false,
     hasBom: row.has_bom ?? false,
     // Day 20/05/2026 (CEO): bom_code text trỏ về bom.code, cho phép share
     // 1 BOM giữa nhiều SKU. Migration 00105 backfill từ existing data.
@@ -1349,6 +1350,11 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       ...(product.isFnbStockItem !== undefined
         ? { is_fnb_stock_item: product.isFnbStockItem }
         : {}),
+      // Generated Supabase types follow the deployed schema. Keep this cast
+      // until the next schema dump includes migration 00391.
+      ...(product.allowFreeSale !== undefined
+        ? { allow_free_sale: product.allowFreeSale }
+        : {}) as any,
       // Day 20/05/2026 (CEO BOM Phase 5): link với BOM standalone qua code
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ...(product.bomCode ? { bom_code: product.bomCode } : {}) as any,
@@ -1399,6 +1405,9 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   }
   if (updates.isFnbStockItem !== undefined) {
     payload.is_fnb_stock_item = updates.isFnbStockItem;
+  }
+  if (updates.allowFreeSale !== undefined) {
+    (payload as Record<string, unknown>).allow_free_sale = updates.allowFreeSale;
   }
   // Thương hiệu + thêm các field còn lại — đưa vào payload khi có thay đổi.
   // Dùng `null` thay vì `undefined` để cho phép xoá brand/nhà cung cấp/trọng

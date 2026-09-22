@@ -26,6 +26,15 @@ describe("danhGiaFnbReadiness", () => {
     expect(locMonFnbDangMoBan(products)).toEqual([products[0]]);
   });
 
+  it("đưa món 0đ vào POS chỉ khi quản trị đã bật bán miễn phí", () => {
+    const products = [
+      { code: "FNB-FREE", sell_price: 0, allow_sale: true, allow_free_sale: true },
+      { code: "FNB-DRAFT", sell_price: 0, allow_sale: true, allow_free_sale: false },
+    ];
+
+    expect(locMonFnbDangMoBan(products)).toEqual([products[0]]);
+  });
+
   it("vẫn kiểm tra SKU topping có giá khi POS bán như một món độc lập", () => {
     const products = [
       { code: "SKU-TPP-005", sell_price: 10_000, allow_sale: true },
