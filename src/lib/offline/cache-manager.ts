@@ -103,7 +103,8 @@ export async function prefetchMenuData(
     getToppingPhanHopLe(tenantId, branchId),
   ]);
   const visibleProducts = filterFnbProductsForBranch(
-    prods ?? [],
+    // Generated DB types are refreshed after migration 00391.
+    (prods ?? []) as any[],
     scopes,
     branchId,
   ).filter(

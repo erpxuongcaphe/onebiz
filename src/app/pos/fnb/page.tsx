@@ -554,7 +554,8 @@ function FnbPosPageInner() {
             }
             setPlatformPriceMap(ppMap);
             const prods = filterFnbProductsForBranch(
-              prodsResp.data ?? [],
+              // Generated DB types are refreshed after migration 00391.
+              (prodsResp.data ?? []) as any[],
               menuScopes,
               branchId,
             ).filter(
