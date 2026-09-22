@@ -63,6 +63,8 @@ with required(relation_name, operation) as (
     ('floor_plan_decorations', 'select'),
     ('floor_plan_zones', 'select'),
     ('floor-plans', 'select'),
+    ('fnb_branch_product_cost_balances', 'select'),
+    ('fnb_branch_product_cost_events', 'select'),
     ('fnb_delivery_fee_tiers', 'delete'),
     ('fnb_delivery_fee_tiers', 'insert'),
     ('fnb_delivery_fee_tiers', 'select'),
