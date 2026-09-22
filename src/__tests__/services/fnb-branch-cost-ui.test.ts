@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const page = readFileSync("src/app/(main)/hang-hoa/hang-cap-fnb/page.tsx", "utf8");
 const service = readFileSync("src/lib/services/supabase/fnb-branch-cost.ts", "utf8");
+const productDialog = readFileSync("src/components/shared/dialogs/create-product-dialog.tsx", "utf8");
 
 describe("F&B branch opening cost UI", () => {
   it("uses the audited branch RPC instead of a writable table call", () => {
@@ -21,5 +22,19 @@ describe("F&B branch opening cost UI", () => {
     expect(service).toContain("canConfirmOpeningCost: !productsWithEvents.has(row.product_id) && costedQuantity === 0");
     expect(page).toContain("row.canConfirmOpeningCost && <Button");
     expect(page).toContain("Cần rà soát lệch");
+  });
+
+  it("uses Retail price for Retail SKU inputs and branch batch cost only for prepared stock", () => {
+    expect(productDialog).toMatch(
+      /material\.isFnbStockItem\s*\?\s*\{[\s\S]*sellPrice: fnbPreparedCostByProductId\[material\.id\]\?\.unitCost \?\? 0/,
+    );
+    expect(productDialog).toMatch(
+      /product\?\.isFnbStockItem\s*\?\s*fnbPreparedCostByProductId\[product\.id\]\?\.unitCost \?\? 0\s*:\s*item\.costPrice/,
+    );
+    expect(productDialog).toContain("Chưa có giá BTP tại quán");
+    expect(productDialog).toContain("công thức vẫn lưu được khi mẻ chưa có giá");
+    expect(productDialog).toMatch(
+      /hasMissingPreparedComponentCost\s*\? \(isEdit \? Number\(initialData\?\.costPrice \?\? 0\) : 0\)/,
+    );
   });
 });
