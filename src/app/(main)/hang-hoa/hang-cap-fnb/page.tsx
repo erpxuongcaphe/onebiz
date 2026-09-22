@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
 import { useAuth, useToast } from "@/lib/contexts";
@@ -17,12 +18,18 @@ import {
   setFnbSupplyBranchScope,
   type FnbSupplyRow,
 } from "@/lib/services/supabase/fnb-supply-catalog";
+import {
+  listFnbBranchOpeningCostRows,
+  setFnbBranchOpeningCost,
+  type FnbBranchOpeningCostRow,
+} from "@/lib/services/supabase/fnb-branch-cost";
 
 export default function FnbSupplyCatalogPage() {
   const { hasPermission, activeBranchId } = useAuth();
   const { toast } = useToast();
   const canView = hasPermission("products.view");
   const canEdit = hasPermission("products.edit") && hasPermission("system.manage_branches");
+  const canSetOpeningCost = hasPermission("inventory.create_po") || hasPermission("system.manage_branches");
   const [branches, setBranches] = useState<BranchDetail[]>([]);
   const [showOtherBranches, setShowOtherBranches] = useState(false);
   const [branchId, setBranchId] = useState("");
@@ -38,6 +45,13 @@ export default function FnbSupplyCatalogPage() {
   const [scopeBusy, setScopeBusy] = useState(false);
   const [scopeError, setScopeError] = useState("");
   const [scopeConfirmation, setScopeConfirmation] = useState<boolean | null>(null);
+  const [openingRows, setOpeningRows] = useState<FnbBranchOpeningCostRow[]>([]);
+  const [openingBusy, setOpeningBusy] = useState(false);
+  const [openingError, setOpeningError] = useState("");
+  const [openingProduct, setOpeningProduct] = useState<FnbBranchOpeningCostRow | null>(null);
+  const [openingUnitCost, setOpeningUnitCost] = useState("");
+  const [openingReason, setOpeningReason] = useState("");
+  const [openingSaving, setOpeningSaving] = useState(false);
   const [count, setCount] = useState(0);
   const [page, setPage] = useState(0);
   const [revision, setRevision] = useState(0);
@@ -106,6 +120,19 @@ export default function FnbSupplyCatalogPage() {
     }).finally(() => { if (!controller.signal.aborted) setScopeBusy(false); });
     return () => controller.abort();
   }, [canView, branchId, revision]);
+
+  useEffect(() => {
+    setOpeningRows([]); setOpeningError("");
+    if (!canView || !branchId || !scopeEnabled) { setOpeningBusy(false); return; }
+    const controller = new AbortController();
+    setOpeningBusy(true);
+    listFnbBranchOpeningCostRows(branchId, controller.signal).then((data) => {
+      if (!controller.signal.aborted) setOpeningRows(data);
+    }).catch(() => {
+      if (!controller.signal.aborted) setOpeningError("Không tải được tồn cần chốt giá vốn đầu kỳ.");
+    }).finally(() => { if (!controller.signal.aborted) setOpeningBusy(false); });
+    return () => controller.abort();
+  }, [canView, branchId, scopeEnabled, revision]);
 
   useEffect(() => {
     setMatches([]); setSearchError("");
@@ -179,6 +206,21 @@ export default function FnbSupplyCatalogPage() {
     } catch (cause) {
       toast({ title: "Chưa cập nhật được kiểm soát SKU", description: cause instanceof Error ? cause.message : "Vui lòng thử lại.", variant: "error" });
     } finally { setScopeBusy(false); }
+  }
+
+  async function saveOpeningCost() {
+    if (!openingProduct || !branchId || !canSetOpeningCost || openingSaving) return;
+    const unitCost = Number(openingUnitCost.replaceAll(",", "").trim());
+    if (!Number.isFinite(unitCost) || unitCost < 0 || !openingReason.trim()) return;
+    setOpeningSaving(true);
+    try {
+      const result = await setFnbBranchOpeningCost(branchId, openingProduct.productId, unitCost, openingReason);
+      toast({ title: `Đã chốt giá vốn đầu kỳ ${openingProduct.code}`, description: `${result.quantity} ${openingProduct.unit} được ghi nhận vào sổ giá vốn của quán.` });
+      setOpeningProduct(null); setOpeningUnitCost(""); setOpeningReason("");
+      setRevision((value) => value + 1);
+    } catch (cause) {
+      toast({ title: "Chưa chốt được giá vốn đầu kỳ", description: cause instanceof Error ? cause.message : "Vui lòng thử lại.", variant: "error" });
+    } finally { setOpeningSaving(false); }
   }
 
   if (!canView) return <p className="p-6">Bạn chưa có quyền xem sản phẩm.</p>;
@@ -268,6 +310,31 @@ export default function FnbSupplyCatalogPage() {
             </Button>}
           </div>
           {scopeError && <p role="alert" className="text-destructive">{scopeError}</p>}
+          {scopeEnabled && <section className="space-y-3 border-b pb-4" aria-labelledby="fnb-opening-cost-heading">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h3 id="fnb-opening-cost-heading" className="font-medium">Giá vốn tồn đầu kỳ tại quán</h3>
+                <p className="text-sm text-muted-foreground">Chỉ chốt tồn thực tế chưa có sổ giá vốn. Không lấy hoặc ghi đè giá Retail.</p>
+              </div>
+              <Button variant="ghost" title="Tải lại giá vốn" aria-label="Tải lại giá vốn" disabled={openingBusy}
+                onClick={() => setRevision((value) => value + 1)}><Icon name="refresh" size={16} /></Button>
+            </div>
+            {openingBusy && <p role="status" className="text-sm text-muted-foreground">Đang đối chiếu tồn với sổ giá vốn...</p>}
+            {openingError && <p role="alert" className="text-sm text-destructive">{openingError}</p>}
+            {!openingBusy && !openingError && openingRows.length === 0 && <p className="text-sm text-muted-foreground">Tồn của quán đã có giá vốn tương ứng, không cần chốt đầu kỳ.</p>}
+            {!openingBusy && openingRows.length > 0 && <div className="overflow-x-auto border">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b bg-muted/30"><tr><th className="p-2">Mã hàng</th><th className="p-2">Tồn thực tế</th><th className="p-2">Đã có giá vốn</th><th className="p-2">Trạng thái</th><th className="p-2" /></tr></thead>
+                <tbody>{openingRows.map((row) => <tr key={row.productId} className="border-b last:border-0">
+                  <td className="p-2"><span className="font-medium">{row.code}</span><span className="block text-muted-foreground">{row.name}</span></td>
+                  <td className="p-2 tabular-nums">{row.physicalQuantity} {row.unit}</td>
+                  <td className="p-2 tabular-nums">{row.costedQuantity} {row.unit}</td>
+                  <td className={row.canConfirmOpeningCost ? "p-2 text-status-warning" : "p-2 text-destructive"}>{row.canConfirmOpeningCost ? "Cần chốt đầu kỳ" : "Cần rà soát lệch"}</td>
+                  <td className="p-2 text-right">{canSetOpeningCost && row.canConfirmOpeningCost && <Button size="sm" variant="outline" onClick={() => { setOpeningProduct(row); setOpeningUnitCost(""); setOpeningReason(""); }}>Chốt giá vốn</Button>}</td>
+                </tr>)}</tbody>
+              </table>
+            </div>}
+          </section>}
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="border-b"><tr><th className="p-2">Mã hàng</th><th className="p-2">Tên hàng</th><th className="p-2">Đơn vị</th><th className="p-2">Trạng thái</th><th /></tr></thead>
@@ -295,5 +362,19 @@ export default function FnbSupplyCatalogPage() {
         : "Bán nội bộ chuỗi vào quán này sẽ không còn bị giới hạn bởi danh sách SKU cấp hàng."}
       confirmLabel={scopeConfirmation ? "Bật kiểm soát" : "Tắt kiểm soát"}
       loading={scopeBusy} onConfirm={saveScope} />
+    <Dialog open={openingProduct !== null} onOpenChange={(open) => { if (!open && !openingSaving) setOpeningProduct(null); }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Chốt giá vốn tồn đầu kỳ</DialogTitle>
+          <DialogDescription>{openingProduct ? `${openingProduct.code} · ${openingProduct.name}. Hệ thống chốt đúng ${openingProduct.physicalQuantity} ${openingProduct.unit} đang có tại quán và ghi audit.` : ""}</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1"><label htmlFor="fnb-opening-unit-cost" className="text-sm font-medium">Giá vốn một {openingProduct?.unit}</label><Input id="fnb-opening-unit-cost" inputMode="decimal" value={openingUnitCost} onChange={(event) => setOpeningUnitCost(event.target.value)} placeholder="VD: 1250" disabled={openingSaving} /></div>
+          <div className="space-y-1"><label htmlFor="fnb-opening-reason" className="text-sm font-medium">Lý do chốt đầu kỳ</label><Input id="fnb-opening-reason" value={openingReason} onChange={(event) => setOpeningReason(event.target.value)} placeholder="VD: Tồn kiểm kê khi bắt đầu theo dõi giá vốn" disabled={openingSaving} /></div>
+          <p className="text-xs text-muted-foreground">Không thể sửa lại bằng màn này. Khi có nhập hàng hoặc bán nội bộ mới, giá vốn sẽ tự tính theo phát sinh của chính quán.</p>
+        </div>
+        <DialogFooter><Button variant="outline" disabled={openingSaving} onClick={() => setOpeningProduct(null)}>Hủy</Button><Button disabled={openingSaving || !openingReason.trim() || !openingUnitCost.trim()} onClick={saveOpeningCost}>{openingSaving ? "Đang chốt..." : "Chốt và lưu audit"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </>;
 }
