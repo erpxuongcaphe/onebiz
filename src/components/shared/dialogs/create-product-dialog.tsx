@@ -1386,7 +1386,10 @@ export function CreateProductDialog({
           };
           const recipeLoads = await Promise.allSettled(
             variants
-              .filter((variant) => !!variant.bomCode)
+              .filter(
+                (variant): variant is ProductVariant & { bomCode: string } =>
+                  typeof variant.bomCode === "string" && variant.bomCode.length > 0,
+              )
               .map((v) =>
                 // A slow or malformed BOM for one size must not block every
                 // other size. The outer timeout caps the whole size load,
