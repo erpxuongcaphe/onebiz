@@ -533,7 +533,10 @@ export async function calculateFnbBOMBranchCost(
   bomId: string,
   branchId: string,
 ): Promise<BOMCostBreakdown> {
-  const { data, error } = await supabase.rpc(
+  // Generated Supabase types lag behind migration 00390. The schema contract
+  // test keeps this temporary compatibility call tied to the deployed RPC.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
     "calculate_fnb_bom_branch_cost_00390",
     { p_bom_id: bomId, p_branch_id: branchId },
   );
