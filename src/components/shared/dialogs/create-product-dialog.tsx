@@ -12,6 +12,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Button } from "@/components/ui/button";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
   Select,
   SelectTrigger,
@@ -326,9 +327,6 @@ export function CreateProductDialog({
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loadingCats, setLoadingCats] = useState(false);
-  const [categoryPickerOpen, setCategoryPickerOpen] = useState(false);
-  const [categoryQuery, setCategoryQuery] = useState("");
-  const categoryPickerRef = useRef<HTMLDivElement>(null);
 
   const [categoryId, setCategoryId] = useState("");
   const [name, setName] = useState("");
@@ -546,6 +544,7 @@ export function CreateProductDialog({
   const [variantItems, setVariantItems] = useState<InlineVariant[]>([]);
   const [variantDataReady, setVariantDataReady] = useState(false);
   const [variantDataError, setVariantDataError] = useState<string | null>(null);
+  const [variantDataWarning, setVariantDataWarning] = useState<string | null>(null);
   const [variantReloadNonce, setVariantReloadNonce] = useState(0);
   // Công thức theo size quản lý tập trung tại tab BOM và lưu chung một lần.
   // recipeRows = lưới NVL × size; recipeEnabled = toggle.
@@ -1334,6 +1333,7 @@ export function CreateProductDialog({
         setOriginalVariantIds(new Set());
         setVariantDataReady(false);
         setVariantDataError(null);
+        setVariantDataWarning(null);
       }
       return;
     }
@@ -1343,6 +1343,7 @@ export function CreateProductDialog({
     loadedVariantsKeyRef.current = loadingProductId;
     setVariantDataReady(false);
     setVariantDataError(null);
+    setVariantDataWarning(null);
     let cancelled = false;
     let settled = false;
     (async () => {
@@ -1383,12 +1384,21 @@ export function CreateProductDialog({
             conversionCache.set(materialId, conversions);
             return conversions;
           };
-          for (const v of variants) {
-            if (!v.bomCode) continue;
-            try {
+          const recipeLoads = await Promise.allSettled(
+            variants
+              .filter(
+                (variant): variant is ProductVariant & { bomCode: string } =>
+                  typeof variant.bomCode === "string" && variant.bomCode.length > 0,
+              )
+              .map((v) =>
+                // A slow or malformed BOM for one size must not block every
+                // other size. The outer timeout caps the whole size load,
+                // instead of allowing several 12-second reads to accumulate.
+                withFnbSetupTimeout(
+                  (async () => {
               const boms = await withFnbSetupTimeout(getBOMByCode(v.bomCode));
               const bom = boms.find((b) => !b.branchId) ?? boms[0];
-              if (!bom) continue;
+              if (!bom) return;
               const full = await withFnbSetupTimeout(getBOMById(bom.id));
               const itemsByMaterial = new Map(
                 (full.items ?? []).map((item) => [item.materialId, item]),
@@ -1429,14 +1439,24 @@ export function CreateProductDialog({
                   [saved.modifierOptionId]: inputQuantity,
                 };
               }
-            } catch {
-              /* bỏ qua BOM lỗi 1 size, vẫn nạp các size khác */
-            }
-          }
+                  })(),
+                  undefined,
+                  `Tải công thức ${v.name} quá lâu.`,
+                ),
+              ),
+          );
           if (cancelled) return;
           const loaded = [...rowMap.values()];
           setRecipeRows(loaded);
           setRecipeEnabled(loaded.length > 0);
+          const failedRecipeLoads = recipeLoads.filter(
+            (result) => result.status === "rejected",
+          ).length;
+          setVariantDataWarning(
+            failedRecipeLoads > 0
+              ? `Không đọc được công thức của ${failedRecipeLoads} size. Các size còn lại vẫn có thể chỉnh sửa; bấm Thử lại để nạp lại toàn bộ.`
+              : null,
+          );
         }
         if (!cancelled) {
           settled = true;
@@ -1476,6 +1496,7 @@ export function CreateProductDialog({
   function retryVariantDataLoad() {
     loadedVariantsKeyRef.current = null;
     setVariantDataError(null);
+    setVariantDataWarning(null);
     setVariantDataReady(false);
     setVariantReloadNonce((current) => current + 1);
   }
@@ -1851,46 +1872,6 @@ export function CreateProductDialog({
 
   const selectedCategory = categories.find((c) => c.value === categoryId);
   const selectedCategoryCode = selectedCategory?.code;
-  const visibleCategories = useMemo(() => {
-    const normalizedQuery = categoryQuery.trim().toLocaleLowerCase("vi");
-
-    return [...categories]
-      .filter((category) => {
-        if (!normalizedQuery) return true;
-        return `${category.label} ${category.code ?? ""}`
-          .toLocaleLowerCase("vi")
-          .includes(normalizedQuery);
-      })
-      .sort(
-        (left, right) =>
-          left.label.localeCompare(right.label, "vi", { sensitivity: "base" }) ||
-          (left.code ?? "").localeCompare(right.code ?? "", "vi", {
-            sensitivity: "base",
-          }),
-      );
-  }, [categories, categoryQuery]);
-
-  useEffect(() => {
-    if (!categoryPickerOpen) return;
-
-    const closeWhenClickingAway = (event: MouseEvent) => {
-      if (
-        categoryPickerRef.current &&
-        !categoryPickerRef.current.contains(event.target as Node)
-      ) {
-        setCategoryPickerOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", closeWhenClickingAway);
-    return () => document.removeEventListener("mousedown", closeWhenClickingAway);
-  }, [categoryPickerOpen]);
-
-  useEffect(() => {
-    setCategoryPickerOpen(false);
-    setCategoryQuery("");
-  }, [open, scope]);
-
   // Case-insensitive dup check cho 3 ô ĐVT
   const purchaseUnitDup = findCaseInsensitiveDup(purchaseUnit, existingUnits);
   const stockUnitDup = findCaseInsensitiveDup(stockUnit, existingUnits);
@@ -2829,92 +2810,19 @@ export function CreateProductDialog({
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
-              <div ref={categoryPickerRef} className="relative">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-9 w-full justify-between px-3 text-left font-normal"
-                  aria-expanded={categoryPickerOpen}
-                  aria-haspopup="listbox"
-                  onClick={() => setCategoryPickerOpen((isOpen) => !isOpen)}
-                >
-                  <span className={selectedCategory ? "truncate" : "text-muted-foreground"}>
-                    {selectedCategory
-                      ? selectedCategory.label
-                      : loadingCats
-                        ? "Đang tải..."
-                        : "Chọn nhóm hàng"}
-                  </span>
-                  <Icon name="expand_more" size={18} className="shrink-0 text-muted-foreground" />
-                </Button>
-                {categoryPickerOpen && (
-                  <div
-                    role="dialog"
-                    aria-label="Tìm và chọn nhóm hàng"
-                    className="absolute z-50 mt-1 w-full rounded-lg border bg-popover p-2 shadow-lg"
-                  >
-                    <div className="relative">
-                      <Icon
-                        name="search"
-                        size={16}
-                        className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      />
-                      <Input
-                        autoFocus
-                        value={categoryQuery}
-                        onChange={(event) => setCategoryQuery(event.target.value)}
-                        placeholder="Tìm tên hoặc mã nhóm"
-                        className="h-8 pl-8"
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape") {
-                            setCategoryPickerOpen(false);
-                          }
-                        }}
-                      />
-                    </div>
-                    <div
-                      role="listbox"
-                      className="mt-2 max-h-64 overflow-y-scroll overscroll-contain pr-1 [scrollbar-gutter:stable]"
-                    >
-                      {visibleCategories.length > 0 ? (
-                        visibleCategories.map((category) => {
-                          const isSelected = category.value === categoryId;
-                          return (
-                            <button
-                              key={category.value}
-                              type="button"
-                              role="option"
-                              aria-selected={isSelected}
-                              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent focus:bg-accent focus:outline-none"
-                              onClick={() => {
-                                setCategoryId(category.value);
-                                setCategoryPickerOpen(false);
-                                setCategoryQuery("");
-                              }}
-                            >
-                              <span className="min-w-0 flex-1 truncate font-medium">
-                                {category.label}
-                              </span>
-                              {category.code && (
-                                <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                                  {category.code}
-                                </span>
-                              )}
-                              {isSelected && (
-                                <Icon name="check" size={16} className="shrink-0 text-primary" />
-                              )}
-                            </button>
-                          );
-                        })
-                      ) : (
-                        <p className="px-2 py-5 text-center text-sm text-muted-foreground">
-                          Không tìm thấy nhóm phù hợp.
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+              <SearchableSelect
+                value={categoryId}
+                onValueChange={setCategoryId}
+                disabled={loadingCats}
+                placeholder={loadingCats ? "Đang tải..." : "Chọn nhóm hàng"}
+                searchPlaceholder="Tìm tên hoặc mã nhóm"
+                emptyText="Không tìm thấy nhóm phù hợp."
+                options={categories.map((category) => ({
+                  value: category.value,
+                  label: category.label,
+                  meta: category.code,
+                }))}
+              />
               {selectedCategory?.code && (
                 <p className="text-xs text-muted-foreground">
                   Mã nhóm: <span className="font-mono text-foreground">{selectedCategory.code}</span>
@@ -2957,34 +2865,18 @@ export function CreateProductDialog({
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">Nhà cung cấp</label>
-              <Select
-                value={supplierId || null}
-                onValueChange={(v) => setSupplierId(v ?? "")}
-                items={suppliers.map((s) => ({
-                  value: s.id,
-                  label: s.code ? `${s.code} — ${s.name}` : s.name,
+              <SearchableSelect
+                value={supplierId}
+                onValueChange={setSupplierId}
+                placeholder="Chọn nhà cung cấp"
+                searchPlaceholder="Tìm tên hoặc mã nhà cung cấp"
+                emptyText="Không tìm thấy nhà cung cấp phù hợp."
+                options={suppliers.map((supplier) => ({
+                  value: supplier.id,
+                  label: supplier.name,
+                  meta: supplier.code,
                 }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn nhà cung cấp">
-                    {(v) => {
-                      const match = suppliers.find((s) => s.id === v);
-                      if (match) {
-                        return match.code ? `${match.code} — ${match.name}` : match.name;
-                      }
-                      return "Chọn nhà cung cấp";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {suppliers.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.code ? `${s.code} — ` : ""}
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
           </div>
 
@@ -3578,6 +3470,16 @@ export function CreateProductDialog({
                     ? "Chọn các SKU Retail và định lượng dùng cho một phần bán. POS sẽ trừ đúng các mã này tại chi nhánh bán món."
                     : "Định nghĩa NVL cần để tạo 1 đơn vị SKU. Khi bán SKU, hệ thống tự trừ NVL theo công thức này."}
               </div>
+
+              {!fnbVariantContextPending && variantDataWarning && (
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-warning/35 bg-status-warning/10 px-3 py-2 text-xs text-foreground">
+                  <span>{variantDataWarning}</span>
+                  <Button type="button" variant="outline" size="sm" onClick={retryVariantDataLoad}>
+                    <Icon name="refresh" size={14} className="mr-1" />
+                    Thử lại
+                  </Button>
+                </div>
+              )}
 
               {fnbVariantContextPending ? (
                 variantDataError ? (

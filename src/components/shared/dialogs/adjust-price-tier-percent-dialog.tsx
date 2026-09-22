@@ -18,13 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@/components/ui/select";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useToast } from "@/lib/contexts";
 import {
   bulkAddPriceTierItems,
@@ -260,32 +254,18 @@ export function AdjustPriceTierPercentDialog({
               <label className="text-sm font-medium">
                 Nhóm hàng <span className="text-destructive">*</span>
               </label>
-              <Select
-                value={categoryId || null}
-                onValueChange={(v) => setCategoryId(v ?? "")}
-                items={categories.map((cat) => ({
-                  value: cat.value,
-                  label: cat.code ? `${cat.code} — ${cat.label}` : cat.label,
+              <SearchableSelect
+                value={categoryId}
+                onValueChange={setCategoryId}
+                placeholder="Chọn nhóm hàng"
+                searchPlaceholder="Tìm tên hoặc mã nhóm"
+                emptyText="Không tìm thấy nhóm phù hợp."
+                options={categories.map((category) => ({
+                  value: category.value,
+                  label: category.label,
+                  meta: category.code,
                 }))}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Chọn nhóm hàng">
-                    {(v) => {
-                      const m = categories.find((c) => c.value === v);
-                      if (m) return m.code ? `${m.code} — ${m.label}` : m.label;
-                      return "Chọn nhóm hàng";
-                    }}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>
-                      {cat.code ? `${cat.code} — ` : ""}
-                      {cat.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
           )}
 
