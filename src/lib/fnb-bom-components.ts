@@ -1,6 +1,9 @@
 import type { Product } from "@/lib/types";
 
-type FnbComponentCandidate = Pick<Product, "productType" | "channel">;
+type FnbComponentCandidate = Pick<
+  Product,
+  "productType" | "channel" | "inventoryRole"
+>;
 
 /**
  * F&B menu items consume stockable Retail SKUs at the selling branch.
@@ -10,5 +13,8 @@ type FnbComponentCandidate = Pick<Product, "productType" | "channel">;
 export function isSelectableFnbBomComponent(
   product: FnbComponentCandidate,
 ): boolean {
-  return product.productType === "sku" && product.channel !== "fnb";
+  return (
+    product.productType === "sku" &&
+    (product.inventoryRole === "fnb_stock_item" || product.channel !== "fnb")
+  );
 }

@@ -19,4 +19,14 @@ describe("F&B BOM component policy", () => {
       isSelectableFnbBomComponent({ productType: "nvl", channel: undefined }),
     ).toBe(false);
   });
+
+  it("allows stockable semi-finished items prepared at an F&B branch", () => {
+    expect(
+      isSelectableFnbBomComponent({
+        productType: "sku",
+        channel: "fnb",
+        inventoryRole: "fnb_stock_item",
+      }),
+    ).toBe(true);
+  });
 });

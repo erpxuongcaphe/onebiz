@@ -1243,6 +1243,8 @@ function mapProduct(row: any): Product {
     unit: row.unit,
     productType: row.product_type ?? "nvl",
     channel: row.channel ?? undefined,
+    inventoryRole: row.inventory_role ?? undefined,
+    isFnbStockItem: row.is_fnb_stock_item ?? false,
     hasBom: row.has_bom ?? false,
     // Day 20/05/2026 (CEO): bom_code text trỏ về bom.code, cho phép share
     // 1 BOM giữa nhiều SKU. Migration 00105 backfill từ existing data.
@@ -1344,6 +1346,9 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       // Kênh bán: chỉ gán cho SKU (fnb/retail). NVL giữ NULL.
       channel: product.productType === "sku" ? (product.channel ?? null) : null,
       has_bom: product.hasBom ?? false,
+      ...(product.isFnbStockItem !== undefined
+        ? { is_fnb_stock_item: product.isFnbStockItem }
+        : {}),
       // Day 20/05/2026 (CEO BOM Phase 5): link với BOM standalone qua code
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ...(product.bomCode ? { bom_code: product.bomCode } : {}) as any,
@@ -1391,6 +1396,9 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
   // Kênh bán fnb|retail (hoặc null khi quay về NVL)
   if (updates.channel !== undefined) {
     payload.channel = updates.channel ?? null;
+  }
+  if (updates.isFnbStockItem !== undefined) {
+    payload.is_fnb_stock_item = updates.isFnbStockItem;
   }
   // Thương hiệu + thêm các field còn lại — đưa vào payload khi có thay đổi.
   // Dùng `null` thay vì `undefined` để cho phép xoá brand/nhà cung cấp/trọng

@@ -255,11 +255,12 @@ export interface Database {
           product_type: string;
           channel: string | null;
           has_bom: boolean;
+          is_fnb_stock_item: boolean;
           /**
            * GENERATED ALWAYS (migration 00164) — vai trò tồn kho, KHÔNG ghi được.
            * Suy từ product_type + channel: raw_material | retail_stock_item | fnb_menu_item.
            */
-          inventory_role: "raw_material" | "retail_stock_item" | "fnb_menu_item";
+          inventory_role: "raw_material" | "retail_stock_item" | "fnb_menu_item" | "fnb_stock_item";
           old_code: string | null;
           group_code: string | null;
           purchase_unit: string | null;
@@ -294,6 +295,7 @@ export interface Database {
           product_type?: string;
           channel?: string | null;
           has_bom?: boolean;
+          is_fnb_stock_item?: boolean;
           old_code?: string | null;
           group_code?: string | null;
           purchase_unit?: string | null;
@@ -324,6 +326,7 @@ export interface Database {
           product_type?: string;
           channel?: string | null;
           has_bom?: boolean;
+          is_fnb_stock_item?: boolean;
           old_code?: string | null;
           group_code?: string | null;
           purchase_unit?: string | null;

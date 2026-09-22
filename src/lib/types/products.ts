@@ -9,6 +9,11 @@ export type ProductStatus = 'active' | 'inactive';
  *   undefined/null — NVL (nguyên liệu nội bộ), không bán ra ngoài
  */
 export type ProductChannel = 'fnb' | 'retail';
+export type InventoryRole =
+  | 'raw_material'
+  | 'retail_stock_item'
+  | 'fnb_menu_item'
+  | 'fnb_stock_item';
 
 export interface Product {
   id: string;
@@ -18,6 +23,10 @@ export interface Product {
   productType: ProductType;
   /** Kênh bán (chỉ áp dụng cho SKU). Xem ProductChannel. */
   channel?: ProductChannel;
+  /** Cach ma hang tham gia ton kho. F&B prepared stock is opt-in and hidden from POS. */
+  inventoryRole?: InventoryRole;
+  /** Ban thanh pham duoc nau/so che va giu ton tai chi nhanh F&B. */
+  isFnbStockItem?: boolean;
   hasBom: boolean;
   /**
    * Day 20/05/2026 (CEO): Mã BOM mà SKU này dùng (text reference đến bom.code).
