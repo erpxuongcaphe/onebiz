@@ -12,6 +12,72 @@ export interface FnbBranchOpeningCostRow {
   canConfirmOpeningCost: boolean;
 }
 
+export interface FnbBranchComponentCost {
+  productId: string;
+  unitCost: number;
+  costedQuantity: number;
+  physicalQuantity: number;
+}
+
+/**
+ * Branch cost is needed only for prepared F&B stock. Regular Retail SKUs in a
+ * recipe continue to use their Retail sell price as the branch's supply price.
+ */
+export async function getFnbBranchComponentCosts(
+  branchId: string,
+  productIds: string[],
+  signal?: AbortSignal,
+) {
+  if (!branchId || productIds.length === 0) {
+    return new Map<string, FnbBranchComponentCost>();
+  }
+  const tenantId = await getCurrentTenantId();
+  const ids = Array.from(new Set(productIds)).slice(0, 500);
+  // Generated Supabase types intentionally lag this newly deployed migration.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let costQuery = (getClient() as any)
+    .from("fnb_branch_product_cost_balances")
+    .select("product_id, unit_cost, costed_quantity")
+    .eq("tenant_id", tenantId)
+    .eq("branch_id", branchId)
+    .in("product_id", ids);
+  let stockQuery = (getClient() as any)
+    .from("branch_stock")
+    .select("product_id, quantity")
+    .eq("tenant_id", tenantId)
+    .eq("branch_id", branchId)
+    .is("variant_id", null)
+    .in("product_id", ids);
+  if (signal) {
+    costQuery = costQuery.abortSignal(signal);
+    stockQuery = stockQuery.abortSignal(signal);
+  }
+  const [{ data, error }, { data: stockRows, error: stockError }] = await Promise.all([
+    costQuery,
+    stockQuery,
+  ]);
+  if (signal?.aborted) return new Map<string, FnbBranchComponentCost>();
+  if (error) handleError(error, "getFnbBranchComponentCosts");
+  if (stockError) handleError(stockError, "getFnbBranchComponentCosts.stock");
+  const physicalByProductId = new Map<string, number>(
+    (stockRows ?? []).map((row: { product_id: string; quantity: number }) => [
+      row.product_id,
+      Number(row.quantity ?? 0),
+    ]),
+  );
+  return new Map<string, FnbBranchComponentCost>(
+    (data ?? []).map((row: { product_id: string; unit_cost: number; costed_quantity: number }) => [
+      row.product_id,
+      {
+        productId: row.product_id,
+        unitCost: Number(row.unit_cost ?? 0),
+        costedQuantity: Number(row.costed_quantity ?? 0),
+        physicalQuantity: physicalByProductId.get(row.product_id) ?? 0,
+      },
+    ]),
+  );
+}
+
 /**
  * Only returns stock that needs an explicit opening-cost decision. We keep the
  * physical and cost-ledger quantities side by side so the operator cannot
