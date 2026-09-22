@@ -45,11 +45,18 @@ const RPC = new Set(schema.rpc as string[]);
  * chính bỏ qua ĐÚNG các tên này, và phép kiểm "danh sách chờ phải sạch" bên
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
-const RPC_CHO_MIGRATION = new Map<string, string>();
+const RPC_CHO_MIGRATION = new Map<string, string>([
+  // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
+  // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
+  ["set_fnb_branch_opening_cost_00390", "00390"],
+]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
-const BANG_CHO_MIGRATION = new Map<string, string>();
+const BANG_CHO_MIGRATION = new Map<string, string>([
+  ["fnb_branch_product_cost_balances", "00390"],
+  ["fnb_branch_product_cost_events", "00390"],
+]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */
 function xoaGhiChu(s: string): string {
