@@ -24,6 +24,10 @@ export interface BOM {
   // Joined
   productName?: string;
   productCode?: string;
+  /** Kênh của SKU đầu ra, dùng để chọn đúng nguồn giá vốn khi xem BOM. */
+  productChannel?: 'fnb' | 'retail' | null;
+  /** Bán thành phẩm F&B: có tồn và giá vốn riêng tại từng quán. */
+  isFnbStockItem?: boolean;
   branchName?: string;
   items?: BOMItem[];
   totalCost?: number;
