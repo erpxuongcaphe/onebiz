@@ -86,7 +86,7 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     expect(source).toContain("getBomComponentUnitPrice(material, \"fnb\")");
     expect(source).toContain("fnbPreparedCostByProductId[product.id]?.unitCost");
     expect(source).toContain("Chưa có giá vốn BTP");
-    expect(source).toContain("có thể lưu công thức trước khi sản xuất mẻ đầu tiên");
+    expect(source).toContain("Dự toán dùng giá cấp nội bộ hiện hành");
   });
 
   it("chốt SKU cha theo size mặc định sau khi toàn bộ BOM size đã lưu", () => {
