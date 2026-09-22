@@ -691,7 +691,7 @@ export function CreateProductDialog({
       return <span className="text-muted-foreground">Đang tính…</span>;
     }
     if (hasMissingPreparedComponentCost) {
-      return <span className="text-status-warning">Chưa có giá BTP tại quán</span>;
+      return <span className="text-status-warning">Chưa có giá vốn BTP</span>;
     }
     return formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0);
   }
@@ -3236,7 +3236,7 @@ export function CreateProductDialog({
                   <div>
                     <h3 className="text-sm font-medium">Giá theo quy cách</h3>
                     <p className="text-xs text-muted-foreground">
-                      Giá vốn lấy từ giá bán Retail của thành phần. Riêng bán thành phẩm tại quán lấy giá vốn mẻ của quán đang chọn.
+                      SKU Retail dùng giá cấp nội bộ. Bán thành phẩm dùng giá vốn bình quân tại quán.
                     </p>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={() => setInnerTab("bom")}>
@@ -3250,7 +3250,7 @@ export function CreateProductDialog({
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Quy cách</th>
                         <th className="w-40 px-3 py-2 text-right font-semibold">Giá bán (đ)</th>
-                        <th className="w-44 px-3 py-2 text-right font-semibold">Giá vốn F&B</th>
+                        <th className="w-44 px-3 py-2 text-right font-semibold">Giá vốn theo công thức</th>
                         <th className="px-3 py-2 text-left font-semibold">Mã BOM</th>
                         <th className="w-28 px-3 py-2 text-center font-semibold">POS mặc định</th>
                       </tr>
@@ -3306,14 +3306,14 @@ export function CreateProductDialog({
               {!hasFnbSizeVariants && !fnbVariantContextPending && (
                 channel === "fnb" && hasBom ? (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Giá vốn (₫)</label>
+                    <label className="text-sm font-medium">Giá vốn theo công thức (₫)</label>
                     <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
                       {fnbPreparedCostLoading ? "Đang tính..." : hasMissingPreparedComponentCost
-                        ? "Chưa có giá bán thành phẩm tại quán"
+                        ? "Chưa có giá vốn BTP"
                         : formatCurrency(inlineFnbBomCost)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      SKU Retail lấy giá bán Retail. Bán thành phẩm tại quán lấy giá vốn mẻ; công thức vẫn lưu được khi mẻ chưa có giá.
+                      SKU Retail dùng giá cấp nội bộ. Bán thành phẩm dùng bình quân tại quán; có thể lưu công thức trước khi sản xuất mẻ đầu tiên.
                     </p>
                   </div>
                 ) : (
@@ -3822,7 +3822,7 @@ export function CreateProductDialog({
                 )}
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">
-                    {channel === "fnb" ? "Thành phần Retail" : "Nguyên vật liệu"}{" "}
+                    {channel === "fnb" ? "Thành phần công thức" : "Nguyên vật liệu"}{" "}
                     <span className="text-destructive">*</span>
                   </label>
                   <Button
@@ -3839,7 +3839,7 @@ export function CreateProductDialog({
                 {bomItems.length === 0 ? (
                   <div className="rounded-lg border-2 border-dashed border-border p-6 text-center text-sm text-muted-foreground">
                     {channel === "fnb" ? (
-                      <>Chưa có thành phần. Chọn SKU Retail đang quản lý tồn tại chi nhánh.</>
+                      <>Chưa có thành phần. Chọn SKU Retail hoặc bán thành phẩm đang có tồn tại quán.</>
                     ) : (
                       <>Chưa có NVL nào. Click <b>&quot;Thêm NVL&quot;</b> để bắt đầu.</>
                     )}
@@ -3850,7 +3850,7 @@ export function CreateProductDialog({
                       <thead className="bg-surface-container-low text-xs text-muted-foreground">
                         <tr>
                           <th className="text-left px-3 py-2 font-semibold">
-                            {channel === "fnb" ? "Thành phần Retail" : "NVL"}
+                            {channel === "fnb" ? "Thành phần" : "NVL"}
                           </th>
                           <th className="text-right px-3 py-2 font-semibold w-28">Số lượng</th>
                           <th className="text-left px-3 py-2 font-semibold w-20">ĐVT</th>
@@ -3896,6 +3896,13 @@ export function CreateProductDialog({
                               <td className="px-3 py-2">
                                 <div className="font-medium">{it.materialName}</div>
                                 <div className="text-xs text-muted-foreground">{it.materialCode}</div>
+                                {channel === "fnb" && componentProduct && (
+                                  <div className="mt-1 text-xs text-muted-foreground">
+                                    {componentProduct.isFnbStockItem
+                                      ? "Bán thành phẩm · Bình quân tại quán"
+                                      : "SKU Retail · Giá cấp nội bộ"}
+                                  </div>
+                                )}
                                 {channel === "fnb" &&
                                   (supplyStatusByProductId[it.materialId]?.requiredBranches ?? 0) > 0 && (
                                     <div
@@ -4003,7 +4010,7 @@ export function CreateProductDialog({
                               )}
                               <td className="px-3 py-2 text-right text-sm tabular-nums">
                                 {componentProduct?.isFnbStockItem && !(it.costPrice > 0)
-                                  ? <span className="text-status-warning">Chưa có giá mẻ</span>
+                                  ? <span className="text-status-warning">Chưa có giá vốn</span>
                                   : formatCurrency(lineCost)}
                               </td>
                               <td className="px-3 py-2">
@@ -4032,7 +4039,7 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {channel === "fnb" && hasMissingPreparedComponentCost
-                              ? <span className="text-status-warning">Chưa có giá bán thành phẩm tại quán</span>
+                              ? <span className="text-status-warning">Chưa có giá vốn BTP</span>
                               : formatCurrency(inlineFnbBomCost)}
                           </td>
                           <td></td>
@@ -4960,16 +4967,23 @@ export function CreateProductDialog({
                                   {(p.isFnbStockItem
                                     ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
                                     : getBomComponentUnitPrice(p, channel)) > 0 ? (
-                                    <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-                                      {formatCurrency(
-                                        p.isFnbStockItem
-                                          ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
-                                          : getBomComponentUnitPrice(p, channel),
+                                    <span className="text-right text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                                      <span className="block">
+                                        {formatCurrency(
+                                          p.isFnbStockItem
+                                            ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
+                                            : getBomComponentUnitPrice(p, channel),
+                                        )}
+                                      </span>
+                                      {channel === "fnb" && (
+                                        <span className="block text-[10px]">
+                                          {p.isFnbStockItem ? "Bình quân quán" : "Giá cấp nội bộ"}
+                                        </span>
                                       )}
                                     </span>
                                   ) : channel === "fnb" && p.isFnbStockItem ? (
                                     <span className="text-[11px] text-destructive whitespace-nowrap">
-                                      Chưa có giá BTP tại quán
+                                      Chưa có giá vốn BTP
                                     </span>
                                   ) : null}
                                 </button>

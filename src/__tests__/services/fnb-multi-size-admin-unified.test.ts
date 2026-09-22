@@ -38,7 +38,7 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
 
   it("Giá hiển thị đủ quy cách, giá bán, giá vốn, BOM và mặc định POS", () => {
     expect(source).toContain("Giá theo quy cách");
-    expect(source).toContain("Giá vốn F&B");
+    expect(source).toContain("Giá vốn theo công thức");
     expect(source).toContain("Mã BOM");
     expect(source).toContain("POS mặc định");
     expect(source).toContain("variantItems.map((variant, index)");
@@ -81,12 +81,12 @@ describe("quản trị FnB nhiều size dùng một nguồn dữ liệu", () => 
     );
   });
 
-  it("món FnB một size lấy SKU Retail theo giá Retail và BTP theo giá mẻ tại quán", () => {
+  it("món FnB một size lấy SKU Retail theo giá cấp nội bộ và BTP theo bình quân tại quán", () => {
     expect(source).toContain("const inlineFnbBomCost = useMemo(");
     expect(source).toContain("getBomComponentUnitPrice(material, \"fnb\")");
     expect(source).toContain("fnbPreparedCostByProductId[product.id]?.unitCost");
-    expect(source).toContain("Chưa có giá bán thành phẩm tại quán");
-    expect(source).toContain("công thức vẫn lưu được khi mẻ chưa có giá");
+    expect(source).toContain("Chưa có giá vốn BTP");
+    expect(source).toContain("có thể lưu công thức trước khi sản xuất mẻ đầu tiên");
   });
 
   it("chốt SKU cha theo size mặc định sau khi toàn bộ BOM size đã lưu", () => {

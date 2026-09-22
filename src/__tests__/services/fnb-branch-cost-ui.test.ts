@@ -31,8 +31,10 @@ describe("F&B branch opening cost UI", () => {
     expect(productDialog).toMatch(
       /product\?\.isFnbStockItem\s*\?\s*fnbPreparedCostByProductId\[product\.id\]\?\.unitCost \?\? 0\s*:\s*item\.costPrice/,
     );
-    expect(productDialog).toContain("Chưa có giá BTP tại quán");
-    expect(productDialog).toContain("công thức vẫn lưu được khi mẻ chưa có giá");
+    expect(productDialog).toContain("Chưa có giá vốn BTP");
+    expect(productDialog).toContain("có thể lưu công thức trước khi sản xuất mẻ đầu tiên");
+    expect(productDialog).toContain("Bán thành phẩm · Bình quân tại quán");
+    expect(productDialog).toContain("SKU Retail · Giá cấp nội bộ");
     expect(productDialog).toMatch(
       /hasMissingPreparedComponentCost\s*\? \(isEdit \? Number\(initialData\?\.costPrice \?\? 0\) : 0\)/,
     );
