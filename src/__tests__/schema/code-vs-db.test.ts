@@ -49,6 +49,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
   ["set_fnb_branch_opening_cost_00390", "00390"],
+  ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
