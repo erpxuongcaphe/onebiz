@@ -32,6 +32,7 @@ Tham chiếu KiotViet: danh sách hóa đơn có bộ lọc theo thời gian, kh
 - Danh sách hóa đơn Retail: sắp mã, ngày chứng từ, khách, tổng tiền và giảm giá ngay ở truy vấn nguồn trước phân trang; các cột công nợ/hoàn trả tính từ nguồn khác vẫn chỉ hiển thị, không giả vờ sắp xếp toàn cục.
 - Báo cáo thu chi: thống nhất ngày chứng từ với Sổ quỹ thay vì ngày tạo bản ghi; KPI Thu/Chi/Ròng cộng đúng toàn kỳ đã chọn, không lấy nhầm tháng cuối. Bổ sung danh sách phiếu thu/chi 50 dòng/trang và Excel toàn kỳ qua RPC Sổ quỹ, chỉ cho người có `finance.view_cash_book`. Biểu đồ/bảng tháng đổi nội dung theo nút xem; lũy kế được ghi rõ là **trong kỳ**, không phải số dư quỹ đầu kỳ hoặc báo cáo B03-DN.
 - Xuất danh mục Hàng hóa theo đúng bộ lọc/thứ tự đang xem qua nhiều trang 1.000 dòng; không còn dựa vào một truy vấn `pageSize: 100000` vốn có thể bị giới hạn số dòng ở API.
+- Nhà cung cấp: thêm góc xem theo từng phiếu nhập hoàn thành (mã, ngày tạo, NCC, chi nhánh, tổng, đã trả, còn nợ), tìm kiếm, sắp xếp toàn bộ kết quả trước phân trang, tải thêm và xuất Excel toàn kỳ. Mã phiếu dẫn sang danh sách phiếu nhập đã lọc. Bảng chi tiết cần quyền `reports.view_detail`; màn phiếu nhập Retail giữ thứ tự mặc định cũ. “Đã trả/còn nợ” là trạng thái hiện tại của chứng từ, không phải số dư tại cuối kỳ.
 
 ## Bộ lọc và sắp xếp toàn web
 
@@ -50,7 +51,7 @@ Tiếp theo phải kiểm kê từng màn danh sách, bắt đầu hóa đơn/ph
 ## Còn cần làm, theo thứ tự
 
 1. **Đối soát số liệu nguồn (P0):** so F&B KPI, bảng theo giờ, bảng theo bàn, hóa đơn và phiếu trả theo cùng kỳ/chi nhánh; quy định xử lý hoàn tiền, hóa đơn sửa/hủy và nhiều lượt gửi bếp. Không kết luận đủ quản trị trước bước này.
-2. **Chứng từ mua hàng và luồng tiền (P1):** bảng phiếu nhập/thanh toán theo NCC, sổ thu/chi theo chứng từ; lọc và xuất toàn bộ đúng quyền, không chỉ top N.
+2. **Chứng từ mua hàng và luồng tiền (P1, một phần đã làm):** đã có bảng phiếu nhập theo NCC và sổ thu/chi theo chứng từ. Còn thiếu dòng thanh toán/cấn trừ ứng trước theo từng phiếu và đối soát số dư công nợ ở cuối kỳ.
 3. **Drill-down xuyên báo cáo (P1):** từ khách/món/kênh/khuyến mãi/ABC tới hóa đơn, từ tồn kho tới phiếu biến động, với cùng kỳ và chi nhánh.
 4. **Cấu hình bảng (P2):** cột, thứ tự/sắp xếp, bộ lọc lưu theo người dùng; mặc định bảng chi tiết cho các báo cáo đối soát, biểu đồ chỉ là góc nhìn bổ sung.
 5. **Định nghĩa chỉ tiêu (P2):** chú giải nguồn, công thức, VAT/chiết khấu/hoàn trả, thời điểm ghi nhận và độ trễ cập nhật ngay trên từng màn. Xác minh Excel khớp bộ lọc đang xem.

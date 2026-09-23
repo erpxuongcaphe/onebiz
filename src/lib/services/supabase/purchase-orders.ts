@@ -302,7 +302,15 @@ export async function getPurchaseOrders(
     query = query.eq("branch_id", params.branchId);
   }
 
-  query = query.order("created_at", { ascending: false }).range(from, to);
+  const reportSortFields = new Set(["created_at", "total", "paid", "debt", "supplier_name", "code"]);
+  if (params.sortBy && reportSortFields.has(params.sortBy)) {
+    query = query.order(params.sortBy, { ascending: params.sortOrder === "asc" });
+    if (params.sortBy !== "created_at") query = query.order("created_at", { ascending: false });
+    query = query.order("id", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+  query = query.range(from, to);
 
   const { data, count, error } = await query;
   if (error) handleError(error, "getPurchaseOrders");
