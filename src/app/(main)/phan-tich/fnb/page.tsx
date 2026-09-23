@@ -21,6 +21,8 @@ import {
   getFnbKpis,
   getFnbInvoiceDetailPage,
   getFnbInvoiceExportRows,
+  getFnbReturnDetailPage,
+  getFnbReturnExportRows,
   getRevenueByMenuItem,
   getRevenueByTable,
   getRevenueByHourFnb,
@@ -33,6 +35,7 @@ import type {
   HourlyRevenue,
   CashierPerformance,
   FnbInvoiceDetailRow,
+  FnbReturnDetailRow,
 } from "@/lib/services/supabase/fnb-analytics";
 import {
   exportReportToExcel,
@@ -42,6 +45,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { LoadErrorState } from "@/components/shared/load-error-state";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
 
 // === Tooltips ===
 
@@ -95,10 +99,14 @@ export default function FnbAnalyticsPage() {
   const [invoiceHasMore, setInvoiceHasMore] = useState(false);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [returnRows, setReturnRows] = useState<FnbReturnDetailRow[]>([]);
+  const [returnHasMore, setReturnHasMore] = useState(false);
+  const [returnLoading, setReturnLoading] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const invoiceRequestIdRef = useRef(0);
+  const returnRequestIdRef = useRef(0);
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
-
 
   useEffect(() => {
     if (!isReady) return;
@@ -158,6 +166,33 @@ export default function FnbAnalyticsPage() {
     return () => { invoiceRequestIdRef.current += 1; };
   }, [isReady, canViewInvoiceDetail, viewMode, loadInvoicePage]);
 
+  const loadReturnPage = useCallback(async (offset: number) => {
+    const requestId = ++returnRequestIdRef.current;
+    setReturnLoading(true);
+    setReturnError(null);
+    if (offset === 0) {
+      setReturnRows([]);
+      setReturnHasMore(false);
+    }
+    try {
+      const page = await getFnbReturnDetailPage(activeBranchId, range, offset, 50);
+      if (requestId !== returnRequestIdRef.current) return;
+      setReturnRows((current) => offset === 0 ? page.rows : [...current, ...page.rows]);
+      setReturnHasMore(page.hasMore);
+    } catch (error) {
+      if (requestId !== returnRequestIdRef.current) return;
+      setReturnError(error instanceof Error ? error.message : "Không tải được phiếu trả F&B.");
+    } finally {
+      if (requestId === returnRequestIdRef.current) setReturnLoading(false);
+    }
+  }, [activeBranchId, range]);
+
+  useEffect(() => {
+    if (!isReady || !canViewInvoiceDetail) return;
+    void loadReturnPage(0);
+    return () => { returnRequestIdRef.current += 1; };
+  }, [isReady, canViewInvoiceDetail, loadReturnPage]);
+
   // CEO 13/05: Export Excel — 2 mode (view: 1 sheet, full: 4 sheet)
   const handleExportView = useCallback(() => {
     try {
@@ -168,9 +203,11 @@ export default function FnbAnalyticsPage() {
         generatedAt: new Date(),
       });
       const kpiRows = [
-        { metric: "Tổng doanh thu", value: kpis?.totalRevenue ?? 0 },
-        { metric: "Số đơn", value: kpis?.totalOrders ?? 0 },
-        { metric: "TB / đơn", value: kpis?.avgTicket ?? 0 },
+        { metric: "Doanh thu hóa đơn (đ)", value: kpis?.totalRevenue ?? 0 },
+        { metric: "Trả hàng trong kỳ (đ)", value: kpis?.returnAmount ?? 0 },
+        { metric: "Doanh thu sau trả hàng (đ)", value: kpis?.netRevenue ?? 0 },
+        { metric: "Số hóa đơn", value: kpis?.totalOrders ?? 0 },
+        { metric: "TB / hóa đơn (đ)", value: kpis?.avgTicket ?? 0 },
         { metric: "Turnover TB (phút)", value: kpis?.avgTurnoverMinutes ?? 0 },
       ];
       const sheet: ExcelSheet = {
@@ -178,7 +215,7 @@ export default function FnbAnalyticsPage() {
         titleRows: title,
         columns: [
           { label: "Chỉ tiêu", key: "metric", width: 24 },
-          { label: "Giá trị", key: "value", width: 18, format: "currency" },
+          { label: "Giá trị", key: "value", width: 18 },
         ],
         rows: kpiRows,
       };
@@ -204,6 +241,9 @@ export default function FnbAnalyticsPage() {
     try {
       const invoiceExportRows = canViewInvoiceDetail
         ? await getFnbInvoiceExportRows(activeBranchId, range)
+        : [];
+      const returnExportRows = canViewInvoiceDetail
+        ? await getFnbReturnExportRows(activeBranchId, range)
         : [];
       const title = buildReportTitleRows({
         title: "BÁO CÁO F&B — ĐẦY ĐỦ",
@@ -236,17 +276,37 @@ export default function FnbAnalyticsPage() {
             debt: invoice.debt,
           })),
         } satisfies ExcelSheet] : []),
+        ...(canViewInvoiceDetail ? [{
+          name: "Phieu tra F&B",
+          titleRows: ["CHI TIẾT PHIẾU TRẢ F&B", ...title.slice(1)],
+          columns: [
+            { label: "Mã phiếu trả", key: "code", width: 20 },
+            { label: "Ngày lập", key: "createdAt", width: 22 },
+            { label: "Hóa đơn gốc", key: "invoiceCode", width: 20 },
+            { label: "Giá trị trả", key: "total", width: 18, format: "currency" },
+            { label: "Đã hoàn tiền", key: "refunded", width: 18, format: "currency" },
+          ],
+          rows: returnExportRows.map((row) => ({
+            code: row.code,
+            createdAt: new Date(row.createdAt).toLocaleString("vi-VN"),
+            invoiceCode: row.invoiceCode,
+            total: row.total,
+            refunded: row.refunded,
+          })),
+        } satisfies ExcelSheet] : []),
         {
           name: "KPI F&B",
           titleRows: title,
           columns: [
             { label: "Chỉ tiêu", key: "metric", width: 24 },
-            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+            { label: "Giá trị", key: "value", width: 18 },
           ],
           rows: [
-            { metric: "Tổng doanh thu", value: kpis?.totalRevenue ?? 0 },
-            { metric: "Số đơn", value: kpis?.totalOrders ?? 0 },
-            { metric: "TB / đơn", value: kpis?.avgTicket ?? 0 },
+            { metric: "Doanh thu hóa đơn (đ)", value: kpis?.totalRevenue ?? 0 },
+            { metric: "Trả hàng trong kỳ (đ)", value: kpis?.returnAmount ?? 0 },
+            { metric: "Doanh thu sau trả hàng (đ)", value: kpis?.netRevenue ?? 0 },
+            { metric: "Số hóa đơn", value: kpis?.totalOrders ?? 0 },
+            { metric: "TB / hóa đơn (đ)", value: kpis?.avgTicket ?? 0 },
             { metric: "Turnover TB (phút)", value: kpis?.avgTurnoverMinutes ?? 0 },
           ],
         },
@@ -331,7 +391,7 @@ export default function FnbAnalyticsPage() {
       });
       toast({
         title: "Đã xuất Excel (đầy đủ)",
-        description: "Gồm hóa đơn chi tiết, chỉ tiêu và các bảng phân tích F&B.",
+        description: "Gồm hóa đơn, phiếu trả F&B, chỉ tiêu và các bảng phân tích.",
         variant: "success",
         duration: 5000,
       });
@@ -398,7 +458,7 @@ export default function FnbAnalyticsPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4">
         <KpiCard
-          label="Tổng doanh thu F&B"
+          label="Doanh thu hóa đơn F&B"
           value={formatCurrency(kpis?.totalRevenue ?? 0)}
           icon="attach_money"
           bg="bg-primary-fixed"
@@ -429,6 +489,13 @@ export default function FnbAnalyticsPage() {
           iconColor="text-status-warning"
           valueColor="text-foreground"
         />
+      </div>
+
+      <div className="mx-4 mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 border-y border-border py-3 text-sm">
+        <span>Trả hàng trong kỳ: <strong className="tabular-nums">{formatCurrency(kpis?.returnAmount ?? 0)}đ</strong></span>
+        <span>Doanh thu sau trả hàng: <strong className="tabular-nums text-primary">{formatCurrency(kpis?.netRevenue ?? 0)}đ</strong></span>
+        {canViewInvoiceDetail && <a href="#fnb-return-title" className="font-medium text-primary underline-offset-2 hover:underline">Xem phiếu trả F&B</a>}
+        <span className="w-full text-xs text-muted-foreground">Phiếu trả tính theo ngày lập, kể cả khi hóa đơn gốc thuộc kỳ trước; số âm có thể xuất hiện trong kỳ.</span>
       </div>
 
       {/* CEO 13/05: 2 mode — Biểu đồ vs Bảng số liệu kế toán */}
@@ -765,7 +832,7 @@ export default function FnbAnalyticsPage() {
               <tbody>
                 {invoiceRows.map((invoice) => (
                   <tr key={invoice.id} className="border-b border-border last:border-b-0 hover:bg-surface-container-low">
-                    <td className="px-3 py-2 font-medium text-foreground">{invoice.code}</td>
+                    <td className="px-3 py-2 font-medium text-primary"><a href={buildInvoiceListDeepLink(invoice.code)} className="underline-offset-2 hover:underline">{invoice.code}</a></td>
                     <td className="px-3 py-2 whitespace-nowrap tabular-nums">{new Date(invoice.issuedAt).toLocaleString("vi-VN")}</td>
                     <td className="px-3 py-2">{invoice.customerName}</td>
                     <td className="px-3 py-2">{{ draft: "Nháp", confirmed: "Đã xác nhận", completed: "Hoàn tất" }[invoice.status] ?? invoice.status}</td>
@@ -785,6 +852,54 @@ export default function FnbAnalyticsPage() {
             <div className="mt-3 flex justify-center">
               <button type="button" disabled={invoiceLoading} onClick={() => void loadInvoicePage(invoiceRows.length)} className="h-9 rounded-md border border-border px-4 text-sm font-medium text-foreground disabled:opacity-60">
                 {invoiceLoading ? "Đang tải..." : "Xem thêm 50 hóa đơn"}
+              </button>
+            </div>
+          )}
+        </section>
+      )}
+      {canViewInvoiceDetail && (
+        <section className="px-4 pb-5" aria-labelledby="fnb-return-title">
+          <h2 id="fnb-return-title" className="mb-1 text-base font-semibold text-foreground">Chi tiết phiếu trả F&B</h2>
+          <p className="mb-2 text-xs text-muted-foreground">
+            {selectedPeriodLabel} · Chỉ phiếu trả của hóa đơn F&B · {formatNumber(returnRows.length)} dòng đã tải
+          </p>
+          {returnError && (
+            <div role="alert" className="mb-2 flex items-center gap-3 text-sm text-status-error">
+              <span>{returnError}</span>
+              <button type="button" className="font-medium underline" onClick={() => void loadReturnPage(returnRows.length)}>Thử lại</button>
+            </div>
+          )}
+          <div className="overflow-x-auto border-y border-border">
+            <table className="w-full min-w-[650px] text-sm">
+              <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                <tr className="border-b border-border">
+                  <th scope="col" className="px-3 py-2 text-left font-medium">Phiếu trả</th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">Ngày lập</th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">Hóa đơn gốc</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Giá trị trả</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Đã hoàn tiền</th>
+                </tr>
+              </thead>
+              <tbody>
+                {returnRows.map((row) => (
+                  <tr key={row.id} className="border-b border-border last:border-b-0 hover:bg-surface-container-low">
+                    <td className="px-3 py-2 font-medium">{row.code}</td>
+                    <td className="px-3 py-2 whitespace-nowrap tabular-nums">{new Date(row.createdAt).toLocaleString("vi-VN")}</td>
+                    <td className="px-3 py-2 text-primary"><a href={buildInvoiceListDeepLink(row.invoiceCode)} className="underline-offset-2 hover:underline">{row.invoiceCode}</a></td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.total)}đ</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.refunded)}đ</td>
+                  </tr>
+                ))}
+                {!returnLoading && !returnError && returnRows.length === 0 && (
+                  <tr><td colSpan={5} className="px-3 py-8 text-center text-muted-foreground">Không có phiếu trả F&B trong kỳ đã chọn.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {(returnHasMore || returnLoading) && (
+            <div className="mt-3 flex justify-center">
+              <button type="button" disabled={returnLoading} onClick={() => void loadReturnPage(returnRows.length)} className="h-9 rounded-md border border-border px-4 text-sm font-medium text-foreground disabled:opacity-60">
+                {returnLoading ? "Đang tải..." : "Xem thêm 50 phiếu trả"}
               </button>
             </div>
           )}
