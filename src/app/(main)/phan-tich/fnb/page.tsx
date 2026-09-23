@@ -815,6 +815,7 @@ export default function FnbAnalyticsPage() {
               </button>
             </div>
           )}
+          <ReportTableFrame tablePreferenceKey="report.fnb.invoice-details">
           <div className="overflow-x-auto border-y border-border">
             <table className="w-full min-w-[850px] text-sm">
               <thead className="bg-surface-container-low text-xs text-muted-foreground">
@@ -848,6 +849,7 @@ export default function FnbAnalyticsPage() {
               </tbody>
             </table>
           </div>
+          </ReportTableFrame>
           {(invoiceHasMore || invoiceLoading) && (
             <div className="mt-3 flex justify-center">
               <button type="button" disabled={invoiceLoading} onClick={() => void loadInvoicePage(invoiceRows.length)} className="h-9 rounded-md border border-border px-4 text-sm font-medium text-foreground disabled:opacity-60">
@@ -869,6 +871,7 @@ export default function FnbAnalyticsPage() {
               <button type="button" className="font-medium underline" onClick={() => void loadReturnPage(returnRows.length)}>Thử lại</button>
             </div>
           )}
+          <ReportTableFrame tablePreferenceKey="report.fnb.return-details">
           <div className="overflow-x-auto border-y border-border">
             <table className="w-full min-w-[650px] text-sm">
               <thead className="bg-surface-container-low text-xs text-muted-foreground">
@@ -896,6 +899,7 @@ export default function FnbAnalyticsPage() {
               </tbody>
             </table>
           </div>
+          </ReportTableFrame>
           {(returnHasMore || returnLoading) && (
             <div className="mt-3 flex justify-center">
               <button type="button" disabled={returnLoading} onClick={() => void loadReturnPage(returnRows.length)} className="h-9 rounded-md border border-border px-4 text-sm font-medium text-foreground disabled:opacity-60">

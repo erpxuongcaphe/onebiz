@@ -21,7 +21,7 @@ const chartSwitch = readFileSync(
 );
 describe("báo cáo Khách hàng - Sản phẩm V5", () => {
   it("dùng tiếng Việt rõ nghĩa và ba góc nhìn phù hợp dữ liệu lớn", () => {
-    expect(page).toContain('title="Khách hàng mua sản phẩm nào"');
+    expect(page).toContain('title="Doanh số mặt hàng theo khách hàng"');
     expect(page).toContain('label: "Theo khách hàng"');
     expect(page).toContain('label: "Mặt hàng từng khách"');
     expect(page).toContain('label: "Theo nhóm hàng"');
