@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -120,6 +120,8 @@ const invoiceTypeOptions = [
   { label: "Không giao hàng", value: "no_delivery" },
   { label: "Giao hàng", value: "delivery" },
 ];
+
+const INVOICE_SORT_COLUMNS = ["code", "date", "customerName", "totalAmount", "discount"];
 
 function InvoiceDetail({
   invoice,
@@ -503,6 +505,7 @@ export default function HoaDonPage() {
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
@@ -644,6 +647,8 @@ export default function HoaDonPage() {
       pageSize,
       search: debouncedSearch,
       searchField,
+      sortBy: sorting[0]?.id,
+      sortOrder: sorting[0]?.desc ? "desc" : "asc",
       filters: commonFilters,
     });
     setData(result.data);
@@ -672,7 +677,7 @@ export default function HoaDonPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
+  }, [page, pageSize, sorting, debouncedSearch, searchField, selectedStatuses, deliveryFilter, branchScopeReady, deepLinkReady, dateRange, phamViHienTai, toast]);
 
   useEffect(() => {
     fetchData();
@@ -1018,6 +1023,12 @@ export default function HoaDonPage() {
         <DataTable
           columns={columns}
           data={data}
+          sorting={sorting}
+          onSortingChange={(updater) => {
+            setSorting((current) => typeof updater === "function" ? updater(current) : updater);
+            setPage(0);
+          }}
+          sortableColumnIds={INVOICE_SORT_COLUMNS}
           loading={loading}
           total={total}
           density="compact"

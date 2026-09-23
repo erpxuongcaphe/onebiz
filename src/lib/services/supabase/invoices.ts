@@ -24,6 +24,21 @@ const VALID_INVOICE_LIST_STATUSES = new Set([
   "cancelled",
 ]);
 
+const INVOICE_SORT_FIELDS: Record<string, string> = {
+  code: "code",
+  customerName: "customer_name",
+  totalAmount: "total",
+  discount: "discount_amount",
+};
+
+export function getInvoiceListSort(
+  sortBy: string | undefined,
+  dateColumn: "ngay_chung_tu" | "created_at",
+): string {
+  if (sortBy === "date" || !sortBy) return dateColumn;
+  return INVOICE_SORT_FIELDS[sortBy] ?? dateColumn;
+}
+
 function getEffectiveInvoiceListStatuses(statuses?: string[]): string[] {
   const validStatuses = (statuses ?? []).filter(
     (status) => status === "processing" || VALID_INVOICE_LIST_STATUSES.has(status),
@@ -121,8 +136,10 @@ export async function getInvoices(params: QueryParams): Promise<QueryResult<Invo
   }
 
   // Sort & paginate
+  const sortColumn = getInvoiceListSort(params.sortBy, cotNgay);
   query = query
-    .order(cotNgay, { ascending: false })
+    .order(sortColumn, { ascending: params.sortBy ? params.sortOrder === "asc" : false })
+    .order("id", { ascending: false })
     .range(from, to);
 
   const { data, count, error } = await query;

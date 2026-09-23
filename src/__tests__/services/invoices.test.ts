@@ -15,7 +15,26 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: vi.fn().mockResolvedValue("tenant-test-1"),
 }));
 
-import { cancelInvoice } from "@/lib/services/supabase/invoices";
+import { cancelInvoice, getInvoiceListSort } from "@/lib/services/supabase/invoices";
+
+describe("invoice list server sorting", () => {
+  it.each([
+    [undefined, "ngay_chung_tu"],
+    ["date", "ngay_chung_tu"],
+    ["code", "code"],
+    ["customerName", "customer_name"],
+    ["totalAmount", "total"],
+    ["discount", "discount_amount"],
+    ["debt", "ngay_chung_tu"],
+    ["total;drop table invoices", "ngay_chung_tu"],
+  ])("maps %s to a safe database column", (sortBy, expected) => {
+    expect(getInvoiceListSort(sortBy, "ngay_chung_tu")).toBe(expected);
+  });
+
+  it("keeps operation-time lists on created_at by default", () => {
+    expect(getInvoiceListSort(undefined, "created_at")).toBe("created_at");
+  });
+});
 
 describe("cancelInvoice", () => {
   beforeEach(() => {
