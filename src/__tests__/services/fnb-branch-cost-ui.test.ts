@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const page = readFileSync("src/app/(main)/hang-hoa/hang-cap-fnb/page.tsx", "utf8");
 const service = readFileSync("src/lib/services/supabase/fnb-branch-cost.ts", "utf8");
 const productDialog = readFileSync("src/components/shared/dialogs/create-product-dialog.tsx", "utf8");
+const bomEditor = readFileSync("src/components/shared/dialogs/bom-editor-dialog.tsx", "utf8");
 
 describe("F&B branch opening cost UI", () => {
   it("uses the audited branch RPC instead of a writable table call", () => {
@@ -32,7 +33,7 @@ describe("F&B branch opening cost UI", () => {
       /product\?\.isFnbStockItem\s*\?\s*fnbPreparedCostByProductId\[product\.id\]\?\.unitCost \?\? 0\s*:\s*item\.costPrice/,
     );
     expect(productDialog).toContain("Chưa có giá vốn BTP");
-    expect(productDialog).toContain("Dự toán dùng giá cấp nội bộ hiện hành");
+    expect(productDialog).toContain("SKU Retail dùng giá cấp nội bộ hiện hành");
     expect(productDialog).toContain("Bán thành phẩm · Bình quân tại quán");
     expect(productDialog).toContain("SKU Retail · Giá cấp nội bộ");
     expect(productDialog).toContain('const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;');
@@ -43,5 +44,12 @@ describe("F&B branch opening cost UI", () => {
     expect(productDialog).toMatch(
       /hasMissingPreparedComponentCost\s*\? \(isEdit \? Number\(initialData\?\.costPrice \?\? 0\) : 0\)/,
     );
+  });
+
+  it("keeps dedicated F&B BOM preview separate from Retail cost and allows pre-batch setup", () => {
+    expect(bomEditor).toContain('const isFnbRecipe = output?.channel === "fnb" || output?.isFnbStockItem === true;');
+    expect(bomEditor).toContain("return material?.sellPrice ?? null;");
+    expect(bomEditor).toContain("return preparedCosts[item.materialId] ?? null;");
+    expect(bomEditor).toContain("Vẫn lưu được công thức");
   });
 });
