@@ -337,7 +337,7 @@ export default function DatHangPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Phân tích đặt hàng"
+      title="Tình trạng đơn đặt hàng"
       subtitle="Theo dõi tình trạng và hiệu suất đơn hàng"
       preset={preset}
       range={range}

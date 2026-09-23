@@ -19,6 +19,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname } from "next/navigation";
+import { sortReportRows } from "@/lib/reports/table-sort";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -70,6 +71,10 @@ export interface DataTableColumn<T> {
   width?: string;
   /** Sticky left cho freeze */
   sticky?: boolean;
+  /** Disable sorting for computed/display-only columns. */
+  sortable?: boolean;
+  /** Compare on the source value, not a formatted React cell. */
+  sortValue?: (row: T) => string | number | null | undefined;
 }
 
 export interface ColumnGroup {
@@ -151,6 +156,7 @@ export function ReportDataTable<T>({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [pageState, setPageState] = useState({ key: "", index: 0 });
   const [pageSize, setPageSize] = useState(defaultPageSize);
+  const [sortState, setSortState] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const columnEntries = useMemo(
     () =>
       columns.map((column, index) => ({
@@ -160,6 +166,16 @@ export function ReportDataTable<T>({
       })),
     [columns],
   );
+  const sortableColumnIds = useMemo(() => new Set(
+    columnEntries
+      .filter(({ column }) => column.sortable !== false && (
+        Boolean(column.sortValue) || rows.some((row) => {
+          const value = (row as Record<string, unknown>)[String(column.key)];
+          return typeof value === "string" || typeof value === "number";
+        })
+      ))
+      .map(({ id }) => id),
+  ), [columnEntries, rows]);
   const hiddenColumnKeys = useMemo(
     () => new Set(preferences.hiddenColumnKeys),
     [preferences.hiddenColumnKeys],
@@ -194,6 +210,18 @@ export function ReportDataTable<T>({
         .sort((a, b) => a - b),
     [defaultPageSize, pageSizeOptions],
   );
+  const sortedRows = useMemo(() => {
+    if (!sortState) return rows;
+    const entry = columnEntries.find(({ id }) => id === sortState.id);
+    if (!entry || !sortableColumnIds.has(sortState.id)) return rows;
+    return sortReportRows(
+      rows,
+      (row) => entry.column.sortValue
+        ? entry.column.sortValue(row)
+        : (row as Record<string, unknown>)[String(entry.column.key)],
+      sortState.direction,
+    );
+  }, [rows, columnEntries, sortState, sortableColumnIds]);
   const showPagination = rows.length > paginationThreshold;
   const resultBoundaryKey =
     rows.length === 0
@@ -203,7 +231,7 @@ export function ReportDataTable<T>({
           getRowKey(rows[rows.length - 1], rows.length - 1),
           rows.length,
         ].join(":");
-  const pageResetKey = [preferenceKey, resultBoundaryKey].join(":");
+  const pageResetKey = [preferenceKey, resultBoundaryKey, sortState?.id ?? "", sortState?.direction ?? ""].join(":");
   const requestedPageIndex =
     pageState.key === pageResetKey ? pageState.index : 0;
   const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -212,7 +240,7 @@ export function ReportDataTable<T>({
   const pageEnd = showPagination
     ? Math.min(rows.length, pageStart + pageSize)
     : rows.length;
-  const pagedRows = showPagination ? rows.slice(pageStart, pageEnd) : rows;
+  const pagedRows = showPagination ? sortedRows.slice(pageStart, pageEnd) : sortedRows;
 
 
   useEffect(() => {
@@ -434,7 +462,20 @@ export function ReportDataTable<T>({
                 )}
                 style={col.width ? { width: col.width } : undefined}
               >
-                {col.label}
+                {!sortableColumnIds.has(id) ? col.label : (
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-inherit hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    onClick={() => setSortState((current) => ({
+                      id,
+                      direction: current?.id === id && current.direction === "asc" ? "desc" : "asc",
+                    }))}
+                    aria-label={`Sắp xếp ${col.label}${sortState?.id === id ? (sortState.direction === "asc" ? " giảm dần" : " tăng dần") : " tăng dần"}`}
+                  >
+                    {col.label}
+                    <Icon name={sortState?.id === id ? (sortState.direction === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more"} size={14} />
+                  </button>
+                )}
               </th>
             ))}
           </tr>
