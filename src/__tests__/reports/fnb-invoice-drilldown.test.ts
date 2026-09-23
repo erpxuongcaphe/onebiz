@@ -64,4 +64,15 @@ describe("F&B report invoice drill-down", () => {
 
     expect(await getRevenueByTable("branch-1")).toEqual([{ tableName: "Bàn 1", revenue: 120, orders: 1 }]);
   });
+
+  it("filters table revenue by invoice document date, matching the KPI period", async () => {
+    await getRevenueByTable("branch-1", { from: "2026-09-22", to: "2026-09-22" });
+
+    expect(queryCalls).toContainEqual(["select", [expect.stringContaining("invoices!inner(total, status, ngay_chung_tu)")]]);
+    expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
+    expect(queryCalls).toContainEqual(["not", ["invoices.status", "eq", "cancelled"]]);
+    expect(queryCalls).toContainEqual(["gte", ["invoices.ngay_chung_tu", "2026-09-21T17:00:00.000Z"]]);
+    expect(queryCalls).toContainEqual(["lt", ["invoices.ngay_chung_tu", "2026-09-22T17:00:00.000Z"]]);
+    expect(queryCalls).not.toContainEqual(["gte", ["created_at", expect.anything()]]);
+  });
 });

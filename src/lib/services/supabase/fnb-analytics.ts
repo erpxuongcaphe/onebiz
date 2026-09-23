@@ -295,18 +295,19 @@ export async function getRevenueByTable(
 ): Promise<TableRevenue[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  // P1-3B-R1: range filter.
   const rangeWindow = toCreatedAtRangeWindow(range);
 
   let query = supabase
     .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices(total, status)")
+    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices!inner(total, status, ngay_chung_tu)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
+    .eq("invoices.source", "fnb")
+    .not("invoices.status", "eq", "cancelled")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
   if (rangeWindow) {
-    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+    query = query.gte("invoices.ngay_chung_tu", rangeWindow.start).lt("invoices.ngay_chung_tu", rangeWindow.end);
   }
 
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
