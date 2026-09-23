@@ -4,8 +4,8 @@
  *
  * 00335 — NGÀY CHỨNG TỪ: bảng `invoices` lọc/sắp xếp/đọc theo cột sinh
  * `ngay_chung_tu` = coalesce(issued_at, created_at). Các bảng khác (sales_returns,
- * stock_movements, purchase_orders, cash_transactions…) giữ `created_at` vì là
- * thời gian giao dịch thật.
+ * stock_movements, purchase_orders…) giữ `created_at` theo nghiệp vụ tương ứng.
+ * Riêng báo cáo dòng tiền đọc `cash_transactions.transaction_date` để khớp Sổ quỹ.
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
@@ -2961,18 +2961,20 @@ export async function getCashFlowDetailed(
 ): Promise<CashFlowDetailedRow[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = resolveRange(dateRange, lastNMonthsRange(months));
+  const fallbackRange = lastNMonthsRange(months);
+  const fromDate = dateRange?.from ?? fallbackRange.start.slice(0, 10);
+  const toDate = dateRange?.to ?? new Date(Date.parse(fallbackRange.end) - 86_400_000).toISOString().slice(0, 10);
   const monthKeys = monthKeysForRange(dateRange, months);
 
   let query = supabase
     .from("cash_transactions")
-    .select("created_at, type, amount, category")
+    .select("transaction_date, type, amount, category")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
-    .gte("created_at", range.start)
-    .lt("created_at", range.end);
+    .gte("transaction_date", fromDate)
+    .lte("transaction_date", toDate);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getCashFlowDetailed]");
+  const data = await fetchAllPostgrestRows(() => query.order("transaction_date", { ascending: true }), "[getCashFlowDetailed]");
 
   // P1-3B-R4: key kèm year.
 
@@ -2984,14 +2986,14 @@ export async function getCashFlowDetailed(
   }
 
   (data ?? []).forEach(c => {
-    const d = new Date(c.created_at);
-    const mKey = `T${d.getMonth() + 1}/${d.getFullYear()}`;
+    const [year, month] = String(c.transaction_date).slice(0, 10).split("-").map(Number);
+    const mKey = `T${month}/${year}`;
     const type = c.type === "receipt" ? "receipt" : "payment";
     const cat = c.category ?? "Khác";
     const mapKey = `${mKey}_${type}`;
     const catMap = grouped.get(mapKey);
     if (catMap) {
-      catMap.set(cat, (catMap.get(cat) ?? 0) + (c.amount ?? 0));
+      catMap.set(cat, (catMap.get(cat) ?? 0) + Number(c.amount ?? 0));
     }
   });
 

@@ -15,9 +15,14 @@ import {
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
+import { formatCurrency, formatDate, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
+import { getAllCashBookEntries, getCashBookListWorkspace } from "@/lib/services/supabase/cash-book";
+import type { CashBookEntry } from "@/lib/types";
+import { PERMISSIONS } from "@/lib/permissions/constants";
+import { Button } from "@/components/ui/button";
+import { cashCategoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
@@ -62,21 +67,33 @@ function CashFlowTooltip({ active, payload, label }: CashFlowTooltipProps) {
 export default function LuongTienPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
+  const { tenant, hasPermission } = useAuth();
+  const canViewCashBook = hasPermission(PERMISSIONS.FINANCE_VIEW_CASH_BOOK);
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
-    useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
+    useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [data, setData] = useState<CashFlowDetailedRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [ledgerRows, setLedgerRows] = useState<CashBookEntry[]>([]);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+  const [ledgerPage, setLedgerPage] = useState(0);
+  const [ledgerType, setLedgerType] = useState<"all" | "receipt" | "payment">("all");
+  const [ledgerLoading, setLedgerLoading] = useState(false);
+  const [ledgerError, setLedgerError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const requestIdRef = useRef(0);
+  const ledgerRequestIdRef = useRef(0);
 
-  const tenantName = useAuth().tenant?.name;
+  const tenantName = tenant?.name;
+  const dateToExclusive = new Date(Date.parse(`${range.to}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
 
   const buildSheets = useCallback((): ExcelSheet[] => {
     // Sheet 0: Info + disclaimer
     const infoSheet = buildInfoSheet({
-      title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+      title: "BÁO CÁO THU CHI VÀ DÒNG TIỀN",
       description:
-        "Dòng tiền thu, chi, dòng tiền ròng và số dư lũy kế trong kỳ đã chọn.",
+        "Phiếu thu, phiếu chi hoàn thành theo ngày chứng từ; dòng tiền lũy kế chỉ tính trong kỳ đã chọn.",
       range,
       branchName: branchLabel,
       tenantName,
@@ -86,19 +103,19 @@ export default function LuongTienPage() {
     });
 
     const titleBase = {
-      title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+      title: "BÁO CÁO THU CHI VÀ DÒNG TIỀN",
       range,
       branchName: branchLabel,
       tenantName,
       generatedAt: new Date(),
     };
 
-    // Sheet 1: Cash flow 6 tháng (theo MISA trực tiếp)
+    // Sheet 1: tổng hợp thu chi theo tháng trong kỳ đã chọn.
     const cashFlowSheet: ExcelSheet = {
-      name: "Cash flow",
+      name: "Thu chi theo tháng",
       titleRows: buildReportTitleRows({
         ...titleBase,
-        title: "LƯU CHUYỂN TIỀN THEO KỲ",
+        title: "THU CHI THEO THÁNG TRONG KỲ",
       }),
       columns: [
         { label: "Tháng", key: "month", width: 16, align: "center" },
@@ -111,7 +128,7 @@ export default function LuongTienPage() {
           format: "currency",
         },
         {
-          label: "Số dư lũy kế",
+          label: "Dòng tiền lũy kế trong kỳ",
           key: "balance",
           width: 22,
           format: "currency",
@@ -134,27 +151,6 @@ export default function LuongTienPage() {
       withSignature: true,
     };
 
-    // Sheet 2: Thu chi tháng cuối kỳ (drill chi tiết)
-    const lastMonth = data[data.length - 1];
-    const monthDetail: ExcelSheet = {
-      name: "Thu chi kỳ cuối",
-      titleRows: buildReportTitleRows({
-        ...titleBase,
-        title: `THU CHI THÁNG ${lastMonth?.month ?? "—"}`,
-      }),
-      columns: [
-        { label: "Chỉ tiêu", key: "metric", width: 32 },
-        { label: "Số tiền (VND)", key: "value", width: 22, format: "currency" },
-      ],
-      rows: [
-        { metric: "Tổng thu", value: lastMonth?.totalReceipt ?? 0 },
-        { metric: "Tổng chi", value: lastMonth?.totalPayment ?? 0 },
-        { metric: "Dòng tiền ròng", value: lastMonth?.net ?? 0 },
-        { metric: "Số dư đầu kỳ", value: 0 },
-        { metric: "Số dư cuối kỳ (lũy kế)", value: lastMonth?.cumulativeBalance ?? 0 },
-      ],
-    };
-
     const categoryDetail: ExcelSheet = {
       name: "Chi tiết danh mục",
       titleRows: buildReportTitleRows({
@@ -171,33 +167,34 @@ export default function LuongTienPage() {
         ...row.receipts.map((item) => ({
           month: row.month,
           type: "Thu",
-          category: item.category,
+          category: cashCategoryLabel(item.category),
           amount: item.amount,
         })),
         ...row.payments.map((item) => ({
           month: row.month,
           type: "Chi",
-          category: item.category,
+          category: cashCategoryLabel(item.category),
           amount: item.amount,
         })),
       ]),
     };
 
-    return [infoSheet, cashFlowSheet, monthDetail, categoryDetail];
+    return [infoSheet, cashFlowSheet, categoryDetail];
   }, [data, range, branchLabel, tenantName]);
 
   const handleExportView = useCallback(() => {
     try {
-      // View mode: chỉ Cash flow 6 tháng (1 sheet chính + info)
+      // View export chỉ gồm phần tổng hợp theo tháng và thông tin phạm vi.
       const infoSheet = buildInfoSheet({
-        title: "BÁO CÁO LƯU CHUYỂN TIỀN TỆ",
+        title: "BÁO CÁO THU CHI VÀ DÒNG TIỀN",
         range,
         branchName: branchLabel,
         tenantName,
         generatedAt: new Date(),
+        disclaimer: "Báo cáo quản trị nội bộ; dòng tiền lũy kế không phải số dư quỹ đầu kỳ hay B03-DN.",
       });
       const allSheets = buildSheets();
-      const cfSheet = allSheets.find((s) => s.name === "Cash flow");
+      const cfSheet = allSheets.find((s) => s.name === "Thu chi theo tháng");
       exportReportToExcel({
         kind: "luong-tien",
         mode: "view",
@@ -216,19 +213,62 @@ export default function LuongTienPage() {
     }
   }, [buildSheets, range, branchLabel, tenantName, toast]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
+    setExporting(true);
     try {
+      const sheets = buildSheets();
+      if (canViewCashBook) {
+        const entries = await getAllCashBookEntries({
+          branchId: activeBranchId,
+          dateFrom: range.from,
+          dateToExclusive,
+          statuses: ["completed"],
+          types: ledgerType === "all" ? undefined : [ledgerType],
+        });
+        sheets.push({
+          name: "Chứng từ thu chi",
+          titleRows: buildReportTitleRows({
+            title: ledgerType === "receipt" ? "PHIẾU THU TRONG KỲ" : ledgerType === "payment" ? "PHIẾU CHI TRONG KỲ" : "CHỨNG TỪ THU CHI TRONG KỲ",
+            range,
+            branchName: branchLabel,
+            tenantName,
+            generatedAt: new Date(),
+          }),
+          columns: [
+            { label: "Ngày chứng từ", key: "date", width: 18 },
+            { label: "Mã phiếu", key: "code", width: 18 },
+            { label: "Loại", key: "type", width: 14 },
+            { label: "Chi nhánh", key: "branch", width: 26 },
+            { label: "Đối tượng", key: "counterparty", width: 28 },
+            { label: "Danh mục", key: "category", width: 24 },
+            { label: "Phương thức", key: "paymentMethod", width: 18 },
+            { label: "Chứng từ gốc", key: "reference", width: 20 },
+            { label: "Số tiền", key: "amount", width: 20, format: "currency" },
+          ],
+          rows: entries.map((entry) => ({
+            date: entry.date,
+            code: entry.code,
+            type: entry.type === "receipt" ? "Thu" : "Chi",
+            branch: entry.branchName ?? "",
+            counterparty: entry.counterparty,
+            category: cashCategoryLabel(entry.category),
+            paymentMethod: cashPaymentMethodLabel(entry.paymentMethod),
+            reference: entry.referenceCode ?? "",
+            amount: entry.amount,
+          })),
+        });
+      }
       exportReportToExcel({
         kind: "luong-tien",
         mode: "full",
         range,
         branchName: branchLabel,
         tenantName,
-        sheets: buildSheets(),
+        sheets,
       });
       toast({
-        title: "Đã xuất báo cáo lưu chuyển tiền",
-        description: "4 sheet: Thông tin + Lưu chuyển tiền + Thu chi kỳ cuối + Chi tiết danh mục",
+        title: "Đã xuất báo cáo thu chi",
+        description: canViewCashBook ? "Có danh sách chứng từ thu chi trong kỳ." : "Báo cáo tổng hợp theo tháng và danh mục.",
         variant: "success",
       });
     } catch (err) {
@@ -237,19 +277,23 @@ export default function LuongTienPage() {
         description: err instanceof Error ? err.message : "",
         variant: "error",
       });
+    } finally {
+      setExporting(false);
     }
-  }, [buildSheets, range, branchLabel, tenantName, toast]);
+  }, [buildSheets, canViewCashBook, activeBranchId, range, dateToExclusive, ledgerType, branchLabel, tenantName, toast]);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const result = await getCashFlowDetailed(6, activeBranchId, range);
       if (requestId === requestIdRef.current) setData(result);
     } catch (error) {
       if (requestId === requestIdRef.current) {
-        console.error("Failed to fetch cash-flow report:", error);
+        setData([]);
+        setLoadError(error instanceof Error ? error.message : "Không tải được báo cáo thu chi.");
       }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
@@ -260,13 +304,42 @@ export default function LuongTienPage() {
     fetchData();
   }, [fetchData]);
 
-  // Aggregate the last month bucket in the selected range
-  const current = data[data.length - 1];
-  const prev = data.length >= 2 ? data[data.length - 2] : null;
-  const totalReceipt = current?.totalReceipt ?? 0;
-  const totalPayment = current?.totalPayment ?? 0;
-  const net = current?.net ?? 0;
-  const balance = current?.cumulativeBalance ?? 0;
+  useEffect(() => {
+    if (!isReady || !canViewCashBook) return;
+    const requestId = ++ledgerRequestIdRef.current;
+    setLedgerLoading(true);
+    setLedgerError(null);
+    setLedgerRows([]);
+    setLedgerTotal(0);
+    getCashBookListWorkspace({
+      page: ledgerPage,
+      pageSize: 50,
+      branchId: activeBranchId,
+      dateFrom: range.from,
+      dateToExclusive,
+      statuses: ["completed"],
+      types: ledgerType === "all" ? undefined : [ledgerType],
+    }).then((result) => {
+      if (requestId !== ledgerRequestIdRef.current) return;
+      if (result.data.length === 0 && result.total > 0 && ledgerPage > 0) {
+        setLedgerPage(0);
+        return;
+      }
+      setLedgerRows(result.data);
+      setLedgerTotal(result.total);
+    }).catch((error) => {
+      if (requestId !== ledgerRequestIdRef.current) return;
+      setLedgerRows([]);
+      setLedgerTotal(0);
+      setLedgerError(error instanceof Error ? error.message : "Không tải được chứng từ thu chi.");
+    }).finally(() => {
+      if (requestId === ledgerRequestIdRef.current) setLedgerLoading(false);
+    });
+  }, [isReady, canViewCashBook, ledgerPage, ledgerType, activeBranchId, range.from, dateToExclusive]);
+
+  const totalReceipt = data.reduce((sum, row) => sum + row.totalReceipt, 0);
+  const totalPayment = data.reduce((sum, row) => sum + row.totalPayment, 0);
+  const net = totalReceipt - totalPayment;
 
   // Chart data for stacked bar
   const chartData = data.map((d) => ({
@@ -278,7 +351,7 @@ export default function LuongTienPage() {
   // Cumulative balance line chart
   const balanceData = data.map((d) => ({
     month: d.month,
-    "Số dư lũy kế": d.cumulativeBalance,
+    "Dòng tiền lũy kế": d.cumulativeBalance,
     "Dòng tiền ròng": d.net,
   }));
 
@@ -293,44 +366,46 @@ export default function LuongTienPage() {
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       <ReportPageHeader
-        title="Lưu chuyển tiền tệ"
-        subtitle="Dòng tiền quản trị theo phạm vi và kỳ đã chọn"
+        title="Báo cáo thu chi và dòng tiền"
+        subtitle="Theo ngày chứng từ; dòng tiền lũy kế chỉ tính trong kỳ đã chọn"
         preset={preset}
         range={range}
-        onPresetChange={setPreset}
-        onCustomRangeChange={setCustomRange}
+        onPresetChange={(next) => { setPreset(next); setLedgerPage(0); }}
+        onCustomRangeChange={(next) => { setCustomRange(next); setLedgerPage(0); }}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading || data.length === 0}
+        exportDisabled={loading || exporting || data.length === 0 || Boolean(loadError)}
       />
       <div className="space-y-6 p-4 sm:p-6">
+      {loadError && (
+        <div role="alert" className="flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+          <span>Không tải được báo cáo: {loadError}</span>
+          <Button variant="outline" size="sm" onClick={fetchData}>Tải lại</Button>
+        </div>
+      )}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <KpiCard
-          label={`Thu ${current?.month ?? "kỳ gần nhất"}`}
+          label="Tổng thu trong kỳ"
           value={formatCurrency(totalReceipt)}
           icon="north_east"
           bg="bg-status-success/10"
           iconColor="text-status-success"
           valueColor="text-foreground"
-          change={prev ? `${((totalReceipt - prev.totalReceipt) / Math.max(prev.totalReceipt, 1) * 100).toFixed(1)}%` : undefined}
-          positive={prev ? totalReceipt >= prev.totalReceipt : undefined}
         />
         <KpiCard
-          label={`Chi ${current?.month ?? "kỳ gần nhất"}`}
+          label="Tổng chi trong kỳ"
           value={formatCurrency(totalPayment)}
           icon="south_east"
           bg="bg-status-error/10"
           iconColor="text-status-error"
           valueColor="text-foreground"
-          change={prev ? `${((totalPayment - prev.totalPayment) / Math.max(prev.totalPayment, 1) * 100).toFixed(1)}%` : undefined}
-          positive={prev ? totalPayment <= prev.totalPayment : undefined}
         />
         <KpiCard
-          label="Dòng tiền ròng"
+          label="Dòng tiền ròng trong kỳ"
           value={formatCurrency(net)}
           icon={net >= 0 ? "trending_up" : "trending_down"}
           bg={net >= 0 ? "bg-primary-fixed" : "bg-status-warning/10"}
@@ -338,18 +413,9 @@ export default function LuongTienPage() {
           valueColor="text-foreground"
           positive={net >= 0}
         />
-        <KpiCard
-          label="Số dư lũy kế trong kỳ"
-          value={formatCurrency(balance)}
-          icon="account_balance_wallet"
-          bg="bg-status-info/10"
-          iconColor="text-status-info"
-          valueColor="text-foreground"
-          positive={balance >= 0}
-        />
       </div>
 
-      {/* Charts */}
+      {viewMode === "chart" && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <ChartCard title="Thu - Chi theo tháng" subtitle={selectedPeriodLabel}>
           <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
@@ -365,7 +431,7 @@ export default function LuongTienPage() {
           </ResponsiveContainer>
         </ChartCard>
 
-        <ChartCard title="Dòng tiền ròng & Số dư lũy kế" subtitle={selectedPeriodLabel}>
+        <ChartCard title="Dòng tiền ròng và lũy kế trong kỳ" subtitle={selectedPeriodLabel}>
           <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
             <LineChart data={balanceData}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -374,13 +440,14 @@ export default function LuongTienPage() {
               <Tooltip content={<CashFlowTooltip />} />
               <Legend wrapperStyle={{ fontSize: 11 }} />
               <Line type="linear" dataKey="Dòng tiền ròng" stroke="#004AC6" strokeWidth={2} dot={{ r: 3 }} />
-              <Line type="linear" dataKey="Số dư lũy kế" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
+              <Line type="linear" dataKey="Dòng tiền lũy kế" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </ChartCard>
       </div>
+      )}
 
-      {/* Detail Table */}
+      {viewMode === "table" && (
       <ChartCard title="Chi tiết theo tháng" subtitle={selectedPeriodLabel}>
         <ReportTableFrame tablePreferenceKey="report.cash-flow.months">
           <div className="overflow-x-auto">
@@ -391,7 +458,7 @@ export default function LuongTienPage() {
                 <th className="py-2 px-3 font-medium text-right">Tổng thu</th>
                 <th className="py-2 px-3 font-medium text-right">Tổng chi</th>
                 <th className="py-2 px-3 font-medium text-right">Ròng</th>
-                <th className="py-2 px-3 font-medium text-right">Số dư lũy kế</th>
+                <th className="py-2 px-3 font-medium text-right">Lũy kế trong kỳ</th>
                 <th className="py-2 px-3 font-medium">Chi tiết thu</th>
                 <th className="py-2 px-3 font-medium">Chi tiết chi</th>
               </tr>
@@ -414,9 +481,9 @@ export default function LuongTienPage() {
                   </td>
                   <td className="py-2 px-3">
                     <div className="space-y-0.5">
-                      {row.receipts.slice(0, 3).map((r) => (
+                      {row.receipts.map((r) => (
                         <div key={r.category} className="text-xs text-muted-foreground">
-                          {r.category}: <span className="font-medium text-foreground">{formatCurrency(r.amount)}</span>
+                          {cashCategoryLabel(r.category)}: <span className="font-medium text-foreground">{formatCurrency(r.amount)}</span>
                         </div>
                       ))}
                       {row.receipts.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
@@ -424,9 +491,9 @@ export default function LuongTienPage() {
                   </td>
                   <td className="py-2 px-3">
                     <div className="space-y-0.5">
-                      {row.payments.slice(0, 3).map((p) => (
+                      {row.payments.map((p) => (
                         <div key={p.category} className="text-xs text-muted-foreground">
-                          {p.category}: <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
+                          {cashCategoryLabel(p.category)}: <span className="font-medium text-foreground">{formatCurrency(p.amount)}</span>
                         </div>
                       ))}
                       {row.payments.length === 0 && <span className="text-xs text-muted-foreground">—</span>}
@@ -439,6 +506,78 @@ export default function LuongTienPage() {
           </div>
         </ReportTableFrame>
       </ChartCard>
+      )}
+      {canViewCashBook && (
+        <section className="space-y-3" aria-label="Chứng từ thu chi">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Chứng từ thu chi</h2>
+              <p className="text-xs text-muted-foreground">Phiếu hoàn thành theo ngày chứng từ · {ledgerTotal.toLocaleString("vi-VN")} phiếu</p>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <span>Loại phiếu</span>
+              <select
+                className="h-9 rounded border bg-background px-2"
+                value={ledgerType}
+                onChange={(event) => {
+                  setLedgerType(event.target.value as "all" | "receipt" | "payment");
+                  setLedgerPage(0);
+                }}
+              >
+                <option value="all">Tất cả</option>
+                <option value="receipt">Phiếu thu</option>
+                <option value="payment">Phiếu chi</option>
+              </select>
+            </label>
+          </div>
+          <ReportTableFrame tablePreferenceKey="report.cash-flow.transactions">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="px-3 py-2">Ngày chứng từ</th>
+                    <th className="px-3 py-2">Mã phiếu</th>
+                    <th className="px-3 py-2">Loại</th>
+                    <th className="px-3 py-2">Chi nhánh</th>
+                    <th className="px-3 py-2">Đối tượng</th>
+                    <th className="px-3 py-2">Danh mục</th>
+                    <th className="px-3 py-2">Phương thức</th>
+                    <th className="px-3 py-2">Chứng từ gốc</th>
+                    <th className="px-3 py-2 text-right">Số tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ledgerRows.map((entry) => (
+                    <tr key={entry.id} className="border-b">
+                      <td className="whitespace-nowrap px-3 py-2">{formatDate(entry.date)}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-medium">{entry.code}</td>
+                      <td className="px-3 py-2">{entry.type === "receipt" ? "Thu" : "Chi"}</td>
+                      <td className="px-3 py-2">{entry.branchName ?? "—"}</td>
+                      <td className="px-3 py-2">{entry.counterparty || "—"}</td>
+                      <td className="px-3 py-2">{cashCategoryLabel(entry.category)}</td>
+                      <td className="px-3 py-2">{cashPaymentMethodLabel(entry.paymentMethod)}</td>
+                      <td className="px-3 py-2">{entry.referenceCode ?? "—"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-right font-medium">{formatCurrency(entry.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!ledgerLoading && !ledgerError && ledgerRows.length === 0 && (
+                <p className="p-4 text-sm text-muted-foreground">Không có phiếu thu chi trong phạm vi đã chọn.</p>
+              )}
+              {ledgerLoading && <p className="p-4 text-sm text-muted-foreground">Đang tải chứng từ...</p>}
+              {ledgerError && <p role="alert" className="p-4 text-sm text-destructive">Không tải được chứng từ: {ledgerError}</p>}
+            </div>
+          </ReportTableFrame>
+          {ledgerTotal > 50 && (
+            <div className="flex items-center justify-end gap-2 text-sm">
+              <span>Trang {ledgerPage + 1}/{Math.ceil(ledgerTotal / 50)}</span>
+              <Button variant="outline" size="sm" disabled={ledgerPage === 0 || ledgerLoading} onClick={() => setLedgerPage((page) => page - 1)}>Trước</Button>
+              <Button variant="outline" size="sm" disabled={(ledgerPage + 1) * 50 >= ledgerTotal || ledgerLoading} onClick={() => setLedgerPage((page) => page + 1)}>Sau</Button>
+            </div>
+          )}
+        </section>
+      )}
       </div>
     </div>
   );

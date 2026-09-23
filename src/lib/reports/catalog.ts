@@ -447,9 +447,9 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/luong-tien",
-    title: "Lưu chuyển tiền tệ",
-    shortTitle: "Luồng tiền",
-    description: "Theo dõi dòng tiền vào, ra và số dư theo thời gian.",
+    title: "Thu chi và dòng tiền theo chứng từ",
+    shortTitle: "Thu chi và dòng tiền",
+    description: "Thu chi theo ngày chứng từ, dòng tiền lũy kế trong kỳ và phiếu gốc theo quyền Sổ quỹ.",
     category: "finance",
     icon: "swap_horiz",
     keywords: ["cash flow", "tiền vào", "tiền ra", "số dư"],

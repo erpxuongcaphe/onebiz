@@ -48,6 +48,7 @@ import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatDate, formatUser, formatDateInputValue } from "@/lib/format";
+import { cashCategoryLabel as categoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 import { exportToCsv } from "@/lib/utils/export";
 import {
   exportReportToExcel,
@@ -77,13 +78,6 @@ const statusMap: Record<
   completed: { label: "Hoàn thành", variant: "default" },
   draft: { label: "Phiếu tạm", variant: "secondary" },
   cancelled: { label: "Đã hủy", variant: "destructive" },
-};
-
-const PAYMENT_METHOD_LABELS: Record<string, string> = {
-  cash: "Tiền mặt",
-  transfer: "Chuyển khoản",
-  card: "Thẻ",
-  ewallet: "Ví điện tử",
 };
 
 // === Fund type options ===
@@ -118,27 +112,6 @@ const statusFilterOptions = [
   { label: "Phiếu tạm", value: "draft" },
   { label: "Đã hủy", value: "cancelled" },
 ];
-
-// Map slug → label tiếng Việt cho category. Trước đây render raw slug
-// (`customer_payment`, `chi_tra_ncc`...) → user không hiểu.
-const CATEGORY_LABELS: Record<string, string> = {
-  customer_payment: "Thu tiền khách hàng",
-  thu_tien_khach: "Thu tiền khách hàng",
-  thu_tien_mat: "Thu tiền mặt",
-  thu_khac: "Thu khác",
-  supplier_payment: "Chi trả NCC",
-  chi_tra_ncc: "Chi trả NCC",
-  chi_phi_van_chuyen: "Chi phí vận chuyển",
-  chi_phi_khac: "Chi phí khác",
-  salary: "Lương nhân viên",
-  rent: "Tiền thuê",
-  utility: "Điện nước",
-};
-
-function categoryLabel(c: string | undefined | null): string {
-  if (!c) return "—";
-  return CATEGORY_LABELS[c] ?? c;
-}
 
 // CEO 06/06/2026: chuyển sang utility chung computeListPresetRange()
 // để chuẩn hoá 11 preset (thêm last_week, this_quarter, last_quarter,
@@ -851,7 +824,7 @@ export default function SoQuyPage() {
       header: "Phương thức",
       size: 125,
       cell: ({ row }) =>
-        PAYMENT_METHOD_LABELS[row.original.paymentMethod ?? ""] ?? "—",
+        cashPaymentMethodLabel(row.original.paymentMethod),
     },
     {
       accessorKey: "status",

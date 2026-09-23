@@ -30,6 +30,7 @@ Tham chiếu KiotViet: danh sách hóa đơn có bộ lọc theo thời gian, kh
 - Bảng danh sách dùng `DataTable`: không cho sắp xếp giả chỉ trên trang hiện tại khi trang được phân từ máy chủ. Có hợp đồng `sorting`/`onSortingChange` cho trang triển khai sắp xếp máy chủ.
 - Danh mục Hàng hóa: nối mã, tên, giá bán, giá vốn (theo quyền) và thời gian tạo với `getProducts` để sắp xếp toàn bộ kết quả trước phân trang. Cột tồn theo chi nhánh/BOM và các cột tính từ bảng liên kết không gắn sắp xếp sai nguồn.
 - Danh sách hóa đơn Retail: sắp mã, ngày chứng từ, khách, tổng tiền và giảm giá ngay ở truy vấn nguồn trước phân trang; các cột công nợ/hoàn trả tính từ nguồn khác vẫn chỉ hiển thị, không giả vờ sắp xếp toàn cục.
+- Báo cáo thu chi: thống nhất ngày chứng từ với Sổ quỹ thay vì ngày tạo bản ghi; KPI Thu/Chi/Ròng cộng đúng toàn kỳ đã chọn, không lấy nhầm tháng cuối. Bổ sung danh sách phiếu thu/chi 50 dòng/trang và Excel toàn kỳ qua RPC Sổ quỹ, chỉ cho người có `finance.view_cash_book`. Biểu đồ/bảng tháng đổi nội dung theo nút xem; lũy kế được ghi rõ là **trong kỳ**, không phải số dư quỹ đầu kỳ hoặc báo cáo B03-DN.
 - Xuất danh mục Hàng hóa theo đúng bộ lọc/thứ tự đang xem qua nhiều trang 1.000 dòng; không còn dựa vào một truy vấn `pageSize: 100000` vốn có thể bị giới hạn số dòng ở API.
 
 ## Bộ lọc và sắp xếp toàn web
