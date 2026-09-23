@@ -45,6 +45,7 @@ import {
   type DataTableColumn,
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -715,7 +716,7 @@ export default function BanHangPage() {
       align: "left",
       sticky: true,
       hideable: false,
-      cell: (row) => <span className="font-mono text-xs text-primary">{row.code}</span>,
+      cell: (row) => <a href={buildInvoiceListDeepLink(row.code)} className="font-mono text-xs text-primary underline-offset-2 hover:underline">{row.code}</a>,
     },
     {
       label: "Thời gian",
@@ -1214,7 +1215,7 @@ export default function BanHangPage() {
                   {topInvoicesList.map((inv) => (
                     <tr key={inv.code} className="border-b last:border-0">
                       <td className="py-3 pr-4 font-mono text-xs text-primary">
-                        {inv.code}
+                        <a href={buildInvoiceListDeepLink(inv.code)} className="underline-offset-2 hover:underline">{inv.code}</a>
                       </td>
                       <td className="py-3 pr-4 font-medium">
                         {inv.customer}
