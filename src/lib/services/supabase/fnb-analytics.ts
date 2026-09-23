@@ -390,7 +390,7 @@ export async function getCashierPerformance(
 
   let query = supabase
     .from("invoices")
-    .select("total, created_by, profiles(full_name)")
+    .select("total, created_by, profiles!invoices_created_by_fkey(full_name)")
     .eq("tenant_id", tenantId)
     .eq("source", "fnb")
     .not("status", "eq", "cancelled");
