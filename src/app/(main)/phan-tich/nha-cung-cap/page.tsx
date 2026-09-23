@@ -17,9 +17,12 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { ReportDataTable, ReportPageHeader, ReportTableFrame, type DataTableColumn } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
+import { useDebounce } from "@/lib/utils/use-debounce";
 import { useBranchFilter, useToast } from "@/lib/contexts";
+import { useAuth } from "@/lib/contexts/auth-context";
+import { PERMISSIONS } from "@/lib/permissions/constants";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -27,6 +30,7 @@ import {
 } from "@/lib/utils/excel-export";
 import {
   formatCurrency,
+  formatDate,
   formatChartCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
@@ -36,7 +40,9 @@ import {
   getTopSuppliersByPurchase,
   getSupplierPaymentStatus,
   getSupplierSummary,
+  getPurchaseOrders,
 } from "@/lib/services";
+import type { PurchaseOrder } from "@/lib/types";
 import type {
   ChartPoint,
   SupplierSummaryRow,
@@ -47,6 +53,14 @@ import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 // === Helpers ===
 
 const PAYMENT_COLORS = ["#16a34a", "#f59e0b", "#ef4444"];
+const VOUCHER_SORTS = {
+  recent: { sortBy: "created_at", sortOrder: "desc" },
+  oldest: { sortBy: "created_at", sortOrder: "asc" },
+  total: { sortBy: "total", sortOrder: "desc" },
+  paid: { sortBy: "paid", sortOrder: "desc" },
+  debt: { sortBy: "debt", sortOrder: "desc" },
+  supplier: { sortBy: "supplier_name", sortOrder: "asc" },
+} as const;
 
 function truncateAxisLabel(value: string, maxLength: number = 24): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
@@ -140,11 +154,15 @@ function renderPieLabel(props: any) {
 }
 
 export default function NhaCungCapPage() {
-  const { activeBranchId, branchLabel, isReady } = useBranchFilter();
+  const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
+  const { hasPermission } = useAuth();
+  const canViewDetail = hasPermission(PERMISSIONS.REPORTS_VIEW_DETAIL);
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
-    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [kpis, setKpis] = useState<{
     totalSuppliers: number;
     purchaseThisMonth: number;
@@ -157,8 +175,64 @@ export default function NhaCungCapPage() {
   const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
   const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
+  const [tableMode, setTableMode] = useState<"vouchers" | "suppliers">("vouchers");
+  const [voucherSearch, setVoucherSearch] = useState("");
+  const [voucherSort, setVoucherSort] = useState<keyof typeof VOUCHER_SORTS>("recent");
+  const debouncedVoucherSearch = useDebounce(voucherSearch, 300);
+  const [vouchers, setVouchers] = useState<PurchaseOrder[]>([]);
+  const [voucherPage, setVoucherPage] = useState(0);
+  const [voucherTotal, setVoucherTotal] = useState(0);
+  const [voucherLoading, setVoucherLoading] = useState(false);
+  const [voucherError, setVoucherError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
+  const voucherRequestIdRef = useRef(0);
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
+
+  const voucherColumns: DataTableColumn<PurchaseOrder>[] = [
+    {
+      label: "Mã phiếu", key: "code", sortable: false,
+      cell: (row) => <a className="font-medium text-primary hover:underline" href={`/hang-hoa/nhap-hang?search=${encodeURIComponent(row.code)}`}>{row.code}</a>,
+    },
+    { label: "Ngày tạo", key: "date", sortable: false, cell: (row) => formatDate(row.date) },
+    { label: "Nhà cung cấp", key: "supplierName", sortable: false },
+    { label: "Chi nhánh", key: "branchId", sortable: false,
+      cell: (row) => branches.find((branch) => branch.id === row.branchId)?.name ?? "—" },
+    { label: "Tổng phiếu", key: "total", align: "right", sortable: false, cell: (row) => formatCurrency(row.total) + "đ" },
+    { label: "Đã trả", key: "paid", align: "right", sortable: false, cell: (row) => formatCurrency(row.paid) + "đ" },
+    { label: "Còn nợ", key: "amountOwed", align: "right", sortable: false, cell: (row) => formatCurrency(row.amountOwed) + "đ" },
+  ];
+
+  const fetchVouchers = useCallback(async (page: number, append = false) => {
+    const requestId = ++voucherRequestIdRef.current;
+    setVoucherLoading(true);
+    setVoucherError(null);
+    try {
+      const result = await getPurchaseOrders({
+        page, pageSize: 50, search: debouncedVoucherSearch,
+        ...VOUCHER_SORTS[voucherSort],
+        branchId: activeBranchId,
+        filters: { status: "completed", dateFrom: range.from, dateTo: range.to },
+      });
+      if (requestId !== voucherRequestIdRef.current) return;
+      setVouchers((current) => append ? [...current, ...result.data] : result.data);
+      setVoucherPage(page);
+      setVoucherTotal(result.total);
+    } catch (error) {
+      if (requestId === voucherRequestIdRef.current) {
+        setVoucherError(error instanceof Error ? error.message : "Không tải được phiếu nhập.");
+      }
+    } finally {
+      if (requestId === voucherRequestIdRef.current) setVoucherLoading(false);
+    }
+  }, [activeBranchId, debouncedVoucherSearch, range, voucherSort]);
+
+  useEffect(() => {
+    if (!isReady || !canViewDetail || viewMode !== "table" || tableMode !== "vouchers") return;
+    setVouchers([]);
+    setVoucherTotal(0);
+    void fetchVouchers(0);
+    return () => { voucherRequestIdRef.current += 1; };
+  }, [canViewDetail, fetchVouchers, isReady, tableMode, viewMode]);
 
 
   const handleExportView = useCallback(() => {
@@ -169,7 +243,24 @@ export default function NhaCungCapPage() {
         branchName: branchLabel,
         generatedAt: new Date(),
       });
-      const sheet: ExcelSheet = {
+      const sheet: ExcelSheet = viewMode === "table" && tableMode === "vouchers" && canViewDetail ? {
+        name: "Phiếu nhập đã tải",
+        titleRows: title,
+        columns: [
+          { label: "Mã phiếu", key: "code", width: 16 },
+          { label: "Ngày tạo", key: "date", width: 20 },
+          { label: "Nhà cung cấp", key: "supplierName", width: 32 },
+          { label: "Chi nhánh", key: "branchName", width: 28 },
+          { label: "Tổng phiếu", key: "total", width: 18, format: "currency" },
+          { label: "Đã trả", key: "paid", width: 18, format: "currency" },
+          { label: "Còn nợ", key: "debt", width: 18, format: "currency" },
+        ],
+        rows: vouchers.map((order) => ({
+          code: order.code, date: order.date, supplierName: order.supplierName,
+          branchName: branches.find((branch) => branch.id === order.branchId)?.name ?? "",
+          total: order.total, paid: order.paid, debt: order.amountOwed,
+        })),
+      } : {
         name: "Tổng quan NCC",
         titleRows: title,
         columns: [
@@ -196,9 +287,11 @@ export default function NhaCungCapPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [supplierTable, range, branchLabel, toast]);
+  }, [supplierTable, vouchers, range, branchLabel, branches, toast, viewMode, tableMode, canViewDetail]);
 
   const handleExportFull = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
       const [allTopSuppliers, allSupplierRows] = await Promise.all([
         getTopSuppliersByPurchase(null, activeBranchId, range),
@@ -216,7 +309,7 @@ export default function NhaCungCapPage() {
           titleRows: title,
           columns: [
             { label: "Chỉ tiêu", key: "metric", width: 28 },
-            { label: "Giá trị", key: "value", width: 18, format: "currency" },
+            { label: "Giá trị", key: "value", width: 18 },
           ],
           rows: [
             { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
@@ -254,7 +347,7 @@ export default function NhaCungCapPage() {
             { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
           ],
           rows: allSupplierRows.map((s) => ({
-            name: s.name, purchased: s.total, debt: s.debt, orders: s.orders,
+            name: s.name, purchased: s.total, debt: s.debt, orderCount: s.orders,
           })),
         },
         {
@@ -267,12 +360,45 @@ export default function NhaCungCapPage() {
           rows: paymentStatus,
         },
       ];
+      if (canViewDetail) {
+        const allVouchers: PurchaseOrder[] = [];
+        for (let page = 0; ; page += 1) {
+          const result = await getPurchaseOrders({
+            page, pageSize: 1000, search: debouncedVoucherSearch,
+            ...VOUCHER_SORTS[voucherSort],
+            branchId: activeBranchId,
+            filters: { status: "completed", dateFrom: range.from, dateTo: range.to },
+          });
+          allVouchers.push(...result.data);
+          if (!result.data.length || allVouchers.length >= result.total) break;
+        }
+        sheets.push({
+          name: "Phiếu nhập trong kỳ",
+          titleRows: ["PHIẾU NHẬP HOÀN THÀNH", ...title.slice(1)],
+          columns: [
+            { label: "Mã phiếu", key: "code", width: 16 },
+            { label: "Ngày tạo", key: "date", width: 20 },
+            { label: "Nhà cung cấp", key: "supplierName", width: 32 },
+            { label: "Chi nhánh", key: "branchName", width: 28 },
+            { label: "Tổng phiếu", key: "total", width: 18, format: "currency" },
+            { label: "Đã trả", key: "paid", width: 18, format: "currency" },
+            { label: "Còn nợ", key: "debt", width: 18, format: "currency" },
+          ],
+          rows: allVouchers.map((order) => ({
+            code: order.code, date: order.date, supplierName: order.supplierName,
+            branchName: branches.find((branch) => branch.id === order.branchId)?.name ?? "",
+            total: order.total, paid: order.paid, debt: order.amountOwed,
+          })),
+        });
+      }
       await exportReportToExcel({ kind: "nha-cung-cap", mode: "full", range, branchName: branchLabel, sheets });
       toast({ title: "Đã xuất Excel (đầy đủ)", variant: "success" });
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    } finally {
+      setExporting(false);
     }
-  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, range, branchLabel, toast]);
+  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, range, branchLabel, branches, debouncedVoucherSearch, voucherSort, canViewDetail, exporting, toast]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -286,7 +412,7 @@ export default function NhaCungCapPage() {
       onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
-      exportDisabled={loading}
+      exportDisabled={loading || exporting || !!loadError}
     />
   );
 
@@ -294,12 +420,13 @@ export default function NhaCungCapPage() {
     const requestId = ++requestIdRef.current;
     try {
       setLoading(true);
+      setLoadError(null);
       const [kpiData, purchase, top, payment, summary] = await Promise.all([
         getSupplierKpis(activeBranchId, range),
         getPurchaseByMonth(6, activeBranchId, range),
         getTopSuppliersByPurchase(5, activeBranchId, range),
         getSupplierPaymentStatus(activeBranchId),
-        getSupplierSummary(8, activeBranchId, range),
+        getSupplierSummary(null, activeBranchId, range),
       ]);
       if (requestId !== requestIdRef.current) return;
       setKpis(kpiData);
@@ -309,7 +436,7 @@ export default function NhaCungCapPage() {
       setSupplierTable(summary);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
-      console.error("Failed to fetch supplier analytics:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo nhà cung cấp.");
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -336,6 +463,11 @@ export default function NhaCungCapPage() {
       {reportHeader}
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
+        {loadError && (
+          <div role="alert" className="border border-destructive/30 px-4 py-3 text-sm text-destructive">
+            {loadError}
+          </div>
+        )}
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
@@ -380,7 +512,7 @@ export default function NhaCungCapPage() {
           />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {viewMode === "chart" && <><div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Purchase volume by month */}
           <ChartCard title="Giá trị mua hàng theo tháng" subtitle={selectedPeriodLabel}>
             <div className="h-64">
@@ -510,9 +642,63 @@ export default function NhaCungCapPage() {
             )}
           </div>
         </ChartCard>
+        </>}
 
-        {/* Supplier table */}
-        <ChartCard title="Bảng tổng hợp nhà cung cấp" subtitle={selectedPeriodLabel}>
+        {viewMode === "table" && <section className="border border-border bg-surface-container-lowest">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-4 py-3">
+            <div>
+              <h2 className="text-base font-semibold">Mua hàng nhà cung cấp</h2>
+              <p className="text-sm text-muted-foreground">{selectedPeriodLabel} · {branchLabel}</p>
+              <p className="text-xs text-muted-foreground">Ngày lọc theo lúc tạo phiếu; đã trả và còn nợ là số hiện tại của phiếu.</p>
+            </div>
+            <div className="flex border border-border" role="group" aria-label="Góc nhìn báo cáo nhà cung cấp">
+              {canViewDetail && <button type="button" onClick={() => setTableMode("vouchers")}
+                className={tableMode === "vouchers" ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" : "px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"}>
+                Theo phiếu nhập
+              </button>}
+              <button type="button" onClick={() => setTableMode("suppliers")}
+                className={tableMode === "suppliers" ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground" : "px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground"}>
+                Theo nhà cung cấp
+              </button>
+            </div>
+          </div>
+          {tableMode === "vouchers" && canViewDetail ? <div className="p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="search" aria-label="Tìm mã phiếu hoặc nhà cung cấp"
+                  className="h-9 w-full max-w-sm border border-border bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  placeholder="Tìm mã phiếu hoặc nhà cung cấp" value={voucherSearch}
+                  onChange={(event) => setVoucherSearch(event.target.value)} />
+                <select aria-label="Sắp xếp phiếu nhập" className="h-9 border border-border bg-background px-2 text-sm"
+                  value={voucherSort} onChange={(event) => setVoucherSort(event.target.value as keyof typeof VOUCHER_SORTS)}>
+                  <option value="recent">Mới nhất</option>
+                  <option value="oldest">Cũ nhất</option>
+                  <option value="total">Tổng phiếu cao nhất</option>
+                  <option value="paid">Đã trả cao nhất</option>
+                  <option value="debt">Còn nợ cao nhất</option>
+                  <option value="supplier">Tên NCC A–Z</option>
+                </select>
+              </div>
+              <span className="text-sm text-muted-foreground">{voucherTotal} phiếu hoàn thành</span>
+            </div>
+            {voucherError ? <div role="alert" className="py-6 text-sm text-destructive">{voucherError}</div> : voucherLoading && !vouchers.length ? (
+              <div className="py-8 text-sm text-muted-foreground">Đang tải phiếu nhập...</div>
+            ) : <ReportDataTable<PurchaseOrder>
+              columns={voucherColumns}
+              tablePreferenceKey="report.suppliers.purchase-vouchers"
+              rows={vouchers}
+              getRowKey={(row) => row.id}
+              subtotalLabel={`Đã tải ${vouchers.length} / ${voucherTotal} phiếu`}
+              emptyState="Không có phiếu nhập hoàn thành khớp bộ lọc"
+              paginationThreshold={100}
+            />}
+            {vouchers.length < voucherTotal && <button type="button" disabled={voucherLoading}
+              onClick={() => void fetchVouchers(voucherPage + 1, true)}
+              className="mt-3 border border-border px-3 py-2 text-sm font-medium text-primary disabled:opacity-50">
+              {voucherLoading ? "Đang tải..." : "Tải thêm phiếu nhập"}
+            </button>}
+          </div> : <div className="p-4">
+          <h3 className="mb-2 text-sm font-semibold">Tổng hợp theo nhà cung cấp</h3>
           {supplierTable.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Chưa có dữ liệu nhà cung cấp
@@ -553,7 +739,8 @@ export default function NhaCungCapPage() {
               </div>
             </ReportTableFrame>
           )}
-        </ChartCard>
+          </div>}
+        </section>}
       </div>
     </div>
   );

@@ -477,6 +477,10 @@ export default function NhapHangPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get("search")?.trim();
+    if (code) setSearch(code);
+  }, []);
   // CEO 05/07: ô "Tìm theo" — "all" = gộp mã phiếu+NCC như cũ.
   const [searchField, setSearchField] = useState("all");
   const [page, setPage] = useState(0);
