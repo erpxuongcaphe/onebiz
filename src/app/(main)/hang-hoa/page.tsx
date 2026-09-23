@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
 import { ColumnDef, type SortingState } from "@tanstack/react-table";
@@ -89,6 +89,8 @@ import {
   getBOMsByProduct,
   getProductById,
 } from "@/lib/services";
+import { getFnbPreparedBomEstimates } from "@/lib/services/supabase/bom";
+import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { useToast, useBranchFilter } from "@/lib/contexts";
@@ -104,6 +106,26 @@ import { Icon } from "@/components/ui/icon";
 import { findLatestFormDraft } from "@/lib/hooks/use-durable-form-draft";
 
 type ProductScope = "nvl" | "sku";
+type PreparedCostDisplay = { value: number; source: "batch" | "recipe" };
+
+function PreparedCost({ product, cost, loading }: {
+  product: Product;
+  cost?: PreparedCostDisplay;
+  loading: boolean;
+}) {
+  if (!product.isFnbStockItem) return <>{formatCurrency(product.costPrice)}</>;
+  if (!cost) return <span className="text-muted-foreground">{loading ? "Đang tính..." : "Chưa có dự toán"}</span>;
+  return (
+    <span className="block text-right" title={cost.source === "batch"
+      ? "Giá vốn bình quân từ các mẻ đã chốt tại quán này"
+      : "Dự toán BOM theo giá bán Retail hiện hành; không phải giá vốn tồn thực tế"}>
+      {formatCurrency(cost.value)}
+      <span className="block text-[11px] font-normal text-muted-foreground">
+        {cost.source === "batch" ? "Bình quân quán" : "Dự toán BOM"}
+      </span>
+    </span>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Inline detail panel for a product row
@@ -141,6 +163,8 @@ function ProductDetail({
   onEdit,
   onDelete,
   canViewCost,
+  preparedCost,
+  preparedCostLoading,
   stockCardBranchId,
   stockCardBranchName,
   onConfigureBom,
@@ -151,6 +175,8 @@ function ProductDetail({
   onDelete?: () => void;
   /** Sprint A.2: ẩn "Giá vốn" / "Lợi nhuận" khi user không có quyền products.view_cost */
   canViewCost: boolean;
+  preparedCost?: PreparedCostDisplay;
+  preparedCostLoading: boolean;
   stockCardBranchId?: string;
   stockCardBranchName?: string;
   onConfigureBom?: () => void;
@@ -198,7 +224,14 @@ function ProductDetail({
                     { label: "Nhà cung cấp", value: product.supplierName ?? null },
                     // Sprint A.2: ẩn "Giá vốn" khỏi user thiếu products.view_cost
                     ...(canViewCost
-                      ? [{ label: "Giá vốn", value: formatCurrency(product.costPrice) }]
+                      ? [{
+                          label: product.isFnbStockItem && preparedCost?.source === "recipe"
+                            ? "Dự toán BOM" : "Giá vốn",
+                          value: product.isFnbStockItem
+                            ? preparedCost ? formatCurrency(preparedCost.value)
+                              : preparedCostLoading ? "Đang tính..." : "Chưa có dự toán"
+                            : formatCurrency(product.costPrice),
+                        }]
                       : []),
                     {
                       label: "Giá bán",
@@ -369,6 +402,9 @@ export default function HangHoaPage() {
   const [bomAvailability, setBomAvailability] = useState<
     Map<string, { available: number; bottleneck?: string }>
   >(new Map());
+  const [preparedCosts, setPreparedCosts] = useState<Map<string, PreparedCostDisplay>>(new Map());
+  const [preparedCostsLoading, setPreparedCostsLoading] = useState(false);
+  const listRequestId = useRef(0);
   const [stats, setStats] = useState<{
     totalCount: number;
     stockValue: number;
@@ -615,8 +651,11 @@ export default function HangHoaPage() {
 
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     if (permissionsLoading) return;
+    const requestId = ++listRequestId.current;
     if (!activeBranchId && !duocXemToanChuoi) {
       setData([]);
+      setPreparedCosts(new Map());
+      setPreparedCostsLoading(false);
       setTotal(0);
       setOtherBranchCount(0);
       setLoading(false);
@@ -635,8 +674,13 @@ export default function HangHoaPage() {
       branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
       filters: listFilters,
     });
+    if (requestId !== listRequestId.current) return;
     setData(result.data);
     setTotal(result.total);
+    setPreparedCosts(new Map());
+    const preparedIds = result.data.filter((product) => canViewCost && product.isFnbStockItem)
+      .map((product) => product.id);
+    setPreparedCostsLoading(preparedIds.length > 0);
     // Trống vì đang lọc theo chi nhánh? Đếm SP toàn chuỗi (cùng bộ lọc) để gợi ý.
     if (duocXemToanChuoi && result.data.length === 0 && !viewAllBranches && activeBranchId) {
       try {
@@ -667,6 +711,33 @@ export default function HangHoaPage() {
     const productIds = Array.from(new Set(result.data.map((p) => p.id)));
 
     await Promise.all([
+      (async () => {
+        if (!preparedIds.length) return;
+        try {
+          const [estimates, branchCosts] = await Promise.all([
+            getFnbPreparedBomEstimates(preparedIds, isFnbOutletView ? activeBranchId : undefined),
+            isFnbOutletView && activeBranchId
+              ? getFnbBranchComponentCosts(activeBranchId, preparedIds).catch(() => new Map())
+              : Promise.resolve(new Map()),
+          ]);
+          const next = new Map<string, PreparedCostDisplay>();
+          for (const id of preparedIds) {
+            const branchCost = branchCosts.get(id);
+            if (branchCost && branchCost.costedQuantity > 0 &&
+              Math.abs(branchCost.costedQuantity - branchCost.physicalQuantity) <= 0.0001) {
+              next.set(id, { value: branchCost.unitCost, source: "batch" });
+            } else if (estimates.has(id)) {
+              next.set(id, { value: estimates.get(id)!, source: "recipe" });
+            }
+          }
+          if (requestId === listRequestId.current) setPreparedCosts(next);
+        } catch (error) {
+          console.warn("Không tính được dự toán BOM bán thành phẩm:", error);
+          if (requestId === listRequestId.current) setPreparedCosts(new Map());
+        } finally {
+          if (requestId === listRequestId.current) setPreparedCostsLoading(false);
+        }
+      })(),
       // Day 18/05/2026 (CEO): query BOM status cho SKU có has_bom=true
       // → set state để badge "Chưa có BOM" hiển thị warning.
       (async () => {
@@ -731,7 +802,7 @@ export default function HangHoaPage() {
         }
       })(),
     ]);
-  }, [page, pageSize, sorting, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches, duocXemToanChuoi, permissionsLoading]);
+  }, [page, pageSize, sorting, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches, duocXemToanChuoi, permissionsLoading, isFnbOutletView, canViewCost]);
 
   // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
   useEffect(() => {
@@ -1371,7 +1442,7 @@ export default function HangHoaPage() {
             accessorKey: "costPrice",
             header: "Giá vốn",
             cell: ({ row }: { row: { original: Product } }) => (
-              <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
+              <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} loading={preparedCostsLoading} /></span>
             ),
           } as ColumnDef<Product, unknown>,
         ]
@@ -1561,7 +1632,7 @@ export default function HangHoaPage() {
             accessorKey: "costPrice",
             header: "Giá vốn",
             cell: ({ row }: { row: { original: Product } }) => (
-              <span className="text-right block">{formatCurrency(row.original.costPrice)}</span>
+              <span className="text-right block"><PreparedCost product={row.original} cost={preparedCosts.get(row.original.id)} loading={preparedCostsLoading} /></span>
             ),
           } as ColumnDef<Product, unknown>,
         ]
@@ -2167,6 +2238,8 @@ export default function HangHoaPage() {
                 setDeleteConfirmOpen(true);
               }}
               canViewCost={canViewCost}
+              preparedCost={preparedCosts.get(product.id)}
+              preparedCostLoading={preparedCostsLoading}
               stockCardBranchId={branchStockView ? activeBranchId : undefined}
               stockCardBranchName={branchStockView ? currentBranch?.name : undefined}
               onConfigureBom={() => {

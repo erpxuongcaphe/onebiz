@@ -523,6 +523,89 @@ export async function calculateBOMCost(
   };
 }
 
+/** Current recipe estimate for prepared F&B stock, not an inventory valuation. */
+export async function getFnbPreparedBomEstimates(
+  productIds: string[],
+  branchId?: string,
+): Promise<Map<string, number>> {
+  const estimates = new Map<string, number>();
+  if (productIds.length === 0) return estimates;
+  const tenantId = await getCurrentTenantId();
+  const ids = [...new Set(productIds)];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
+  const { data: products, error: productError } = await client.from("products")
+    .select("id, bom_code")
+    .eq("tenant_id", tenantId)
+    .in("id", ids);
+  if (productError) throw productError;
+  const linkedCodes = new Map<string, string>(
+    (products ?? []).filter((product: { bom_code: string | null }) => product.bom_code)
+      .map((product: { id: string; bom_code: string }) => [product.id, product.bom_code]),
+  );
+  const headerSelect = "id, product_id, code, branch_id, version, yield_qty";
+  const { data: directHeaders, error: headerError } = await client.from("bom")
+    .select(headerSelect)
+    .eq("tenant_id", tenantId)
+    .eq("is_active", true)
+    .in("product_id", ids)
+    .order("version", { ascending: false });
+  if (headerError) throw headerError;
+  const { data: linkedHeaders, error: linkedError } = linkedCodes.size
+    ? await client.from("bom")
+      .select(headerSelect)
+      .eq("tenant_id", tenantId)
+      .eq("is_active", true)
+      .in("code", [...new Set(linkedCodes.values())])
+      .order("version", { ascending: false })
+    : { data: [], error: null };
+  if (linkedError) throw linkedError;
+
+  const selected = new Map<string, { id: string; yield_qty: number; branch_id: string | null }>();
+  const linkedByCode = new Map<string, string[]>();
+  for (const [id, code] of linkedCodes) {
+    linkedByCode.set(code, [...(linkedByCode.get(code) ?? []), id]);
+  }
+  for (const header of [...(directHeaders ?? []), ...(linkedHeaders ?? [])]) {
+    const targets: string[] = header.code && linkedByCode.has(header.code)
+      ? linkedByCode.get(header.code)!
+      : header.product_id && !linkedCodes.has(header.product_id) ? [header.product_id] : [];
+    for (const id of targets) {
+      const existing = selected.get(id);
+      const eligible = header.branch_id == null || header.branch_id === branchId;
+      if (!eligible || (existing && branchId && existing.branch_id === branchId && header.branch_id == null)) continue;
+      if (!existing || (branchId && header.branch_id === branchId && existing.branch_id == null)) {
+        selected.set(id, header);
+      }
+    }
+  }
+  const bomIds = [...selected.values()].map((header) => header.id);
+  if (!bomIds.length) return estimates;
+
+  const { data: items, error: itemError } = await client.from("bom_items")
+    .select("bom_id, quantity, waste_percent, products!bom_items_material_id_fkey(sell_price, is_fnb_stock_item)")
+    .in("bom_id", bomIds);
+  if (itemError) throw itemError;
+  const lines = new Map<string, Array<{ quantity: number; waste_percent: number; products: { sell_price: number; is_fnb_stock_item: boolean } | null }>>();
+  for (const item of items ?? []) {
+    const rows = lines.get(item.bom_id) ?? [];
+    rows.push(item);
+    lines.set(item.bom_id, rows);
+  }
+  for (const [productId, header] of selected) {
+    const rows = lines.get(header.id) ?? [];
+    const yieldQty = Number(header.yield_qty);
+    if (!rows.length || !Number.isFinite(yieldQty) || yieldQty <= 0 ||
+      rows.some((row) => !row.products || row.products.is_fnb_stock_item ||
+        !(Number(row.products.sell_price) > 0))) continue;
+    const total = rows.reduce((sum, row) =>
+      sum + Number(row.quantity) * (1 + Number(row.waste_percent ?? 0) / 100) *
+        Number(row.products!.sell_price), 0);
+    if (Number.isFinite(total)) estimates.set(productId, total / yieldQty);
+  }
+  return estimates;
+}
+
 /**
  * Giá vốn thực tế của BOM F&B tại một quán.
  *
