@@ -27,12 +27,12 @@ import { useBranchFilter, useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts";
 import {
   getOverviewKpis,
-  getDailyRevenue,
+  getSalesReportDailyRows,
   getRevenueByCategory,
   getTopProductsByRevenue,
 } from "@/lib/services";
 import type {
-  MonthlyRevenuePoint,
+  SalesReportDailyRow,
   CategoryRevenue,
   TopProductRevenue,
 } from "@/lib/services/supabase/analytics";
@@ -44,6 +44,7 @@ import {
 } from "@/lib/utils/excel-export";
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
 
 // === Helpers ===
 
@@ -102,7 +103,11 @@ export default function TongQuanPage() {
     newCustomers: number; prevNewCustomers: number;
     profit: number; prevProfit: number;
   } | null>(null);
-  const [dailyRevenue, setDailyRevenue] = useState<MonthlyRevenuePoint[]>([]);
+  const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
+  const dailyRevenue = dailyRows.map((row) => ({
+    date: `${row.date.slice(8, 10)}/${row.date.slice(5, 7)}`,
+    revenue: row.netRevenue,
+  }));
   const [categoryRevenue, setCategoryRevenue] = useState<CategoryRevenue[]>([]);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
   // Finance KPI cho Excel export (chi phí, biên LN — KPI Snapshot cần)
@@ -128,7 +133,7 @@ export default function TongQuanPage() {
 
       // Sheet duy nhất gom KPI + top products (mirror view)
       const kpiRows = [
-        { metric: "Doanh thu", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
+        { metric: "Doanh thu thuần", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
         { metric: "Đơn hàng", value: kpis?.orders ?? 0, prev: kpis?.prevOrders ?? 0 },
         { metric: "Khách mới", value: kpis?.newCustomers ?? 0, prev: kpis?.prevNewCustomers ?? 0 },
         { metric: "Lợi nhuận", value: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
@@ -336,7 +341,7 @@ export default function TongQuanPage() {
       try {
         const [kpiData, daily, category, products] = await Promise.all([
           getOverviewKpis(activeBranchId, range),
-          getDailyRevenue(30, activeBranchId, range),
+          getSalesReportDailyRows(activeBranchId, range),
           getRevenueByCategory(activeBranchId, range),
           getTopProductsByRevenue(10, activeBranchId, range),
         ]);
@@ -352,7 +357,7 @@ export default function TongQuanPage() {
           profitMargin: kpiData.profitMargin,
           prevProfitMargin: kpiData.prevProfitMargin,
         });
-        setDailyRevenue(daily);
+        setDailyRows(daily);
         setCategoryRevenue(category);
         setTopProducts(products);
       } catch (err) {
@@ -407,7 +412,7 @@ export default function TongQuanPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Doanh thu"
+            label="Doanh thu thuần"
             value={formatCurrency(kpis?.revenue ?? 0) + "đ"}
             change={calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0)}
             positive={(kpis?.revenue ?? 0) >= (kpis?.prevRevenue ?? 0)}
@@ -454,7 +459,7 @@ export default function TongQuanPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Revenue line chart */}
             <ChartCard
-              title="Doanh thu theo ngày"
+              title="Doanh thu thuần theo ngày"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -489,7 +494,7 @@ export default function TongQuanPage() {
                     <Line
                       type="linear"
                       dataKey="revenue"
-                      name="Doanh thu"
+                      name="Doanh thu thuần"
                       stroke="#004AC6"
                       strokeWidth={2}
                       dot={false}
@@ -502,7 +507,7 @@ export default function TongQuanPage() {
 
             {/* Revenue by category bar chart */}
             <ChartCard
-              title="Doanh thu theo danh mục"
+              title="Doanh số gộp theo danh mục"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -536,7 +541,7 @@ export default function TongQuanPage() {
                     <Tooltip content={<RevenueTooltip />} />
                     <Bar
                       dataKey="revenue"
-                      name="Doanh thu"
+                      name="Doanh số gộp"
                       fill="#004AC6"
                       radius={[0, 4, 4, 0]}
                     />
@@ -549,7 +554,7 @@ export default function TongQuanPage() {
           /* Table view — 2 bảng số liệu kế toán: theo ngày + theo danh mục */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
-              title="Doanh thu theo ngày"
+              title="Doanh thu thuần theo ngày"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -561,7 +566,7 @@ export default function TongQuanPage() {
                 </Link>
               }
             >
-              {dailyRevenue.length === 0 ? (
+              {dailyRows.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
                   Chưa có dữ liệu doanh thu theo ngày
                 </div>
@@ -572,20 +577,36 @@ export default function TongQuanPage() {
                     <thead className="sticky top-0 bg-surface-container-low">
                       <tr className="border-b text-left text-xs text-muted-foreground">
                         <th className="py-2 px-3 font-medium">Ngày</th>
-                        <th className="py-2 px-3 font-medium text-right">Doanh thu</th>
+                        <th className="py-2 px-3 font-medium text-right">Bán gộp</th>
+                        <th className="py-2 px-3 font-medium text-right">Hàng trả</th>
+                        <th className="py-2 px-3 font-medium text-right">Doanh thu thuần</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {dailyRevenue.map((d) => (
+                      {dailyRows.map((d) => (
                         <tr
                           key={d.date}
                           className="border-b last:border-0 hover:bg-surface-container-low"
                         >
                           <td className="py-1.5 px-3 text-foreground tabular-nums">
-                            {d.date}
+                            {d.date.slice(8, 10)}/{d.date.slice(5, 7)}
+                          </td>
+                          <td className="py-1.5 px-3 text-right tabular-nums">
+                            {d.grossRevenue > 0 ? (
+                              <Link href={buildSalesInvoiceDayLink(d.date, activeBranchId)} className="text-primary hover:underline">
+                                {formatCurrency(d.grossRevenue)}đ
+                              </Link>
+                            ) : "0đ"}
+                          </td>
+                          <td className="py-1.5 px-3 text-right tabular-nums">
+                            {d.returnAmount > 0 ? (
+                              <Link href={buildSalesReturnDayLink(d.date, activeBranchId)} className="text-primary hover:underline">
+                                {formatCurrency(d.returnAmount)}đ
+                              </Link>
+                            ) : "0đ"}
                           </td>
                           <td className="py-1.5 px-3 text-right font-medium tabular-nums">
-                            {formatCurrency(d.revenue)}đ
+                            {formatCurrency(d.netRevenue)}đ
                           </td>
                         </tr>
                       ))}
@@ -593,10 +614,14 @@ export default function TongQuanPage() {
                     <tfoot className="bg-surface-container-low">
                       <tr className="border-t-2 border-foreground/20 font-bold">
                         <td className="py-2 px-3">TỔNG</td>
+                        <td className="py-2 px-3 text-right tabular-nums">
+                          {formatCurrency(dailyRows.reduce((sum, row) => sum + row.grossRevenue, 0))}đ
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums">
+                          {formatCurrency(dailyRows.reduce((sum, row) => sum + row.returnAmount, 0))}đ
+                        </td>
                         <td className="py-2 px-3 text-right text-primary tabular-nums">
-                          {formatCurrency(
-                            dailyRevenue.reduce((s, d) => s + d.revenue, 0),
-                          )}đ
+                          {formatCurrency(dailyRows.reduce((sum, row) => sum + row.netRevenue, 0))}đ
                         </td>
                       </tr>
                     </tfoot>
@@ -607,7 +632,7 @@ export default function TongQuanPage() {
             </ChartCard>
 
             <ChartCard
-              title="Doanh thu theo danh mục"
+              title="Doanh số gộp theo danh mục"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -630,7 +655,7 @@ export default function TongQuanPage() {
                     <thead>
                       <tr className="border-b text-left text-xs text-muted-foreground">
                         <th className="py-2 px-3 font-medium">Danh mục</th>
-                        <th className="py-2 px-3 font-medium text-right">Doanh thu</th>
+                        <th className="py-2 px-3 font-medium text-right">Doanh số gộp</th>
                         <th className="py-2 px-3 font-medium text-right">% tổng</th>
                       </tr>
                     </thead>
@@ -680,7 +705,7 @@ export default function TongQuanPage() {
         )}
 
         {/* Top 10 products table */}
-        <ChartCard title="Top 10 sản phẩm bán chạy" subtitle={`Theo doanh thu · ${selectedPeriodLabel}`}>
+        <ChartCard title="Top 10 sản phẩm bán chạy" subtitle={`Theo doanh số gộp · ${selectedPeriodLabel}`}>
           {topProducts.length === 0 ? (
             <div className="flex items-center justify-center h-32 text-sm text-muted-foreground">
               Chưa có dữ liệu sản phẩm bán chạy
@@ -694,7 +719,7 @@ export default function TongQuanPage() {
                     <th className="pb-2 pr-4 font-medium w-8">#</th>
                     <th className="pb-2 pr-4 font-medium">Sản phẩm</th>
                     <th className="pb-2 pr-4 font-medium text-right">SL bán</th>
-                    <th className="pb-2 font-medium text-right">Doanh thu</th>
+                    <th className="pb-2 font-medium text-right">Doanh số gộp</th>
                   </tr>
                 </thead>
                 <tbody>
