@@ -25,6 +25,18 @@ const migration = readFileSync(
   "supabase/migrations/00258_finance_dashboard_consistency.sql",
   "utf8",
 );
+const refundMigration = readFileSync(
+  "supabase/migrations/00393_report_sales_refunds_not_operating_expense.sql",
+  "utf8",
+);
+const returnWriter = readFileSync(
+  "supabase/migrations/00381_allow_customer_credit_on_sales_return.sql",
+  "utf8",
+);
+const overviewPage = readFileSync(
+  "src/app/(main)/phan-tich/page.tsx",
+  "utf8",
+);
 
 beforeEach(() => {
   rpc.mockReset();
@@ -119,5 +131,23 @@ describe("finance dashboard consistency", () => {
     expect(service.slice(detailedStart, detailedEnd)).toContain(
       '.eq("status", "completed")',
     );
+  });
+
+  it("does not count sales-return refunds as both reduced revenue and expense", () => {
+    expect(returnWriter).toContain("'payment', 'Tra hang'");
+    expect(returnWriter).toContain("'sales_return', v_return_id");
+    expect(refundMigration).toContain("'get_profit_and_loss_report'");
+    expect(refundMigration).toContain("'get_branch_profit_and_loss_report'");
+    expect(refundMigration).toContain("'get_finance_dashboard_report'");
+    expect(refundMigration).toContain("execute replace(v_definition, '''Trả hàng''', '''Trả hàng'', ''Tra hang''')");
+    expect(refundMigration).not.toMatch(/\b(?:insert|update|delete)\s+(?:into|public\.)/i);
+  });
+
+  it("uses return-adjusted daily rows for the overview KPI drilldown", () => {
+    expect(overviewPage).toContain("getSalesReportDailyRows(activeBranchId, range)");
+    expect(overviewPage).toContain("row.netRevenue");
+    expect(overviewPage).toContain("buildSalesInvoiceDayLink(d.date, activeBranchId)");
+    expect(overviewPage).toContain("buildSalesReturnDayLink(d.date, activeBranchId)");
+    expect(overviewPage).not.toContain("getDailyRevenue(30, activeBranchId, range)");
   });
 });
