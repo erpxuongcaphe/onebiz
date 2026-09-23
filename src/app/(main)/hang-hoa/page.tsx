@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import dynamic from "next/dynamic";
-import { ColumnDef } from "@tanstack/react-table";
+import { ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { PageHeader } from "@/components/shared/page-header";
 import { ListPageLayout } from "@/components/shared/list-page-layout";
@@ -343,6 +343,15 @@ function ProductDetail({
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
+const PRODUCT_SORT_COLUMNS = ["code", "name", "createdAt", "sellPrice", "costPrice"];
+const PRODUCT_SORT_FIELDS: Record<string, string> = {
+  code: "code",
+  name: "name",
+  createdAt: "created_at",
+  sellPrice: "sell_price",
+  costPrice: "cost_price",
+};
+
 export default function HangHoaPage() {
   const [scope, setScope] = useState<ProductScope>("nvl");
   const [data, setData] = useState<Product[]>([]);
@@ -381,6 +390,7 @@ export default function HangHoaPage() {
   }, []);
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(15);
+  const [sorting, setSorting] = useState<SortingState>([]);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
   const [starred, setStarred] = useState<Set<string>>(new Set());
 
@@ -617,6 +627,8 @@ export default function HangHoaPage() {
     const result = await getProducts({
       page,
       pageSize,
+      sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id] ?? "created_at",
+      sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
       search: debouncedSearch,
       searchField,
       // Branch-scope: mặc định theo CN đang chọn; "Toàn chuỗi" → undefined.
@@ -719,7 +731,7 @@ export default function HangHoaPage() {
         }
       })(),
     ]);
-  }, [page, pageSize, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches, duocXemToanChuoi, permissionsLoading]);
+  }, [page, pageSize, sorting, debouncedSearch, searchField, scope, buildListFilters, activeBranchId, viewAllBranches, duocXemToanChuoi, permissionsLoading]);
 
   // Đổi chi nhánh / bật-tắt "Toàn chuỗi" → về trang 1.
   useEffect(() => {
@@ -1105,6 +1117,7 @@ export default function HangHoaPage() {
 
   // Reset category + brand filter when scope changes (pool khác nhau giữa NVL/SKU)
   useEffect(() => {
+    setSorting([]);
     setCategoryFilter("all");
     setBrandFilter("all");
   }, [scope]);
@@ -1133,15 +1146,21 @@ export default function HangHoaPage() {
     if (exporting) return; // đang tải toàn bộ dòng — chặn bấm kép
     setExporting(true);
     try {
-      const all = await getProducts({
-        page: 0,
-        pageSize: 100000, // lấy hết dòng khớp lọc, không giới hạn theo trang
-        search: debouncedSearch,
-        searchField,
-        branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
-        filters: buildListFilters(),
-      });
-      const rows = all.data;
+      const rows: Product[] = [];
+      for (let exportPage = 0; ; exportPage += 1) {
+        const result = await getProducts({
+          page: exportPage,
+          pageSize: 1000,
+          sortBy: PRODUCT_SORT_FIELDS[sorting[0]?.id] ?? "created_at",
+          sortOrder: sorting[0] ? (sorting[0].desc ? "desc" : "asc") : "desc",
+          search: debouncedSearch,
+          searchField,
+          branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId,
+          filters: buildListFilters(),
+        });
+        rows.push(...result.data);
+        if (result.data.length === 0 || rows.length >= result.total) break;
+      }
       if (rows.length === 0) {
         toast({ title: "Không có dòng nào để xuất", variant: "warning" });
         return;
@@ -1898,6 +1917,12 @@ export default function HangHoaPage() {
         <DataTable
           columns={columns}
           data={data}
+          sorting={sorting}
+          onSortingChange={(updater) => {
+            setSorting((current) => typeof updater === "function" ? updater(current) : updater);
+            setPage(0);
+          }}
+          sortableColumnIds={PRODUCT_SORT_COLUMNS}
           loading={loading}
           density="compact"
           toolbarMetrics={

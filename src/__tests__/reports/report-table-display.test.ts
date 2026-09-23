@@ -52,7 +52,7 @@ describe("report table display controls", () => {
 
   it("paginates large report tables without limiting Excel exports", () => {
     expect(table).toContain("DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 200]");
-    expect(table).toContain("rows.slice(pageStart, pageEnd)");
+    expect(table).toContain("sortedRows.slice(pageStart, pageEnd)");
     expect(table).toContain("pagedRows.map");
     expect(table).toContain("absoluteIndex");
     expect(table).toContain('aria-label="Số dòng mỗi trang"');

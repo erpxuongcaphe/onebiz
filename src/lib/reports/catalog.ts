@@ -194,7 +194,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/tong-hop-kenh",
-    title: "Tổng hợp theo kênh",
+    title: "Doanh thu bán lẻ và F&B theo kênh",
     shortTitle: "Tổng hợp kênh",
     description: "So sánh kết quả giữa cửa hàng, POS và các kênh bán.",
     category: "executive",
@@ -234,7 +234,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/dat-hang",
-    title: "Đặt hàng & xử lý",
+    title: "Tình trạng đơn đặt hàng",
     shortTitle: "Đặt hàng",
     description: "Theo dõi đơn đặt, tỷ lệ chuyển đổi và tiến độ xử lý.",
     category: "sales",
@@ -294,7 +294,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/khach-san-pham",
-    title: "Khách hàng mua sản phẩm nào",
+    title: "Doanh số mặt hàng theo khách hàng",
     shortTitle: "Khách và sản phẩm",
     description: "Xem từng khách đã mua sản phẩm nào, số lượng và doanh thu.",
     category: "customers",
@@ -334,7 +334,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/hang-hoa",
-    title: "Phân tích hàng hóa",
+    title: "Hiệu quả bán và tồn kho hàng hóa",
     shortTitle: "Hàng hóa",
     description: "Hiệu quả bán, số lượng và doanh thu theo sản phẩm.",
     category: "inventory",
@@ -477,9 +477,9 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/fnb",
-    title: "Báo cáo vận hành F&B",
+    title: "Doanh thu và vận hành F&B",
     shortTitle: "F&B",
-    description: "Các chỉ số bán món, bàn, ca và vận hành cửa hàng F&B.",
+    description: "Đối soát hóa đơn và xem số liệu theo giờ, món bếp, bàn, nhân viên.",
     category: "operations",
     icon: "local_cafe",
     keywords: ["quán cà phê", "nhà hàng", "món", "bàn"],
@@ -527,7 +527,7 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/nha-cung-cap",
-    title: "Báo cáo nhà cung cấp",
+    title: "Mua hàng theo nhà cung cấp",
     shortTitle: "Nhà cung cấp",
     description: "Tổng hợp mua hàng, giá trị nhập và hiệu quả nhà cung cấp.",
     category: "operations",

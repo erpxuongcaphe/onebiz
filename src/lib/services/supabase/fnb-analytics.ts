@@ -82,6 +82,85 @@ export interface CashierPerformance {
   avgTicket: number;
 }
 
+export interface FnbInvoiceDetailRow {
+  id: string;
+  code: string;
+  issuedAt: string;
+  customerName: string;
+  status: string;
+  total: number;
+  paid: number;
+  debt: number;
+  paymentMethod: string;
+}
+
+export interface FnbInvoiceDetailPage {
+  rows: FnbInvoiceDetailRow[];
+  hasMore: boolean;
+}
+
+/** Read-only, bounded drill-down using the same invoice scope as F&B KPIs. */
+export async function getFnbInvoiceDetailPage(
+  branchId?: string,
+  range?: { from: string; to: string },
+  offset = 0,
+  limit = 50,
+): Promise<FnbInvoiceDetailPage> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  const pageSize = Math.min(Math.max(1, limit), 500);
+  const start = Math.max(0, offset);
+
+  let query = supabase
+    .from("invoices")
+    .select("id, code, ngay_chung_tu, customer_name, status, total, paid, debt, payment_method")
+    .eq("tenant_id", tenantId)
+    .eq("source", "fnb")
+    .not("status", "eq", "cancelled");
+  if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeWindow) {
+    query = query.gte("ngay_chung_tu", rangeWindow.start).lt("ngay_chung_tu", rangeWindow.end);
+  }
+
+  const { data, error } = await query
+    .order("ngay_chung_tu", { ascending: false })
+    .order("id", { ascending: false })
+    .range(start, start + pageSize);
+  if (error) {
+    handleError(error, "[getFnbInvoiceDetailPage]");
+    return { rows: [], hasMore: false };
+  }
+  const page = data ?? [];
+  return {
+    rows: page.slice(0, pageSize).map((invoice) => ({
+      id: invoice.id,
+      code: invoice.code,
+      issuedAt: invoice.ngay_chung_tu,
+      customerName: invoice.customer_name || "Khách lẻ",
+      status: invoice.status,
+      total: Number(invoice.total ?? 0),
+      paid: Number(invoice.paid ?? 0),
+      debt: Number(invoice.debt ?? 0),
+      paymentMethod: invoice.payment_method ?? "",
+    })),
+    hasMore: page.length > pageSize,
+  };
+}
+
+/** Explicit export only; paged reads avoid Supabase's per-request row cap. */
+export async function getFnbInvoiceExportRows(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<FnbInvoiceDetailRow[]> {
+  const rows: FnbInvoiceDetailRow[] = [];
+  for (;;) {
+    const page = await getFnbInvoiceDetailPage(branchId, range, rows.length, 500);
+    rows.push(...page.rows);
+    if (!page.hasMore || page.rows.length === 0) return rows;
+  }
+}
+
 // === Queries ===
 
 /**
@@ -155,7 +234,7 @@ export async function getRevenueByMenuItem(
   // Get completed kitchen order IDs
   let koQuery = supabase
     .from("kitchen_orders")
-    .select("id")
+    .select("id, invoice_id, invoices(status)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
@@ -164,7 +243,12 @@ export async function getRevenueByMenuItem(
   }
 
   const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
-  const koIds = (koRows ?? []).map((r) => r.id);
+  const koIds = (koRows ?? [])
+    .filter((order) => {
+      const invoice = (order as Record<string, unknown>).invoices as { status: string } | null;
+      return Boolean(order.invoice_id && invoice && invoice.status !== "cancelled");
+    })
+    .map((order) => order.id);
   if (koIds.length === 0) return [];
 
   // Get items for those orders — scope qua kitchen_order_id (đã filter tenant ở koQuery)
@@ -216,7 +300,7 @@ export async function getRevenueByTable(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices(total)")
+    .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices(total, status)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .not("table_id", "is", null);
@@ -228,9 +312,12 @@ export async function getRevenueByTable(
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
 
   const map = new Map<string, { tableName: string; revenue: number; orders: number }>();
+  const countedInvoices = new Set<string>();
   for (const row of rows ?? []) {
     const tbl = (row as Record<string, unknown>).restaurant_tables as { name: string } | null;
-    const inv = (row as Record<string, unknown>).invoices as { total: number } | null;
+    const inv = (row as Record<string, unknown>).invoices as { total: number; status: string } | null;
+    if (!row.invoice_id || !inv || inv.status === "cancelled" || countedInvoices.has(row.invoice_id)) continue;
+    countedInvoices.add(row.invoice_id);
     const tableName = tbl?.name ?? `Bàn ${row.table_id?.slice(0, 4)}`;
     const key = row.table_id!;
     const prev = map.get(key) ?? { tableName, revenue: 0, orders: 0 };

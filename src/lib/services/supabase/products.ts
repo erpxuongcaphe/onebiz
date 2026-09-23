@@ -159,6 +159,7 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
   const sortBy = params.sortBy ?? "created_at";
   const ascending = params.sortOrder === "asc";
   query = query.order(sortBy, { ascending });
+  if (sortBy !== "id") query = query.order("id", { ascending });
 
   // Paginate
   query = query.range(from, to);

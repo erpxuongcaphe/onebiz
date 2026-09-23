@@ -343,7 +343,7 @@ export default function TongHopKenhPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Tổng hợp kênh"
+      title="Doanh thu bán lẻ và F&B theo kênh"
       subtitle="So sánh bán lẻ và F&B trên toàn hệ thống"
       preset={preset}
       range={range}

@@ -6,6 +6,7 @@ import {
   getCoreRowModel,
   getSortedRowModel,
   SortingState,
+  OnChangeFn,
   useReactTable,
   RowSelectionState,
   VisibilityState,
@@ -91,6 +92,11 @@ interface DataTableProps<TData, TValue> {
   pageCount?: number;
   pageIndex?: number;
   pageSize?: number;
+  /** Server-side ordering for paginated lists; must sort before paging. */
+  sorting?: SortingState;
+  onSortingChange?: OnChangeFn<SortingState>;
+  /** Only fields mapped to an actual server-side sort should be clickable. */
+  sortableColumnIds?: string[];
   onPageChange?: (page: number) => void;
   onPageSizeChange?: (size: number) => void;
   total?: number;
@@ -323,6 +329,9 @@ export function DataTable<TData, TValue>({
   pageCount = 1,
   pageIndex = 0,
   pageSize = 20,
+  sorting: controlledSorting,
+  onSortingChange,
+  sortableColumnIds,
   onPageChange,
   onPageSizeChange,
   total = 0,
@@ -352,6 +361,7 @@ export function DataTable<TData, TValue>({
   emptyBranchHint,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
+  const serverPaged = pageCount > 1;
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   // Day 17/05/2026: Select-all-matching mode — user đã click banner "Chọn tất
   // cả X SP khớp bộ lọc" → rowSelection chứa cả IDs ngoài trang hiện tại
@@ -409,7 +419,12 @@ export function DataTable<TData, TValue>({
       } as ColumnDef<TData, TValue>);
     }
 
-    cols.push(...columns);
+    cols.push(...columns.map((column) => {
+      if (!sortableColumnIds) return column;
+      const accessorKey = "accessorKey" in column ? String(column.accessorKey) : "";
+      const id = column.id ?? accessorKey;
+      return { ...column, enableSorting: Boolean(id && sortableColumnIds.includes(id) && column.enableSorting !== false) };
+    }));
 
     if (rowActions) {
       cols.push({
@@ -456,7 +471,7 @@ export function DataTable<TData, TValue>({
     }
 
     return cols;
-  }, [columns, selectable, rowActions]);
+  }, [columns, selectable, rowActions, sortableColumnIds]);
 
   const table = useReactTable<TData>({
     data,
@@ -464,13 +479,15 @@ export function DataTable<TData, TValue>({
     columns: allColumns as any,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    onSortingChange: setSorting,
+    manualSorting: serverPaged,
+    enableSorting: !serverPaged || Boolean(onSortingChange),
+    onSortingChange: onSortingChange ?? setSorting,
     onRowSelectionChange: setRowSelection,
     onColumnVisibilityChange: setColumnVisibility,
     manualPagination: true,
     pageCount,
     state: {
-      sorting,
+      sorting: controlledSorting ?? sorting,
       rowSelection,
       // Sprint B8: dùng mergedVisibility để auto-hide theo viewport breakpoint
       columnVisibility: mergedVisibility,

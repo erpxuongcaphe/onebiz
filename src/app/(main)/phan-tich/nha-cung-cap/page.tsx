@@ -276,7 +276,7 @@ export default function NhaCungCapPage() {
 
   const reportHeader = (
     <ReportPageHeader
-      title="Phân tích nhà cung cấp"
+      title="Mua hàng theo nhà cung cấp"
       subtitle="Thống kê mua hàng và công nợ nhà cung cấp"
       preset={preset}
       range={range}
