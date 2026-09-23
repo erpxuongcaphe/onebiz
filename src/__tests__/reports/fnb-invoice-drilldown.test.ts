@@ -30,7 +30,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   }),
 }));
 
-import { getFnbInvoiceDetailPage, getRevenueByTable } from "@/lib/services/supabase/fnb-analytics";
+import { getCashierPerformance, getFnbInvoiceDetailPage, getRevenueByTable } from "@/lib/services/supabase/fnb-analytics";
 
 describe("F&B report invoice drill-down", () => {
   beforeEach(() => {
@@ -74,5 +74,14 @@ describe("F&B report invoice drill-down", () => {
     expect(queryCalls).toContainEqual(["gte", ["invoices.ngay_chung_tu", "2026-09-21T17:00:00.000Z"]]);
     expect(queryCalls).toContainEqual(["lt", ["invoices.ngay_chung_tu", "2026-09-22T17:00:00.000Z"]]);
     expect(queryCalls).not.toContainEqual(["gte", ["created_at", expect.anything()]]);
+  });
+
+  it("uses the invoice creator FK for the cashier report", async () => {
+    rowsByTable.invoices = [
+      { total: 120, created_by: "user-1", profiles: { full_name: "Thu ngân" } },
+    ];
+    const result = await getCashierPerformance("branch-1", { from: "2026-09-22", to: "2026-09-22" });
+    expect(result).toEqual([{ cashierName: "Thu ngân", revenue: 120, orders: 1, avgTicket: 120 }]);
+    expect(queryCalls).toContainEqual(["select", ["total, created_by, profiles!invoices_created_by_fkey(full_name)"]]);
   });
 });
