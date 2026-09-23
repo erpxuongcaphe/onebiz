@@ -9,6 +9,7 @@
 
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+import { inclusiveReportRpcRange } from "@/lib/reports/inclusive-rpc-range";
 
 // ============================================================
 // 1. Aging tồn kho / Dead-stock
@@ -125,12 +126,13 @@ export async function getDisposalLossReport(params?: {
   branchId?: string | null;
 }): Promise<DisposalLossReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_disposal_loss_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_branch_id: params?.branchId ?? null,
     },
   );
@@ -218,12 +220,13 @@ export async function getInventoryVarianceReport(params?: {
   branchId?: string | null;
 }): Promise<InventoryVarianceReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_inventory_variance_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_branch_id: params?.branchId ?? null,
     },
   );

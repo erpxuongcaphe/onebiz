@@ -10,6 +10,7 @@
 
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+import { inclusiveReportRpcRange } from "@/lib/reports/inclusive-rpc-range";
 
 function handleReportError(
   error: { message: string; code?: string },
@@ -225,10 +226,11 @@ export async function getVatReport(params?: {
   branchId?: string | null;
 }): Promise<VatReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)("get_vat_report", {
-    p_date_from: params?.dateFrom ?? null,
-    p_date_to: params?.dateTo ?? null,
+    p_date_from: from,
+    p_date_to: to,
     p_branch_id: params?.branchId ?? null,
   });
   if (error) {
@@ -334,10 +336,11 @@ export async function getRfmReport(params?: {
   branchId?: string | null;
 }): Promise<RfmReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)("get_rfm_report", {
-    p_date_from: params?.dateFrom ?? null,
-    p_date_to: params?.dateTo ?? null,
+    p_date_from: from,
+    p_date_to: to,
     p_branch_id: params?.branchId ?? null,
   });
   if (error) {
@@ -429,12 +432,13 @@ export async function getFnbServeTimeReport(params?: {
   branchId?: string | null;
 }): Promise<FnbServeTimeReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_fnb_serve_time_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_branch_id: params?.branchId ?? null,
     },
   );
