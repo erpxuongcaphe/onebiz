@@ -46,6 +46,7 @@ import {
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
+import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -187,6 +188,11 @@ export default function BanHangPage() {
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topInvoicesList, setTopInvoicesList] = useState<TopInvoice[]>([]);
   const [tableMode, setTableMode] = useState<SalesTableMode>("daily");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("detail") === "invoices") {
+      setTableMode("invoices");
+    }
+  }, []);
   const [overviewMetric, setOverviewMetric] =
     useState<SalesOverviewMetric>("netRevenue");
   const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
@@ -668,7 +674,11 @@ export default function BanHangPage() {
       label: "Đơn",
       key: "orderCount",
       align: "right",
-      cell: (row) => formatNumber(row.orderCount),
+      cell: (row) => row.orderCount > 0 ? (
+        <a href={buildSalesInvoiceDayLink(row.date, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem ${row.orderCount} hóa đơn ngày ${formatReportDate(row.date)}`}>
+          {formatNumber(row.orderCount)}
+        </a>
+      ) : formatNumber(row.orderCount),
     },
     {
       label: "SL bán",
@@ -686,7 +696,11 @@ export default function BanHangPage() {
       label: "Trả trong ngày",
       key: "returnAmount",
       align: "right",
-      cell: (row) => formatCurrency(row.returnAmount) + "đ",
+      cell: (row) => row.returnAmount > 0 ? (
+        <a href={buildSalesReturnDayLink(row.date, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem phiếu trả ngày ${formatReportDate(row.date)}`}>
+          {formatCurrency(row.returnAmount)}đ
+        </a>
+      ) : formatCurrency(row.returnAmount) + "đ",
     },
     {
       label: "Doanh thu thuần",
@@ -696,7 +710,7 @@ export default function BanHangPage() {
       cell: (row) => formatCurrency(row.netRevenue) + "đ",
     },
     {
-      label: "Đã thu",
+      label: "Đã thu từ đơn",
       key: "paid",
       align: "right",
       cell: (row) => formatCurrency(row.paid) + "đ",
