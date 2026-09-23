@@ -103,7 +103,7 @@ describe("F&B supply catalog service", () => {
       if (table === "bom") return makeQuery({ data: [{ id: "bom-1" }], error: null });
       if (table === "bom_items") return makeQuery({ data: [{ material_id: "already" }, { material_id: "box" }], error: null });
       if (table === "products") {
-        const callCount = mocks.from.mock.calls.filter(([name]: [string]) => name === "products").length;
+        const callCount = mocks.from.mock.calls.filter((call) => call[0] === "products").length;
         return callCount === 1
           ? makeQuery({ data: [{ id: "menu-1" }], error: null })
           : makeQuery({ data: [{ id: "box", code: "SKU-BOX", name: "Hộp sữa", unit: "Hộp" }], error: null });
@@ -133,7 +133,7 @@ describe("F&B supply catalog service", () => {
       if (table === "bom") return bomQuery;
       if (table === "bom_items") return query({ data: [{ material_id: "box" }], error: null });
       if (table === "products") {
-        const calls = mocks.from.mock.calls.filter(([name]: [string]) => name === "products").length;
+        const calls = mocks.from.mock.calls.filter((call) => call[0] === "products").length;
         return calls === 1
           ? query({ data: [{ id: "visible-menu" }, { id: "hidden-menu" }], error: null })
           : query({ data: [{ id: "box", code: "SKU-SUA-001", name: "Sữa hộp", unit: "Hộp" }], error: null });

@@ -696,7 +696,7 @@ export function CreateProductDialog({
       return <span className="text-muted-foreground">Đang tính…</span>;
     }
     if (hasMissingPreparedComponentCost) {
-      return <span className="text-status-warning">Chưa có giá vốn BTP</span>;
+      return <span className="text-status-warning">Chờ mẻ đầu</span>;
     }
     return formatCurrency(perSizeCostByKey[variant.key] ?? variant.costPrice ?? 0);
   }
@@ -3335,14 +3335,14 @@ export function CreateProductDialog({
               {!hasFnbSizeVariants && !fnbVariantContextPending && (
                 usesFnbRecipeCosts && hasBom ? (
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Giá vốn theo công thức (₫)</label>
+                    <label className="text-sm font-medium">Dự toán theo công thức (₫)</label>
                     <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
                       {fnbPreparedCostLoading ? "Đang tính..." : hasMissingPreparedComponentCost
-                        ? "Chưa có giá vốn BTP"
+                        ? "Chờ giá vốn mẻ đầu"
                         : formatCurrency(inlineFnbBomCost)}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Dự toán dùng giá cấp nội bộ hiện hành. Giá vốn bán thực tế của bán thành phẩm dùng bình quân tại quán sau khi hoàn tất mẻ.
+                      SKU Retail dùng giá cấp nội bộ hiện hành. Vẫn lưu được công thức khi bán thành phẩm chưa có mẻ; giá vốn thực tế chốt theo chi nhánh lúc nhập, sản xuất và bán.
                     </p>
                   </div>
                 ) : (
@@ -4081,7 +4081,7 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
                             {channel === "fnb" && hasMissingPreparedComponentCost
-                              ? <span className="text-status-warning">Chưa có giá vốn BTP</span>
+                              ? <span className="text-status-warning">Chờ giá vốn mẻ đầu; vẫn lưu được BOM</span>
                               : formatCurrency(inlineFnbBomCost)}
                           </td>
                           <td></td>
