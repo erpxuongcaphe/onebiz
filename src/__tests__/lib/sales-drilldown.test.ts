@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
+import {
+  buildSalesInvoiceDayLink,
+  buildSalesInvoiceRangeLink,
+  buildSalesReturnDayLink,
+  buildSalesReturnRangeLink,
+} from "@/lib/reports/sales-drilldown";
 
 describe("sales report day drill-down", () => {
   it("keeps the selected branch and day for invoice detail", () => {
@@ -21,5 +26,26 @@ describe("sales report day drill-down", () => {
     expect(url.searchParams.get("from")).toBe("2026-09-20");
     expect(url.searchParams.get("to")).toBe("2026-09-20");
     expect(url.searchParams.get("branch")).toBe("branch-1");
+  });
+
+  it("opens period source documents in their detailed table views", () => {
+    const sales = new URL(
+      buildSalesInvoiceRangeLink("2026-09-01", "2026-09-30", "branch-1"),
+      "https://onebiz.test",
+    );
+    expect(sales.pathname).toBe("/phan-tich/ban-hang");
+    expect(sales.searchParams.get("detail")).toBe("invoices");
+    expect(sales.searchParams.get("from")).toBe("2026-09-01");
+    expect(sales.searchParams.get("to")).toBe("2026-09-30");
+    expect(sales.searchParams.get("branch")).toBe("branch-1");
+
+    const returns = new URL(
+      buildSalesReturnRangeLink("2026-09-01", "2026-09-30", "branch-1"),
+      "https://onebiz.test",
+    );
+    expect(returns.pathname).toBe("/phan-tich/tra-hang");
+    expect(returns.searchParams.get("detail")).toBe("items");
+    expect(returns.searchParams.get("preset")).toBe("custom");
+    expect(returns.searchParams.get("view")).toBe("table");
   });
 });

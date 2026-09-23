@@ -81,6 +81,11 @@ export default function SalesReturnReportPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [reasonFilter, setReasonFilter] = useState<string | "all">("all");
   const [tableMode, setTableMode] = useState<"day" | "document" | "item" | "reason">("day");
+  useEffect(() => {
+    const detail = new URLSearchParams(window.location.search).get("detail");
+    if (detail === "items") setTableMode("item");
+    if (detail === "documents") setTableMode("document");
+  }, []);
   const requestKey = `${activeBranchId ?? "all"}:${range.from}:${range.to}:${reloadToken}`;
   const loading = !isReady || reportResult?.key !== requestKey;
   const rows = useMemo(() => loading ? [] : reportResult.rows, [loading, reportResult]);
