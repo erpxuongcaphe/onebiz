@@ -116,7 +116,7 @@ export default function SalesReturnReportPage() {
     const productCount = new Set(rows.map((r) => r.productId)).size;
     // Return rate = giá trị trả / doanh thu cùng kỳ * 100
     const returnRate =
-      periodRevenue > 0 ? (totalValue / periodRevenue) * 100 : 0;
+      periodRevenue > 0 ? (totalValue / periodRevenue) * 100 : null;
     return {
       totalValue,
       totalQty,
@@ -431,28 +431,30 @@ export default function SalesReturnReportPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
           label="Tỷ lệ trả hàng"
-          value={`${kpis.returnRate.toFixed(2)}%`}
-          change={`${formatCurrency(kpis.totalValue)}đ / ${formatCurrency(kpis.periodRevenue)}đ DT`}
-          positive={kpis.returnRate < 2}
+          value={kpis.returnRate === null ? "—" : `${kpis.returnRate.toFixed(2)}%`}
+          change={kpis.returnRate === null
+            ? "Chưa có doanh thu cùng kỳ"
+            : `${formatCurrency(kpis.totalValue)}đ / ${formatCurrency(kpis.periodRevenue)}đ DT`}
+          positive={kpis.returnRate !== null && kpis.returnRate < 2}
           icon="percent"
           bg={
-            kpis.returnRate > 5
+            (kpis.returnRate ?? 0) > 5
               ? "bg-status-error/10"
-              : kpis.returnRate > 2
+              : (kpis.returnRate ?? 0) > 2
                 ? "bg-status-warning/10"
                 : "bg-status-success/10"
           }
           iconColor={
-            kpis.returnRate > 5
+            (kpis.returnRate ?? 0) > 5
               ? "text-status-error"
-              : kpis.returnRate > 2
+              : (kpis.returnRate ?? 0) > 2
                 ? "text-status-warning"
                 : "text-status-success"
           }
           valueColor={
-            kpis.returnRate > 5
+            (kpis.returnRate ?? 0) > 5
               ? "text-status-error"
-              : kpis.returnRate > 2
+              : (kpis.returnRate ?? 0) > 2
                 ? "text-status-warning"
                 : "text-status-success"
           }

@@ -21,6 +21,7 @@ describe("return document drill-down", () => {
     expect(source).not.toContain('.catch(() => [])');
     expect(source).toContain('if (loadError)');
     expect(source).toContain('Không hiển thị tỷ lệ 0% khi doanh thu chưa tải được.');
+    expect(source).toContain('periodRevenue > 0 ? (totalValue / periodRevenue) * 100 : null');
   });
 
   it("links sales and return report rows to their original documents", () => {
