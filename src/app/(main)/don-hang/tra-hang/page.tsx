@@ -257,6 +257,9 @@ export default function TraHangPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialInvoiceCode = searchParams.get("invoice")?.trim() || undefined;
+  const initialReturnCode = searchParams.get("mo") === "1"
+    ? searchParams.get("tim")?.trim() || undefined
+    : undefined;
   const { toast } = useToast();
   const { activeBranchId, currentBranch, isReady: branchReady } = useBranchFilter();
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
@@ -265,7 +268,7 @@ export default function TraHangPage() {
   const [data, setData] = useState<ReturnOrder[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(initialReturnCode ?? "");
   const debouncedSearch = useDebounce(search, 300);
   const [searchField, setSearchField] = useState("code");
   const [page, setPage] = useState(0);
@@ -293,10 +296,12 @@ export default function TraHangPage() {
   );
 
   // Filters
-  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([
-    "completed",
-  ]);
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("this_month");
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>(
+    initialReturnCode ? [] : ["completed"],
+  );
+  const [datePreset, setDatePreset] = useState<DatePresetValue>(
+    initialReturnCode ? "all" : "this_month",
+  );
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [createdBy, setCreatedBy] = useState("");
@@ -420,6 +425,12 @@ export default function TraHangPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!initialReturnCode) return;
+    const index = data.findIndex((item) => item.code === initialReturnCode);
+    if (index >= 0) setExpandedRow(index);
+  }, [data, initialReturnCode]);
 
   useEffect(() => {
     setPage(0);

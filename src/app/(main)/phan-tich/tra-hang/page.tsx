@@ -45,6 +45,9 @@ import {
 } from "@/lib/services";
 import { KpiCard } from "../_components/kpi-card";
 import { ChartCard } from "../_components/chart-card";
+import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
+import { buildReturnListDeepLink } from "@/lib/utils/return-list-deep-link";
+import { LoadErrorState } from "@/components/shared/load-error-state";
 
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
 
@@ -63,13 +66,16 @@ export default function SalesReturnReportPage() {
   const [rows, setRows] = useState<SalesReturnRow[]>([]);
   // Tổng doanh thu cùng kỳ — dùng để tính return rate %
   const [periodRevenue, setPeriodRevenue] = useState<number>(0);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [reasonFilter, setReasonFilter] = useState<string | "all">("all");
 
   useEffect(() => {
     if (!isReady) return;
     let cancelled = false;
     setLoading(true);
+    setLoadError(null);
     // Fetch song song: báo cáo trả hàng + tổng doanh thu cùng kỳ
     Promise.all([
       getSalesReturnReport({
@@ -80,7 +86,7 @@ export default function SalesReturnReportPage() {
       getDailyRevenue(0, activeBranchId ?? undefined, {
         from: range.from,
         to: range.to,
-      }).catch(() => []),
+      }),
     ])
       .then(([returnRes, revenueDays]) => {
         if (cancelled) return;
@@ -91,13 +97,7 @@ export default function SalesReturnReportPage() {
       })
       .catch((err) => {
         if (cancelled) return;
-        toast({
-          title: "Không tải được báo cáo trả hàng",
-          description: err instanceof Error ? err.message : "Lỗi không xác định",
-          variant: "error",
-        });
-        setRows([]);
-        setPeriodRevenue(0);
+        setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo trả hàng.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -106,7 +106,7 @@ export default function SalesReturnReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [isReady, activeBranchId, range.from, range.to, toast]);
+  }, [isReady, activeBranchId, range.from, range.to, reloadToken]);
 
   // ── KPI ──
   const kpis = useMemo(() => {
@@ -190,12 +190,16 @@ export default function SalesReturnReportPage() {
       width: "100px",
       cell: (r) => formatDate(r.returnDate),
     },
-    { label: "Mã phiếu trả", key: "returnCode", width: "120px" },
+    { label: "Mã phiếu trả", key: "returnCode", width: "120px", cell: (r) => (
+      <a href={buildReturnListDeepLink(r.returnCode)} className="font-medium text-primary underline-offset-2 hover:underline">{r.returnCode}</a>
+    ) },
     {
       label: "Hoá đơn gốc",
       key: "invoiceCode",
       width: "120px",
-      cell: (r) => r.invoiceCode ?? "—",
+      cell: (r) => r.invoiceCode
+        ? <a href={buildInvoiceListDeepLink(r.invoiceCode)} className="font-medium text-primary underline-offset-2 hover:underline">{r.invoiceCode}</a>
+        : "—",
     },
     { label: "Chi nhánh", key: "branchName", width: "140px" },
     { label: "Khách", key: "customerName", width: "160px" },
@@ -380,20 +384,49 @@ export default function SalesReturnReportPage() {
     }
   }, [rows, byReason, byProduct, byStaff, kpis, range, branchLabel, toast]);
 
+  const reportHeader = (
+    <ReportPageHeader
+      title="Trả hàng chi tiết"
+      subtitle="Theo lý do, sản phẩm, nhân viên và chi nhánh"
+      preset={preset}
+      range={range}
+      onPresetChange={setPreset}
+      onCustomRangeChange={setCustomRange}
+      viewMode={viewMode}
+      onViewModeChange={setViewMode}
+      onExportFull={handleExport}
+      exportDisabled={loading || Boolean(loadError) || rows.length === 0}
+    />
+  );
+
+  if (loadError) {
+    return (
+      <div className="p-3 md:p-5 space-y-4">
+        {reportHeader}
+        <LoadErrorState
+          title="Không tải được báo cáo trả hàng"
+          description={`${loadError} Không hiển thị tỷ lệ 0% khi doanh thu chưa tải được.`}
+          onRetry={() => setReloadToken((value) => value + 1)}
+        />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="p-3 md:p-5 space-y-4">
+        {reportHeader}
+        <div className="flex h-48 items-center justify-center gap-2 text-sm text-muted-foreground" role="status">
+          <Icon name="progress_activity" size={20} className="animate-spin" />
+          Đang tải báo cáo trả hàng...
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 md:p-5 space-y-4">
-      <ReportPageHeader
-        title="Trả hàng chi tiết"
-        subtitle="Drill-down theo lý do / SP / NV xử lý / chi nhánh"
-        preset={preset}
-        range={range}
-        onPresetChange={setPreset}
-        onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
-        onExportFull={handleExport}
-        exportDisabled={loading || rows.length === 0}
-      />
+      {reportHeader}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard

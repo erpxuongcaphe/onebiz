@@ -46,6 +46,7 @@ import { Icon } from "@/components/ui/icon";
 import { LoadErrorState } from "@/components/shared/load-error-state";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
+import { buildReturnListDeepLink } from "@/lib/utils/return-list-deep-link";
 
 // === Tooltips ===
 
@@ -886,7 +887,7 @@ export default function FnbAnalyticsPage() {
               <tbody>
                 {returnRows.map((row) => (
                   <tr key={row.id} className="border-b border-border last:border-b-0 hover:bg-surface-container-low">
-                    <td className="px-3 py-2 font-medium">{row.code}</td>
+                    <td className="px-3 py-2 font-medium text-primary"><a href={buildReturnListDeepLink(row.code)} className="underline-offset-2 hover:underline">{row.code}</a></td>
                     <td className="px-3 py-2 whitespace-nowrap tabular-nums">{new Date(row.createdAt).toLocaleString("vi-VN")}</td>
                     <td className="px-3 py-2 text-primary"><a href={buildInvoiceListDeepLink(row.invoiceCode)} className="underline-offset-2 hover:underline">{row.invoiceCode}</a></td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatCurrency(row.total)}đ</td>
