@@ -51,6 +51,8 @@ async function fetchAllFnbRows<T>(
 
 export interface FnbKpis {
   totalRevenue: number;
+  returnAmount: number;
+  netRevenue: number;
   totalOrders: number;
   avgTicket: number;
   avgTurnoverMinutes: number;
@@ -97,6 +99,82 @@ export interface FnbInvoiceDetailRow {
 export interface FnbInvoiceDetailPage {
   rows: FnbInvoiceDetailRow[];
   hasMore: boolean;
+}
+
+export interface FnbReturnDetailRow {
+  id: string;
+  code: string;
+  createdAt: string;
+  invoiceCode: string;
+  total: number;
+  refunded: number;
+}
+
+export interface FnbReturnDetailPage {
+  rows: FnbReturnDetailRow[];
+  hasMore: boolean;
+}
+
+/** Return date is the accounting date for the period, even when the sale is older. */
+export async function getFnbReturnDetailPage(
+  branchId?: string,
+  range?: { from: string; to: string },
+  offset = 0,
+  limit = 50,
+): Promise<FnbReturnDetailPage> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  const rangeWindow = toCreatedAtRangeWindow(range);
+  const pageSize = Math.min(Math.max(1, limit), 500);
+  const start = Math.max(0, offset);
+  let query = supabase
+    .from("sales_returns")
+    .select("id, code, created_at, total, refunded, invoices!sales_returns_invoice_id_fkey!inner(code, source)")
+    .eq("tenant_id", tenantId)
+    .in("status", ["confirmed", "completed"])
+    .eq("invoices.source", "fnb");
+  if (branchId) query = query.eq("branch_id", branchId);
+  if (rangeWindow) {
+    query = query.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+  }
+  const { data, error } = await query
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(start, start + pageSize);
+  if (error) {
+    handleError(error, "[getFnbReturnDetailPage]");
+    return { rows: [], hasMore: false };
+  }
+  const page = data ?? [];
+  return {
+    rows: page.slice(0, pageSize).map((raw) => {
+      const row = raw as unknown as {
+        id: string; code: string; created_at: string; total: number; refunded: number;
+        invoices: { code: string } | null;
+      };
+      return {
+      id: row.id,
+      code: row.code,
+      createdAt: row.created_at,
+      invoiceCode: row.invoices?.code ?? "",
+      total: Number(row.total ?? 0),
+      refunded: Number(row.refunded ?? 0),
+      };
+    }),
+    hasMore: page.length > pageSize,
+  };
+}
+
+export async function getFnbReturnExportRows(
+  branchId?: string,
+  range?: { from: string; to: string },
+): Promise<FnbReturnDetailRow[]> {
+  const rows: FnbReturnDetailRow[] = [];
+  for (;;) {
+    const page = await getFnbReturnDetailPage(branchId, range, rows.length, 500);
+    rows.push(...page.rows);
+    if (!page.hasMore || page.rows.length === 0) return rows;
+  }
 }
 
 /** Read-only, bounded drill-down using the same invoice scope as F&B KPIs. */
@@ -193,6 +271,23 @@ export async function getFnbKpis(
   const totalOrders = rows.length;
   const avgTicket = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
 
+  let returnQuery = supabase
+    .from("sales_returns")
+    .select("id, total, invoices!sales_returns_invoice_id_fkey!inner(source)")
+    .eq("tenant_id", tenantId)
+    .in("status", ["confirmed", "completed"])
+    .eq("invoices.source", "fnb");
+  if (branchId) returnQuery = returnQuery.eq("branch_id", branchId);
+  if (rangeWindow) {
+    returnQuery = returnQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+  }
+  const returns = await fetchAllFnbRows(
+    () => returnQuery.order("id", { ascending: true }),
+    "[getFnbKpis.returns]",
+  );
+  const returnAmount = returns.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
+  const netRevenue = totalRevenue - returnAmount;
+
   // Avg turnover from kitchen_orders (time from created_at to status='completed')
   let koQuery = supabase
     .from("kitchen_orders")
@@ -215,7 +310,7 @@ export async function getFnbKpis(
     avgTurnoverMinutes = Math.round(totalMinutes / koRows.length);
   }
 
-  return { totalRevenue, totalOrders, avgTicket, avgTurnoverMinutes };
+  return { totalRevenue, returnAmount, netRevenue, totalOrders, avgTicket, avgTurnoverMinutes };
 }
 
 /**

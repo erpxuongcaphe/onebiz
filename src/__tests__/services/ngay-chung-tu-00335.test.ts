@@ -64,13 +64,14 @@ describe("00335 — nơi PHẢI giữ thời gian giao dịch thật", () => {
     expect(sau).not.toContain("ngay_chung_tu");
   });
 
-  it("đơn bếp F&B (kitchen_orders) giữ created_at", () => {
+  it("đơn bếp F&B không dùng ngày chứng từ làm thời điểm của chính đơn bếp", () => {
     const s = doc("src/lib/services/supabase/fnb-analytics.ts");
     const khoi = s.split('.from("kitchen_orders")').slice(1);
     expect(khoi.length).toBeGreaterThan(0);
     for (const k of khoi) {
-      // 400 ký tự đầu sau .from là phần select/filter của chính truy vấn đó
-      expect(k.slice(0, 400)).not.toContain("ngay_chung_tu");
+      // Báo cáo doanh thu có thể lọc hóa đơn JOIN theo ngày chứng từ;
+      // kitchen_orders vẫn không có cột ngay_chung_tu riêng.
+      expect(k.slice(0, 400)).not.toContain('.gte("ngay_chung_tu"');
     }
   });
 

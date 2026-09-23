@@ -623,7 +623,7 @@ export { splitByItems, splitEqually, areAllTableOrdersCompleted } from "./split-
 
 // F&B Analytics
 export {
-  getFnbKpis, getFnbInvoiceDetailPage, getFnbInvoiceExportRows, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb,
+  getFnbKpis, getFnbInvoiceDetailPage, getFnbInvoiceExportRows, getFnbReturnDetailPage, getFnbReturnExportRows, getRevenueByMenuItem, getRevenueByTable, getRevenueByHourFnb,
   getCashierPerformance, getTableTurnover,
   // Day 21/05/2026 (CEO): delivery staff performance + count today
   getDeliveryStaffPerformance, getOrdersByDeliveryStaff,
