@@ -9,6 +9,7 @@
 
 import { getClient, handleError } from "./base";
 import { isRpcUnavailable } from "./rpc-utils";
+import { inclusiveReportRpcRange } from "@/lib/reports/inclusive-rpc-range";
 
 // ============================================================
 // 1. Sales Returns
@@ -49,12 +50,13 @@ export async function getSalesReturnReport(params?: {
   branchId?: string | null;
 }): Promise<SalesReturnReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_sales_return_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_branch_id: params?.branchId ?? null,
     },
   );
@@ -136,12 +138,13 @@ export async function getStaffRevenueReport(params?: {
   branchId?: string | null;
 }): Promise<StaffRevenueReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_staff_revenue_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_source: params?.source ?? null,
       p_branch_id: params?.branchId ?? null,
     },
@@ -231,12 +234,13 @@ export async function getPlatformCommissionReport(params?: {
   branchId?: string | null;
 }): Promise<PlatformCommissionReport> {
   const supabase = getClient();
+  const { from, to } = inclusiveReportRpcRange(params?.dateFrom, params?.dateTo);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
     "get_platform_commission_report",
     {
-      p_date_from: params?.dateFrom ?? null,
-      p_date_to: params?.dateTo ?? null,
+      p_date_from: from,
+      p_date_to: to,
       p_branch_id: params?.branchId ?? null,
     },
   );
