@@ -12,7 +12,7 @@
  * Built trên framework `@/components/shared/report` Sprint REP-1.
  */
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
@@ -31,6 +31,7 @@ import {
 import { getXntReport, type XntRow, type XntReportResult } from "@/lib/services";
 import { cn } from "@/lib/utils";
 import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
+import { filterXntRows, sumXntRows, type XntRowFilter } from "@/lib/reports/xnt-view";
 
 type SubMode = "summary" | "detail";
 
@@ -56,6 +57,7 @@ export default function XuatNhapTonPage() {
   });
 
   const [subMode, setSubMode] = useState<SubMode>("summary");
+  const [rowFilter, setRowFilter] = useState<XntRowFilter>("activity");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
@@ -100,6 +102,11 @@ export default function XuatNhapTonPage() {
 
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
+  const visibleRows = useMemo(
+    () => filterXntRows(data?.rows ?? [], rowFilter),
+    [data?.rows, rowFilter],
+  );
+  const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
 
   // ========================================================
   // Excel export — view mode (mirror current view)
@@ -142,7 +149,7 @@ export default function XuatNhapTonPage() {
               { label: "Tồn cuối kỳ", key: "closingQty", width: 12, format: "number" },
               { label: "Giá trị cuối kỳ", key: "closingValue", width: 16, format: "currency" },
             ],
-            rows: data.rows.map((r) => ({
+            rows: visibleRows.map((r) => ({
               code: r.code,
               name: r.name,
               unit: r.unit,
@@ -155,16 +162,16 @@ export default function XuatNhapTonPage() {
               closingQty: r.closingQty,
               closingValue: r.closingValue,
             })),
-            footerLabel: `SL mặt hàng: ${data.subtotal.productCount}`,
+            footerLabel: `SL mặt hàng: ${visibleSubtotal.productCount}`,
             footer: {
-              openingQty: data.subtotal.openingQty,
-              openingValue: data.subtotal.openingValue,
-              totalIn: data.subtotal.totalIn,
-              inValue: data.subtotal.inValue,
-              totalOut: data.subtotal.totalOut,
-              outValue: data.subtotal.outValue,
-              closingQty: data.subtotal.closingQty,
-              closingValue: data.subtotal.closingValue,
+              openingQty: visibleSubtotal.openingQty,
+              openingValue: visibleSubtotal.openingValue,
+              totalIn: visibleSubtotal.totalIn,
+              inValue: visibleSubtotal.inValue,
+              totalOut: visibleSubtotal.totalOut,
+              outValue: visibleSubtotal.outValue,
+              closingQty: visibleSubtotal.closingQty,
+              closingValue: visibleSubtotal.closingValue,
             },
           },
         ],
@@ -211,7 +218,7 @@ export default function XuatNhapTonPage() {
               { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
               { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
             ],
-            rows: data.rows.map((r) => ({
+            rows: visibleRows.map((r) => ({
               code: r.code,
               name: r.name,
               openingQty: r.openingQty,
@@ -233,12 +240,12 @@ export default function XuatNhapTonPage() {
               closingQty: r.closingQty,
               closingValue: r.closingValue,
             })),
-            footerLabel: `SL mặt hàng: ${data.subtotal.productCount}`,
+            footerLabel: `SL mặt hàng: ${visibleSubtotal.productCount}`,
           },
         ],
       });
     }
-  }, [data, range, branchName, subMode]);
+  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal]);
 
   // ========================================================
   // Excel export — full mode (multi-sheet kế toán pivot)
@@ -407,56 +414,56 @@ export default function XuatNhapTonPage() {
       key: "openingQty",
       align: "right",
       cell: (r) => formatNumber(r.openingQty),
-      subtotalCell: data ? formatNumber(data.subtotal.openingQty) : "0",
+      subtotalCell: formatNumber(visibleSubtotal.openingQty),
     },
     {
       label: "Giá trị đầu kỳ",
       key: "openingValue",
       align: "right",
       cell: (r) => formatCurrency(r.openingValue),
-      subtotalCell: data ? formatCurrency(data.subtotal.openingValue) : "0",
+      subtotalCell: formatCurrency(visibleSubtotal.openingValue),
     },
     {
       label: "Số lượng nhập",
       key: "totalIn",
       align: "right",
       cell: (r) => formatNumber(r.totalIn),
-      subtotalCell: data ? formatNumber(data.subtotal.totalIn) : "0",
+      subtotalCell: formatNumber(visibleSubtotal.totalIn),
     },
     {
       label: "Giá trị nhập",
       key: "inValue",
       align: "right",
       cell: (r) => formatCurrency(r.inValue),
-      subtotalCell: data ? formatCurrency(data.subtotal.inValue) : "0",
+      subtotalCell: formatCurrency(visibleSubtotal.inValue),
     },
     {
       label: "Số lượng xuất",
       key: "totalOut",
       align: "right",
       cell: (r) => formatNumber(r.totalOut),
-      subtotalCell: data ? formatNumber(data.subtotal.totalOut) : "0",
+      subtotalCell: formatNumber(visibleSubtotal.totalOut),
     },
     {
       label: "Giá trị xuất",
       key: "outValue",
       align: "right",
       cell: (r) => formatCurrency(r.outValue),
-      subtotalCell: data ? formatCurrency(data.subtotal.outValue) : "0",
+      subtotalCell: formatCurrency(visibleSubtotal.outValue),
     },
     {
       label: "Tồn cuối kỳ",
       key: "closingQty",
       align: "right",
       cell: (r) => formatNumber(r.closingQty),
-      subtotalCell: data ? formatNumber(data.subtotal.closingQty) : "0",
+      subtotalCell: formatNumber(visibleSubtotal.closingQty),
     },
     {
       label: "Giá trị cuối kỳ",
       key: "closingValue",
       align: "right",
       cell: (r) => formatCurrency(r.closingValue),
-      subtotalCell: data ? formatCurrency(data.subtotal.closingValue) : "0",
+      subtotalCell: formatCurrency(visibleSubtotal.closingValue),
     },
   ];
 
@@ -525,8 +532,16 @@ export default function XuatNhapTonPage() {
   ];
 
   const subtotalLabel = data
-    ? `SL mặt hàng: ${data.subtotal.productCount}`
+    ? `SL mặt hàng: ${visibleSubtotal.productCount}`
     : "—";
+  const emptyState =
+    rowFilter === "activity"
+      ? "Không có tồn đầu, biến động hoặc tồn cuối trong kỳ này."
+      : rowFilter === "closing-stock"
+        ? "Không có mặt hàng có tồn cuối kỳ khác 0."
+        : debouncedSearch
+          ? "Không tìm thấy mặt hàng phù hợp."
+          : "Chưa có dữ liệu trong kỳ này.";
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-hidden">
@@ -595,6 +610,35 @@ export default function XuatNhapTonPage() {
             </button>
           )}
         </div>
+        <div
+          role="group"
+          aria-label="Lọc mặt hàng theo tồn kho"
+          className="inline-flex shrink-0 items-center rounded-md border border-border bg-surface-container-low p-0.5"
+        >
+          {([
+            ["activity", "Có phát sinh"],
+            ["closing-stock", "Tồn cuối khác 0"],
+            ["all", "Tất cả"],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              aria-pressed={rowFilter === value}
+              onClick={() => setRowFilter(value)}
+              className={cn(
+                "h-7 rounded px-2.5 text-xs font-medium transition-colors",
+                rowFilter === value
+                  ? "bg-primary text-primary-foreground ambient-shadow"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground" aria-live="polite">
+          {visibleRows.length}/{data?.rows.length ?? 0} mặt hàng
+        </span>
       </div>
 
       {/* Body */}
@@ -620,24 +664,24 @@ export default function XuatNhapTonPage() {
               <ReportDataTable
                 columns={summaryColumns}
                 tablePreferenceKey="report.xuat-nhap-ton.summary"
-                rows={data.rows}
+                rows={visibleRows}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
                 defaultPageSize={50}
                 pageSizeOptions={[25, 50, 100, 200]}
-                emptyState="Chưa có dữ liệu trong kỳ này"
+                emptyState={emptyState}
               />
             ) : (
               <ReportDataTable
                 columns={detailColumns}
                 tablePreferenceKey="report.xuat-nhap-ton.detail"
                 columnGroups={detailColumnGroups}
-                rows={data.rows}
+                rows={visibleRows}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
                 defaultPageSize={50}
                 pageSizeOptions={[25, 50, 100, 200]}
-                emptyState="Chưa có dữ liệu trong kỳ này"
+                emptyState={emptyState}
               />
             )}
           </div>
