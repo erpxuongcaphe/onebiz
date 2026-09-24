@@ -41,7 +41,7 @@ const FILTER_OPTIONS: { key: FilterMode; label: string; bg: string; icon: string
 
 export default function AbcAnalysisPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
@@ -262,8 +262,6 @@ export default function AbcAnalysisPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
         exportDisabled={loading || !data}

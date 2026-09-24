@@ -55,7 +55,7 @@ const TIER_LABEL: Record<string, string> = {
 export default function FnbShipperReportPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -303,8 +303,6 @@ export default function FnbShipperReportPage() {
       range={range}
       onPresetChange={setPreset}
       onCustomRangeChange={setCustomRange}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
       exportDisabled={loading || exporting || shippers.length === 0}

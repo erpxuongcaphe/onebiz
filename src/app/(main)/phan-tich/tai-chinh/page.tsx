@@ -154,7 +154,7 @@ export default function TaiChinhPage() {
   const { tenant } = useAuth();
   const tenantName = tenant?.name;
   const { toast } = useToast();
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
@@ -503,8 +503,6 @@ export default function TaiChinhPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
         exportDisabled={loading}

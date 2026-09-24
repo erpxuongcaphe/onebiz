@@ -46,8 +46,6 @@ export default function XuatNhapTonPage() {
     range,
     setPreset,
     setCustomRange,
-    viewMode,
-    setViewMode,
   } = useReportState({
     defaultPreset: "thisMonth",
     defaultViewMode: "table", // XNT default table (số liệu nhiều, biểu đồ ít ý nghĩa)
@@ -511,8 +509,6 @@ export default function XuatNhapTonPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
         exportDisabled={loading || !data}

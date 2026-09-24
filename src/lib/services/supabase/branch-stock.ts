@@ -139,6 +139,7 @@ export async function getBranchStockRows(params?: {
   return merged.filter(
     (row) =>
       row.minStock !== undefined &&
+      Number(row.minStock) > 0 &&
       row.quantity <= Number(row.minStock ?? 0),
   );
 }
@@ -251,7 +252,7 @@ export async function getBranchStockPage(params: {
   let filtered = rows;
   if (params.lowStockOnly) {
     filtered = filtered.filter(
-      (r) => r.minStock !== undefined && r.quantity <= (r.minStock ?? 0)
+      (r) => r.minStock !== undefined && Number(r.minStock) > 0 && r.quantity <= (r.minStock ?? 0)
     );
   }
 
@@ -351,6 +352,7 @@ export async function getBranchStockAggregates(params: {
     lowStockCount: rows.filter(
       (row) =>
         row.minStock != null &&
+        Number(row.minStock) > 0 &&
         row.quantity <= Number(row.minStock),
     ).length,
   };

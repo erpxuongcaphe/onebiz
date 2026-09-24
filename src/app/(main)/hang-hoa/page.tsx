@@ -295,7 +295,9 @@ function ProductDetail({
                     </div>
                     <Button type="button" size="sm" onClick={onConfigureBom}>
                       <Icon name="science" size={16} className="mr-1.5" />
-                      {product.hasBom ? "Xem công thức" : "Tạo công thức"}
+                      {stockCardBranchName
+                        ? "Thiết lập BOM tại quán"
+                        : product.hasBom ? "Xem công thức" : "Tạo công thức"}
                     </Button>
                   </div>
                 )}
