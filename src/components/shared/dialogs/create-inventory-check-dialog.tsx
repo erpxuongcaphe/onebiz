@@ -81,6 +81,7 @@ export function CreateInventoryCheckDialog({
   const [productSearch, setProductSearch] = useState("");
   const [showProductDropdown, setShowProductDropdown] = useState(false);
   const [filteredProducts, setFilteredProducts] = useState<ProductRow[]>([]);
+  const [productSearchStatus, setProductSearchStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [checkItems, setCheckItems] = useState<InventoryCheckLine[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -94,49 +95,70 @@ export function CreateInventoryCheckDialog({
     setProductSearch("");
     setShowProductDropdown(false);
     setFilteredProducts([]);
+    setProductSearchStatus("idle");
     setCheckItems([]);
     setErrors({});
     setSaving(false);
   }, [open]);
 
   useEffect(() => {
+    let cancelled = false;
     const term = productSearch.trim();
     if (!term) {
       setFilteredProducts([]);
+      setProductSearchStatus("idle");
       return;
     }
 
+    setProductSearchStatus("loading");
     const timer = setTimeout(async () => {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-      const isOutlet =
-        currentBranch?.branchType === "store" ||
-        branches.some(
-          (branch) => branch.id === activeBranchId && branch.branchType === "store",
-        );
-      // CEO 07/07/2026 (Cách B) — lọc SP kiểm kho theo VAI TRÒ + CHI NHÁNH:
-      //  • LUÔN loại món menu F&B (fnb_menu_item) — không giữ tồn ở đâu.
-      //  • Kho/Xưởng: NVL vẫn giữ tồn trực tiếp dù có BOM; chỉ loại SKU
-      //    Retail có BOM vì tồn của SKU này nằm ở NVL.
-      //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
-      //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
-      // Gộp điều kiện vai trò, phạm vi kho và tìm kiếm thành một bộ lọc lồng nhau;
-      // PostgREST chỉ nhận một biểu thức `or` cho mỗi truy vấn.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let q: any = (supabase as any)
-        .from("products")
-        .select("id, code, name, unit, cost_price")
-        .eq("tenant_id", ctx.tenantId)
-        .eq("is_active", true);
-      const productFilter = buildInventoryCheckProductFilter(term, isOutlet);
-      if (productFilter) q = q.or(productFilter);
-      q = q.limit(10);
-      const { data, error } = await q;
+      try {
+        const supabase = getClient();
+        const ctx = await getCurrentContext();
+        const isOutlet =
+          currentBranch?.branchType === "store" ||
+          branches.some(
+            (branch) => branch.id === activeBranchId && branch.branchType === "store",
+          );
+        // CEO 07/07/2026 (Cách B) — lọc SP kiểm kho theo VAI TRÒ + CHI NHÁNH:
+        //  • LUÔN loại món menu F&B (fnb_menu_item) — không giữ tồn ở đâu.
+        //  • Kho/Xưởng: NVL vẫn giữ tồn trực tiếp dù có BOM; chỉ loại SKU
+        //    Retail có BOM vì tồn của SKU này nằm ở NVL.
+        //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
+        //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
+        // Gộp điều kiện vai trò, phạm vi kho và tìm kiếm thành một bộ lọc lồng nhau;
+        // PostgREST chỉ nhận một biểu thức `or` cho mỗi truy vấn.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any = (supabase as any)
+          .from("products")
+          .select("id, code, name, unit, cost_price")
+          .eq("tenant_id", ctx.tenantId)
+          .eq("is_active", true);
+        const productFilter = buildInventoryCheckProductFilter(term, isOutlet);
+        if (productFilter) q = q.or(productFilter);
+        q = q.limit(10);
+        const { data, error } = await q;
 
-      if (!error) setFilteredProducts((data ?? []) as ProductRow[]);
+        if (cancelled) return;
+        if (error) {
+          setFilteredProducts([]);
+          setProductSearchStatus("error");
+          return;
+        }
+
+        setFilteredProducts((data ?? []) as ProductRow[]);
+        setProductSearchStatus("ready");
+      } catch {
+        if (cancelled) return;
+        setFilteredProducts([]);
+        setProductSearchStatus("error");
+      }
     }, 250);
 
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [productSearch, currentBranch?.branchType, branches, activeBranchId]);
 
   async function addProduct(product: ProductRow) {
@@ -391,7 +413,15 @@ export function CreateInventoryCheckDialog({
                   />
                   {showProductDropdown && productSearch && (
                     <div className="absolute z-30 mt-1 max-h-56 w-full overflow-y-auto rounded-lg border bg-popover shadow-lg">
-                      {filteredProducts.length === 0 ? (
+                      {productSearchStatus === "loading" ? (
+                        <div role="status" className="px-3 py-2 text-sm text-muted-foreground">
+                          Đang tìm mặt hàng...
+                        </div>
+                      ) : productSearchStatus === "error" ? (
+                        <div role="status" className="px-3 py-2 text-sm text-destructive">
+                          Không tải được danh sách. Thử tìm lại.
+                        </div>
+                      ) : filteredProducts.length === 0 ? (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
                           Không tìm thấy NVL / hàng giữ tồn phù hợp
                         </div>
