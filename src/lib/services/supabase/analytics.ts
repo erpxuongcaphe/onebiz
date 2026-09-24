@@ -12,6 +12,7 @@ import { getClient, handleError, getCurrentTenantId } from "./base";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
+import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/channel-report";
 
 // === Shared Types ===
 
@@ -1586,57 +1587,8 @@ export async function getChannelRevenue(
   branchId?: string,
   range?: { from: string; to: string },
 ): Promise<ChartPoint[]> {
-  const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  const r = resolveRange(range, thisMonthRange());
-
-  // Main invoices = "Tại quầy" (POS)
-  let posQuery = supabase
-    .from("invoices")
-    .select("total")
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed")
-    .gte("ngay_chung_tu", r.start)
-    .lt("ngay_chung_tu", r.end);
-  if (branchId) posQuery = posQuery.eq("branch_id", branchId);
-  const posData = await fetchAllPostgrestRows(() => posQuery.order("ngay_chung_tu", { ascending: true }), "[channel.pos]");
-
-  const posRevenue = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
-
-  // Online orders by channel — P1-3B-R5 12/06/2026: filter status=completed
-  // để cân với POS (chỉ completed) → kênh online không phồng giả vì
-  // pending/cancelled.
-  // online_orders KHÔNG có cột branch_id — lọc .eq("branch_id") cũ làm query
-  // lỗi 42703, chọn 1 chi nhánh là kênh online mất trắng. Chi nhánh suy từ
-  // hoá đơn gắn kèm. Lưu ý: đơn online chưa xuất hoá đơn sẽ không hiện ở
-  // chế độ xem theo chi nhánh (vẫn hiện ở "Tất cả chi nhánh").
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let onlineQuery: any = supabase
-    .from("online_orders")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .select(
-      (branchId
-        ? "channel_name, total_amount, invoices!inner(branch_id)"
-        : "channel_name, total_amount") as any,
-    )
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed" as never)
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (branchId) onlineQuery = (onlineQuery as any).eq("invoices.branch_id", branchId);
-  const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
-
-  const channelMap = new Map<string, number>();
-  channelMap.set("Tại quầy", posRevenue);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ((onlineData ?? []) as any[]).forEach(o => {
-    const name = o.channel_name || "Khác";
-    channelMap.set(name, (channelMap.get(name) ?? 0) + (o.total_amount ?? 0));
-  });
-
-  return Array.from(channelMap.entries()).map(([label, value]) => ({ label, value }));
+  const rows = await getChannelPerformance(branchId, range);
+  return rows.map(({ channel, revenue }) => ({ label: channel, value: revenue }));
 }
 
 export async function getChannelPerformance(
@@ -1649,7 +1601,7 @@ export async function getChannelPerformance(
 
   let posQuery = supabase
     .from("invoices")
-    .select("total")
+    .select("id, total")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("ngay_chung_tu", r.start)
@@ -1657,43 +1609,44 @@ export async function getChannelPerformance(
   if (branchId) posQuery = posQuery.eq("branch_id", branchId);
   const posData = await fetchAllPostgrestRows(() => posQuery.order("ngay_chung_tu", { ascending: true }), "[channel.pos]");
 
-  const posRev = (posData ?? []).reduce((s, i) => s + (i.total ?? 0), 0);
-  const posCount = posData?.length ?? 0;
+  const onlineOrders: ChannelOnlineOrder[] = [];
+  const invoiceIds = (posData ?? []).map((invoice) => invoice.id);
+  // Linked orders follow the invoice period, even when the online order was created earlier.
+  for (let offset = 0; offset < invoiceIds.length; offset += 200) {
+    const ids = invoiceIds.slice(offset, offset + 200);
+    const linkedQuery = supabase
+      .from("online_orders")
+      .select("channel_name, total_amount, invoice_id")
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed")
+      .in("invoice_id", ids);
+    const linked = await fetchAllPostgrestRows(
+      () => linkedQuery.order("id", { ascending: true }),
+      "[channel.online-linked]",
+    );
+    onlineOrders.push(...((linked ?? []) as ChannelOnlineOrder[]));
+  }
 
-  // P1-3B-R5 12/06/2026: filter status=completed cho online_orders (cân với POS).
-  // Chi nhánh suy từ hoá đơn gắn kèm — online_orders không có cột branch_id.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let onlineQuery: any = supabase
-    .from("online_orders")
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .select(
-      (branchId
-        ? "channel_name, total_amount, invoices!inner(branch_id)"
-        : "channel_name, total_amount") as any,
-    )
-    .eq("tenant_id", tenantId)
-    .eq("status", "completed" as never)
-    .gte("created_at", r.start)
-    .lt("created_at", r.end);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (branchId) onlineQuery = (onlineQuery as any).eq("invoices.branch_id", branchId);
-  const onlineData = await fetchAllPostgrestRows(() => onlineQuery.order("created_at", { ascending: true }), "[channel.online]");
-
-  const map = new Map<string, { revenue: number; orders: number }>();
-  map.set("Tại quầy", { revenue: posRev, orders: posCount });
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ((onlineData ?? []) as any[]).forEach(o => {
-    const name = o.channel_name || "Khác";
-    const existing = map.get(name) ?? { revenue: 0, orders: 0 };
-    existing.revenue += o.total_amount ?? 0;
-    existing.orders += 1;
-    map.set(name, existing);
-  });
-
-  return Array.from(map.entries()).map(([channel, { revenue, orders }]) => ({
-    channel, revenue, orders, avgValue: orders > 0 ? Math.round(revenue / orders) : 0,
-  }));
+  // Uninvoiced orders have no reliable branch; include them only chain-wide.
+  if (!branchId) {
+    const unlinkedQuery = supabase
+      .from("online_orders")
+      .select("channel_name, total_amount, invoice_id")
+      .eq("tenant_id", tenantId)
+      .eq("status", "completed")
+      .is("invoice_id", null)
+      .gte("created_at", r.start)
+      .lt("created_at", r.end);
+    const unlinked = await fetchAllPostgrestRows(
+      () => unlinkedQuery.order("created_at", { ascending: true }),
+      "[channel.online-unlinked]",
+    );
+    onlineOrders.push(...((unlinked ?? []) as ChannelOnlineOrder[]));
+  }
+  return summarizeChannelSales(
+    (posData ?? []).map((invoice) => ({ id: String(invoice.id), total: invoice.total })),
+    onlineOrders,
+  );
 }
 
 // ========================================

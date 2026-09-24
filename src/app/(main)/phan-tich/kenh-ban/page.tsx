@@ -18,10 +18,7 @@ import {
   formatCurrency,
   formatChartTooltipCurrency,
 } from "@/lib/format";
-import {
-  getChannelRevenue,
-  getChannelPerformance,
-} from "@/lib/services";
+import { getChannelPerformance } from "@/lib/services";
 import type { ChartPoint } from "@/lib/services/supabase/analytics";
 import {
   exportReportToExcel,
@@ -123,7 +120,7 @@ export default function KenhBanPage() {
   const handleExportView = useCallback(() => {
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO KÊNH BÁN",
+        title: "BÁO CÁO KÊNH BÁN · DOANH SỐ TRƯỚC TRẢ HÀNG",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -134,7 +131,7 @@ export default function KenhBanPage() {
         columns: [
           { label: "Kênh", key: "channel", width: 20 },
           { label: "Số đơn", key: "orders", width: 12, format: "number" },
-          { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+          { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
           { label: "TB/đơn (VND)", key: "avgValue", width: 16, format: "currency" },
         ],
         rows: channelPerformance.map((c) => ({
@@ -170,7 +167,7 @@ export default function KenhBanPage() {
   const handleExportFull = useCallback(() => {
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO KÊNH BÁN — ĐẦY ĐỦ",
+        title: "BÁO CÁO KÊNH BÁN · DOANH SỐ TRƯỚC TRẢ HÀNG",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -182,7 +179,7 @@ export default function KenhBanPage() {
           columns: [
             { label: "Kênh", key: "channel", width: 20 },
             { label: "Số đơn", key: "orders", width: 12, format: "number" },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+            { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
             { label: "TB/đơn (VND)", key: "avgValue", width: 16, format: "currency" },
           ],
           rows: channelPerformance.map((c) => ({
@@ -199,11 +196,11 @@ export default function KenhBanPage() {
           },
         },
         {
-          name: "DT theo kênh (pie)",
-          titleRows: ["DOANH THU THEO KÊNH", ...title.slice(1)],
+          name: "Doanh số theo kênh",
+          titleRows: ["DOANH SỐ GỘP THEO KÊNH · TRƯỚC TRẢ HÀNG", ...title.slice(1)],
           columns: [
             { label: "Kênh", key: "label", width: 20 },
-            { label: "Doanh thu (VND)", key: "value", width: 18, format: "currency" },
+            { label: "Doanh số gộp (VND)", key: "value", width: 18, format: "currency" },
           ],
           rows: channelRevenue.map((c) => ({ label: c.label, value: c.value })),
         },
@@ -228,7 +225,7 @@ export default function KenhBanPage() {
   const reportHeader = (
     <ReportPageHeader
       title="Phân tích kênh bán"
-      subtitle="So sánh hiệu suất các kênh bán hàng"
+      subtitle="So sánh doanh số gộp theo kênh, chưa trừ trả hàng"
       preset={preset}
       range={range}
       onPresetChange={setPreset}
@@ -243,12 +240,9 @@ export default function KenhBanPage() {
     const requestId = ++requestIdRef.current;
     setLoading(true);
     try {
-      const [revenueRes, perfRes] = await Promise.all([
-        getChannelRevenue(activeBranchId, range),
-        getChannelPerformance(activeBranchId, range),
-      ]);
+      const perfRes = await getChannelPerformance(activeBranchId, range);
       if (requestId !== requestIdRef.current) return;
-      setChannelRevenue(revenueRes);
+      setChannelRevenue(perfRes.map(({ channel, revenue }) => ({ label: channel, value: revenue })));
       setChannelPerformance(perfRes);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
@@ -318,7 +312,7 @@ export default function KenhBanPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Revenue by channel pie chart */}
           <ChartCard
-            title="Doanh thu theo kênh bán"
+            title="Doanh số gộp theo kênh bán"
             subtitle={selectedPeriodLabel}
           >
             {pieData.length > 0 ? (
@@ -356,7 +350,7 @@ export default function KenhBanPage() {
               </div>
             ) : (
               <div className="h-64 md:h-80 flex items-center justify-center text-sm text-muted-foreground">
-                Chưa có dữ liệu doanh thu.
+                Chưa có doanh số trong kỳ.
               </div>
             )}
           </ChartCard>
@@ -374,7 +368,7 @@ export default function KenhBanPage() {
                   <tr className="border-b text-muted-foreground">
                     <th className="text-left py-2 pr-4 font-medium">Kênh</th>
                     <th className="text-right py-2 pr-4 font-medium">
-                      Doanh thu
+                      Doanh số gộp
                     </th>
                     <th className="text-right py-2 pr-4 font-medium">
                       Đơn hàng
