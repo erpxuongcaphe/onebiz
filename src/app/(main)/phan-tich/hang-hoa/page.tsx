@@ -37,12 +37,15 @@ import {
   getCategoryDistribution,
   getStockMovements,
   getAnalyticsLowStock,
+  getSalesReturnReport,
 } from "@/lib/services";
 import type {
   TopProductRevenue,
   StockMovementPoint,
   LowStockItem,
 } from "@/lib/services/supabase/analytics";
+import { reconcileProductSales } from "@/lib/reports/product-sales-reconciliation";
+import type { SalesReturnRow } from "@/lib/services/supabase/sales-reports";
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
 
@@ -166,24 +169,42 @@ export default function HangHoaPage() {
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<InventoryKpis | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
+  const [salesReturns, setSalesReturns] = useState<SalesReturnRow[]>([]);
+  const [returnReportStatus, setReturnReportStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [returnRetryToken, setReturnRetryToken] = useState(0);
   const [categories, setCategories] = useState<{ name: string; value: number }[]>([]);
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
-  const [productSort, setProductSort] = useState<"revenue" | "quantity" | "name">("revenue");
+  const [productSort, setProductSort] = useState<"netRevenue" | "revenue" | "quantity" | "returnedValue" | "name">("netRevenue");
   const [productPage, setProductPage] = useState(1);
   const requestIdRef = useRef(0);
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
+  const reconciledProducts = useMemo(
+    () => reconcileProductSales(topProducts, salesReturns),
+    [topProducts, salesReturns],
+  );
   const visibleProducts = useMemo(() => {
     const needle = productSearch.trim().toLocaleLowerCase("vi");
-    const filtered = topProducts.filter((product) =>
+    const filtered = reconciledProducts.filter((product) =>
       `${product.name} ${product.code ?? ""}`.toLocaleLowerCase("vi").includes(needle),
     );
     return [...filtered].sort((a, b) => {
       if (productSort === "name") return a.name.localeCompare(b.name, "vi");
-      return productSort === "quantity" ? b.qty - a.qty : b.revenue - a.revenue;
+      if (productSort === "quantity") return b.qty - a.qty;
+      if (productSort === "returnedValue") return b.returnedValue - a.returnedValue;
+      return productSort === "revenue" ? b.revenue - a.revenue : b.netRevenue - a.netRevenue;
     });
-  }, [topProducts, productSearch, productSort]);
+  }, [reconciledProducts, productSearch, productSort]);
+  const visibleProductTotals = useMemo(
+    () => visibleProducts.reduce((totals, product) => ({
+      qty: totals.qty + product.qty,
+      revenue: totals.revenue + product.revenue,
+      returnedValue: totals.returnedValue + product.returnedValue,
+      netRevenue: totals.netRevenue + product.netRevenue,
+    }), { qty: 0, revenue: 0, returnedValue: 0, netRevenue: 0 }),
+    [visibleProducts],
+  );
   const productsPerPage = 50;
   const productPageCount = Math.max(1, Math.ceil(visibleProducts.length / productsPerPage));
   const currentProductPage = Math.min(productPage, productPageCount);
@@ -191,13 +212,16 @@ export default function HangHoaPage() {
     (currentProductPage - 1) * productsPerPage,
     currentProductPage * productsPerPage,
   );
+  const exportIncludesReturns = viewMode === "table" && returnReportStatus === "ready";
   const exportProducts = viewMode === "chart" ? topProducts.slice(0, 10) : visibleProducts;
 
 
   const handleExportView = useCallback(() => {
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO BÁN HÀNG THEO MẶT HÀNG (TRƯỚC TRẢ HÀNG)",
+        title: exportIncludesReturns
+          ? "BÁO CÁO BÁN HÀNG THEO MẶT HÀNG (ĐÃ ĐỐI SOÁT TRẢ HÀNG)"
+          : "BÁO CÁO BÁN HÀNG THEO MẶT HÀNG (TRƯỚC TRẢ HÀNG)",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
@@ -211,6 +235,10 @@ export default function HangHoaPage() {
           { label: "Sản phẩm", key: "name", width: 32 },
           { label: "SL bán", key: "qty", width: 12, format: "number" },
           { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
+          ...(exportIncludesReturns ? [
+            { label: "Tiền trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
+            { label: "Doanh thu thuần (VND)", key: "netRevenue", width: 20, format: "currency" as const },
+          ] : []),
         ],
         rows: exportProducts.map((p, i) => ({
           rank: i + 1,
@@ -218,12 +246,16 @@ export default function HangHoaPage() {
           name: p.name,
           qty: p.qty,
           revenue: p.revenue,
+          returnedValue: "returnedValue" in p ? p.returnedValue : undefined,
+          netRevenue: "netRevenue" in p ? p.netRevenue : undefined,
         })),
         footer: {
           rank: "",
           name: "TỔNG",
           qty: exportProducts.reduce((s, p) => s + p.qty, 0),
           revenue: exportProducts.reduce((s, p) => s + p.revenue, 0),
+          returnedValue: exportIncludesReturns ? visibleProductTotals.returnedValue : undefined,
+          netRevenue: exportIncludesReturns ? visibleProductTotals.netRevenue : undefined,
         },
       };
       exportReportToExcel({
@@ -237,7 +269,7 @@ export default function HangHoaPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [exportProducts, range, branchLabel, toast]);
+  }, [exportProducts, exportIncludesReturns, visibleProductTotals, range, branchLabel, toast]);
 
   const handleExportFull = useCallback(() => {
     try {
@@ -247,6 +279,7 @@ export default function HangHoaPage() {
         branchName: branchLabel,
         generatedAt: new Date(),
       });
+      const fullSalesRows = exportIncludesReturns ? reconciledProducts : topProducts;
       const sheets: ExcelSheet[] = [
         {
           name: "KPI",
@@ -263,16 +296,31 @@ export default function HangHoaPage() {
         },
         {
           name: "Mặt hàng đã bán",
-          titleRows: ["MẶT HÀNG ĐÃ BÁN · DOANH SỐ TRƯỚC TRẢ HÀNG", ...title.slice(1)],
+          titleRows: [
+            exportIncludesReturns
+              ? "MẶT HÀNG ĐÃ BÁN · ĐÃ ĐỐI SOÁT TRẢ HÀNG"
+              : "MẶT HÀNG ĐÃ BÁN · DOANH SỐ TRƯỚC TRẢ HÀNG",
+            ...title.slice(1),
+          ],
           columns: [
             { label: "STT", key: "rank", width: 6 },
             { label: "Mã hàng", key: "code", width: 18 },
             { label: "Sản phẩm", key: "name", width: 32 },
             { label: "SL bán", key: "qty", width: 12, format: "number" },
             { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
+            ...(exportIncludesReturns ? [
+              { label: "Tiền trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
+              { label: "Doanh thu thuần (VND)", key: "netRevenue", width: 20, format: "currency" as const },
+            ] : []),
           ],
-          rows: topProducts.map((p, i) => ({
-            rank: i + 1, code: p.code ?? "", name: p.name, qty: p.qty, revenue: p.revenue,
+          rows: fullSalesRows.map((p, i) => ({
+            rank: i + 1,
+            code: p.code ?? "",
+            name: p.name,
+            qty: p.qty,
+            revenue: p.revenue,
+            returnedValue: "returnedValue" in p ? p.returnedValue : undefined,
+            netRevenue: "netRevenue" in p ? p.netRevenue : undefined,
           })),
         },
         {
@@ -320,7 +368,7 @@ export default function HangHoaPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [kpis, topProducts, categories, movements, lowStock, range, branchLabel, toast]);
+  }, [kpis, topProducts, reconciledProducts, exportIncludesReturns, categories, movements, lowStock, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
@@ -352,6 +400,36 @@ export default function HangHoaPage() {
     fetchData();
   }, [fetchData, isReady]);
 
+  useEffect(() => {
+    if (!isReady || viewMode !== "table") {
+      setReturnReportStatus("idle");
+      return;
+    }
+
+    let cancelled = false;
+    setSalesReturns([]);
+    setReturnReportStatus("loading");
+    getSalesReturnReport({
+      dateFrom: range.from,
+      dateTo: range.to,
+      branchId: activeBranchId ?? null,
+    })
+      .then((report) => {
+        if (cancelled) return;
+        setSalesReturns(report.rows);
+        setReturnReportStatus("ready");
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("Failed to fetch product sales returns:", error);
+        setReturnReportStatus("error");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeBranchId, isReady, range.from, range.to, returnRetryToken, viewMode]);
+
   if (loading) {
     return (
       <div className="flex flex-col h-[calc(100vh-4rem)] items-center justify-center">
@@ -376,7 +454,7 @@ export default function HangHoaPage() {
         onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading}
+        exportDisabled={loading || (viewMode === "table" && returnReportStatus !== "ready")}
       />
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">
@@ -581,7 +659,7 @@ export default function HangHoaPage() {
         </ChartCard>
 
         </> : <div className="space-y-4">
-          <ChartCard title="Mặt hàng đã bán" subtitle={`${selectedPeriodLabel} · Doanh số gộp trước trả hàng · ${visibleProducts.length} mặt hàng`}>
+          <ChartCard title="Bán hàng theo mặt hàng" subtitle={`${selectedPeriodLabel} · ${visibleProducts.length} mặt hàng có phát sinh bán hoặc trả`}>
             <div className="flex flex-wrap gap-2 pb-3">
               <input
                 aria-label="Tìm mặt hàng đã bán"
@@ -596,35 +674,63 @@ export default function HangHoaPage() {
                 value={productSort}
                 onChange={(event) => { setProductSort(event.target.value as typeof productSort); setProductPage(1); }}
               >
-                <option value="revenue">Doanh số cao nhất</option>
-                <option value="quantity">Số lượng nhiều nhất</option>
+                <option value="netRevenue">Doanh thu thuần cao nhất</option>
+                <option value="revenue">Doanh số gộp cao nhất</option>
+                <option value="quantity">Số lượng bán nhiều nhất</option>
+                <option value="returnedValue">Tiền trả cao nhất</option>
                 <option value="name">Tên A–Z</option>
               </select>
+            </div>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
+              {returnReportStatus === "ready" ? (
+                <p>Đối chiếu tiền theo mã hàng và biến thể. Tiền trả tính theo ngày lập phiếu; doanh thu thuần = doanh số gộp trừ tiền trả.</p>
+              ) : returnReportStatus === "error" ? (
+                <div className="flex flex-wrap items-center gap-2 text-status-error">
+                  <p>Chưa tải được phiếu trả hàng; số thuần đang để trống.</p>
+                  <button type="button" className="underline underline-offset-2" onClick={() => setReturnRetryToken((value) => value + 1)}>Thử lại</button>
+                </div>
+              ) : (
+                <p>Đang đối soát phiếu trả hàng trong kỳ…</p>
+              )}
+              {returnReportStatus === "ready" && <p>Có thể âm nếu trả trong kỳ hàng bán từ kỳ trước.</p>}
             </div>
             <ReportTableFrame tablePreferenceKey="report.products.sales">
               <div className="overflow-x-auto">
                 {visibleProducts.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted-foreground">Không có mặt hàng phù hợp.</p>
                 ) : (
-                  <table className="w-full text-sm">
+                  <table className="w-full min-w-[760px] text-sm">
                     <thead>
                       <tr className="border-b text-muted-foreground">
                         <th className="py-2 text-left font-medium">Mã hàng</th>
                         <th className="py-2 text-left font-medium">Mặt hàng</th>
-                        <th className="py-2 text-right font-medium">Số lượng bán</th>
+                        <th className="py-2 text-right font-medium">SL bán</th>
                         <th className="py-2 text-right font-medium">Doanh số gộp</th>
+                        <th className="py-2 text-right font-medium">Tiền trả</th>
+                        <th className="py-2 text-right font-medium">Doanh thu thuần</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {pagedProducts.map((product, index) => (
-                        <tr key={`${product.code ?? product.name}-${index}`} className="border-b last:border-0">
+                      {pagedProducts.map((product) => (
+                        <tr key={`${product.productId}-${product.name}`} className="border-b last:border-0">
                           <td className="py-2 pr-4 text-muted-foreground">{product.code ?? "—"}</td>
                           <td className="py-2 pr-4 font-medium">{product.name}</td>
                           <td className="py-2 text-right tabular-nums">{formatNumber(product.qty)}</td>
                           <td className="py-2 text-right tabular-nums">{formatCurrency(product.revenue)}đ</td>
+                          <td className="py-2 text-right tabular-nums">{returnReportStatus === "ready" ? `${formatCurrency(product.returnedValue)}đ` : "—"}</td>
+                          <td className="py-2 text-right font-medium tabular-nums">{returnReportStatus === "ready" ? `${formatCurrency(product.netRevenue)}đ` : "—"}</td>
                         </tr>
                       ))}
                     </tbody>
+                    {returnReportStatus === "ready" && <tfoot>
+                      <tr className="border-t-2 bg-muted/40 font-semibold">
+                        <td className="py-2 pr-4" colSpan={2}>Tổng kết quả lọc</td>
+                        <td className="py-2 text-right tabular-nums">{formatNumber(visibleProductTotals.qty)}</td>
+                        <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.revenue)}đ</td>
+                        <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.returnedValue)}đ</td>
+                        <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.netRevenue)}đ</td>
+                      </tr>
+                    </tfoot>}
                   </table>
                 )}
               </div>

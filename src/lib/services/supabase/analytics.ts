@@ -45,6 +45,7 @@ export interface CategoryRevenue {
 }
 
 export interface TopProductRevenue {
+  productId: string;
   name: string;
   code?: string;
   qty: number;
@@ -1444,7 +1445,7 @@ export async function getTopProductsByRevenue(
     const product = item.products as { code?: string } | null;
     // One SKU can have separate F&B size lines with different prices.
     const key = productId ? `${productId}:${name}` : name;
-    const current = totals.get(key) ?? { name, code: product?.code, qty: 0, revenue: 0 };
+    const current = totals.get(key) ?? { productId, name, code: product?.code, qty: 0, revenue: 0 };
     current.qty += Number(item.quantity ?? 0);
     current.revenue += Number(item.total ?? 0);
     totals.set(key, current);
