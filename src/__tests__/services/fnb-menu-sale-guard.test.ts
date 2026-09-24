@@ -35,4 +35,12 @@ describe("kiemTraGiaBanThemNhanhFnb", () => {
       }),
     ).toEqual({ dat: true });
   });
+
+  it("cho chọn size miễn phí của món đã bật cờ dù size mặc định có giá", () => {
+    expect(kiemTraGiaBanThemNhanhFnb({
+      catalogPrice: 20_000,
+      resolvedPrice: 0,
+      allowFreeSale: true,
+    })).toEqual({ dat: true });
+  });
 });

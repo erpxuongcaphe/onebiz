@@ -20,7 +20,7 @@ import type {
 
 interface Variant { id: string; label: string; sell_price: number; is_default?: boolean }
 interface Topping { id: string; name: string; price: number }
-interface Product { id: string; name: string; sell_price: number }
+interface Product { id: string; name: string; sell_price: number; allow_free_sale?: boolean }
 
 /**
  * CEO 01/06/2026 — Sprint 2.2e:
@@ -361,7 +361,8 @@ export function FnbItemDialog({
       if (initialSelection?.variantId) {
         initVariant =
           variants?.find(
-            (v) => v.id === initialSelection.variantId && v.sell_price > 0,
+            (v) => v.id === initialSelection.variantId &&
+              (v.sell_price > 0 || (v.sell_price === 0 && product?.allow_free_sale === true)),
           ) ?? null;
       }
       // Guard Size: chọn đúng quy cách được đánh dấu mặc định. Trước đây lấy
@@ -369,7 +370,8 @@ export function FnbItemDialog({
       // tôn trọng. Không có cái nào đánh dấu thì để TRỐNG, buộc người bán chọn.
       if (!initVariant) {
         initVariant =
-          variants?.find((v) => v.is_default && v.sell_price > 0) ?? null;
+          variants?.find((v) => v.is_default &&
+            (v.sell_price > 0 || (v.sell_price === 0 && product?.allow_free_sale === true))) ?? null;
       }
       setSelectedVariant(initVariant);
 
@@ -560,9 +562,10 @@ export function FnbItemDialog({
   // xác nhận (không biết món có tuỳ chọn hay không thì đừng đoán).
   // Guard Size (3 tầng — tầng giao diện):
   //  · món có quy cách đang bật thì BẮT BUỘC chọn cỡ, không mặc định bừa;
-  //  · giá của dòng phải > 0 — bán 0đ do quên nhập giá là mất tiền thật.
+  //  · giá 0 chỉ hợp lệ khi quản lý đã bật bán miễn phí cho món.
   const thieuQuyCach = coQuyCach && !selectedVariant;
-  const giaKhongHopLe = !variantsLoading && !thieuQuyCach && unitPrice <= 0;
+  const giaKhongHopLe = !variantsLoading && !thieuQuyCach &&
+    (unitPrice < 0 || (unitPrice === 0 && product?.allow_free_sale !== true));
 
   const canConfirm =
     invalidModifierGroupIds.size === 0 && !modifiersLoading && !modifiersFailed
@@ -903,7 +906,8 @@ export function FnbItemDialog({
                 <Label className="text-[13px] font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {variants.map((v) => {
-                    const chuaCoGia = v.sell_price <= 0;
+                    const chuaCoGia = v.sell_price < 0 ||
+                      (v.sell_price === 0 && product?.allow_free_sale !== true);
                     return (
                       <button
                         key={v.id}
