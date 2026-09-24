@@ -64,4 +64,14 @@ describe("financial analysis details", () => {
     expect(page).toContain("Math.min(cogsItems.length + 100, cogsTotalCount)");
     expect(page).toContain("marginTrend.map((item)");
   });
+
+  it("labels the selected trend granularity and net-of-return revenue", () => {
+    expect(page).toContain("setTrendGranularity(detailsRes.granularity)");
+    expect(page).toContain("Theo ngày");
+    expect(page).toContain("Theo tháng");
+    expect(page).toContain("Doanh thu thuần hàng hóa");
+    expect(page).toContain("Doanh thu thuần");
+    expect(page).toContain("phiếu trả được xác nhận trong kỳ");
+    expect(page).toContain('href="/phan-tich/tra-hang"');
+  });
 });
