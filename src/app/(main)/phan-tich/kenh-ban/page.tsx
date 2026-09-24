@@ -361,22 +361,8 @@ export default function KenhBanPage() {
             )}
           </ChartCard>
 
-          {/* Historical trend placeholder */}
+          {/* Channel performance table */}
           <ChartCard
-            title="Xu hướng theo kênh"
-            subtitle="Dữ liệu lịch sử"
-          >
-            <div className="h-64 md:h-80 flex flex-col items-center justify-center text-muted-foreground gap-2">
-              <Icon name="info" className="size-8" />
-              <p className="text-sm text-center px-4">
-                Biểu đồ xu hướng theo tháng sẽ được bổ sung khi có đủ dữ liệu lịch sử.
-              </p>
-            </div>
-          </ChartCard>
-        </div>
-
-        {/* Channel performance table */}
-        <ChartCard
           title="Hiệu suất theo kênh bán"
           subtitle={selectedPeriodLabel}
         >
@@ -430,7 +416,8 @@ export default function KenhBanPage() {
               Chưa có dữ liệu hiệu suất kênh bán.
             </div>
           )}
-        </ChartCard>
+          </ChartCard>
+        </div>
       </div>
     </div>
   );

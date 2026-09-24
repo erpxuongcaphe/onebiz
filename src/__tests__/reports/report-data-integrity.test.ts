@@ -11,6 +11,7 @@ describe("report data integrity", () => {
     for (const route of fixedViews) {
       const page = readFileSync(`src/app/(main)/phan-tich/${route}/page.tsx`, "utf8");
       expect(page, route).not.toContain("onViewModeChange={setViewMode}");
+      if (route === "kenh-ban") expect(page).not.toContain("Historical trend placeholder");
     }
   });
 
