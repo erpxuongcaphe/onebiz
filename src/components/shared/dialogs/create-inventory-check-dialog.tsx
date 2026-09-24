@@ -20,6 +20,7 @@ import type { Database } from "@/lib/supabase/types";
 import { isRpcUnavailable } from "@/lib/services/supabase/rpc-utils";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency } from "@/lib/format";
+import { buildInventoryCheckProductFilter } from "@/lib/inventory-check-search";
 
 type ProductRow = Pick<
   Database["public"]["Tables"]["products"]["Row"],
@@ -119,22 +120,17 @@ export function CreateInventoryCheckDialog({
       //    Retail có BOM vì tồn của SKU này nằm ở NVL.
       //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
       //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
-      // inventory_role chưa có trong generated types → cast any.
+      // Gộp điều kiện vai trò, phạm vi kho và tìm kiếm thành một bộ lọc lồng nhau;
+      // PostgREST chỉ nhận một biểu thức `or` cho mỗi truy vấn.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let q: any = (supabase as any)
         .from("products")
         .select("id, code, name, unit, cost_price")
         .eq("tenant_id", ctx.tenantId)
-        .eq("is_active", true)
-        // Postgres `NULL <> 'fnb_menu_item'` is unknown, so `.neq()` silently
-        // removed legacy Retail components whose inventory_role is not set.
-        .or("inventory_role.is.null,inventory_role.neq.fnb_menu_item");
-      if (!isOutlet) {
-        q = q.or("product_type.eq.nvl,has_bom.is.false");
-      }
-      q = q
-        .or(`code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%`)
-        .limit(10);
+        .eq("is_active", true);
+      const productFilter = buildInventoryCheckProductFilter(term, isOutlet);
+      if (productFilter) q = q.or(productFilter);
+      q = q.limit(10);
       const { data, error } = await q;
 
       if (!error) setFilteredProducts((data ?? []) as ProductRow[]);
