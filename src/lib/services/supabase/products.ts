@@ -539,6 +539,7 @@ export async function getAllStockMovements(
   params: QueryParams & {
     movementType?: string;
     branchId?: string;
+    productId?: string;
     /** P1-3C-K2 12/06/2026: filter ngày — trang /hang-hoa/lich-su-kho có UI date preset nhưng trước đây service không nhận. */
     dateFrom?: string;
     dateTo?: string;
@@ -554,6 +555,7 @@ export async function getAllStockMovements(
     .from("stock_movements")
     .select("*, products!inner(name, code, unit), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId);
+  if (params.productId) query = query.eq("product_id", params.productId);
 
   // Search by product name/code or note
   if (params.search) {
@@ -651,6 +653,7 @@ export async function getStockMovementCounts(
     search?: string;
     movementType?: string;
     branchId?: string;
+    productId?: string;
     dateFrom?: string;
     dateTo?: string;
   },
@@ -670,6 +673,7 @@ export async function getStockMovementCounts(
       .from("stock_movements")
       .select("id, products!inner(name, code)", { count: "exact", head: true })
       .eq("tenant_id", tenantId);
+    if (params.productId) query = query.eq("product_id", params.productId);
 
     if (params.search) {
       query = query.or(

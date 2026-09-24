@@ -5,7 +5,7 @@
  *
  * Format chuẩn KiotViet (CEO 06/05/2026):
  * - View "Tổng hợp" (11 cột): Mã / Tên / ĐVT + số lượng và giá trị Tồn đầu / Nhập / Xuất / Tồn cuối
- * - View "Chi tiết" (17 cột): Mã / Tên / Tồn đầu + NHẬP × 5 + XUẤT × 6 + Tồn cuối
+ * - View "Chi tiết" (20 cột): Mã / Tên / Tồn đầu + NHẬP × 6 + XUẤT × 8 + Tồn cuối
  * - Filter: 16 preset thời gian + chi nhánh + search SP
  * - Export: View hiện tại (1 sheet) hoặc Đầy đủ (multi-sheet kế toán pivot)
  *
@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useState, useCallback, useRef } from "react";
+import Link from "next/link";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
@@ -29,8 +30,11 @@ import {
 } from "@/lib/utils/excel-export";
 import { getXntReport, type XntRow, type XntReportResult } from "@/lib/services";
 import { cn } from "@/lib/utils";
+import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
 
 type SubMode = "summary" | "detail";
+
+const COST_ESTIMATE_NOTE = "Giá trị tồn, nhập, xuất ước tính theo giá vốn sản phẩm hiện tại; không phải giá vốn lịch sử theo từng chứng từ.";
 
 const SUB_MODES: { key: SubMode; label: string; icon: string }[] = [
   { key: "summary", label: "Tổng hợp", icon: "view_module" },
@@ -112,6 +116,7 @@ export default function XuatNhapTonPage() {
       branchName,
       generatedAt: new Date(),
     });
+    titleRows.push(COST_ESTIMATE_NOTE);
 
     if (subMode === "summary") {
       exportReportToExcel({
@@ -165,7 +170,7 @@ export default function XuatNhapTonPage() {
         ],
       });
     } else {
-      // detail mode — 13 cột chia NHẬP/XUẤT
+      // Detail mode keeps every movement bucket visible, including internal issues.
       exportReportToExcel({
         kind: "xuat-nhap-ton",
         mode: "view",
@@ -178,10 +183,8 @@ export default function XuatNhapTonPage() {
             tablePreferenceKey: "report.xuat-nhap-ton.detail",
             columnGroups: [
               { label: "", span: 4 }, // Mã / Tên / Tồn đầu / GT đầu
-              // Đợt 2b (17/07): +1 cột "Khác" mỗi bên — trước đây inOther/outOther
-              // bị RƠI khỏi file xuất (94% lượng xuất khi bom_consume còn ở other).
               { label: "NHẬP", span: 6 },
-              { label: "XUẤT", span: 7 },
+              { label: "XUẤT", span: 8 },
               { label: "", span: 2 }, // Tồn cuối + GT cuối
             ],
             columns: [
@@ -189,20 +192,21 @@ export default function XuatNhapTonPage() {
               { label: "Tên hàng", key: "name", width: 32 },
               { label: "Tồn đầu", key: "openingQty", width: 10, format: "number" },
               { label: "GT đầu", key: "openingValue", width: 14, format: "currency" },
-              // NHẬP 5 cột
+              // NHẬP 6 cột
               { label: "NCC", key: "inSupplier", width: 10, format: "number" },
               { label: "Kiểm(+)", key: "inCheck", width: 10, format: "number" },
               { label: "Trả KH", key: "inReturn", width: 10, format: "number" },
               { label: "Chuyển đến", key: "inTransfer", width: 11, format: "number" },
               { label: "SX nhập", key: "inProduction", width: 10, format: "number" },
               { label: "Khác(+)", key: "inOther", width: 10, format: "number" },
-              // XUẤT 7 cột
+              // XUẤT 8 cột
               { label: "Bán", key: "outSale", width: 10, format: "number" },
               { label: "Hủy", key: "outDisposal", width: 10, format: "number" },
               { label: "Trả NCC", key: "outSupplierReturn", width: 11, format: "number" },
               { label: "Kiểm(-)", key: "outCheck", width: 10, format: "number" },
               { label: "Chuyển đi", key: "outTransfer", width: 11, format: "number" },
               { label: "SX xuất", key: "outProduction", width: 10, format: "number" },
+              { label: "Nội bộ", key: "outInternal", width: 10, format: "number" },
               { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
               { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
               { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
@@ -224,6 +228,7 @@ export default function XuatNhapTonPage() {
               outCheck: r.outCheck,
               outTransfer: r.outTransfer,
               outProduction: r.outProduction,
+              outInternal: r.outInternal,
               outOther: r.outOther,
               closingQty: r.closingQty,
               closingValue: r.closingValue,
@@ -247,12 +252,14 @@ export default function XuatNhapTonPage() {
       branchName,
       generatedAt: new Date(),
     });
+    titleRows.push(COST_ESTIMATE_NOTE);
 
     exportReportToExcel({
       kind: "xuat-nhap-ton",
       mode: "full",
       range,
       branchName,
+      disclaimer: COST_ESTIMATE_NOTE,
       sheets: [
         // Sheet 1 — Tổng hợp 9 cột
         {
@@ -298,14 +305,14 @@ export default function XuatNhapTonPage() {
             closingValue: data.subtotal.closingValue,
           },
         },
-        // Sheet 2 — Chi tiết NHẬP/XUẤT 13 cột
+        // Sheet 2 — Chi tiết NHẬP/XUẤT 20 cột
         {
           name: "2. Chi tiết NHẬP-XUẤT",
           titleRows,
           columnGroups: [
             { label: "", span: 4 },
             { label: "NHẬP", span: 6 },
-            { label: "XUẤT", span: 7 },
+            { label: "XUẤT", span: 8 },
             { label: "", span: 2 },
           ],
           columns: [
@@ -325,6 +332,7 @@ export default function XuatNhapTonPage() {
             { label: "Kiểm(-)", key: "outCheck", width: 10, format: "number" },
             { label: "Chuyển đi", key: "outTransfer", width: 11, format: "number" },
             { label: "SX xuất", key: "outProduction", width: 10, format: "number" },
+            { label: "Nội bộ", key: "outInternal", width: 10, format: "number" },
             { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
             { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
             { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
@@ -346,6 +354,7 @@ export default function XuatNhapTonPage() {
             outCheck: r.outCheck,
             outTransfer: r.outTransfer,
             outProduction: r.outProduction,
+            outInternal: r.outInternal,
             outOther: r.outOther,
             closingQty: r.closingQty,
             closingValue: r.closingValue,
@@ -362,7 +371,7 @@ export default function XuatNhapTonPage() {
             { key: "Từ ngày", value: range.from },
             { key: "Đến ngày", value: range.to },
             { key: "Chi nhánh", value: branchName },
-            { key: "Phương pháp tính giá", value: "Cost price snapshot (best-effort)" },
+            { key: "Cơ sở giá trị tồn", value: "Ước tính theo giá vốn sản phẩm hiện tại; không phải giá vốn lịch sử theo chứng từ" },
             { key: "Người xuất", value: "—" },
             {
               key: "Thời gian xuất",
@@ -379,7 +388,18 @@ export default function XuatNhapTonPage() {
   // ========================================================
 
   const summaryColumns: DataTableColumn<XntRow>[] = [
-    { label: "Mã hàng", key: "code", align: "left", width: "120px" },
+    {
+      label: "Mã hàng", key: "code", align: "left", width: "120px",
+      cell: (r) => (
+        <Link
+          className="text-primary hover:underline"
+          href={buildXntMovementHref({ productId: r.productId, productCode: r.code, branchId: activeBranchId ?? undefined, from: range.from, to: range.to })}
+          title="Xem phát sinh kho của mặt hàng"
+        >
+          {r.code}
+        </Link>
+      ),
+    },
     { label: "Tên hàng", key: "name", align: "left" },
     { label: "ĐVT", key: "unit", align: "center", width: "80px" },
     {
@@ -441,7 +461,18 @@ export default function XuatNhapTonPage() {
   ];
 
   const detailColumns: DataTableColumn<XntRow>[] = [
-    { label: "Mã hàng", key: "code", align: "left", width: "110px" },
+    {
+      label: "Mã hàng", key: "code", align: "left", width: "110px",
+      cell: (r) => (
+        <Link
+          className="text-primary hover:underline"
+          href={buildXntMovementHref({ productId: r.productId, productCode: r.code, branchId: activeBranchId ?? undefined, from: range.from, to: range.to })}
+          title="Xem phát sinh kho của mặt hàng"
+        >
+          {r.code}
+        </Link>
+      ),
+    },
     { label: "Tên hàng", key: "name", align: "left", width: "220px" },
     {
       label: "Tồn đầu kỳ",
@@ -463,13 +494,14 @@ export default function XuatNhapTonPage() {
     { label: "Chuyển kho đến", key: "inTransfer", align: "right", cell: (r) => formatNumber(r.inTransfer) },
     { label: "Sản xuất nhập", key: "inProduction", align: "right", cell: (r) => formatNumber(r.inProduction) },
     { label: "Nhập khác", key: "inOther", align: "right", cell: (r) => formatNumber(r.inOther) },
-    // XUẤT × 7 — thêm "Xuất khác" (outOther)
+    // XUẤT × 8, including internal issues already counted in totalOut.
     { label: "Bán hàng", key: "outSale", align: "right", cell: (r) => formatNumber(r.outSale) },
     { label: "Xuất huỷ", key: "outDisposal", align: "right", cell: (r) => formatNumber(r.outDisposal) },
     { label: "Trả NCC", key: "outSupplierReturn", align: "right", cell: (r) => formatNumber(r.outSupplierReturn) },
     { label: "Kiểm kê (−)", key: "outCheck", align: "right", cell: (r) => formatNumber(r.outCheck) },
     { label: "Chuyển kho đi", key: "outTransfer", align: "right", cell: (r) => formatNumber(r.outTransfer) },
     { label: "Sản xuất xuất", key: "outProduction", align: "right", cell: (r) => formatNumber(r.outProduction) },
+    { label: "Xuất nội bộ", key: "outInternal", align: "right", cell: (r) => formatNumber(r.outInternal) },
     { label: "Xuất khác", key: "outOther", align: "right", cell: (r) => formatNumber(r.outOther) },
     {
       label: "Tồn cuối kỳ",
@@ -488,7 +520,7 @@ export default function XuatNhapTonPage() {
   const detailColumnGroups: ColumnGroup[] = [
     { label: "", span: 4 },
     { label: "NHẬP", span: 6, variant: "input" },
-    { label: "XUẤT", span: 7, variant: "output" },
+    { label: "XUẤT", span: 8, variant: "output" },
     { label: "", span: 2 },
   ];
 
@@ -513,6 +545,10 @@ export default function XuatNhapTonPage() {
         onExportFull={handleExportFull}
         exportDisabled={loading || !data}
       />
+
+      <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
+        Số lượng được tái dựng từ phát sinh kho. Giá trị tồn, nhập và xuất là ước tính theo giá vốn sản phẩm hiện tại, không phải giá vốn lịch sử của từng chứng từ. Bấm mã hàng để đối chiếu phát sinh.
+      </p>
 
       {/* Sub-mode toggle + Search */}
       <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-2 flex items-center gap-3 flex-wrap">

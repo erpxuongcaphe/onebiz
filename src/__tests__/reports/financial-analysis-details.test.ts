@@ -56,4 +56,12 @@ describe("financial analysis details", () => {
     expect(page).toContain("50_000");
     expect(page).toContain("4. Xu hướng biên lãi");
   });
+
+  it("does not present the first ten COGS rows as the complete breakdown", () => {
+    expect(page).toContain("setCogsTotalCount(detailsRes.cogsTotalCount)");
+    expect(page).toContain("cogsItems.length < cogsTotalCount");
+    expect(page).toContain("Xem thêm mặt hàng");
+    expect(page).toContain("Math.min(cogsItems.length + 100, cogsTotalCount)");
+    expect(page).toContain("marginTrend.map((item)");
+  });
 });

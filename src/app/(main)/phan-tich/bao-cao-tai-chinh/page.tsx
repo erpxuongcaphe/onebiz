@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -151,12 +151,17 @@ export default function BaoCaoTaiChinhPage() {
   } | null>(null);
   const [branchPnL, setBranchPnL] = useState<BranchPnLRow[]>([]);
   const [cogsItems, setCogsItems] = useState<COGSItem[]>([]);
+  const [cogsTotalCount, setCogsTotalCount] = useState(0);
+  const [loadingMoreCogs, setLoadingMoreCogs] = useState(false);
+  const requestIdRef = useRef(0);
   const [marginTrend, setMarginTrend] = useState<GrossMarginTrend[]>([]);
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
   const [dso, setDso] = useState<DSOResult | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
+    const requestId = ++requestIdRef.current;
+    setLoadingMoreCogs(false);
     try {
       setLoading(true);
       const bid = activeBranchId;
@@ -179,14 +184,17 @@ export default function BaoCaoTaiChinhPage() {
             ? getBranchPnLComparison(range)
             : Promise.resolve([] as BranchPnLRow[]),
         ]);
+      if (requestId !== requestIdRef.current) return;
       setPnl(pnlRes);
       setCogsItems(detailsRes.cogsItems);
+      setCogsTotalCount(detailsRes.cogsTotalCount);
       setMarginTrend(detailsRes.marginTrend);
       setTurnover(detailsRes.turnover);
       setDso(detailsRes.dso);
       setConsolidated(consolidatedRes);
       setBranchPnL(branchPnLRes);
     } catch (err) {
+      if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch P&L data:", err);
       toast({
         title: "Lỗi tải báo cáo kết quả vận hành",
@@ -194,9 +202,35 @@ export default function BaoCaoTaiChinhPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (requestId === requestIdRef.current) setLoading(false);
     }
   }, [activeBranchId, ceoView, isReady, range, toast]);
+
+  const loadMoreCogs = async () => {
+    if (loadingMoreCogs || cogsItems.length >= cogsTotalCount) return;
+    const requestId = requestIdRef.current;
+    setLoadingMoreCogs(true);
+    try {
+      const result = await getFinancialAnalysisDetails(
+        activeBranchId,
+        range,
+        !activeBranchId && ceoView,
+        Math.min(cogsItems.length + 100, cogsTotalCount),
+      );
+      if (requestId !== requestIdRef.current) return;
+      setCogsItems(result.cogsItems);
+      setCogsTotalCount(result.cogsTotalCount);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      toast({
+        title: "Không tải thêm được giá vốn",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại",
+        variant: "error",
+      });
+    } finally {
+      if (requestId === requestIdRef.current) setLoadingMoreCogs(false);
+    }
+  };
 
   useEffect(() => {
     fetchData();
@@ -899,6 +933,7 @@ export default function BaoCaoTaiChinhPage() {
                 Chưa có dữ liệu.
               </p>
             ) : (
+              <div>
               <div className="h-72">
                 <ResponsiveContainer
                   width="100%"
@@ -973,6 +1008,31 @@ export default function BaoCaoTaiChinhPage() {
                     />
                   </LineChart>
                 </ResponsiveContainer>
+              </div>
+              <ReportTableFrame tablePreferenceKey="report.financial-results.margin-trend">
+                <div className="mt-3 overflow-x-auto border-t border-border pt-3">
+                  <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground">
+                      <th className="py-2 text-left font-medium">Kỳ</th>
+                      <th className="py-2 text-right font-medium">Doanh thu</th>
+                      <th className="py-2 text-right font-medium">Giá vốn</th>
+                      <th className="py-2 text-right font-medium">Biên gộp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {marginTrend.map((item) => (
+                      <tr key={item.month} className="border-b last:border-0">
+                        <td className="py-2">{item.month}</td>
+                        <td className="py-2 text-right tabular-nums">{formatCurrency(item.revenue)}</td>
+                        <td className="py-2 text-right tabular-nums">{formatCurrency(item.cogs)}</td>
+                        <td className="py-2 text-right tabular-nums">{formatNumber(item.grossMargin)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  </table>
+                </div>
+              </ReportTableFrame>
               </div>
             )}
           </ChartCard>
@@ -1150,7 +1210,7 @@ export default function BaoCaoTaiChinhPage() {
         {cogsItems.length > 0 && (
           <ChartCard
             title="Chi tiết giá vốn theo sản phẩm"
-            subtitle={selectedPeriodLabel}
+            subtitle={`${selectedPeriodLabel} · ${formatNumber(cogsItems.length)}/${formatNumber(cogsTotalCount)} mặt hàng`}
           >
             <ReportTableFrame tablePreferenceKey="report.financial-results.materials">
               <div className="overflow-x-auto">
@@ -1205,6 +1265,19 @@ export default function BaoCaoTaiChinhPage() {
                   ))}
                 </tbody>
               </table>
+              {cogsItems.length < cogsTotalCount && (
+                <div className="border-t border-border py-3 text-center">
+                  <button
+                    type="button"
+                    className="inline-flex h-9 items-center gap-1 text-sm font-medium text-primary hover:underline disabled:opacity-50"
+                    onClick={() => void loadMoreCogs()}
+                    disabled={loadingMoreCogs}
+                  >
+                    {loadingMoreCogs ? "Đang tải..." : `Xem thêm mặt hàng (${formatNumber(cogsTotalCount - cogsItems.length)} còn lại)`}
+                    {!loadingMoreCogs && <Icon name="expand_more" size={16} />}
+                  </button>
+                </div>
+              )}
               </div>
             </ReportTableFrame>
           </ChartCard>

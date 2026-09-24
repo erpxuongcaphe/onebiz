@@ -45,9 +45,9 @@ describe("historical XNT report", () => {
           out_check: 0,
           out_transfer: 0,
           out_production: 0,
-          out_internal: 0,
+          out_internal: 2,
           out_other: 0,
-          closing_qty: 11,
+          closing_qty: 9,
         },
       ],
       error: null,
@@ -61,9 +61,10 @@ describe("historical XNT report", () => {
     expect(result.rows[0]).toMatchObject({
       openingQty: 10,
       totalIn: 6,
-      totalOut: 5,
-      closingQty: 11,
-      closingValue: 1_100_000,
+      outInternal: 2,
+      totalOut: 7,
+      closingQty: 9,
+      closingValue: 900_000,
     });
     expect(
       result.rows[0].openingQty
@@ -90,5 +91,13 @@ describe("historical XNT report", () => {
     expect(service).toContain('"get_xnt_report"');
     expect(service).not.toContain('.from("stock_movements")');
     expect(service).not.toContain("fetchAllXntRows");
+  });
+
+  it("shows internal issues in both detailed views and exports", () => {
+    const page = readFileSync("src/app/(main)/phan-tich/xuat-nhap-ton/page.tsx", "utf8");
+    expect(page).toContain('key: "outInternal"');
+    expect(page.match(/outInternal: r\.outInternal/g)).toHaveLength(2);
+    expect(page).toContain('label: "Xuất nội bộ"');
+    expect(page).toContain("Giá trị tồn, nhập, xuất ước tính theo giá vốn sản phẩm hiện tại");
   });
 });
