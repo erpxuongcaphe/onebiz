@@ -25,7 +25,7 @@ import {
 } from "recharts";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
+import { formatNumber, formatCurrency, formatDate, formatChartCurrency } from "@/lib/format";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -46,6 +46,7 @@ import {
   summarizeSalesReturns,
   type ReturnDaySummary,
   type ReturnDocumentSummary,
+  type ReturnReasonSummary,
 } from "@/lib/reports/sales-return-summary";
 import { KpiCard } from "../_components/kpi-card";
 import { ChartCard } from "../_components/chart-card";
@@ -54,6 +55,10 @@ import { buildReturnListDeepLink } from "@/lib/utils/return-list-deep-link";
 import { LoadErrorState } from "@/components/shared/load-error-state";
 
 const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+
+function chartLabel(value: string): string {
+  return value.length > 18 ? `${value.slice(0, 17)}…` : value;
+}
 
 export default function SalesReturnReportPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
@@ -65,22 +70,26 @@ export default function SalesReturnReportPage() {
     setCustomRange,
     viewMode,
     setViewMode,
-  } = useReportState({ defaultViewMode: "chart" });
+  } = useReportState({ defaultViewMode: "table" });
 
-  const [rows, setRows] = useState<SalesReturnRow[]>([]);
-  // Tổng doanh thu cùng kỳ — dùng để tính return rate %
-  const [periodRevenue, setPeriodRevenue] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reportResult, setReportResult] = useState<{
+    key: string;
+    rows: SalesReturnRow[];
+    periodRevenue: number;
+    error: string | null;
+  } | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [reasonFilter, setReasonFilter] = useState<string | "all">("all");
-  const [tableMode, setTableMode] = useState<"day" | "document" | "item">("day");
+  const [tableMode, setTableMode] = useState<"day" | "document" | "item" | "reason">("day");
+  const requestKey = `${activeBranchId ?? "all"}:${range.from}:${range.to}:${reloadToken}`;
+  const loading = !isReady || reportResult?.key !== requestKey;
+  const rows = useMemo(() => loading ? [] : reportResult.rows, [loading, reportResult]);
+  const periodRevenue = loading ? 0 : reportResult.periodRevenue;
+  const loadError = loading ? null : reportResult.error;
 
   useEffect(() => {
     if (!isReady) return;
     let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
     // Fetch song song: báo cáo trả hàng + tổng doanh thu cùng kỳ
     Promise.all([
       getSalesReturnReport({
@@ -95,21 +104,27 @@ export default function SalesReturnReportPage() {
     ])
       .then(([returnRes, salesDays]) => {
         if (cancelled) return;
-        setRows(returnRes.rows);
-        setPeriodRevenue(salesDays.reduce((sum, day) => sum + day.revenue, 0));
+        setReportResult({
+          key: requestKey,
+          rows: returnRes.rows,
+          periodRevenue: salesDays.reduce((sum, day) => sum + day.revenue, 0),
+          error: null,
+        });
       })
       .catch((err) => {
         if (cancelled) return;
-        setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo trả hàng.");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        setReportResult({
+          key: requestKey,
+          rows: [],
+          periodRevenue: 0,
+          error: err instanceof Error ? err.message : "Không tải được báo cáo trả hàng.",
+        });
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isReady, activeBranchId, range.from, range.to, reloadToken]);
+  }, [isReady, activeBranchId, range.from, range.to, requestKey]);
 
   const reasonOptions = useMemo(() => summarizeSalesReturns(rows).byReason, [rows]);
   const filteredRows = useMemo(() => {
@@ -203,6 +218,13 @@ export default function SalesReturnReportPage() {
     { label: "SL trả", key: "quantity", align: "right", cell: (row) => formatNumber(row.quantity) },
     { label: "Giá trị trả", key: "value", align: "right", cell: (row) => formatCurrency(row.value) + "đ" },
     { label: "NV xử lý", key: "staffName" },
+  ];
+
+  const reasonColumns: DataTableColumn<ReturnReasonSummary>[] = [
+    { label: "Lý do trả hàng", key: "reason", hideable: false },
+    { label: "Số phiếu", key: "count", align: "right", cell: (row) => formatNumber(row.count) },
+    { label: "SL trả", key: "qty", align: "right", cell: (row) => formatNumber(row.qty) },
+    { label: "Giá trị trả", key: "value", align: "right", cell: (row) => formatCurrency(row.value) + "đ" },
   ];
 
   // ── Export ──
@@ -497,19 +519,20 @@ export default function SalesReturnReportPage() {
                 <BarChart
                   data={byReason.slice(0, 8)}
                   layout="vertical"
-                  margin={{ top: 5, right: 10, left: 80, bottom: 5 }}
+                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis
                     type="number"
                     fontSize={11}
-                    tickFormatter={(v) => formatNumber(v / 1_000_000) + "tr"}
+                    tickFormatter={formatChartCurrency}
                   />
                   <YAxis
                     type="category"
                     dataKey="reason"
                     fontSize={11}
-                    width={80}
+                    width={140}
+                    tickFormatter={chartLabel}
                   />
                   <Tooltip
                     formatter={(v: unknown) =>
@@ -535,19 +558,20 @@ export default function SalesReturnReportPage() {
                 <BarChart
                   data={byProduct.slice(0, 8)}
                   layout="vertical"
-                  margin={{ top: 5, right: 10, left: 100, bottom: 5 }}
+                  margin={{ top: 5, right: 10, left: 10, bottom: 5 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis
                     type="number"
                     fontSize={11}
-                    tickFormatter={(v) => formatNumber(v / 1_000_000) + "tr"}
+                    tickFormatter={formatChartCurrency}
                   />
                   <YAxis
                     type="category"
                     dataKey="productName"
                     fontSize={10}
-                    width={100}
+                    width={140}
+                    tickFormatter={chartLabel}
                   />
                   <Tooltip
                     formatter={(v: unknown) =>
@@ -589,6 +613,7 @@ export default function SalesReturnReportPage() {
             ["day", "Theo ngày"],
             ["document", "Theo phiếu"],
             ["item", "Dòng hàng"],
+            ["reason", "Theo lý do"],
           ] as const).map(([mode, label]) => (
             <button
               key={mode}
@@ -622,7 +647,7 @@ export default function SalesReturnReportPage() {
             subtotalLabel={`${kpis.returnCount} phiếu · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
             emptyState="Không có phiếu trả hàng trong kỳ hoặc bộ lọc đã chọn"
           />
-        ) : (
+        ) : tableMode === "item" ? (
           <ReportDataTable
             tablePreferenceKey="report.sales-returns.rows"
             columns={columns}
@@ -630,6 +655,15 @@ export default function SalesReturnReportPage() {
             getRowKey={(row, index) => `${row.returnId}-${row.productId}-${index}`}
             subtotalLabel={`${filteredRows.length} dòng · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
             emptyState="Không có dòng hàng trả trong kỳ hoặc bộ lọc đã chọn"
+          />
+        ) : (
+          <ReportDataTable
+            tablePreferenceKey="report.sales-returns.reasons"
+            columns={reasonColumns}
+            rows={byReason}
+            getRowKey={(row) => row.reason}
+            subtotalLabel={`${kpis.returnCount} phiếu · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
+            emptyState="Không có lý do trả hàng trong kỳ hoặc bộ lọc đã chọn"
           />
         )}
       </section>
