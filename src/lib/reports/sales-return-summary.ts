@@ -23,6 +23,13 @@ export interface ReturnDocumentSummary {
   value: number;
 }
 
+export interface ReturnReasonSummary {
+  reason: string;
+  count: number;
+  qty: number;
+  value: number;
+}
+
 export function summarizeSalesReturns(rows: SalesReturnRow[]) {
   const days = new Map<string, ReturnDaySummary & { returnIds: Set<string> }>();
   const documents = new Map<string, ReturnDocumentSummary>();

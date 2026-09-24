@@ -22,6 +22,14 @@ describe("return document drill-down", () => {
     expect(source).toContain('if (loadError)');
     expect(source).toContain('Không hiển thị tỷ lệ 0% khi doanh thu chưa tải được.');
     expect(source).toContain('periodRevenue > 0 ? (summary.totalValue / periodRevenue) * 100 : null');
+    expect(source).toContain('reportResult?.key !== requestKey');
+  });
+
+  it("defaults to the auditable table and has a full reason breakdown", () => {
+    const source = readFileSync("src/app/(main)/phan-tich/tra-hang/page.tsx", "utf8");
+    expect(source).toContain('defaultViewMode: "table"');
+    expect(source).toContain('["reason", "Theo lý do"]');
+    expect(source).toContain('tablePreferenceKey="report.sales-returns.reasons"');
   });
 
   it("links sales and return report rows to their original documents", () => {
