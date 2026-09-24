@@ -39,6 +39,7 @@ import type {
   COGSItem,
   CogsCostBasis,
   GrossMarginTrend,
+  FinancialAnalysisDetails,
   InventoryTurnoverResult,
   DSOResult,
   ConsolidatedPnL,
@@ -155,6 +156,9 @@ export default function BaoCaoTaiChinhPage() {
   const [loadingMoreCogs, setLoadingMoreCogs] = useState(false);
   const requestIdRef = useRef(0);
   const [marginTrend, setMarginTrend] = useState<GrossMarginTrend[]>([]);
+  const [trendGranularity, setTrendGranularity] = useState<
+    FinancialAnalysisDetails["granularity"]
+  >("month");
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
   const [dso, setDso] = useState<DSOResult | null>(null);
 
@@ -189,6 +193,7 @@ export default function BaoCaoTaiChinhPage() {
       setCogsItems(detailsRes.cogsItems);
       setCogsTotalCount(detailsRes.cogsTotalCount);
       setMarginTrend(detailsRes.marginTrend);
+      setTrendGranularity(detailsRes.granularity);
       setTurnover(detailsRes.turnover);
       setDso(detailsRes.dso);
       setConsolidated(consolidatedRes);
@@ -824,7 +829,7 @@ export default function BaoCaoTaiChinhPage() {
               <tbody>
                 {[
                   {
-                    label: "Doanh thu hàng hóa",
+                    label: "Doanh thu thuần hàng hóa",
                     cur: cur?.goodsRevenue ?? 0,
                     prev: prev?.goodsRevenue ?? 0,
                   },
@@ -834,7 +839,7 @@ export default function BaoCaoTaiChinhPage() {
                     prev: prev?.deliveryFee ?? 0,
                   },
                   {
-                    label: "= Tổng doanh thu",
+                    label: "= Tổng doanh thu sau trả hàng",
                     cur: cur?.revenue ?? 0,
                     prev: prev?.revenue ?? 0,
                     bold: true,
@@ -919,6 +924,18 @@ export default function BaoCaoTaiChinhPage() {
             </table>
             </div>
           </ReportTableFrame>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Doanh thu và giá vốn đã trừ các phiếu trả được xác nhận trong kỳ.
+            Ngày có doanh thu âm là ngày ghi nhận trả hàng lớn hơn doanh thu bán mới;
+            xem báo cáo Trả hàng chi tiết để đối chiếu từng phiếu.
+            {" "}
+            <a
+              href="/phan-tich/tra-hang"
+              className="font-medium text-primary underline-offset-2 hover:underline"
+            >
+              Mở báo cáo Trả hàng
+            </a>
+          </p>
         </ChartCard>
 
         {/* Gross Margin Trend + COGS Breakdown */}
@@ -926,7 +943,13 @@ export default function BaoCaoTaiChinhPage() {
           {/* Gross Margin Trend */}
           <ChartCard
             title="Xu hướng biên lợi nhuận gộp"
-            subtitle="6 tháng gần nhất · tham chiếu"
+            subtitle={`${
+              trendGranularity === "day"
+                ? "Theo ngày"
+                : trendGranularity === "year"
+                  ? "Theo năm"
+                  : "Theo tháng"
+            } · ${selectedPeriodLabel}`}
           >
             {marginTrend.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
@@ -977,7 +1000,7 @@ export default function BaoCaoTaiChinhPage() {
                         <span className="text-xs">{value}</span>
                       )}
                     />
-                    {/* Stitch palette: Doanh thu dùng primary #004AC6, COGS orange, Biên gộp green. */}
+                    {/* Stitch palette: Doanh thu thuần dùng primary #004AC6, COGS orange, Biên gộp green. */}
                     <Line
                       yAxisId="left"
                       type="linear"
@@ -985,7 +1008,7 @@ export default function BaoCaoTaiChinhPage() {
                       stroke="#004AC6"
                       strokeWidth={2}
                       dot={{ fill: "#004AC6", r: 3 }}
-                      name="Doanh thu"
+                      name="Doanh thu thuần"
                     />
                     <Line
                       yAxisId="left"
@@ -1015,7 +1038,7 @@ export default function BaoCaoTaiChinhPage() {
                   <thead>
                     <tr className="border-b text-muted-foreground">
                       <th className="py-2 text-left font-medium">Kỳ</th>
-                      <th className="py-2 text-right font-medium">Doanh thu</th>
+                      <th className="py-2 text-right font-medium">Doanh thu thuần</th>
                       <th className="py-2 text-right font-medium">Giá vốn</th>
                       <th className="py-2 text-right font-medium">Biên gộp</th>
                     </tr>
