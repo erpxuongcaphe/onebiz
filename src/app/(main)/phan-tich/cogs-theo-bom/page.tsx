@@ -8,6 +8,7 @@ import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { getCogsByBom, type CogsByBomRow } from "@/lib/services";
+import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
 import {
   buildReportTitleRows,
   exportReportToExcel,
@@ -60,10 +61,13 @@ export default function CogsTheoBomPage() {
   }, [fetchData]);
 
   const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
-  const totalCogs = rows.reduce((sum, row) => sum + row.cogsReal, 0);
-  const totalMargin = totalRevenue - totalCogs;
-  const marginPercent = totalRevenue > 0 ? (totalMargin / totalRevenue) * 100 : 0;
-  const negativeMargin = rows.filter((row) => row.margin < 0);
+  const knownRows = rows.filter((row) => row.cogsReal != null);
+  const missingCostCount = rows.length - knownRows.length;
+  const knownRevenue = knownRows.reduce((sum, row) => sum + row.revenue, 0);
+  const totalCogs = knownRows.reduce((sum, row) => sum + (row.cogsReal ?? 0), 0);
+  const totalMargin = knownRevenue - totalCogs;
+  const marginPercent = knownRevenue > 0 ? (totalMargin / knownRevenue) * 100 : 0;
+  const negativeMargin = knownRows.filter((row) => (row.margin ?? 0) < 0);
 
   const detailSheet = useCallback((): ExcelSheet => ({
     name: "Chi tiết giá vốn",
@@ -82,6 +86,7 @@ export default function CogsTheoBomPage() {
       { label: "Doanh thu", key: "revenue", width: 18, format: "currency" },
       { label: "Giá vốn", key: "cogsReal", width: 18, format: "currency" },
       { label: "Lợi nhuận gộp", key: "margin", width: 18, format: "currency" },
+      { label: "Tình trạng giá vốn", key: "costStatus", width: 20 },
     ],
     rows: rows.map((row) => ({
       invoiceCode: row.invoiceCode,
@@ -93,6 +98,7 @@ export default function CogsTheoBomPage() {
       revenue: row.revenue,
       cogsReal: row.cogsReal,
       margin: row.margin,
+      costStatus: row.cogsReal == null ? "Chưa xác định" : "Đã ghi nhận",
     })),
     footer: {
       invoiceCode: "TỔNG",
@@ -103,9 +109,9 @@ export default function CogsTheoBomPage() {
       qtySold: rows.reduce((sum, row) => sum + row.qtySold, 0),
       revenue: totalRevenue,
       cogsReal: totalCogs,
-      margin: totalMargin,
+      margin: missingCostCount ? null : totalMargin,
     },
-  }), [branchLabel, range, rows, totalCogs, totalMargin, totalRevenue]);
+  }), [branchLabel, missingCostCount, range, rows, totalCogs, totalMargin, totalRevenue]);
 
   const handleExport = useCallback(async (mode: "view" | "full") => {
     try {
@@ -124,9 +130,10 @@ export default function CogsTheoBomPage() {
           ],
           rows: [
             { metric: "Doanh thu sản phẩm có công thức", value: totalRevenue },
-            { metric: "Giá vốn theo công thức", value: totalCogs },
-            { metric: "Lợi nhuận gộp", value: totalMargin },
+            { metric: "Giá vốn đã ghi nhận", value: totalCogs },
+            { metric: "Lợi nhuận gộp (dòng đủ giá)", value: totalMargin },
             { metric: "Số dòng có lợi nhuận âm", value: negativeMargin.length },
+            { metric: "Số dòng chưa có giá vốn", value: missingCostCount },
           ],
         });
       }
@@ -137,7 +144,7 @@ export default function CogsTheoBomPage() {
         range,
         branchName: branchLabel,
         reportTitle: "Báo cáo giá vốn theo công thức",
-        description: "Giá vốn được tính từ nguyên vật liệu trong công thức đã ghi nhận.",
+        description: "Giá vốn tại thời điểm bán, chưa trừ hàng trả; dòng chưa có giá không được tính thành 0.",
         sheets,
       });
       toast({ title: "Đã xuất báo cáo giá vốn theo công thức", variant: "success" });
@@ -148,13 +155,13 @@ export default function CogsTheoBomPage() {
         variant: "error",
       });
     }
-  }, [branchLabel, detailSheet, negativeMargin.length, range, toast, totalCogs, totalMargin, totalRevenue]);
+  }, [branchLabel, detailSheet, missingCostCount, negativeMargin.length, range, toast, totalCogs, totalMargin, totalRevenue]);
 
   return (
     <div className="flex min-h-full flex-col">
       <ReportPageHeader
         title="Giá vốn theo công thức"
-        subtitle="Đối chiếu giá vốn nguyên vật liệu trong công thức với doanh thu sản phẩm"
+        subtitle="Giá vốn đã chốt trên hóa đơn có BOM; doanh thu trước hàng trả"
         preset={preset}
         range={range}
         onPresetChange={setPreset}
@@ -168,28 +175,33 @@ export default function CogsTheoBomPage() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <SummaryCard
             icon={<Icon name="trending_up" size={16} />}
-            label="Doanh thu sản phẩm có công thức"
+            label="Doanh thu gộp của dòng có BOM"
             value={loading ? "—" : formatCurrency(totalRevenue)}
             highlight
           />
           <SummaryCard
             icon={<Icon name="payments" size={16} />}
-            label="Giá vốn theo công thức"
+            label="Giá vốn đã ghi nhận"
             value={loading ? "—" : formatCurrency(totalCogs)}
           />
           <SummaryCard
             icon={<Icon name="account_balance" size={16} />}
-            label={`Lợi nhuận gộp (${marginPercent.toFixed(1)}%)`}
+            label={`Lãi gộp dòng đủ giá (${marginPercent.toFixed(1)}%)`}
             value={loading ? "—" : formatCurrency(totalMargin)}
             danger={totalMargin < 0}
           />
           <SummaryCard
             icon={<Icon name="warning" size={16} />}
-            label="Dòng có lợi nhuận âm"
-            value={loading ? "—" : formatNumber(negativeMargin.length)}
-            danger={negativeMargin.length > 0}
+            label="Dòng chưa có giá vốn"
+            value={loading ? "—" : formatNumber(missingCostCount)}
+            danger={missingCostCount > 0}
           />
         </div>
+
+        <p className="text-sm text-muted-foreground">
+          Giá vốn lấy từ dòng hóa đơn lúc bán, không tính lại theo giá nguyên liệu hôm nay.
+          Hàng trả xem riêng ở báo cáo Trả hàng; dòng thiếu giá không được cộng vào lãi gộp.
+        </p>
 
         <ReportTableFrame tablePreferenceKey="report.bom-cogs.rows">
           <div className="overflow-x-auto rounded-lg border border-border bg-card">
@@ -214,19 +226,19 @@ export default function CogsTheoBomPage() {
                   <td colSpan={8} className="py-12 text-center text-muted-foreground">
                     <Icon name="info" size={32} className="mx-auto mb-2 opacity-40" />
                     <p className="text-sm">Chưa có dữ liệu giá vốn theo công thức trong kỳ và phạm vi đã chọn.</p>
-                    <p className="mt-1 text-xs">Báo cáo chỉ tính sản phẩm đã có công thức đang hoạt động.</p>
+                    <p className="mt-1 text-xs">Báo cáo chỉ tính dòng hóa đơn của sản phẩm có BOM.</p>
                   </td>
                 </tr>
               ) : rows.map((row) => (
-                <tr key={`${row.invoiceId}-${row.productId}`} className={`border-t border-border hover:bg-surface-container-low/50 ${row.margin < 0 ? "bg-status-danger/5" : ""}`}>
-                  <td className="px-4 py-2 font-medium text-primary">{row.invoiceCode}</td>
+                <tr key={`${row.invoiceId}-${row.productId}`} className={`border-t border-border hover:bg-surface-container-low/50 ${(row.margin ?? 0) < 0 ? "bg-status-danger/5" : ""}`}>
+                  <td className="px-4 py-2 font-medium text-primary"><a href={buildInvoiceListDeepLink(row.invoiceCode)} className="underline-offset-2 hover:underline">{row.invoiceCode}</a></td>
                   <td className="px-4 py-2 text-xs text-muted-foreground">{formatDateTime(row.invoiceDate)}</td>
                   <td className="px-4 py-2">{row.branchName}</td>
                   <td className="px-4 py-2"><div>{row.productName}</div><div className="text-xs text-muted-foreground">{row.productCode}</div></td>
                   <td className="px-4 py-2 text-right">{formatNumber(row.qtySold)}</td>
                   <td className="px-4 py-2 text-right font-medium">{formatCurrency(row.revenue)}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(row.cogsReal)}</td>
-                  <td className={`px-4 py-2 text-right font-semibold ${row.margin < 0 ? "text-status-danger" : "text-status-success"}`}>{formatCurrency(row.margin)}</td>
+                  <td className="px-4 py-2 text-right">{row.cogsReal == null ? "Chưa xác định" : formatCurrency(row.cogsReal)}</td>
+                  <td className={`px-4 py-2 text-right font-semibold ${(row.margin ?? 0) < 0 ? "text-status-danger" : "text-status-success"}`}>{row.margin == null ? "—" : formatCurrency(row.margin)}</td>
                 </tr>
               ))}
             </tbody>
@@ -236,7 +248,7 @@ export default function CogsTheoBomPage() {
                   <td colSpan={5} className="px-4 py-3 text-right font-semibold">Tổng cộng:</td>
                   <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(totalRevenue)}</td>
                   <td className="px-4 py-3 text-right font-semibold">{formatCurrency(totalCogs)}</td>
-                  <td className={`px-4 py-3 text-right font-semibold ${totalMargin < 0 ? "text-status-danger" : "text-status-success"}`}>{formatCurrency(totalMargin)}</td>
+                  <td className={`px-4 py-3 text-right font-semibold ${totalMargin < 0 ? "text-status-danger" : "text-status-success"}`}>{missingCostCount ? "Chưa đủ giá" : formatCurrency(totalMargin)}</td>
                 </tr>
               </tfoot>
             )}

@@ -607,6 +607,10 @@ export function CreateProductDialog({
   // appears as a sellable F&B menu item. Its recipe still consumes Retail SKUs
   // at their internal-sale price, exactly like an F&B recipe.
   const usesFnbRecipeCosts = channel === "fnb" || isFnbStockItem;
+  const fnbBomCostPending = usesFnbRecipeCosts && hasBom &&
+    (!bomDraftSourceReady || (bomItems.length > 0 &&
+      (materialOptions.length === 0 || fnbPreparedCostLoading ||
+        bomItems.some((item) => !materialOptions.some((product) => product.id === item.materialId)))));
   const hasFnbSizeVariants =
     scope === "sku" &&
     channel === "fnb" &&
@@ -681,7 +685,7 @@ export function CreateProductDialog({
         const product = materialOptions.find((candidate) => candidate.id === item.materialId);
         const unitCost = product?.isFnbStockItem
           ? fnbPreparedCostByProductId[product.id]?.unitCost ?? 0
-          : item.costPrice;
+          : product ? getBomComponentUnitPrice(product, "fnb") : item.costPrice;
         return sum + item.quantity * (getDirectConversionFactor(
           item.stockUnit,
           item.unit,
@@ -1789,7 +1793,8 @@ export function CreateProductDialog({
   useEffect(() => {
     // Giá, BOM và Quy cách dùng chung một nguồn công thức theo size. Tab Giá
     // cũng cần danh mục NVL để tính đúng giá vốn Retail của từng BOM.
-    const needForBom = hasBom && innerTab === "bom";
+    const needForBom = hasBom && (innerTab === "bom" ||
+      (usesFnbRecipeCosts && innerTab === "pricing"));
     const needForRecipe =
       channel === "fnb" &&
       (innerTab === "pricing" || innerTab === "bom" || innerTab === "variants") &&
@@ -1815,6 +1820,7 @@ export function CreateProductDialog({
     innerTab,
     materialOptions.length,
     channel,
+    usesFnbRecipeCosts,
     variantItems.length,
   ]);
 
@@ -2129,6 +2135,11 @@ export function CreateProductDialog({
     }
 
     if (scope === "sku" && usesFnbRecipeCosts) {
+      if (fnbBomCostPending) {
+        setInnerTab("bom");
+        toast({ variant: "error", title: "Đang tải giá công thức", description: "Chờ giá thành phần tải xong rồi lưu lại." });
+        return;
+      }
       const usedMaterialIds = new Set<string>();
       if (hasBom && !bomCodeTrim && variantItems.length === 0) {
         for (const item of bomItems) usedMaterialIds.add(item.materialId);
@@ -3337,7 +3348,7 @@ export function CreateProductDialog({
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Dự toán theo công thức (₫)</label>
                     <div className="flex min-h-10 items-center rounded-md border bg-muted/30 px-3 text-sm font-semibold tabular-nums">
-                      {fnbPreparedCostLoading ? "Đang tính..." : hasMissingPreparedComponentCost
+                      {fnbBomCostPending ? "Đang tính..." : hasMissingPreparedComponentCost
                         ? "Chờ giá vốn mẻ đầu"
                         : formatCurrency(inlineFnbBomCost)}
                     </div>
@@ -3925,7 +3936,11 @@ export function CreateProductDialog({
                             it.unit,
                             it.conversions,
                           ) ?? 0;
-                          const lineCost = it.quantity * conversionFactor * it.costPrice;
+                          const componentUnitCost = componentProduct?.isFnbStockItem
+                            ? fnbPreparedCostByProductId[componentProduct.id]?.unitCost ?? 0
+                            : componentProduct ? getBomComponentUnitPrice(componentProduct, "fnb") : it.costPrice;
+                          const lineCost = it.quantity * conversionFactor *
+                            (usesFnbRecipeCosts ? componentUnitCost : it.costPrice);
                           const stockQuantity = getRecipeQuantityInStockUnit(
                             it.quantity,
                             it.stockUnit,
@@ -4051,7 +4066,9 @@ export function CreateProductDialog({
                                 </td>
                               )}
                               <td className="px-3 py-2 text-right text-sm tabular-nums">
-                                {componentProduct?.isFnbStockItem && !(it.costPrice > 0)
+                                {fnbBomCostPending
+                                  ? <span className="text-muted-foreground">Đang tính...</span>
+                                  : componentProduct?.isFnbStockItem && !(componentUnitCost > 0)
                                   ? <span className="text-status-warning">Chưa có giá vốn thực tế</span>
                                   : formatCurrency(lineCost)}
                               </td>
@@ -4080,7 +4097,9 @@ export function CreateProductDialog({
                               : "Tổng giá vốn (theo BOM):"}
                           </td>
                           <td className="px-3 py-2 text-right font-bold text-primary">
-                            {channel === "fnb" && hasMissingPreparedComponentCost
+                            {fnbBomCostPending
+                              ? <span className="text-muted-foreground">Đang tính...</span>
+                              : channel === "fnb" && hasMissingPreparedComponentCost
                               ? <span className="text-status-warning">Chờ giá vốn mẻ đầu; vẫn lưu được BOM</span>
                               : formatCurrency(inlineFnbBomCost)}
                           </td>

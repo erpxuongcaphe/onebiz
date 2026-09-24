@@ -138,7 +138,8 @@ function buildProductTags(product: Product): string[] {
   if (product.productType === "nvl") {
     tags.push("Nguyên vật liệu");
   } else {
-    if (product.channel === "fnb") tags.push("POS FnB");
+    if (product.isFnbStockItem) tags.push("Bán thành phẩm tại quán");
+    else if (product.channel === "fnb") tags.push("POS FnB");
     else if (product.channel === "retail") tags.push("Bán lẻ / Sỉ");
     else tags.push("Hàng bán");
   }
@@ -245,6 +246,8 @@ function ProductDetail({
                       label: "Kênh bán",
                       value: isNvl
                         ? "Nội bộ"
+                        : product.isFnbStockItem
+                          ? "Không hiển thị trên POS"
                         : product.channel === "fnb"
                           ? "POS FnB"
                           : product.channel === "retail"
@@ -283,14 +286,16 @@ function ProductDetail({
                     <div>
                       <p className="text-sm font-medium">Công thức (BOM)</p>
                       <p className="text-xs text-muted-foreground">
-                        {stockCardBranchName
+                        {product.isFnbStockItem
+                          ? "Công thức sản xuất theo mẻ; các món F&B dùng tồn sau khi hoàn tất mẻ."
+                          : stockCardBranchName
                           ? `Tạo từ đây sẽ chỉ áp dụng cho ${stockCardBranchName}.`
                           : "Thiết lập nguyên liệu trừ kho cho SKU này."}
                       </p>
                     </div>
                     <Button type="button" size="sm" onClick={onConfigureBom}>
                       <Icon name="science" size={16} className="mr-1.5" />
-                      {product.hasBom ? "Thiết lập BOM" : "Tạo công thức"}
+                      {product.hasBom ? "Xem công thức" : "Tạo công thức"}
                     </Button>
                   </div>
                 )}

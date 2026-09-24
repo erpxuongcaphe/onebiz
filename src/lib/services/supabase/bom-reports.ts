@@ -3,7 +3,7 @@
  *
  * 2 báo cáo wrap RPC migration 00099:
  *   - getNvlConsumptionByBranch:  tiêu hao NVL theo chi nhánh × material
- *   - getCogsByBom:               COGS thực tính từ BOM × cost_price NVL
+ *   - getCogsByBom:               gia von da chot tren dong hoa don co BOM
  */
 
 import { getClient, handleError } from "./base";
@@ -65,7 +65,7 @@ export async function getNvlConsumptionByBranch(params: {
 }
 
 // ============================================================
-// 2. COGS thực theo BOM
+// 2. Historical COGS for sold BOM items
 // ============================================================
 
 export interface CogsByBomRow {
@@ -79,8 +79,8 @@ export interface CogsByBomRow {
   productName: string;
   qtySold: number;
   revenue: number;
-  cogsReal: number;
-  margin: number;
+  cogsReal: number | null;
+  margin: number | null;
 }
 
 export async function getCogsByBom(params: {
@@ -117,7 +117,7 @@ export async function getCogsByBom(params: {
     productName: r.product_name,
     qtySold: Number(r.qty_sold ?? 0),
     revenue: Number(r.revenue ?? 0),
-    cogsReal: Number(r.cogs_real ?? 0),
-    margin: Number(r.margin ?? 0),
+    cogsReal: r.cogs_real == null ? null : Number(r.cogs_real),
+    margin: r.margin == null ? null : Number(r.margin),
   }));
 }
