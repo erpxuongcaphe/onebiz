@@ -40,6 +40,7 @@ export interface FnbSetupIssue {
 
 interface ValidateFnbVariantSetupInput {
   isFnb: boolean;
+  allowFreeSale?: boolean;
   variants: FnbVariantSetupDraft[];
   recipeEnabled: boolean;
   recipeRows: FnbRecipeSetupRow[];
@@ -51,6 +52,7 @@ export function validateFnbVariantSetup(
 ): FnbSetupIssue[] {
   const {
     isFnb,
+    allowFreeSale = false,
     variants,
     recipeEnabled,
     recipeRows,
@@ -86,12 +88,13 @@ export function validateFnbVariantSetup(
   }
 
   const invalidPrice = variants.find(
-    (variant) => !Number.isFinite(variant.sellPrice) || variant.sellPrice <= 0,
+    (variant) => !Number.isFinite(variant.sellPrice) || variant.sellPrice < 0 ||
+      (variant.sellPrice === 0 && !allowFreeSale),
   );
   if (invalidPrice) {
     issues.push({
       code: "variant_price_invalid",
-      message: `Giá bán quy cách ${invalidPrice.name.trim() || "chưa đặt tên"} phải lớn hơn 0.`,
+      message: `Giá bán quy cách ${invalidPrice.name.trim() || "chưa đặt tên"} phải lớn hơn 0, hoặc bật Bán miễn phí (0đ).`,
     });
   }
 

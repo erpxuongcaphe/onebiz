@@ -54,6 +54,7 @@ describe("FnB checkout permission", () => {
   it("keeps variants without a selling price visible but unavailable", () => {
     expect(itemDialog).toContain('disabled={chuaCoGia}');
     expect(itemDialog).toContain('"Chưa có giá"');
-    expect(itemDialog).toContain("v.is_default && v.sell_price > 0");
+    expect(itemDialog).toContain("v.is_default &&");
+    expect(itemDialog).toContain("v.sell_price === 0 && product?.allow_free_sale === true");
   });
 });

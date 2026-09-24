@@ -60,6 +60,7 @@ export interface AtomicFnbProductInput {
   description?: string;
   image?: string;
   allowSale?: boolean;
+  allowFreeSale?: boolean;
   groupCode?: string;
   shelfLifeDays?: number;
   shelfLifeUnit?: string;

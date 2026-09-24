@@ -10,7 +10,7 @@ export function kiemTraGiaBanThemNhanhFnb(input: {
   allowFreeSale?: boolean;
 }): { dat: true } | { dat: false; lyDo: string } {
   const catalogPrice = Number(input.catalogPrice);
-  const explicitlyFree = input.allowFreeSale === true && catalogPrice === 0;
+  const explicitlyFree = input.allowFreeSale === true;
   if (!Number.isFinite(catalogPrice) || catalogPrice < 0 || (catalogPrice === 0 && !explicitlyFree)) {
     return {
       dat: false,

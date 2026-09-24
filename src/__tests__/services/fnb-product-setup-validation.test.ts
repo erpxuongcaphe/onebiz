@@ -107,6 +107,26 @@ describe("validateFnbVariantSetup", () => {
     }
   });
 
+  it("chỉ cho giá size bằng 0 khi món F&B bật bán miễn phí", () => {
+    const freeVariants = variants.map((variant) => ({ ...variant, sellPrice: 0 }));
+    expect(validateFnbVariantSetup({
+      isFnb: true,
+      allowFreeSale: true,
+      variants: freeVariants,
+      recipeEnabled: true,
+      recipeRows,
+    })).toEqual([]);
+    for (const sellPrice of [-1, Number.NaN]) {
+      expect(validateFnbVariantSetup({
+        isFnb: true,
+        allowFreeSale: true,
+        variants: [{ ...variants[0], sellPrice }],
+        recipeEnabled: true,
+        recipeRows: [{ ...recipeRows[0], qty: { m: 18 } }],
+      }).map((issue) => issue.code)).toContain("variant_price_invalid");
+    }
+  });
+
   it("chặn món có quy cách nhưng chưa bật công thức từng cỡ", () => {
     const issues = validateFnbVariantSetup({
       isFnb: true,

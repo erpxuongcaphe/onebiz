@@ -2098,6 +2098,7 @@ export function CreateProductDialog({
 
     const fnbSetupIssues = validateFnbVariantSetup({
       isFnb: scope === "sku" && channel === "fnb",
+      allowFreeSale,
       variants: variantItems,
       recipeEnabled,
       recipeRows,
@@ -2118,17 +2119,6 @@ export function CreateProductDialog({
         variant: "error",
         title: "Chưa thể lưu quy cách FnB",
         description: firstIssue.message,
-        duration: 10000,
-      });
-      return;
-    }
-
-    if (allowFreeSale && variantItems.length > 0) {
-      setInnerTab("pricing");
-      toast({
-        variant: "error",
-        title: "Chưa thể bán miễn phí theo quy cách",
-        description: "Bán miễn phí (0đ) hiện áp dụng cho món F&B không có quy cách. Các size phải có giá bán riêng lớn hơn 0.",
         duration: 10000,
       });
       return;
@@ -2567,6 +2557,7 @@ export function CreateProductDialog({
             description: commonPayload.description,
             image: commonPayload.image,
             allowSale: commonPayload.allowSale,
+            allowFreeSale: commonPayload.allowFreeSale,
             groupCode: selectedCategory!.code,
             shelfLifeDays: commonPayload.shelfLifeDays,
             shelfLifeUnit: commonPayload.shelfLifeUnit,
@@ -4623,7 +4614,7 @@ export function CreateProductDialog({
                           </td>
                           <td className="px-3 py-2">
                             <div className="text-right font-medium tabular-nums">
-                              {v.sellPrice > 0 ? formatCurrency(v.sellPrice) : (
+                              {v.sellPrice > 0 || (allowFreeSale && v.sellPrice === 0) ? formatCurrency(v.sellPrice) : (
                                 <span className="text-status-warning">Chưa nhập</span>
                               )}
                             </div>
