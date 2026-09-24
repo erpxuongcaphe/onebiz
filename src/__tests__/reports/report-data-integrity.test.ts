@@ -95,7 +95,9 @@ describe("report data integrity", () => {
     expect(inventoryPage).toContain("getTopProductsByRevenue(0, activeBranchId, range)");
     expect(inventoryPage).toContain('viewMode === "chart"');
     expect(inventoryPage).toContain("exportProducts.map((p, i)");
-    expect(inventoryPage).toContain("pagedProducts.map((product, index)");
+    expect(inventoryPage).toContain("getSalesReturnReport({");
+    expect(inventoryPage).toContain("pagedProducts.map((product) =>");
+    expect(inventoryPage).toContain("key={`${product.productId}-${product.name}`}");
     expect(analytics).toContain("dayKeysForRange(customRange, days)");
     expect(analytics).toContain("if (!inbound.has(key)) continue");
   });
