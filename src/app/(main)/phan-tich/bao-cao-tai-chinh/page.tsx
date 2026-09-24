@@ -1009,8 +1009,9 @@ export default function BaoCaoTaiChinhPage() {
                   </LineChart>
                 </ResponsiveContainer>
               </div>
-              <div className="mt-3 overflow-x-auto border-t border-border pt-3">
-                <table className="w-full text-sm">
+              <ReportTableFrame tablePreferenceKey="report.financial-results.margin-trend">
+                <div className="mt-3 overflow-x-auto border-t border-border pt-3">
+                  <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-muted-foreground">
                       <th className="py-2 text-left font-medium">Kỳ</th>
@@ -1029,8 +1030,9 @@ export default function BaoCaoTaiChinhPage() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
-              </div>
+                  </table>
+                </div>
+              </ReportTableFrame>
               </div>
             )}
           </ChartCard>
