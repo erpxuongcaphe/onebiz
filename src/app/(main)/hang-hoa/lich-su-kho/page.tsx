@@ -35,6 +35,7 @@ import {
   getStockMovementTotalValue,
   getStockMovementUnitValue,
 } from "@/lib/stock-movement-values";
+import { readXntMovementFilter } from "@/lib/reports/xnt-drilldown";
 
 // === Movement type badge config ===
 const movementTypeBadge: Record<
@@ -113,6 +114,8 @@ export default function LichSuKhoPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
+  const [productFilter, setProductFilter] = useState<{ id: string; code: string } | null>(null);
+  const [queryReady, setQueryReady] = useState(false);
 
   // Load branches once
   useEffect(() => {
@@ -125,10 +128,24 @@ export default function LichSuKhoPage() {
   }, []);
 
   useEffect(() => {
+    if (productFilter) return;
     setBranchFilter(activeBranchId ?? "all");
-  }, [activeBranchId]);
+  }, [activeBranchId, productFilter]);
+
+  useEffect(() => {
+    const filter = readXntMovementFilter(window.location.search);
+    if (filter) {
+      setProductFilter({ id: filter.productId, code: filter.productCode });
+      setBranchFilter(filter.branchId ?? "all");
+      setDatePreset("custom");
+      setDateFrom(filter.from);
+      setDateTo(filter.to);
+    }
+    setQueryReady(true);
+  }, []);
 
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    if (!queryReady) return;
     if (!background) setLoading(true);
     try {
       // P1-3C-K2 12/06/2026: truyền dateFrom/dateTo (trước đây state có nhưng
@@ -143,6 +160,7 @@ export default function LichSuKhoPage() {
         search: search || undefined,
         movementType: typeFilter !== "all" ? typeFilter : undefined,
         branchId: branchFilter !== "all" ? branchFilter : undefined,
+        productId: productFilter?.id,
         dateFrom: effectiveDateFrom || undefined,
         dateTo: effectiveDateTo || undefined,
       };
@@ -162,7 +180,7 @@ export default function LichSuKhoPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, search, typeFilter, branchFilter, datePreset, dateFrom, dateTo, toast]);
+  }, [queryReady, page, pageSize, search, typeFilter, branchFilter, productFilter, datePreset, dateFrom, dateTo, toast]);
 
   useEffect(() => {
     fetchData();
@@ -173,7 +191,7 @@ export default function LichSuKhoPage() {
   // Reset page when filters change
   useEffect(() => {
     setPage(0);
-  }, [search, typeFilter, branchFilter, datePreset, dateFrom, dateTo]);
+  }, [search, typeFilter, branchFilter, productFilter, datePreset, dateFrom, dateTo]);
 
 
   // === Export ===
@@ -215,6 +233,7 @@ export default function LichSuKhoPage() {
         search: search || undefined,
         movementType: typeFilter !== "all" ? typeFilter : undefined,
         branchId: branchFilter !== "all" ? branchFilter : undefined,
+        productId: productFilter?.id,
         dateFrom: (datePreset === "custom" ? dateFrom : presetRange.from) || undefined,
         dateTo: (datePreset === "custom" ? dateTo : presetRange.to) || undefined,
       };
@@ -295,6 +314,14 @@ export default function LichSuKhoPage() {
 
   // === Columns ===
   const filterChips: ListFilterChip[] = [];
+  if (productFilter) {
+    filterChips.push({
+      key: "product",
+      label: "Mặt hàng",
+      value: productFilter.code || "Đã chọn",
+      onClear: () => setProductFilter(null),
+    });
+  }
   if (typeFilter !== "all") {
     filterChips.push({
       key: "type",
@@ -528,6 +555,7 @@ export default function LichSuKhoPage() {
             <FilterChips
               filters={filterChips}
               onClearAll={() => {
+                setProductFilter(null);
                 setTypeFilter("all");
                 setBranchFilter("all");
                 setDatePreset("all");
@@ -554,6 +582,7 @@ export default function LichSuKhoPage() {
         onOpenChange={setFilterOpen}
         activeCount={filterChips.length}
         onClearAll={() => {
+          setProductFilter(null);
           setTypeFilter("all");
           setBranchFilter("all");
           setDatePreset("all");
