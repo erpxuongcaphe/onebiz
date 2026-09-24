@@ -26,7 +26,6 @@ import {
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -43,6 +42,11 @@ import {
   getDailyRevenue,
   type SalesReturnRow,
 } from "@/lib/services";
+import {
+  summarizeSalesReturns,
+  type ReturnDaySummary,
+  type ReturnDocumentSummary,
+} from "@/lib/reports/sales-return-summary";
 import { KpiCard } from "../_components/kpi-card";
 import { ChartCard } from "../_components/chart-card";
 import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
@@ -70,6 +74,7 @@ export default function SalesReturnReportPage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
   const [reasonFilter, setReasonFilter] = useState<string | "all">("all");
+  const [tableMode, setTableMode] = useState<"day" | "document" | "item">("day");
 
   useEffect(() => {
     if (!isReady) return;
@@ -88,12 +93,10 @@ export default function SalesReturnReportPage() {
         to: range.to,
       }),
     ])
-      .then(([returnRes, revenueDays]) => {
+      .then(([returnRes, salesDays]) => {
         if (cancelled) return;
         setRows(returnRes.rows);
-        setPeriodRevenue(
-          revenueDays.reduce((s, d) => s + (Number(d.revenue) || 0), 0),
-        );
+        setPeriodRevenue(salesDays.reduce((sum, day) => sum + day.revenue, 0));
       })
       .catch((err) => {
         if (cancelled) return;
@@ -108,79 +111,18 @@ export default function SalesReturnReportPage() {
     };
   }, [isReady, activeBranchId, range.from, range.to, reloadToken]);
 
-  // ── KPI ──
-  const kpis = useMemo(() => {
-    const totalValue = rows.reduce((s, r) => s + r.returnValue, 0);
-    const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
-    const returnCount = new Set(rows.map((r) => r.returnId)).size;
-    const productCount = new Set(rows.map((r) => r.productId)).size;
-    // Return rate = giá trị trả / doanh thu cùng kỳ * 100
-    const returnRate =
-      periodRevenue > 0 ? (totalValue / periodRevenue) * 100 : null;
-    return {
-      totalValue,
-      totalQty,
-      returnCount,
-      productCount,
-      returnRate,
-      periodRevenue,
-    };
-  }, [rows, periodRevenue]);
-
-  // ── Aggregations ──
-  const byReason = useMemo(() => {
-    const map = new Map<string, { value: number; qty: number; count: number }>();
-    for (const r of rows) {
-      const ex = map.get(r.reason) ?? { value: 0, qty: 0, count: 0 };
-      ex.value += r.returnValue;
-      ex.qty += r.quantity;
-      ex.count += 1;
-      map.set(r.reason, ex);
-    }
-    return Array.from(map.entries())
-      .map(([reason, d]) => ({ reason, ...d }))
-      .sort((a, b) => b.value - a.value);
-  }, [rows]);
-
-  const byProduct = useMemo(() => {
-    const map = new Map<string, { productName: string; value: number; qty: number }>();
-    for (const r of rows) {
-      const ex = map.get(r.productId) ?? {
-        productName: r.productName,
-        value: 0,
-        qty: 0,
-      };
-      ex.value += r.returnValue;
-      ex.qty += r.quantity;
-      map.set(r.productId, ex);
-    }
-    return Array.from(map.entries())
-      .map(([productId, d]) => ({ productId, ...d }))
-      .sort((a, b) => b.value - a.value);
-  }, [rows]);
-
-  const byStaff = useMemo(() => {
-    const map = new Map<string, { name: string; value: number; count: number }>();
-    for (const r of rows) {
-      const key = r.createdBy ?? "unknown";
-      const ex = map.get(key) ?? {
-        name: r.createdByName ?? "Không xác định",
-        value: 0,
-        count: 0,
-      };
-      ex.value += r.returnValue;
-      ex.count += 1;
-      map.set(key, ex);
-    }
-    return Array.from(map.entries())
-      .map(([id, d]) => ({ id, ...d }))
-      .sort((a, b) => b.value - a.value);
-  }, [rows]);
-
+  const reasonOptions = useMemo(() => summarizeSalesReturns(rows).byReason, [rows]);
   const filteredRows = useMemo(() => {
     if (reasonFilter === "all") return rows;
     return rows.filter((r) => r.reason === reasonFilter);
   }, [rows, reasonFilter]);
+  const summary = useMemo(() => summarizeSalesReturns(filteredRows), [filteredRows]);
+  const { byDay, byDocument, byReason, byProduct, byStaff } = summary;
+  const kpis = useMemo(() => ({
+    ...summary,
+    periodRevenue,
+    returnRate: periodRevenue > 0 ? (summary.totalValue / periodRevenue) * 100 : null,
+  }), [summary, periodRevenue]);
 
   // ── Columns ──
   const columns: DataTableColumn<SalesReturnRow>[] = [
@@ -238,9 +180,34 @@ export default function SalesReturnReportPage() {
     },
   ];
 
+  const dayColumns: DataTableColumn<ReturnDaySummary>[] = [
+    { label: "Ngày trả", key: "date", hideable: false, cell: (row) => row.date.split("-").reverse().join("/") },
+    { label: "Số phiếu", key: "returnCount", align: "right", cell: (row) => formatNumber(row.returnCount) },
+    { label: "Dòng hàng", key: "productLines", align: "right", cell: (row) => formatNumber(row.productLines) },
+    { label: "SL trả", key: "quantity", align: "right", cell: (row) => formatNumber(row.quantity) },
+    { label: "Giá trị trả", key: "value", align: "right", cell: (row) => formatCurrency(row.value) + "đ" },
+  ];
+
+  const documentColumns: DataTableColumn<ReturnDocumentSummary>[] = [
+    { label: "Ngày trả", key: "date", cell: (row) => formatDate(row.date) },
+    { label: "Mã phiếu", key: "code", hideable: false, cell: (row) => (
+      <a href={buildReturnListDeepLink(row.code)} className="font-medium text-primary underline-offset-2 hover:underline">{row.code}</a>
+    ) },
+    { label: "Hóa đơn gốc", key: "invoiceCode", cell: (row) => row.invoiceCode
+      ? <a href={buildInvoiceListDeepLink(row.invoiceCode)} className="text-primary underline-offset-2 hover:underline">{row.invoiceCode}</a>
+      : "—" },
+    { label: "Chi nhánh", key: "branchName" },
+    { label: "Khách", key: "customerName" },
+    { label: "Lý do", key: "reason" },
+    { label: "Dòng hàng", key: "productLines", align: "right", cell: (row) => formatNumber(row.productLines) },
+    { label: "SL trả", key: "quantity", align: "right", cell: (row) => formatNumber(row.quantity) },
+    { label: "Giá trị trả", key: "value", align: "right", cell: (row) => formatCurrency(row.value) + "đ" },
+    { label: "NV xử lý", key: "staffName" },
+  ];
+
   // ── Export ──
   const handleExport = useCallback(() => {
-    if (rows.length === 0) {
+    if (filteredRows.length === 0) {
       toast({ title: "Không có dữ liệu để xuất", variant: "warning" });
       return;
     }
@@ -248,8 +215,7 @@ export default function SalesReturnReportPage() {
 
       const infoSheet = buildInfoSheet({
         title: "BÁO CÁO TRẢ HÀNG CHI TIẾT",
-        description:
-          "Drill-down theo lý do / SP / NV xử lý / chi nhánh",
+        description: `Theo ngày, phiếu và dòng hàng. Lý do: ${reasonFilter === "all" ? "Tất cả" : reasonFilter}.`,
         range,
         branchName: branchLabel,
         tenantName: "OneBiz",
@@ -257,6 +223,39 @@ export default function SalesReturnReportPage() {
         disclaimer:
           "Chỉ tính phiếu trả hàng đã chốt (status=completed/confirmed). Phiếu draft/cancelled không tính.",
       });
+
+      const daySheet: ExcelSheet = {
+        name: "Theo ngày",
+        titleRows: ["TRẢ HÀNG THEO NGÀY"],
+        columns: [
+          { label: "Ngày trả", key: "date", width: 14 },
+          { label: "Số phiếu", key: "returnCount", width: 14, format: "number" },
+          { label: "Dòng hàng", key: "productLines", width: 14, format: "number" },
+          { label: "SL trả", key: "quantity", width: 14, format: "number" },
+          { label: "Giá trị trả", key: "value", width: 18, format: "currency" },
+        ],
+        rows: byDay.map((day) => ({ ...day, date: day.date.split("-").reverse().join("/") })),
+        footer: { date: "TỔNG", returnCount: kpis.returnCount, productLines: filteredRows.length, quantity: kpis.totalQty, value: kpis.totalValue },
+      };
+
+      const documentSheet: ExcelSheet = {
+        name: "Theo phiếu",
+        titleRows: ["TRẢ HÀNG THEO PHIẾU"],
+        columns: [
+          { label: "Ngày trả", key: "date", width: 20 },
+          { label: "Mã phiếu", key: "code", width: 16 },
+          { label: "HĐ gốc", key: "invoiceCode", width: 16 },
+          { label: "Chi nhánh", key: "branchName", width: 22 },
+          { label: "Khách", key: "customerName", width: 24 },
+          { label: "Lý do", key: "reason", width: 25 },
+          { label: "Dòng hàng", key: "productLines", width: 14, format: "number" },
+          { label: "SL trả", key: "quantity", width: 14, format: "number" },
+          { label: "Giá trị trả", key: "value", width: 18, format: "currency" },
+          { label: "NV xử lý", key: "staffName", width: 22 },
+        ],
+        rows: byDocument.map((document) => ({ ...document, date: formatDate(document.date) })),
+        footer: { code: "TỔNG", productLines: filteredRows.length, quantity: kpis.totalQty, value: kpis.totalValue },
+      };
 
       const reasonSheet: ExcelSheet = {
         name: "Theo lý do",
@@ -275,7 +274,7 @@ export default function SalesReturnReportPage() {
         })),
         footer: {
           reason: "TỔNG",
-          count: rows.length,
+          count: kpis.returnCount,
           qty: kpis.totalQty,
           value: kpis.totalValue,
         },
@@ -332,7 +331,7 @@ export default function SalesReturnReportPage() {
           { label: "Lý do", key: "reason", width: 24 },
           { label: "NV", key: "staff", width: 20 },
         ],
-        rows: rows.map((r) => ({
+        rows: filteredRows.map((r) => ({
           date: formatDate(r.returnDate),
           code: r.returnCode,
           invoice: r.invoiceCode ?? "",
@@ -351,7 +350,7 @@ export default function SalesReturnReportPage() {
           invoice: "",
           branch: "",
           customer: "",
-          product: `${rows.length} dòng`,
+          product: `${filteredRows.length} dòng`,
           qty: kpis.totalQty,
           price: "",
           value: kpis.totalValue,
@@ -367,12 +366,12 @@ export default function SalesReturnReportPage() {
         range,
         branchName: branchLabel,
         tenantName: "OneBiz",
-        sheets: [infoSheet, reasonSheet, productSheet, staffSheet, detailSheet],
+        sheets: [infoSheet, daySheet, documentSheet, reasonSheet, productSheet, staffSheet, detailSheet],
       });
 
       toast({
         title: "Đã xuất báo cáo trả hàng",
-        description: `5 sheet: Info + Lý do (${byReason.length}) + SP (${byProduct.length}) + NV (${byStaff.length}) + Chi tiết (${rows.length})`,
+        description: `7 sheet, ${kpis.returnCount} phiếu và ${filteredRows.length} dòng hàng theo bộ lọc hiện tại`,
         variant: "success",
       });
     } catch (err) {
@@ -382,12 +381,12 @@ export default function SalesReturnReportPage() {
         variant: "error",
       });
     }
-  }, [rows, byReason, byProduct, byStaff, kpis, range, branchLabel, toast]);
+  }, [filteredRows, byDay, byDocument, byReason, byProduct, byStaff, kpis, range, branchLabel, reasonFilter, toast]);
 
   const reportHeader = (
     <ReportPageHeader
       title="Trả hàng chi tiết"
-      subtitle="Theo lý do, sản phẩm, nhân viên và chi nhánh"
+      subtitle="Đối chiếu theo ngày, phiếu và mặt hàng; mở chứng từ gốc từ bảng chi tiết"
       preset={preset}
       range={range}
       onPresetChange={setPreset}
@@ -395,7 +394,7 @@ export default function SalesReturnReportPage() {
       viewMode={viewMode}
       onViewModeChange={setViewMode}
       onExportFull={handleExport}
-      exportDisabled={loading || Boolean(loadError) || rows.length === 0}
+      exportDisabled={loading || Boolean(loadError) || filteredRows.length === 0}
     />
   );
 
@@ -430,11 +429,11 @@ export default function SalesReturnReportPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          label="Tỷ lệ trả hàng"
+          label="Giá trị trả / bán gộp"
           value={kpis.returnRate === null ? "—" : `${kpis.returnRate.toFixed(2)}%`}
           change={kpis.returnRate === null
             ? "Chưa có doanh thu cùng kỳ"
-            : `${formatCurrency(kpis.totalValue)}đ / ${formatCurrency(kpis.periodRevenue)}đ DT`}
+            : `${formatCurrency(kpis.totalValue)}đ trả / ${formatCurrency(kpis.periodRevenue)}đ bán gộp cùng kỳ`}
           positive={kpis.returnRate !== null && kpis.returnRate < 2}
           icon="percent"
           bg={
@@ -478,7 +477,7 @@ export default function SalesReturnReportPage() {
           valueColor="text-foreground"
         />
         <KpiCard
-          label="Doanh thu cùng kỳ"
+          label="Bán gộp cùng kỳ"
           value={formatCurrency(kpis.periodRevenue) + " đ"}
           icon="payments"
           bg="bg-status-info/10"
@@ -563,57 +562,77 @@ export default function SalesReturnReportPage() {
         </div>
       )}
 
-      {byReason.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setReasonFilter("all")}
-            className={cn(
-              "h-8 px-3 rounded-full text-xs font-medium transition-colors",
-              reasonFilter === "all"
-                ? "bg-primary text-on-primary"
-                : "bg-surface-container-low text-foreground hover:bg-surface-container",
-            )}
-          >
-            Tất cả ({rows.length})
-          </button>
-          {byReason.slice(0, 6).map((r) => (
-            <button
-              key={r.reason}
-              type="button"
-              onClick={() => setReasonFilter(r.reason)}
-              className={cn(
-                "h-8 px-3 rounded-full text-xs font-medium transition-colors",
-                reasonFilter === r.reason
-                  ? "bg-primary text-on-primary"
-                  : "bg-surface-container-low text-foreground hover:bg-surface-container",
-              )}
+      <section className="border border-border bg-background">
+        <div className="flex flex-wrap items-end justify-between gap-3 border-b border-border px-4 py-3">
+          <div>
+            <h2 className="text-base font-semibold">Số liệu trả hàng</h2>
+            <p className="text-sm text-muted-foreground">{kpis.returnCount} phiếu, {filteredRows.length} dòng hàng trong bộ lọc.</p>
+          </div>
+          <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+            Lý do trả hàng
+            <select
+              value={reasonFilter}
+              onChange={(event) => setReasonFilter(event.target.value)}
+              className="h-9 min-w-48 max-w-72 border border-border bg-background px-2 text-sm text-foreground"
             >
-              {r.reason} ({r.count})
+              <option value="all">Tất cả lý do ({rows.length} dòng)</option>
+              {reasonOptions.map((reason) => (
+                <option key={reason.reason} value={reason.reason}>
+                  {reason.reason} ({reason.count} phiếu)
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex flex-wrap gap-1 border-b border-border px-3 py-2" role="tablist" aria-label="Góc nhìn trả hàng">
+          {([
+            ["day", "Theo ngày"],
+            ["document", "Theo phiếu"],
+            ["item", "Dòng hàng"],
+          ] as const).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              role="tab"
+              aria-selected={tableMode === mode}
+              onClick={() => setTableMode(mode)}
+              className={tableMode === mode
+                ? "bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground"
+                : "px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"}
+            >
+              {label}
             </button>
           ))}
         </div>
-      )}
-
-      <ReportDataTable
-        tablePreferenceKey="report.sales-returns.rows"
-        columns={columns}
-        rows={filteredRows}
-        getRowKey={(r, i) => `${r.returnId}-${r.productId}-${i}`}
-        subtotalLabel={
-          loading
-            ? "Đang tải..."
-            : filteredRows.length === 0
-              ? "Không có phiếu trả hàng trong kỳ"
-              : `${filteredRows.length} dòng — Tổng: ${formatCurrency(filteredRows.reduce((s, r) => s + r.returnValue, 0))}đ`
-        }
-        emptyState={
-          <div className="text-center py-12 text-muted-foreground">
-            <Icon name="undo" size={40} className="opacity-50 mb-2" />
-            <p>Chưa có phiếu trả hàng nào trong kỳ</p>
-          </div>
-        }
-      />
+        {tableMode === "day" ? (
+          <ReportDataTable
+            tablePreferenceKey="report.sales-returns.daily"
+            columns={dayColumns}
+            rows={byDay}
+            getRowKey={(row) => row.date}
+            subtotalLabel={`${kpis.returnCount} phiếu · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
+            emptyState="Không có phiếu trả hàng trong kỳ hoặc bộ lọc đã chọn"
+          />
+        ) : tableMode === "document" ? (
+          <ReportDataTable
+            tablePreferenceKey="report.sales-returns.documents"
+            columns={documentColumns}
+            rows={byDocument}
+            getRowKey={(row) => row.id}
+            subtotalLabel={`${kpis.returnCount} phiếu · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
+            emptyState="Không có phiếu trả hàng trong kỳ hoặc bộ lọc đã chọn"
+          />
+        ) : (
+          <ReportDataTable
+            tablePreferenceKey="report.sales-returns.rows"
+            columns={columns}
+            rows={filteredRows}
+            getRowKey={(row, index) => `${row.returnId}-${row.productId}-${index}`}
+            subtotalLabel={`${filteredRows.length} dòng · ${formatCurrency(kpis.totalValue)}đ giá trị trả`}
+            emptyState="Không có dòng hàng trả trong kỳ hoặc bộ lọc đã chọn"
+          />
+        )}
+      </section>
     </div>
   );
 }
