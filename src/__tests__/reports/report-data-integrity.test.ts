@@ -76,6 +76,12 @@ describe("report data integrity", () => {
 
   it("paginates product sales and builds movement dates from the selected range", () => {
     expect(analytics).toContain(".range(offset, offset + pageSize - 1)");
+    expect(analytics).toContain("products!invoice_items_product_id_fkey(code)");
+    expect(analytics).toContain("const key = productId || name");
+    expect(inventoryPage).toContain("getTopProductsByRevenue(0, activeBranchId, range)");
+    expect(inventoryPage).toContain('viewMode === "chart"');
+    expect(inventoryPage).toContain("exportProducts.map((p, i)");
+    expect(inventoryPage).toContain("pagedProducts.map((product, index)");
     expect(analytics).toContain("dayKeysForRange(customRange, days)");
     expect(analytics).toContain("if (!inbound.has(key)) continue");
   });

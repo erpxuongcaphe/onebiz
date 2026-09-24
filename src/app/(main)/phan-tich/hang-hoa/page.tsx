@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -19,7 +19,7 @@ import {
 import { KpiCard, ChartCard } from "../_components";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -169,29 +169,52 @@ export default function HangHoaPage() {
   const [categories, setCategories] = useState<{ name: string; value: number }[]>([]);
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [productSort, setProductSort] = useState<"revenue" | "quantity" | "name">("revenue");
+  const [productPage, setProductPage] = useState(1);
   const requestIdRef = useRef(0);
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
+  const visibleProducts = useMemo(() => {
+    const needle = productSearch.trim().toLocaleLowerCase("vi");
+    const filtered = topProducts.filter((product) =>
+      `${product.name} ${product.code ?? ""}`.toLocaleLowerCase("vi").includes(needle),
+    );
+    return [...filtered].sort((a, b) => {
+      if (productSort === "name") return a.name.localeCompare(b.name, "vi");
+      return productSort === "quantity" ? b.qty - a.qty : b.revenue - a.revenue;
+    });
+  }, [topProducts, productSearch, productSort]);
+  const productsPerPage = 50;
+  const productPageCount = Math.max(1, Math.ceil(visibleProducts.length / productsPerPage));
+  const currentProductPage = Math.min(productPage, productPageCount);
+  const pagedProducts = visibleProducts.slice(
+    (currentProductPage - 1) * productsPerPage,
+    currentProductPage * productsPerPage,
+  );
+  const exportProducts = viewMode === "chart" ? topProducts.slice(0, 10) : visibleProducts;
 
 
   const handleExportView = useCallback(() => {
     try {
       const title = buildReportTitleRows({
-        title: "BÁO CÁO HÀNG HÓA",
+        title: "BÁO CÁO BÁN HÀNG THEO MẶT HÀNG (TRƯỚC TRẢ HÀNG)",
         range,
         branchName: branchLabel,
         generatedAt: new Date(),
       });
       const sheet: ExcelSheet = {
-        name: "Top SP bán chạy",
+        name: "Mặt hàng đã bán",
         titleRows: title,
         columns: [
           { label: "STT", key: "rank", width: 6 },
+          { label: "Mã hàng", key: "code", width: 18 },
           { label: "Sản phẩm", key: "name", width: 32 },
           { label: "SL bán", key: "qty", width: 12, format: "number" },
-          { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+          { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
         ],
-        rows: topProducts.map((p, i) => ({
+        rows: exportProducts.map((p, i) => ({
           rank: i + 1,
+          code: p.code ?? "",
           name: p.name,
           qty: p.qty,
           revenue: p.revenue,
@@ -199,8 +222,8 @@ export default function HangHoaPage() {
         footer: {
           rank: "",
           name: "TỔNG",
-          qty: topProducts.reduce((s, p) => s + p.qty, 0),
-          revenue: topProducts.reduce((s, p) => s + p.revenue, 0),
+          qty: exportProducts.reduce((s, p) => s + p.qty, 0),
+          revenue: exportProducts.reduce((s, p) => s + p.revenue, 0),
         },
       };
       exportReportToExcel({
@@ -214,7 +237,7 @@ export default function HangHoaPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [topProducts, range, branchLabel, toast]);
+  }, [exportProducts, range, branchLabel, toast]);
 
   const handleExportFull = useCallback(() => {
     try {
@@ -239,16 +262,17 @@ export default function HangHoaPage() {
           ],
         },
         {
-          name: "Top SP",
-          titleRows: ["TOP 10 SP BÁN CHẠY", ...title.slice(1)],
+          name: "Mặt hàng đã bán",
+          titleRows: ["MẶT HÀNG ĐÃ BÁN · DOANH SỐ TRƯỚC TRẢ HÀNG", ...title.slice(1)],
           columns: [
             { label: "STT", key: "rank", width: 6 },
+            { label: "Mã hàng", key: "code", width: 18 },
             { label: "Sản phẩm", key: "name", width: 32 },
             { label: "SL bán", key: "qty", width: 12, format: "number" },
-            { label: "Doanh thu (VND)", key: "revenue", width: 18, format: "currency" },
+            { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
           ],
           rows: topProducts.map((p, i) => ({
-            rank: i + 1, name: p.name, qty: p.qty, revenue: p.revenue,
+            rank: i + 1, code: p.code ?? "", name: p.name, qty: p.qty, revenue: p.revenue,
           })),
         },
         {
@@ -304,7 +328,7 @@ export default function HangHoaPage() {
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
         getInventoryKpis(activeBranchId, range),
-        getTopProductsByRevenue(10, activeBranchId, range),
+        getTopProductsByRevenue(0, activeBranchId, range),
         getCategoryDistribution(activeBranchId),
         getStockMovements(30, activeBranchId, range),
         getAnalyticsLowStock(10, activeBranchId),
@@ -396,11 +420,12 @@ export default function HangHoaPage() {
           />
         </div>
 
+        {viewMode === "chart" ? <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Top 10 Products by Revenue - Horizontal Bar */}
           <ChartCard
-            title="Top 10 sản phẩm theo doanh thu"
-            subtitle={`${selectedPeriodLabel} · ${topProducts.length} sản phẩm`}
+            title="Top 10 mặt hàng theo doanh số gộp"
+            subtitle={`${selectedPeriodLabel} · Trước trả hàng · ${topProducts.length} mặt hàng`}
           >
             <div className="h-72 md:h-96">
               {topProducts.length === 0 ? (
@@ -410,7 +435,10 @@ export default function HangHoaPage() {
               ) : (
                 <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
-                    data={[...topProducts].reverse()}
+                    data={topProducts.slice(0, 10).map((product) => ({
+                      ...product,
+                      name: product.code ? `${product.name} · ${product.code}` : product.name,
+                    })).reverse()}
                     layout="vertical"
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                   >
@@ -435,7 +463,7 @@ export default function HangHoaPage() {
                       dataKey="revenue"
                       fill="#004AC6"
                       radius={[0, 6, 6, 0]}
-                      name="Doanh thu"
+                    name="Doanh số gộp"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -551,6 +579,67 @@ export default function HangHoaPage() {
             )}
           </div>
         </ChartCard>
+
+        </> : <div className="space-y-4">
+          <ChartCard title="Mặt hàng đã bán" subtitle={`${selectedPeriodLabel} · Doanh số gộp trước trả hàng · ${visibleProducts.length} mặt hàng`}>
+            <div className="flex flex-wrap gap-2 pb-3">
+              <input
+                aria-label="Tìm mặt hàng đã bán"
+                className="h-9 min-w-48 flex-1 rounded border border-input bg-background px-3 text-sm"
+                placeholder="Tìm tên hoặc mã hàng"
+                value={productSearch}
+                onChange={(event) => { setProductSearch(event.target.value); setProductPage(1); }}
+              />
+              <select
+                aria-label="Sắp xếp mặt hàng"
+                className="h-9 rounded border border-input bg-background px-3 text-sm"
+                value={productSort}
+                onChange={(event) => { setProductSort(event.target.value as typeof productSort); setProductPage(1); }}
+              >
+                <option value="revenue">Doanh số cao nhất</option>
+                <option value="quantity">Số lượng nhiều nhất</option>
+                <option value="name">Tên A–Z</option>
+              </select>
+            </div>
+            <ReportTableFrame tablePreferenceKey="report.products.sales">
+              <div className="overflow-x-auto">
+                {visibleProducts.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">Không có mặt hàng phù hợp.</p>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-muted-foreground">
+                        <th className="py-2 text-left font-medium">Mã hàng</th>
+                        <th className="py-2 text-left font-medium">Mặt hàng</th>
+                        <th className="py-2 text-right font-medium">Số lượng bán</th>
+                        <th className="py-2 text-right font-medium">Doanh số gộp</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedProducts.map((product, index) => (
+                        <tr key={`${product.code ?? product.name}-${index}`} className="border-b last:border-0">
+                          <td className="py-2 pr-4 text-muted-foreground">{product.code ?? "—"}</td>
+                          <td className="py-2 pr-4 font-medium">{product.name}</td>
+                          <td className="py-2 text-right tabular-nums">{formatNumber(product.qty)}</td>
+                          <td className="py-2 text-right tabular-nums">{formatCurrency(product.revenue)}đ</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </ReportTableFrame>
+            {productPageCount > 1 && <div className="flex items-center justify-end gap-3 pt-3 text-sm"><button type="button" disabled={currentProductPage === 1} onClick={() => setProductPage(currentProductPage - 1)} className="disabled:opacity-40">Trước</button><span>{currentProductPage}/{productPageCount}</span><button type="button" disabled={currentProductPage === productPageCount} onClick={() => setProductPage(currentProductPage + 1)} className="disabled:opacity-40">Sau</button></div>}
+          </ChartCard>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <ChartCard title="Mặt hàng theo nhóm" subtitle="Tồn tại thời điểm hiện tại">
+              <ReportTableFrame tablePreferenceKey="report.products.categories"><div className="max-h-80 overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Nhóm hàng</th><th className="py-2 text-right font-medium">Số mặt hàng</th></tr></thead><tbody>{categories.map((category) => <tr key={category.name} className="border-b last:border-0"><td className="py-2">{category.name}</td><td className="py-2 text-right tabular-nums">{formatNumber(category.value)}</td></tr>)}</tbody></table></div></ReportTableFrame>
+            </ChartCard>
+            <ChartCard title="Nhập, xuất kho theo ngày" subtitle={selectedPeriodLabel}>
+              <ReportTableFrame tablePreferenceKey="report.products.movements"><div className="max-h-80 overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Ngày</th><th className="py-2 text-right font-medium">Nhập</th><th className="py-2 text-right font-medium">Xuất</th></tr></thead><tbody>{movements.map((movement) => <tr key={movement.day} className="border-b last:border-0"><td className="py-2">{movement.day}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.nhap)}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.xuat)}</td></tr>)}</tbody></table></div></ReportTableFrame>
+            </ChartCard>
+          </div>
+        </div>}
 
         {/* Low Stock Products Table */}
         <ChartCard
