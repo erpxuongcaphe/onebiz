@@ -45,6 +45,7 @@ export interface CategoryRevenue {
 
 export interface TopProductRevenue {
   name: string;
+  code?: string;
   qty: number;
   revenue: number;
 }
@@ -1419,7 +1420,7 @@ export async function getTopProductsByRevenue(
   while (true) {
     let query = supabase
       .from("invoice_items")
-      .select("product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
+      .select("product_id, product_name, quantity, total, products!invoice_items_product_id_fkey(code), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
       .eq("invoices.tenant_id", tenantId)
       .gte("invoices.ngay_chung_tu", resolved.start)
       .lt("invoices.ngay_chung_tu", resolved.end)
@@ -1435,19 +1436,21 @@ export async function getTopProductsByRevenue(
     offset += page.length;
   }
 
-  const totals = new Map<string, { qty: number; revenue: number }>();
+  const totals = new Map<string, TopProductRevenue>();
   for (const item of rows) {
     const name = String(item.product_name ?? "");
-    const current = totals.get(name) ?? { qty: 0, revenue: 0 };
+    const productId = String(item.product_id ?? "");
+    const product = item.products as { code?: string } | null;
+    const key = productId || name;
+    const current = totals.get(key) ?? { name, code: product?.code, qty: 0, revenue: 0 };
     current.qty += Number(item.quantity ?? 0);
     current.revenue += Number(item.total ?? 0);
-    totals.set(name, current);
+    totals.set(key, current);
   }
 
-  return Array.from(totals.entries())
-    .map(([name, values]) => ({ name, ...values }))
+  return Array.from(totals.values())
     .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit);
+    .slice(0, limit > 0 ? limit : undefined);
 }
 
 /**
