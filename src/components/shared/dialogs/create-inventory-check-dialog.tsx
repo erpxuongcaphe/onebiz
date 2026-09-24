@@ -115,8 +115,8 @@ export function CreateInventoryCheckDialog({
         );
       // CEO 07/07/2026 (Cách B) — lọc SP kiểm kho theo VAI TRÒ + CHI NHÁNH:
       //  • LUÔN loại món menu F&B (fnb_menu_item) — không giữ tồn ở đâu.
-      //  • Chi nhánh SẢN XUẤT (Kho/Xưởng): loại thêm has_bom (tồn nằm ở NVL) →
-      //    chỉ đếm NVL / hàng giữ tồn trực tiếp (giữ hành vi cũ 29/05).
+      //  • Kho/Xưởng: NVL vẫn giữ tồn trực tiếp dù có BOM; chỉ loại SKU
+      //    Retail có BOM vì tồn của SKU này nằm ở NVL.
       //  • QUÁN (outlet): GIỮ SKU Retail has_bom (thành phần giữ tồn thật tại
       //    quán) → cho đếm sữa lon / ly / cà phê rang xay.
       // inventory_role chưa có trong generated types → cast any.
@@ -130,8 +130,7 @@ export function CreateInventoryCheckDialog({
         // removed legacy Retail components whose inventory_role is not set.
         .or("inventory_role.is.null,inventory_role.neq.fnb_menu_item");
       if (!isOutlet) {
-        // production hoặc chưa xác định → an toàn: loại SKU cascade (tồn ở NVL).
-        q = q.not("has_bom", "is", true);
+        q = q.or("product_type.eq.nvl,has_bom.is.false");
       }
       q = q
         .or(`code.ilike.%${term}%,name.ilike.%${term}%,barcode.ilike.%${term}%`)
