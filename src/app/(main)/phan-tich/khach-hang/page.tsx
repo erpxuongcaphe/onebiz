@@ -151,8 +151,6 @@ export default function KhachHangPage() {
     range,
     setPreset,
     setCustomRange,
-    viewMode,
-    setViewMode,
   } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<{
@@ -461,8 +459,6 @@ export default function KhachHangPage() {
       range={range}
       onPresetChange={setPreset}
       onCustomRangeChange={setCustomRange}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
       exportDisabled={loading || !kpis}

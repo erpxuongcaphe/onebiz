@@ -118,7 +118,7 @@ function summarizeLots(rows: LotRow[]) {
 }
 
 export default function LotTraceabilityPage() {
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
@@ -345,8 +345,6 @@ export default function LotTraceabilityPage() {
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
         hideDateRange
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={() => handleExport("view")}
         onExportFull={() => handleExport("full")}
         exportDisabled={loading}

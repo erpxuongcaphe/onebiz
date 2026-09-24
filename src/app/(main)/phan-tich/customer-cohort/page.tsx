@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
 
 export default function CustomerCohortPage() {
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
 
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
@@ -184,8 +184,6 @@ export default function CustomerCohortPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={() => handleExport("view")}
         onExportFull={() => handleExport("full")}
         exportDisabled={loading || !data}

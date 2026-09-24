@@ -111,7 +111,7 @@ function renderPieLabel(props: any) {
 export default function KenhBanPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
@@ -233,8 +233,6 @@ export default function KenhBanPage() {
       range={range}
       onPresetChange={setPreset}
       onCustomRangeChange={setCustomRange}
-      viewMode={viewMode}
-      onViewModeChange={setViewMode}
       onExportView={handleExportView}
       onExportFull={handleExportFull}
       exportDisabled={loading}

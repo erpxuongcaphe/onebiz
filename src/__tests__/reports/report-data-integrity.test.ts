@@ -2,6 +2,18 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("report data integrity", () => {
+  it("does not show a view switch on reports without alternate views", () => {
+    const fixedViews = [
+      "abc-analysis", "kiem-ke", "khuyen-mai", "kenh-ban", "fnb-shipper",
+      "tai-chinh", "dat-hang", "customer-cohort", "lot-traceability",
+      "xuat-nhap-ton", "khach-hang",
+    ];
+    for (const route of fixedViews) {
+      const page = readFileSync(`src/app/(main)/phan-tich/${route}/page.tsx`, "utf8");
+      expect(page, route).not.toContain("onViewModeChange={setViewMode}");
+    }
+  });
+
   const analytics = readFileSync("src/lib/services/supabase/analytics.ts", "utf8");
   const branchStock = readFileSync("src/lib/services/supabase/branch-stock.ts", "utf8");
   const inventoryPage = readFileSync(
@@ -66,6 +78,7 @@ describe("report data integrity", () => {
     expect(analytics).toContain("getBranchStockRows({ branchId, lowStockOnly: true })");
     expect(analytics).not.toContain('.from("branch_inventory")');
     expect(branchStock).toContain("totalProducts: productIds.size");
+    expect(branchStock).toContain("Number(row.minStock) > 0");
   });
 
   it("passes the selected branch to every inventory report data source", () => {
@@ -77,7 +90,7 @@ describe("report data integrity", () => {
   it("paginates product sales and builds movement dates from the selected range", () => {
     expect(analytics).toContain(".range(offset, offset + pageSize - 1)");
     expect(analytics).toContain("products!invoice_items_product_id_fkey(code)");
-    expect(analytics).toContain("const key = productId || name");
+    expect(analytics).toContain("const key = productId ? `${productId}:${name}` : name");
     expect(inventoryPage).toContain("getTopProductsByRevenue(0, activeBranchId, range)");
     expect(inventoryPage).toContain('viewMode === "chart"');
     expect(inventoryPage).toContain("exportProducts.map((p, i)");

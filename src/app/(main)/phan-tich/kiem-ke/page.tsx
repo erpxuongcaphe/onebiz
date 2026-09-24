@@ -45,7 +45,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function KiemKeReportPage() {
   const { activeBranchId, isReady, branches } = useBranchFilter();
   const { toast } = useToast();
-  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+  const { preset, range, setPreset, setCustomRange } =
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
   const [data, setData] = useState<InventoryCheckReportResult | null>(null);
@@ -254,8 +254,6 @@ export default function KiemKeReportPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
         onExportView={() => handleExport("view")}
         onExportFull={() => handleExport("full")}
         exportDisabled={loading || !data}

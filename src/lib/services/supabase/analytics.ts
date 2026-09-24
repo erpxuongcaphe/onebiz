@@ -1441,7 +1441,8 @@ export async function getTopProductsByRevenue(
     const name = String(item.product_name ?? "");
     const productId = String(item.product_id ?? "");
     const product = item.products as { code?: string } | null;
-    const key = productId || name;
+    // One SKU can have separate F&B size lines with different prices.
+    const key = productId ? `${productId}:${name}` : name;
     const current = totals.get(key) ?? { name, code: product?.code, qty: 0, revenue: 0 };
     current.qty += Number(item.quantity ?? 0);
     current.revenue += Number(item.total ?? 0);
