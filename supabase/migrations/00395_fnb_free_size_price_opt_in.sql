@@ -11,6 +11,7 @@ begin
   if to_regprocedure('public.save_fnb_size_setup_atomic_00357(uuid,jsonb)') is null
      or to_regprocedure('public.create_fnb_product_with_size_setup_atomic(jsonb,jsonb,uuid[])') is null
      or to_regprocedure('public.resolve_sale_price_00363(uuid,uuid,uuid,uuid,text,text,numeric,timestamptz)') is null
+     or to_regprocedure('public._fnb_send_to_kitchen_impl_00330(uuid,uuid,text,text,text,jsonb,text,numeric,numeric,uuid,text,uuid)') is null
      or not exists (
        select 1 from information_schema.columns
         where table_schema = 'public' and table_name = 'products' and column_name = 'allow_free_sale'
@@ -71,6 +72,30 @@ begin
   v_new := 'p_channel = ''fnb'' and (v_unit_price is null or v_unit_price < 0 or (v_unit_price = 0 and not v_product.allow_free_sale))';
   if position(v_new in v_definition) = 0 then
     if position(v_old in v_definition) = 0 then raise exception 'FNB_00395_RESOLVER_GUARD_CHANGED'; end if;
+    v_definition := replace(v_definition, v_old, v_new);
+  end if;
+  execute v_definition;
+
+  -- The inherited size guard is still called by newer kitchen wrappers.
+  v_definition := pg_get_functiondef('public._fnb_send_to_kitchen_impl_00330(uuid,uuid,text,text,text,jsonb,text,numeric,numeric,uuid,text,uuid)'::regprocedure);
+  v_old := 'v_gia      numeric;';
+  v_new := 'v_gia      numeric;' || E'\n  v_allow_free_sale boolean;';
+  if position(v_new in v_definition) = 0 then
+    if position(v_old in v_definition) = 0 then raise exception 'FNB_00395_KITCHEN_DECLARATION_CHANGED'; end if;
+    v_definition := replace(v_definition, v_old, v_new);
+  end if;
+  v_old := 'select p.name into v_ten from public.products p';
+  v_new := 'select p.name, p.allow_free_sale into v_ten, v_allow_free_sale from public.products p';
+  if position(v_new in v_definition) = 0 then
+    if position(v_old in v_definition) = 0 then raise exception 'FNB_00395_KITCHEN_PRODUCT_LOOKUP_CHANGED'; end if;
+    v_definition := replace(v_definition, v_old, v_new);
+  end if;
+  v_old := 'if coalesce(v_gia, 0) <= 0 then';
+  v_new := 'if v_gia is null or v_gia < 0 or (v_gia = 0 and not v_allow_free_sale) then';
+  if position(v_new in v_definition) = 0 then
+    if (length(v_definition) - length(replace(v_definition, v_old, ''))) / length(v_old) <> 2 then
+      raise exception 'FNB_00395_KITCHEN_PRICE_GUARDS_CHANGED';
+    end if;
     v_definition := replace(v_definition, v_old, v_new);
   end if;
   execute v_definition;

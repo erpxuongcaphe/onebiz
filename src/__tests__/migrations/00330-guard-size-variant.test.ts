@@ -87,7 +87,8 @@ describe("00330 — guard ở máy chủ", () => {
 
 describe("guard Size — tầng giao diện", () => {
   it("chọn cỡ mặc định theo cờ, không lấy phần tử đầu", () => {
-    expect(UI).toContain("v.is_default && v.sell_price > 0");
+    expect(UI).toContain("v.is_default &&");
+    expect(UI).toContain("v.sell_price === 0 && product?.allow_free_sale === true");
     expect(UI).not.toContain("initVariant = variants?.[0]");
   });
 
@@ -96,8 +97,8 @@ describe("guard Size — tầng giao diện", () => {
     expect(UI).toMatch(/canConfirm =[\s\S]{0,200}!thieuQuyCach/);
   });
 
-  it("chặn giá ≤ 0", () => {
-    expect(UI).toContain("unitPrice <= 0");
+  it("chặn giá âm và giá 0 khi chưa bật bán miễn phí", () => {
+    expect(UI).toContain("unitPrice < 0 || (unitPrice === 0 && product?.allow_free_sale !== true)");
     expect(UI).toMatch(/canConfirm =[\s\S]{0,220}!giaKhongHopLe/);
   });
 

@@ -18,6 +18,10 @@ const resolverSource = readFileSync(
   join(process.cwd(), "supabase/migrations/00363_unified_sale_pricing.sql"),
   "utf8",
 );
+const kitchenSource = readFileSync(
+  join(process.cwd(), "supabase/migrations/00330_guard_size_variant_send_kitchen.sql"),
+  "utf8",
+);
 
 describe("00395 free FnB sizes", () => {
   it("changes only guarded FnB size, create and resolver functions", () => {
@@ -27,6 +31,8 @@ describe("00395 free FnB sizes", () => {
     expect(migration).toContain("v_sell_price = 0 and not v_allow_free_sale");
     expect(migration).toContain("p_product->>''allowFreeSale''");
     expect(migration).toContain("v_unit_price = 0 and not v_product.allow_free_sale");
+    expect(migration).toContain("_fnb_send_to_kitchen_impl_00330");
+    expect(migration).toContain("v_gia = 0 and not v_allow_free_sale");
     expect(migration).not.toMatch(/\bupdate\s+public\.(?:products|product_variants)\b/i);
   });
 
@@ -38,5 +44,6 @@ describe("00395 free FnB sizes", () => {
     expect(resolverSource).toContain("select p.id, p.sell_price into v_product");
     expect(resolverSource).toContain("p_channel = 'fnb' and coalesce(v_unit_price, 0) <= 0");
     expect(migration).toContain("p_channel = ''fnb'' and (v_unit_price is null");
+    expect(kitchenSource.match(/if coalesce\(v_gia, 0\) <= 0 then/g)).toHaveLength(2);
   });
 });
