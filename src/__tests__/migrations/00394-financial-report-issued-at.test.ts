@@ -39,6 +39,8 @@ describe("00394 financial report date and sales-return reconciliation", () => {
     expect(migration).toContain("expected 2 target report functions");
     expect(migration).toContain("financial-analysis function differs from reviewed shape");
     expect(migration).toContain("consolidated P&L differs from reviewed shape");
+    expect(migration).toContain("position('reconciliation' in v_details) = 0");
+    expect(migration).toContain("position('returned_cogs' in v_details) = 0");
     expect(migration).toContain("rollback_snapshot_ok");
   });
 
