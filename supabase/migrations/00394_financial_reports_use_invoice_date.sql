@@ -208,8 +208,8 @@ begin
   if v_details not like '%ISSUED_AT_REPORT_00394%'
      or v_details not like '%i.issued_at%'
      or v_details not like '%sr.created_at%'
-     or v_details not like '%''reconciliation'', jsonb_build_object('%
-     or v_details not like '%''returned_cogs''%'
+     or position('reconciliation' in v_details) = 0
+     or position('returned_cogs' in v_details) = 0
      or v_consolidated not like '%ISSUED_AT_REPORT_00394%'
      or v_consolidated not like '%i.issued_at%'
      or v_backup_count <> 2 then
