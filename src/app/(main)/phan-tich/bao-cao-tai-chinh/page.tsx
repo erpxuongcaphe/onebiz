@@ -40,6 +40,7 @@ import type {
   CogsCostBasis,
   GrossMarginTrend,
   FinancialAnalysisDetails,
+  FinancialSalesReturnReconciliation,
   InventoryTurnoverResult,
   DSOResult,
   ConsolidatedPnL,
@@ -72,6 +73,35 @@ function describeCogsBasis(basis?: CogsCostBasis): string {
     );
   }
   return "Giá vốn dùng snapshot tại thời điểm bán cho toàn bộ dòng dữ liệu.";
+}
+
+function buildSalesReturnReconciliationSheet(
+  reconciliation: FinancialSalesReturnReconciliation,
+  name: string,
+  titleRows?: string[],
+): ExcelSheet {
+  const goodsSales = reconciliation.invoiceTotal - reconciliation.deliveryFee;
+  return {
+    name,
+    titleRows,
+    columns: [
+      { label: "Khoản đối soát", key: "metric", width: 38 },
+      { label: "Số chứng từ", key: "documents", width: 16, format: "number" },
+      { label: "Giá trị", key: "amount", width: 20, format: "currency" },
+    ],
+    rows: [
+      { metric: "Hóa đơn hoàn tất", documents: reconciliation.invoiceCount },
+      { metric: "Tổng giá trị hóa đơn", amount: reconciliation.invoiceTotal },
+      { metric: "Phí giao hàng thu hộ", amount: reconciliation.deliveryFee },
+      { metric: "Doanh thu hàng hóa trước trả", amount: goodsSales },
+      { metric: "Phiếu trả đã xác nhận", documents: reconciliation.returnCount },
+      { metric: "Giá trị hàng trả", amount: reconciliation.returnedTotal },
+      { metric: "Doanh thu thuần hàng hóa", amount: goodsSales - reconciliation.returnedTotal },
+      { metric: "Giá vốn trước hoàn nhập", amount: reconciliation.salesCogs },
+      { metric: "Hoàn nhập giá vốn do trả hàng", amount: reconciliation.returnedCogs },
+      { metric: "Giá vốn thuần", amount: reconciliation.salesCogs - reconciliation.returnedCogs },
+    ],
+  };
 }
 
 // === Custom Tooltips ===
@@ -156,6 +186,8 @@ export default function BaoCaoTaiChinhPage() {
   const [loadingMoreCogs, setLoadingMoreCogs] = useState(false);
   const requestIdRef = useRef(0);
   const [marginTrend, setMarginTrend] = useState<GrossMarginTrend[]>([]);
+  const [reconciliation, setReconciliation] =
+    useState<FinancialSalesReturnReconciliation | null>(null);
   const [trendGranularity, setTrendGranularity] = useState<
     FinancialAnalysisDetails["granularity"]
   >("month");
@@ -193,6 +225,7 @@ export default function BaoCaoTaiChinhPage() {
       setCogsItems(detailsRes.cogsItems);
       setCogsTotalCount(detailsRes.cogsTotalCount);
       setMarginTrend(detailsRes.marginTrend);
+      setReconciliation(detailsRes.reconciliation);
       setTrendGranularity(detailsRes.granularity);
       setTurnover(detailsRes.turnover);
       setDso(detailsRes.dso);
@@ -269,45 +302,53 @@ export default function BaoCaoTaiChinhPage() {
         branchName,
         generatedAt: new Date(),
       });
+      const viewSheets: ExcelSheet[] = [
+        {
+          name: "P&L",
+          titleRows,
+          columns: [
+            { label: "Khoản mục", key: "label", width: 34 },
+            { label: cur.period, key: "current", width: 18, format: "currency" },
+            { label: "Tỷ lệ kỳ này", key: "currentRate", width: 14, format: "percent" },
+            { label: prev.period, key: "previous", width: 18, format: "currency" },
+            { label: "Tỷ lệ kỳ trước", key: "previousRate", width: 14, format: "percent" },
+          ],
+          rows: [
+            { label: "Doanh thu hàng hóa", current: cur.goodsRevenue, previous: prev.goodsRevenue },
+            { label: "Phí giao hàng thu hộ", current: cur.deliveryFee, previous: prev.deliveryFee },
+            { label: "= Tổng doanh thu", current: cur.revenue, previous: prev.revenue },
+            { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
+            {
+              label: "= Lãi gộp",
+              current: cur.grossProfit,
+              currentRate: cur.grossMargin,
+              previous: prev.grossProfit,
+              previousRate: prev.grossMargin,
+            },
+            { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+            {
+              label: "= Kết quả vận hành",
+              current: cur.netProfit,
+              currentRate: cur.netMargin,
+              previous: prev.netProfit,
+              previousRate: prev.netMargin,
+            },
+          ],
+        },
+      ];
+      if (reconciliation && (reconciliation.invoiceCount > 0 || reconciliation.returnCount > 0)) {
+        viewSheets.push(buildSalesReturnReconciliationSheet(
+          reconciliation,
+          "Đối soát bán-trả",
+          titleRows,
+        ));
+      }
       await exportReportToExcel({
         kind: "bao-cao-tai-chinh",
         mode: "view",
         range,
         branchName,
-        sheets: [
-          {
-            name: "P&L",
-            titleRows,
-            columns: [
-              { label: "Khoản mục", key: "label", width: 34 },
-              { label: cur.period, key: "current", width: 18, format: "currency" },
-              { label: "Tỷ lệ kỳ này", key: "currentRate", width: 14, format: "percent" },
-              { label: prev.period, key: "previous", width: 18, format: "currency" },
-              { label: "Tỷ lệ kỳ trước", key: "previousRate", width: 14, format: "percent" },
-            ],
-            rows: [
-              { label: "Doanh thu hàng hóa", current: cur.goodsRevenue, previous: prev.goodsRevenue },
-              { label: "Phí giao hàng thu hộ", current: cur.deliveryFee, previous: prev.deliveryFee },
-              { label: "= Tổng doanh thu", current: cur.revenue, previous: prev.revenue },
-              { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
-              {
-                label: "= Lãi gộp",
-                current: cur.grossProfit,
-                currentRate: cur.grossMargin,
-                previous: prev.grossProfit,
-                previousRate: prev.grossMargin,
-              },
-              { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
-              {
-                label: "= Kết quả vận hành",
-                current: cur.netProfit,
-                currentRate: cur.netMargin,
-                previous: prev.netProfit,
-                previousRate: prev.netMargin,
-              },
-            ],
-          },
-        ],
+        sheets: viewSheets,
       });
       toast({ title: "Đã xuất báo cáo P&L", variant: "success" });
     } catch (err) {
@@ -485,6 +526,14 @@ export default function BaoCaoTaiChinhPage() {
         ],
       });
 
+      if (exportDetails.reconciliation.invoiceCount > 0 || exportDetails.reconciliation.returnCount > 0) {
+        sheets.push(buildSalesReturnReconciliationSheet(
+          exportDetails.reconciliation,
+          "6. Đối soát bán-trả",
+          titleRows,
+        ));
+      }
+
       await exportReportToExcel({
         kind: "bao-cao-tai-chinh",
         mode: "full",
@@ -599,6 +648,71 @@ export default function BaoCaoTaiChinhPage() {
             </p>
           </div>
         )}
+
+        {reconciliation &&
+          (reconciliation.invoiceCount > 0 || reconciliation.returnCount > 0) && (
+            <section aria-labelledby="sales-return-reconciliation-title" className="border-y py-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <h2 id="sales-return-reconciliation-title" className="text-sm font-semibold">
+                  Đối soát bán và trả hàng
+                </h2>
+                <p className="text-xs text-muted-foreground">
+                  Hóa đơn theo ngày phát hành; phiếu trả theo ngày lập
+                </p>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Bán trước trả · {formatNumber(reconciliation.invoiceCount)} HĐ
+                  </p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatCurrency(reconciliation.invoiceTotal - reconciliation.deliveryFee)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Trả hàng · {formatNumber(reconciliation.returnCount)} phiếu
+                  </p>
+                  <p className="mt-1 text-sm font-semibold text-status-error">
+                    −{formatCurrency(reconciliation.returnedTotal)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Doanh thu thuần</p>
+                  <p className="mt-1 text-sm font-semibold text-primary">
+                    {formatCurrency(
+                      reconciliation.invoiceTotal -
+                        reconciliation.deliveryFee -
+                        reconciliation.returnedTotal,
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Giá vốn bán</p>
+                  <p className="mt-1 text-sm font-semibold">
+                    {formatCurrency(reconciliation.salesCogs)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Hoàn nhập do trả</p>
+                  <p className="mt-1 text-sm font-semibold text-status-success">
+                    −{formatCurrency(reconciliation.returnedCogs)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Giá vốn thuần</p>
+                  <p className="mt-1 text-sm font-semibold text-status-warning">
+                    {formatCurrency(reconciliation.salesCogs - reconciliation.returnedCogs)}
+                  </p>
+                </div>
+              </div>
+              {reconciliation.deliveryFee !== 0 && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Phí giao hàng thu hộ {formatCurrency(reconciliation.deliveryFee)} được tách khỏi doanh thu hàng hóa.
+                </p>
+              )}
+            </section>
+          )}
 
         {/* So sánh P&L các chi nhánh — chỉ hiển thị ở view "Tất cả" */}
         {branchId === "all" && branchPnL.length > 0 && (
@@ -926,6 +1040,7 @@ export default function BaoCaoTaiChinhPage() {
           </ReportTableFrame>
           <p className="mt-2 text-xs text-muted-foreground">
             Doanh thu và giá vốn đã trừ các phiếu trả được xác nhận trong kỳ.
+            Ngày bán theo ngày hóa đơn; phiếu trả theo ngày lập.
             Ngày có doanh thu âm là ngày ghi nhận trả hàng lớn hơn doanh thu bán mới;
             xem báo cáo Trả hàng chi tiết để đối chiếu từng phiếu.
             {" "}

@@ -147,6 +147,15 @@ function buildFinancialAnalysisDetailsRpc() {
       granularity: "month",
       exclude_internal: false,
       cogs_total_count: productTotals.size,
+      reconciliation: {
+        invoice_count: invoices.length,
+        invoice_total: invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0),
+        delivery_fee: invoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0),
+        return_count: 0,
+        returned_total: 0,
+        sales_cogs: totalCogs,
+        returned_cogs: 0,
+      },
       cogs_breakdown: Array.from(productTotals.entries())
         .map(([productName, row]) => ({
           product_name: productName,
@@ -260,6 +269,7 @@ import {
   getConsolidatedPnL,
   getBranchPnLComparison,
   getCOGSBreakdown,
+  getFinancialAnalysisDetails,
   getInventoryTurnover,
   getDSO,
   getFinancialAlerts,
@@ -359,6 +369,22 @@ describe("getProfitAndLoss", () => {
     expect(result.current.goodsRevenue).toBe(result.current.revenue);
     // grossProfit không đổi so với công thức cũ khi ship = 0.
     expect(result.current.grossProfit).toBe(5_000_000);
+  });
+});
+
+describe("getFinancialAnalysisDetails", () => {
+  it("maps sales and return reconciliation from the server report", async () => {
+    const result = await getFinancialAnalysisDetails(undefined, undefined, false, 10);
+
+    expect(result.reconciliation).toEqual({
+      invoiceCount: 2,
+      invoiceTotal: 15_000_000,
+      deliveryFee: 0,
+      returnCount: 0,
+      returnedTotal: 0,
+      salesCogs: 10_000_000,
+      returnedCogs: 0,
+    });
   });
 });
 
