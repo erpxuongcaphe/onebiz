@@ -5,7 +5,9 @@ import { join } from "node:path";
 /**
  * ĐỒNG BỘ REPO ↔ PRODUCTION (00335 Pha A/A3).
  *
- * LỖ HỔNG ĐANG VÁ: tám RPC báo cáo đã đổi sang đọc NGÀY HÓA ĐƠN trên
+ * Hợp đồng ngày hóa đơn cho các RPC báo cáo phải được lưu trong repo:
+ * các migration trước xử lý tám RPC; 00394 bổ sung hai RPC tài chính còn thiếu.
+ * LỖ HỔNG ĐÃ VÁ: tám RPC báo cáo đã đổi sang đọc NGÀY HÓA ĐƠN trên
  * production ngày 20/08/2026, nhưng bản đổi chỉ nằm ở tệp vận hành CHƯA TRACK
  * (SQL-CAN-CHAY/…). Dựng database trắng từ repo sẽ ra tám hàm vẫn lọc theo
  * invoices.created_at ⇒ khác production, các trang báo cáo lệch số nhau đúng
@@ -23,7 +25,7 @@ const NOI_DUNG_MIGRATION = readdirSync(THU_MUC)
   .filter((f) => f.endsWith(".sql") && !f.includes("rollback"))
   .map((f) => ({ ten: f, noiDung: readFileSync(join(THU_MUC, f), "utf8") }));
 
-/** Tám RPC báo cáo phải đọc theo ngày hóa đơn, kèm migration chịu trách nhiệm. */
+/** Các RPC báo cáo phải đọc doanh số theo ngày hóa đơn, kèm migration chịu trách nhiệm. */
 const HAM_PHAI_DOI: Array<[string, string]> = [
   ["get_customer_product_report", "00338"],
   ["get_customer_product_detail_page", "00338"],
@@ -33,9 +35,11 @@ const HAM_PHAI_DOI: Array<[string, string]> = [
   ["get_sales_report_summary", "00339"],
   ["get_profit_and_loss_report", "00339"],
   ["get_branch_profit_and_loss_report", "00339"],
+  ["get_financial_analysis_details_report", "00394"],
+  ["get_consolidated_profit_and_loss_report", "00394"],
 ];
 
-describe("Tám RPC báo cáo đọc theo ngày hóa đơn phải nằm TRONG REPO", () => {
+describe("RPC báo cáo đọc theo ngày hóa đơn phải nằm TRONG REPO", () => {
   it.each(HAM_PHAI_DOI)("%s — có migration %s xử lý", (ham, soHieu) => {
     const file = NOI_DUNG_MIGRATION.find((m) => m.ten.startsWith(soHieu));
     expect(file, `thiếu migration ${soHieu}`).toBeTruthy();

@@ -121,11 +121,22 @@ export interface GrossMarginTrend {
 export interface FinancialAnalysisDetails {
   cogsItems: COGSItem[];
   marginTrend: GrossMarginTrend[];
+  reconciliation: FinancialSalesReturnReconciliation;
   turnover: InventoryTurnoverResult;
   dso: DSOResult;
   granularity: "day" | "month" | "year";
   excludeInternal: boolean;
   cogsTotalCount: number;
+}
+
+export interface FinancialSalesReturnReconciliation {
+  invoiceCount: number;
+  invoiceTotal: number;
+  deliveryFee: number;
+  returnCount: number;
+  returnedTotal: number;
+  salesCogs: number;
+  returnedCogs: number;
 }
 
 // === Helper: date ranges (same as analytics.ts) ===
@@ -377,6 +388,7 @@ export async function getFinancialAnalysisDetails(
       : [];
     const turnover = (payload.turnover ?? {}) as Record<string, unknown>;
     const dso = (payload.dso ?? {}) as Record<string, unknown>;
+    const reconciliation = (payload.reconciliation ?? {}) as Record<string, unknown>;
 
     return {
       cogsItems: cogsRows.map((row) => ({
@@ -392,6 +404,15 @@ export async function getFinancialAnalysisDetails(
         cogs: number(row.cogs),
         grossMargin: number(row.gross_margin),
       })),
+      reconciliation: {
+        invoiceCount: number(reconciliation.invoice_count),
+        invoiceTotal: number(reconciliation.invoice_total),
+        deliveryFee: number(reconciliation.delivery_fee),
+        returnCount: number(reconciliation.return_count),
+        returnedTotal: number(reconciliation.returned_total),
+        salesCogs: number(reconciliation.sales_cogs),
+        returnedCogs: number(reconciliation.returned_cogs),
+      },
       turnover: {
         turnoverRatio: number(turnover.turnover_ratio),
         avgDaysToSell: number(turnover.average_days_to_sell),

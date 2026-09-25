@@ -5,6 +5,10 @@ const migration = readFileSync(
   "supabase/migrations/00260_financial_analysis_details.sql",
   "utf8",
 );
+const reconciliationMigration = readFileSync(
+  "supabase/migrations/00394_financial_reports_use_invoice_date.sql",
+  "utf8",
+);
 const service = readFileSync(
   "src/lib/services/supabase/reports.ts",
   "utf8",
@@ -28,6 +32,9 @@ describe("financial analysis details", () => {
     expect(migration).toContain("coalesce(ii.unit_cost, pr.cost_price, 0)");
     expect(migration).toContain("join public.return_items");
     expect(migration).toContain("i.status = 'completed'");
+    expect(reconciliationMigration).toContain("'reconciliation', jsonb_build_object(");
+    expect(reconciliationMigration).toContain("'sales_cogs'");
+    expect(reconciliationMigration).toContain("'returned_cogs'");
   });
 
   it("does not write business rows", () => {
@@ -72,6 +79,8 @@ describe("financial analysis details", () => {
     expect(page).toContain("Doanh thu thuần hàng hóa");
     expect(page).toContain("Doanh thu thuần");
     expect(page).toContain("phiếu trả được xác nhận trong kỳ");
+    expect(page).toContain("Đối soát bán và trả hàng");
+    expect(page).toContain("Hoàn nhập do trả");
     expect(page).toContain('href="/phan-tich/tra-hang"');
   });
 });
