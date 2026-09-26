@@ -1,4 +1,4 @@
--- Disposable PostgreSQL integration fixture for migration 00396.
+-- Disposable PostgreSQL integration fixture for migration 00397.
 -- Run only against a fresh test database, never against an application database.
 \set ON_ERROR_STOP on
 
@@ -87,7 +87,7 @@ returns boolean language sql stable as $$
 $$;
 
 -- Mirrors the production helper's ledger math/idempotency boundary so the real
--- 00396 trigger can be exercised without bootstrapping the entire application schema.
+-- 00397 trigger can be exercised without bootstrapping the entire application schema.
 create function public._post_fnb_branch_cost_in_00390(
   p_tenant_id uuid,
   p_branch_id uuid,
@@ -138,7 +138,7 @@ begin
 end;
 $$;
 
-\ir ../migrations/00396_fnb_return_bom_cost_restore.sql
+\ir ../migrations/00397_fnb_return_bom_cost_restore.sql
 
 insert into public.fnb_supply_branch_scopes values
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', true),
@@ -268,4 +268,4 @@ begin
   end if;
 end $$;
 
-select '00396 PostgreSQL integration assertions passed' as result;
+select '00397 PostgreSQL integration assertions passed' as result;

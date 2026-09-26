@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  "supabase/migrations/00396_fnb_return_bom_cost_restore.sql",
+  "supabase/migrations/00397_fnb_return_bom_cost_restore.sql",
   "utf8",
 ).toLowerCase();
 
-describe("00396 F&B BOM return cost restore", () => {
+describe("00397 F&B BOM return cost restore", () => {
   it("tracks only future BOM ingredient returns in opted-in F&B branches", () => {
     expect(migration).toContain("new.reference_type <> 'return_bom_restore'");
     expect(migration).toContain("_fnb_branch_cost_tracking_enabled_00390");

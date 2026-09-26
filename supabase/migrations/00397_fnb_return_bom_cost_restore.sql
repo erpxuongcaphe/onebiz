@@ -1,4 +1,4 @@
--- 00396: Restore F&B BOM ingredients to the branch cost ledger at the
+-- 00397: Restore F&B BOM ingredients to the branch cost ledger at the
 -- original invoice's weighted issue cost. This is future-only and does not
 -- rewrite product cost, historic movements, or shared Retail stock.
 begin;
@@ -11,7 +11,7 @@ begin
      or to_regclass('public.sales_returns') is null
      or to_regprocedure('public._fnb_branch_cost_tracking_enabled_00390(uuid,uuid)') is null
      or to_regprocedure('public._post_fnb_branch_cost_in_00390(uuid,uuid,uuid,numeric,numeric,text,text,uuid,uuid,text,uuid)') is null then
-    raise exception using errcode = 'P0001', message = 'FNB_00396_PREREQUISITE_MISSING';
+    raise exception using errcode = 'P0001', message = 'FNB_00397_PREREQUISITE_MISSING';
   end if;
 end;
 $preflight$;
@@ -27,7 +27,7 @@ alter table public.fnb_branch_product_cost_events
     'invoice_void_restore', 'return_bom_restore'
   ));
 
-create function public._capture_fnb_return_bom_cost_00396()
+create function public._capture_fnb_return_bom_cost_00397()
 returns trigger
 language plpgsql
 security definer
@@ -143,19 +143,19 @@ begin
 end;
 $$;
 
-alter function public._capture_fnb_return_bom_cost_00396() owner to postgres;
-revoke all on function public._capture_fnb_return_bom_cost_00396()
+alter function public._capture_fnb_return_bom_cost_00397() owner to postgres;
+revoke all on function public._capture_fnb_return_bom_cost_00397()
   from public, anon, authenticated;
 
-drop trigger if exists capture_fnb_return_bom_cost_00396 on public.stock_movements;
-create trigger capture_fnb_return_bom_cost_00396
+drop trigger if exists capture_fnb_return_bom_cost_00397 on public.stock_movements;
+create trigger capture_fnb_return_bom_cost_00397
   after insert on public.stock_movements
   for each row
   when (new.type = 'in' and new.reference_type = 'return_bom_restore')
-  execute function public._capture_fnb_return_bom_cost_00396();
+  execute function public._capture_fnb_return_bom_cost_00397();
 
-comment on function public._capture_fnb_return_bom_cost_00396() is
-  '00396: Cost future F&B BOM return movements at original invoice issue WAC; fail closed on missing or over-returned cost history.';
+comment on function public._capture_fnb_return_bom_cost_00397() is
+  '00397: Cost future F&B BOM return movements at original invoice issue WAC; fail closed on missing or over-returned cost history.';
 
 do $verify$
 begin
@@ -163,14 +163,14 @@ begin
     select 1
       from pg_trigger t
      where t.tgrelid = 'public.stock_movements'::regclass
-       and t.tgname = 'capture_fnb_return_bom_cost_00396'
+       and t.tgname = 'capture_fnb_return_bom_cost_00397'
        and not t.tgisinternal
   ) or not exists (
     select 1 from pg_constraint c
      where c.conrelid = 'public.fnb_branch_product_cost_events'::regclass
        and c.conname = 'fnb_branch_product_cost_events_source_type_check'
   ) then
-    raise exception using errcode = 'P0001', message = 'FNB_00396_INSTALL_INCOMPLETE';
+    raise exception using errcode = 'P0001', message = 'FNB_00397_INSTALL_INCOMPLETE';
   end if;
 end;
 $verify$;
