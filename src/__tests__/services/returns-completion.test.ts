@@ -118,6 +118,21 @@ describe("createSalesReturnAtomic", () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["FNB_RETURN_COST_REFERENCE_INVALID", "Phiếu trả hoặc hóa đơn gốc không hợp lệ"],
+    ["FNB_RETURN_COST_HISTORY_REQUIRED", "có lần trả trước chưa được ghi nhận giá vốn"],
+    ["FNB_RETURN_COST_SOURCE_REQUIRED", "chưa có lịch sử giá vốn nguyên liệu"],
+    ["FNB_RETURN_COST_QUANTITY_EXCEEDED", "hoàn vượt lượng đã tiêu hao"],
+  ])("explains F&B return cost guard %s in Vietnamese", async (code, message) => {
+    mockRpc.mockResolvedValueOnce({
+      data: null,
+      error: { code: "P0001", message: `Database error: ${code}` },
+    });
+
+    await expect(createSalesReturnAtomic(sampleInput)).rejects.toThrow(message);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
   it("rejects invalid input before contacting the database", async () => {
     await expect(
       createSalesReturnAtomic({ ...sampleInput, items: [] }),
