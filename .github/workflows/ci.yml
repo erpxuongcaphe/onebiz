@@ -41,7 +41,10 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGDATABASE: fnb_cost_test
-        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/00397_fnb_return_bom_cost_restore.integration.sql
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00397_fnb_return_bom_cost_restore.integration.sql
+          node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00398_fnb_production_cancel_cost_restore.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest
