@@ -210,7 +210,19 @@ export async function cancelProductionOrder(
       p_reason: reason ?? null,
     },
   );
-  if (error) throw error;
+  if (error) {
+    const costErrors: Record<string, string> = {
+      FNB_PRODUCTION_RETURN_SOURCE_REQUIRED:
+        "Không xác định được mẻ sản xuất tại quán này. Chưa hủy mẻ hoặc thay đổi tồn kho.",
+      FNB_PRODUCTION_RETURN_HISTORY_REQUIRED:
+        "Mẻ này thiếu lịch sử giá vốn nguyên liệu đã xuất. Cần đối soát trước khi hủy.",
+      FNB_PRODUCTION_RETURN_QUANTITY_EXCEEDED:
+        "Lượng nguyên liệu hoàn lại vượt lượng đã xuất cho mẻ. Cần kiểm tra các lần hoàn trước.",
+    };
+    const message = costErrors[(error as { message?: string }).message ?? ""];
+    if (message) throw new Error(message);
+    throw error;
+  }
 
   const result = (data ?? {}) as Record<string, unknown>;
   return {

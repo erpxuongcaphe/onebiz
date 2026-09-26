@@ -8,6 +8,46 @@ on:
       - staging
 
 jobs:
+  fnb-return-cost-postgres-integration:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fnb_cost_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d fnb_cost_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-client
+
+      - name: Apply migration and verify F&B return-cost behavior
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_cost_test
+        run: |
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00397_fnb_return_bom_cost_restore.integration.sql
+          node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00398_fnb_production_cancel_cost_restore.integration.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00399_fnb_purchase_order_revert_cost.integration.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00400_fnb_inventory_adjustment_transfer_cost.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

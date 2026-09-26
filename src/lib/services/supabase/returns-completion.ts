@@ -42,6 +42,27 @@ export interface SalesReturnAtomicResult {
   }>;
 }
 
+const FNB_RETURN_COST_ERRORS: Record<string, string> = {
+  FNB_RETURN_COST_REFERENCE_INVALID:
+    "Phiếu trả hoặc hóa đơn gốc không hợp lệ; chưa có thay đổi nào được ghi.",
+  FNB_RETURN_COST_HISTORY_REQUIRED:
+    "Hóa đơn này có lần trả trước chưa được ghi nhận giá vốn nguyên liệu. Tạm dừng và nhờ quản lý đối soát trước khi thử lại.",
+  FNB_RETURN_COST_SOURCE_REQUIRED:
+    "Hóa đơn gốc chưa có lịch sử giá vốn nguyên liệu để hoàn kho chính xác. Phiếu chưa được ghi nhận; cần quản lý rà soát.",
+  FNB_RETURN_COST_QUANTITY_EXCEEDED:
+    "Lượng nguyên liệu hoàn vượt lượng đã tiêu hao theo hóa đơn gốc. Kiểm tra số lượng trả và công thức áp dụng trước khi thử lại.",
+};
+
+function getFnbReturnCostErrorMessage(error: {
+  message?: string;
+  details?: string;
+  hint?: string;
+}): string | null {
+  const raw = [error.message, error.details, error.hint].filter(Boolean).join(" ");
+  const code = Object.keys(FNB_RETURN_COST_ERRORS).find((candidate) => raw.includes(candidate));
+  return code ? FNB_RETURN_COST_ERRORS[code] : null;
+}
+
 export async function createSalesReturnAtomic(
   input: CreateSalesReturnAtomicInput,
 ): Promise<SalesReturnAtomicResult> {
@@ -70,7 +91,11 @@ export async function createSalesReturnAtomic(
     p_shift_id: input.shiftId ?? null,
   });
 
-  if (error) handleError(error, "createSalesReturnAtomic");
+  if (error) {
+    const fnbCostMessage = getFnbReturnCostErrorMessage(error);
+    if (fnbCostMessage) throw new Error(fnbCostMessage);
+    handleError(error, "createSalesReturnAtomic");
+  }
   if (!data || typeof data !== "object") {
     throw new Error("Kh\u00f4ng nh\u1eadn \u0111\u01b0\u1ee3c k\u1ebft qu\u1ea3 t\u1ea1o phi\u1ebfu tr\u1ea3 h\u00e0ng");
   }
