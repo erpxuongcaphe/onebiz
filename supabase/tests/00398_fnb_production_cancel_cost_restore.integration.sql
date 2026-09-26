@@ -96,10 +96,14 @@ end;
 $$;
 
 -- Non-opted-in branch bypasses both cost triggers.
+insert into public.fnb_supply_branch_scopes values (
+  '10000000-0000-0000-0000-000000000001',
+  '20000000-0000-0000-0000-000000000003', false
+);
 insert into public.stock_movements values (
   '90000000-0000-0000-0000-000000000009',
   '10000000-0000-0000-0000-000000000001',
-  '20000000-0000-0000-0000-000000000002',
+  '20000000-0000-0000-0000-000000000003',
   '90000000-0000-0000-0000-000000000002', 'in', 'production_order',
   '90000000-0000-0000-0000-000000000003', 100, null, null
 );
@@ -109,6 +113,19 @@ begin
     where source_stock_movement_id = '90000000-0000-0000-0000-000000000009') then
     raise exception 'Non-opted-in branch was changed';
   end if;
+  -- The prior fixture enabled branch 2; a cross-branch reference must fail there.
+  begin
+    insert into public.stock_movements values (
+      '90000000-0000-0000-0000-000000000010',
+      '10000000-0000-0000-0000-000000000001',
+      '20000000-0000-0000-0000-000000000002',
+      '90000000-0000-0000-0000-000000000002', 'in', 'production_order',
+      '90000000-0000-0000-0000-000000000003', 1, null, null
+    );
+    raise exception 'Expected wrong-branch rejection';
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'FNB_PRODUCTION_RETURN_SOURCE_REQUIRED' then raise; end if;
+  end;
 end;
 $$;
 select '00398 production return/completion assertions passed' as result;
