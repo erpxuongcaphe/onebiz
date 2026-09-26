@@ -42,6 +42,7 @@ as $$
 declare
   v_source_tenant uuid;
   v_source_branch uuid;
+  v_source_found boolean := false;
   v_source_type text;
   v_unit_cost numeric(18,6);
   v_costed_quantity numeric(18,4);
@@ -70,22 +71,27 @@ begin
   if new.reference_type = 'inventory_check' then
     select ic.tenant_id, ic.branch_id into v_source_tenant, v_source_branch
       from public.inventory_checks ic where ic.id = new.reference_id for update;
+    v_source_found := found;
   elsif new.reference_type = 'supplier_return' then
     select sr.tenant_id, sr.branch_id into v_source_tenant, v_source_branch
       from public.supplier_returns sr where sr.id = new.reference_id for update;
+    v_source_found := found;
   elsif new.reference_type in ('disposal_export', 'disposal_export_void') then
     select de.tenant_id, de.branch_id into v_source_tenant, v_source_branch
       from public.disposal_exports de where de.id = new.reference_id for update;
+    v_source_found := found;
   elsif new.reference_type in ('internal_export', 'internal_export_void') then
     select ie.tenant_id, ie.branch_id into v_source_tenant, v_source_branch
       from public.internal_exports ie where ie.id = new.reference_id for update;
+    v_source_found := found;
   elsif new.reference_type in ('stock_adjustment', 'initial_stock_reset') then
     v_source_tenant := new.tenant_id;
     v_source_branch := new.branch_id;
+    v_source_found := true;
   else
     return new;
   end if;
-  if not found or v_source_tenant is distinct from new.tenant_id
+  if not v_source_found or v_source_tenant is distinct from new.tenant_id
      or v_source_branch is distinct from new.branch_id then
     raise exception using errcode = 'P0001', message = 'FNB_INVENTORY_COST_SOURCE_REQUIRED';
   end if;

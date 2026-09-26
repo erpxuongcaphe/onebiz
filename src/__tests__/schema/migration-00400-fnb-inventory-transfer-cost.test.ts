@@ -11,6 +11,7 @@ describe("00400 F&B inventory and transfer cost ledger", () => {
     expect(migration).toContain("when 'inventory_check' then 'inventory_adjustment'");
     expect(migration).toContain("elsif new.reference_type in ('stock_adjustment', 'initial_stock_reset') then");
     expect(migration).toContain('v_source_tenant := new.tenant_id;');
+    expect(migration).toContain('v_source_found := true;');
     expect(migration).toContain("_post_fnb_branch_cost_out_00390");
     expect(migration).toContain("_post_fnb_branch_cost_in_00390");
     expect(migration).toContain("fnb_manual_stock_gain_cost_required");
