@@ -83,7 +83,18 @@ export async function applyManualStockMovement(
     p_created_by: null,
     p_items: rpcItems,
   });
-  if (rpcErr) handleError(rpcErr, "applyManualStockMovement:atomic_rpc");
+  if (rpcErr) {
+    if (rpcErr.message.includes("FNB_MANUAL_STOCK_GAIN_COST_REQUIRED")) {
+      throw new Error("Chi nhánh F&B chưa có giá vốn đầu kỳ cho mặt hàng này. Hãy nhập/cấp hàng hoặc chốt giá vốn đầu kỳ trước khi tăng tồn.");
+    }
+    if (rpcErr.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Lượng đã có giá vốn tại chi nhánh không đủ để xuất. Hãy đối soát tồn và giá vốn trước.");
+    }
+    if (rpcErr.message.includes("FNB_INVENTORY_COST_SOURCE_REQUIRED")) {
+      throw new Error("Chứng từ kho không khớp chi nhánh hoặc không còn hợp lệ; tồn kho chưa thay đổi.");
+    }
+    handleError(rpcErr, "applyManualStockMovement:atomic_rpc");
+  }
 
 
 }

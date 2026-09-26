@@ -511,7 +511,18 @@ export async function completeStockTransfer(transferId: string): Promise<void> {
     p_transfer_id: transferId,
     p_created_by: ctx.userId,
   });
-  if (error) handleError(error, "completeStockTransfer.atomic_rpc");
+  if (error) {
+    if (error.message.includes("FNB_TRANSFER_SOURCE_COST_REQUIRED")) {
+      throw new Error("Không thể chuyển vào chi nhánh F&B: kho xuất chưa có sổ giá vốn. Hãy dùng luồng cấp hàng nội bộ.");
+    }
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Không thể chuyển kho: lượng đã định giá tại chi nhánh xuất không đủ.");
+    }
+    if (error.message.includes("FNB_TRANSFER_COST_MOVEMENTS_REQUIRED")) {
+      throw new Error("Không thể hoàn tất chuyển kho vì dòng xuất và nhận không khớp; tồn kho chưa thay đổi.");
+    }
+    handleError(error, "completeStockTransfer.atomic_rpc");
+  }
 }
 
 /* ------------------------------------------------------------------ */

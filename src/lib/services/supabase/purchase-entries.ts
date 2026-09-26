@@ -543,7 +543,12 @@ export async function completeSupplierReturn(
     p_payment_method: input.paymentMethod ?? "cash",
   });
 
-  if (error) handleError(error, "completeSupplierReturn.atomic");
+  if (error) {
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Không thể trả hàng: lượng đã định giá tại chi nhánh không đủ; cần đối soát tồn đầu kỳ trước.");
+    }
+    handleError(error, "completeSupplierReturn.atomic");
+  }
 
   const result = data as { return_id?: string; code?: string } | null;
   if (!result?.return_id || !result.code) {
