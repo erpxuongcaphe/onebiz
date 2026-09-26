@@ -45,6 +45,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00397_fnb_return_bom_cost_restore.integration.sql
           node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00398_fnb_production_cancel_cost_restore.integration.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/00399_fnb_purchase_order_revert_cost.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest

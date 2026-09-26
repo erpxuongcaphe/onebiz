@@ -580,6 +580,7 @@ export async function receivePurchaseOrder(orderId: string): Promise<void> {
  * - Xoá input_invoice (nếu chưa 'recorded' — nếu đã ghi sổ → throw).
  * - Reset received_quantity về 0.
  * - Set status='draft'.
+ * - Với chi nhánh F&B bật sổ giá vốn, ghi giảm theo giá bình quân tại quán.
  *
  * Guards (RPC sẽ raise):
  * - Status phải ordered/partial/completed.
@@ -607,7 +608,18 @@ export async function reopenPurchaseOrderForEdit(
       p_allow_negative: allowNegative,
     },
   );
-  if (error) handleError(error, "reopenPurchaseOrderForEdit");
+  if (error) {
+    if (error.message.includes("FNB_PURCHASE_REVERT_COST_SOURCE_REQUIRED")) {
+      throw new Error("Không thể hoàn phiếu: sổ giá vốn chi nhánh không có lịch sử nhận hàng tương ứng.");
+    }
+    if (error.message.includes("FNB_PURCHASE_REVERT_COST_QUANTITY_EXCEEDED")) {
+      throw new Error("Không thể hoàn phiếu: số lượng vượt phần đã nhận và ghi giá vốn tại chi nhánh.");
+    }
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Không thể hoàn phiếu: tồn đã định giá tại chi nhánh không đủ; cần đối soát tồn đầu kỳ trước.");
+    }
+    handleError(error, "reopenPurchaseOrderForEdit");
+  }
 
   const res = data as {
     success: boolean;
