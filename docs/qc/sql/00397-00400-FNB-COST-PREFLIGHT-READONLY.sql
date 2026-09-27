@@ -1,4 +1,4 @@
--- Metadata only for 00397-00400. Does not invoke a business RPC or change data.
+-- Metadata only for 00397-00401. Does not invoke a business RPC or change data.
 begin transaction read only;
 set local statement_timeout = '5s';
 set local lock_timeout = '1s';
@@ -23,10 +23,11 @@ from (values
   ('public._capture_fnb_inventory_cost_event_00400()'),
   ('public._post_fnb_branch_cost_out_00390(uuid,uuid,uuid,numeric,text,text,uuid,uuid,text,uuid)'),
   ('public.complete_stock_transfer_atomic(uuid,uuid,uuid)'),
+  ('public._complete_stock_transfer_cost_impl_00400(uuid,uuid,uuid)'),
   ('public.revert_production_materials(uuid,text)')
 ) as required(name);
 
-select c.conname, pg_get_constraintdef(c.oid) as definition
+select c.conname, c.convalidated, pg_get_constraintdef(c.oid) as definition
 from pg_constraint c
 where c.conrelid = to_regclass('public.fnb_branch_product_cost_events')
   and c.conname = 'fnb_branch_product_cost_events_source_type_check';
@@ -41,8 +42,16 @@ where t.tgrelid = to_regclass('public.stock_movements')
 
 select p.oid::regprocedure as function_name,
   md5(p.prosrc) as source_hash,
-  position('production_cancel_restore' in p.prosrc) > 0 as production_restore_installed,
-  position('stock_transfer' in p.prosrc) > 0 as branch_transfer_cost_installed,
+  case
+    when p.oid = to_regprocedure('public._capture_fnb_branch_cost_stock_movement_00390()')
+      then position('production_cancel_restore' in p.prosrc) > 0
+    else null
+  end as production_restore_installed,
+  case
+    when p.oid = to_regprocedure('public.complete_stock_transfer_atomic(uuid,uuid,uuid)')
+      then position('_complete_stock_transfer_cost_impl_00400' in p.prosrc) > 0
+    else null
+  end as branch_transfer_cost_installed,
   pg_get_functiondef(p.oid) as definition
 from pg_proc p
 where p.oid in (

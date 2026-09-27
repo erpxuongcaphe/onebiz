@@ -1,6 +1,7 @@
 -- Keep the opted-in F&B branch cost ledger aligned when a received purchase
 -- order is reopened. No historical rows are backfilled or rewritten.
 begin;
+set local lock_timeout = '1s';
 
 do $migration$
 begin
@@ -20,8 +21,8 @@ alter table public.fnb_branch_product_cost_events
     'opening', 'purchase_receipt', 'internal_sale_receipt',
     'production_consume', 'production_complete', 'bom_consume',
     'invoice_void_restore', 'return_bom_restore',
-    'production_cancel_restore', 'purchase_order_revert'
-  ));
+  'production_cancel_restore', 'purchase_order_revert'
+  )) not valid;
 
 create or replace function public._capture_fnb_purchase_revert_cost_00399()
 returns trigger

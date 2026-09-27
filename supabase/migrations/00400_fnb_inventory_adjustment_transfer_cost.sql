@@ -1,6 +1,7 @@
 -- Keep opted-in branch cost ledgers aligned with inventory adjustments,
 -- supplier returns, stock exports, and transfers. Gains need branch WAC.
 begin;
+set local lock_timeout = '1s';
 
 do $migration$
 begin
@@ -30,8 +31,8 @@ alter table public.fnb_branch_product_cost_events
     'production_cancel_restore', 'purchase_order_revert',
     'inventory_adjustment', 'stock_transfer', 'supplier_return',
     'disposal_export', 'internal_export',
-    'disposal_export_restore', 'internal_export_restore'
-  ));
+  'disposal_export_restore', 'internal_export_restore'
+  )) not valid;
 
 create function public._capture_fnb_inventory_cost_event_00400()
 returns trigger

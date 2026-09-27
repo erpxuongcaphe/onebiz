@@ -2,6 +2,7 @@
 -- original invoice's weighted issue cost. This is future-only and does not
 -- rewrite product cost, historic movements, or shared Retail stock.
 begin;
+set local lock_timeout = '1s';
 
 do $preflight$
 begin
@@ -25,7 +26,7 @@ alter table public.fnb_branch_product_cost_events
     'opening', 'purchase_receipt', 'internal_sale_receipt',
     'production_consume', 'production_complete', 'bom_consume',
     'invoice_void_restore', 'return_bom_restore'
-  ));
+  )) not valid;
 
 create function public._capture_fnb_return_bom_cost_00397()
 returns trigger

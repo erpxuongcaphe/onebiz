@@ -1,6 +1,7 @@
 -- Price future prepared-batch material returns at their recorded issue cost.
 -- No business rows or historical costs are rewritten.
 begin;
+set local lock_timeout = '1s';
 
 do $migration$
 declare
@@ -100,7 +101,7 @@ begin
       'opening', 'purchase_receipt', 'internal_sale_receipt',
       'production_consume', 'production_complete', 'bom_consume',
       'invoice_void_restore', 'return_bom_restore', 'production_cancel_restore'
-    ));
+    )) not valid;
   execute replace(v_definition, v_old, v_new);
 end;
 $migration$;
