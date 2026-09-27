@@ -307,6 +307,9 @@ export async function completeDisposalExport(disposalId: string): Promise<void> 
         "Chưa có RPC apply_disposal_export_atomic. Vui lòng chạy migration 00074 trước.",
       );
     }
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Không thể xuất hủy: lượng đã định giá tại chi nhánh không đủ; cần đối soát tồn đầu kỳ trước.");
+    }
     handleError(error, "completeDisposalExport");
   }
 
@@ -336,6 +339,9 @@ export async function cancelDisposalExport(
       p_reason: reason?.trim() || "Hủy từ giao diện xuất hủy",
     },
   );
+  if (error?.message.includes("FNB_STOCK_EXPORT_RESTORE_SOURCE_REQUIRED")) {
+    throw new Error("Không thể hủy phiếu xuất hủy: không tìm thấy giá vốn của lần xuất gốc hoặc lượng hoàn vượt lượng đã xuất.");
+  }
   if (error) handleError(error, "cancelDisposalExport");
 }
 
@@ -361,6 +367,9 @@ export async function completeInternalExport(exportId: string): Promise<void> {
       throw new Error(
         "Chưa có RPC apply_internal_export_atomic. Vui lòng chạy migration 00074 trước.",
       );
+    }
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Không thể xuất dùng: lượng đã định giá tại chi nhánh không đủ; cần đối soát tồn đầu kỳ trước.");
     }
     handleError(error, "completeInternalExport");
   }
@@ -388,6 +397,9 @@ export async function cancelInternalExport(
       p_reason: reason?.trim() || "Hủy từ giao diện xuất nội bộ",
     },
   );
+  if (error?.message.includes("FNB_STOCK_EXPORT_RESTORE_SOURCE_REQUIRED")) {
+    throw new Error("Không thể hủy phiếu xuất dùng: không tìm thấy giá vốn của lần xuất gốc hoặc lượng hoàn vượt lượng đã xuất.");
+  }
   if (error) handleError(error, "cancelInternalExport");
 }
 
@@ -595,7 +607,18 @@ export async function applyInventoryCheck(checkId: string): Promise<void> {
     p_check_id: checkId,
     p_created_by: ctx.userId,
   });
-  if (error) handleError(error, "applyInventoryCheck.atomic_rpc");
+  if (error) {
+    if (error.message.includes("FNB_MANUAL_STOCK_GAIN_COST_REQUIRED")) {
+      throw new Error("Không thể tăng tồn kiểm kê: chi nhánh chưa có giá vốn đầu kỳ cho mặt hàng này.");
+    }
+    if (error.message.includes("FNB_INVENTORY_COST_SOURCE_REQUIRED")) {
+      throw new Error("Chứng từ kiểm kho không khớp chi nhánh; tồn kho chưa thay đổi.");
+    }
+    if (error.message.includes("FNB_BRANCH_COST_REQUIRED")) {
+      throw new Error("Lượng đã có giá vốn tại chi nhánh không đủ để ghi giảm kiểm kê; cần đối soát tồn đầu kỳ trước.");
+    }
+    handleError(error, "applyInventoryCheck.atomic_rpc");
+  }
 }
 
 /* ------------------------------------------------------------------ */
