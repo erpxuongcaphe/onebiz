@@ -55,7 +55,9 @@ create table public.cash_transactions(
 );
 create table public.invoices(
   id uuid primary key default gen_random_uuid(),
+  tenant_id uuid,
   shift_id uuid,
+  source text,
   status text not null
 );
 

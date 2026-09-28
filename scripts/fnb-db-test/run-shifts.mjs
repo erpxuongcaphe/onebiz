@@ -29,6 +29,7 @@ function extractFunction(file, name, { checkLatest = true } = {}) {
 }
 
 const coreFile = '00298_fix_shift_open_close_reconcile_flow.sql';
+const finalizeFile = '00402_fix_fnb_void_shift_reconciliation.sql';
 const permissionFile = '00370_fnb_checkout_permission.sql';
 const channelFile = '00374_split_retail_fnb_open_shift_permissions.sql';
 const permissionMigration = readFileSync(new URL(permissionFile, migrations), 'utf8');
@@ -38,7 +39,7 @@ if (!/rename\s+to\s+_open_shift_checkout_impl_00298/i.test(permissionMigration))
 
 const sql = [
   readFileSync(new URL('./schema-shifts.sql', import.meta.url), 'utf8'),
-  extractFunction(coreFile, '_finalize_shift_atomic_00298'),
+  extractFunction(finalizeFile, '_finalize_shift_atomic_00298'),
   // 00370 preserves this body under a private name. 00374 then exposes
   // separate permission-guarded Retail and F&B entry points.
   extractFunction(coreFile, 'open_shift_atomic', { checkLatest: false }),

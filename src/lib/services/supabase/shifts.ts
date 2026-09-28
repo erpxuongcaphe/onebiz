@@ -327,9 +327,35 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: cashRows, error: cashErr } = await (supabase as any)
     .from("cash_transactions")
-    .select("type, amount, payment_method, status, reference_type")
+    .select("type, amount, payment_method, status, reference_type, reference_id")
     .eq("shift_id", shiftId);
   if (cashErr) handleError(cashErr, "previewShiftClose:cash");
+
+  const voidInvoiceIds = Array.from(
+    new Set<string>(
+      (cashRows ?? [])
+        .filter(
+          (row: { reference_type?: string; reference_id?: string | null }) =>
+            row.reference_type === "invoice_void" && row.reference_id,
+        )
+        .map((row: { reference_id: string }) => String(row.reference_id)),
+    ),
+  );
+  const fnbVoidInvoiceIds = new Set<string>();
+  if (voidInvoiceIds.length > 0) {
+    const { data: fnbVoidInvoices, error: voidInvoiceErr } = await supabase
+      .from("invoices")
+      .select("id")
+      .eq("tenant_id", tenantId)
+      .eq("source", "fnb")
+      .in("id", voidInvoiceIds);
+    if (voidInvoiceErr) {
+      handleError(voidInvoiceErr, "previewShiftClose:voidInvoices");
+    }
+    (fnbVoidInvoices ?? []).forEach((invoice) =>
+      fnbVoidInvoiceIds.add(invoice.id),
+    );
+  }
 
   let cashIn = 0;
   let cashOut = 0;
@@ -348,7 +374,15 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
     }
 
     // Sales by method — chỉ tính giao dịch liên quan đến bán hàng
-    if (r.reference_type === "invoice" || r.reference_type === "sales_return") {
+    const isFnbInvoiceVoid =
+      r.reference_type === "invoice_void" &&
+      typeof r.reference_id === "string" &&
+      fnbVoidInvoiceIds.has(r.reference_id);
+    if (
+      r.reference_type === "invoice" ||
+      r.reference_type === "sales_return" ||
+      isFnbInvoiceVoid
+    ) {
       const net = r.type === "receipt" ? amt : -amt;
       salesByMethod[method] = (salesByMethod[method] ?? 0) + net;
     }
