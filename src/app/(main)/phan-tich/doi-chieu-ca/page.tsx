@@ -164,7 +164,10 @@ function ShiftDetailDialog({
                   <h3 className="text-sm font-semibold">Hóa đơn trong ca</h3>
                   <span className="text-xs text-muted-foreground">{detail.invoices.length} chứng từ</span>
                 </div>
-                <div className="overflow-x-auto rounded-md border">
+                <ReportTableFrame
+                  tablePreferenceKey="report.shift-reconciliation.invoices"
+                  className="overflow-x-auto rounded-md border"
+                >
                   <table className="w-full min-w-[820px] text-sm">
                     <thead className="bg-surface-container-low text-xs text-muted-foreground">
                       <tr>
@@ -202,7 +205,7 @@ function ShiftDetailDialog({
                       )}
                     </tbody>
                   </table>
-                </div>
+                </ReportTableFrame>
               </section>
 
               <section>
@@ -210,7 +213,10 @@ function ShiftDetailDialog({
                   <h3 className="text-sm font-semibold">Phiếu thu chi trong ca</h3>
                   <span className="text-xs text-muted-foreground">{detail.transactions.length} chứng từ</span>
                 </div>
-                <div className="overflow-x-auto rounded-md border">
+                <ReportTableFrame
+                  tablePreferenceKey="report.shift-reconciliation.cash-transactions"
+                  className="overflow-x-auto rounded-md border"
+                >
                   <table className="w-full min-w-[780px] text-sm">
                     <thead className="bg-surface-container-low text-xs text-muted-foreground">
                       <tr>
@@ -242,7 +248,7 @@ function ShiftDetailDialog({
                       )}
                     </tbody>
                   </table>
-                </div>
+                </ReportTableFrame>
               </section>
             </div>
           )}
