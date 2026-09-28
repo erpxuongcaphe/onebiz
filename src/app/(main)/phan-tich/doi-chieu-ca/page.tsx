@@ -1,7 +1,17 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +27,8 @@ import { useReportState } from "@/lib/hooks/use-report-state";
 import { usePermissions } from "@/lib/permissions";
 import {
   getReconciledShifts,
+  getReconciledShiftDetail,
+  type ReconciledShiftDetail,
   type ReconciledShiftFilter,
   type ReconciledShiftRow,
 } from "@/lib/services/supabase/shifts";
@@ -44,6 +56,200 @@ function isSelfReconcile(row: ReconciledShiftRow): boolean {
 
 function isBigVariance(row: ReconciledShiftRow): boolean {
   return row.expectedCash > 0 && Math.abs(row.variance) / row.expectedCash > 0.05;
+}
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: "Tiền mặt",
+  transfer: "Chuyển khoản",
+  card: "Thẻ",
+  ewallet: "Ví điện tử",
+  mixed: "Nhiều hình thức",
+};
+
+function ShiftDetailDialog({
+  row,
+  onClose,
+}: {
+  row: ReconciledShiftRow | null;
+  onClose: () => void;
+}) {
+  const [detail, setDetail] = useState<ReconciledShiftDetail | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+
+  useEffect(() => {
+    if (!row) {
+      setDetail(null);
+      setError(null);
+      return;
+    }
+    const requestId = ++requestIdRef.current;
+    setLoading(true);
+    setError(null);
+    void getReconciledShiftDetail(row.id)
+      .then((result) => {
+        if (requestId === requestIdRef.current) setDetail(result);
+      })
+      .catch((err: unknown) => {
+        if (requestId === requestIdRef.current) {
+          setError(err instanceof Error ? err.message : "Không tải được chứng từ trong ca.");
+        }
+      })
+      .finally(() => {
+        if (requestId === requestIdRef.current) setLoading(false);
+      });
+  }, [row]);
+
+  const expectedFromLedger = row && detail
+    ? row.startingCash + detail.summary.netCashMovement
+    : 0;
+  const ledgerDifference = row ? expectedFromLedger - row.expectedCash : 0;
+  const hasLedgerMismatch = Math.abs(ledgerDifference) > 0.5;
+
+  return (
+    <Dialog open={!!row} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="grid max-h-[min(900px,calc(100vh-2rem))] w-[min(1180px,calc(100vw-2rem))] max-w-none grid-rows-[auto,minmax(0,1fr)] overflow-hidden p-0 sm:max-w-none">
+        <DialogHeader className="border-b px-5 py-4 pr-12">
+          <DialogTitle>Đối soát chứng từ trong ca</DialogTitle>
+          <DialogDescription>
+            {row
+              ? `${row.branchName} · ${row.cashierName} · mở ${formatDate(row.openedAt)}${row.closedAt ? ` · đóng ${formatDate(row.closedAt)}` : ""}`
+              : "Hóa đơn và phiếu thu chi gắn đúng mã ca."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="min-h-0 overflow-y-auto p-5">
+          {loading && (
+            <div className="flex items-center justify-center gap-2 py-20 text-sm text-muted-foreground">
+              <Icon name="progress_activity" className="animate-spin" />
+              Đang đối soát hóa đơn và sổ tiền...
+            </div>
+          )}
+          {!loading && error && (
+            <div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+          {!loading && !error && row && detail && (
+            <div className="space-y-5">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  ["Đơn hoàn thành", `${detail.summary.completedInvoiceCount} đơn`],
+                  ["Đơn đã hủy", `${detail.summary.cancelledInvoiceCount} đơn`],
+                  ["Doanh thu đơn hiệu lực", formatCurrency(detail.summary.completedSales)],
+                  ["Tiền mặt thuần", formatCurrency(detail.summary.netCashMovement)],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-md border bg-surface-container-low px-3 py-2">
+                    <div className="text-xs text-muted-foreground">{label}</div>
+                    <div className="mt-0.5 text-base font-semibold tabular-nums">{value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div className={cn(
+                "grid gap-2 rounded-md border p-3 text-sm sm:grid-cols-2 lg:grid-cols-4",
+                hasLedgerMismatch ? "border-status-error/40 bg-status-error/5" : "border-status-success/30 bg-status-success/5",
+              )}>
+                <div><span className="text-muted-foreground">Tiền đầu ca:</span> <b>{formatCurrency(row.startingCash)}</b></div>
+                <div><span className="text-muted-foreground">Dự kiến từ sổ:</span> <b>{formatCurrency(expectedFromLedger)}</b></div>
+                <div><span className="text-muted-foreground">Dự kiến đã chốt:</span> <b>{formatCurrency(row.expectedCash)}</b></div>
+                <div className={hasLedgerMismatch ? "text-status-error" : "text-status-success"}>
+                  <span>Chênh sổ:</span> <b>{formatCurrency(ledgerDifference)}</b>
+                </div>
+              </div>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Hóa đơn trong ca</h3>
+                  <span className="text-xs text-muted-foreground">{detail.invoices.length} chứng từ</span>
+                </div>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full min-w-[820px] text-sm">
+                    <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Mã hóa đơn</th>
+                        <th className="px-3 py-2 text-left">Thời gian</th>
+                        <th className="px-3 py-2 text-left">Khách hàng</th>
+                        <th className="px-3 py-2 text-left">Trạng thái</th>
+                        <th className="px-3 py-2 text-left">Thanh toán</th>
+                        <th className="px-3 py-2 text-right">Tổng tiền</th>
+                        <th className="px-3 py-2 text-left">Lý do hủy</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {detail.invoices.map((invoice) => (
+                        <tr key={invoice.id}>
+                          <td className="px-3 py-2 font-medium">
+                            <Link className="text-primary hover:underline" href={`/don-hang/hoa-don?tim=${encodeURIComponent(invoice.code)}`}>
+                              {invoice.code}
+                            </Link>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2">{formatDate(invoice.createdAt)}</td>
+                          <td className="px-3 py-2">{invoice.customerName}</td>
+                          <td className="px-3 py-2">
+                            <Badge variant="outline" className={invoice.status === "cancelled" ? "border-status-error/30 text-status-error" : "border-status-success/30 text-status-success"}>
+                              {invoice.status === "cancelled" ? "Đã hủy" : invoice.status === "completed" ? "Hoàn thành" : invoice.status}
+                            </Badge>
+                          </td>
+                          <td className="px-3 py-2">{PAYMENT_METHOD_LABELS[invoice.paymentMethod] ?? invoice.paymentMethod}</td>
+                          <td className="px-3 py-2 text-right font-medium tabular-nums">{formatCurrency(invoice.total)}</td>
+                          <td className="max-w-[260px] px-3 py-2 text-xs text-muted-foreground">{invoice.voidReason ?? "—"}</td>
+                        </tr>
+                      ))}
+                      {detail.invoices.length === 0 && (
+                        <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Ca này không có hóa đơn.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+
+              <section>
+                <div className="mb-2 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Phiếu thu chi trong ca</h3>
+                  <span className="text-xs text-muted-foreground">{detail.transactions.length} chứng từ</span>
+                </div>
+                <div className="overflow-x-auto rounded-md border">
+                  <table className="w-full min-w-[780px] text-sm">
+                    <thead className="bg-surface-container-low text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Mã phiếu</th>
+                        <th className="px-3 py-2 text-left">Ngày chứng từ</th>
+                        <th className="px-3 py-2 text-left">Loại</th>
+                        <th className="px-3 py-2 text-left">Danh mục</th>
+                        <th className="px-3 py-2 text-left">Hình thức</th>
+                        <th className="px-3 py-2 text-right">Số tiền</th>
+                        <th className="px-3 py-2 text-left">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {detail.transactions.map((transaction) => (
+                        <tr key={transaction.id} className={transaction.status === "cancelled" ? "text-muted-foreground line-through" : undefined}>
+                          <td className="px-3 py-2 font-mono text-xs">{transaction.code}</td>
+                          <td className="whitespace-nowrap px-3 py-2">{formatDate(transaction.transactionDate)}</td>
+                          <td className="px-3 py-2">{transaction.type === "receipt" ? "Thu" : "Chi"}</td>
+                          <td className="px-3 py-2">{transaction.category}</td>
+                          <td className="px-3 py-2">{PAYMENT_METHOD_LABELS[transaction.paymentMethod] ?? transaction.paymentMethod}</td>
+                          <td className={cn("px-3 py-2 text-right font-medium tabular-nums", transaction.type === "receipt" ? "text-status-success" : "text-status-error")}>
+                            {transaction.type === "receipt" ? "+" : "-"}{formatCurrency(transaction.amount)}
+                          </td>
+                          <td className="max-w-[280px] px-3 py-2 text-xs text-muted-foreground">{transaction.note ?? "—"}</td>
+                        </tr>
+                      ))}
+                      {detail.transactions.length === 0 && (
+                        <tr><td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">Ca này không có phiếu thu chi.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function ReconciledShiftReportPage() {
@@ -74,6 +280,7 @@ export default function ReconciledShiftReportPage() {
   const [type, setType] = useState<NonNullable<ReconciledShiftFilter["type"]>>("all");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<ReconciledShiftRow[]>([]);
+  const [selectedShift, setSelectedShift] = useState<ReconciledShiftRow | null>(null);
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
 
@@ -307,7 +514,7 @@ export default function ReconciledShiftReportPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-surface-container-low text-xs font-semibold uppercase text-muted-foreground">
-                    <th className="px-3 py-2 text-left">Đóng lúc</th><th className="px-3 py-2 text-left">Chi nhánh</th><th className="px-3 py-2 text-left">Thu ngân</th><th className="px-3 py-2 text-left">Người đối chiếu</th><th className="px-3 py-2 text-right">Số đơn</th><th className="px-3 py-2 text-right">Doanh thu</th><th className="px-3 py-2 text-right">Dự kiến</th><th className="px-3 py-2 text-right">Thực tế</th><th className="px-3 py-2 text-right">Chênh lệch</th><th className="px-3 py-2 text-center">Cờ</th><th className="px-3 py-2 text-left">Lý do</th>
+                    <th className="px-3 py-2 text-left">Đóng lúc</th><th className="px-3 py-2 text-left">Chi nhánh</th><th className="px-3 py-2 text-left">Thu ngân</th><th className="px-3 py-2 text-left">Người đối chiếu</th><th className="px-3 py-2 text-right">Số đơn</th><th className="px-3 py-2 text-right">Doanh thu</th><th className="px-3 py-2 text-right">Dự kiến</th><th className="px-3 py-2 text-right">Thực tế</th><th className="px-3 py-2 text-right">Chênh lệch</th><th className="px-3 py-2 text-center">Cờ</th><th className="px-3 py-2 text-left">Lý do</th><th className="px-3 py-2 text-right">Chứng từ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -333,6 +540,18 @@ export default function ReconciledShiftReportPage() {
                           </div>
                         </td>
                         <td className="max-w-xs px-3 py-2 text-xs text-muted-foreground"><div className="line-clamp-2">{row.reason ?? "—"}</div></td>
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="h-8 gap-1"
+                            onClick={() => setSelectedShift(row)}
+                          >
+                            <Icon name="receipt_long" size={14} />
+                            Đối soát
+                          </Button>
+                        </td>
                       </tr>
                     );
                   })}
@@ -343,6 +562,7 @@ export default function ReconciledShiftReportPage() {
           )}
         </div>
       </div>
+      <ShiftDetailDialog row={selectedShift} onClose={() => setSelectedShift(null)} />
     </div>
   );
 }
