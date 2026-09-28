@@ -7,6 +7,9 @@ declare
   retail_cashier uuid := gen_random_uuid();
   shift_id uuid;
   retail_shift_id uuid;
+  void_reconcile_shift_id uuid;
+  fnb_void_invoice_id uuid := gen_random_uuid();
+  retail_void_invoice_id uuid := gen_random_uuid();
   result jsonb;
 begin
   insert into branches(id, tenant_id) values (branch, tenant), (other_branch, tenant);
@@ -77,6 +80,29 @@ begin
   perform test_assert((result->'sales_by_method'->>'cash')::numeric = 80000, 'cash sales subtract invoice refunds');
   perform test_assert((result->'sales_by_method'->>'transfer')::numeric = 50000, 'transfer sales are separated');
   perform test_assert(not (result->'sales_by_method' ? 'opening_balance'), 'non-sale cash is excluded from sales summary');
+
+  -- A mixed synthetic shift proves the new void rule is F&B-only. The F&B
+  -- sale and refund net to zero; the Retail refund remains outside F&B sales
+  -- netting, preserving the existing Retail reporting contract.
+  insert into shifts(tenant_id, branch_id, cashier_id, starting_cash, status)
+  values (tenant, branch, fnb_cashier, 0, 'open')
+  returning id into void_reconcile_shift_id;
+  insert into invoices(id, tenant_id, shift_id, source, status) values
+    (fnb_void_invoice_id, tenant, void_reconcile_shift_id, 'fnb', 'cancelled'),
+    (retail_void_invoice_id, tenant, void_reconcile_shift_id, 'retail', 'cancelled');
+  insert into cash_transactions(
+    tenant_id, branch_id, shift_id, type, amount, payment_method, status,
+    reference_type, reference_id
+  ) values
+    (tenant, branch, void_reconcile_shift_id, 'receipt', 10000, 'cash', 'completed', 'invoice', fnb_void_invoice_id),
+    (tenant, branch, void_reconcile_shift_id, 'payment', 10000, 'cash', 'completed', 'invoice_void', fnb_void_invoice_id),
+    (tenant, branch, void_reconcile_shift_id, 'receipt', 15000, 'cash', 'completed', 'invoice', retail_void_invoice_id),
+    (tenant, branch, void_reconcile_shift_id, 'payment', 15000, 'cash', 'completed', 'invoice_void', retail_void_invoice_id);
+
+  result := close_shift_atomic(void_reconcile_shift_id, 0, 'F&B void isolation');
+  perform test_assert((result->>'expected_cash')::numeric = 0, 'sale and refund cash movements balance');
+  perform test_assert((result->>'total_sales')::numeric = 15000, 'only F&B invoice voids reduce F&B shift sales');
+  perform test_assert((result->'sales_by_method'->>'cash')::numeric = 15000, 'Retail void remains outside F&B sales netting');
 
   begin
     perform close_shift_atomic(shift_id, 592345, null);
