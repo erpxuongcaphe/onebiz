@@ -23,10 +23,10 @@ describe("Trạng thái chốt đơn đặt hàng nhiều hóa đơn", () => {
     ).toHaveAttribute("href", "/don-hang/hoa-don?tim=HD001602&mo=1");
   });
 
-  it("trạng thái nội bộ không dùng từ chưa chốt trên nhãn quản trị", () => {
-    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đã có hóa đơn");
+  it("trạng thái nội bộ nói rõ đơn còn mở để tiếp tục xử lý", () => {
+    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đang xử lý");
     expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta).toContain(
-      "chưa xác nhận kết thúc xử lý nội bộ",
+      "đơn đặt vẫn mở để có thể bán tiếp",
     );
   });
 });
