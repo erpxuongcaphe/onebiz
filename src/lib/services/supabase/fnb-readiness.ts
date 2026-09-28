@@ -128,6 +128,14 @@ function thieuGiaFnb(product: Pick<SanPhamTopping, "sell_price" | "allow_free_sa
   return price < 0 || (price === 0 && product.allow_free_sale !== true);
 }
 
+function thieuGiaQuyCachFnb(
+  variant: Pick<QuyCachFnb, "sell_price">,
+  product: Pick<SanPhamTopping, "allow_free_sale"> | undefined,
+): boolean {
+  const price = variant.sell_price ?? 0;
+  return price < 0 || (price === 0 && product?.allow_free_sale !== true);
+}
+
 function coBomApDung(
   product: Pick<SanPhamTopping, "id" | "bom_code">,
   boms: readonly DongBom[],
@@ -244,8 +252,9 @@ export function danhGiaFnbReadiness(input: {
   const simpleProductsMissingBom = simpleProducts.filter(
     (product) => !coBomApDung(product, input.boms, input.branchId),
   );
+  const menuById = new Map(menuProducts.map((product) => [product.id, product]));
   const variantsMissingPrice = variants.filter(
-    (variant) => (variant.sell_price ?? 0) <= 0,
+    (variant) => thieuGiaQuyCachFnb(variant, menuById.get(variant.product_id)),
   );
   const variantsMissingBom = variants.filter(
     (variant) =>
@@ -262,12 +271,11 @@ export function danhGiaFnbReadiness(input: {
     (productVariants) =>
       productVariants.filter((variant) => variant.is_default).length !== 1,
   );
-  const menuById = new Map(menuProducts.map((product) => [product.id, product]));
   const variantIssueById = new Map<string, FnbMenuIssue>();
   for (const variant of variants) {
     const product = menuById.get(variant.product_id);
     if (!product) continue;
-    const missingPrice = (variant.sell_price ?? 0) <= 0;
+    const missingPrice = thieuGiaQuyCachFnb(variant, product);
     const missingBom = variantsMissingBom.some((item) => item.id === variant.id);
     if (missingPrice || missingBom) {
       variantIssueById.set(variant.id, {
@@ -319,7 +327,7 @@ export function danhGiaFnbReadiness(input: {
         return issue.missingPrice || issue.missingBom ? [issue] : [];
       }
       return productVariants.flatMap((variant) => {
-        const missingPrice = (variant.sell_price ?? 0) <= 0;
+        const missingPrice = thieuGiaQuyCachFnb(variant, product);
         const missingBom =
           !variant.bom_code ||
           !input.boms.some(

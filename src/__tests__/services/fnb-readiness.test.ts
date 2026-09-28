@@ -285,6 +285,46 @@ describe("danhGiaFnbReadiness", () => {
     ]);
   });
 
+  it("chấp nhận quy cách giá 0 khi món cha bật bán miễn phí", () => {
+    const result = danhGiaFnbReadiness({
+      products: [],
+      menuProducts: [
+        {
+          id: "free-cup",
+          code: "SKU-LMV-001",
+          name: "Ly Mang Về",
+          sell_price: 0,
+          allow_sale: true,
+          allow_free_sale: true,
+          bom_code: null,
+        },
+      ],
+      variants: [
+        {
+          id: "free-cup-m",
+          product_id: "free-cup",
+          name: "Size M",
+          sell_price: 0,
+          bom_code: "BOM-LMV-M",
+          is_default: true,
+        },
+      ],
+      boms: [
+        {
+          product_id: null,
+          code: "BOM-LMV-M",
+          branch_id: null,
+          has_items: true,
+        },
+      ],
+      groups: [],
+      options: [],
+    });
+
+    expect(result.variantsMissingPrice).toBe(0);
+    expect(result.menuIssues).toEqual([]);
+  });
+
   it("không chặn vì topping SKU đang tắt nhưng vẫn bắt buộc BOM cho món bán", () => {
     const result = danhGiaFnbReadiness({
       products: [
