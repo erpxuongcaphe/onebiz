@@ -48,8 +48,8 @@ describe("trangThaiXuLyDon — ba mức", () => {
 
   it("có đủ ba nhãn tiếng Việt", () => {
     expect(NHAN_TRANG_THAI_XU_LY.cho_xu_ly.nhan).toBe("Chờ xử lý");
-    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đã có hóa đơn");
-    expect(NHAN_TRANG_THAI_XU_LY.hoan_tat.nhan).toBe("Đã có hóa đơn");
+    expect(NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan).toBe("Đang xử lý");
+    expect(NHAN_TRANG_THAI_XU_LY.hoan_tat.nhan).toBe("Đã xử lý");
   });
 });
 
@@ -175,8 +175,10 @@ describe("Modal POS vẫn chọn được đơn Đang xử lý", () => {
     expect(pos).toContain("r.data.filter((o) => !o.fulfilledById)");
   });
 
-  it("có dấu hiệu 'Đã có N hóa đơn' để thu ngân biết", () => {
+  it("không gọi đơn đã bán một phần là 'Chờ xử lý' và cho biết có thể bán tiếp", () => {
     expect(pos).toContain('trangThaiXuLyDon(o) === "dang_xu_ly"');
-    expect(pos).toContain("Đã có {o.completedChildCount} hóa đơn");
+    expect(pos).toContain("NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan");
+    expect(pos).toContain("Đã xuất {o.completedChildCount} hóa đơn");
+    expect(pos).toContain("Còn có thể bán tiếp");
   });
 });

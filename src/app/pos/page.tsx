@@ -5268,7 +5268,8 @@ function ProcessOrderModal({
             Xử lý đặt hàng
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Chọn đơn đặt hàng đã tạo để nạp vào màn bán và thanh toán.
+            Chọn đơn còn xử lý để tạo phiếu bán riêng. Đơn đã có hóa đơn vẫn
+            có thể bán tiếp cho đến khi được chốt xử lý.
           </p>
         </DialogHeader>
 
@@ -5304,7 +5305,7 @@ function ProcessOrderModal({
               checked={onlyPending}
               onChange={(e) => setOnlyPending(e.target.checked)}
             />
-            Chỉ đơn chưa xử lý
+            Còn có thể bán tiếp
           </label>
         </div>
 
@@ -5336,10 +5337,14 @@ function ProcessOrderModal({
                     <span
                       className={cn(
                         "text-[11px] font-semibold px-1.5 py-0.5 rounded",
-                        statusTone[o.status] ?? "bg-muted",
+                        trangThaiXuLyDon(o) === "dang_xu_ly"
+                          ? "bg-primary/15 text-primary"
+                          : statusTone[o.status] ?? "bg-muted",
                       )}
                     >
-                      {o.statusName}
+                      {trangThaiXuLyDon(o) === "dang_xu_ly"
+                        ? NHAN_TRANG_THAI_XU_LY.dang_xu_ly.nhan
+                        : o.statusName}
                     </span>
                     {/* Đơn ĐANG XỬ LÝ vẫn chọn được để bán tiếp đợt sau — chỉ
                         báo cho thu ngân biết đơn này đã có hóa đơn rồi. */}
@@ -5348,7 +5353,7 @@ function ProcessOrderModal({
                         className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning"
                         title={NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta}
                       >
-                        Đã có {o.completedChildCount} hóa đơn
+                        Đã xuất {o.completedChildCount} hóa đơn
                       </span>
                     )}
                   </div>
