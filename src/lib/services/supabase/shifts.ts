@@ -555,6 +555,148 @@ export async function getReconciledShifts(
   return filtered;
 }
 
+export interface ReconciledShiftInvoiceDetail {
+  id: string;
+  code: string;
+  customerName: string;
+  status: "draft" | "confirmed" | "completed" | "cancelled";
+  total: number;
+  paid: number;
+  paymentMethod: string;
+  source: string;
+  createdAt: string;
+  voidReason: string | null;
+}
+
+export interface ReconciledShiftCashDetail {
+  id: string;
+  code: string;
+  type: "receipt" | "payment";
+  category: string;
+  amount: number;
+  paymentMethod: string;
+  status: "draft" | "completed" | "cancelled";
+  referenceType: string | null;
+  referenceId: string | null;
+  note: string | null;
+  transactionDate: string;
+}
+
+export interface ReconciledShiftDetail {
+  invoices: ReconciledShiftInvoiceDetail[];
+  transactions: ReconciledShiftCashDetail[];
+  summary: {
+    completedInvoiceCount: number;
+    cancelledInvoiceCount: number;
+    completedSales: number;
+    ledgerReceipts: number;
+    ledgerPayments: number;
+    cashReceipts: number;
+    cashPayments: number;
+    netCashMovement: number;
+  };
+}
+
+export function summarizeReconciledShiftDetail(
+  invoices: ReconciledShiftInvoiceDetail[],
+  transactions: ReconciledShiftCashDetail[],
+): ReconciledShiftDetail["summary"] {
+  const completedInvoices = invoices.filter((invoice) => invoice.status === "completed");
+  const completedTransactions = transactions.filter(
+    (transaction) => transaction.status === "completed",
+  );
+  const receipts = completedTransactions.filter((transaction) => transaction.type === "receipt");
+  const payments = completedTransactions.filter((transaction) => transaction.type === "payment");
+  const cashReceipts = receipts
+    .filter((transaction) => transaction.paymentMethod === "cash")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  const cashPayments = payments
+    .filter((transaction) => transaction.paymentMethod === "cash")
+    .reduce((sum, transaction) => sum + transaction.amount, 0);
+
+  return {
+    completedInvoiceCount: completedInvoices.length,
+    cancelledInvoiceCount: invoices.filter((invoice) => invoice.status === "cancelled").length,
+    completedSales: completedInvoices.reduce((sum, invoice) => sum + invoice.total, 0),
+    ledgerReceipts: receipts.reduce((sum, transaction) => sum + transaction.amount, 0),
+    ledgerPayments: payments.reduce((sum, transaction) => sum + transaction.amount, 0),
+    cashReceipts,
+    cashPayments,
+    netCashMovement: cashReceipts - cashPayments,
+  };
+}
+
+/**
+ * Bounded, read-only drill-down for one reconciled shift. Both sources are
+ * joined by shift_id so overlapping cashiers or back-dated invoices cannot be
+ * pulled into the wrong reconciliation.
+ */
+export async function getReconciledShiftDetail(
+  shiftId: string,
+): Promise<ReconciledShiftDetail> {
+  if (!shiftId) throw new Error("Thiếu mã ca cần đối soát.");
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+
+  const [invoiceResult, cashResult] = await Promise.all([
+    supabase
+      .from("invoices")
+      .select(
+        "id, code, customer_name, status, total, paid, payment_method, source, created_at, void_reason",
+      )
+      .eq("tenant_id", tenantId)
+      .eq("shift_id", shiftId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("cash_transactions")
+      .select(
+        "id, code, type, category, amount, payment_method, status, reference_type, reference_id, note, transaction_date",
+      )
+      .eq("tenant_id", tenantId)
+      .eq("shift_id", shiftId)
+      .order("transaction_date", { ascending: true }),
+  ]);
+
+  if (invoiceResult.error) {
+    handleError(invoiceResult.error, "getReconciledShiftDetail.invoices");
+  }
+  if (cashResult.error) {
+    handleError(cashResult.error, "getReconciledShiftDetail.cash");
+  }
+
+  const invoices: ReconciledShiftInvoiceDetail[] = (invoiceResult.data ?? []).map((row) => ({
+    id: row.id,
+    code: row.code,
+    customerName: row.customer_name || "Khách lẻ",
+    status: row.status,
+    total: Number(row.total ?? 0),
+    paid: Number(row.paid ?? 0),
+    paymentMethod: row.payment_method,
+    source: row.source,
+    createdAt: row.created_at,
+    voidReason: row.void_reason ?? null,
+  }));
+  const transactions: ReconciledShiftCashDetail[] = (cashResult.data ?? []).map((row) => ({
+    id: row.id,
+    code: row.code,
+    type: row.type,
+    category: row.category,
+    amount: Number(row.amount ?? 0),
+    paymentMethod: row.payment_method,
+    status: row.status,
+    referenceType: row.reference_type ?? null,
+    referenceId: row.reference_id ?? null,
+    note: row.note ?? null,
+    transactionDate: row.transaction_date,
+  }));
+
+  return {
+    invoices,
+    transactions,
+    summary: summarizeReconciledShiftDetail(invoices, transactions),
+  };
+}
+
 /** Get shift history for a branch */
 export async function getShiftHistory(
   branchId: string,
