@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
 import {
   LineChart,
   Line,
@@ -49,6 +50,10 @@ import type {
 import { Icon } from "@/components/ui/icon";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import {
+  buildSalesInvoiceRangeLink,
+  buildSalesReturnRangeLink,
+} from "@/lib/reports/sales-drilldown";
 
 // === Helpers ===
 
@@ -658,13 +663,39 @@ export default function BaoCaoTaiChinhPage() {
         {reconciliation &&
           (reconciliation.invoiceCount > 0 || reconciliation.returnCount > 0) && (
             <section aria-labelledby="sales-return-reconciliation-title" className="border-y py-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                <h2 id="sales-return-reconciliation-title" className="text-sm font-semibold">
-                  Đối soát bán và trả hàng
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  Hóa đơn theo ngày phát hành; phiếu trả theo ngày lập
-                </p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h2 id="sales-return-reconciliation-title" className="text-sm font-semibold">
+                    Đối soát bán và trả hàng
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Hóa đơn theo ngày phát hành; phiếu trả theo ngày lập
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href={buildSalesInvoiceRangeLink(
+                      range.from,
+                      range.to,
+                      activeBranchId ?? undefined,
+                    )}
+                    className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
+                  >
+                    <Icon name="receipt_long" size={15} />
+                    Xem hóa đơn
+                  </Link>
+                  <Link
+                    href={buildSalesReturnRangeLink(
+                      range.from,
+                      range.to,
+                      activeBranchId ?? undefined,
+                    )}
+                    className="inline-flex h-8 items-center gap-1 border border-border px-2.5 text-xs font-medium text-foreground hover:bg-surface-container-low"
+                  >
+                    <Icon name="undo" size={15} />
+                    Xem dòng trả
+                  </Link>
+                </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 xl:grid-cols-6">
                 <div>
