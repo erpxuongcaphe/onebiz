@@ -31,6 +31,9 @@ function row(overrides: Partial<XntRow> = {}): XntRow {
     outValue: 0,
     closingQty: 0,
     closingValue: 0,
+    valuedMovementCount: 0,
+    missingCostMovementCount: 0,
+    valuationComplete: true,
     ...overrides,
   };
 }

@@ -49,6 +49,16 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00400_fnb_inventory_adjustment_transfer_cost.integration.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00401_validate_fnb_branch_cost_event_source_type.integration.sql
 
+      - name: Verify historical XNT valuation in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb xnt_valuation_test
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00404_historical_xnt_valuation.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

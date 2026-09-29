@@ -2,7 +2,7 @@
  * Báo cáo Xuất - Nhập - Tồn.
  *
  * Dữ liệu được tổng hợp ở Postgres để không giới hạn 1.000 dòng và để tái dựng
- * đúng tồn cuối của kỳ lịch sử. Hàm chỉ đọc, không cập nhật tồn kho.
+ * đúng tồn cuối và giá trị của kỳ lịch sử. Hàm chỉ đọc, không cập nhật tồn kho.
  */
 
 import type { DateRange } from "@/lib/types/report";
@@ -16,7 +16,7 @@ export interface XntRow {
   unit: string;
   categoryName: string | null;
   openingQty: number;
-  openingValue: number;
+  openingValue: number | null;
   inSupplier: number;
   inCheck: number;
   inReturn: number;
@@ -33,10 +33,13 @@ export interface XntRow {
   outOther: number;
   totalIn: number;
   totalOut: number;
-  inValue: number;
-  outValue: number;
+  inValue: number | null;
+  outValue: number | null;
   closingQty: number;
-  closingValue: number;
+  closingValue: number | null;
+  valuedMovementCount: number;
+  missingCostMovementCount: number;
+  valuationComplete: boolean;
   byBranch?: XntBranchBreakdown[];
 }
 
@@ -44,13 +47,13 @@ export interface XntBranchBreakdown {
   branchId: string;
   branchName: string;
   openingQty: number;
-  openingValue: number;
+  openingValue: number | null;
   totalIn: number;
   totalOut: number;
-  inValue: number;
-  outValue: number;
+  inValue: number | null;
+  outValue: number | null;
   closingQty: number;
-  closingValue: number;
+  closingValue: number | null;
 }
 
 export interface XntReportResult {
@@ -58,13 +61,15 @@ export interface XntReportResult {
   subtotal: {
     productCount: number;
     openingQty: number;
-    openingValue: number;
+    openingValue: number | null;
     totalIn: number;
-    inValue: number;
+    inValue: number | null;
     totalOut: number;
-    outValue: number;
+    outValue: number | null;
     closingQty: number;
-    closingValue: number;
+    closingValue: number | null;
+    valuedProductCount: number;
+    incompleteValuationCount: number;
   };
   range: DateRange;
 }
@@ -80,6 +85,12 @@ function number(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function nullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export async function getXntReport(
   options: XntOptions,
 ): Promise<XntReportResult> {
@@ -88,7 +99,7 @@ export async function getXntReport(
 
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("get_xnt_report", {
+  const { data, error } = await (supabase.rpc as any)("get_xnt_report_v2", {
     p_date_from: rangeWindow.start,
     p_date_to: rangeWindow.end,
     p_branch_id: options.branchId ?? null,
@@ -100,7 +111,6 @@ export async function getXntReport(
   }
 
   const rows: XntRow[] = (data as Array<Record<string, unknown>>).map((raw) => {
-    const cost = number(raw.cost_price);
     const inSupplier = number(raw.in_supplier);
     const inCheck = number(raw.in_check);
     const inReturn = number(raw.in_return);
@@ -130,7 +140,7 @@ export async function getXntReport(
       unit: String(raw.unit ?? ""),
       categoryName: raw.category_name ? String(raw.category_name) : null,
       openingQty,
-      openingValue: openingQty * cost,
+      openingValue: nullableNumber(raw.opening_value),
       inSupplier,
       inCheck,
       inReturn,
@@ -147,10 +157,13 @@ export async function getXntReport(
       outOther,
       totalIn,
       totalOut,
-      inValue: totalIn * cost,
-      outValue: totalOut * cost,
+      inValue: nullableNumber(raw.in_value),
+      outValue: nullableNumber(raw.out_value),
       closingQty,
-      closingValue: closingQty * cost,
+      closingValue: nullableNumber(raw.closing_value),
+      valuedMovementCount: number(raw.valued_movement_count),
+      missingCostMovementCount: number(raw.missing_cost_movement_count),
+      valuationComplete: raw.valuation_complete === true,
     };
   });
 
@@ -158,13 +171,28 @@ export async function getXntReport(
     (sum, row) => ({
       productCount: sum.productCount + 1,
       openingQty: sum.openingQty + row.openingQty,
-      openingValue: sum.openingValue + row.openingValue,
+      openingValue:
+        sum.openingValue === null || row.openingValue === null
+          ? null
+          : sum.openingValue + row.openingValue,
       totalIn: sum.totalIn + row.totalIn,
-      inValue: sum.inValue + row.inValue,
+      inValue:
+        sum.inValue === null || row.inValue === null
+          ? null
+          : sum.inValue + row.inValue,
       totalOut: sum.totalOut + row.totalOut,
-      outValue: sum.outValue + row.outValue,
+      outValue:
+        sum.outValue === null || row.outValue === null
+          ? null
+          : sum.outValue + row.outValue,
       closingQty: sum.closingQty + row.closingQty,
-      closingValue: sum.closingValue + row.closingValue,
+      closingValue:
+        sum.closingValue === null || row.closingValue === null
+          ? null
+          : sum.closingValue + row.closingValue,
+      valuedProductCount: sum.valuedProductCount + (row.valuationComplete ? 1 : 0),
+      incompleteValuationCount:
+        sum.incompleteValuationCount + (row.valuationComplete ? 0 : 1),
     }),
     {
       productCount: 0,
@@ -176,6 +204,8 @@ export async function getXntReport(
       outValue: 0,
       closingQty: 0,
       closingValue: 0,
+      valuedProductCount: 0,
+      incompleteValuationCount: 0,
     },
   );
 

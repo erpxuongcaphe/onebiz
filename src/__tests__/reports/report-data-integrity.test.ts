@@ -133,7 +133,7 @@ describe("report data integrity", () => {
     expect(fnbAnalytics).toContain("fetchAllFnbRows");
     expect(promotionAnalytics).toContain("fetchAllPromotionRows");
     expect(abcAnalysis).toContain("fetchAllAbcRows");
-    expect(xntReport).toContain('"get_xnt_report"');
+    expect(xntReport).toContain('"get_xnt_report_v2"');
     expect(xntReport).not.toContain('.from("stock_movements")');
     expect(xntMigration).toContain("period_movements");
     expect(xntMigration).toContain("movements_after_period");
