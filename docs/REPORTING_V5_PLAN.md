@@ -64,6 +64,10 @@ Tuổi tồn, Tổn thất, Tiêu hao, Giá vốn công thức và Nhà cung c�
 
 - Phân biệt số lượng, giá trị, giá vốn và đơn vị tính.
 - Có góc nhìn tồn đầu, nhập, xuất, tồn cuối và biến động.
+- Nhập nội bộ vào chi nhánh bật sổ giá vốn F&B phải lấy event giá vốn của
+  chính chi nhánh qua phiếu nhập liên kết; chỉ công nhận khi số lượng khớp.
+  Nếu thiếu/không khớp event thì để giá trị chưa đủ dữ liệu, không lấy giá
+  vốn Retail. Chi nhánh không bật sổ F&B giữ nguyên quy tắc định giá hiện tại.
 - Nhận diện hàng chậm bán, sắp hết, âm kho, chênh lệch và hao hụt.
 - Chi tiết có mã hàng, tên hàng, nhóm, chi nhánh, chứng từ và ngày giao dịch.
 - Nhà cung cấp có mua hàng, giá trị nhập, VAT và công nợ khi nguồn có sẵn.
