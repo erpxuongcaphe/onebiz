@@ -35,7 +35,11 @@ import { filterXntRows, sumXntRows, type XntRowFilter } from "@/lib/reports/xnt-
 
 type SubMode = "summary" | "detail";
 
-const COST_ESTIMATE_NOTE = "Giá trị tồn, nhập, xuất ước tính theo giá vốn sản phẩm hiện tại; không phải giá vốn lịch sử theo từng chứng từ.";
+const HISTORICAL_VALUE_NOTE = "Giá trị được tính từ giá vốn chốt tại từng phát sinh kho. Mặt hàng thiếu snapshot lịch sử được để trống, không ước tính bằng giá vốn hiện tại.";
+
+function formatValuation(value: number | null): string {
+  return value === null ? "Chưa đủ dữ liệu" : formatCurrency(value);
+}
 
 const SUB_MODES: { key: SubMode; label: string; icon: string }[] = [
   { key: "summary", label: "Tổng hợp", icon: "view_module" },
@@ -107,6 +111,7 @@ export default function XuatNhapTonPage() {
     [data?.rows, rowFilter],
   );
   const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
+  const incompleteVisibleCount = visibleSubtotal.incompleteValuationCount;
 
   // ========================================================
   // Excel export — view mode (mirror current view)
@@ -123,7 +128,7 @@ export default function XuatNhapTonPage() {
       branchName,
       generatedAt: new Date(),
     });
-    titleRows.push(COST_ESTIMATE_NOTE);
+    titleRows.push(HISTORICAL_VALUE_NOTE);
 
     if (subMode === "summary") {
       exportReportToExcel({
@@ -259,14 +264,14 @@ export default function XuatNhapTonPage() {
       branchName,
       generatedAt: new Date(),
     });
-    titleRows.push(COST_ESTIMATE_NOTE);
+    titleRows.push(HISTORICAL_VALUE_NOTE);
 
     exportReportToExcel({
       kind: "xuat-nhap-ton",
       mode: "full",
       range,
       branchName,
-      disclaimer: COST_ESTIMATE_NOTE,
+      disclaimer: HISTORICAL_VALUE_NOTE,
       sheets: [
         // Sheet 1 — Tổng hợp 9 cột
         {
@@ -378,7 +383,7 @@ export default function XuatNhapTonPage() {
             { key: "Từ ngày", value: range.from },
             { key: "Đến ngày", value: range.to },
             { key: "Chi nhánh", value: branchName },
-            { key: "Cơ sở giá trị tồn", value: "Ước tính theo giá vốn sản phẩm hiện tại; không phải giá vốn lịch sử theo chứng từ" },
+            { key: "Cơ sở giá trị tồn", value: "Snapshot giá vốn tại từng phát sinh; dòng thiếu lịch sử không được ước tính" },
             { key: "Người xuất", value: "—" },
             {
               key: "Thời gian xuất",
@@ -420,8 +425,8 @@ export default function XuatNhapTonPage() {
       label: "Giá trị đầu kỳ",
       key: "openingValue",
       align: "right",
-      cell: (r) => formatCurrency(r.openingValue),
-      subtotalCell: formatCurrency(visibleSubtotal.openingValue),
+      cell: (r) => formatValuation(r.openingValue),
+      subtotalCell: formatValuation(visibleSubtotal.openingValue),
     },
     {
       label: "Số lượng nhập",
@@ -434,8 +439,8 @@ export default function XuatNhapTonPage() {
       label: "Giá trị nhập",
       key: "inValue",
       align: "right",
-      cell: (r) => formatCurrency(r.inValue),
-      subtotalCell: formatCurrency(visibleSubtotal.inValue),
+      cell: (r) => formatValuation(r.inValue),
+      subtotalCell: formatValuation(visibleSubtotal.inValue),
     },
     {
       label: "Số lượng xuất",
@@ -448,8 +453,8 @@ export default function XuatNhapTonPage() {
       label: "Giá trị xuất",
       key: "outValue",
       align: "right",
-      cell: (r) => formatCurrency(r.outValue),
-      subtotalCell: formatCurrency(visibleSubtotal.outValue),
+      cell: (r) => formatValuation(r.outValue),
+      subtotalCell: formatValuation(visibleSubtotal.outValue),
     },
     {
       label: "Tồn cuối kỳ",
@@ -462,8 +467,8 @@ export default function XuatNhapTonPage() {
       label: "Giá trị cuối kỳ",
       key: "closingValue",
       align: "right",
-      cell: (r) => formatCurrency(r.closingValue),
-      subtotalCell: formatCurrency(visibleSubtotal.closingValue),
+      cell: (r) => formatValuation(r.closingValue),
+      subtotalCell: formatValuation(visibleSubtotal.closingValue),
     },
   ];
 
@@ -491,7 +496,7 @@ export default function XuatNhapTonPage() {
       label: "Giá trị đầu kỳ",
       key: "openingValue",
       align: "right",
-      cell: (r) => formatCurrency(r.openingValue),
+      cell: (r) => formatValuation(r.openingValue),
     },
     // NHẬP × 6 — Đợt 2b (17/07): thêm "Nhập khác" (inOther: tồn đầu kỳ...) —
     // service tính từ A3 nhưng UI chưa từng render → màn Chi tiết rơi số.
@@ -520,7 +525,7 @@ export default function XuatNhapTonPage() {
       label: "Giá trị cuối kỳ",
       key: "closingValue",
       align: "right",
-      cell: (r) => formatCurrency(r.closingValue),
+      cell: (r) => formatValuation(r.closingValue),
     },
   ];
 
@@ -561,9 +566,14 @@ export default function XuatNhapTonPage() {
         exportDisabled={loading || !data}
       />
 
-      <p className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
-        Số lượng được tái dựng từ phát sinh kho. Giá trị tồn, nhập và xuất là ước tính theo giá vốn sản phẩm hiện tại, không phải giá vốn lịch sử của từng chứng từ. Bấm mã hàng để đối chiếu phát sinh.
-      </p>
+      <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
+        <p>{HISTORICAL_VALUE_NOTE} Bấm mã hàng để đối chiếu phát sinh.</p>
+        {!loading && incompleteVisibleCount > 0 && (
+          <p className="mt-1 font-medium text-status-warning" role="status">
+            {incompleteVisibleCount} mặt hàng đang thiếu giá vốn lịch sử; tổng giá trị được để trống để tránh cộng sai.
+          </p>
+        )}
+      </div>
 
       {/* Sub-mode toggle + Search */}
       <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-2 flex items-center gap-3 flex-wrap">

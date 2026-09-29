@@ -13,7 +13,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 import { getXntReport } from "@/lib/services/supabase/xnt-report";
 
 const migration = readFileSync(
-  "supabase/migrations/00259_historical_xnt_report.sql",
+  "supabase/migrations/00404_historical_xnt_valuation.sql",
   "utf8",
 );
 const service = readFileSync(
@@ -31,7 +31,6 @@ describe("historical XNT report", () => {
           name: "Cà phê",
           unit: "kg",
           category_name: "Hạt",
-          cost_price: 100_000,
           opening_qty: 10,
           in_supplier: 5,
           in_check: 0,
@@ -48,6 +47,13 @@ describe("historical XNT report", () => {
           out_internal: 2,
           out_other: 0,
           closing_qty: 9,
+          opening_value: 1_000_000,
+          in_value: 600_000,
+          out_value: 700_000,
+          closing_value: 900_000,
+          valued_movement_count: 8,
+          missing_cost_movement_count: 0,
+          valuation_complete: true,
         },
       ],
       error: null,
@@ -65,6 +71,8 @@ describe("historical XNT report", () => {
       totalOut: 7,
       closingQty: 9,
       closingValue: 900_000,
+      valuationComplete: true,
+      missingCostMovementCount: 0,
     });
     expect(
       result.rows[0].openingQty
@@ -73,22 +81,19 @@ describe("historical XNT report", () => {
     ).toBe(result.rows[0].closingQty);
   });
 
-  it("reconstructs historical closing stock from movements after period end", () => {
-    expect(migration).toContain("movements_after_period");
-    expect(migration).toContain("sm.created_at >= p_date_to");
-    expect(migration).toContain(
-      "p.current_qty - coalesce(ap.net_after, 0) as closing_at_period",
-    );
-    expect(migration).toContain(
-      "and (p_branch_id is null or sm.branch_id = p_branch_id)",
-    );
-    expect(migration).toContain("sum(branch_stock.quantity)");
-    expect(migration).toContain("coalesce(company_bs.quantity, p.stock, 0)");
+  it("values history from immutable movement snapshots without current product cost", () => {
+    expect(migration).toContain("public.get_xnt_report_v2");
+    expect(migration).toContain("cost_event.total_cost");
+    expect(migration).toContain("movement.unit_cost");
+    expect(migration).toContain("movement.type = 'in' and movement.unit_price is not null");
+    expect(migration).toContain("missing_cost_movement_count");
+    expect(migration).not.toContain("products.cost_price");
+    expect(migration).not.toMatch(/movement\.type\s*=\s*'out'[\s\S]{0,100}unit_price/);
     expect(migration).not.toMatch(/\b(update|delete|insert)\s+(into\s+)?public\./i);
   });
 
   it("uses one server aggregate instead of downloading every stock movement", () => {
-    expect(service).toContain('"get_xnt_report"');
+    expect(service).toContain('"get_xnt_report_v2"');
     expect(service).not.toContain('.from("stock_movements")');
     expect(service).not.toContain("fetchAllXntRows");
   });
@@ -98,6 +103,36 @@ describe("historical XNT report", () => {
     expect(page).toContain('key: "outInternal"');
     expect(page.match(/outInternal: r\.outInternal/g)).toHaveLength(2);
     expect(page).toContain('label: "Xuất nội bộ"');
-    expect(page).toContain("Giá trị tồn, nhập, xuất ước tính theo giá vốn sản phẩm hiện tại");
+    expect(page).toContain("Giá trị được tính từ giá vốn chốt tại từng phát sinh kho");
+    expect(page).toContain("tổng giá trị được để trống để tránh cộng sai");
+  });
+
+  it("does not turn incomplete legacy valuation into a plausible zero", async () => {
+    rpc.mockResolvedValueOnce({
+      data: [{
+        product_id: "legacy",
+        code: "OLD-001",
+        name: "Dòng cũ",
+        unit: "Cái",
+        opening_qty: 2,
+        closing_qty: 2,
+        opening_value: null,
+        in_value: null,
+        out_value: null,
+        closing_value: null,
+        missing_cost_movement_count: 1,
+        valuation_complete: false,
+      }],
+      error: null,
+    });
+
+    const result = await getXntReport({
+      range: { from: "2026-07-01", to: "2026-07-31" },
+    });
+
+    expect(result.rows[0].closingValue).toBeNull();
+    expect(result.rows[0].valuationComplete).toBe(false);
+    expect(result.subtotal.closingValue).toBeNull();
+    expect(result.subtotal.incompleteValuationCount).toBe(1);
   });
 });

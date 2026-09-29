@@ -27,13 +27,28 @@ export function sumXntRows(rows: XntRow[]): XntReportResult["subtotal"] {
     (sum, row) => ({
       productCount: sum.productCount + 1,
       openingQty: sum.openingQty + row.openingQty,
-      openingValue: sum.openingValue + row.openingValue,
+      openingValue:
+        sum.openingValue === null || row.openingValue === null
+          ? null
+          : sum.openingValue + row.openingValue,
       totalIn: sum.totalIn + row.totalIn,
-      inValue: sum.inValue + row.inValue,
+      inValue:
+        sum.inValue === null || row.inValue === null
+          ? null
+          : sum.inValue + row.inValue,
       totalOut: sum.totalOut + row.totalOut,
-      outValue: sum.outValue + row.outValue,
+      outValue:
+        sum.outValue === null || row.outValue === null
+          ? null
+          : sum.outValue + row.outValue,
       closingQty: sum.closingQty + row.closingQty,
-      closingValue: sum.closingValue + row.closingValue,
+      closingValue:
+        sum.closingValue === null || row.closingValue === null
+          ? null
+          : sum.closingValue + row.closingValue,
+      valuedProductCount: sum.valuedProductCount + (row.valuationComplete ? 1 : 0),
+      incompleteValuationCount:
+        sum.incompleteValuationCount + (row.valuationComplete ? 0 : 1),
     }),
     {
       productCount: 0,
@@ -45,6 +60,8 @@ export function sumXntRows(rows: XntRow[]): XntReportResult["subtotal"] {
       outValue: 0,
       closingQty: 0,
       closingValue: 0,
+      valuedProductCount: 0,
+      incompleteValuationCount: 0,
     },
   );
 }
