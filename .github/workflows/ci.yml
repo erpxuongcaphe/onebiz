@@ -59,6 +59,16 @@ jobs:
           createdb xnt_valuation_test
           PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00404_historical_xnt_valuation.integration.sql
 
+      - name: Verify sales-return source identity in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb return_identity_test
+          PGDATABASE=return_identity_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00405_return_item_source_identity.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
