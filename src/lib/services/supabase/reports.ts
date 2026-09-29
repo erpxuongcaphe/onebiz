@@ -67,6 +67,9 @@ export interface ProfitAndLoss {
   /** Phí giao hàng thu hộ = SUM(invoices.delivery_fee) hóa đơn completed. */
   deliveryFee: number;
   cogs: number;
+  /** Giá vốn chỉ được coi là chính xác khi mọi dòng bán/trả có snapshot. */
+  cogsComplete: boolean;
+  missingCostLines: number;
   grossProfit: number;
   grossMargin: number;
   operatingExpense: number;
@@ -76,8 +79,10 @@ export interface ProfitAndLoss {
 
 export interface CogsCostBasis {
   snapshotLines: number;
-  estimatedLegacyLines: number;
-  mode: "snapshot" | "mixed" | "estimated";
+  missingSalesCostLines: number;
+  missingReturnCostLines: number;
+  complete: boolean;
+  mode: "snapshot" | "incomplete";
 }
 
 export interface COGSItem {
@@ -86,6 +91,8 @@ export interface COGSItem {
   costPrice: number;
   totalCost: number;
   pctOfCogs: number;
+  costComplete: boolean;
+  missingCostLines: number;
 }
 
 export interface FinancialAlert {
@@ -103,6 +110,7 @@ export interface InventoryTurnoverResult {
   avgDaysToSell: number;
   totalCogsPeriod: number;
   avgInventoryValue: number;
+  valuationComplete: boolean;
 }
 
 export interface DSOResult {
@@ -116,6 +124,8 @@ export interface GrossMarginTrend {
   revenue: number;
   cogs: number;
   grossMargin: number;
+  cogsComplete: boolean;
+  missingCostLines: number;
 }
 
 export interface FinancialAnalysisDetails {
@@ -127,6 +137,9 @@ export interface FinancialAnalysisDetails {
   granularity: "day" | "month" | "year";
   excludeInternal: boolean;
   cogsTotalCount: number;
+  cogsComplete: boolean;
+  missingSalesCostLines: number;
+  missingReturnCostLines: number;
 }
 
 export interface FinancialSalesReturnReconciliation {
@@ -137,6 +150,9 @@ export interface FinancialSalesReturnReconciliation {
   returnedTotal: number;
   salesCogs: number;
   returnedCogs: number;
+  cogsComplete: boolean;
+  missingSalesCostLines: number;
+  missingReturnCostLines: number;
 }
 
 // === Helper: date ranges (same as analytics.ts) ===
@@ -220,13 +236,14 @@ export async function getProfitAndLoss(
   if (typeof (supabase as any).rpc === "function") {
     try {
       const { data, error } = await (supabase.rpc as any)(
-        "get_profit_and_loss_report",
+        "get_profit_and_loss_report_v2",
         {
           p_current_from: thisMonth.start,
           p_current_to: thisMonth.end,
           p_previous_from: prevMonth.start,
           p_previous_to: prevMonth.end,
           p_branch_id: branchId ?? null,
+          p_exclude_internal: false,
         },
       );
       if (error) throw error;
@@ -254,37 +271,49 @@ export async function getProfitAndLoss(
           (now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear());
       const buildBasis = (row: Record<string, unknown>): CogsCostBasis => {
         const snapshotLines = number(row.snapshot_lines);
-        const estimatedLegacyLines = number(row.estimated_legacy_lines);
+        const missingSalesCostLines = number(row.missing_sales_cost_lines);
+        const missingReturnCostLines = number(row.missing_return_cost_lines);
+        const complete = row.cogs_complete === true;
         return {
           snapshotLines,
-          estimatedLegacyLines,
-          mode:
-            estimatedLegacyLines === 0
-              ? "snapshot"
-              : snapshotLines > 0
-                ? "mixed"
-                : "estimated",
+          missingSalesCostLines,
+          missingReturnCostLines,
+          complete,
+          mode: complete ? "snapshot" : "incomplete",
         };
       };
+
+      const knownCogs = (row: Record<string, unknown>) =>
+        number(row.sales_cogs) - number(row.returned_cogs);
+      const currentBasis = buildBasis(payload.current);
+      const previousBasis = buildBasis(payload.previous);
 
       return {
         current: buildPnL(
           currentMonth,
           number(payload.current.revenue),
-          number(payload.current.cogs),
+          currentBasis.complete
+            ? number(payload.current.cogs)
+            : knownCogs(payload.current),
           number(payload.current.operating_expense),
           number(payload.current.delivery_fee),
+          currentBasis.complete,
+          currentBasis.missingSalesCostLines + currentBasis.missingReturnCostLines,
         ),
         previous: buildPnL(
           previousMonth,
           number(payload.previous.revenue),
-          number(payload.previous.cogs),
+          previousBasis.complete
+            ? number(payload.previous.cogs)
+            : knownCogs(payload.previous),
           number(payload.previous.operating_expense),
           number(payload.previous.delivery_fee),
+          previousBasis.complete,
+          previousBasis.missingSalesCostLines + previousBasis.missingReturnCostLines,
         ),
         cogsCostBasis: {
-          current: buildBasis(payload.current),
-          previous: buildBasis(payload.previous),
+          current: currentBasis,
+          previous: previousBasis,
         },
       };
     } catch (error) {
@@ -304,7 +333,9 @@ function buildPnL(
   revenue: number,
   cogs: number,
   opEx: number,
-  deliveryFee: number = 0
+  deliveryFee: number = 0,
+  cogsComplete: boolean = true,
+  missingCostLines: number = 0,
 ): ProfitAndLoss {
   // CEO 08/07: lãi gộp/biên tính trên doanh thu HÀNG HÓA (ship thu hộ, không vào lãi).
   // Phí giao hàng là khoản THU HỘ đơn vị vận chuyển → tách khỏi doanh thu hàng hóa
@@ -318,6 +349,8 @@ function buildPnL(
     goodsRevenue,
     deliveryFee,
     cogs,
+    cogsComplete,
+    missingCostLines,
     grossProfit,
     grossMargin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
     operatingExpense: opEx,
@@ -341,7 +374,7 @@ export async function getFinancialAnalysisDetails(
 
   try {
     const { data, error } = await (supabase.rpc as any)(
-      "get_financial_analysis_details_report",
+      "get_financial_analysis_details_report_v2",
       {
         p_date_from: range.start,
         p_date_to: range.end,
@@ -397,12 +430,17 @@ export async function getFinancialAnalysisDetails(
         costPrice: number(row.average_unit_cost),
         totalCost: number(row.total_cost),
         pctOfCogs: number(row.pct_of_cogs),
+        costComplete: row.cost_complete === true,
+        missingCostLines: number(row.missing_cost_lines),
       })),
       marginTrend: trendRows.map((row) => ({
         month: formatBucket(row.bucket_start),
         revenue: number(row.revenue),
-        cogs: number(row.cogs),
-        grossMargin: number(row.gross_margin),
+        cogs: row.cogs_complete === true ? number(row.cogs) : Number.NaN,
+        grossMargin:
+          row.cogs_complete === true ? number(row.gross_margin) : Number.NaN,
+        cogsComplete: row.cogs_complete === true,
+        missingCostLines: number(row.missing_cost_lines),
       })),
       reconciliation: {
         invoiceCount: number(reconciliation.invoice_count),
@@ -412,12 +450,16 @@ export async function getFinancialAnalysisDetails(
         returnedTotal: number(reconciliation.returned_total),
         salesCogs: number(reconciliation.sales_cogs),
         returnedCogs: number(reconciliation.returned_cogs),
+        cogsComplete: reconciliation.cogs_complete === true,
+        missingSalesCostLines: number(reconciliation.missing_sales_cost_lines),
+        missingReturnCostLines: number(reconciliation.missing_return_cost_lines),
       },
       turnover: {
         turnoverRatio: number(turnover.turnover_ratio),
         avgDaysToSell: number(turnover.average_days_to_sell),
         totalCogsPeriod: number(turnover.cogs_period),
         avgInventoryValue: number(turnover.average_inventory_value),
+        valuationComplete: turnover.valuation_complete === true,
       },
       dso: {
         dso: number(dso.days),
@@ -427,6 +469,9 @@ export async function getFinancialAnalysisDetails(
       granularity,
       excludeInternal: payload.exclude_internal === true,
       cogsTotalCount: number(payload.cogs_total_count),
+      cogsComplete: payload.cogs_complete === true,
+      missingSalesCostLines: number(payload.missing_sales_cost_lines),
+      missingReturnCostLines: number(payload.missing_return_cost_lines),
     };
   } catch (error) {
     const message =
@@ -828,12 +873,14 @@ export async function getConsolidatedPnL(
 
   try {
     const { data, error } = await (supabase.rpc as any)(
-      "get_consolidated_profit_and_loss_report",
+      "get_profit_and_loss_report_v2",
       {
         p_current_from: thisMonth.start,
         p_current_to: thisMonth.end,
         p_previous_from: prevMonth.start,
         p_previous_to: prevMonth.end,
+        p_branch_id: null,
+        p_exclude_internal: true,
       },
     );
     if (error) throw error;
@@ -857,9 +904,13 @@ export async function getConsolidatedPnL(
       ...buildPnL(
         period,
         number(row.revenue),
-        number(row.cogs),
+        row.cogs_complete === true
+          ? number(row.cogs)
+          : number(row.sales_cogs) - number(row.returned_cogs),
         number(row.operating_expense),
         number(row.delivery_fee),
+        row.cogs_complete === true,
+        number(row.missing_sales_cost_lines) + number(row.missing_return_cost_lines),
       ),
       internalRevenue: number(row.internal_revenue),
     });
@@ -898,6 +949,8 @@ export interface BranchPnLRow {
   opEx: number;
   netProfit: number;
   netMargin: number;
+  cogsComplete: boolean;
+  missingCostLines: number;
 }
 
 /**
@@ -914,7 +967,7 @@ export async function getBranchPnLComparison(
   // consolidated report and avoids client-side row caps.
   try {
     const { data, error } = await (supabase.rpc as any)(
-      "get_branch_profit_and_loss_report",
+      "get_branch_profit_and_loss_report_v2",
       {
         p_date_from: range.start,
         p_date_to: range.end,
@@ -946,6 +999,8 @@ export async function getBranchPnLComparison(
       opEx: number(row.operating_expense),
       netProfit: number(row.operating_result),
       netMargin: number(row.operating_margin),
+      cogsComplete: row.cogs_complete === true,
+      missingCostLines: number(row.missing_cost_lines),
     }));
   } catch (error) {
     const message =

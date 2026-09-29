@@ -612,10 +612,11 @@ function simulateProfitAndLossRpc() {
   const cash = (tableMocks.cash_transactions?.data ?? []) as Array<Record<string, unknown>>;
   const revenue = invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
   const deliveryFee = invoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0);
-  const cogs = items.reduce((sum, row) => {
-    const product = row.products as { cost_price?: number } | null;
-    return sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? product?.cost_price ?? 0);
-  }, 0);
+  const cogs = items.reduce(
+    (sum, row) => sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? 0),
+    0,
+  );
+  const missingCostLines = items.filter((row) => row.unit_cost == null).length;
   const operatingExpense = cash
     .filter((row) => row.type === "payment")
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
@@ -624,18 +625,26 @@ function simulateProfitAndLossRpc() {
       current: {
         revenue,
         delivery_fee: deliveryFee,
-        cogs,
+        cogs: missingCostLines === 0 ? cogs : null,
+        sales_cogs: cogs,
+        returned_cogs: 0,
         operating_expense: operatingExpense,
-        snapshot_lines: 0,
-        estimated_legacy_lines: items.length,
+        snapshot_lines: items.length - missingCostLines,
+        missing_sales_cost_lines: missingCostLines,
+        missing_return_cost_lines: 0,
+        cogs_complete: missingCostLines === 0,
       },
       previous: {
         revenue: 0,
         delivery_fee: 0,
         cogs: 0,
+        sales_cogs: 0,
+        returned_cogs: 0,
         operating_expense: 0,
         snapshot_lines: 0,
-        estimated_legacy_lines: 0,
+        missing_sales_cost_lines: 0,
+        missing_return_cost_lines: 0,
+        cogs_complete: true,
       },
     },
     error: null,
@@ -710,14 +719,17 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "apply_inventory_check_atomic") {
         return simulateApplyInventoryCheckAtomic(params);
       }
-      if (fn === "get_profit_and_loss_report") {
+      if (fn === "get_profit_and_loss_report_v2") {
         return simulateProfitAndLossRpc();
       }
-      if (fn === "get_financial_analysis_details_report") {
+      if (fn === "get_financial_analysis_details_report_v2") {
         return {
           data: {
             granularity: "month",
             exclude_internal: false,
+            cogs_complete: true,
+            missing_sales_cost_lines: 0,
+            missing_return_cost_lines: 0,
             cogs_breakdown: [],
             margin_trend: [],
             turnover: {
@@ -725,6 +737,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
               average_days_to_sell: 60,
               cogs_period: 3_000_000,
               average_inventory_value: 6_000_000,
+              valuation_complete: true,
             },
             dso: {
               days: 27,

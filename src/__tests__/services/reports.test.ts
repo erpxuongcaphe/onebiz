@@ -32,9 +32,9 @@ const mockInvoices = [
 ];
 
 const mockInvoiceItems = [
-  { invoice_id: "inv1", quantity: 10, product_name: "SP A", products: { cost_price: 500_000 } },
-  { invoice_id: "inv1", quantity: 5, product_name: "SP B", products: { cost_price: 200_000 } },
-  { invoice_id: "inv2", quantity: 8, product_name: "SP A", products: { cost_price: 500_000 } },
+  { invoice_id: "inv1", quantity: 10, product_name: "SP A", unit_cost: 500_000, products: { cost_price: 500_000 } },
+  { invoice_id: "inv1", quantity: 5, product_name: "SP B", unit_cost: 200_000, products: { cost_price: 200_000 } },
+  { invoice_id: "inv2", quantity: 8, product_name: "SP A", unit_cost: 500_000, products: { cost_price: 500_000 } },
 ];
 
 const mockCashPayments = [
@@ -90,28 +90,37 @@ function buildProfitAndLossRpc() {
   const cash = ((tableDataMap.cash_transactions as { data?: Array<Record<string, unknown>> })?.data ?? []);
   const revenue = invoices.reduce((sum, row) => sum + Number(row.total ?? 0), 0);
   const deliveryFee = invoices.reduce((sum, row) => sum + Number(row.delivery_fee ?? 0), 0);
-  const cogs = items.reduce((sum, row) => {
-    const product = row.products as { cost_price?: number } | null;
-    return sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? product?.cost_price ?? 0);
-  }, 0);
+  const cogs = items.reduce(
+    (sum, row) => sum + Number(row.quantity ?? 0) * Number(row.unit_cost ?? 0),
+    0,
+  );
+  const missingCostLines = items.filter((row) => row.unit_cost == null).length;
   const operatingExpense = cash
     .filter((row) => row.type === "payment")
     .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
   const current = {
     revenue,
     delivery_fee: deliveryFee,
-    cogs,
+    cogs: missingCostLines === 0 ? cogs : null,
+    sales_cogs: cogs,
+    returned_cogs: 0,
     operating_expense: operatingExpense,
-    snapshot_lines: 0,
-    estimated_legacy_lines: items.length,
+    snapshot_lines: items.length - missingCostLines,
+    missing_sales_cost_lines: missingCostLines,
+    missing_return_cost_lines: 0,
+    cogs_complete: missingCostLines === 0,
   };
   const previous = {
     revenue: 0,
     delivery_fee: 0,
     cogs: 0,
+    sales_cogs: 0,
+    returned_cogs: 0,
     operating_expense: 0,
     snapshot_lines: 0,
-    estimated_legacy_lines: 0,
+    missing_sales_cost_lines: 0,
+    missing_return_cost_lines: 0,
+    cogs_complete: true,
   };
   return { data: { current, previous }, error: null };
 }
@@ -146,6 +155,9 @@ function buildFinancialAnalysisDetailsRpc() {
     data: {
       granularity: "month",
       exclude_internal: false,
+      cogs_complete: true,
+      missing_sales_cost_lines: 0,
+      missing_return_cost_lines: 0,
       cogs_total_count: productTotals.size,
       reconciliation: {
         invoice_count: invoices.length,
@@ -155,6 +167,9 @@ function buildFinancialAnalysisDetailsRpc() {
         returned_total: 0,
         sales_cogs: totalCogs,
         returned_cogs: 0,
+        cogs_complete: true,
+        missing_sales_cost_lines: 0,
+        missing_return_cost_lines: 0,
       },
       cogs_breakdown: Array.from(productTotals.entries())
         .map(([productName, row]) => ({
@@ -163,6 +178,8 @@ function buildFinancialAnalysisDetailsRpc() {
           average_unit_cost: row.quantity ? row.totalCost / row.quantity : 0,
           total_cost: row.totalCost,
           pct_of_cogs: totalCogs ? row.totalCost / totalCogs * 100 : 0,
+          cost_complete: true,
+          missing_cost_lines: 0,
         }))
         .sort((a, b) => b.total_cost - a.total_cost),
       margin_trend: [],
@@ -171,6 +188,7 @@ function buildFinancialAnalysisDetailsRpc() {
         average_days_to_sell: 0,
         cogs_period: totalCogs,
         average_inventory_value: inventoryValue,
+        valuation_complete: true,
       },
       dso: {
         days: revenue ? Math.round(receivables / (revenue / 90)) : 0,
@@ -189,6 +207,11 @@ function buildConsolidatedProfitAndLossRpc() {
         revenue: 13_000_000,
         delivery_fee: 0,
         cogs: 9_000_000,
+        sales_cogs: 9_000_000,
+        returned_cogs: 0,
+        cogs_complete: true,
+        missing_sales_cost_lines: 0,
+        missing_return_cost_lines: 0,
         operating_expense: 3_000_000,
         internal_revenue: 2_000_000,
       },
@@ -196,6 +219,11 @@ function buildConsolidatedProfitAndLossRpc() {
         revenue: 0,
         delivery_fee: 0,
         cogs: 0,
+        sales_cogs: 0,
+        returned_cogs: 0,
+        cogs_complete: true,
+        missing_sales_cost_lines: 0,
+        missing_return_cost_lines: 0,
         operating_expense: 0,
         internal_revenue: 0,
       },
@@ -239,6 +267,8 @@ function buildBranchProfitAndLossRpc() {
       operating_expense: operatingExpense,
       operating_result: operatingResult,
       operating_margin: goodsRevenue > 0 ? Math.round((operatingResult / goodsRevenue) * 1000) / 10 : 0,
+      cogs_complete: true,
+      missing_cost_lines: 0,
     };
   });
   return { data: { rows }, error: null };
@@ -250,11 +280,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
       const data = tableDataMap[table] ?? { data: [], error: null };
       return createChain(data);
     }),
-    rpc: vi.fn((fn: string) => {
-      if (fn === "get_profit_and_loss_report") return buildProfitAndLossRpc();
-      if (fn === "get_consolidated_profit_and_loss_report") return buildConsolidatedProfitAndLossRpc();
-      if (fn === "get_financial_analysis_details_report") return buildFinancialAnalysisDetailsRpc();
-      if (fn === "get_branch_profit_and_loss_report") return buildBranchProfitAndLossRpc();
+    rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
+      if (fn === "get_profit_and_loss_report_v2") {
+        return params?.p_exclude_internal
+          ? buildConsolidatedProfitAndLossRpc()
+          : buildProfitAndLossRpc();
+      }
+      if (fn === "get_financial_analysis_details_report_v2") return buildFinancialAnalysisDetailsRpc();
+      if (fn === "get_branch_profit_and_loss_report_v2") return buildBranchProfitAndLossRpc();
       return { data: null, error: { message: "RPC_NOT_MOCKED" } };
     }),
   }),
@@ -280,7 +313,7 @@ beforeEach(() => {
 });
 
 describe("getProfitAndLoss", () => {
-  it("calculates P&L with COGS from invoice_items * cost_price", async () => {
+  it("calculates P&L with immutable invoice-line cost snapshots", async () => {
     const result = await getProfitAndLoss();
 
     // Revenue: 10M + 5M = 15M
@@ -335,7 +368,7 @@ describe("getProfitAndLoss", () => {
       // COGS = 600.000 (1 dòng qty=1 * cost 600.000).
       invoice_items: {
         data: [
-          { invoice_id: "inv-ship", quantity: 1, product_name: "SP X", products: { cost_price: 600_000 } },
+          { invoice_id: "inv-ship", quantity: 1, product_name: "SP X", unit_cost: 600_000, products: { cost_price: 600_000 } },
         ],
         error: null,
       },
@@ -370,6 +403,30 @@ describe("getProfitAndLoss", () => {
     // grossProfit không đổi so với công thức cũ khi ship = 0.
     expect(result.current.grossProfit).toBe(5_000_000);
   });
+
+  it("marks COGS incomplete instead of using the current product cost", async () => {
+    tableDataMap = {
+      ...defaultTableData(),
+      invoice_items: {
+        data: [
+          {
+            invoice_id: "inv1",
+            quantity: 1,
+            product_name: "Dữ liệu cũ",
+            unit_cost: null,
+            products: { cost_price: 999_999 },
+          },
+        ],
+        error: null,
+      },
+    };
+
+    const result = await getProfitAndLoss();
+    expect(result.current.cogsComplete).toBe(false);
+    expect(result.current.missingCostLines).toBe(1);
+    expect(result.current.cogs).toBe(0);
+    expect(result.cogsCostBasis.current.mode).toBe("incomplete");
+  });
 });
 
 describe("getFinancialAnalysisDetails", () => {
@@ -384,6 +441,9 @@ describe("getFinancialAnalysisDetails", () => {
       returnedTotal: 0,
       salesCogs: 10_000_000,
       returnedCogs: 0,
+      cogsComplete: true,
+      missingSalesCostLines: 0,
+      missingReturnCostLines: 0,
     });
   });
 });
