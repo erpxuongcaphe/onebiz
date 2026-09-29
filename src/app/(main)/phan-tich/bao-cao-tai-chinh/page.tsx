@@ -60,19 +60,13 @@ function pctChange(current: number, previous: number): string {
 }
 
 function describeCogsBasis(basis?: CogsCostBasis): string {
-  if (!basis || basis.mode === "estimated") {
-    return "Giá vốn đang ước tính theo giá vốn sản phẩm hiện tại cho dữ liệu lịch sử.";
+  if (!basis || !basis.complete) {
+    const missing =
+      (basis?.missingSalesCostLines ?? 0) +
+      (basis?.missingReturnCostLines ?? 0);
+    return `Chưa thể chốt giá vốn vì ${missing.toLocaleString("vi-VN")} dòng chưa có snapshot tại thời điểm bán/trả. Hệ thống không lấy giá hiện tại để ước tính.`;
   }
-  if (basis.mode === "mixed") {
-    return (
-      "Giá vốn gồm " +
-      basis.snapshotLines.toLocaleString("vi-VN") +
-      " dòng snapshot và " +
-      basis.estimatedLegacyLines.toLocaleString("vi-VN") +
-      " dòng lịch sử ước tính."
-    );
-  }
-  return "Giá vốn dùng snapshot tại thời điểm bán cho toàn bộ dòng dữ liệu.";
+  return `Giá vốn dùng snapshot tại thời điểm bán/trả cho đủ ${basis.snapshotLines.toLocaleString("vi-VN")} dòng.`;
 }
 
 function buildSalesReturnReconciliationSheet(
@@ -97,9 +91,9 @@ function buildSalesReturnReconciliationSheet(
       { metric: "Phiếu trả đã xác nhận", documents: reconciliation.returnCount },
       { metric: "Giá trị hàng trả", amount: reconciliation.returnedTotal },
       { metric: "Doanh thu thuần hàng hóa", amount: goodsSales - reconciliation.returnedTotal },
-      { metric: "Giá vốn trước hoàn nhập", amount: reconciliation.salesCogs },
-      { metric: "Hoàn nhập giá vốn do trả hàng", amount: reconciliation.returnedCogs },
-      { metric: "Giá vốn thuần", amount: reconciliation.salesCogs - reconciliation.returnedCogs },
+      { metric: "Giá vốn trước hoàn nhập", amount: reconciliation.cogsComplete ? reconciliation.salesCogs : null },
+      { metric: "Hoàn nhập giá vốn do trả hàng", amount: reconciliation.cogsComplete ? reconciliation.returnedCogs : null },
+      { metric: "Giá vốn thuần", amount: reconciliation.cogsComplete ? reconciliation.salesCogs - reconciliation.returnedCogs : null },
     ],
   };
 }
@@ -279,6 +273,8 @@ export default function BaoCaoTaiChinhPage() {
   const useConsolidated = ceoView && branchId === "all" && !!consolidated;
   const cur = useConsolidated ? consolidated.current : pnl?.current;
   const prev = useConsolidated ? consolidated.previous : pnl?.previous;
+  const currentCogsComplete = cur?.cogsComplete !== false;
+  const previousCogsComplete = prev?.cogsComplete !== false;
 
   // Export view — 1 sheet P&L summary
   async function handleExportView() {
@@ -317,21 +313,21 @@ export default function BaoCaoTaiChinhPage() {
             { label: "Doanh thu hàng hóa", current: cur.goodsRevenue, previous: prev.goodsRevenue },
             { label: "Phí giao hàng thu hộ", current: cur.deliveryFee, previous: prev.deliveryFee },
             { label: "= Tổng doanh thu", current: cur.revenue, previous: prev.revenue },
-            { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
+            { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogsComplete ? cur.cogs : null, previous: prev.cogsComplete ? prev.cogs : null },
             {
               label: "= Lãi gộp",
-              current: cur.grossProfit,
-              currentRate: cur.grossMargin,
-              previous: prev.grossProfit,
-              previousRate: prev.grossMargin,
+              current: cur.cogsComplete ? cur.grossProfit : null,
+              currentRate: cur.cogsComplete ? cur.grossMargin : null,
+              previous: prev.cogsComplete ? prev.grossProfit : null,
+              previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
             { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
             {
               label: "= Kết quả vận hành",
-              current: cur.netProfit,
-              currentRate: cur.netMargin,
-              previous: prev.netProfit,
-              previousRate: prev.netMargin,
+              current: cur.cogsComplete ? cur.netProfit : null,
+              currentRate: cur.cogsComplete ? cur.netMargin : null,
+              previous: prev.cogsComplete ? prev.netProfit : null,
+              previousRate: prev.cogsComplete ? prev.netMargin : null,
             },
           ],
         },
@@ -415,21 +411,21 @@ export default function BaoCaoTaiChinhPage() {
             { label: "Doanh thu hàng hóa", current: cur.goodsRevenue, previous: prev.goodsRevenue },
             { label: "Phí giao hàng thu hộ", current: cur.deliveryFee, previous: prev.deliveryFee },
             { label: "= Tổng doanh thu", current: cur.revenue, previous: prev.revenue },
-            { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogs, previous: prev.cogs },
+            { label: "(-) Giá vốn hàng bán (COGS)", current: cur.cogsComplete ? cur.cogs : null, previous: prev.cogsComplete ? prev.cogs : null },
             {
               label: "= Lãi gộp",
-              current: cur.grossProfit,
-              currentRate: cur.grossMargin,
-              previous: prev.grossProfit,
-              previousRate: prev.grossMargin,
+              current: cur.cogsComplete ? cur.grossProfit : null,
+              currentRate: cur.cogsComplete ? cur.grossMargin : null,
+              previous: prev.cogsComplete ? prev.grossProfit : null,
+              previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
             { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
             {
               label: "= Kết quả vận hành",
-              current: cur.netProfit,
-              currentRate: cur.netMargin,
-              previous: prev.netProfit,
-              previousRate: prev.netMargin,
+              current: cur.cogsComplete ? cur.netProfit : null,
+              currentRate: cur.cogsComplete ? cur.netMargin : null,
+              previous: prev.cogsComplete ? prev.netProfit : null,
+              previousRate: prev.cogsComplete ? prev.netMargin : null,
             },
           ],
         },
@@ -457,11 +453,11 @@ export default function BaoCaoTaiChinhPage() {
                   ? "Kho"
                   : "Quán",
             revenue: branch.revenue,
-            cogs: branch.cogs,
-            grossProfit: branch.grossProfit,
-            grossMargin: branch.grossMargin,
+            cogs: branch.cogsComplete ? branch.cogs : null,
+            grossProfit: branch.cogsComplete ? branch.grossProfit : null,
+            grossMargin: branch.cogsComplete ? branch.grossMargin : null,
             opEx: branch.opEx,
-            operatingResult: branch.netProfit,
+            operatingResult: branch.cogsComplete ? branch.netProfit : null,
           })),
         });
       }
@@ -481,9 +477,9 @@ export default function BaoCaoTaiChinhPage() {
             index: index + 1,
             product: item.productName,
             quantity: item.qtySold,
-            unitCost: item.costPrice,
-            totalCost: item.totalCost,
-            share: item.pctOfCogs,
+            unitCost: item.costComplete ? item.costPrice : null,
+            totalCost: item.costComplete ? item.totalCost : null,
+            share: item.costComplete ? item.pctOfCogs : null,
           })),
         });
       }
@@ -501,9 +497,9 @@ export default function BaoCaoTaiChinhPage() {
           rows: exportMarginTrend.map((item) => ({
             period: item.month,
             revenue: item.revenue,
-            cogs: item.cogs,
-            grossProfit: item.revenue - item.cogs,
-            grossMargin: item.grossMargin,
+            cogs: item.cogsComplete ? item.cogs : null,
+            grossProfit: item.cogsComplete ? item.revenue - item.cogs : null,
+            grossMargin: item.cogsComplete ? item.grossMargin : null,
           })),
         });
       }
@@ -516,10 +512,10 @@ export default function BaoCaoTaiChinhPage() {
           { label: "Đơn vị", key: "unit", width: 18 },
         ],
         rows: [
-          { metric: "Vòng quay tồn kho", value: exportTurnover.turnoverRatio ?? 0, unit: "lần/kỳ" },
-          { metric: "Số ngày bán hết trung bình", value: exportTurnover.avgDaysToSell ?? 0, unit: "ngày" },
-          { metric: "Giá vốn bán trong kỳ", value: exportTurnover.totalCogsPeriod ?? 0, unit: "VND" },
-          { metric: "Giá trị tồn kho trung bình", value: exportTurnover.avgInventoryValue ?? 0, unit: "VND" },
+          { metric: "Vòng quay tồn kho", value: exportTurnover.valuationComplete ? exportTurnover.turnoverRatio : null, unit: "lần/kỳ" },
+          { metric: "Số ngày bán hết trung bình", value: exportTurnover.valuationComplete ? exportTurnover.avgDaysToSell : null, unit: "ngày" },
+          { metric: "Giá vốn bán trong kỳ", value: exportTurnover.valuationComplete ? exportTurnover.totalCogsPeriod : null, unit: "VND" },
+          { metric: "Giá trị tồn kho trung bình", value: exportTurnover.valuationComplete ? exportTurnover.avgInventoryValue : null, unit: "VND" },
           { metric: "Số ngày thu tiền trung bình (DSO)", value: exportDso.dso ?? 0, unit: "ngày" },
           { metric: "Tổng phải thu hiện tại", value: exportDso.totalReceivables ?? 0, unit: "VND" },
           { metric: "Doanh thu trung bình/ngày", value: Math.round(exportDso.avgDailyRevenue ?? 0), unit: "VND" },
@@ -634,6 +630,16 @@ export default function BaoCaoTaiChinhPage() {
           </div>
         )}
 
+        {useConsolidated && cur && !currentCogsComplete && (
+          <div className="border-l-2 border-status-warning bg-status-warning/5 px-3 py-2 flex items-start gap-2">
+            <Icon name="warning" size={18} className="text-status-warning shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              <strong className="text-foreground">Chưa thể chốt lợi nhuận hợp nhất:</strong>{" "}
+              thiếu {formatNumber(cur.missingCostLines)} dòng snapshot giá vốn. Hệ thống không dùng giá sản phẩm hiện tại để ước tính lịch sử.
+            </p>
+          </div>
+        )}
+
         {!useConsolidated && pnl && (
           <div className="border-l-2 border-status-warning bg-status-warning/5 px-3 py-2 flex items-start gap-2">
             <Icon
@@ -690,19 +696,25 @@ export default function BaoCaoTaiChinhPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Giá vốn bán</p>
                   <p className="mt-1 text-sm font-semibold">
-                    {formatCurrency(reconciliation.salesCogs)}
+                    {reconciliation.cogsComplete
+                      ? formatCurrency(reconciliation.salesCogs)
+                      : "Chưa đủ dữ liệu"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Hoàn nhập do trả</p>
                   <p className="mt-1 text-sm font-semibold text-status-success">
-                    −{formatCurrency(reconciliation.returnedCogs)}
+                    {reconciliation.cogsComplete
+                      ? `−${formatCurrency(reconciliation.returnedCogs)}`
+                      : "Chưa đủ dữ liệu"}
                   </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Giá vốn thuần</p>
                   <p className="mt-1 text-sm font-semibold text-status-warning">
-                    {formatCurrency(reconciliation.salesCogs - reconciliation.returnedCogs)}
+                    {reconciliation.cogsComplete
+                      ? formatCurrency(reconciliation.salesCogs - reconciliation.returnedCogs)
+                      : "Chưa thể chốt"}
                   </p>
                 </div>
               </div>
@@ -769,10 +781,10 @@ export default function BaoCaoTaiChinhPage() {
                           {formatCurrency(b.revenue)}
                         </td>
                         <td className="py-3 pr-3 text-right text-status-warning">
-                          {formatCurrency(b.cogs)}
+                          {b.cogsComplete ? formatCurrency(b.cogs) : "Chưa đủ dữ liệu"}
                         </td>
                         <td className="py-3 pr-3 text-right font-medium text-status-success">
-                          {formatCurrency(b.grossProfit)}
+                          {b.cogsComplete ? formatCurrency(b.grossProfit) : "—"}
                         </td>
                         <td className="py-3 pr-3 text-right text-xs">
                           <span
@@ -784,7 +796,7 @@ export default function BaoCaoTaiChinhPage() {
                                   : "bg-status-error/10 text-status-error"
                             }`}
                           >
-                            {b.grossMargin}%
+                            {b.cogsComplete ? `${b.grossMargin}%` : "—"}
                           </span>
                         </td>
                         <td className="py-3 pr-3 text-right text-muted-foreground">
@@ -795,13 +807,14 @@ export default function BaoCaoTaiChinhPage() {
                             b.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
-                          {formatCurrency(b.netProfit)}
+                          {b.cogsComplete ? formatCurrency(b.netProfit) : "—"}
                         </td>
                       </tr>
                     );
                   })}
                   {/* Tổng cộng */}
                   {(() => {
+                    const allBranchesComplete = branchPnL.every((branch) => branch.cogsComplete);
                     const sum = branchPnL.reduce(
                       (acc, b) => ({
                         revenue: acc.revenue + b.revenue,
@@ -825,13 +838,13 @@ export default function BaoCaoTaiChinhPage() {
                           {formatCurrency(sum.revenue)}
                         </td>
                         <td className="py-3 pr-3 text-right text-status-warning">
-                          {formatCurrency(sum.cogs)}
+                          {allBranchesComplete ? formatCurrency(sum.cogs) : "Chưa đủ dữ liệu"}
                         </td>
                         <td className="py-3 pr-3 text-right text-status-success">
-                          {formatCurrency(sum.grossProfit)}
+                          {allBranchesComplete ? formatCurrency(sum.grossProfit) : "—"}
                         </td>
                         <td className="py-3 pr-3 text-right text-xs">
-                          {totalMargin}%
+                          {allBranchesComplete ? `${totalMargin}%` : "—"}
                         </td>
                         <td className="py-3 pr-3 text-right text-muted-foreground">
                           {formatCurrency(sum.opEx)}
@@ -841,7 +854,7 @@ export default function BaoCaoTaiChinhPage() {
                             sum.netProfit >= 0 ? "text-status-success" : "text-status-error"
                           }`}
                         >
-                          {formatCurrency(sum.netProfit)}
+                          {allBranchesComplete ? formatCurrency(sum.netProfit) : "—"}
                         </td>
                       </tr>
                     );
@@ -876,13 +889,15 @@ export default function BaoCaoTaiChinhPage() {
           />
           <KpiCard
             label="Giá vốn hàng bán"
-            value={cur ? formatCurrency(cur.cogs) : "—"}
+            value={cur && currentCogsComplete ? formatCurrency(cur.cogs) : "Chưa đủ dữ liệu"}
             change={
-              cur && prev
+              cur && prev && currentCogsComplete && previousCogsComplete
                 ? `${pctChange(cur.cogs, prev.cogs)} so với kỳ trước`
-                : ""
+                : cur && !currentCogsComplete
+                  ? `Thiếu ${formatNumber(cur.missingCostLines)} dòng giá vốn`
+                  : ""
             }
-            positive={cur && prev ? cur.cogs <= prev.cogs : true}
+            positive={cur && prev && currentCogsComplete && previousCogsComplete ? cur.cogs <= prev.cogs : true}
             icon="trending_down"
             bg="bg-status-warning/10"
             iconColor="text-status-warning"
@@ -890,9 +905,9 @@ export default function BaoCaoTaiChinhPage() {
           />
           <KpiCard
             label="Kết quả vận hành"
-            value={cur ? formatCurrency(cur.netProfit) : "—"}
+            value={cur && currentCogsComplete ? formatCurrency(cur.netProfit) : "Chưa thể chốt"}
             change={
-              cur && prev
+              cur && prev && currentCogsComplete && previousCogsComplete
                 ? `${pctChange(cur.netProfit, prev.netProfit)} so với kỳ trước`
                 : ""
             }
@@ -904,9 +919,9 @@ export default function BaoCaoTaiChinhPage() {
           />
           <KpiCard
             label="Biên lợi nhuận gộp"
-            value={cur ? `${cur.grossMargin}%` : "—"}
+            value={cur && currentCogsComplete ? `${cur.grossMargin}%` : "Chưa thể chốt"}
             change={
-              cur && prev
+              cur && prev && currentCogsComplete && previousCogsComplete
                 ? `${pctChange(cur.grossMargin, prev.grossMargin)} so với kỳ trước`
                 : ""
             }
@@ -964,6 +979,7 @@ export default function BaoCaoTaiChinhPage() {
                     cur: cur?.cogs ?? 0,
                     prev: prev?.cogs ?? 0,
                     negative: true,
+                    dependsOnCogs: true,
                   },
                   {
                     label: "= Lãi gộp",
@@ -971,12 +987,14 @@ export default function BaoCaoTaiChinhPage() {
                     prev: prev?.grossProfit ?? 0,
                     bold: true,
                     color: "text-status-success",
+                    dependsOnCogs: true,
                   },
                   {
                     label: "   Biên LN gộp (%)",
                     cur: cur?.grossMargin ?? 0,
                     prev: prev?.grossMargin ?? 0,
                     isPercent: true,
+                    dependsOnCogs: true,
                   },
                   {
                     label: "(-) Chi phí vận hành",
@@ -991,17 +1009,23 @@ export default function BaoCaoTaiChinhPage() {
                     bold: true,
                     color: "text-status-success",
                     highlight: true,
+                    dependsOnCogs: true,
                   },
                   {
                     label: "   Biên KQ vận hành (%)",
                     cur: cur?.netMargin ?? 0,
                     prev: prev?.netMargin ?? 0,
                     isPercent: true,
+                    dependsOnCogs: true,
                   },
                 ].map((row) => {
-                  const change = row.isPercent
-                    ? `${(row.cur - row.prev).toFixed(1)}pp`
-                    : pctChange(row.cur, row.prev);
+                  const currentAvailable = !row.dependsOnCogs || currentCogsComplete;
+                  const previousAvailable = !row.dependsOnCogs || previousCogsComplete;
+                  const change = currentAvailable && previousAvailable
+                    ? row.isPercent
+                      ? `${(row.cur - row.prev).toFixed(1)}pp`
+                      : pctChange(row.cur, row.prev)
+                    : "—";
                   const isPositiveChange = row.negative
                     ? row.cur <= row.prev
                     : row.cur >= row.prev;
@@ -1017,14 +1041,18 @@ export default function BaoCaoTaiChinhPage() {
                         {row.label}
                       </td>
                       <td className="py-3 pr-4 text-right font-medium">
-                        {row.isPercent
-                          ? `${row.cur}%`
-                          : formatCurrency(row.cur)}
+                        {!currentAvailable
+                          ? "Chưa đủ dữ liệu"
+                          : row.isPercent
+                            ? `${row.cur}%`
+                            : formatCurrency(row.cur)}
                       </td>
                       <td className="py-3 pr-4 text-right text-muted-foreground">
-                        {row.isPercent
-                          ? `${row.prev}%`
-                          : formatCurrency(row.prev)}
+                        {!previousAvailable
+                          ? "Chưa đủ dữ liệu"
+                          : row.isPercent
+                            ? `${row.prev}%`
+                            : formatCurrency(row.prev)}
                       </td>
                       <td
                         className={`py-3 text-right text-xs font-medium ${isPositiveChange ? "text-status-success" : "text-status-error"}`}
@@ -1163,8 +1191,12 @@ export default function BaoCaoTaiChinhPage() {
                       <tr key={item.month} className="border-b last:border-0">
                         <td className="py-2">{item.month}</td>
                         <td className="py-2 text-right tabular-nums">{formatCurrency(item.revenue)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatCurrency(item.cogs)}</td>
-                        <td className="py-2 text-right tabular-nums">{formatNumber(item.grossMargin)}%</td>
+                        <td className="py-2 text-right tabular-nums">
+                          {item.cogsComplete ? formatCurrency(item.cogs) : "Chưa đủ dữ liệu"}
+                        </td>
+                        <td className="py-2 text-right tabular-nums">
+                          {item.cogsComplete ? `${formatNumber(item.grossMargin)}%` : "—"}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1180,7 +1212,7 @@ export default function BaoCaoTaiChinhPage() {
             title="Top sản phẩm theo giá vốn"
             subtitle={selectedPeriodLabel}
           >
-            {cogsItems.length === 0 ? (
+            {cogsItems.filter((item) => item.costComplete).length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">
                 Chưa có dữ liệu giá vốn.
               </p>
@@ -1194,7 +1226,7 @@ export default function BaoCaoTaiChinhPage() {
                   initialDimension={{ width: 320, height: 224 }}
                 >
                   <BarChart
-                    data={cogsItems.slice(0, 7)}
+                    data={cogsItems.filter((item) => item.costComplete).slice(0, 7)}
                     layout="vertical"
                     margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                   >
@@ -1223,7 +1255,7 @@ export default function BaoCaoTaiChinhPage() {
                       radius={[0, 6, 6, 0]}
                       name="Giá vốn"
                     >
-                      {cogsItems.slice(0, 7).map((_, index) => (
+                      {cogsItems.filter((item) => item.costComplete).slice(0, 7).map((_, index) => (
                         <Cell
                           key={`cell-${index}`}
                           fill={
@@ -1256,7 +1288,7 @@ export default function BaoCaoTaiChinhPage() {
                   <span className="text-xs">Vòng quay</span>
                 </div>
                 <p className="text-3xl font-bold text-primary">
-                  {turnover?.turnoverRatio ?? 0}
+                  {turnover?.valuationComplete ? turnover.turnoverRatio : "—"}
                 </p>
                 <p className="text-xs text-muted-foreground">lần/kỳ</p>
               </div>
@@ -1266,7 +1298,7 @@ export default function BaoCaoTaiChinhPage() {
                   <span className="text-xs">Trung bình ngày bán hết</span>
                 </div>
                 <p className="text-3xl font-bold text-status-warning">
-                  {turnover?.avgDaysToSell ?? 0}
+                  {turnover?.valuationComplete ? turnover.avgDaysToSell : "—"}
                 </p>
                 <p className="text-xs text-muted-foreground">ngày</p>
               </div>
@@ -1277,7 +1309,9 @@ export default function BaoCaoTaiChinhPage() {
                   Giá vốn bán trong kỳ
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(turnover?.totalCogsPeriod ?? 0)}
+                  {turnover?.valuationComplete
+                    ? formatCurrency(turnover.totalCogsPeriod)
+                    : "Chưa đủ dữ liệu"}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
@@ -1285,7 +1319,9 @@ export default function BaoCaoTaiChinhPage() {
                   Giá trị tồn kho TB
                 </span>
                 <span className="font-medium">
-                  {formatCurrency(turnover?.avgInventoryValue ?? 0)}
+                  {turnover?.valuationComplete
+                    ? formatCurrency(turnover.avgInventoryValue)
+                    : "Chưa đủ dữ liệu"}
                 </span>
               </div>
             </div>
@@ -1389,14 +1425,16 @@ export default function BaoCaoTaiChinhPage() {
                         {formatNumber(item.qtySold)}
                       </td>
                       <td className="py-3 pr-4 text-right">
-                        {formatCurrency(item.costPrice)}
+                        {item.costComplete ? formatCurrency(item.costPrice) : "—"}
                       </td>
                       <td className="py-3 pr-4 text-right font-medium text-status-warning">
-                        {formatCurrency(item.totalCost)}
+                        {item.costComplete
+                          ? formatCurrency(item.totalCost)
+                          : `Thiếu ${formatNumber(item.missingCostLines)} dòng`}
                       </td>
                       <td className="py-3 text-right">
                         <span className="inline-block bg-status-warning/10 text-status-warning px-2 py-0.5 rounded text-xs font-medium">
-                          {item.pctOfCogs}%
+                          {item.costComplete ? `${item.pctOfCogs}%` : "—"}
                         </span>
                       </td>
                     </tr>

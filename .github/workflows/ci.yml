@@ -69,6 +69,16 @@ jobs:
           createdb return_identity_test
           PGDATABASE=return_identity_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00405_return_item_source_identity.integration.sql
 
+      - name: Verify snapshot-only profit and loss in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb profit_loss_test
+          PGDATABASE=profit_loss_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00406_profit_loss_snapshot_cogs.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
