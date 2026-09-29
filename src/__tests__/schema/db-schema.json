@@ -1101,6 +1101,7 @@
   ],
   "return_items": [
    "id",
+   "invoice_item_id",
    "product_id",
    "product_name",
    "quantity",
