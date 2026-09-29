@@ -29,6 +29,14 @@ const refundMigration = readFileSync(
   "supabase/migrations/00393_report_sales_refunds_not_operating_expense.sql",
   "utf8",
 );
+const snapshotPnlRefundMigration = readFileSync(
+  "supabase/migrations/00407_exclude_ascii_sales_return_refunds_from_pnl.sql",
+  "utf8",
+);
+const xntValuationGuardMigration = readFileSync(
+  "supabase/migrations/00408_flag_inconsistent_xnt_valuation.sql",
+  "utf8",
+);
 const returnWriter = readFileSync(
   "supabase/migrations/00381_allow_customer_credit_on_sales_return.sql",
   "utf8",
@@ -141,6 +149,32 @@ describe("finance dashboard consistency", () => {
     expect(refundMigration).toContain("'get_finance_dashboard_report'");
     expect(refundMigration).toContain("execute replace(v_definition, '''Trả hàng''', '''Trả hàng'', ''Tra hang''')");
     expect(refundMigration).not.toMatch(/\b(?:insert|update|delete)\s+(?:into|public\.)/i);
+  });
+
+  it("keeps the snapshot P&L v2 compatible with the return writer's ASCII category", () => {
+    expect(snapshotPnlRefundMigration).toContain("get_profit_and_loss_report_v2");
+    expect(snapshotPnlRefundMigration).toContain(
+      "execute replace(v_definition, '''Trả hàng''', '''Trả hàng'', ''Tra hang''')",
+    );
+    expect(snapshotPnlRefundMigration).not.toMatch(
+      /\b(?:insert|update|delete)\s+(?:into|public\.)/i,
+    );
+  });
+
+  it("hides XNT value totals when zero stock retains an inconsistent valuation", () => {
+    expect(xntValuationGuardMigration).toContain(
+      "quantity_row.closing_qty >= -0.0001",
+    );
+    expect(xntValuationGuardMigration).toContain("or abs(");
+    expect(xntValuationGuardMigration).toContain(
+      "coalesce(valued_row.opening_value_raw, 0)",
+    );
+    expect(xntValuationGuardMigration).toContain(
+      "execute regexp_replace(v_definition, v_pattern, v_replacement, 'g')",
+    );
+    expect(xntValuationGuardMigration).not.toMatch(
+      /\b(?:insert|update|delete)\s+(?:into|public\.)/i,
+    );
   });
 
   it("uses return-adjusted daily rows for the overview KPI drilldown", () => {
