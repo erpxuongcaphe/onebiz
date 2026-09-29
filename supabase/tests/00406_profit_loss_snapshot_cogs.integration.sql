@@ -124,6 +124,22 @@ insert into public.sales_returns(
   'completed', 30, '2026-09-14'
 );
 
+insert into public.cash_transactions(
+  id, tenant_id, branch_id, type, status, category, amount, created_at
+) values
+  ('90000000-0000-0000-0000-000000000001',
+   '20000000-0000-0000-0000-000000000001',
+   '40000000-0000-0000-0000-000000000001',
+   'payment', 'completed', 'Tra hang', 300, '2026-09-15'),
+  ('90000000-0000-0000-0000-000000000002',
+   '20000000-0000-0000-0000-000000000001',
+   '40000000-0000-0000-0000-000000000001',
+   'payment', 'completed', 'Trả hàng', 200, '2026-09-15'),
+  ('90000000-0000-0000-0000-000000000003',
+   '20000000-0000-0000-0000-000000000001',
+   '40000000-0000-0000-0000-000000000001',
+   'payment', 'completed', 'Điện nước', 700, '2026-09-15');
+
 -- Legacy row: same product appears twice, but name + price uniquely identifies Size L.
 insert into public.return_items(
   id, return_id, invoice_item_id, product_id, product_name, quantity, unit_price
@@ -135,6 +151,8 @@ insert into public.return_items(
 );
 
 \ir ../migrations/00406_profit_loss_snapshot_cogs.sql
+\ir ../migrations/00407_exclude_ascii_sales_return_refunds_from_pnl.sql
+\ir ../migrations/00407_exclude_ascii_sales_return_refunds_from_pnl.sql
 
 do $$
 declare
@@ -159,6 +177,7 @@ begin
   v_current := v_report->'current';
 
   if (v_current->>'revenue')::numeric <> 120
+     or (v_current->>'operating_expense')::numeric <> 700
      or (v_current->>'sales_cogs')::numeric <> 25
      or (v_current->>'returned_cogs')::numeric <> 12
      or (v_current->>'missing_sales_cost_lines')::integer <> 1
@@ -192,6 +211,9 @@ begin
      or (v_current->>'cogs')::numeric <> 20
      or (v_current->>'gross_profit')::numeric <> 100 then
     raise exception 'branch P&L mismatch: %', v_current;
+  end if;
+  if (v_current->>'operating_expense')::numeric <> 700 then
+    raise exception 'branch P&L counted sales-return refunds as expenses: %', v_current;
   end if;
 
   v_current := public.get_financial_analysis_details_report_v2(
