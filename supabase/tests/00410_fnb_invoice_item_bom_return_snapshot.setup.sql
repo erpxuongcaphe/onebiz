@@ -63,7 +63,7 @@ returns void language plpgsql as $$ begin return; end; $$;
 create function public.upsert_branch_stock(uuid, uuid, uuid, numeric)
 returns void language plpgsql as $$ begin return; end; $$;
 create function public.restore_bom_for_return(uuid, uuid, uuid, numeric, uuid, uuid, text, uuid)
-returns jsonb language sql as $$ select '{"success":true,"bom_found":true}'::jsonb; $$;
+returns jsonb language sql as $$ select '{"success":true,"bom_found":true,"legacy_restore_called":true}'::jsonb; $$;
 create function public.consume_bom_for_sale(uuid, uuid, uuid, numeric, uuid, uuid, text, jsonb, boolean, uuid)
 returns jsonb language sql as $$ select '{"success":true,"bom_id":"00000000-0000-0000-0000-000000000001","consumed":[]}'::jsonb; $$;
 
@@ -134,4 +134,3 @@ begin
   return '{}'::jsonb;
 end;
 $function$;
-
