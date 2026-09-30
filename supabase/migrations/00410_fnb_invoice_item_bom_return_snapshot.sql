@@ -274,30 +274,20 @@ declare
   );
   v_payment_definition text;
   v_return_definition text;
-  v_old_invoice_item_insert constant text := $old_insert$
-    insert into public.invoice_items (
-      invoice_id, product_id, product_name, unit,
-      quantity, unit_price, discount, vat_rate, vat_amount, total
-    ) values (
-      v_invoice_id, r.product_id,
-      case when r.variant_label is not null and r.variant_label <> ''
-           then r.product_name || ' (' || r.variant_label || ')'
-           else r.product_name end,
-      'Cái', r.quantity, r.unit_price, 0, v_vat_rate, v_vat_amt, v_line_before_tax
-    );
-$old_insert$;
-  v_new_invoice_item_insert constant text := $new_insert$
-    insert into public.invoice_items (
-      invoice_id, product_id, product_name, unit,
-      quantity, unit_price, discount, vat_rate, vat_amount, total
-    ) values (
-      v_invoice_id, r.product_id,
-      case when r.variant_label is not null and r.variant_label <> ''
-           then r.product_name || ' (' || r.variant_label || ')'
-           else r.product_name end,
-      'Cái', r.quantity, r.unit_price, 0, v_vat_rate, v_vat_amt, v_line_before_tax
-    ) returning id into v_invoice_item_id;
-$new_insert$;
+  v_invoice_item_insert_pattern constant text := $insert_pattern$(?isx)
+    (insert\s+into\s+public\.invoice_items\s*\(
+      \s*invoice_id\s*,\s*product_id\s*,\s*product_name\s*,\s*unit\s*,
+      \s*quantity\s*,\s*unit_price\s*,\s*discount\s*,\s*vat_rate\s*,
+      \s*vat_amount\s*,\s*total\s*
+    \)\s*values\s*\(
+      \s*v_invoice_id\s*,\s*r\.product_id\s*,
+      \s*case\s+when\s+r\.variant_label\s+is\s+not\s+null\s+and\s+r\.variant_label\s*<>\s*''\s*
+      then\s+r\.product_name\s*\|\|\s*'\s*\('\s*\|\|\s*r\.variant_label\s*\|\|\s*'\s*\)'\s*
+      else\s+r\.product_name\s+end\s*,
+      \s*'Cái'\s*,\s*r\.quantity\s*,\s*r\.unit_price\s*,\s*0\s*,
+      \s*v_vat_rate\s*,\s*v_vat_amt\s*,\s*v_line_before_tax\s*
+    \))\s*;
+$insert_pattern$;
   v_new_return_call constant text := $new_return$
       v_restore_result := public._restore_fnb_invoice_item_bom_00410(
         v_invoice_item_id, v_tenant_id, v_invoice.branch_id, v_line.product_id, v_qty,
@@ -312,6 +302,7 @@ $new_insert$;
       end if;
 $new_return$;
   v_count integer;
+  v_invoice_item_insert_count integer;
 begin
   if v_payment_oid is null or v_return_oid is null then
     raise exception using errcode = 'P0001', message = 'FNB_00410_PATCH_TARGET_MISSING';
@@ -333,11 +324,18 @@ begin
   end if;
 
   if position('returning id into v_invoice_item_id' in v_payment_definition) = 0 then
-    if position(v_old_invoice_item_insert in v_payment_definition) = 0 then
-      raise exception using errcode = 'P0001', message = 'FNB_00410_PAYMENT_INVOICE_ITEM_SHAPE_CHANGED';
+    select count(*)::integer into v_invoice_item_insert_count
+      from regexp_matches(v_payment_definition, v_invoice_item_insert_pattern, 'g');
+    if v_invoice_item_insert_count <> 1 then
+      raise exception using errcode = 'P0001',
+        message = 'FNB_00410_PAYMENT_INVOICE_ITEM_SHAPE_CHANGED',
+        detail = v_invoice_item_insert_count::text;
     end if;
-    v_payment_definition := replace(
-      v_payment_definition, v_old_invoice_item_insert, v_new_invoice_item_insert
+    v_payment_definition := regexp_replace(
+      v_payment_definition,
+      v_invoice_item_insert_pattern,
+      E'\\1 returning id into v_invoice_item_id;',
+      'g'
     );
   end if;
 

@@ -28,7 +28,8 @@ begin
   ) into v_return_definition;
   if v_payment_definition not like '%_capture_fnb_invoice_item_bom_snapshot_00410%'
      or v_return_definition not like '%_restore_fnb_invoice_item_bom_00410%'
-     or v_return_definition not like '%FNB_RETURN_LEGACY_BOM_FALLBACK%' then
+     or v_return_definition not like '%FNB_RETURN_LEGACY_BOM_FALLBACK%'
+     or v_payment_definition not like '%returning id into v_invoice_item_id%' then
     raise exception '00410 RPC patch verification failed';
   end if;
 
