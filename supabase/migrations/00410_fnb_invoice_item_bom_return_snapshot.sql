@@ -22,7 +22,7 @@ begin
 end;
 $preflight$;
 
-create table public.fnb_invoice_item_bom_snapshots_00410 (
+create table if not exists public.fnb_invoice_item_bom_snapshots_00410 (
   invoice_item_id uuid primary key references public.invoice_items(id) on delete restrict,
   invoice_id uuid not null references public.invoices(id) on delete restrict,
   tenant_id uuid not null,
@@ -30,7 +30,7 @@ create table public.fnb_invoice_item_bom_snapshots_00410 (
   created_at timestamptz not null default now()
 );
 
-create table public.fnb_invoice_item_bom_snapshot_components_00410 (
+create table if not exists public.fnb_invoice_item_bom_snapshot_components_00410 (
   id bigint generated always as identity primary key,
   invoice_item_id uuid not null references public.fnb_invoice_item_bom_snapshots_00410(invoice_item_id) on delete restrict,
   material_id uuid not null references public.products(id) on delete restrict,
@@ -39,13 +39,13 @@ create table public.fnb_invoice_item_bom_snapshot_components_00410 (
   created_at timestamptz not null default now()
 );
 
-create index fnb_invoice_item_bom_components_lookup_00410
+create index if not exists fnb_invoice_item_bom_components_lookup_00410
   on public.fnb_invoice_item_bom_snapshot_components_00410(invoice_item_id, material_id);
 
 alter table public.fnb_invoice_item_bom_snapshots_00410 enable row level security;
 alter table public.fnb_invoice_item_bom_snapshot_components_00410 enable row level security;
 
-create function public._capture_fnb_invoice_item_bom_snapshot_00410(
+create or replace function public._capture_fnb_invoice_item_bom_snapshot_00410(
   p_invoice_item_id uuid,
   p_invoice_id uuid,
   p_consumption jsonb
@@ -123,7 +123,7 @@ begin
 end;
 $function$;
 
-create function public._restore_fnb_invoice_item_bom_00410(
+create or replace function public._restore_fnb_invoice_item_bom_00410(
   p_invoice_item_id uuid,
   p_tenant_id uuid,
   p_branch_id uuid,
