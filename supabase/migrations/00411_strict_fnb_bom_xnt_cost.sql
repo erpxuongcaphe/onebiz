@@ -35,7 +35,7 @@ begin
 
   if v_definition not like '%internal_sale_cost.total_cost%'
      or v_definition not like '%public._fnb_branch_cost_tracking_enabled_00390%' then
-    raise exception '00411: unexpected XNT function version; apply after 00409';
+    raise exception '00411: unexpected XNT function version; apply after 00409 and 00410';
   end if;
 
   select count(*)::integer

@@ -49,6 +49,19 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00400_fnb_inventory_adjustment_transfer_cost.integration.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/00401_validate_fnb_branch_cost_event_source_type.integration.sql
 
+      - name: Verify invoice-line BOM return snapshots in a disposable database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_return_snapshot_test
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00410_fnb_invoice_item_bom_return_snapshot.setup.sql
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00410_fnb_invoice_item_bom_return_snapshot.sql
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00410_fnb_invoice_item_bom_return_snapshot.sql
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00410_fnb_invoice_item_bom_return_snapshot.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
@@ -114,3 +127,4 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
+
