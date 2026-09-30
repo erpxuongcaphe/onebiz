@@ -183,7 +183,8 @@ declare
   v_line_before_tax numeric;
   r record;
 begin
-    insert into public.invoice_items (
+    insert
+      into public.invoice_items (
       invoice_id, product_id, product_name, unit,
       quantity, unit_price, discount, vat_rate, vat_amount, total
     ) values (
