@@ -19,6 +19,10 @@ describe("F&B return uses the source invoice-line BOM snapshot", () => {
     expect(sql).toContain("_capture_fnb_invoice_item_bom_snapshot_00410");
     expect(sql).toContain("FNB_00410_PAYMENT_CONSUME_CALL_COUNT_CHANGED");
     expect(sql).toContain("FNB_00410_PAYMENT_INVOICE_ITEM_SHAPE_CHANGED");
+    expect(sql).toContain("v_invoice_item_insert_pattern");
+    expect(sql).toContain("regexp_matches(v_payment_definition, v_invoice_item_insert_pattern, 'g')");
+    expect(sql).toContain("E'\\\\1 returning id into v_invoice_item_id;'");
+    expect(sql).not.toContain("v_old_invoice_item_insert");
     expect(sql).toContain("v_invoice.source is distinct from 'fnb'");
     expect(sql).toContain("v_return.invoice_source is distinct from 'fnb'");
   });
