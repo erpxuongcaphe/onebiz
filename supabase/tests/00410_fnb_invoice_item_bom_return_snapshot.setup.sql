@@ -2,9 +2,12 @@
 -- Run only in fnb_return_snapshot_test, never an application database.
 \set ON_ERROR_STOP on
 
-create role anon nologin;
-create role authenticated nologin;
-create role service_role nologin;
+select 'create role anon nologin'
+ where not exists (select 1 from pg_roles where rolname = 'anon') \gexec
+select 'create role authenticated nologin'
+ where not exists (select 1 from pg_roles where rolname = 'authenticated') \gexec
+select 'create role service_role nologin'
+ where not exists (select 1 from pg_roles where rolname = 'service_role') \gexec
 
 create table public.products (id uuid primary key);
 create table public.invoices (
