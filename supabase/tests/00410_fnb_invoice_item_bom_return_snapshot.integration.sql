@@ -16,6 +16,9 @@ declare
   v_sku_id constant uuid := '40000000-0000-0000-0000-000000000001';
   v_material_id constant uuid := '40000000-0000-0000-0000-000000000002';
   v_total_restored numeric;
+  v_return_cost_quantity numeric;
+  v_return_cost_total numeric;
+  v_caught boolean;
 begin
   select pg_get_functiondef(
     'public._fnb_complete_payment_impl_00230(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric)'::regprocedure
@@ -47,6 +50,13 @@ begin
   ) values (
     '50000000-0000-0000-0000-000000000003', v_invoice_id, v_sku_id,
     'Thach Suong Sao Size L', 'ly', 2, 0, 0, 0, 0, 0
+  );
+  insert into public.fnb_branch_product_cost_events(
+    tenant_id, branch_id, product_id, direction, source_type,
+    source_reference_type, source_reference_id, quantity, unit_cost, total_cost
+  ) values (
+    v_tenant_id, v_branch_id, v_material_id, 'out', 'bom_consume',
+    'bom_consume', v_invoice_id, 14.5, 10, 145
   );
 
   v_consumption := jsonb_build_object(
@@ -96,6 +106,16 @@ begin
           where reference_type = 'return_bom_restore' and reference_id = v_return_id) is distinct from 5 then
     raise exception 'return used another same-SKU invoice line BOM snapshot: %', v_result;
   end if;
+  select sum(e.quantity), sum(e.total_cost)
+    into v_return_cost_quantity, v_return_cost_total
+    from public.fnb_branch_product_cost_events e
+   where e.direction = 'in' and e.source_type = 'return_bom_restore'
+     and e.source_reference_id = v_return_id;
+  if v_return_cost_quantity is distinct from 5
+     or v_return_cost_total is distinct from 50 then
+    raise exception 'same-SKU snapshot return did not restore original branch cost: qty %, cost %',
+      v_return_cost_quantity, v_return_cost_total;
+  end if;
 
   v_return_id := '60000000-0000-0000-0000-000000000001';
   insert into public.sales_returns(id, invoice_id, tenant_id, branch_id, status)
@@ -133,6 +153,19 @@ begin
      or v_total_restored is distinct from 4.5 then
     raise exception 'full partial-return sequence did not exactly restore source BOM quantity: %', v_total_restored;
   end if;
+  select sum(e.quantity), sum(e.total_cost)
+    into v_return_cost_quantity, v_return_cost_total
+    from public.fnb_branch_product_cost_events e
+   where e.direction = 'in' and e.source_type = 'return_bom_restore'
+     and e.source_reference_id in (
+       '60000000-0000-0000-0000-000000000001',
+       '60000000-0000-0000-0000-000000000002'
+     );
+  if v_return_cost_quantity is distinct from 4.5
+     or v_return_cost_total is distinct from 45 then
+    raise exception 'partial return cost events did not match original branch cost: qty %, cost %',
+      v_return_cost_quantity, v_return_cost_total;
+  end if;
 
   -- A repeated/over-quantity return must fail before adding another movement.
   v_return_id := '60000000-0000-0000-0000-000000000005';
@@ -156,6 +189,58 @@ begin
      where reference_type = 'return_bom_restore' and reference_id = v_return_id
   ) then
     raise exception 'duplicate return created a stock movement';
+  end if;
+
+  -- A tracked branch must fail closed if the original invoice has no cost event.
+  insert into public.invoices(id, tenant_id, branch_id, source)
+  values ('10000000-0000-0000-0000-000000000004', v_tenant_id, v_branch_id, 'fnb');
+  insert into public.invoice_items(
+    id, invoice_id, product_id, product_name, unit, quantity,
+    unit_price, discount, vat_rate, vat_amount, total
+  ) values (
+    '50000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000004', v_sku_id,
+    'FNB line without source cost', 'ly', 1, 0, 0, 0, 0, 0
+  );
+  perform public._capture_fnb_invoice_item_bom_snapshot_00410(
+    '50000000-0000-0000-0000-000000000005',
+    '10000000-0000-0000-0000-000000000004',
+    jsonb_build_object(
+      'success', true,
+      'bom_id', '00000000-0000-0000-0000-000000000003',
+      'consumed', jsonb_build_array(
+        jsonb_build_object('material_id', v_material_id, 'qty', 2, 'unit', 'G')
+      )
+    )
+  );
+  v_return_id := '60000000-0000-0000-0000-000000000007';
+  insert into public.sales_returns(id, invoice_id, tenant_id, branch_id, status)
+  values (v_return_id, '10000000-0000-0000-0000-000000000004', v_tenant_id, v_branch_id, 'completed');
+  insert into public.return_items(return_id, invoice_item_id, product_id, quantity)
+  values (v_return_id, '50000000-0000-0000-0000-000000000005', v_sku_id, 1);
+  v_caught := false;
+  begin
+    perform public._restore_fnb_invoice_item_bom_00410(
+      '50000000-0000-0000-0000-000000000005', v_tenant_id, v_branch_id, v_sku_id, 1,
+      v_return_id, null, 'RT-MISSING-COST', null
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'FNB_RETURN_COST_SOURCE_REQUIRED' then
+      raise;
+    end if;
+    v_caught := true;
+  end;
+  if not v_caught then
+    raise exception 'return without original F&B cost source should have failed';
+  end if;
+  if exists (
+    select 1 from public.stock_movements
+     where reference_type = 'return_bom_restore' and reference_id = v_return_id
+  ) or exists (
+    select 1 from public.fnb_branch_product_cost_events
+     where source_type = 'return_bom_restore' and source_reference_id = v_return_id
+  ) then
+    raise exception 'failed cost validation left a stock movement or cost event';
   end if;
 
   -- Old F&B invoices stay untouched and retain a clearly-labelled legacy path.
