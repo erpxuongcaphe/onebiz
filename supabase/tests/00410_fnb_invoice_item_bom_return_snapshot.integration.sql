@@ -122,6 +122,7 @@ begin
     v_invoice_item_id, v_tenant_id, v_branch_id, v_sku_id, 2,
     v_return_id, null, 'RT-2', null
   );
+  update public.invoice_items set returned_qty = 3 where id = v_invoice_item_id;
   select sum(quantity) into v_total_restored from public.stock_movements
    where reference_type = 'return_bom_restore'
      and reference_id in (
