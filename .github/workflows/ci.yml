@@ -58,6 +58,9 @@ jobs:
         run: |
           createdb xnt_valuation_test
           PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00404_historical_xnt_valuation.integration.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00411_strict_fnb_bom_xnt_cost.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00411_strict_fnb_bom_xnt_cost.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00411_strict_fnb_bom_xnt_cost.integration.sql
 
       - name: Verify sales-return source identity in an isolated database
         env:
@@ -111,3 +114,4 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key-for-ci-build
           SUPABASE_SERVICE_ROLE_KEY: placeholder-service-role-key-for-ci-build
+
