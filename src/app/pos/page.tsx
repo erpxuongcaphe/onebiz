@@ -114,6 +114,7 @@ import { ProductGrid } from "./components/product-grid";
 import { CustomerPicker } from "./components/customer-picker";
 import { ReceiverCustomerSelect } from "@/components/shared/receiver-customer-select";
 import { VariantPickerDialog } from "./components/variant-picker-dialog";
+import { isUnconfiguredDefaultVariant } from "./retail-variant-selection";
 import { ConfirmDialog } from "@/components/shared/dialogs";
 // PERF (CEO 23/05/2026): Lazy-load CreateCustomerDialog (534 dòng).
 // POS load nhanh hơn ~80KB initial.
@@ -1266,8 +1267,8 @@ function PosPageInner() {
       setVariantPickerLoading(true);
       try {
         const variants = await getVariantsByProduct(product.id);
-        if (variants.length === 0) {
-          // No variants → add base product directly
+        if (variants.length === 0 || isUnconfiguredDefaultVariant(product, variants)) {
+          // No sellable packaging choice: use the product's catalog/tier price.
           addLineWithTier(product, stockOpt);
           setTimeout(() => {
             // Dòng mới nằm TRÊN CÙNG → cuộn lên đầu (CEO 04/07)
