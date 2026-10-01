@@ -5,6 +5,30 @@ type StockMovementValueInput = Pick<
   "type" | "quantity" | "unitCost" | "unitPrice"
 >;
 
+type RecordedMovementCost = {
+  unit_cost: number | string;
+  quantity: number | string;
+};
+
+export function getRecordedMovementPrices(
+  movement: { type: string; unit_cost: number | null; unit_price: number | null },
+  costEvent?: RecordedMovementCost,
+): Pick<StockMovement, "unitCost" | "unitPrice"> {
+  const unitCost = costEvent && Number(costEvent.quantity) > 0
+    ? Number(costEvent.unit_cost)
+    : null;
+  if (unitCost != null && Number.isFinite(unitCost) && unitCost >= 0) {
+    return {
+      unitCost,
+      unitPrice: movement.type === "in" ? unitCost : undefined,
+    };
+  }
+  return {
+    unitCost: movement.unit_cost != null ? Number(movement.unit_cost) : undefined,
+    unitPrice: movement.unit_price != null ? Number(movement.unit_price) : undefined,
+  };
+}
+
 export function getSignedStockQuantity(
   movement: Pick<StockMovementValueInput, "type" | "quantity">,
 ): number {

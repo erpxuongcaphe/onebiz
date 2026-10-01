@@ -9,9 +9,39 @@ import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "
 import { isRpcUnavailable } from "./rpc-utils";
 // Đợt 2 (CEO 17/07): nhãn hướng giao dịch lấy từ nguồn sự thật chung.
 import { MOVEMENT_TYPE_LABELS } from "@/lib/constants/stock-movement-refs";
+import { getRecordedMovementPrices } from "@/lib/stock-movement-values";
 
 type ProductInsert = Database["public"]["Tables"]["products"]["Insert"];
 type ProductUpdate = Database["public"]["Tables"]["products"]["Update"];
+
+type BranchCostEvent = {
+  source_stock_movement_id: string;
+  unit_cost: number;
+  quantity: number;
+};
+
+async function loadRecordedBranchCosts(
+  supabase: ReturnType<typeof getClient>,
+  tenantId: string,
+  rows: Array<{ id: string }>,
+): Promise<Map<string, BranchCostEvent>> {
+  const ids = [...new Set(rows.map((row) => row.id))];
+  const costs = new Map<string, BranchCostEvent>();
+  for (let offset = 0; offset < ids.length; offset += 200) {
+    // Generated database types lag the F&B branch-cost migration.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data, error } = await (supabase as any)
+      .from("fnb_branch_product_cost_events")
+      .select("source_stock_movement_id, unit_cost, quantity")
+      .eq("tenant_id", tenantId)
+      .in("source_stock_movement_id", ids.slice(offset, offset + 200));
+    if (error) handleError(error, "loadRecordedBranchCosts");
+    for (const event of (data ?? []) as BranchCostEvent[]) {
+      costs.set(event.source_stock_movement_id, event);
+    }
+  }
+  return costs;
+}
 
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -596,6 +626,7 @@ export async function getAllStockMovements(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: any[] = data ?? [];
   const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+  const recordedCosts = await loadRecordedBranchCosts(supabase, tenantId, rows);
   const branchIds = Array.from(
     new Set(rows.map((row) => row.branch_id).filter((id): id is string => Boolean(id))),
   );
@@ -640,8 +671,7 @@ export async function getAllStockMovements(
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
-      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
-      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
+      ...getRecordedMovementPrices(row, recordedCosts.get(row.id)),
     };
   });
 
@@ -940,6 +970,7 @@ export async function getStockMovements(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const rows: any[] = data ?? [];
   const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+  const recordedCosts = await loadRecordedBranchCosts(supabase, tenantId, rows);
 
   const movements: StockMovement[] = rows.map((row) => {
     const p = resolvePartner(row);
@@ -961,8 +992,7 @@ export async function getStockMovements(
       partner: p.partner,
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
-      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
-      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
+      ...getRecordedMovementPrices(row, recordedCosts.get(row.id)),
     };
   });
 
@@ -1010,6 +1040,11 @@ export async function getStockCard(
       };
       const rows = raw.rows ?? [];
       const resolvePartner = await buildMovementPartnerResolver(supabase, rows);
+      const recordedCosts = await loadRecordedBranchCosts(
+        supabase,
+        tenantId,
+        rows.map((row) => ({ id: String(row.id) })),
+      );
       const typeNameMap = MOVEMENT_TYPE_LABELS;
       const movements: StockMovement[] = rows.map((row) => {
         const p = resolvePartner(row);
@@ -1034,8 +1069,14 @@ export async function getStockCard(
           partnerType: p.partnerType,
           referenceCode: p.referenceCode,
           runningBalance: Number(row.running_balance ?? 0),
-          unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
-          unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
+          ...getRecordedMovementPrices(
+            {
+              type: String(row.type ?? ""),
+              unit_cost: row.unit_cost == null ? null : Number(row.unit_cost),
+              unit_price: row.unit_price == null ? null : Number(row.unit_price),
+            },
+            recordedCosts.get(String(row.id)),
+          ),
         };
       });
 
@@ -1108,6 +1149,7 @@ export async function getStockCard(
 
   // 4) Enrich (đối tác + mã chứng từ thật) + đảo MỚI TRÊN CÙNG cho hiển thị.
   const resolvePartner = await buildMovementPartnerResolver(supabase, ledger);
+  const recordedCosts = await loadRecordedBranchCosts(supabase, tenantId, ledger);
   const branchIds = Array.from(
     new Set(ledger.map((row) => row.branch_id).filter((id): id is string => Boolean(id))),
   );
@@ -1147,8 +1189,7 @@ export async function getStockCard(
       partnerType: p.partnerType,
       referenceCode: p.referenceCode,
       runningBalance: runningById.get(row.id),
-      unitCost: row.unit_cost != null ? Number(row.unit_cost) : undefined,
-      unitPrice: row.unit_price != null ? Number(row.unit_price) : undefined,
+      ...getRecordedMovementPrices(row, recordedCosts.get(row.id)),
     };
     return m;
   });
