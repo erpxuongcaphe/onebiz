@@ -7,9 +7,8 @@ import { describe, expect, it } from "vitest";
  * Khoá 3 hành vi:
  *  1. Màn bếp KHÔNG gọi máy chủ khi tab bị che (trước: cứ 30 giây một lần dù
  *     không ai nhìn — nhiều màn bếp cộng lại là tải vô ích cho Supabase).
- *  2. Sự kiện món của quán KHÁC không làm màn bếp này tải lại. ⚠️ Bảng
- *     kitchen_order_items KHÔNG có branch_id nên KHÔNG lọc được phía máy chủ
- *     → phải lọc phía máy khách theo đơn đang hiển thị.
+ *  2. Chỉ nhận sự kiện đơn có branch_id; bảng kitchen_order_items không có
+ *     branch_id nên không mở publication/subscription rộng toàn doanh nghiệp.
  *  3. Ô món POS FnB: ảnh phải co được, khối tên giữ chỗ cố định — nếu không
  *     ảnh vuông ăn hết chiều cao 220px và tên món bị cắt (đo trên máy thật:
  *     ô kết thúc y=324, tên nằm y=323–340).
@@ -31,24 +30,19 @@ describe("KDS không tải máy chủ vô ích", () => {
     expect(kds).toContain('document.removeEventListener("visibilitychange"');
   });
 
-  it("sự kiện món của quán khác không làm tải lại", () => {
-    expect(kds).toContain("visibleOrderIdsRef");
-    expect(kds).toContain("kitchen_order_id");
-    expect(kds).toMatch(/if \(orderId && !visibleOrderIdsRef\.current\.has\(orderId\)\) return/);
-  });
-
-  it("KHÔNG lọc kitchen_order_items theo branch_id — cột đó không tồn tại", () => {
-    // Chốt lại sự thật schema để lần sau không ai thêm filter sai làm màn bếp
-    // ngừng cập nhật.
+  it("không đăng ký sự kiện món không lọc được theo chi nhánh", () => {
     expect(schema.bang.kitchen_order_items).not.toContain("branch_id");
-    expect(kds).not.toMatch(
-      /table: "kitchen_order_items"[\s\S]{0,80}filter: `branch_id/,
-    );
-    // Kênh đơn (kitchen_orders) thì CÓ branch_id và PHẢI giữ filter
+    expect(kds).not.toContain('table: "kitchen_order_items"');
     expect(schema.bang.kitchen_orders).toContain("branch_id");
     expect(kds).toMatch(
       /table: "kitchen_orders"[\s\S]{0,80}filter: `branch_id=eq\.\$\{branchId\}`/,
     );
+  });
+
+  it("hiển thị đúng khi chỉ polling và cảnh báo nếu dữ liệu thực sự cũ", () => {
+    expect(kds).toContain('lastFetchAt === null ? "Đang tải" : "Đồng bộ 30s"');
+    expect(kds).toContain("Dữ liệu bếp chưa cập nhật");
+    expect(kds).toContain("now - lastFetchAt > 90_000");
   });
 
   it("kết quả tải cũ không đè danh sách mới hoặc chi nhánh mới", () => {
