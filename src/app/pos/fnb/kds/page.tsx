@@ -228,12 +228,6 @@ function KdsPageInner() {
   const storeBranches = branches.filter((branch) => branch.branchType === "store");
 
   const [orders, setOrders] = useState<KdsOrder[]>([]);
-  // Id các đơn đang hiện — để lọc sự kiện món của quán khác (xem realtime bên
-  // dưới). Dùng ref vì hàm nghe realtime giữ bản chụp cũ của state.
-  const visibleOrderIdsRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
-    visibleOrderIdsRef.current = new Set(orders.map((o) => o.id));
-  }, [orders]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<FilterTab>("all");
   const [displayPreferences, setDisplayPreferences] = useState<KdsDisplayPreferences>(
@@ -532,9 +526,7 @@ function KdsPageInner() {
     const client = getClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const scheduleRealtimeRefresh = () => {
-      // Mot thay doi mon thuong cap nhat ca kitchen_order_items va
-      // kitchen_orders trong cung giao dich. Gom cac tin hieu lien ke de tranh
-      // moi lan cham KDS tao nhieu cap truy van trung nhau.
+      // Coalesce nearby order changes before refetching the canonical state.
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         refreshTimer = null;
@@ -553,28 +545,6 @@ function KdsPageInner() {
           filter: `branch_id=eq.${branchId}`,
         },
         scheduleRealtimeRefresh
-      )
-      // 04/08: lọc chéo-chi-nhánh cho món. Trước đây MỌI thay đổi món của mọi
-      // quán/mọi doanh nghiệp đều làm màn bếp này gọi lại toàn bộ đơn.
-      // ⚠️ kitchen_order_items KHÔNG có cột branch_id (verify db-schema.json)
-      // nên KHÔNG lọc được phía máy chủ → lọc phía máy khách: chỉ gọi lại khi
-      // món thuộc đơn đang hiển thị. Đơn MỚI vẫn về qua kênh kitchen_orders
-      // (đã lọc branch_id) nên không bỏ sót.
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "kitchen_order_items",
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as
-            | { kitchen_order_id?: string }
-            | null;
-          const orderId = row?.kitchen_order_id;
-          if (orderId && !visibleOrderIdsRef.current.has(orderId)) return;
-          scheduleRealtimeRefresh();
-        }
       )
       .subscribe((status) => {
         setRealtimeConnected(status === "SUBSCRIBED");
@@ -1015,7 +985,7 @@ function KdsPageInner() {
                         : "bg-status-warning",
                   )}
                 />
-                {fetchError ? "Lỗi tải" : realtimeConnected ? "Trực tiếp" : "Đang kiểm tra"} · {filtered.length} đơn
+                {fetchError ? "Lỗi tải" : realtimeConnected ? "Trực tiếp" : lastFetchAt === null ? "Đang tải" : "Đồng bộ 30s"} · {filtered.length} đơn
               </span>
             </div>
           </div>
@@ -1153,7 +1123,7 @@ function KdsPageInner() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-semibold text-sm text-status-warning">
-              {fetchError ? "Lỗi tải đơn bếp" : "Mất kết nối realtime"}
+              {fetchError ? "Lỗi tải đơn bếp" : "Dữ liệu bếp chưa cập nhật"}
             </div>
             <div className="text-xs text-muted-foreground">
               {fetchError
