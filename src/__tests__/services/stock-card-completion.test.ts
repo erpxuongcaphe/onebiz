@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  getRecordedMovementPrices,
   getSignedStockQuantity,
   getStockMovementTotalValue,
   getStockMovementUnitValue,
@@ -25,6 +26,10 @@ const stockHistoryPage = readFileSync(
 );
 const stockPage = readFileSync(
   join(process.cwd(), "src/app/(main)/hang-hoa/ton-kho/page.tsx"),
+  "utf8",
+);
+const productService = readFileSync(
+  join(process.cwd(), "src/lib/services/supabase/products.ts"),
   "utf8",
 );
 
@@ -67,6 +72,40 @@ describe("stock card completion", () => {
     expect(
       getStockMovementTotalValue({ type: "export", quantity: 1 }),
     ).toBeNull();
+  });
+
+  it("uses the recorded F&B branch cost for sale, receipt and export", () => {
+    const salePrices = getRecordedMovementPrices(
+      { type: "out", unit_cost: 6000, unit_price: null },
+      { unit_cost: 10000, quantity: 0.1 },
+    );
+    expect(salePrices).toEqual({ unitCost: 10000, unitPrice: undefined });
+    expect(getStockMovementTotalValue({ type: "export", quantity: 0.1, ...salePrices })).toBe(1000);
+
+    const receiptPrices = getRecordedMovementPrices(
+      { type: "in", unit_cost: 6000, unit_price: 9000 },
+      { unit_cost: 10000, quantity: 2 },
+    );
+    expect(getStockMovementUnitValue({ type: "import", quantity: 2, ...receiptPrices })).toBe(10000);
+    expect(getStockMovementTotalValue({ type: "import", quantity: 2, ...receiptPrices })).toBe(20000);
+  });
+
+  it("keeps Retail and legacy movement prices unchanged without a branch cost event", () => {
+    expect(getRecordedMovementPrices({ type: "out", unit_cost: 6000, unit_price: null }))
+      .toEqual({ unitCost: 6000, unitPrice: undefined });
+    expect(getRecordedMovementPrices({ type: "in", unit_cost: 6000, unit_price: 9000 }))
+      .toEqual({ unitCost: 6000, unitPrice: 9000 });
+    expect(getRecordedMovementPrices(
+      { type: "out", unit_cost: 6000, unit_price: null },
+      { unit_cost: 10000, quantity: 0 },
+    )).toEqual({ unitCost: 6000, unitPrice: undefined });
+  });
+
+  it("matches branch-cost events by movement ID across history and stock-card readers", () => {
+    expect(productService).toContain('"source_stock_movement_id, unit_cost, quantity"');
+    expect(productService).toContain("costs.set(event.source_stock_movement_id, event)");
+    expect(productService.match(/loadRecordedBranchCosts\(/g)?.length).toBe(5);
+    expect(productService.match(/getRecordedMovementPrices\(/g)?.length).toBe(4);
   });
 
   it("passes the selected branch from product list to the stock card query", () => {
