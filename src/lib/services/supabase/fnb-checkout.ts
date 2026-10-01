@@ -199,6 +199,10 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
     message: "Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.",
   },
   {
+    codes: ["FNB_BRANCH_COST_REQUIRED"],
+    message: "Nguyên liệu tại quán chưa đủ tồn đã ghi giá vốn. Kiểm tra nhập/nhận hàng trước khi thanh toán.",
+  },
+  {
     codes: ["CUSTOMER_NOT_FOUND", "SHIFT_NOT_OPEN_FOR_USER_BRANCH"],
     message: "Thông tin khách hàng hoặc ca làm việc không còn hợp lệ. Vui lòng tải lại.",
   },
