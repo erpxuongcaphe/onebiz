@@ -282,6 +282,11 @@ describe("fnbPayment (atomic RPC wrapper)", () => {
       .toBe("Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.");
   });
 
+  it("giải thích khi nguyên liệu tại quán chưa có đủ tồn được ghi giá vốn", () => {
+    expect(getFnbPaymentErrorMessage({ message: "FNB_BRANCH_COST_REQUIRED", code: "P0001" }))
+      .toBe("Nguyên liệu tại quán chưa đủ tồn đã ghi giá vốn. Kiểm tra nhập/nhận hàng trước khi thanh toán.");
+  });
+
   it("đổi mã guard coupon thành lỗi tiếng Việt cho thu ngân", async () => {
     rpcResponses["fnb_complete_payment_atomic_v3"] = {
       data: null,
