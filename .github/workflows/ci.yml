@@ -61,6 +61,10 @@ jobs:
           PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00410_fnb_invoice_item_bom_return_snapshot.sql
           PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00410_fnb_invoice_item_bom_return_snapshot.sql
           PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00410_fnb_invoice_item_bom_return_snapshot.integration.sql
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00415_fnb_linked_supply_return.setup.sql
+          node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-linked-cost-flow.sql --replace
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f /tmp/fnb-linked-cost-flow.sql
+          PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00415_fnb_linked_supply_return.integration.sql
 
       - name: Verify internal-sale price to F&B BOM cost in an isolated database
         env:

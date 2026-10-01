@@ -31,7 +31,10 @@ const statements = names.map((name) => {
   const bodyStart = source.indexOf("as $$", start);
   const end = source.indexOf("\n$$;", bodyStart);
   if (bodyStart < 0 || end < 0) throw new Error(`Function body boundary changed for ${name}`);
-  return source.slice(start, end + "\n$$;".length);
+  const statement = source.slice(start, end + "\n$$;".length);
+  return process.argv.includes("--replace")
+    ? statement.replace(/^create function/i, "create or replace function")
+    : statement;
 });
 
 writeFileSync(process.argv[2], statements.join("\n\n"), "utf8");
