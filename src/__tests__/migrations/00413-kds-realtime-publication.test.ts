@@ -16,9 +16,12 @@ describe("00413 KDS realtime publication", () => {
     expect(migration).toContain("cmd in ('SELECT', 'ALL')");
   });
 
-  it("is idempotent and does not modify business rows", () => {
+  it("is idempotent and touches only new kitchen items' parent order", () => {
     expect(migration).toContain("set local lock_timeout = '1s'");
     expect(migration).toContain("if not exists (");
-    expect(migration).not.toMatch(/\b(insert|update|delete|truncate)\s+(into|from|public\.)/i);
+    expect(migration).not.toMatch(/\b(insert|delete|truncate)\s+(into|from|public\.)/i);
+    expect(migration).toContain("after insert on public.kitchen_order_items");
+    expect(migration).toMatch(/update public\.kitchen_orders\s+set updated_at = now\(\)/);
+    expect(migration).not.toMatch(/update public\.(?!kitchen_orders)/i);
   });
 });
