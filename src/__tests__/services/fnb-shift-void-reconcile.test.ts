@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { summarizeShiftCashRows } from "@/lib/shift-cash-preview";
 
 const migration = readFileSync(
   join(
@@ -35,8 +36,20 @@ describe("F&B invoice void shift reconciliation", () => {
   });
 
   it("nets F&B invoice void refunds in preview and atomic close", () => {
-    expect(shiftService).toContain('r.reference_type === "invoice_void"');
-    expect(shiftService).toContain("fnbvoidinvoiceids.has(r.reference_id)");
+    expect(shiftService).toContain("summarizeshiftcashrows(cashrows, startingcash, fnbvoidinvoiceids)");
+    const cash = summarizeShiftCashRows([
+      {
+        code: "PT001", type: "receipt", amount: 79000, payment_method: "cash",
+        status: "completed", reference_type: "invoice", reference_id: "invoice-1",
+        category: "Bán hàng", note: null, created_at: "2026-09-13T10:00:00Z",
+      },
+      {
+        code: "PC001", type: "payment", amount: 79000, payment_method: "cash",
+        status: "completed", reference_type: "invoice_void", reference_id: "invoice-1",
+        category: "Hoàn tiền hủy đơn", note: null, created_at: "2026-09-13T10:30:00Z",
+      },
+    ], 0, new Set(["invoice-1"]));
+    expect(cash).toMatchObject({ expectedCash: 0, totalSales: 0 });
     expect(migration).toContain("voided_invoice.source = 'fnb'");
   });
 
