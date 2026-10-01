@@ -53,7 +53,9 @@ export function createClient(): Client {
 
   cachedClient = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    // A trailing newline survives URL encoding as %0A in the Realtime WebSocket
+    // apikey query param; HTTP requests may still appear healthy.
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!.trim(),
     {
       auth: {
         // PERF F15: processLock thay vì navigatorLock default. Tránh lock
