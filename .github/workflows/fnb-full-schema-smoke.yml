@@ -1,0 +1,55 @@
+name: FNB full local schema smoke
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/fnb-full-schema-smoke.yml'
+      - 'supabase/config.toml'
+      - 'supabase/migrations/**'
+
+permissions:
+  contents: read
+
+jobs:
+  local-schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: supabase/setup-cli@v3
+      - name: Start a disposable local database and apply every migration
+        run: supabase db start
+      - name: Verify F&B document and inventory contracts exist
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: 54322
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: postgres
+        run: |
+          psql -X -v ON_ERROR_STOP=1 <<'SQL'
+          do $$
+          begin
+            if current_setting('port')::integer <> 54322 then
+              raise exception 'Refusing to inspect a non-local test database';
+            end if;
+            if to_regclass('public.internal_sales') is null
+               or to_regclass('public.fnb_branch_product_cost_events') is null
+               or to_regclass('public.kitchen_orders') is null
+               or to_regclass('public.invoices') is null
+               or to_regclass('public.stock_movements') is null then
+              raise exception 'F&B document or inventory tables are missing';
+            end if;
+            if to_regprocedure('public.create_internal_sale_atomic(uuid,uuid,uuid,uuid,uuid,text,uuid,text,jsonb,text,boolean,text)') is null
+               or to_regprocedure('public.fnb_complete_payment_atomic_v3(uuid,uuid,text,text,jsonb,numeric,boolean,numeric,uuid,text,text,uuid,numeric,uuid,text)') is null then
+              raise exception 'F&B internal-sale or payment RPC is missing';
+            end if;
+          end $$;
+          SQL
+      - name: Stop disposable database
+        if: always()
+        run: supabase stop --no-backup
