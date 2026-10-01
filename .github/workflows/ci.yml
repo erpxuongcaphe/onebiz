@@ -62,6 +62,19 @@ jobs:
           PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00410_fnb_invoice_item_bom_return_snapshot.sql
           PGDATABASE=fnb_return_snapshot_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00410_fnb_invoice_item_bom_return_snapshot.integration.sql
 
+      - name: Verify internal-sale price to F&B BOM cost in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_supply_flow_test
+          PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00414_fnb_supply_to_bom_cost.setup.sql
+          node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-supply-cost-flow.sql
+          PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f /tmp/fnb-supply-cost-flow.sql
+          PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00414_fnb_supply_to_bom_cost.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
