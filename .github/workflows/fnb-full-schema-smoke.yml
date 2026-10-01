@@ -26,6 +26,8 @@ jobs:
           test -f supabase/migrations/00025_ai_agents.sql
           test -f supabase/migrations/00033_fix_production_gaps.sql
           mv supabase/migrations/00025_ai_agents.sql /tmp/00025_ai_agents.superseded.sql
+          grep -q '^comment on function public.fnb_complete_payment_atomic is$' supabase/migrations/00035_fnb_tip_support.sql
+          sed -i 's/^comment on function public.fnb_complete_payment_atomic is$/comment on function public.fnb_complete_payment_atomic(uuid,uuid,text,text,jsonb,numeric,numeric,text,uuid,uuid,numeric) is/' supabase/migrations/00035_fnb_tip_support.sql
       - name: Start a disposable local database and apply production-compatible migrations
         run: supabase db start
       - name: Verify F&B document and inventory contracts exist
