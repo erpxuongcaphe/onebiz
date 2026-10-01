@@ -7,6 +7,7 @@
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import type { Shift, OpenShiftInput, CloseShiftInput } from "@/lib/types/shift";
 import { applyDateRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { summarizeShiftCashRows, type ShiftCashEntry, type ShiftCashRow } from "@/lib/shift-cash-preview";
 
 // ── Mappers ──
 
@@ -307,6 +308,7 @@ export interface ShiftPreview {
   totalSales: number;
   totalOrders: number;
   salesByMethod: Record<string, number>;
+  cashEntries: ShiftCashEntry[];
 }
 
 export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> {
@@ -323,22 +325,29 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
   if (shiftErr) handleError(shiftErr, "previewShiftClose:shift");
   const startingCash = Number(shift?.starting_cash ?? 0);
 
-  // 2. Cash in/out — chỉ tiền mặt, status != cancelled
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: cashRows, error: cashErr } = await (supabase as any)
-    .from("cash_transactions")
-    .select("type, amount, payment_method, status, reference_type, reference_id")
-    .eq("shift_id", shiftId);
-  if (cashErr) handleError(cashErr, "previewShiftClose:cash");
+  // Load all pages so the preview agrees with the database finalizer even
+  // when a busy shift has more than the PostgREST row limit.
+  const cashRows: ShiftCashRow[] = [];
+  const pageSize = 500;
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("cash_transactions")
+      .select("code, type, amount, payment_method, status, reference_type, reference_id, category, note, created_at")
+      .eq("tenant_id", tenantId)
+      .eq("shift_id", shiftId)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error) handleError(error, "previewShiftClose:cash");
+    cashRows.push(...((data ?? []) as ShiftCashRow[]));
+    if ((data?.length ?? 0) < pageSize) break;
+  }
 
   const voidInvoiceIds = Array.from(
     new Set<string>(
-      (cashRows ?? [])
-        .filter(
-          (row: { reference_type?: string; reference_id?: string | null }) =>
-            row.reference_type === "invoice_void" && row.reference_id,
-        )
-        .map((row: { reference_id: string }) => String(row.reference_id)),
+      cashRows
+        .filter((row) => row.reference_type === "invoice_void" && row.reference_id != null)
+        .map((row) => row.reference_id as string),
     ),
   );
   const fnbVoidInvoiceIds = new Set<string>();
@@ -357,38 +366,7 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
     );
   }
 
-  let cashIn = 0;
-  let cashOut = 0;
-  const salesByMethod: Record<string, number> = {};
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (cashRows ?? []).forEach((r: any) => {
-    if ((r.status ?? "completed") === "cancelled") return;
-    const method = r.payment_method ?? "cash";
-    const amt = Number(r.amount ?? 0);
-
-    // Cash drawer reconciliation — chỉ method cash
-    if (method === "cash") {
-      if (r.type === "receipt") cashIn += amt;
-      else if (r.type === "payment") cashOut += amt;
-    }
-
-    // Sales by method — chỉ tính giao dịch liên quan đến bán hàng
-    const isFnbInvoiceVoid =
-      r.reference_type === "invoice_void" &&
-      typeof r.reference_id === "string" &&
-      fnbVoidInvoiceIds.has(r.reference_id);
-    if (
-      r.reference_type === "invoice" ||
-      r.reference_type === "sales_return" ||
-      isFnbInvoiceVoid
-    ) {
-      const net = r.type === "receipt" ? amt : -amt;
-      salesByMethod[method] = (salesByMethod[method] ?? 0) + net;
-    }
-  });
-
-  const expectedCash = startingCash + cashIn - cashOut;
+  const cash = summarizeShiftCashRows(cashRows, startingCash, fnbVoidInvoiceIds);
 
   // 3. Đếm số hoá đơn completed
   const { count: orderCount } = await supabase
@@ -398,20 +376,15 @@ export async function previewShiftClose(shiftId: string): Promise<ShiftPreview> 
     .eq("shift_id", shiftId)
     .eq("status", "completed");
 
-  const totalSales = Object.values(salesByMethod).reduce((s, v) => s + v, 0);
-  // Lọc method có amount = 0
-  const cleanedMethods = Object.fromEntries(
-    Object.entries(salesByMethod).filter(([, v]) => v !== 0),
-  );
-
   return {
     startingCash,
-    cashIn,
-    cashOut,
-    expectedCash,
-    totalSales,
+    cashIn: cash.cashIn,
+    cashOut: cash.cashOut,
+    expectedCash: cash.expectedCash,
+    totalSales: cash.totalSales,
     totalOrders: orderCount ?? 0,
-    salesByMethod: cleanedMethods,
+    salesByMethod: cash.salesByMethod,
+    cashEntries: cash.cashEntries,
   };
 }
 

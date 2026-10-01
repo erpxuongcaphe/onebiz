@@ -394,6 +394,45 @@ export function ReconcileShiftDialog({
                 </div>
               </div>
 
+              {preview.expectedCash < 0 && (
+                <p className="text-sm text-status-warning">
+                  Chi tiền mặt vượt tiền đầu ca và khoản thu. Kiểm tra phiếu chi,
+                  khoản hoàn của ca khác và tiền thực tế trước khi chốt.
+                </p>
+              )}
+
+              <details className="border-t border-border pt-2 text-sm">
+                <summary className="cursor-pointer font-semibold">
+                  Phiếu thu/chi tiền mặt ({preview.cashEntries.length})
+                </summary>
+                {preview.cashEntries.length === 0 ? (
+                  <p className="pt-2 text-muted-foreground">Không có phiếu tiền mặt trong ca.</p>
+                ) : (
+                  <div className="mt-2 max-h-56 overflow-y-auto divide-y divide-border">
+                    {preview.cashEntries.slice(-100).reverse().map((entry) => (
+                      <div key={entry.code} className="flex justify-between gap-3 py-2">
+                        <div className="min-w-0">
+                          <p className="font-medium">{entry.code} · {entry.category}</p>
+                          <p className="text-xs text-muted-foreground">{formatDate(entry.createdAt)}</p>
+                          {entry.note && <p className="text-xs text-muted-foreground break-words">{entry.note}</p>}
+                        </div>
+                        <span className={cn(
+                          "shrink-0 tabular-nums font-semibold",
+                          entry.type === "receipt" ? "text-status-success" : "text-status-error",
+                        )}>
+                          {entry.type === "receipt" ? "+" : "−"}{formatCurrency(entry.amount)}đ
+                        </span>
+                      </div>
+                    ))}
+                    {preview.cashEntries.length > 100 && (
+                      <p className="py-2 text-xs text-muted-foreground">
+                        Đang hiện 100 phiếu gần nhất. Tổng thu/chi ở trên đã tính toàn bộ phiếu trong ca.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </details>
+
               {/* Actual cash + variance */}
               <div>
                 <Label className="font-semibold">Tiền mặt thực tế đếm được *</Label>
