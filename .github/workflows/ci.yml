@@ -79,6 +79,16 @@ jobs:
           PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f /tmp/fnb-supply-cost-flow.sql
           PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00414_fnb_supply_to_bom_cost.integration.sql
 
+      - name: Verify prepared batch completion cost reaches drink BOM
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-prepared-cost-trigger.sql
+          PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00416_fnb_prepared_batch_to_bom_cost.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
