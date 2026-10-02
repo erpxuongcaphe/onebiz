@@ -89,6 +89,17 @@ jobs:
           node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-prepared-cost-trigger.sql
           PGDATABASE=fnb_supply_flow_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00416_fnb_prepared_batch_to_bom_cost.integration.sql
 
+      - name: Verify real prepared-batch production function chain
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_real_production_test
+          node scripts/fnb-db-test/extract-production-chain.mjs /tmp/fnb-real-production-chain.sql
+          PGDATABASE=fnb_real_production_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00417_fnb_real_production_chain.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
