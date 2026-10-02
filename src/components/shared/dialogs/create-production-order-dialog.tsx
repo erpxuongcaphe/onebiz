@@ -271,7 +271,8 @@ export function CreateProductionOrderDialog({
               available,
               shortage: available < n.needed,
               costMismatch: Boolean(costs && (!cost ||
-                Math.abs(cost.costedQuantity - available) > 0.0001 ||
+                Math.abs(cost.costedQuantity - cost.physicalQuantity) > 0.0001 ||
+                cost.physicalQuantity + 0.0001 < n.needed ||
                 cost.costedQuantity + 0.0001 < n.needed)),
             };
           });

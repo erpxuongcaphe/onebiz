@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   boms: [] as Record<string, unknown>[],
   available: 0,
   costedQuantity: null as number | null,
+  physicalQuantity: null as number | null,
   prepared: true,
   scopeEnabled: true,
   createProductionOrder: vi.fn(),
@@ -38,7 +39,7 @@ vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({
 vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({
   getFnbBranchComponentCosts: async () => new Map(mocks.costedQuantity === null ? [] : [[
     "ingredient", { productId: "ingredient", costedQuantity: mocks.costedQuantity,
-      physicalQuantity: mocks.available, unitCost: 10000 },
+      physicalQuantity: mocks.physicalQuantity ?? mocks.available, unitCost: 10000 },
   ]]),
 }));
 vi.mock("@/components/ui/dialog", () => ({
@@ -79,6 +80,7 @@ describe("production branch selection", () => {
     mocks.boms = [];
     mocks.available = 0;
     mocks.costedQuantity = null;
+    mocks.physicalQuantity = null;
     mocks.prepared = true;
     mocks.scopeEnabled = true;
     mocks.createProductionOrder.mockClear();
@@ -148,6 +150,10 @@ describe("production branch selection", () => {
     mocks.costedQuantity = 2;
     fireEvent.change(screen.getByDisplayValue("2"), { target: { value: "1" } });
     await waitFor(() => expect(finish).toBeEnabled());
+
+    mocks.physicalQuantity = 0;
+    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    await waitFor(() => expect(finish).toBeDisabled());
   });
 
   it("keeps the Retail production flow independent of the F&B cost ledger", async () => {
