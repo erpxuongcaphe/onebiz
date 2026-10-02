@@ -329,11 +329,14 @@ export async function checkMaterialsAvailability(
 ): Promise<MaterialCheckResult[]> {
   if (!materials.length) return [];
 
+  const tenantId = await getCurrentTenantId();
   const productIds = materials.map((m) => m.productId);
   const { data, error } = await supabase
     .from("branch_stock")
     .select("product_id, quantity")
+    .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
+    .is("variant_id", null)
     .in("product_id", productIds);
 
   if (error) throw error;
