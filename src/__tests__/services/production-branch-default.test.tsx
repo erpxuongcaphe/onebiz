@@ -1,10 +1,14 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CreateProductionOrderDialog } from "@/components/shared/dialogs/create-production-order-dialog";
 
 const mocks = vi.hoisted(() => ({
   activeBranchId: "xtb" as string | undefined,
+  boms: [] as Record<string, unknown>[],
+  available: 0,
+  createProductionOrder: vi.fn(),
+  completeProductionAtomic: vi.fn(),
   toast: vi.fn(),
 }));
 
@@ -13,7 +17,12 @@ vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: mocks.activeBranchId }),
 }));
 vi.mock("@/lib/services", () => ({
-  getAllBOMs: async () => [],
+  getAllBOMs: async () => mocks.boms,
+  getBOMsByProduct: async () => mocks.boms,
+  getBOMById: async () => mocks.boms[0],
+  checkMaterialsAvailability: async () => [{ productId: "ingredient", available: mocks.available }],
+  createProductionOrder: mocks.createProductionOrder,
+  completeProductionAtomic: mocks.completeProductionAtomic,
   getBranches: async () => [
     { id: "warehouse", name: "Kho Tổng", branchType: "factory" },
     { id: "xtb", name: "Xưởng Tư Búa", branchType: "store" },
@@ -46,7 +55,13 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("@/components/ui/icon", () => ({ Icon: () => <span /> }));
 
 describe("production branch selection", () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    mocks.boms = [];
+    mocks.available = 0;
+    mocks.createProductionOrder.mockClear();
+    mocks.completeProductionAtomic.mockClear();
+  });
 
   it("defaults to the branch currently open, not the first factory", async () => {
     mocks.activeBranchId = "xtb";
@@ -58,5 +73,32 @@ describe("production branch selection", () => {
     mocks.activeBranchId = undefined;
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue(""));
+  });
+
+  it("does not create an unfinished order when the selected branch lacks ingredients", async () => {
+    mocks.activeBranchId = "xtb";
+    mocks.boms = [{
+      id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST",
+      productName: "Thạch thử", name: "Công thức thạch", isActive: true,
+      yieldQty: 1, yieldUnit: "G", items: [{
+        materialId: "ingredient", materialCode: "SKU-ING-TEST",
+        materialName: "Bột thử", quantity: 1, unit: "G",
+      }],
+    }];
+
+    render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    fireEvent.focus(screen.getByPlaceholderText("Gõ mã hoặc tên sản phẩm..."));
+    fireEvent.click(screen.getByRole("button", { name: /SKU-BTP-TEST/ }));
+
+    const finish = screen.getByRole("button", { name: "Hoàn thành sản xuất & nhập kho" });
+    await waitFor(() => expect(screen.getByText(/Thiếu nguyên liệu tại chi nhánh này/)).toBeTruthy());
+    expect(finish).toBeDisabled();
+    expect(mocks.createProductionOrder).not.toHaveBeenCalled();
+
+    mocks.available = 2;
+    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    await waitFor(() => expect(finish).toBeEnabled());
+    expect(mocks.createProductionOrder).not.toHaveBeenCalled();
   });
 });
