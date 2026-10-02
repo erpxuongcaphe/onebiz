@@ -111,6 +111,19 @@ jobs:
           node scripts/fnb-db-test/extract-internal-sale-stock-out.mjs /tmp/fnb-internal-sale-stock-out.sql
           PGDATABASE=fnb_internal_sale_stock_out_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00418_fnb_internal_sale_stock_out.integration.sql
 
+      - name: Verify complete internal-sale documents and XTB cost
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_internal_sale_complete_test
+          node scripts/fnb-db-test/extract-internal-sale-documents.mjs /tmp/fnb-internal-sale-documents.sql
+          node scripts/fnb-db-test/extract-internal-sale-stock-out.mjs /tmp/fnb-internal-sale-stock-out.sql
+          node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-supply-cost-flow.sql
+          PGDATABASE=fnb_internal_sale_complete_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00419_fnb_internal_sale_complete_chain.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
