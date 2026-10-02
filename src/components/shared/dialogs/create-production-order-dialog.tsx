@@ -24,10 +24,13 @@ import {
   getBOMById,
   getBOMsByProduct,
   getBranches,
+  getProductById,
   createProductionOrder,
   completeProductionAtomic,
   checkMaterialsAvailability,
 } from "@/lib/services";
+import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbSupplyBranchScope } from "@/lib/services/supabase/fnb-supply-catalog";
 import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
@@ -48,6 +51,7 @@ interface MaterialNeed {
   needed: number;
   available: number;
   shortage: boolean;
+  costMismatch: boolean;
 }
 
 export function CreateProductionOrderDialog({
@@ -239,25 +243,44 @@ export function CreateProductionOrderDialog({
         // thành vẫn chặn vì kho chi nhánh thiếu. Batch 1 query, hết N+1.
         let needs: MaterialNeed[];
         if (branchId) {
-          const checks = await checkMaterialsAvailability(
-            branchId,
-            baseNeeds.map((n) => ({
-              productId: n.productId,
-              productName: n.productName,
-              plannedQty: n.needed,
-              unit: n.unit,
-            })),
-          );
+          const [checks, product] = await Promise.all([
+            checkMaterialsAvailability(
+              branchId,
+              baseNeeds.map((n) => ({
+                productId: n.productId,
+                productName: n.productName,
+                plannedQty: n.needed,
+                unit: n.unit,
+              })),
+            ),
+            getProductById(bom.productId),
+          ]);
+          if (!product) throw new Error("Không tìm thấy sản phẩm cần sản xuất.");
+          const scope = product.isFnbStockItem
+            ? await getFnbSupplyBranchScope(branchId)
+            : null;
+          const costs = scope?.enforcementEnabled
+            ? await getFnbBranchComponentCosts(branchId, baseNeeds.map((n) => n.productId))
+            : null;
           const availOf = new Map(checks.map((c) => [c.productId, c.available]));
           needs = baseNeeds.map((n) => {
             const available = availOf.get(n.productId) ?? 0;
-            return { ...n, available, shortage: available < n.needed };
+            const cost = costs?.get(n.productId);
+            return {
+              ...n,
+              available,
+              shortage: available < n.needed,
+              costMismatch: Boolean(costs && (!cost ||
+                Math.abs(cost.costedQuantity - available) > 0.0001 ||
+                cost.costedQuantity + 0.0001 < n.needed)),
+            };
           });
         } else {
           needs = baseNeeds.map((n) => ({
             ...n,
             available: 0,
             shortage: n.needed > 0,
+            costMismatch: false,
           }));
         }
         if (cancelled) return;
@@ -281,9 +304,11 @@ export function CreateProductionOrderDialog({
   }, [bomId, plannedQty, branchId, toast]);
 
   const hasShortage = materials.some((m) => m.shortage);
+  const hasCostMismatch = materials.some((m) => m.costMismatch);
   const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId]);
   const canComplete = !computing && selectedBom?.id === bomId &&
-    checkedMaterialKey === materialCheckKey && materials.length > 0 && !hasShortage;
+    checkedMaterialKey === materialCheckKey && materials.length > 0 &&
+    !hasShortage && !hasCostMismatch;
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -648,10 +673,10 @@ export function CreateProductionOrderDialog({
                             <span className="text-xs text-muted-foreground">{m.unit}</span>
                           </td>
                           <td className="p-2 text-center">
-                            {m.shortage ? (
+                            {m.shortage || m.costMismatch ? (
                               <span className="inline-flex items-center gap-1 text-destructive text-xs">
                                 <Icon name="warning" size={14} />
-                                Thiếu
+                                {m.shortage ? "Thiếu" : "Lệch giá vốn"}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1 text-status-success text-xs">
@@ -671,6 +696,12 @@ export function CreateProductionOrderDialog({
                 <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
                   <Icon name="warning" size={14} />
                   Thiếu nguyên liệu tại chi nhánh này. Nhập đủ tồn rồi mới hoàn thành mẻ.
+                </div>
+              )}
+              {hasCostMismatch && (
+                <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
+                  <Icon name="warning" size={14} />
+                  Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp. Cần đối soát trước khi hoàn thành mẻ.
                 </div>
               )}
             </div>
