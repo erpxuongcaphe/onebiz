@@ -18,7 +18,7 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { useToast } from "@/lib/contexts";
+import { useBranchFilter, useToast } from "@/lib/contexts";
 import {
   getAllBOMs,
   getBOMById,
@@ -27,7 +27,6 @@ import {
   createProductionOrder,
   completeProductionAtomic,
   checkMaterialsAvailability,
-  getProductById,
 } from "@/lib/services";
 import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
@@ -57,6 +56,7 @@ export function CreateProductionOrderDialog({
   onSuccess,
 }: CreateProductionOrderDialogProps) {
   const { toast } = useToast();
+  const { activeBranchId } = useBranchFilter();
 
   const [boms, setBoms] = useState<BOM[]>([]);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -94,9 +94,11 @@ export function CreateProductionOrderDialog({
         const [bomList, brList] = await Promise.all([getAllBOMs(), getBranches()]);
         setBoms(bomList);
         setBranches(brList);
-        // Default to first factory branch
-        const factory = brList.find((b) => b.branchType === "factory") ?? brList[0];
-        if (factory) setBranchId(factory.id);
+        setBranchId(
+          activeBranchId && brList.some((branch) => branch.id === activeBranchId)
+            ? activeBranchId
+            : "",
+        );
       } catch (err) {
         toast({
           title: "Lỗi tải dữ liệu",
@@ -105,7 +107,7 @@ export function CreateProductionOrderDialog({
         });
       }
     })();
-  }, [open, toast]);
+  }, [open, activeBranchId, toast]);
 
   // Reset on open
   useEffect(() => {
@@ -115,6 +117,7 @@ export function CreateProductionOrderDialog({
       setShowProductDropdown(false);
       setBomsOfProduct([]);
       setBomId("");
+      setBranchId("");
       setPlannedQty("1");
       setPlannedStart("");
       setPlannedEnd("");
@@ -247,19 +250,11 @@ export function CreateProductionOrderDialog({
             return { ...n, available, shortage: available < n.needed };
           });
         } else {
-          // Chưa chọn chi nhánh (hiếm) — fallback tồn tổng như cũ.
-          needs = await Promise.all(
-            baseNeeds.map(async (n) => {
-              let available = 0;
-              try {
-                const prod = await getProductById(n.productId);
-                available = prod?.stock ?? 0;
-              } catch {
-                // ignore
-              }
-              return { ...n, available, shortage: available < n.needed };
-            }),
-          );
+          needs = baseNeeds.map((n) => ({
+            ...n,
+            available: 0,
+            shortage: n.needed > 0,
+          }));
         }
         setMaterials(needs);
       } catch (err) {
@@ -280,7 +275,9 @@ export function CreateProductionOrderDialog({
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn sản phẩm cần SX";
     if (!bomId) e.bomId = "Sản phẩm chưa có BOM hợp lệ";
-    if (!branchId) e.branchId = "Chọn chi nhánh";
+    if (!branchId || !branches.some((branch) => branch.id === branchId)) {
+      e.branchId = "Chọn chi nhánh";
+    }
     if (!plannedQty || Number(plannedQty) <= 0) e.plannedQty = "Số lượng phải > 0";
     setErrors(e);
     return Object.keys(e).length === 0;
