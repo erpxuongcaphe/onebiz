@@ -4,11 +4,11 @@ import { describe, expect, it } from "vitest";
 const migration = readFileSync(
   "supabase/migrations/00411_strict_fnb_bom_xnt_cost.sql",
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 const internalSaleMigration = readFileSync(
   "supabase/migrations/00409_xnt_internal_sale_branch_cost.sql",
   "utf8",
-);
+).replace(/\r\n/g, "\n");
 
 describe("strict F&B BOM cost source for XNT", () => {
   it("requires a branch ledger event for tracked BOM consumption", () => {
