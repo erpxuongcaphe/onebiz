@@ -92,6 +92,51 @@ describe("danhGiaFnbReadiness", () => {
     ]);
   });
 
+  it("không báo thiếu giá cho topping 0đ được bật bán miễn phí", () => {
+    const result = danhGiaFnbReadiness({
+      products: [
+        {
+          id: "free-topping",
+          code: "SKU-TPP-FREE",
+          name: "Topping miễn phí",
+          sell_price: 0,
+          allow_free_sale: true,
+          bom_code: null,
+        },
+        {
+          id: "draft-topping",
+          code: "SKU-TPP-DRAFT",
+          name: "Topping nháp",
+          sell_price: 0,
+          allow_free_sale: false,
+          bom_code: null,
+        },
+        {
+          id: "unset-topping",
+          code: "SKU-TPP-UNSET",
+          name: "Chưa đặt giá",
+          sell_price: null,
+          allow_free_sale: true,
+          bom_code: null,
+        },
+      ],
+      boms: [
+        { product_id: "free-topping", code: null, branch_id: null },
+        { product_id: "draft-topping", code: null, branch_id: null },
+        { product_id: "unset-topping", code: null, branch_id: null },
+      ],
+      groups: [],
+      options: [],
+    });
+
+    expect(result.toppingReady).toBe(1);
+    expect(result.toppingMissingPrice).toBe(2);
+    expect(result.toppingIssues).toEqual([
+      expect.objectContaining({ code: "SKU-TPP-DRAFT", missingPrice: true }),
+      expect.objectContaining({ code: "SKU-TPP-UNSET", missingPrice: true }),
+    ]);
+  });
+
   it("không tính BOM riêng của chi nhánh khác", () => {
     const result = danhGiaFnbReadiness({
       products: [

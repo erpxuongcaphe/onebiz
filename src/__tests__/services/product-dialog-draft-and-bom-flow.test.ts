@@ -100,6 +100,8 @@ describe("product dialog draft and inline BOM flow", () => {
     expect(readinessAudit).toContain("fnb_product_branch_menu_policies");
     expect(readinessAudit).toContain("mon_dang_mo_ban");
     expect(readinessAudit).toContain("sku_bom_chua_duyet");
+    expect(readinessAudit).toContain("allow_free_sale");
+    expect(readinessAudit).toContain("hasSellableFnbPrice(product.sell_price, product.allow_free_sale)");
     expect(readinessAudit).not.toContain(".insert(");
     expect(readinessAudit).not.toContain(".update(");
     expect(readinessAudit).not.toContain(".delete(");

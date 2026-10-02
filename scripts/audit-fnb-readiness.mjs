@@ -44,6 +44,10 @@ const branchCodeArg = process.argv
   ?.slice("--branch=".length)
   .trim();
 
+function hasSellableFnbPrice(price, allowFreeSale) {
+  return Number.isFinite(price) && (price > 0 || (price === 0 && allowFreeSale === true));
+}
+
 async function auditBranchReadiness(branchCode) {
   const branches = await select(
     "branches",
@@ -59,7 +63,7 @@ async function auditBranchReadiness(branchCode) {
   const tenantId = branch.tenant_id;
   const products = await select(
     "products",
-    "id,code,name,sell_price,allow_sale,bom_code,is_active,product_type,channel",
+    "id,code,name,sell_price,allow_sale,allow_free_sale,bom_code,is_active,product_type,channel",
     (query) =>
       query
         .eq("tenant_id", tenantId)
@@ -105,12 +109,15 @@ async function auditBranchReadiness(branchCode) {
     return mode === "only" ? listed : !listed;
   });
   const liveProducts = branchProducts.filter(
-    (product) => product.allow_sale === true && Number(product.sell_price ?? 0) > 0,
+    (product) =>
+      product.allow_sale === true &&
+      hasSellableFnbPrice(product.sell_price, product.allow_free_sale),
   );
+  const liveProductIds = new Set(liveProducts.map((product) => product.id));
   const draftProducts = branchProducts.filter(
     (product) =>
       !product.code.startsWith("SKU-TPP") &&
-      !(product.allow_sale === true && Number(product.sell_price ?? 0) > 0),
+      !liveProductIds.has(product.id),
   );
   const productIds = liveProducts.map((product) => product.id);
   const variants = productIds.length
@@ -165,12 +172,16 @@ async function auditBranchReadiness(branchCode) {
       for (const variant of productVariants) {
         const hasBom =
           !!variant.bom_code && validBoms.some((bom) => bom.code === variant.bom_code);
-        if (Number(variant.sell_price ?? 0) <= 0 || !hasBom) {
+        const missingPrice = !hasSellableFnbPrice(
+          variant.sell_price,
+          product.allow_free_sale,
+        );
+        if (missingPrice || !hasBom) {
           issues.push({
             ma: product.code,
             mon: product.name,
             quy_cach: variant.name,
-            thieu_gia: Number(variant.sell_price ?? 0) <= 0,
+            thieu_gia: missingPrice,
             thieu_bom: !hasBom,
           });
         }
@@ -254,7 +265,7 @@ if (branchCodeArg) {
 
 const toppingProducts = await select(
   "products",
-  "id,tenant_id,code,name,sell_price,unit,has_bom,bom_code,is_active,channel,product_type",
+  "id,tenant_id,code,name,sell_price,allow_free_sale,unit,has_bom,bom_code,is_active,channel,product_type",
   (query) => query.ilike("code", "SKU-TPP%"),
 );
 
@@ -362,7 +373,7 @@ for (const tenantId of tenantIds) {
       product.is_active &&
       product.product_type === "sku" &&
       product.channel === "fnb" &&
-      Number(product.sell_price ?? 0) > 0 &&
+      hasSellableFnbPrice(product.sell_price, product.allow_free_sale) &&
       applicableBom(product),
   );
   console.log(`Topping sẵn sàng: ${readiness.length}/${products.length}`);
