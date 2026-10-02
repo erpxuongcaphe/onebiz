@@ -489,6 +489,7 @@ export default function NhapHangPage() {
   const [editingPO, setEditingPO] = useState<{
     id: string;
     code: string;
+    branchId?: string;
     supplierId: string;
     supplierName: string;
     total?: number;
@@ -880,6 +881,7 @@ export default function NhapHangPage() {
               setEditingPO({
                 id: order.id,
                 code: order.code,
+                branchId: order.branchId,
                 supplierId: order.supplierId,
                 supplierName: order.supplierName,
                 total: order.total,
@@ -1333,6 +1335,7 @@ export default function NhapHangPage() {
                     setEditingPO({
                       id: row.id,
                       code: row.code,
+                      branchId: row.branchId,
                       supplierId: row.supplierId,
                       supplierName: row.supplierName,
                       total: row.total,
@@ -1432,6 +1435,8 @@ export default function NhapHangPage() {
 
     <CreatePurchaseOrderDialog
       open={createOpen}
+      branchId={activeBranchId ?? undefined}
+      branchName={currentBranch?.name}
       onOpenChange={(open) => {
         setCreateOpen(open);
         if (!open) setEditingPO(null);

@@ -38,6 +38,7 @@ import { purchaseLineMoney } from "@/lib/purchase-line-money";
 interface EditingPO {
   id: string;
   code: string;
+  branchId?: string;
   supplierId: string;
   supplierName: string;
   total?: number;
@@ -58,6 +59,8 @@ interface CreatePurchaseOrderDialogProps {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
   editingPO?: EditingPO | null;
+  branchId?: string;
+  branchName?: string;
 }
 
 interface LineItem {
@@ -228,6 +231,8 @@ export function CreatePurchaseOrderDialog({
   onOpenChange,
   onSuccess,
   editingPO,
+  branchId,
+  branchName,
 }: CreatePurchaseOrderDialogProps) {
   const isEdit = !!editingPO;
   // Phase 1.5 (CEO 01/06/2026): edit phiếu đã nhập kho — locked items/qty.
@@ -547,6 +552,15 @@ export function CreatePurchaseOrderDialog({
 
   async function handleSave(mode: "draft" | "receive") {
     if (!validate()) return;
+    const targetBranchId = editingPO ? editingPO.branchId : branchId;
+    if (!targetBranchId) {
+      toast({
+        title: "Chưa xác định chi nhánh nhập hàng",
+        description: "Vui lòng chọn lại chi nhánh rồi mở phiếu nhập. Chưa có dữ liệu nào được ghi.",
+        variant: "error",
+      });
+      return;
+    }
     if (!isEdit && (!code || code === "Đang tạo mã...")) {
       toast({
         title: "Đang chuẩn bị mã phiếu",
@@ -557,9 +571,6 @@ export function CreatePurchaseOrderDialog({
     }
     setSavingMode(mode);
     try {
-      const supabase = getClient();
-      const ctx = await getCurrentContext();
-
       // Phase 1.5 (CEO 01/06/2026): phiếu đã nhập kho — chỉ cập nhật
       // paid/debt/note, KHÔNG đụng items/total/tồn. Items đã được khoá ở UI
       // (fieldset disabled). Atomic full sẽ làm sprint riêng.
@@ -590,7 +601,7 @@ export function CreatePurchaseOrderDialog({
       const saveResult = await savePurchaseOrderAtomic({
         orderId: isEdit && editingPO ? editingPO.id : null,
         requestedCode: isEdit && editingPO ? editingPO.code : code,
-        branchId: ctx.branchId,
+        branchId: targetBranchId,
         supplierId: selectedSupplier!.id,
         note: notes || null,
         shippingCost: shippingFee,
@@ -704,6 +715,9 @@ export function CreatePurchaseOrderDialog({
                 {code}
               </span>
             </div>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Nhập tại: {isEdit ? "chi nhánh của phiếu gốc" : branchName || "Chưa chọn chi nhánh"}
+            </p>
           </DialogHeader>
         </div>
 

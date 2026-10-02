@@ -926,7 +926,7 @@ function mapPurchaseOrder(row: any): PurchaseOrder {
     supplierId: row.supplier_id,
     supplierCode: "",
     supplierName: row.supplier_name,
-    amountOwed: Number(row.debt ?? 0),
+    amountOwed: row.status === "cancelled" ? 0 : Number(row.debt ?? 0),
     taxAmount: Number(row.tax_amount ?? 0),
     total: Number(row.total ?? 0),
     paid: Number(row.paid ?? 0),

@@ -48,6 +48,10 @@ const dialog = readFileSync(
   "src/components/shared/dialogs/create-purchase-order-dialog.tsx",
   "utf8",
 );
+const receiptPage = readFileSync(
+  "src/app/(main)/hang-hoa/nhap-hang/page.tsx",
+  "utf8",
+);
 const inputInvoiceDialog = readFileSync(
   "src/components/shared/dialogs/create-input-invoice-dialog.tsx",
   "utf8",
@@ -77,6 +81,16 @@ beforeEach(() => {
 });
 
 describe("atomic purchase-order save", () => {
+  it("uses the selected branch for new receipts and preserves the original branch on edit", () => {
+    expect(receiptPage).toContain("branchId={activeBranchId ?? undefined}");
+    expect(receiptPage).toContain("branchId: row.branchId");
+    expect(dialog).toContain("const targetBranchId = editingPO ? editingPO.branchId : branchId;");
+    expect(dialog).toContain("branchId: targetBranchId");
+    expect(dialog).not.toMatch(/branchId:\s*ctx\.branchId/);
+    expect(readFileSync("src/lib/services/supabase/purchase-orders.ts", "utf8"))
+      .toContain('amountOwed: row.status === "cancelled" ? 0 : Number(row.debt ?? 0)');
+  });
+
   it("sends only business inputs and derives actor data on the server", async () => {
     const result = await savePurchaseOrderAtomic({
       requestedCode: "PO-IMPORT-001",
