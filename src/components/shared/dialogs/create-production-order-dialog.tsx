@@ -82,6 +82,7 @@ export function CreateProductionOrderDialog({
   const [selectedBom, setSelectedBom] = useState<BOM | null>(null);
   const [materials, setMaterials] = useState<MaterialNeed[]>([]);
   const [computing, setComputing] = useState(false);
+  const [checkedMaterialKey, setCheckedMaterialKey] = useState("");
 
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -124,6 +125,7 @@ export function CreateProductionOrderDialog({
       setNotes("");
       setSelectedBom(null);
       setMaterials([]);
+      setCheckedMaterialKey("");
       setErrors({});
       setLotNumber("");
       setManufacturedDate(formatDateInputValue());
@@ -204,16 +206,18 @@ export function CreateProductionOrderDialog({
 
   // When BOM or qty changes → recompute material needs
   useEffect(() => {
+    let cancelled = false;
+    setSelectedBom(null);
+    setMaterials([]);
+    setCheckedMaterialKey("");
     if (!bomId) {
-      setSelectedBom(null);
-      setMaterials([]);
+      setComputing(false);
       return;
     }
     setComputing(true);
     (async () => {
       try {
         const bom = await getBOMById(bomId);
-        setSelectedBom(bom);
 
         const qty = Number(plannedQty) || 0;
         const batches = bom.yieldQty > 0 ? qty / bom.yieldQty : 0;
@@ -256,20 +260,30 @@ export function CreateProductionOrderDialog({
             shortage: n.needed > 0,
           }));
         }
+        if (cancelled) return;
+        setSelectedBom(bom);
         setMaterials(needs);
+        setCheckedMaterialKey(JSON.stringify([bomId, plannedQty, branchId]));
       } catch (err) {
+        if (cancelled) return;
+        setSelectedBom(null);
+        setMaterials([]);
         toast({
           title: "Lỗi tính NVL",
           description: err instanceof Error ? err.message : "Vui lòng thử lại",
           variant: "error",
         });
       } finally {
-        setComputing(false);
+        if (!cancelled) setComputing(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [bomId, plannedQty, branchId, toast]);
 
   const hasShortage = materials.some((m) => m.shortage);
+  const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId]);
+  const canComplete = !computing && selectedBom?.id === bomId &&
+    checkedMaterialKey === materialCheckKey && materials.length > 0 && !hasShortage;
 
   function validate(): boolean {
     const e: Record<string, string> = {};
@@ -287,7 +301,7 @@ export function CreateProductionOrderDialog({
   // → trừ NVL + nhập thành phẩm + tạo lô qua RPC nguyên tử 00159, trong 1 phát.
   async function handleSave() {
     if (!validate()) return;
-    if (!selectedBom) return;
+    if (!selectedBom || !canComplete) return;
     if (saving) return;
 
     setSaving(true);
@@ -656,7 +670,7 @@ export function CreateProductionOrderDialog({
               {hasShortage && (
                 <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
                   <Icon name="warning" size={14} />
-                  Có NVL không đủ tồn kho — bạn vẫn có thể tạo lệnh nhưng cần nhập kho trước khi sản xuất
+                  Thiếu nguyên liệu tại chi nhánh này. Nhập đủ tồn rồi mới hoàn thành mẻ.
                 </div>
               )}
             </div>
@@ -678,7 +692,7 @@ export function CreateProductionOrderDialog({
             Hủy
           </Button>
           {/* CEO 06/07: 1 nút duy nhất — tạo lệnh = hoàn thành + nhập kho luôn */}
-          <Button onClick={() => handleSave()} disabled={saving || computing}>
+          <Button onClick={() => handleSave()} disabled={saving || !canComplete}>
             {saving && (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
             )}
