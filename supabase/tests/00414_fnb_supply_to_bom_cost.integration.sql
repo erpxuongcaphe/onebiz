@@ -95,4 +95,89 @@ begin
 end;
 $$;
 
+-- A two-ingredient bill must either cost both lines or leave both untouched.
+do $$
+declare
+  v_tenant constant uuid := '10000000-0000-0000-0000-000000000001';
+  v_retail constant uuid := '20000000-0000-0000-0000-000000000001';
+  v_xtb constant uuid := '20000000-0000-0000-0000-000000000002';
+  v_first constant uuid := '30000000-0000-0000-0000-000000000001';
+  v_second constant uuid := '30000000-0000-0000-0000-000000000003';
+  v_actor constant uuid := '40000000-0000-0000-0000-000000000001';
+  v_invoice constant uuid := '50000000-0000-0000-0000-000000000003';
+  v_failed boolean := false;
+begin
+  perform public.create_internal_sale_atomic(
+    v_tenant, v_retail, v_xtb, v_actor, null, 'XTB', null, 'Retail',
+    jsonb_build_array(jsonb_build_object(
+      'productId', v_second, 'quantity', 2, 'unitPrice', 8000
+    )), 'debt', false, 'isolated second ingredient'
+  );
+  if (select costed_quantity from public.fnb_branch_product_cost_balances
+       where branch_id = v_xtb and product_id = v_second) <> 2 then
+    raise exception 'Second ingredient did not receive XTB cost';
+  end if;
+
+  begin
+    perform public._post_fnb_branch_cost_out_00390(
+      v_tenant, v_xtb, v_first, 0.5, 'bom_consume', 'bom_consume',
+      v_invoice, '60000000-0000-0000-0000-000000000003', null, v_actor
+    );
+    perform public._post_fnb_branch_cost_out_00390(
+      v_tenant, v_xtb, v_second, 3, 'bom_consume', 'bom_consume',
+      v_invoice, '60000000-0000-0000-0000-000000000004', null, v_actor
+    );
+  exception when sqlstate 'P0001' then
+    if sqlerrm <> 'FNB_BRANCH_COST_REQUIRED' then raise; end if;
+    v_failed := true;
+  end;
+  if not v_failed
+     or (select costed_quantity from public.fnb_branch_product_cost_balances
+          where branch_id = v_xtb and product_id = v_first) <> 3
+     or (select costed_quantity from public.fnb_branch_product_cost_balances
+          where branch_id = v_xtb and product_id = v_second) <> 2
+     or exists (select 1 from public.fnb_branch_product_cost_events
+          where source_stock_movement_id in (
+            '60000000-0000-0000-0000-000000000003',
+            '60000000-0000-0000-0000-000000000004'
+          )) then
+    raise exception 'Failed two-ingredient BOM did not roll back both cost lines';
+  end if;
+
+  perform public._post_fnb_branch_cost_out_00390(
+    v_tenant, v_xtb, v_first, 0.5, 'bom_consume', 'bom_consume',
+    v_invoice, '60000000-0000-0000-0000-000000000005', null, v_actor
+  );
+  perform public._post_fnb_branch_cost_out_00390(
+    v_tenant, v_xtb, v_second, 0.25, 'bom_consume', 'bom_consume',
+    v_invoice, '60000000-0000-0000-0000-000000000006', null, v_actor
+  );
+  if (select sum(total_cost) from public.fnb_branch_product_cost_events
+       where source_reference_id = v_invoice and source_type = 'bom_consume') <> 7500 then
+    raise exception 'Two-ingredient BOM cost must be 5,500 + 2,000';
+  end if;
+
+  perform public._post_fnb_branch_cost_in_00390(
+    v_tenant, v_xtb, v_first, 0.5, 11000, 'invoice_void_restore', 'invoice',
+    v_invoice, '60000000-0000-0000-0000-000000000007', null, v_actor
+  );
+  perform public._post_fnb_branch_cost_in_00390(
+    v_tenant, v_xtb, v_second, 0.25, 8000, 'invoice_void_restore', 'invoice',
+    v_invoice, '60000000-0000-0000-0000-000000000008', null, v_actor
+  );
+  if (select costed_quantity from public.fnb_branch_product_cost_balances
+       where branch_id = v_xtb and product_id = v_first) <> 3
+     or (select total_cost from public.fnb_branch_product_cost_balances
+       where branch_id = v_xtb and product_id = v_first) <> 33000
+     or (select costed_quantity from public.fnb_branch_product_cost_balances
+       where branch_id = v_xtb and product_id = v_second) <> 2
+     or (select total_cost from public.fnb_branch_product_cost_balances
+       where branch_id = v_xtb and product_id = v_second) <> 16000
+     or exists (select 1 from public.fnb_branch_product_cost_events
+       where branch_id = v_retail) then
+    raise exception 'Two-ingredient void did not restore XTB or touched Retail';
+  end if;
+end;
+$$;
+
 select '00414 isolated supply-to-BOM cost flow passed' as result;
