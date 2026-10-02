@@ -337,6 +337,11 @@ function PurchaseOrderDetail({
             </div>
           ) : (
             <>
+              {order.status === "cancelled" ? (
+                <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                  Phiếu đã hủy. Số lượng và giá trị bên dưới là thông tin gốc để tra cứu; không còn hàng chờ nhận.
+                </div>
+              ) : (
               <div className="rounded-xl border bg-surface-container-lowest p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
@@ -376,16 +381,20 @@ function PurchaseOrderDetail({
                   </div>
                 </div>
               </div>
+              )}
               <DetailItemsTable
                 columns={[
                   { header: "Mã hàng", accessor: "productCode" as never },
                   { header: "Tên hàng", accessor: "productName" as never },
                   {
-                    header: "Đã nhập / SL",
+                    header: order.status === "cancelled" ? "SL phiếu gốc" : "Đã nhập / SL",
                     accessor: (item: Record<string, unknown>) => {
                       const received = item.receivedQuantity as number;
                       const total = item.quantity as number;
                       const unit = (item.unit as string) || "";
+                      if (order.status === "cancelled") {
+                        return <span>{formatNumber(total)} {unit}</span>;
+                      }
                       const done = received >= total;
                       return (
                         <span className={done ? "text-status-success font-semibold" : "text-status-warning"}>
@@ -412,20 +421,13 @@ function PurchaseOrderDetail({
                   },
                 ]}
                 items={items as unknown as Record<string, unknown>[]}
-                summary={[
-                  {
-                    label: "Tổng tiền hàng",
-                    value: formatCurrency(totalOrdered),
-                  },
-                  {
-                    label: "Đã nhập",
-                    value: formatCurrency(totalReceivedValue),
-                  },
-                  {
-                    label: "Cần trả NCC",
-                    value: formatCurrency(order.amountOwed),
-                    className: "font-bold text-base",
-                  },
+                summary={order.status === "cancelled" ? [
+                  { label: "Giá trị phiếu gốc", value: formatCurrency(totalOrdered) },
+                  { label: "Cần trả NCC", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
+                ] : [
+                  { label: "Tổng tiền hàng", value: formatCurrency(totalOrdered) },
+                  { label: "Đã nhập", value: formatCurrency(totalReceivedValue) },
+                  { label: "Cần trả NCC", value: formatCurrency(order.amountOwed), className: "font-bold text-base" },
                 ]}
               />
             </>
