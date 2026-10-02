@@ -3,6 +3,7 @@
 -- bounded stubs; no application database or live business rows are involved.
 \set ON_ERROR_STOP on
 
+create extension if not exists "uuid-ossp";
 create schema auth;
 create function auth.uid() returns uuid language sql stable as $$
   select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid;
