@@ -243,6 +243,8 @@ function PurchaseOrderDetail({
 }) {
   const status = STATUS_META[order.status];
   const { toast } = useToast();
+  const { branches } = useBranchFilter();
+  const orderBranchName = branches.find((branch) => branch.id === order.branchId)?.name;
   const [items, setItems] = useState<PurchaseOrderItemRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -302,7 +304,7 @@ function PurchaseOrderDetail({
               variant: "default",
               className: "",
             }}
-            subtitle="Chi nhánh trung tâm"
+            subtitle={orderBranchName ?? "Chi nhánh không xác định"}
             meta={
               <div className="flex items-center gap-4 flex-wrap text-xs">
                 <span>
