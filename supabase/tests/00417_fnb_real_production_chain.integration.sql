@@ -163,4 +163,52 @@ begin
   end if;
 end;
 $$;
+
+-- Consume prepared stock in a drink, then void it using the same invoice id.
+update public.branch_stock set quantity = quantity - 2
+ where branch_id = '20000000-0000-0000-0000-000000000002'
+   and product_id = '30000000-0000-0000-0000-000000000002';
+insert into public.stock_movements
+  (tenant_id, branch_id, product_id, type, reference_type, reference_id, quantity)
+values ('10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000002',
+        '30000000-0000-0000-0000-000000000002',
+        'out', 'bom_consume', '72000000-0000-0000-0000-000000000001', 2);
+do $$
+begin
+  if (select total_cost from public.fnb_branch_product_cost_events
+       where source_type = 'bom_consume'
+         and source_reference_id = '72000000-0000-0000-0000-000000000001') <> 2500
+     or (select quantity from public.branch_stock
+       where product_id = '30000000-0000-0000-0000-000000000002') <> 8
+     or (select total_cost from public.fnb_branch_product_cost_balances
+       where product_id = '30000000-0000-0000-0000-000000000002') <> 10000 then
+    raise exception 'Drink did not consume 2 prepared units at completed-batch cost';
+  end if;
+end;
+$$;
+update public.branch_stock set quantity = quantity + 2
+ where branch_id = '20000000-0000-0000-0000-000000000002'
+   and product_id = '30000000-0000-0000-0000-000000000002';
+insert into public.stock_movements
+  (tenant_id, branch_id, product_id, type, reference_type, reference_id, quantity)
+values ('10000000-0000-0000-0000-000000000001',
+        '20000000-0000-0000-0000-000000000002',
+        '30000000-0000-0000-0000-000000000002',
+        'in', 'invoice_void', '72000000-0000-0000-0000-000000000001', 2);
+do $$
+begin
+  if (select quantity from public.branch_stock
+       where product_id = '30000000-0000-0000-0000-000000000002') <> 10
+     or (select total_cost from public.fnb_branch_product_cost_balances
+       where product_id = '30000000-0000-0000-0000-000000000002') <> 12500
+     or (select total_cost from public.fnb_branch_product_cost_events
+       where source_type = 'invoice_void_restore'
+         and source_reference_id = '72000000-0000-0000-0000-000000000001') <> 2500
+     or exists (select 1 from public.fnb_branch_product_cost_events
+       where branch_id = '20000000-0000-0000-0000-000000000001') then
+    raise exception 'Void did not restore prepared stock/cost or touched Retail';
+  end if;
+end;
+$$;
 select '00417 real production function chain passed' as result;
