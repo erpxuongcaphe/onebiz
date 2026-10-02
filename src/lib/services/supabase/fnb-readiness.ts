@@ -124,7 +124,8 @@ export function locMonFnbDangMoBan<
 }
 
 function thieuGiaFnb(product: Pick<SanPhamTopping, "sell_price" | "allow_free_sale">): boolean {
-  const price = product.sell_price ?? 0;
+  const price = product.sell_price;
+  if (price === null || !Number.isFinite(price)) return true;
   return price < 0 || (price === 0 && product.allow_free_sale !== true);
 }
 
@@ -132,7 +133,8 @@ function thieuGiaQuyCachFnb(
   variant: Pick<QuyCachFnb, "sell_price">,
   product: Pick<SanPhamTopping, "allow_free_sale"> | undefined,
 ): boolean {
-  const price = variant.sell_price ?? 0;
+  const price = variant.sell_price;
+  if (price === null || !Number.isFinite(price)) return true;
   return price < 0 || (price === 0 && product?.allow_free_sale !== true);
 }
 
@@ -185,7 +187,7 @@ export function danhGiaFnbReadiness(input: {
 
   const toppingReady = input.products.filter(
     (product) =>
-      (product.sell_price ?? 0) > 0 &&
+      !thieuGiaFnb(product) &&
       coBomApDung(product, input.boms, input.branchId),
   ).length;
   const groupById = new Map(input.groups.map((group) => [group.id, group]));
@@ -369,9 +371,7 @@ export function danhGiaFnbReadiness(input: {
     setupIssues,
     toppingTotal: input.products.length,
     toppingReady,
-    toppingMissingPrice: input.products.filter(
-      (product) => (product.sell_price ?? 0) <= 0,
-    ).length,
+    toppingMissingPrice: input.products.filter(thieuGiaFnb).length,
     toppingMissingBom: input.products.filter(
       (product) => !coBomApDung(product, input.boms, input.branchId),
     ).length,
