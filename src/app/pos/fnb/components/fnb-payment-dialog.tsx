@@ -45,7 +45,7 @@ interface FnbPaymentDialogProps {
   customerConfirmationRequired?: boolean;
   /** Lưu xác nhận Khách lẻ cho tab hiện tại sau khi thu ngân xác nhận rõ. */
   onCustomerConfirmed?: () => void;
-  onConfirm: (payload: FnbPaymentConfirmPayload) => void;
+  onConfirm: (payload: FnbPaymentConfirmPayload) => Promise<boolean>;
 }
 
 const METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
@@ -82,6 +82,8 @@ export function FnbPaymentDialog({
   const [allowDebt, setAllowDebt] = useState(false);
   const [tipInput, setTipInput] = useState("");
   const [walkInConfirmed, setWalkInConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
 
   useEffect(() => {
     if (open) {
@@ -89,6 +91,7 @@ export function FnbPaymentDialog({
       setCashInput(""); setTransferInput(""); setCardInput("");
       setCustomerName(initialCustomerName?.trim() || "Khách lẻ");
       setAllowDebt(false);
+      setSubmitError(false);
       setTipInput("");
       setWalkInConfirmed(false);
     }
@@ -133,7 +136,10 @@ export function FnbPaymentDialog({
     (isFreeOrder || (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt))) &&
     (!customerConfirmationRequired || walkInConfirmed);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
+    if (submitting) return;
+    setSubmitting(true);
+    setSubmitError(false);
     if (customerConfirmationRequired && walkInConfirmed) {
       onCustomerConfirmed?.();
     }
@@ -150,8 +156,13 @@ export function FnbPaymentDialog({
     if (method === "mixed") {
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
     }
-    onConfirm(payload);
-    onOpenChange(false);
+    try {
+      if (!(await onConfirm(payload))) setSubmitError(true);
+    } catch {
+      setSubmitError(true);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const tipQuickButtons = [
@@ -441,9 +452,14 @@ export function FnbPaymentDialog({
         </div>
 
         {/* Chân cố định — NGOÀI vùng cuộn, bàn phím ảo không che được. */}
-        <DialogFooter className="shrink-0">
-          <Button className="w-full" disabled={!canConfirm} onClick={handleConfirm}>
-            {isFreeOrder ? "Xác nhận bán 0đ (miễn phí)" : `Hoàn tất thanh toán — ${formatCurrency(total)}đ`}
+        <DialogFooter className="shrink-0 flex-col sm:flex-col">
+          {submitError && (
+            <p role="alert" className="text-sm text-destructive">
+              Chưa xác nhận được thanh toán. Kiểm tra hóa đơn trước khi thử lại; nếu món đã gửi bếp, không gửi lại.
+            </p>
+          )}
+          <Button className="w-full" disabled={!canConfirm || submitting} onClick={handleConfirm}>
+            {submitting ? "Đang xử lý thanh toán..." : isFreeOrder ? "Xác nhận bán 0đ (miễn phí)" : `Hoàn tất thanh toán — ${formatCurrency(total)}đ`}
           </Button>
         </DialogFooter>
       </DialogContent>

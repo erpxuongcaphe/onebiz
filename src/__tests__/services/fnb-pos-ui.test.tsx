@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { useFnbPosState } from "@/app/pos/fnb/hooks/use-fnb-pos-state";
 
 // ── Mock formatCurrency (en-US convention to match real helper) ──
@@ -964,6 +964,34 @@ describe("FnbPaymentDialog — component", () => {
       allowDebt: true,
       paymentMethod: "cash",
     }));
+  });
+
+  it("giữ hộp thanh toán và số tiền khi RPC thất bại", async () => {
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn().mockResolvedValue(false);
+    render(<FnbPaymentDialog {...baseProps} onOpenChange={onOpenChange} onConfirm={onConfirm} />);
+
+    fireEvent.click(screen.getByText("Đủ"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("Kiểm tra hóa đơn"));
+    expect((screen.getByPlaceholderText("0") as HTMLInputElement).value).toBe("200000");
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/i })).not.toBeDisabled();
+  });
+
+  it("chặn bấm thanh toán lặp khi RPC đang chạy", async () => {
+    let finish!: (ok: boolean) => void;
+    const onConfirm = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} />);
+
+    fireEvent.click(screen.getByText("Đủ"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/i }));
+    expect(screen.getByRole("button", { name: /Đang xử lý thanh toán/i })).toBeDisabled();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    finish(true);
+    await waitFor(() => expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/i })).not.toBeDisabled());
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("confirm button hiện tổng tiền (total, không phải subtotal)", () => {

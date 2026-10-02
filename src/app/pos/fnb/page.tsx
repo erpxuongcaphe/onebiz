@@ -2180,7 +2180,7 @@ function FnbPosPageInner() {
           description: "Vui lòng đợi vài giây trước khi thử lại.",
           variant: "info",
         });
-        return;
+        return false;
       }
       fnbSubmitLockRef.current = true;
       const tab = pos.activeTab;
@@ -2216,7 +2216,7 @@ function FnbPosPageInner() {
           description: "Đơn chưa gửi được bếp hoặc chưa có món — vui lòng thử lại.",
           variant: "error",
         });
-        return;
+        return false;
       }
 
       try {
@@ -2421,9 +2421,15 @@ function FnbPosPageInner() {
           // Refresh tables từ server để đồng bộ status chính xác
           if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
         }
+        return true;
       } catch (err) {
         hapticError();
-        toast({ title: "Thanh toán thất bại", description: (err as Error).message, variant: "error" });
+        toast({
+          title: "Chưa xác nhận thanh toán - kiểm tra hóa đơn",
+          description: (err as Error).message,
+          variant: "error",
+        });
+        return false;
       } finally {
         // P1-3D-P1: release lock dù success/fail để cashier có thể retry.
         fnbSubmitLockRef.current = false;
