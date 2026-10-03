@@ -173,7 +173,9 @@ export function FnbPaymentDialog({
   ];
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!submitting) onOpenChange(nextOpen);
+    }}>
       {/* 06/08 (CEO duyệt plan vòng 4): 3 phần — đầu cố định / thân cuộn /
           chân cố định. Trước đây dialog 720px trên màn 703px đã tràn 2 đầu;
           bàn phím ảo (autoFocus tiền mặt) còn che mất nút Hoàn tất. */}

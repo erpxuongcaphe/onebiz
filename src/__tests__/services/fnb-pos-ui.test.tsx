@@ -30,6 +30,41 @@ function makeLine(overrides: Partial<{
 // ============================================================
 
 describe("useFnbPosState", () => {
+  it("only acknowledges the kitchen request snapshot, retaining newly added items", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    act(() => result.current.addLine(makeLine()));
+    const snapshot = result.current.activeTab!.lines;
+    const acknowledge = result.current.markActiveLinesSent;
+    act(() => result.current.addLine(makeLine({ productId: "prod-2" })));
+    act(() => acknowledge(snapshot));
+    expect(result.current.activeTab!.sentLines).toEqual(snapshot);
+    expect(result.current.activeTab!.lines.map((line) => line.productId)).toEqual(["prod-2"]);
+  });
+
+  it("retains extra quantity added while the kitchen request is pending", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    act(() => result.current.addLine(makeLine()));
+    const snapshot = result.current.activeTab!.lines;
+    act(() => result.current.addLine(makeLine({ quantity: 2 })));
+    act(() => result.current.markActiveLinesSent(snapshot));
+    expect(result.current.activeTab!.sentLines![0].quantity).toBe(1);
+    expect(result.current.activeTab!.lines[0].quantity).toBe(2);
+    expect(result.current.activeTab!.lines[0].lineTotal).toBe(70_000);
+  });
+
+  it("acknowledges the original tab even after switching to another tab", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    act(() => result.current.addLine(makeLine()));
+    const originalId = result.current.activeTabId;
+    const snapshot = result.current.activeTab!.lines;
+    const acknowledge = result.current.markActiveLinesSent;
+    act(() => result.current.createTab("Other", "takeaway"));
+    act(() => result.current.addLine(makeLine({ productId: "prod-2" })));
+    act(() => acknowledge(snapshot));
+    expect(result.current.tabs.find((tab) => tab.id === originalId)!.sentLines).toEqual(snapshot);
+    expect(result.current.activeTab!.lines[0].productId).toBe("prod-2");
+  });
+
   // ── Tab management ──
 
   it("khởi tạo với 1 tab mặc định", () => {
@@ -836,8 +871,8 @@ describe("FnbCart — component", () => {
 
 // Mock Dialog components
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ children, open }: { children: React.ReactNode; open: boolean }) =>
-    open ? <div data-testid="dialog">{children}</div> : null,
+  Dialog: ({ children, open, onOpenChange }: { children: React.ReactNode; open: boolean; onOpenChange?: (open: boolean) => void }) =>
+    open ? <div data-testid="dialog"><button onClick={() => onOpenChange?.(false)}>Close</button>{children}</div> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
@@ -992,6 +1027,21 @@ describe("FnbPaymentDialog — component", () => {
     finish(true);
     await waitFor(() => expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/i })).not.toBeDisabled());
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("keeps checkout open while payment is pending and permits closing after failure", async () => {
+    let finish!: (ok: boolean) => void;
+    const onOpenChange = vi.fn();
+    const onConfirm = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    render(<FnbPaymentDialog {...baseProps} onOpenChange={onOpenChange} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByText("Đủ"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/i }));
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onOpenChange).not.toHaveBeenCalled();
+    finish(false);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
   it("confirm button hiện tổng tiền (total, không phải subtotal)", () => {

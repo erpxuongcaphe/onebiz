@@ -244,7 +244,7 @@ describe("PR-D · trang POS FnB dùng đúng nguồn chung", () => {
     expect(ma).not.toContain("await printKitchenTicketsByStation(");
     expect((ma.match(/void printKitchenTicketsByStation\(/g) ?? []).length).toBe(2);
 
-    const viTriDanhDauDaGui = ma.indexOf("pos.markActiveLinesSent()");
+    const viTriDanhDauDaGui = ma.indexOf("pos.markActiveLinesSent(tab.lines)");
     const viTriInPhieu = ma.indexOf("void printKitchenTicketsByStation(");
     expect(viTriDanhDauDaGui).toBeGreaterThan(0);
     expect(viTriInPhieu).toBeGreaterThan(viTriDanhDauDaGui);
