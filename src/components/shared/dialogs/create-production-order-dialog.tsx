@@ -84,6 +84,7 @@ export function CreateProductionOrderDialog({
   const [expiryDate, setExpiryDate] = useState("");
 
   const [selectedBom, setSelectedBom] = useState<BOM | null>(null);
+  const [outputUnit, setOutputUnit] = useState("");
   const [materials, setMaterials] = useState<MaterialNeed[]>([]);
   const [computing, setComputing] = useState(false);
   const [checkedMaterialKey, setCheckedMaterialKey] = useState("");
@@ -212,6 +213,7 @@ export function CreateProductionOrderDialog({
   useEffect(() => {
     let cancelled = false;
     setSelectedBom(null);
+    setOutputUnit("");
     setMaterials([]);
     setCheckedMaterialKey("");
     if (!bomId) {
@@ -242,6 +244,7 @@ export function CreateProductionOrderDialog({
         // đây so products.stock toàn công ty nên dialog nói "Đủ" mà RPC hoàn
         // thành vẫn chặn vì kho chi nhánh thiếu. Batch 1 query, hết N+1.
         let needs: MaterialNeed[];
+        let resolvedOutputUnit = bom.yieldUnit;
         if (branchId) {
           const [checks, product] = await Promise.all([
             checkMaterialsAvailability(
@@ -256,6 +259,11 @@ export function CreateProductionOrderDialog({
             getProductById(bom.productId),
           ]);
           if (!product) throw new Error("Không tìm thấy sản phẩm cần sản xuất.");
+          // Completion credits the entered quantity in the product's stock unit,
+          // not in a legacy inline BOM's default yield label.
+          if (product.isFnbStockItem) {
+            resolvedOutputUnit = product.stockUnit?.trim() || product.unit?.trim() || bom.yieldUnit;
+          }
           const scope = product.isFnbStockItem
             ? await getFnbSupplyBranchScope(branchId)
             : null;
@@ -286,6 +294,7 @@ export function CreateProductionOrderDialog({
         }
         if (cancelled) return;
         setSelectedBom(bom);
+        setOutputUnit(resolvedOutputUnit);
         setMaterials(needs);
         setCheckedMaterialKey(JSON.stringify([bomId, plannedQty, branchId]));
       } catch (err) {
@@ -363,7 +372,7 @@ export function CreateProductionOrderDialog({
         );
         toast({
           title: "Sản xuất hoàn thành",
-          description: `${createdCode}: +${formatNumber(Number(plannedQty) || 0)} ${selectedBom.yieldUnit} ${selectedBom.productName ?? ""} vào kho — NVL đã trừ, lô ${lot ?? "tự sinh"}.`,
+          description: `${createdCode}: +${formatNumber(Number(plannedQty) || 0)} ${outputUnit} ${selectedBom.productName ?? ""} vào kho — NVL đã trừ, lô ${lot ?? "tự sinh"}.`,
           variant: "success",
         });
       } catch (err) {
@@ -515,7 +524,7 @@ export function CreateProductionOrderDialog({
                 <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
                   <Icon name="auto_awesome" size={12} className="text-primary" />
                   Công thức áp dụng: <b>{selectedBom.name}</b> (1 mẻ ra{" "}
-                  {selectedBom.yieldQty} {selectedBom.yieldUnit})
+                  {selectedBom.yieldQty} {outputUnit})
                 </div>
               )}
               {errors.productId && <p className="text-xs text-destructive">{errors.productId}</p>}
@@ -561,7 +570,7 @@ export function CreateProductionOrderDialog({
                 />
                 {selectedBom && (
                   <span className="flex items-center text-sm text-muted-foreground">
-                    {selectedBom.yieldUnit}
+                    {outputUnit}
                   </span>
                 )}
               </div>

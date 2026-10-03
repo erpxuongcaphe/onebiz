@@ -20,6 +20,12 @@ const readinessAudit = readFileSync(
 );
 
 describe("product dialog draft and inline BOM flow", () => {
+  it("creates prepared recipes in their stock unit without rewriting existing yields", () => {
+    expect(dialog.match(/\.\.\.\(isFnbStockItem \? \{ yieldQty: 1, yieldUnit: finalUnit \} : \{\}\)/g)).toHaveLength(2);
+    const existingUpdate = dialog.slice(dialog.indexOf("await updateBOM(bomExistingId"), dialog.indexOf("savedBomId = bomExistingId"));
+    expect(existingUpdate).not.toContain("yieldQty");
+    expect(existingUpdate).not.toContain("yieldUnit");
+  });
   it("keeps FnB choices in one product draft until the final Save", () => {
     expect(dialog).toContain("const initializedDialogKeyRef = useRef<string | null>(null)");
     expect(dialog).toContain("const loadedModifierDraftKeyRef = useRef<string | null>(null)");
