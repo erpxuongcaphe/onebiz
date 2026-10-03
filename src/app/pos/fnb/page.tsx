@@ -2192,34 +2192,28 @@ function FnbPosPageInner() {
       const paymentManualDiscountAmount = pos.orderDiscountAmount;
       const paymentPromotionId = appliedPromotion?.promotion.id ?? null;
       const paymentCouponCode = couponApplied?.code ?? null;
+      let checkoutStarted = false;
       // CEO 29/05/2026: lấy kitchenOrderId TRỰC TIẾP từ giá trị handleSendToKitchen
       // trả về — KHÔNG đọc lại pos.activeTab (closure cũ chưa cập nhật state sau
       // await → trước đây koId undefined → bấm Thanh toán đơ im lặng, mất đơn).
-      let koId = tab?.kitchenOrderId ?? null;
-      // 29/07 — GIỎ CÒN MÓN THÌ PHẢI GỬI BẾP TRƯỚC KHI TÍNH TIỀN.
-      // Giỏ được dọn sau mỗi lần gửi bếp, nên món còn lại trong giỏ là món
-      // MỚI THÊM chưa ai biết. Trước đây chỉ gửi khi đơn chưa tồn tại
-      // (!koId) — thu ngân thêm món rồi bấm thẳng Thanh toán thì món mới
-      // không vào đơn bếp: bếp không làm, hoá đơn thiếu món, mà màn hình vẫn
-      // cộng tiền món đó vào tổng → thu thừa của khách.
-      // handleSendToKitchen tự phân nhánh: chưa có đơn thì tạo mới, có rồi
-      // thì gửi bổ sung.
-      const soMonChuaGui = tab?.lines.length ?? 0;
-      if (tab && soMonChuaGui > 0) {
-        koId = await handleSendToKitchen();
-      }
-
-      if (!tab || !koId) {
-        fnbSubmitLockRef.current = false;
-        toast({
-          title: "Chưa thể thanh toán",
-          description: "Đơn chưa gửi được bếp hoặc chưa có món — vui lòng thử lại.",
-          variant: "error",
-        });
-        return false;
-      }
-
       try {
+        let koId = tab?.kitchenOrderId ?? null;
+        // Món còn trong giỏ chưa được gửi bếp; gửi trước để hóa đơn khớp KDS.
+        const soMonChuaGui = tab?.lines.length ?? 0;
+        if (tab && soMonChuaGui > 0) {
+          koId = await handleSendToKitchen();
+        }
+
+        if (!tab || !koId) {
+          toast({
+            title: "Chưa thể thanh toán",
+            description: "Đơn chưa gửi được bếp hoặc chưa có món — vui lòng thử lại.",
+            variant: "error",
+          });
+          return false;
+        }
+
+        checkoutStarted = true;
         const payResult = await offlineFnbPayment({
           kitchenOrderId: koId,
           tenantId,
@@ -2425,7 +2419,9 @@ function FnbPosPageInner() {
       } catch (err) {
         hapticError();
         toast({
-          title: "Chưa xác nhận thanh toán - kiểm tra hóa đơn",
+          title: checkoutStarted
+            ? "Chưa xác nhận thanh toán - kiểm tra hóa đơn"
+            : "Chưa gửi được món xuống bếp",
           description: (err as Error).message,
           variant: "error",
         });
