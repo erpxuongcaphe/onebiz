@@ -11,7 +11,7 @@ describe("F&B table transfer ownership", () => {
   });
   it("rejects a stale or released table", () => {
     expect(canTransferFnbTab(parent, [])).toBe(false);
-    expect(canTransferFnbTab(parent, [{ ...tables[0], status: "available", currentOrderId: undefined }])).toBe(false);
+    expect(canTransferFnbTab(parent, [{ ...tables[0], status: "available", currentOrderId: null }])).toBe(false);
   });
   it("rejects orders without a sent order or table", () => {
     expect(canTransferFnbTab(undefined, tables)).toBe(false);
