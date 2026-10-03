@@ -77,4 +77,10 @@ describe("sync queue drawer truthful feedback", () => {
     expect(screen.getByRole("button", { name: "Đồng bộ ngay" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Thử lại mục này" })).toBeDisabled();
   });
+  it("does not show an old error on a legacy completed entry", async () => {
+    mocks.load.mockResolvedValue([{ ...entry("completed"), error: "old timeout" }]);
+    show();
+    await screen.findByRole("button", { name: "Bỏ mục đã đồng bộ" });
+    expect(screen.queryByText("old timeout")).toBeNull();
+  });
 });

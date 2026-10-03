@@ -280,7 +280,7 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                             Đã thử {entry.attempts} lần
                           </div>
                         )}
-                        {entry.error && (
+                        {entry.error && entry.status !== "completed" && (
                           <div className={`text-xs mt-1 break-words ${entry.status === "failed" ? "text-status-error" : "text-muted-foreground"}`}>
                             {entry.error}
                           </div>
