@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   costedQuantity: null as number | null,
   physicalQuantity: null as number | null,
   prepared: true,
+  stockUnit: "" as string,
+  unit: "" as string,
   scopeEnabled: true,
   createProductionOrder: vi.fn(),
   completeProductionAtomic: vi.fn(),
@@ -24,7 +26,7 @@ vi.mock("@/lib/services", () => ({
   getAllBOMs: async () => mocks.boms,
   getBOMsByProduct: async () => mocks.boms,
   getBOMById: async () => mocks.boms[0],
-  getProductById: async () => ({ isFnbStockItem: mocks.prepared }),
+  getProductById: async () => ({ isFnbStockItem: mocks.prepared, stockUnit: mocks.stockUnit, unit: mocks.unit }),
   checkMaterialsAvailability: async () => [{ productId: "ingredient", available: mocks.available }],
   createProductionOrder: mocks.createProductionOrder,
   completeProductionAtomic: mocks.completeProductionAtomic,
@@ -82,6 +84,8 @@ describe("production branch selection", () => {
     mocks.costedQuantity = null;
     mocks.physicalQuantity = null;
     mocks.prepared = true;
+    mocks.stockUnit = "";
+    mocks.unit = "";
     mocks.scopeEnabled = true;
     mocks.createProductionOrder.mockClear();
     mocks.completeProductionAtomic.mockClear();
@@ -172,5 +176,45 @@ describe("production branch selection", () => {
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("warehouse"));
     const finish = selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
+  });
+
+  it.each([
+    [true, "Mẻ/100g", "G", "Mẻ/100g"],
+    [true, "", "G", "G"],
+    [false, "Kg", "Kg", "cái"],
+  ])("labels output in stock units only for F&B prepared goods (%s, %s)", async (prepared, stockUnit, unit, expectedUnit) => {
+    mocks.activeBranchId = "xtb";
+    mocks.prepared = prepared;
+    mocks.stockUnit = stockUnit;
+    mocks.unit = unit;
+    mocks.available = 2;
+    mocks.costedQuantity = 2;
+    mocks.boms = [{
+      id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST",
+      productName: "Cold Brew thử", name: "Công thức thử", isActive: true,
+      yieldQty: 1, yieldUnit: "cái", items: [{
+        materialId: "ingredient", materialCode: "SKU-ING-TEST",
+        materialName: "Cà phê thử", quantity: 0.2, unit: "Túi",
+      }],
+    }];
+    mocks.createProductionOrder.mockResolvedValue({ id: "order", code: "SX-UAT" });
+    mocks.completeProductionAtomic.mockResolvedValue("lot");
+    render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    const finish = selectPreparedProduct();
+    await waitFor(() => expect(finish).toBeEnabled());
+    expect(screen.getByText(expectedUnit, { exact: true })).toBeTruthy();
+    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    await waitFor(() => expect(finish).toBeEnabled());
+    fireEvent.click(finish);
+    await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalled());
+    expect(mocks.createProductionOrder).toHaveBeenCalledWith(expect.objectContaining({
+      branchId: "xtb", plannedQty: 2,
+      materials: [{ productId: "ingredient", plannedQty: 0.4, unit: "Túi" }],
+    }));
+    expect(mocks.completeProductionAtomic.mock.calls[0][1]).toBe(2);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Sản xuất hoàn thành", description: expect.stringContaining(`2 ${expectedUnit}`),
+    }));
   });
 });

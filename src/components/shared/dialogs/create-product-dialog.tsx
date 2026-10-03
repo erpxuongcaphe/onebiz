@@ -2424,6 +2424,7 @@ export function CreateProductDialog({
               } else {
                 const createdBom = await createBOM({
                   productId: initialData.id,
+                  ...(isFnbStockItem ? { yieldQty: 1, yieldUnit: finalUnit } : {}),
                   branchId: bomBranchId,
                   code: getAutomaticBomCode(
                     initialData.code ?? "SKU",
@@ -2658,6 +2659,7 @@ export function CreateProductDialog({
         try {
           const createdBom = await createBOM({
             productId: created.id,
+            ...(isFnbStockItem ? { yieldQty: 1, yieldUnit: finalUnit } : {}),
             branchId: bomBranchId,
             code: getAutomaticBomCode(code, bomBranchId, branches),
             name: bomName || `Công thức cho ${name}`,
