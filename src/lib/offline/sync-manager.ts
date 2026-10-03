@@ -165,7 +165,15 @@ export async function replayQueue(): Promise<SyncResult[]> {
     });
 
     try {
-      const serverData = await executeAction(entry.action, entry.payload);
+      const payload = await resolveKitchenOrderPayload(entry);
+      if (payload === undefined) {
+        const error = "Đơn chưa đồng bộ lên bếp. Giữ thao tác để đồng bộ lại sau.";
+        await db.put("sync_queue", { ...entry, status: "pending", error });
+        results.push({ entryId: entry.id, action: entry.action,
+          localId: entry.localId, success: false, error });
+        continue;
+      }
+      const serverData = await executeAction(entry.action, payload);
 
       // Success — mark completed
       await db.put("sync_queue", {
@@ -226,6 +234,22 @@ export async function replayQueue(): Promise<SyncResult[]> {
 
 // ── Helpers ──
 
+async function resolveKitchenOrderPayload(entry: SyncQueueEntry): Promise<unknown> {
+  if (entry.action !== "fnbPayment" && entry.action !== "addItems") return entry.payload;
+  const payload = entry.payload as { kitchenOrderId: string; tenantId?: string; branchId?: string };
+  if (!payload.kitchenOrderId.startsWith("local_")) return entry.payload;
+  const db = await getDb();
+  const order = await db.get("pending_orders", payload.kitchenOrderId);
+  // Resolve dependencies at replay time, including after an interrupted sync.
+  if (!order?.serverOrderId || order.serverOrderId.startsWith("local_") ||
+      entry.localId !== order.localId ||
+      (entry.action === "fnbPayment" &&
+        (payload.tenantId !== order.tenantId || payload.branchId !== order.branchId))) {
+    return undefined;
+  }
+  return { ...payload, kitchenOrderId: order.serverOrderId };
+}
+
 async function executeAction(
   action: SyncAction,
   payload: unknown
@@ -277,7 +301,7 @@ async function updatePendingOrder(
     const data = serverData as { kitchenOrderId: string; orderNumber: string };
     await db.put("pending_orders", {
       ...order,
-      status: "synced",
+      status: order.status === "pending_payment" ? "pending_payment" : "synced",
       serverOrderId: data.kitchenOrderId,
       serverOrderNumber: data.orderNumber,
       updatedAt: new Date().toISOString(),
