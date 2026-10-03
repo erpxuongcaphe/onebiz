@@ -121,6 +121,7 @@ export function ProductGrid({
           status: "active",
           channel: "retail",
           productType: "sku",
+          allowSale: "true",
         };
         if (catId !== "all") filters.category = catId;
         const query = {

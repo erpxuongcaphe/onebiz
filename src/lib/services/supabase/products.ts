@@ -171,6 +171,10 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
     query = query.eq("is_active", isActive);
   }
 
+  if (params.filters?.allowSale === "true") {
+    query = query.eq("allow_sale", true);
+  }
+
   // Filter: brand (thương hiệu) — case-sensitive match. "Tất cả" = không
   // filter. Nếu FE truyền "__no_brand__" thì filter brand IS NULL (sản phẩm
   // chưa gán thương hiệu).

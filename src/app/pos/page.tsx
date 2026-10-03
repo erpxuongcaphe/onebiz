@@ -468,7 +468,7 @@ function PosPageInner() {
           search: q,
           sortBy: "code",
           sortOrder: "asc",
-          filters: { status: "active", channel: "retail", productType: "sku" },
+          filters: { status: "active", channel: "retail", productType: "sku", allowSale: "true" },
         });
         if (result.data.length > 0) {
           const product = result.data[0];
