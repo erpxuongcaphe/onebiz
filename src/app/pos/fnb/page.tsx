@@ -105,6 +105,7 @@ import { cn } from "@/lib/utils";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
 import { FnbHeader } from "./components/fnb-header";
+import { canTransferFnbTab } from "./table-transfer-eligibility";
 import { FnbLoadingSkeleton } from "./components/fnb-loading-skeleton";
 import { FnbEmptyBranch } from "./components/fnb-empty-branch";
 import type { FnbCategory } from "./components/fnb-category-tabs";
@@ -2818,7 +2819,10 @@ function FnbPosPageInner() {
   const handleTransferTable = useCallback(
     async (toTableId: string) => {
       const tab = pos.activeTab;
-      if (!tab?.kitchenOrderId || !tab.tableId) return;
+      if (!tab?.kitchenOrderId || !tab.tableId || !canTransferFnbTab(tab, tables)) {
+        toast({ title: "Không thể chuyển riêng bill này", description: "Bàn phải đang thuộc đơn được chọn. Vui lòng chọn đơn chính tại sơ đồ bàn.", variant: "warning" });
+        return;
+      }
       if (tab.tableId === toTableId) {
         toast({ title: "Bàn đích trùng bàn hiện tại", variant: "warning" });
         return;
@@ -3533,7 +3537,7 @@ function FnbPosPageInner() {
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
           onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
-          onTransferTable={() => setTransferTableOpen(true)}
+          onTransferTable={canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onOrderHistory={() => setOrderHistoryOpen(true)}
           onApplyCoupon={handleApplyCoupon}
           onRemoveCoupon={handleRemoveCoupon}
@@ -3746,7 +3750,7 @@ function FnbPosPageInner() {
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
               onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
-              onTransferTable={() => setTransferTableOpen(true)}
+              onTransferTable={canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
               onOrderHistory={() => setOrderHistoryOpen(true)}
               onApplyCoupon={handleApplyCoupon}
               onRemoveCoupon={handleRemoveCoupon}
