@@ -100,6 +100,7 @@ describe("F&B offline order dependencies", () => {
     expect(state.orders.get("local_test")).toMatchObject({ status: "pending_payment", paymentData: paymentInput });
     await replayQueue();
     expect(state.payment).toHaveBeenCalledTimes(2);
+    expect(state.queue.get(1)).toMatchObject({ status: "completed", error: null, attempts: 1, payload: paymentInput });
     for (const [input] of state.payment.mock.calls) {
       expect(input).toEqual({ ...paymentInput, kitchenOrderId: "persisted-order" });
     }

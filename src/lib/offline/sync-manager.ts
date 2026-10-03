@@ -166,6 +166,7 @@ export async function replayQueue(): Promise<SyncResult[]> {
       await db.put("sync_queue", {
         ...entry,
         status: "completed",
+        error: null,
         lastAttempt: new Date().toISOString(),
       });
 
