@@ -467,10 +467,12 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
           if (!sent) return [line];
           const currentContent = { ...line, quantity: 0, lineTotal: 0 };
           const sentContent = { ...sent, quantity: 0, lineTotal: 0 };
-          if (JSON.stringify(currentContent) !== JSON.stringify(sentContent)) return [line];
+          if (JSON.stringify(currentContent) !== JSON.stringify(sentContent)) {
+            return [{ ...line, id: nextLineId() }];
+          }
           const quantity = line.quantity - sent.quantity;
           return quantity > 0
-            ? [{ ...line, quantity, lineTotal: calcLineTotal({ ...line, quantity }) }]
+            ? [{ ...line, id: nextLineId(), quantity, lineTotal: calcLineTotal({ ...line, quantity }) }]
             : [];
         });
         return {

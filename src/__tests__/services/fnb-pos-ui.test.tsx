@@ -50,6 +50,7 @@ describe("useFnbPosState", () => {
     expect(result.current.activeTab!.sentLines![0].quantity).toBe(1);
     expect(result.current.activeTab!.lines[0].quantity).toBe(2);
     expect(result.current.activeTab!.lines[0].lineTotal).toBe(70_000);
+    expect(result.current.activeTab!.lines[0].id).not.toBe(snapshot[0].id);
   });
 
   it("acknowledges the original tab even after switching to another tab", () => {
