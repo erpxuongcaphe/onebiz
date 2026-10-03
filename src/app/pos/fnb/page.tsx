@@ -3028,9 +3028,9 @@ function FnbPosPageInner() {
   );
 
   const handleSplitByItems = useCallback(
-    async (itemIds: string[]) => {
+    async (itemIds: string[]): Promise<boolean> => {
       const tab = pos.activeTab;
-      if (!tab?.kitchenOrderId) return;
+      if (!tab?.kitchenOrderId) return false;
       if (!networkStatus.isOnline) {
         hapticError();
         toast({
@@ -3038,11 +3038,11 @@ function FnbPosPageInner() {
           description: "Tách bill không khả dụng khi ngoại tuyến. Vui lòng chờ khôi phục kết nối.",
           variant: "warning",
         });
-        return;
+        return false;
       }
       if (!itemIds || itemIds.length === 0) {
         toast({ title: "Chọn ít nhất 1 món để tách", variant: "warning" });
-        return;
+        return false;
       }
       try {
         const result = await splitByItems(tab.kitchenOrderId, itemIds);
@@ -3060,6 +3060,7 @@ function FnbPosPageInner() {
           description: `${itemIds.length} món chuyển sang tab "${tab.label}-B" — thu tiền ở tab đó`,
           variant: "success",
         });
+        return true;
       } catch (err) {
         hapticError();
         toast({
@@ -3067,15 +3068,16 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+        return false;
       }
     },
     [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
   );
 
   const handleSplitEqually = useCallback(
-    async (numberOfWays: number) => {
+    async (numberOfWays: number): Promise<boolean> => {
       const tab = pos.activeTab;
-      if (!tab?.kitchenOrderId) return;
+      if (!tab?.kitchenOrderId) return false;
       if (!networkStatus.isOnline) {
         hapticError();
         toast({
@@ -3083,15 +3085,15 @@ function FnbPosPageInner() {
           description: "Tách bill không khả dụng khi ngoại tuyến. Vui lòng chờ khôi phục kết nối.",
           variant: "warning",
         });
-        return;
+        return false;
       }
-      if (numberOfWays < 2 || numberOfWays > 10) {
+      if (!Number.isInteger(numberOfWays) || numberOfWays < 2 || numberOfWays > 10) {
         toast({
           title: "Số lần tách không hợp lệ",
           description: "Chỉ chấp nhận từ 2 đến 10 bill.",
           variant: "warning",
         });
-        return;
+        return false;
       }
       try {
         const { childOrderIds } = await splitEqually(tab.kitchenOrderId, numberOfWays);
@@ -3114,6 +3116,7 @@ function FnbPosPageInner() {
           description: `Chia thành ${numberOfWays} phần — thu tiền lần lượt từng tab`,
           variant: "success",
         });
+        return true;
       } catch (err) {
         hapticError();
         toast({
@@ -3121,6 +3124,7 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+        return false;
       }
     },
     [pos, networkStatus.isOnline, toast, loadChildOrderIntoTab, hydrateKitchenOrderIntoTab]
