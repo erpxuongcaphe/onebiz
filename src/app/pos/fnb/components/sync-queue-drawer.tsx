@@ -11,7 +11,7 @@
  * Mở bằng cách click vào ConnectionStatusBar.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Sheet,
   SheetContent,
@@ -64,14 +64,20 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
   const [entries, setEntries] = useState<SyncQueueEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const actionInFlight = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const data = await getQueueEntries();
       setEntries(data);
+      setLoadError(false);
+      return data;
     } catch (err) {
+      setLoadError(true);
       console.error("getQueueEntries failed:", err);
+      return null;
     } finally {
       setLoading(false);
     }
@@ -93,7 +99,8 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
     };
   }, [open, load]);
 
-  const handleSyncNow = async () => {
+  const performSync = async (prepare?: () => Promise<boolean>) => {
+    if (actionInFlight.current || status.isSyncing) return;
     if (!status.isOnline) {
       toast({
         title: "Đang ngoại tuyến",
@@ -102,29 +109,27 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
       });
       return;
     }
-    await status.syncNow();
-    await load();
-    toast({ title: "Đã kích hoạt đồng bộ", variant: "success" });
-  };
-
-  const handleRetryFailed = async () => {
-    if (!status.isOnline) {
-      toast({
-        title: "Đang ngoại tuyến",
-        description: "Không thể thử lại khi mất mạng.",
-        variant: "warning",
-      });
-      return;
-    }
+    actionInFlight.current = true;
     setRetrying(true);
     try {
-      const count = await retryFailedEntries();
-      if (count > 0) {
-        await status.syncNow();
+      if (prepare && !(await prepare())) {
         await load();
-        toast({ title: `Đã thử lại ${count} mục`, variant: "success" });
+        toast({ title: "Không có mục cần thử lại", variant: "default" });
+        return;
+      }
+      await status.syncNow();
+      const refreshed = await load();
+      if (!refreshed) {
+        toast({ title: "Chưa xác nhận được kết quả đồng bộ", variant: "warning" });
+        return;
+      }
+      const waiting = refreshed.filter((entry) => entry.status === "pending" || entry.status === "syncing").length;
+      const failedCount = refreshed.filter((entry) => entry.status === "failed").length;
+      if (waiting || failedCount) {
+        toast({ title: "Đồng bộ chưa hoàn tất",
+          description: `${waiting} mục đang chờ · ${failedCount} mục cần kiểm tra`, variant: "warning" });
       } else {
-        toast({ title: "Không có mục thất bại nào", variant: "default" });
+        toast({ title: "Đồng bộ hoàn tất", variant: "success" });
       }
     } catch (err) {
       toast({
@@ -133,6 +138,7 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
         variant: "error",
       });
     } finally {
+      actionInFlight.current = false;
       setRetrying(false);
     }
   };
@@ -154,34 +160,7 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
 
   const handleRetryOne = async (id?: number) => {
     if (!id) return;
-    if (!status.isOnline) {
-      toast({
-        title: "Đang ngoại tuyến",
-        description: "Hãy kết nối mạng rồi thử lại.",
-        variant: "warning",
-      });
-      return;
-    }
-    try {
-      const reset = await retryQueueEntry(id);
-      if (!reset) {
-        toast({
-          title: "Không thể thử lại",
-          description: "Mục này đang đồng bộ hoặc đã hoàn tất.",
-          variant: "warning",
-        });
-        return;
-      }
-      await status.syncNow();
-      await load();
-      toast({ title: "Đã thử lại 1 mục", variant: "success" });
-    } catch (err) {
-      toast({
-        title: "Thử lại thất bại",
-        description: err instanceof Error ? err.message : "Lỗi không xác định",
-        variant: "error",
-      });
-    }
+    await performSync(() => retryQueueEntry(id));
   };
 
   const pending = entries.filter((e) => e.status === "pending" || e.status === "syncing");
@@ -191,12 +170,12 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="right"
-        className="w-full sm:max-w-md flex flex-col p-0"
+        className="data-[side=right]:w-full data-[side=right]:sm:max-w-md flex flex-col gap-0 p-0"
       >
-        <SheetHeader className="border-b px-4 py-3">
+        <SheetHeader className="border-b pl-4 pr-12 py-3">
           <SheetTitle>Hàng đợi đồng bộ</SheetTitle>
           <SheetDescription>
-            Đơn offline đang chờ gửi lên máy chủ. Khi có mạng sẽ tự động đồng bộ FIFO.
+            Dữ liệu đồng bộ trên thiết bị này.
           </SheetDescription>
         </SheetHeader>
 
@@ -218,24 +197,24 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
               size="sm"
               variant="default"
               className="flex-1"
-              disabled={!status.isOnline || status.isSyncing || pending.length === 0}
-              onClick={handleSyncNow}
+              disabled={!status.isOnline || status.isSyncing || retrying || loading || loadError || pending.length === 0}
+              onClick={() => performSync()}
             >
               <Icon
-                name={status.isSyncing ? "progress_activity" : "sync"}
+                name={status.isSyncing || retrying ? "progress_activity" : "sync"}
                 size={14}
-                className={status.isSyncing ? "animate-spin" : ""}
+                className={status.isSyncing || retrying ? "animate-spin" : ""}
               />
               <span className="ml-1">
-                {status.isSyncing ? "Đang đồng bộ..." : "Đồng bộ ngay"}
+                {status.isSyncing || retrying ? "Đang đồng bộ..." : "Đồng bộ ngay"}
               </span>
             </Button>
             {failed.length > 0 && (
               <Button
                 size="sm"
                 variant="outline"
-                disabled={!status.isOnline || retrying}
-                onClick={handleRetryFailed}
+                disabled={!status.isOnline || retrying || status.isSyncing || loading || loadError}
+                onClick={() => performSync(async () => (await retryFailedEntries()) > 0)}
               >
                 <Icon name="refresh" size={14} />
                 <span className="ml-1">Thử lại</span>
@@ -249,6 +228,14 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" />
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="py-8 px-4 space-y-3">
+              <p className="text-sm text-status-error">Chưa tải được hàng đợi trên thiết bị này.</p>
+              <Button variant="outline" size="sm" onClick={load}>
+                <Icon name="refresh" size={14} />
+                <span className="ml-1">Tải lại danh sách</span>
+              </Button>
             </div>
           ) : entries.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
@@ -294,7 +281,7 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                           </div>
                         )}
                         {entry.error && (
-                          <div className="text-xs text-status-error mt-1 line-clamp-2">
+                          <div className={`text-xs mt-1 break-words ${entry.status === "failed" ? "text-status-error" : "text-muted-foreground"}`}>
                             {entry.error}
                           </div>
                         )}
@@ -305,9 +292,10 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                             size="sm"
                             variant="ghost"
                             onClick={() => handleRetryOne(entry.id)}
-                            disabled={!status.isOnline || status.isSyncing}
+                            disabled={!status.isOnline || status.isSyncing || retrying}
                             className="text-muted-foreground hover:text-status-info"
                             title="Thử lại mục này"
+                            aria-label="Thử lại mục này"
                           >
                             <Icon name="refresh" size={14} />
                           </Button>
@@ -319,6 +307,8 @@ export function SyncQueueDrawer({ open, onOpenChange, status }: SyncQueueDrawerP
                             onClick={() => handleDelete(entry.id)}
                             className="text-muted-foreground hover:text-status-error"
                             title="Bỏ qua mục này"
+                            aria-label="Bỏ mục đã đồng bộ"
+                            disabled={status.isSyncing || retrying}
                           >
                             <Icon name="close" size={14} />
                           </Button>
