@@ -32,8 +32,8 @@ interface SplitBillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   items: SplitItem[];
-  onSplitByItems: (itemIds: string[]) => Promise<void>;
-  onSplitEqually: (numberOfWays: number) => Promise<void>;
+  onSplitByItems: (itemIds: string[]) => Promise<boolean>;
+  onSplitEqually: (numberOfWays: number) => Promise<boolean>;
 }
 
 type Tab = "items" | "equal";
@@ -49,6 +49,8 @@ export function SplitBillDialog({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [numberOfWays, setNumberOfWays] = useState(2);
   const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState(false);
+  const validNumberOfWays = Number.isInteger(numberOfWays) && numberOfWays >= 2 && numberOfWays <= 10;
 
   const toggleItem = (id: string) => {
     setSelectedIds((prev) => {
@@ -60,23 +62,35 @@ export function SplitBillDialog({
   };
 
   const handleSplitItems = async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0 || loading) return;
     setLoading(true);
+    setSubmitError(false);
     try {
-      await onSplitByItems(Array.from(selectedIds));
+      if (!(await onSplitByItems(Array.from(selectedIds)))) {
+        setSubmitError(true);
+        return;
+      }
       setSelectedIds(new Set());
       onOpenChange(false);
+    } catch {
+      setSubmitError(true);
     } finally {
       setLoading(false);
     }
   };
 
   const handleSplitEqual = async () => {
-    if (numberOfWays < 2) return;
+    if (!validNumberOfWays || loading) return;
     setLoading(true);
+    setSubmitError(false);
     try {
-      await onSplitEqually(numberOfWays);
+      if (!(await onSplitEqually(numberOfWays))) {
+        setSubmitError(true);
+        return;
+      }
       onOpenChange(false);
+    } catch {
+      setSubmitError(true);
     } finally {
       setLoading(false);
     }
@@ -90,7 +104,9 @@ export function SplitBillDialog({
   const perPerson = numberOfWays > 0 ? Math.ceil(totalAll / numberOfWays) : 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(nextOpen) => {
+      if (!loading) onOpenChange(nextOpen);
+    }}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -103,6 +119,7 @@ export function SplitBillDialog({
         <div className="flex gap-1 bg-muted/50 p-1 rounded-lg">
           <button
             type="button"
+            disabled={loading}
             onClick={() => setActiveTab("items")}
             className={cn(
               "flex-1 px-3 py-2 rounded text-sm font-medium transition-colors",
@@ -114,6 +131,7 @@ export function SplitBillDialog({
           </button>
           <button
             type="button"
+            disabled={loading}
             onClick={() => setActiveTab("equal")}
             className={cn(
               "flex-1 px-3 py-2 rounded text-sm font-medium transition-colors",
@@ -143,6 +161,7 @@ export function SplitBillDialog({
                   >
                     <input
                       type="checkbox"
+                      disabled={loading}
                       checked={selectedIds.has(item.id)}
                       onChange={() => toggleItem(item.id)}
                       className="rounded"
@@ -173,7 +192,9 @@ export function SplitBillDialog({
                 <Input
                   type="number"
                   min={2}
-                  max={items.length}
+                  max={10}
+                  step={1}
+                  disabled={loading}
                   value={numberOfWays}
                   onChange={(e) => setNumberOfWays(Number(e.target.value) || 2)}
                   className="mt-1 w-32"
@@ -193,8 +214,9 @@ export function SplitBillDialog({
           )}
         </div>
 
+        {submitError && <p role="alert" className="text-sm text-destructive">Chưa xác nhận được kết quả tách bill. Kiểm tra danh sách đơn trước khi thử lại.</p>}
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
           {activeTab === "items" ? (
@@ -203,7 +225,7 @@ export function SplitBillDialog({
               Tách {selectedIds.size} món
             </Button>
           ) : (
-            <Button onClick={handleSplitEqual} disabled={numberOfWays < 2 || loading}>
+            <Button onClick={handleSplitEqual} disabled={!validNumberOfWays || loading}>
               {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Chia {numberOfWays} phần
             </Button>
