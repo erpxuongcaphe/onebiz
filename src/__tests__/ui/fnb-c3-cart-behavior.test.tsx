@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { FnbCart } from "../../app/pos/fnb/components/fnb-cart";
 import type { FnbOrderLine, FnbTabSnapshot } from "@/lib/types/fnb";
@@ -54,6 +54,26 @@ function renderGio(lines: FnbOrderLine[], them: Record<string, unknown> = {}) {
     />,
   );
 }
+
+describe("FnbCart table transfer eligibility", () => {
+  it("does not offer transfer for a split dine-in bill without a table", () => {
+    renderGio([], {
+      activeTab: { id: "split", label: "Ban 2-B", orderType: "dine_in", kitchenOrderId: "order-child", lines: [] },
+      onTransferTable: vi.fn(),
+    });
+    expect(screen.queryByRole("button", { name: "Chuyển bàn" })).not.toBeInTheDocument();
+  });
+
+  it("offers transfer for a sent dine-in order attached to a table", () => {
+    const onTransferTable = vi.fn();
+    renderGio([], {
+      activeTab: { id: "parent", label: "Ban 2", orderType: "dine_in", kitchenOrderId: "order-parent", tableId: "table-2", lines: [] },
+      onTransferTable,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Chuyển bàn" }));
+    expect(onTransferTable).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe("C3 hành vi — fixture 20 dòng", () => {
   it("render đủ 20 dòng, mỗi dòng có nút xoá + đơn giá × SL", () => {

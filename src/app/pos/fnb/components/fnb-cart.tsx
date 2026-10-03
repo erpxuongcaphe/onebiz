@@ -287,7 +287,7 @@ export function FnbCart({
           {/* Kebab actions — chỉ hiện khi đơn đã gửi bếp */}
           {activeTab?.kitchenOrderId && (
             <div className="flex items-center gap-1 shrink-0">
-              {activeTab?.orderType === "dine_in" && onTransferTable && (
+              {activeTab?.orderType === "dine_in" && activeTab.tableId && onTransferTable && (
                 <button
                   type="button"
                   onClick={onTransferTable}
