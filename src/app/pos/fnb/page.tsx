@@ -1753,6 +1753,15 @@ function FnbPosPageInner() {
       // trước in phiếu vì máy chủ đã chốt đơn bếp rồi.
       pos.markActiveLinesSent(tab.lines);
 
+      // The server has claimed this table; reflect it without waiting for a reload.
+      if (networkStatus.isOnline && tab.orderType === "dine_in" && tab.tableId && result.kitchenOrderId) {
+        setTables((prev) => prev.map((table) => table.id === tab.tableId
+          ? { ...table, status: "occupied" as const, currentOrderId: result.kitchenOrderId }
+          : table));
+        if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) =>
+          console.error("[FnB] refresh tables after kitchen submit failed:", err));
+      }
+
       // Print kitchen ticket — Sprint KITCHEN-1: split theo station, mỗi
       // station 1 phiếu (Bar / Bếp / Quầy bánh...). Backward compat: tenant
       // chỉ có 1 station "Bar pha chế" → in 1 phiếu y hệt cũ.
