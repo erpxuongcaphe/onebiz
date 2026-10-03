@@ -124,6 +124,16 @@ jobs:
           node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-supply-cost-flow.sql
           PGDATABASE=fnb_internal_sale_complete_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00419_fnb_internal_sale_complete_chain.integration.sql
 
+      - name: Verify finite F&B table transfer business conflicts
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_transfer_conflict_test
+          PGDATABASE=fnb_transfer_conflict_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00420_fnb_transfer_business_conflict.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
