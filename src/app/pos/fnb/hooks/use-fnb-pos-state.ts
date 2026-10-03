@@ -125,7 +125,7 @@ export interface UseFnbPosStateReturn {
   updateLine: (lineId: string, line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   clearCart: () => void;
   /** Chuyển các món vừa được server nhận vào snapshot "đã gửi bếp". */
-  markActiveLinesSent: () => void;
+  markActiveLinesSent: (snapshot?: FnbOrderLine[]) => void;
   /**
    * 29/07: nạp món vào MỘT tab chỉ định (không cần tab đó đang mở). Dùng cho
    * tách bill: tab con phải cầm sẵn món của đơn con, nếu không màn thanh toán
@@ -456,15 +456,29 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     updateActiveTab(() => []);
   }, [updateActiveTab]);
 
-  const markActiveLinesSent = useCallback(() => {
+  const markActiveLinesSent = useCallback((snapshot?: FnbOrderLine[]) => {
     tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((tab) => {
-        if (tab.id !== activeTabId || tab.lines.length === 0) return tab;
+        if (tab.id !== activeTabId || (snapshot ?? tab.lines).length === 0) return tab;
+        const acknowledged = snapshot ?? tab.lines;
+        const lines = tab.lines.flatMap((line) => {
+          const sent = acknowledged.find((item) => item.id === line.id);
+          if (!sent) return [line];
+          const currentContent = { ...line, quantity: 0, lineTotal: 0 };
+          const sentContent = { ...sent, quantity: 0, lineTotal: 0 };
+          if (JSON.stringify(currentContent) !== JSON.stringify(sentContent)) {
+            return [{ ...line, id: nextLineId() }];
+          }
+          const quantity = line.quantity - sent.quantity;
+          return quantity > 0
+            ? [{ ...line, id: nextLineId(), quantity, lineTotal: calcLineTotal({ ...line, quantity }) }]
+            : [];
+        });
         return {
           ...tab,
-          sentLines: [...(tab.sentLines ?? []), ...tab.lines],
-          lines: [],
+          sentLines: [...(tab.sentLines ?? []), ...acknowledged],
+          lines,
         };
       }),
     );

@@ -1664,7 +1664,7 @@ function FnbPosPageInner() {
         // Server (hoặc hàng đợi offline bền vững) đã nhận món. Chuyển ngay
         // khỏi hàng chờ trước khi in để lỗi máy in không biến lần bấm F10
         // tiếp theo thành một lần gửi trùng vào bếp.
-        pos.markActiveLinesSent();
+        pos.markActiveLinesSent(tab.lines);
 
         // In ticket bổ sung (đánh dấu "BỔ SUNG") — Sprint KITCHEN-1: split
         // theo station, mỗi station 1 phiếu với header lớn (BAR / BẾP / ...).
@@ -1750,7 +1750,7 @@ function FnbPosPageInner() {
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
       // Xem giải thích ở nhánh "gửi bổ sung" phía trên. Mốc này phải đứng
       // trước in phiếu vì máy chủ đã chốt đơn bếp rồi.
-      pos.markActiveLinesSent();
+      pos.markActiveLinesSent(tab.lines);
 
       // Print kitchen ticket — Sprint KITCHEN-1: split theo station, mỗi
       // station 1 phiếu (Bar / Bếp / Quầy bánh...). Backward compat: tenant
