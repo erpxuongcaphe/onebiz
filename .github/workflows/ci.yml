@@ -261,6 +261,8 @@ jobs:
         run: |
           createdb profit_loss_test
           PGDATABASE=profit_loss_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00406_profit_loss_snapshot_cogs.integration.sql
+          createdb profit_loss_cross_period_test
+          PGDATABASE=profit_loss_cross_period_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00426_profit_loss_cross_period.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest
