@@ -45,12 +45,16 @@ export function getStockMovementUnitValue(
       ? movement.unitCost
       : (movement.unitPrice ?? movement.unitCost);
 
-  return value == null ? null : Number(value);
+  if (value == null) return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 export function getStockMovementTotalValue(
   movement: StockMovementValueInput,
 ): number | null {
   const unitValue = getStockMovementUnitValue(movement);
-  return unitValue == null ? null : unitValue * Math.abs(movement.quantity);
+  if (unitValue == null || !Number.isFinite(movement.quantity)) return null;
+  const total = unitValue * Math.abs(movement.quantity);
+  return Number.isFinite(total) ? total : null;
 }
