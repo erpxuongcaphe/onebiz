@@ -19,6 +19,7 @@ import {
   getSignedStockQuantity,
   getStockMovementTotalValue,
   getStockMovementUnitValue,
+  getStockMovementPriceSource,
 } from "@/lib/stock-movement-values";
 
 interface ProductStockMovementsTabProps {
@@ -114,6 +115,7 @@ export function ProductStockMovementsTab({
           ? [
               { header: "Đơn giá", key: "unitValue", width: 16 },
               { header: "Giá trị", key: "movementValue", width: 18 },
+              { header: "Nguồn đơn giá", key: "priceSourceName", width: 24 },
             ]
           : []),
         { header: "Tồn cuối", key: "runningBalance", width: 14 },
@@ -132,6 +134,7 @@ export function ProductStockMovementsTab({
         signedQuantity: getSignedStockQuantity(movement),
         unitValue: getStockMovementUnitValue(movement),
         movementValue: getStockMovementTotalValue(movement),
+        priceSourceName: canViewCost ? getStockMovementPriceSource(movement).label : undefined,
       }));
       const safeCode = productCode.replace(/[^a-zA-Z0-9_-]+/g, "-");
       const safeScope = scopeName
@@ -289,8 +292,11 @@ export function ProductStockMovementsTab({
                   </span>
                 )}
                 {canViewCost && (
-                  <span className="text-right tabular-nums text-xs">
+                  <span className="text-right tabular-nums text-xs" title={getStockMovementPriceSource(m).description}>
                     {unitValue != null ? formatCurrency(unitValue) : "—"}
+                    <span className="block text-[10px] text-muted-foreground leading-tight mt-0.5">
+                      {getStockMovementPriceSource(m).label}
+                    </span>
                   </span>
                 )}
                 {canViewCost && (

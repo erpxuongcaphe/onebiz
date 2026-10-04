@@ -143,6 +143,7 @@ export interface StockMovement {
    * unitPrice=đơn giá phiếu nhập. NULL với dòng cũ chưa có giá. */
   unitCost?: number;
   unitPrice?: number;
+  recordedPriceSource?: "branch_cost_ledger" | "movement_snapshot" | "unknown";
 }
 
 /** Đợt 4 — Thẻ kho: sổ 1 mặt hàng (± theo chi nhánh) kèm tồn cuối cộng dồn

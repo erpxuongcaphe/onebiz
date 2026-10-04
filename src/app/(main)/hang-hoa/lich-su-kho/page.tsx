@@ -34,6 +34,7 @@ import {
   getSignedStockQuantity,
   getStockMovementTotalValue,
   getStockMovementUnitValue,
+  getStockMovementPriceSource,
 } from "@/lib/stock-movement-values";
 import { readXntMovementFilter } from "@/lib/reports/xnt-drilldown";
 
@@ -213,6 +214,7 @@ export default function LichSuKhoPage() {
         ? [
             { header: "Đơn giá", key: "unitValue", width: 16 },
             { header: "Giá trị", key: "movementValue", width: 18 },
+            { header: "Nguồn đơn giá", key: "priceSourceName", width: 24 },
           ]
         : []),
       { header: "Đối tác/Bộ phận", key: "partner", width: 25 },
@@ -251,6 +253,7 @@ export default function LichSuKhoPage() {
         signedQuantity: getSignedStockQuantity(row),
         unitValue: getStockMovementUnitValue(row),
         movementValue: getStockMovementTotalValue(row),
+        priceSourceName: canViewCost ? getStockMovementPriceSource(row).label : undefined,
       }));
       const selectedBranch = branches.find((branch) => branch.id === branchFilter)?.name;
       const scopeName = branchFilter === "all" ? "toan-chuoi" : selectedBranch ?? "chi-nhanh";
@@ -290,8 +293,11 @@ export default function LichSuKhoPage() {
           cell: ({ row }) => {
             const value = getStockMovementUnitValue(row.original);
             return (
-              <span className="block text-right tabular-nums">
+              <span className="block text-right tabular-nums" title={getStockMovementPriceSource(row.original).description}>
                 {value != null ? formatCurrency(value) : "—"}
+                <span className="block text-[11px] text-muted-foreground leading-tight mt-0.5">
+                  {getStockMovementPriceSource(row.original).label}
+                </span>
               </span>
             );
           },

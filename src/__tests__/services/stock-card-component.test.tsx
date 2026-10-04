@@ -30,6 +30,7 @@ const movement = {
   branchName: "Chi nhánh A",
   runningBalance: 7,
   unitPrice: 12000,
+  recordedPriceSource: "movement_snapshot" as const,
 };
 
 describe("ProductStockMovementsTab branch scope", () => {
@@ -111,6 +112,7 @@ describe("ProductStockMovementsTab branch scope", () => {
     expect(await screen.findByText("Chi nhánh")).toBeInTheDocument();
     expect(screen.getByText("Chi nhánh A")).toBeInTheDocument();
     expect(screen.queryByText("Đơn giá")).not.toBeInTheDocument();
+    expect(screen.queryByText("Giá dòng kho")).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Xuất Excel thẻ kho" }));
     await waitFor(() => {
@@ -119,6 +121,7 @@ describe("ProductStockMovementsTab branch scope", () => {
     const [, columns] = vi.mocked(exportToExcel).mock.calls[0];
     expect(columns.map((column) => column.header)).not.toContain("Đơn giá");
     expect(columns.map((column) => column.header)).not.toContain("Giá trị");
+    expect(columns.map((column) => column.header)).not.toContain("Nguồn đơn giá");
   });
 
   it("exports the complete stock card with an explicit file name", async () => {
@@ -146,9 +149,26 @@ describe("ProductStockMovementsTab branch scope", () => {
       scopeName: "Chi nhánh A",
       signedQuantity: 2,
       runningBalance: 7,
+      priceSourceName: "Giá dòng kho",
     });
     expect(columns.map((column) => column.header)).toContain("Mã phiếu");
     expect(columns.map((column) => column.header)).toContain("Đơn giá");
+    expect(columns.map((column) => column.header)).toContain("Nguồn đơn giá");
     expect(fileName).toMatch(/^the-kho_SP-001_chi-nhanh-a_/);
+  });
+
+  it("shows the recorded branch ledger source and never labels zero as missing", async () => {
+    vi.mocked(getStockCard).mockResolvedValueOnce({
+      data: [{ ...movement, unitPrice: 0, unitCost: 0, recordedPriceSource: "branch_cost_ledger" }],
+      total: 1, systemStock: 7, computedFinal: 7, drift: 0,
+    });
+    render(<ProductStockMovementsTab productId="product-1" productCode="SP-001" productName="A" branchId="branch-1" canViewCost />);
+    expect(await screen.findByText("Sổ vốn chi nhánh")).toBeInTheDocument();
+    expect(screen.queryByText("Chưa có đơn giá")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name: "Xuất Excel thẻ kho"}));
+    await waitFor(() => expect(exportToExcel).toHaveBeenCalledTimes(1));
+    expect(vi.mocked(exportToExcel).mock.calls[0][0][0]).toMatchObject({
+      priceSourceName: "Sổ vốn chi nhánh", unitValue: 0, movementValue: 0,
+    });
   });
 });

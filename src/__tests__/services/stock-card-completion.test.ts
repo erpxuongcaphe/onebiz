@@ -6,6 +6,7 @@ import {
   getSignedStockQuantity,
   getStockMovementTotalValue,
   getStockMovementUnitValue,
+  getStockMovementPriceSource,
 } from "@/lib/stock-movement-values";
 
 const migration = readFileSync(
@@ -87,7 +88,7 @@ describe("stock card completion", () => {
       { type: "out", unit_cost: 6000, unit_price: null },
       { unit_cost: 10000, quantity: 0.1 },
     );
-    expect(salePrices).toEqual({ unitCost: 10000, unitPrice: undefined });
+    expect(salePrices).toEqual({ unitCost: 10000, unitPrice: undefined, recordedPriceSource: "branch_cost_ledger" });
     expect(getStockMovementTotalValue({ type: "export", quantity: 0.1, ...salePrices })).toBe(1000);
 
     const receiptPrices = getRecordedMovementPrices(
@@ -100,13 +101,25 @@ describe("stock card completion", () => {
 
   it("keeps Retail and legacy movement prices unchanged without a branch cost event", () => {
     expect(getRecordedMovementPrices({ type: "out", unit_cost: 6000, unit_price: null }))
-      .toEqual({ unitCost: 6000, unitPrice: undefined });
+      .toEqual({ unitCost: 6000, unitPrice: undefined, recordedPriceSource: "movement_snapshot" });
     expect(getRecordedMovementPrices({ type: "in", unit_cost: 6000, unit_price: 9000 }))
-      .toEqual({ unitCost: 6000, unitPrice: 9000 });
+      .toEqual({ unitCost: 6000, unitPrice: 9000, recordedPriceSource: "movement_snapshot" });
     expect(getRecordedMovementPrices(
       { type: "out", unit_cost: 6000, unit_price: null },
       { unit_cost: 10000, quantity: 0 },
-    )).toEqual({ unitCost: 6000, unitPrice: undefined });
+    )).toEqual({ unitCost: 6000, unitPrice: undefined, recordedPriceSource: "movement_snapshot" });
+  });
+
+  it("distinguishes ledger, movement and unverified prices without inventing costs", () => {
+    const zero = getRecordedMovementPrices({ type: "out", unit_cost: 200, unit_price: null }, { unit_cost: 0, quantity: 1 });
+    expect(getStockMovementPriceSource({ type: "export", quantity: 1, ...zero }).label).toBe("Sổ vốn chi nhánh");
+    expect(getStockMovementTotalValue({ type: "export", quantity: 1, ...zero })).toBe(0);
+    const legacy = getRecordedMovementPrices({ type: "out", unit_cost: 200, unit_price: null });
+    expect(getStockMovementPriceSource({ type: "export", quantity: 1, ...legacy }).description).toContain("Không thay thế sổ vốn chi nhánh");
+    expect(getStockMovementPriceSource({ type: "export", quantity: 1, unitCost: 200 }).label).toBe("Chưa rõ nguồn giá");
+    const missing = getRecordedMovementPrices({ type: "out", unit_cost: null, unit_price: null });
+    expect(missing.recordedPriceSource).toBe("unknown");
+    expect(getStockMovementPriceSource({ type: "export", quantity: 1, ...missing }).label).toBe("Chưa có đơn giá");
   });
 
   it("matches branch-cost events by movement ID across history and stock-card readers", () => {
