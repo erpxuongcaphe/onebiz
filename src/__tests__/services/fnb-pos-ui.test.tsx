@@ -1045,6 +1045,85 @@ describe("FnbPaymentDialog — component", () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("locks every payment field and retains the mixed payload after an uncertain result", async () => {
+    let finish!: (ok: boolean) => void;
+    const onConfirm = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: "Hỗn hợp" }));
+    fireEvent.change(screen.getByLabelText("Tiền mặt"), { target: { value: "100000" } });
+    fireEvent.change(screen.getByLabelText("Chuyển khoản"), { target: { value: "50000" } });
+    fireEvent.change(screen.getByLabelText("Thẻ"), { target: { value: "10000" } });
+    fireEvent.change(screen.getByLabelText(/Tiền tip/), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText(/Khách hàng/), { target: { value: "Khách UAT" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    for (const input of screen.getAllByRole("textbox")) expect(input).toBeDisabled();
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Tiền mặt" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Đủ" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Không" })).toBeDisabled();
+    expect(onConfirm).toHaveBeenCalledWith({ paymentMethod: "mixed", paid: 160000,
+      customerName: "Khách UAT", allowDebt: true, tipAmount: 5000,
+      paymentBreakdown: { cash: 100000, transfer: 50000, card: 10000 } });
+    await act(async () => finish(false));
+    expect(screen.getByRole("alert")).toHaveTextContent("Kiểm tra hóa đơn");
+    expect(screen.getByLabelText("Tiền mặt")).toHaveValue("100000");
+    expect(screen.getByLabelText("Chuyển khoản")).toHaveValue("50000");
+    expect(screen.getByLabelText("Thẻ")).toHaveValue("10000");
+    expect(screen.getByLabelText(/Tiền tip/)).toHaveValue("5000");
+    expect(screen.getByLabelText(/Khách hàng/)).toHaveValue("Khách UAT");
+    expect(screen.getByRole("checkbox")).toBeChecked();
+    for (const input of screen.getAllByRole("textbox")) expect(input).not.toBeDisabled();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    expect(onConfirm.mock.calls[1]).toEqual(onConfirm.mock.calls[0]);
+    await act(async () => finish(true));
+  });
+
+  it("blocks same-render double click and dismissal before submitting state renders", async () => {
+    let finish!: (ok: boolean) => void;
+    const onConfirm = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const onOpenChange = vi.fn();
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} onOpenChange={onOpenChange} />);
+    fireEvent.click(screen.getByText("Đủ"));
+    const button = screen.getByRole("button", { name: /Hoàn tất thanh toán/ });
+    act(() => {
+      fireEvent.click(button);
+      fireEvent.click(button);
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    });
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    await act(async () => finish(true));
+  });
+
+  it("unlocks and preserves input after a rejected request without automatic retry", async () => {
+    const onConfirm = vi.fn().mockRejectedValue(new Error("network response lost"));
+    render(<FnbPaymentDialog {...baseProps} onConfirm={onConfirm} />);
+    fireEvent.change(screen.getByLabelText("Tiền khách đưa"), { target: { value: "500000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await screen.findByRole("alert");
+    expect(screen.getByLabelText("Tiền khách đưa")).toHaveValue("500000");
+    expect(screen.getByLabelText("Tiền khách đưa")).not.toBeDisabled();
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not leave checkout locked when customer confirmation throws", async () => {
+    const onCustomerConfirmed = vi.fn().mockImplementationOnce(() => { throw new Error("customer context failed"); });
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    render(<FnbPaymentDialog {...baseProps} customerConfirmationRequired onCustomerConfirmed={onCustomerConfirmed} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByText("Đủ"));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Tôi xác nhận đây là Khách lẻ" }));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await screen.findByRole("alert");
+    expect(onConfirm).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).not.toBeDisabled();
+    expect(screen.getByLabelText("Tiền khách đưa")).toHaveValue("200000");
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
+  });
+
   it("confirm button hiện tổng tiền (total, không phải subtotal)", () => {
     render(
       <FnbPaymentDialog

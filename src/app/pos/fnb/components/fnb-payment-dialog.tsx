@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -84,6 +84,8 @@ export function FnbPaymentDialog({
   const [walkInConfirmed, setWalkInConfirmed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
+  const submittingRef = useRef(false);
+  const fieldId = useId();
 
   useEffect(() => {
     if (open) {
@@ -137,12 +139,10 @@ export function FnbPaymentDialog({
     (!customerConfirmationRequired || walkInConfirmed);
 
   const handleConfirm = async () => {
-    if (submitting) return;
+    if (!canConfirm || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setSubmitError(false);
-    if (customerConfirmationRequired && walkInConfirmed) {
-      onCustomerConfirmed?.();
-    }
     const payload: FnbPaymentConfirmPayload = {
       paymentMethod: method, paid: totalPaid,
       customerName: customerName.trim() || "Khách lẻ",
@@ -157,10 +157,14 @@ export function FnbPaymentDialog({
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
     }
     try {
+      if (customerConfirmationRequired && walkInConfirmed) {
+        onCustomerConfirmed?.();
+      }
       if (!(await onConfirm(payload))) setSubmitError(true);
     } catch {
       setSubmitError(true);
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
@@ -174,7 +178,7 @@ export function FnbPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
-      if (!submitting) onOpenChange(nextOpen);
+      if (!submittingRef.current) onOpenChange(nextOpen);
     }}>
       {/* 06/08 (CEO duyệt plan vòng 4): 3 phần — đầu cố định / thân cuộn /
           chân cố định. Trước đây dialog 720px trên màn 703px đã tràn 2 đầu;
@@ -185,7 +189,8 @@ export function FnbPaymentDialog({
           <DialogDescription>{lineCount} món</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 flex-1 overflow-y-auto space-y-4 py-2 [@media(max-height:720px)]:space-y-3 [@media(max-height:720px)]:py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto min-w-0 py-2 [@media(max-height:720px)]:py-1">
+        <fieldset disabled={submitting} aria-busy={submitting} className="min-w-0 space-y-4 [@media(max-height:720px)]:space-y-3">
           {/* Order summary */}
           <div className="rounded-lg bg-muted px-3 py-2 space-y-1 text-sm">
             <div className="flex justify-between">
@@ -246,7 +251,7 @@ export function FnbPaymentDialog({
 
           {/* Tip — quick buttons + custom input */}
           <div className="space-y-2">
-            <Label className="text-sm flex items-center gap-2">
+            <Label htmlFor={`${fieldId}-tip`} className="text-sm flex items-center gap-2">
               <Icon name="volunteer_activism" size={14} /> Tiền tip (tuỳ chọn)
             </Label>
             <div className="flex gap-2 flex-wrap">
@@ -272,6 +277,7 @@ export function FnbPaymentDialog({
               ))}
             </div>
             <Input
+              id={`${fieldId}-tip`}
               type="text"
               inputMode="numeric"
               placeholder="Hoặc nhập số tiền tuỳ ý"
@@ -300,8 +306,8 @@ export function FnbPaymentDialog({
           {/* Cash input (for cash & mixed) */}
           {(method === "cash" || method === "mixed") && (
             <div className="space-y-2">
-              <Label className="text-sm">{method === "mixed" ? "Tiền mặt" : "Tiền khách đưa"}</Label>
-              <Input type="text" inputMode="numeric" placeholder="0"
+              <Label htmlFor={`${fieldId}-cash`} className="text-sm">{method === "mixed" ? "Tiền mặt" : "Tiền khách đưa"}</Label>
+              <Input id={`${fieldId}-cash`} type="text" inputMode="numeric" placeholder="0"
                 value={cashInput} onChange={(e) => setCashInput(e.target.value)}
                 autoFocus={method === "cash"}
                 className={cn(
@@ -334,14 +340,14 @@ export function FnbPaymentDialog({
           {method === "mixed" && (
             <>
               <div className="space-y-2">
-                <Label className="text-sm">Chuyển khoản</Label>
-                <Input type="text" inputMode="numeric" placeholder="0"
+                <Label htmlFor={`${fieldId}-transfer`} className="text-sm">Chuyển khoản</Label>
+                <Input id={`${fieldId}-transfer`} type="text" inputMode="numeric" placeholder="0"
                   value={transferInput} onChange={(e) => setTransferInput(e.target.value)}
                   className="tabular-nums" />
               </div>
               <div className="space-y-2">
-                <Label className="text-sm">Thẻ</Label>
-                <Input type="text" inputMode="numeric" placeholder="0"
+                <Label htmlFor={`${fieldId}-card`} className="text-sm">Thẻ</Label>
+                <Input id={`${fieldId}-card`} type="text" inputMode="numeric" placeholder="0"
                   value={cardInput} onChange={(e) => setCardInput(e.target.value)}
                   className="tabular-nums" />
               </div>
@@ -420,10 +426,11 @@ export function FnbPaymentDialog({
 
           {/* Customer */}
           <div className="space-y-2">
-            <Label className="text-sm flex items-center gap-2">
+            <Label htmlFor={`${fieldId}-customer`} className="text-sm flex items-center gap-2">
               <Icon name="person" size={14} /> Khách hàng
             </Label>
             <Input
+              id={`${fieldId}-customer`}
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
               placeholder="Khách lẻ"
@@ -451,6 +458,7 @@ export function FnbPaymentDialog({
               </div>
             )}
           </div>
+        </fieldset>
         </div>
 
         {/* Chân cố định — NGOÀI vùng cuộn, bàn phím ảo không che được. */}
