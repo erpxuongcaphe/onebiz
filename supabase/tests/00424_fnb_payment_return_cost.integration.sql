@@ -8,7 +8,6 @@ do $$ begin
   end if;
 end $$;
 \ir 00423_fnb_checkout_cost_ledger.integration.sql
-\ir ../migrations/00397_fnb_return_bom_cost_restore.sql
 select set_config('test.actor','00000000-0000-0000-0000-000000000001',false);
 select test_pay();
 select test_assert((select count(*)=1 and min(total)=90000 and min(paid)=90000 from invoices),'paid invoice posts once');
