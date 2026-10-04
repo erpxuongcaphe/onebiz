@@ -59,7 +59,7 @@ begin raise exception 'UAT_LATE_LOT_FAILURE'; end $$;
 create trigger test_late_lot_failure after insert on product_lots for each row execute function test_late_lot_failure();
 do $$ declare before_state jsonb:=test_full_snapshot(); message text; begin
  begin perform test_refund(1,30000); exception when others then get stacked diagnostics message=message_text; end;
- perform test_assert(message='UAT_LATE_LOT_FAILURE','return reaches lot stage after cash and BOM');
+ perform test_assert(message='UAT_LATE_LOT_FAILURE','return reaches lot stage after cash and BOM; actual=' || coalesce(message,'no exception'));
  perform test_assert(test_full_snapshot()=before_state,'late failure rolls back refund, BOM, cost, documents, lots and KDS');
 end $$;
 drop trigger test_late_lot_failure on product_lots;
