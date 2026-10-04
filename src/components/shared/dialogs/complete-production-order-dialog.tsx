@@ -16,6 +16,7 @@ import { useToast, useAuth } from "@/lib/contexts";
 import {
   completeProductionAtomic,
   checkMaterialsAvailability,
+  getProductionOrderById,
   getBranches,
   createInternalSale,
   syncInternalEntities,
@@ -55,6 +56,7 @@ export function CompleteProductionOrderDialog({
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState(false);
   const [checkAttempt, setCheckAttempt] = useState(0);
+  const [detailError, setDetailError] = useState(false);
 
   // Auto-sell state
   const [autoSell, setAutoSell] = useState(false);
@@ -92,18 +94,32 @@ export function CompleteProductionOrderDialog({
     let active = true;
     setChecking(Boolean(open && order?.materials?.length));
     setCheckError(false);
+    setDetailError(false);
     setMaterialChecks([]);
-    if (!open || !order?.materials?.length) return;
-    checkMaterialsAvailability(order.branchId, order.materials.map((m) => ({
-      productId: m.productId, productName: m.productName,
-      plannedQty: m.plannedQty, unit: m.unit,
-    }))).then((checks) => {
-      if (active) setMaterialChecks(checks);
-    }).catch(() => {
-      if (active) setCheckError(true);
-    }).finally(() => {
-      if (active) setChecking(false);
-    });
+    if (!open || !order) return;
+    setChecking(true);
+    async function loadChecks() {
+      let detail = order!;
+      if (!detail.materials) {
+        try {
+          detail = await getProductionOrderById(detail.id);
+        } catch {
+          if (active) setDetailError(true);
+          return;
+        }
+      }
+      if (!active) return;
+      try {
+        const checks = await checkMaterialsAvailability(detail.branchId, (detail.materials ?? []).map((m) => ({
+          productId: m.productId, productName: m.productName,
+          plannedQty: m.plannedQty, unit: m.unit,
+        })));
+        if (active) setMaterialChecks(checks);
+      } catch {
+        if (active) setCheckError(true);
+      }
+    }
+    void loadChecks().finally(() => { if (active) setChecking(false); });
     return () => { active = false; };
   }, [checkAttempt, open, order]);
 
@@ -111,6 +127,7 @@ export function CompleteProductionOrderDialog({
 
   async function handleComplete() {
     if (!order) return;
+    if (checking || detailError) return;
     if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0) {
       toast({ title: "Số lượng phải > 0", variant: "warning" });
       return;
@@ -266,7 +283,7 @@ export function CompleteProductionOrderDialog({
           </div>
 
           {/* Material availability check */}
-          {(checking || checkError || materialChecks.length > 0) && (
+          {(checking || checkError || detailError || materialChecks.length > 0) && (
             <div className="rounded-lg border border-border overflow-hidden bg-surface-container-lowest" aria-busy={checking}>
               <div className="px-3 py-2 bg-surface-container-low text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -275,7 +292,7 @@ export function CompleteProductionOrderDialog({
                 </span>
                 {checking ? (
                   <Icon name="progress_activity" size={14} className="animate-spin" />
-                ) : checkError ? null : hasShortage ? (
+                ) : checkError || detailError ? null : hasShortage ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                     <span className="size-1.5 rounded-full bg-status-warning" />
                     Thiếu NVL
@@ -287,9 +304,9 @@ export function CompleteProductionOrderDialog({
                   </span>
                 )}
               </div>
-              {checking ? <p role="status" className="px-3 py-3 text-sm text-muted-foreground">Đang kiểm tra nguyên liệu...</p> : checkError ? (
+              {checking ? <p role="status" className="px-3 py-3 text-sm text-muted-foreground">Đang kiểm tra nguyên liệu...</p> : checkError || detailError ? (
                 <div role="alert" className="px-3 py-3 space-y-2">
-                  <p className="text-sm text-status-warning">Chưa kiểm tra được tồn nguyên liệu. Hệ thống sẽ kiểm tra lại khi hoàn tất.</p>
+                  <p className="text-sm text-status-warning">{detailError ? "Chưa tải được nguyên liệu của lệnh. Thử lại trước khi hoàn tất." : "Chưa kiểm tra được tồn nguyên liệu. Hệ thống sẽ kiểm tra lại khi hoàn tất."}</p>
                   <Button type="button" variant="outline" onClick={() => setCheckAttempt((n) => n + 1)}>Thử lại</Button>
                 </div>
               ) : <div className="overflow-x-auto"><table className="w-full text-xs">
@@ -366,7 +383,7 @@ export function CompleteProductionOrderDialog({
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleComplete} disabled={saving}>
+          <Button onClick={handleComplete} disabled={saving || checking || detailError}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Hoàn thành
           </Button>

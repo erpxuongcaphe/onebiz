@@ -211,4 +211,91 @@ begin
   end if;
 end;
 $$;
-select '00417 real production function chain passed' as result;
+-- Retrying a completed batch must be rejected without another stock/cost issue.
+do $$
+declare v_message text; v_before jsonb; v_after jsonb;
+begin
+  select jsonb_build_object(
+    'stock', (select jsonb_agg(to_jsonb(s) order by branch_id,product_id) from branch_stock s),
+    'cost', (select jsonb_agg(to_jsonb(b) order by branch_id,product_id) from fnb_branch_product_cost_balances b),
+    'moves', (select count(*) from stock_movements),
+    'events', (select count(*) from fnb_branch_product_cost_events),
+    'lots', (select count(*) from product_lots),
+    'audit', (select count(*) from audit_log)
+  ) into v_before;
+  begin
+    perform complete_production_atomic('70000000-0000-0000-0000-000000000001',10,'LOT-RETRY',current_date,null);
+  exception when others then get stacked diagnostics v_message=message_text;
+  end;
+  if v_message is distinct from 'PRODUCTION_COMPLETE_STATUS_OR_QTY_INVALID' then
+    raise exception 'Unexpected repeat-completion result: %',v_message;
+  end if;
+  select jsonb_build_object(
+    'stock', (select jsonb_agg(to_jsonb(s) order by branch_id,product_id) from branch_stock s),
+    'cost', (select jsonb_agg(to_jsonb(b) order by branch_id,product_id) from fnb_branch_product_cost_balances b),
+    'moves', (select count(*) from stock_movements),
+    'events', (select count(*) from fnb_branch_product_cost_events),
+    'lots', (select count(*) from product_lots),
+    'audit', (select count(*) from audit_log)
+  ) into v_after;
+  if v_before is distinct from v_after then raise exception 'Repeat completion changed stock or cost'; end if;
+  raise notice 'PASS: repeat completion is finite and leaves stock/cost/lots/audit unchanged';
+end $$;
+
+insert into production_orders(id,tenant_id,branch_id,product_id,code,created_by,status,planned_qty)
+values ('70000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000001',
+ '20000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-000000000002',
+ 'SX-FAIL-LOT','40000000-0000-0000-0000-000000000001','planned',10);
+insert into production_order_materials values ('71000000-0000-0000-0000-000000000002',
+ '70000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-000000000001',1,null,'Tui',11000);
+-- Deliberately fail after the real consume and receipt code has run, inside
+-- this disposable database only. No production migration or trigger is changed.
+create function test_fail_batch_lot() returns trigger language plpgsql as $$
+begin
+  if new.production_order_id='70000000-0000-0000-0000-000000000002' then
+    if not exists(select 1 from stock_movements where reference_id=new.production_order_id and type='out') then
+      raise exception 'TEST_FAILURE_DID_NOT_REACH_CONSUMPTION';
+    end if;
+    raise exception 'TEST_LOT_INSERT_FAILURE';
+  end if;
+  return new;
+end $$;
+create trigger test_fail_batch_lot before insert on product_lots for each row execute function test_fail_batch_lot();
+do $$
+declare v_message text; v_before jsonb; v_after jsonb;
+begin
+  select jsonb_build_object(
+    'stock', (select jsonb_agg(to_jsonb(s) order by branch_id,product_id) from branch_stock s),
+    'products', (select jsonb_agg(to_jsonb(p) order by id) from products p),
+    'orders', (select jsonb_agg(to_jsonb(o) order by id) from production_orders o),
+    'materials', (select jsonb_agg(to_jsonb(m) order by id) from production_order_materials m),
+    'cost', (select jsonb_agg(to_jsonb(b) order by branch_id,product_id) from fnb_branch_product_cost_balances b),
+    'events', (select jsonb_agg(to_jsonb(e) order by id) from fnb_branch_product_cost_events e),
+    'moves', (select jsonb_agg(to_jsonb(s) order by id) from stock_movements s),
+    'lots', (select jsonb_agg(to_jsonb(l) order by id) from product_lots l),
+    'audit', (select count(*) from audit_log),
+    'reconciliations', (select count(*) from lot_reconciliations)
+  ) into v_before;
+  begin
+    perform complete_production_atomic('70000000-0000-0000-0000-000000000002',10,'LOT-FAIL',current_date,null);
+  exception when others then get stacked diagnostics v_message=message_text;
+  end;
+  if v_message is distinct from 'TEST_LOT_INSERT_FAILURE' then raise exception 'Wrong late-failure path: %',v_message; end if;
+  select jsonb_build_object(
+    'stock', (select jsonb_agg(to_jsonb(s) order by branch_id,product_id) from branch_stock s),
+    'products', (select jsonb_agg(to_jsonb(p) order by id) from products p),
+    'orders', (select jsonb_agg(to_jsonb(o) order by id) from production_orders o),
+    'materials', (select jsonb_agg(to_jsonb(m) order by id) from production_order_materials m),
+    'cost', (select jsonb_agg(to_jsonb(b) order by branch_id,product_id) from fnb_branch_product_cost_balances b),
+    'events', (select jsonb_agg(to_jsonb(e) order by id) from fnb_branch_product_cost_events e),
+    'moves', (select jsonb_agg(to_jsonb(s) order by id) from stock_movements s),
+    'lots', (select jsonb_agg(to_jsonb(l) order by id) from product_lots l),
+    'audit', (select count(*) from audit_log),
+    'reconciliations', (select count(*) from lot_reconciliations)
+  ) into v_after;
+  if v_before is distinct from v_after then raise exception 'Late lot failure left a partial production batch'; end if;
+  raise notice 'PASS: lot failure after real material consumption rolls back stock, cost, orders, materials, lots and audit';
+end $$;
+drop trigger test_fail_batch_lot on product_lots;
+drop function test_fail_batch_lot();
+select '00417 real production function chain and late-failure rollback passed' as result;
