@@ -17,10 +17,10 @@ update public.invoices set source = 'fnb' where status = 'completed';
 
 -- A cancelled return must not contribute; a confirmed Size M return belongs
 -- to November, not October. Both link to the original immutable sale cost.
-insert into public.sales_returns values
+insert into public.sales_returns(id, invoice_id, tenant_id, branch_id, status, total, created_at) values
  ('70000000-0000-0000-0000-000000000002','30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','cancelled',900,'2026-10-10'),
- ('70000000-0000-0000-0000-000000000003','30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','confirmed',20,'2026-11-01 00:00:00+07');
-insert into public.return_items values
+ ('70000000-0000-0000-0000-000000000003','30000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','confirmed',20,'2026-11-01 00:00:00+07');
+insert into public.return_items(id, return_id, invoice_item_id, product_id, product_name, quantity, unit_price) values
  ('80000000-0000-0000-0000-000000000002','70000000-0000-0000-0000-000000000002','50000000-0000-0000-0000-000000000001','60000000-0000-0000-0000-000000000001','Xuong Gu Viet (Size L)',1,900),
  ('80000000-0000-0000-0000-000000000003','70000000-0000-0000-0000-000000000003','50000000-0000-0000-0000-000000000002','60000000-0000-0000-0000-000000000001','Xuong Gu Viet (Size M)',1,20);
 
