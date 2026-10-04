@@ -1656,10 +1656,19 @@ function FnbPosPageInner() {
 
       if (isAddItems) {
         // ── Gửi bổ sung vào đơn đã tồn tại ──
-        await offlineAddItemsToExistingOrder(
+        const addResult = await offlineAddItemsToExistingOrder(
           tab.kitchenOrderId!,
           mappedItems,
-          networkStatus.isOnline
+          networkStatus.isOnline,
+          {
+            requestIdentity: {
+              tenantId,
+              branchId: branchId!,
+              createdBy: userId,
+              tabId: tab.id,
+              lineIds: tab.lines.map((line) => line.id),
+            },
+          },
         );
 
         // Server (hoặc hàng đợi offline bền vững) đã nhận món. Chuyển ngay
@@ -1696,7 +1705,7 @@ function FnbPosPageInner() {
               cashierName: user?.fullName,
               style: settings.print.kitchenTicketStyle,
               paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-              isOffline: !networkStatus.isOnline,
+              isOffline: !!addResult.isOffline,
               isSupplement: true,
             },
             branchId,
@@ -1713,7 +1722,7 @@ function FnbPosPageInner() {
         hapticSuccess();
 
         const extraCount = mappedItems.length;
-        if (!networkStatus.isOnline) {
+        if (addResult.isOffline) {
           toast({
             title: "Đã lưu ngoại tuyến",
             description: `${extraCount} món bổ sung sẽ đồng bộ khi có mạng`,
