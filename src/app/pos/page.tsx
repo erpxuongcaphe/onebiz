@@ -5207,30 +5207,47 @@ function ProcessOrderModal({
     "all",
   );
   const [onlyPending, setOnlyPending] = useState(true);
+  const [page, setPage] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
   const { toast } = useToast();
 
   useEffect(() => {
+    setPage(0);
+  }, [open, branchId]);
+
+  useEffect(() => {
     if (!open) return;
+    setOrders([]);
+    setTotalOrders(0);
+    if (!branchId) {
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     // Debounce search 250ms — tránh gọi server mỗi keystroke.
     const t = setTimeout(() => {
       getOrders({
-        page: 0,
+        page,
         pageSize: 50,
         search: search.trim() || undefined,
         searchField,
-        branchId: branchId ?? undefined,
-        filters: onlyPending
-          ? { status: ["draft", "confirmed", "delivering"] }
-          : undefined,
+        branchId,
+        filters: {
+          fulfillmentState: "open",
+          ...(onlyPending ? { status: ["draft", "confirmed", "delivering"] } : {}),
+        },
       })
         .then((r) => {
-          // CEO 14/07: LUÔN loại đơn đã xuất hóa đơn (fulfilled) khỏi màn xử lý —
-          // đã bán rồi thì không cho xử lý/thu tiền lần nữa. Lọc CLIENT-SIDE cho
-          // an toàn cả khi cột fulfilled_by_id chưa có (pre-00188 → undefined →
-          // không loại gì, đúng vì lúc đó chưa đơn nào fulfilled).
-          if (!cancelled) setOrders(r.data.filter((o) => !o.fulfilledById));
+          if (!cancelled) {
+            const lastPage = Math.max(0, Math.ceil(r.total / 50) - 1);
+            if (page > lastPage) {
+              setPage(lastPage);
+              return;
+            }
+            setOrders(r.data);
+            setTotalOrders(r.total);
+          }
         })
         .catch((e: unknown) => {
           if (!cancelled)
@@ -5248,7 +5265,7 @@ function ProcessOrderModal({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [open, search, searchField, onlyPending, branchId, toast]);
+  }, [open, search, searchField, onlyPending, branchId, page, toast]);
 
   if (!open) return null;
 
@@ -5283,7 +5300,10 @@ function ProcessOrderModal({
             />
             <input
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               placeholder="Tìm mã đơn / khách hàng..."
               className="h-9 w-full rounded-md border border-border bg-background pl-8 pr-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
               autoFocus
@@ -5291,9 +5311,10 @@ function ProcessOrderModal({
           </div>
           <select
             value={searchField}
-            onChange={(e) =>
-              setSearchField(e.target.value as typeof searchField)
-            }
+            onChange={(e) => {
+              setSearchField(e.target.value as typeof searchField);
+              setPage(0);
+            }}
             className="h-9 rounded-md border border-border bg-background px-2 text-sm"
           >
             <option value="all">Tất cả</option>
@@ -5304,7 +5325,10 @@ function ProcessOrderModal({
             <input
               type="checkbox"
               checked={onlyPending}
-              onChange={(e) => setOnlyPending(e.target.checked)}
+              onChange={(e) => {
+                setOnlyPending(e.target.checked);
+                setPage(0);
+              }}
             />
             Còn có thể bán tiếp
           </label>
@@ -5318,9 +5342,11 @@ function ProcessOrderModal({
             </div>
           ) : orders.length === 0 ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
-              {search
-                ? "Không tìm thấy đơn phù hợp"
-                : "Chưa có đơn đặt hàng nào"}
+              {!branchId
+                ? "Chọn chi nhánh để xử lý đặt hàng"
+                : search
+                  ? "Không tìm thấy đơn phù hợp"
+                  : "Chưa có đơn đặt hàng nào"}
             </div>
           ) : (
             orders.map((o) => (
@@ -5380,6 +5406,19 @@ function ProcessOrderModal({
               </button>
             ))
           )}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t pt-3 text-sm">
+          <span className="min-w-0 text-muted-foreground tabular-nums" aria-live="polite">
+            {loading ? "Đang tải..." : `${totalOrders} đơn · Trang ${page + 1}/${Math.max(1, Math.ceil(totalOrders / 50))}`}
+          </span>
+          <div className="flex gap-1">
+            <Button variant="outline" size="icon" aria-label="Trang trước" title="Trang trước" disabled={loading || page === 0} onClick={() => setPage((value) => value - 1)}>
+              <Icon name="chevron_left" size={16} />
+            </Button>
+            <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || (page + 1) * 50 >= totalOrders} onClick={() => setPage((value) => value + 1)}>
+              <Icon name="chevron_right" size={16} />
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
