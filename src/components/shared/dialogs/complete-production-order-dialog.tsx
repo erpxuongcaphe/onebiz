@@ -53,6 +53,8 @@ export function CompleteProductionOrderDialog({
   // Material check state — dùng shared helper checkMaterialsAvailability
   const [materialChecks, setMaterialChecks] = useState<MaterialCheckResult[]>([]);
   const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState(false);
+  const [checkAttempt, setCheckAttempt] = useState(0);
 
   // Auto-sell state
   const [autoSell, setAutoSell] = useState(false);
@@ -60,6 +62,7 @@ export function CompleteProductionOrderDialog({
   const [warehouses, setWarehouses] = useState<BranchDetail[]>([]);
 
   useEffect(() => {
+    let active = true;
     if (open && order) {
       setCompletedQty(String(order.plannedQty));
       const today = formatDateInputValue(new Date());
@@ -69,11 +72,10 @@ export function CompleteProductionOrderDialog({
       setAutoSell(false);
       setTargetBranchId("");
 
-      // Check material availability
-      checkMaterials(order);
-
       // Load warehouses for auto-sell
+      setWarehouses([]);
       getBranches().then((branches) => {
+        if (!active) return;
         const targets = branches.filter(
           (b) => b.id !== order.branchId && b.isActive,
         );
@@ -83,38 +85,33 @@ export function CompleteProductionOrderDialog({
         if (defaultWh) setTargetBranchId(defaultWh.id);
       }).catch(() => {});
     }
+    return () => { active = false; };
   }, [open, order]);
 
-  async function checkMaterials(prod: ProductionOrder) {
-    if (!prod.materials || prod.materials.length === 0) {
-      setMaterialChecks([]);
-      return;
-    }
-    setChecking(true);
-    try {
-      // Batched single query qua helper chung (1 round-trip thay vì N queries)
-      const checks = await checkMaterialsAvailability(
-        prod.branchId,
-        prod.materials.map((m) => ({
-          productId: m.productId,
-          productName: m.productName,
-          plannedQty: m.plannedQty,
-          unit: m.unit,
-        })),
-      );
-      setMaterialChecks(checks);
-    } catch {
-      // Silent fail — don't block the dialog
-    } finally {
-      setChecking(false);
-    }
-  }
+  useEffect(() => {
+    let active = true;
+    setChecking(Boolean(open && order?.materials?.length));
+    setCheckError(false);
+    setMaterialChecks([]);
+    if (!open || !order?.materials?.length) return;
+    checkMaterialsAvailability(order.branchId, order.materials.map((m) => ({
+      productId: m.productId, productName: m.productName,
+      plannedQty: m.plannedQty, unit: m.unit,
+    }))).then((checks) => {
+      if (active) setMaterialChecks(checks);
+    }).catch(() => {
+      if (active) setCheckError(true);
+    }).finally(() => {
+      if (active) setChecking(false);
+    });
+    return () => { active = false; };
+  }, [checkAttempt, open, order]);
 
   const hasShortage = materialChecks.some((m) => !m.sufficient);
 
   async function handleComplete() {
     if (!order) return;
-    if (!completedQty || Number(completedQty) <= 0) {
+    if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0) {
       toast({ title: "Số lượng phải > 0", variant: "warning" });
       return;
     }
@@ -214,8 +211,8 @@ export function CompleteProductionOrderDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+    <Dialog open={open} onOpenChange={(next) => { if (!submittingRef.current) onOpenChange(next); }}>
+      <DialogContent className="sm:max-w-lg max-h-[calc(100dvh-2rem)] grid-rows-[auto_minmax(0,1fr)_auto]">
         <DialogHeader>
           <DialogTitle>Hoàn thành lệnh sản xuất</DialogTitle>
           <DialogDescription>
@@ -227,11 +224,14 @@ export function CompleteProductionOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto py-2 pr-1 [&>*]:shrink-0">
           <div className="space-y-2">
-            <label className="text-sm font-medium">Số lượng thực tế</label>
+            <label htmlFor="production-completed-qty" className="text-sm font-medium">Số lượng thực tế</label>
             <Input
+              id="production-completed-qty"
               type="number"
+              min="0"
+              step="any"
               value={completedQty}
               onChange={(e) => setCompletedQty(e.target.value)}
             />
@@ -266,8 +266,8 @@ export function CompleteProductionOrderDialog({
           </div>
 
           {/* Material availability check */}
-          {materialChecks.length > 0 && (
-            <div className="rounded-xl border border-border overflow-hidden bg-surface-container-lowest">
+          {(checking || checkError || materialChecks.length > 0) && (
+            <div className="rounded-lg border border-border overflow-hidden bg-surface-container-lowest" aria-busy={checking}>
               <div className="px-3 py-2 bg-surface-container-low text-xs font-semibold flex items-center justify-between">
                 <span className="flex items-center gap-2">
                   <Icon name="inventory_2" size={14} className="text-muted-foreground" />
@@ -275,7 +275,7 @@ export function CompleteProductionOrderDialog({
                 </span>
                 {checking ? (
                   <Icon name="progress_activity" size={14} className="animate-spin" />
-                ) : hasShortage ? (
+                ) : checkError ? null : hasShortage ? (
                   <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                     <span className="size-1.5 rounded-full bg-status-warning" />
                     Thiếu NVL
@@ -287,11 +287,16 @@ export function CompleteProductionOrderDialog({
                   </span>
                 )}
               </div>
-              <table className="w-full text-xs">
+              {checking ? <p role="status" className="px-3 py-3 text-sm text-muted-foreground">Đang kiểm tra nguyên liệu...</p> : checkError ? (
+                <div role="alert" className="px-3 py-3 space-y-2">
+                  <p className="text-sm text-status-warning">Chưa kiểm tra được tồn nguyên liệu. Hệ thống sẽ kiểm tra lại khi hoàn tất.</p>
+                  <Button type="button" variant="outline" onClick={() => setCheckAttempt((n) => n + 1)}>Thử lại</Button>
+                </div>
+              ) : <div className="overflow-x-auto"><table className="w-full text-xs">
                 <tbody>
                   {materialChecks.map((m) => (
                     <tr key={m.productId} className="border-t border-border">
-                      <td className="px-3 py-2 font-medium">{m.productName}</td>
+                      <td className="px-3 py-2 font-medium break-words">{m.productName}</td>
                       <td className="px-3 py-2 text-right text-muted-foreground tabular-nums">
                         Cần: {formatNumber(m.needed)} {m.unit}
                       </td>
@@ -308,7 +313,7 @@ export function CompleteProductionOrderDialog({
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>}
             </div>
           )}
 
@@ -355,10 +360,10 @@ export function CompleteProductionOrderDialog({
               Khi xác nhận: NVL sẽ bị trừ kho, thành phẩm sẽ được cộng vào kho và lô mới sẽ được tạo.
             </span>
           </div>
-        </div>
+        </fieldset>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
           <Button onClick={handleComplete} disabled={saving}>
