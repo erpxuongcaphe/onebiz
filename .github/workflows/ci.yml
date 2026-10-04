@@ -126,6 +126,7 @@ jobs:
           PGDATABASE: fnb_ui_production_test
           FNB_UI_DB_TEST: '1'
         run: |
+          npm install --global npm@11.6.2
           npm ci
           createdb fnb_ui_production_test
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00417_fnb_real_production_chain.integration.sql
