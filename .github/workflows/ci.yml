@@ -134,6 +134,17 @@ jobs:
           createdb fnb_transfer_conflict_test
           PGDATABASE=fnb_transfer_conflict_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00420_fnb_transfer_business_conflict.integration.sql
 
+      - name: Verify persisted F&B payment replay and access guards
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_payment_replay_test
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          PGDATABASE=fnb_payment_replay_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00421_fnb_payment_replay.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
