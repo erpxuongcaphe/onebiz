@@ -72,15 +72,23 @@ begin
   end if;
 end $$;
 
--- Excluding internal sales must also exclude their later returns.
+-- Whole-chain consolidation excludes internal sales and their later returns.
+-- Branch reports intentionally retain internal activity for local management.
 update public.invoices set source = 'internal'
  where id = '30000000-0000-0000-0000-000000000001';
 do $$ declare report jsonb; begin
   report := public.get_profit_and_loss_report_v2(
     '2026-10-01','2026-11-01','2026-09-01','2026-10-01',
-    '40000000-0000-0000-0000-000000000001',true);
+    null,true);
   if not (report->'current' @> '{"revenue":0,"cogs":0,"return_count":0}'::jsonb)
      or not (report->'previous' @> '{"revenue":100,"cogs":12,"invoice_count":2}'::jsonb) then
     raise exception 'internal cross-period exclusion mismatch: %', report;
+  end if;
+  report := public.get_profit_and_loss_report_v2(
+    '2026-10-01','2026-11-01','2026-09-01','2026-10-01',
+    '40000000-0000-0000-0000-000000000001',true);
+  if report->'exclude_internal' is distinct from 'false'::jsonb
+     or not (report->'current' @> '{"revenue":-15,"cogs":-6,"return_count":1}'::jsonb) then
+    raise exception 'branch internal activity was unexpectedly excluded: %', report;
   end if;
 end $$;
