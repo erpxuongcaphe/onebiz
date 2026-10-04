@@ -55,9 +55,9 @@ insert into products(id,tenant_id,code,name,bom_code,has_bom,inventory_role,stoc
 ('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000002','UAT-RAW1','UAT raw 1',null,false,'stock_item',510),
 ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000002','UAT-RAW2','UAT raw 2',null,false,'stock_item',510);
 insert into bom(id,tenant_id,product_id,code,name) values ('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000010','UAT-BOM','UAT drink BOM');
-insert into bom_items(bom_id,material_id,unit,quantity) values
-('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000011','kg',0.02),
-('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012','kg',0.1);
+insert into bom_items(bom_id,material_id,unit,quantity,sort_order) values
+('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000011','kg',0.02,1),
+('00000000-0000-0000-0000-000000000013','00000000-0000-0000-0000-000000000012','kg',0.1,2);
 insert into branch_stock(tenant_id,branch_id,product_id,quantity)
 select tenant_id, b.id, p.id, b.qty from products p cross join (values
 ('00000000-0000-0000-0000-000000000003'::uuid,10),

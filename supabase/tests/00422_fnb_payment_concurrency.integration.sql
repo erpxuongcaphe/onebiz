@@ -30,4 +30,5 @@ end $$;
 select test_assert((select count(*)=1 from invoices) and (select count(*)=1 from invoice_items) and (select count(*)=1 from cash_transactions) and (select count(*)=1 from audit_log),'shortage rolls back money/lines/audit');
 select test_assert((select count(*)=2 from stock_movements) and (select count(*)=2 from lot_allocations) and (select count(*)=2 from fnb_invoice_item_bom_snapshot_components_00410),'shortage rolls back stock/lot/snapshot writes');
 select test_assert((select invoice_id is null from kitchen_orders where id='00000000-0000-0000-0000-000000000006'),'failed checkout never links invoice');
+select test_assert((select stock=509.98 from products where code='UAT-RAW1') and (select quantity=9.98 from branch_stock where branch_id='00000000-0000-0000-0000-000000000003' and product_id='00000000-0000-0000-0000-000000000011') and (select sum(current_qty)=19.88 from product_lots),'shortage on second ingredient restores first ingredient and lots');
 \echo 'PASS: first-payment money and BOM posting, concurrent replay, Retail sentinel and shortage rollback. Auth/RLS and cost-ledger triggers are outside this fixture.'
