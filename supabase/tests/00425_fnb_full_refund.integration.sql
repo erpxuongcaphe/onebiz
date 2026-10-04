@@ -11,6 +11,7 @@ alter table sales_returns alter id set default gen_random_uuid();
 alter table sales_returns add code text, add customer_id uuid, add customer_name text, add total numeric,
   add refunded numeric, add reason text, add note text, add created_by uuid;
 alter table return_items add product_name text, add unit text, add unit_price numeric, add total numeric;
+alter table invoice_items add variant_id uuid;
 alter table product_lots add variant_id uuid, add source_type text, add initial_qty numeric, add note text;
 alter table kitchen_orders add cancel_reason_code text, add cancel_reason text, add cancelled_at timestamptz, add cancelled_by uuid;
 alter table audit_log add old_data jsonb;
@@ -52,6 +53,20 @@ select create_sales_return_atomic((select id from invoices),
  jsonb_build_array(jsonb_build_object('invoiceItemId',(select id from invoice_items where quantity=2),'quantity',p_quantity)),
  p_refund,'cash','UAT only',null,'00000000-0000-0000-0000-000000000007');
 $$;
+do $$ declare before_state jsonb:=test_full_snapshot(); message text; begin
+ begin perform test_refund(1,40000); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='REFUND_EXCEEDS_RETURN_TOTAL','cannot refund beyond returned line value');
+ perform test_assert(test_full_snapshot()=before_state,'excess refund has no side effects');
+ message:=null;
+ begin perform test_refund(0,0); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='INVALID_RETURN_ITEM','zero returned quantity rejected');
+ perform test_assert(test_full_snapshot()=before_state,'invalid quantity has no side effects');
+ perform set_config('test.actor','',false); message:=null;
+ begin perform test_refund(1,30000); exception when others then get stacked diagnostics message=message_text; end;
+ perform set_config('test.actor','00000000-0000-0000-0000-000000000001',false);
+ perform test_assert(message='UNAUTHENTICATED','return implementation checks actor');
+ perform test_assert(test_full_snapshot()=before_state,'unauthenticated return has no side effects');
+end $$;
 -- Fail lot reconciliation after the authoritative return has already written
 -- cash and restored BOM: the outer RPC must roll everything back together.
 create function test_late_lot_failure() returns trigger language plpgsql as $$
