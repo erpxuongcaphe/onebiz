@@ -47,6 +47,68 @@ describe("F&B offline order dependencies", () => {
     expect(state.orders.get("local_test")!.serverInvoiceId).toBe("invoice");
     expect(state.orders.get("local_test")!.items).toEqual([{ productId: "coffee" }]);
   });
+  it("holds payment after a lost supplement response and retries the same batch before payment", async () => {
+    state.orders.set("local_test", { ...state.orders.get("local_test")!, serverOrderId: "server-order" });
+    const supplement = { kitchenOrderId: "local_test", items: [{ productId: "coffee" }], batchId: "stable-batch" };
+    state.add.mockRejectedValueOnce(new Error("response lost"));
+    enqueue(1, "addItems", supplement);
+    enqueue(2, "fnbPayment", paymentInput);
+    await replayQueue();
+    expect(state.payment).not.toHaveBeenCalled();
+    expect(state.queue.get(2)).toMatchObject({ status: "pending", attempts: 0, payload: paymentInput });
+    await replayQueue();
+    expect(state.add).toHaveBeenCalledTimes(2);
+    for (const args of state.add.mock.calls) {
+      expect(args).toEqual(["server-order", supplement.items, { batchId: "stable-batch" }]);
+    }
+    expect(state.payment).toHaveBeenCalledTimes(1);
+    expect(state.queue.get(2)?.status).toBe("completed");
+    await replayQueue();
+    expect(state.payment).toHaveBeenCalledTimes(1);
+  });
+  it("replays offline send, supplement and payment in order after a lost send response", async () => {
+    const kitchen = { idempotencyKey: "stable-order" };
+    const supplement = { kitchenOrderId: "local_test", items: [], batchId: "stable-batch" };
+    state.send.mockRejectedValueOnce(new Error("response lost"));
+    enqueue(1, "sendToKitchen", kitchen);
+    enqueue(2, "addItems", supplement);
+    enqueue(3, "fnbPayment", paymentInput);
+    await replayQueue();
+    expect(state.add).not.toHaveBeenCalled();
+    expect(state.payment).not.toHaveBeenCalled();
+    expect(state.queue.get(2)).toMatchObject({ status: "pending", attempts: 0, payload: supplement });
+    expect(state.queue.get(3)).toMatchObject({ status: "pending", attempts: 0, payload: paymentInput });
+    await replayQueue();
+    expect(state.send.mock.calls).toEqual([[kitchen], [kitchen]]);
+    expect(state.add).toHaveBeenCalledWith("server-order", [], { batchId: "stable-batch" });
+    expect(state.payment).toHaveBeenCalledWith({ ...paymentInput, kitchenOrderId: "server-order" });
+    expect(state.add.mock.invocationCallOrder[0]).toBeLessThan(state.payment.mock.invocationCallOrder[0]);
+    expect([...state.queue.values()].every(entry => entry.status === "completed")).toBe(true);
+    expect(state.orders.get("local_test")).toMatchObject({ serverOrderId: "server-order", serverInvoiceId: "invoice" });
+  });
+  it("holds the next supplement behind an unconfirmed batch even for an existing server order", async () => {
+    enqueue(1, "addItems", { kitchenOrderId: "server-order", items: [], batchId: "first" });
+    state.queue.set(1, { ...state.queue.get(1)!, status: "failed" });
+    enqueue(2, "addItems", { kitchenOrderId: "server-order", items: [], batchId: "second" });
+    await replayQueue();
+    expect(state.add).not.toHaveBeenCalled();
+    expect(state.queue.get(2)).toMatchObject({ status: "pending", attempts: 0 });
+  });
+  it.each(["failed", "syncing"] as const)("holds dependent payment behind a %s supplement, but not Retail or another bill", async status => {
+    state.orders.set("local_test", { ...state.orders.get("local_test")!, serverOrderId: "server-order" });
+    enqueue(1, "addItems", { kitchenOrderId: "local_test", items: [], batchId: "stable" });
+    state.queue.set(1, { ...state.queue.get(1)!, status, lastAttempt: new Date().toISOString() });
+    enqueue(2, "fnbPayment", paymentInput);
+    enqueue(3, "posCheckout", { idempotencyKey: "retail" });
+    enqueue(4, "fnbPayment", { ...paymentInput, kitchenOrderId: "other-server" });
+    state.queue.set(4, { ...state.queue.get(4)!, localId: "local_other" });
+    state.retail.mockResolvedValue({ invoiceId: "retail", invoiceCode: "HD-R" });
+    await replayQueue();
+    expect(state.payment).toHaveBeenCalledTimes(1);
+    expect(state.payment).toHaveBeenCalledWith({ ...paymentInput, kitchenOrderId: "other-server" });
+    expect(state.retail).toHaveBeenCalledTimes(1);
+    expect(state.queue.get(2)).toMatchObject({ status: "pending", attempts: 0 });
+  });
   it("defers unresolved payment without spending retries or losing the order", async () => {
     enqueue(1, "fnbPayment", paymentInput);
     await replayQueue();

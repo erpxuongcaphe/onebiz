@@ -154,7 +154,7 @@ export async function replayQueue(): Promise<SyncResult[]> {
     try {
       const payload = await resolveKitchenOrderPayload(entry);
       if (payload === undefined) {
-        const error = "Đơn chưa đồng bộ lên bếp. Giữ thao tác để đồng bộ lại sau.";
+        const error = "Thao tác trước của bill chưa đồng bộ xong. Giữ thao tác này để thử lại sau.";
         await db.put("sync_queue", { ...entry, status: "pending", error });
         results.push({ entryId: entry.id, action: entry.action,
           localId: entry.localId, success: false, error });
@@ -224,9 +224,20 @@ export async function replayQueue(): Promise<SyncResult[]> {
 
 async function resolveKitchenOrderPayload(entry: SyncQueueEntry): Promise<unknown> {
   if (entry.action !== "fnbPayment" && entry.action !== "addItems") return entry.payload;
+  const db = await getDb();
+  // A lost response is not proof that a supplement was rejected. Wait for its
+  // stable batch replay before paying or adding the next dependent batch.
+  for (const status of ["pending", "syncing", "failed"] as const) {
+    const predecessors = await db.transaction("sync_queue").objectStore("sync_queue")
+      .index("by_status").getAll(status);
+    if (predecessors.some(previous => previous.localId === entry.localId &&
+        (previous.id ?? 0) < (entry.id ?? 0) &&
+        (previous.action === "sendToKitchen" || previous.action === "addItems" || previous.action === "fnbPayment"))) {
+      return undefined;
+    }
+  }
   const payload = entry.payload as { kitchenOrderId: string; tenantId?: string; branchId?: string };
   if (!payload.kitchenOrderId.startsWith("local_")) return entry.payload;
-  const db = await getDb();
   const order = await db.get("pending_orders", payload.kitchenOrderId);
   // Resolve dependencies at replay time, including after an interrupted sync.
   if (!order?.serverOrderId || order.serverOrderId.startsWith("local_") ||
