@@ -53,6 +53,32 @@ select create_sales_return_atomic((select id from invoices),
  jsonb_build_array(jsonb_build_object('invoiceItemId',(select id from invoice_items where quantity=2),'quantity',p_quantity)),
  p_refund,'cash','UAT only',null,'00000000-0000-0000-0000-000000000007');
 $$;
+\ir ../migrations/00421_fnb_sales_return_checkout_permission.sql
+\ir ../migrations/00421_fnb_sales_return_checkout_permission.sql
+-- Configurable adapter exercises return guards, not Supabase RLS.
+create or replace function public.user_has_permission(uuid,text) returns boolean language sql as $$
+ select coalesce(nullif(current_setting('test.permission.' || $2,true),'')::boolean,true)
+$$;
+do $$ declare before_state jsonb:=test_full_snapshot(); message text; begin
+ perform set_config('test.permission.pos_fnb.checkout','false',false);
+ begin perform test_refund(1,30000); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='FNB_RETURN_CHECKOUT_DENIED','view or Retail checkout does not authorize F&B refund');
+ perform test_assert(test_full_snapshot()=before_state,'denied refund changes no business rows');
+ update invoices set source='pos'; message:=null;
+ begin perform test_refund(0,0); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='INVALID_RETURN_ITEM','Retail permission remains accepted');
+ perform set_config('test.permission.pos_retail.checkout','false',false);
+ perform set_config('test.permission.pos_fnb.view_orders','false',false); message:=null;
+ begin perform test_refund(0,0); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='INSUFFICIENT_PERMISSION','Retail retains original denial rule');
+ update invoices set source='fnb';
+ perform set_config('test.permission.pos_fnb.checkout','true',false); message:=null;
+ begin perform test_refund(0,0); exception when others then get stacked diagnostics message=message_text; end;
+ perform test_assert(message='INVALID_RETURN_ITEM','F&B checkout alone is sufficient');
+ perform test_assert(test_full_snapshot()=before_state,'permission probes leave snapshot unchanged');
+ perform set_config('test.permission.pos_retail.checkout','true',false);
+ perform set_config('test.permission.pos_fnb.view_orders','true',false);
+end $$;
 do $$ declare before_state jsonb:=test_full_snapshot(); message text; begin
  begin perform test_refund(1,40000); exception when others then get stacked diagnostics message=message_text; end;
  perform test_assert(message='REFUND_EXCEEDS_RETURN_TOTAL','cannot refund beyond returned line value');

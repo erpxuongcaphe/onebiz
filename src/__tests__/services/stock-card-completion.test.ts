@@ -34,6 +34,14 @@ const productService = readFileSync(
 );
 
 describe("stock card completion", () => {
+  it("preserves zero but never exports non-finite prices or quantities", () => {
+    expect(getStockMovementTotalValue({ type: "export", quantity: 2, unitCost: 0 })).toBe(0);
+    for (const invalid of [NaN, Infinity, -Infinity]) {
+      expect(getStockMovementUnitValue({ type: "export", quantity: 2, unitCost: invalid })).toBeNull();
+      expect(getStockMovementTotalValue({ type: "import", quantity: invalid, unitPrice: 10 })).toBeNull();
+    }
+    expect(getStockMovementTotalValue({ type: "export", quantity: Number.MAX_VALUE, unitCost: 10 })).toBeNull();
+  });
   it("uses negative quantities for outbound movements", () => {
     expect(getSignedStockQuantity({ type: "export", quantity: 3 })).toBe(-3);
     expect(getSignedStockQuantity({ type: "import", quantity: 3 })).toBe(3);

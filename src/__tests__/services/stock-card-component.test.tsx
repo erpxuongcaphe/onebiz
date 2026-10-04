@@ -66,6 +66,35 @@ describe("ProductStockMovementsTab branch scope", () => {
     expect(screen.getByText("Tồn cuối")).toBeInTheDocument();
   });
 
+  it("clears a previous branch error and reloads the new scope", async () => {
+    vi.mocked(getStockCard).mockRejectedValueOnce(new Error("Old branch unavailable"));
+    const { rerender } = render(
+      <ProductStockMovementsTab productId="product-1" productCode="SP-001" productName="A" branchId="branch-1" />,
+    );
+    expect(await screen.findByText("Old branch unavailable")).toBeInTheDocument();
+    rerender(
+      <ProductStockMovementsTab productId="product-1" productCode="SP-001" productName="A" branchId="branch-2" />,
+    );
+    expect(screen.queryByText("Old branch unavailable")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Xuất Excel thẻ kho" })).toBeInTheDocument();
+    expect(getStockCard).toHaveBeenLastCalledWith("product-1", "branch-2");
+  });
+
+  it("hides old scope data while loading and ignores its late response", async () => {
+    let resolveOld!: (value: Awaited<ReturnType<typeof getStockCard>>) => void;
+    vi.mocked(getStockCard).mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }));
+    const { rerender } = render(
+      <ProductStockMovementsTab productId="product-old" productCode="OLD" productName="Old" branchId="branch-1" />,
+    );
+    rerender(
+      <ProductStockMovementsTab productId="product-new" productCode="NEW" productName="New" branchId="branch-2" />,
+    );
+    expect(await screen.findByRole("button", { name: "Xuất Excel thẻ kho" })).toBeInTheDocument();
+    resolveOld({ data: [], total: 0, systemStock: 0, computedFinal: 0, drift: 0 });
+    await waitFor(() => expect(screen.queryByText("Chưa có biến động kho")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Xuất Excel thẻ kho" })).toBeInTheDocument();
+  });
+
   it("shows branch context in all-chain mode without leaking cost", async () => {
     render(
       <ProductStockMovementsTab

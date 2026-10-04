@@ -60,6 +60,12 @@ export function ProductStockMovementsTab({
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setMovements([]);
+    setTotal(0);
+    setDrift(null);
+    setVisibleLimit(50);
     getStockCard(productId, branchId)
       .then((result) => {
         if (!cancelled) {
