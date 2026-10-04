@@ -213,6 +213,22 @@ jobs:
           node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00424_fnb_payment_return_cost.integration.sql
 
+      - name: Verify full F&B refund with cash and lot reconciliation
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_full_refund_test
+        run: |
+          createdb fnb_full_refund_test
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          node scripts/fnb-db-test/extract-payment-posting-chain.mjs /tmp/fnb-payment-posting-chain.sql
+          node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-checkout-cost-ledger.sql --replace --ledger-only
+          node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
+          node scripts/fnb-db-test/extract-sales-return-chain.mjs /tmp/fnb-sales-return-chain.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00425_fnb_full_refund.integration.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost
