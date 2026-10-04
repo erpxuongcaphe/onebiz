@@ -51,6 +51,7 @@ export async function savePersistedTabs(
   branchId: string,
   tabs: FnbTabSnapshot[],
   activeTabId: string,
+  strict = false,
 ): Promise<void> {
   if (typeof window === "undefined") return;
   try {
@@ -63,6 +64,9 @@ export async function savePersistedTabs(
     await setMeta(getFnbTabsStorageKey(branchId), record);
   } catch (err) {
     console.warn("[FnB] savePersistedTabs failed:", err);
+    if (strict) {
+      throw new Error("Không lưu được giỏ trên thiết bị. Chưa gửi bếp; giữ giỏ và kiểm tra dung lượng trình duyệt rồi thử lại.", { cause: err });
+    }
   }
 }
 

@@ -85,7 +85,7 @@ export interface UseFnbPosStateReturn {
    * Lưu ngay giỏ tạm của chi nhánh. Dùng trước khi đổi PIN vì trang POS sẽ
    * tải lại để nhận phiên đăng nhập mới; không chờ nhịp tự lưu debounce.
    */
-  flushPersistedTabs: () => Promise<void>;
+  flushPersistedTabs: (strict?: boolean) => Promise<void>;
   updateTabMeta: (
     tabId: string,
     meta: Partial<
@@ -186,8 +186,11 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
 
-  const flushPersistedTabs = useCallback(async () => {
-    if (!branchId) return;
+  const flushPersistedTabs = useCallback(async (strict = false) => {
+    if (!branchId) {
+      if (strict) throw new Error("Chọn chi nhánh trước khi gửi bếp.");
+      return;
+    }
 
     // Cùng quy tắc với auto-save: không giữ lại một giỏ hoàn toàn rỗng.
     const onlyEmpty =
@@ -199,7 +202,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       return;
     }
 
-    await savePersistedTabs(branchId, tabs, activeTabId);
+    if (strict) await savePersistedTabs(branchId, tabs, activeTabId, true);
+    else await savePersistedTabs(branchId, tabs, activeTabId);
   }, [branchId, tabs, activeTabId]);
 
   // R12: Restore persisted tabs khi branch change. Tabs cũ hơn 24h tự bỏ

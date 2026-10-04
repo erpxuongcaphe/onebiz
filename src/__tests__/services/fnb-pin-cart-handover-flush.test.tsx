@@ -44,6 +44,16 @@ function makeLine() {
 }
 
 describe("bàn giao PIN F&B giữ giỏ theo chi nhánh", () => {
+  it("saves the exact current cart immediately in strict mode and propagates storage failure", async () => {
+    const { result, unmount } = renderHook(() => useFnbPosState(branchId));
+    act(() => result.current.addLine(makeLine()));
+    await act(async () => { await result.current.flushPersistedTabs(true); });
+    expect(savePersistedTabs).toHaveBeenLastCalledWith(branchId, result.current.tabs, result.current.activeTabId, true);
+    savePersistedTabs.mockRejectedValueOnce(new Error("storage failed"));
+    await expect(result.current.flushPersistedTabs(true)).rejects.toThrow("storage failed");
+    unmount();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     loadPersistedTabs.mockResolvedValue(null);

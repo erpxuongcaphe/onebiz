@@ -249,7 +249,14 @@ export async function addItemsToOrder(
         "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi thêm món.",
       );
     }
-    handleError(error, "addItemsToOrder:atomic_rpc");
+    try {
+      handleError(error, "addItemsToOrder:atomic_rpc");
+    } catch (rejected) {
+      if (rejected instanceof Error && ["P0001", "PT409", "42501", "22023"].includes(error.code ?? "")) {
+        Object.assign(rejected, { kitchenRequestRejected: true });
+      }
+      throw rejected;
+    }
   }
 }
 

@@ -8,7 +8,11 @@
 import { getDb, getMeta, setMeta } from "./db";
 import { enqueue } from "./sync-manager";
 import { withQuotaRecovery, isQuotaExceededError } from "./quota-manager";
-import { sendRecoverableKitchenRequest } from "./kitchen-request";
+import {
+  sendRecoverableKitchenRequest,
+  sendRecoverableKitchenSupplement,
+  type KitchenSupplementIdentity,
+} from "./kitchen-request";
 import {
   sendToKitchen,
   fnbPayment,
@@ -174,8 +178,11 @@ export async function offlineAddItemsToExistingOrder(
   kitchenOrderId: string,
   items: SendToKitchenInput["items"],
   isOnline: boolean,
-  options?: { batchId?: string },
+  options?: { batchId?: string; requestIdentity?: KitchenSupplementIdentity },
 ): Promise<{ isOffline?: boolean }> {
+  if (options?.requestIdentity && await sendRecoverableKitchenSupplement(kitchenOrderId, items, options.requestIdentity, isOnline)) {
+    return {};
+  }
   // P0-8 fix 12/06/2026: batchId stable identify 1 lần ấn "Gửi thêm".
   // Online lần đầu → DB nhận batchId, lưu vào kitchen_order_items.batch_id.
   // Offline queue replay → cùng batchId → DB chặn dup nhờ UNIQUE INDEX.

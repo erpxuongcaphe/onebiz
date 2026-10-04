@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // === Supabase mock ===
 
 const rpcCalls: { fn: string; args?: unknown }[] = [];
+let kitchenRpcError: { message: string; code?: string } | null = null;
 
 function createChain(resolvedValue: unknown = { data: null, error: null }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -34,7 +35,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         return { data: { success: true }, error: null };
       }
       if (fn === "fnb_send_to_kitchen_atomic_v2") {
-        return { data: { kitchen_order_id: "ko-1", order_number: "KB00001" }, error: null };
+        return { data: { kitchen_order_id: "ko-1", order_number: "KB00001" }, error: kitchenRpcError };
       }
       return { data: null, error: null };
     }),
@@ -110,6 +111,7 @@ const ITEM_ROWS = [
 ];
 
 beforeEach(() => {
+  kitchenRpcError = null;
   rpcCalls.length = 0;
 
   mockFromHandler = (table: string) => {
@@ -332,6 +334,19 @@ describe("getKitchenOrderById", () => {
 });
 
 describe("addItemsToOrder", () => {
+  it.each(["P0001", "PT409", "42501", "22023"])("marks SQL rejection %s without losing its message", async (code) => {
+    kitchenRpcError = { code, message: "PRICE_CHANGED" };
+    await expect(addItemsToOrder("ko-1", [], { batchId: "stable" }))
+      .rejects.toMatchObject({ kitchenRequestRejected: true, message: "[addItemsToOrder:atomic_rpc] PRICE_CHANGED" });
+  });
+
+  it("does not classify lost transport as a definite rejection", async () => {
+    kitchenRpcError = { message: "Failed to fetch" };
+    const error = await addItemsToOrder("ko-1", []).catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toHaveProperty("kitchenRequestRejected");
+  });
+
   it("sends additional items through the atomic kitchen RPC", async () => {
     await addItemsToOrder("ko-1", [
       {
