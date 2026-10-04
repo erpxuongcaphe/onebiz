@@ -5,10 +5,17 @@ const state = vi.hoisted(() => ({
   queue: new Map<number, SyncQueueEntry>(),
   orders: new Map<string, PendingOrder>(),
   send: vi.fn(), payment: vi.fn(), add: vi.fn(), retail: vi.fn(),
+  checkpointFailures: 0,
+  writes: [] as string[],
 }));
 vi.mock("@/lib/offline/db", () => ({ getDb: async () => ({
   get: async (_store: string, id: string) => state.orders.get(id),
   put: async (store: string, value: SyncQueueEntry | PendingOrder) => {
+    state.writes.push(`${store}:${value.status}`);
+    if (store === "pending_orders" && state.checkpointFailures > 0) {
+      state.checkpointFailures--;
+      throw new Error("checkpoint write failed");
+    }
     if (store === "sync_queue") state.queue.set((value as SyncQueueEntry).id!, value as SyncQueueEntry);
     else state.orders.set((value as PendingOrder).localId, value as PendingOrder);
   },
@@ -31,6 +38,7 @@ const paymentInput = { kitchenOrderId: "local_test", tenantId: "tenant", branchI
 describe("F&B offline order dependencies", () => {
   beforeEach(() => {
     vi.clearAllMocks(); state.queue.clear(); state.orders.clear();
+    state.checkpointFailures = 0; state.writes.length = 0;
     state.orders.set("local_test", { localId: "local_test", tenantId: "tenant", branchId: "xtb",
       localOrderNumber: "OFF-1", orderType: "takeaway", items: [{ productId: "coffee" }],
       status: "pending_payment", paymentData: paymentInput, createdAt: "now", updatedAt: "now" });
@@ -46,6 +54,29 @@ describe("F&B offline order dependencies", () => {
     expect((state.queue.get(2)!.payload as typeof paymentInput).kitchenOrderId).toBe("local_test");
     expect(state.orders.get("local_test")!.serverInvoiceId).toBe("invoice");
     expect(state.orders.get("local_test")!.items).toEqual([{ productId: "coffee" }]);
+  });
+  it.each(["sendToKitchen", "fnbPayment"] as const)("persists %s linkage before completing its queue entry", async action => {
+    if (action === "fnbPayment") {
+      state.orders.set("local_test", { ...state.orders.get("local_test")!, serverOrderId: "server-order" });
+    }
+    enqueue(1, action, action === "sendToKitchen" ? { idempotencyKey: "stable" } : paymentInput);
+    await replayQueue();
+    const completed = state.writes.indexOf("sync_queue:completed");
+    const checkpoint = state.writes.findIndex(write => write.startsWith("pending_orders:"));
+    expect(checkpoint).toBeGreaterThanOrEqual(0);
+    expect(checkpoint).toBeLessThan(completed);
+  });
+  it("never exposes a completed kitchen send when saving the local linkage fails", async () => {
+    state.checkpointFailures = 1;
+    enqueue(1, "sendToKitchen", { idempotencyKey: "stable" });
+    enqueue(2, "fnbPayment", paymentInput);
+    await replayQueue();
+    expect(state.writes).not.toContain("sync_queue:completed");
+    expect(state.queue.get(1)).toMatchObject({ status: "pending", attempts: 1 });
+    expect(state.payment).not.toHaveBeenCalled();
+    await replayQueue();
+    expect(state.send.mock.calls).toEqual([[{ idempotencyKey: "stable" }], [{ idempotencyKey: "stable" }]]);
+    expect(state.orders.get("local_test")).toMatchObject({ serverOrderId: "server-order", serverInvoiceId: "invoice" });
   });
   it("holds payment after a lost supplement response and retries the same batch before payment", async () => {
     state.orders.set("local_test", { ...state.orders.get("local_test")!, serverOrderId: "server-order" });
