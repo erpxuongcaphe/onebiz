@@ -81,10 +81,11 @@ export async function getProductionOrderById(id: string) {
     .single();
   if (error) throw error;
 
-  const { data: materials } = await supabase
+  const { data: materials, error: materialsError } = await supabase
     .from("production_order_materials")
     .select("*, products!production_order_materials_product_id_fkey(name, code)")
     .eq("production_order_id", id);
+  if (materialsError) throw materialsError;
 
   const order = mapProductionOrder(data as Record<string, unknown>);
   order.materials = (materials ?? []).map((m) => {

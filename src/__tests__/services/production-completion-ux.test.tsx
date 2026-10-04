@@ -4,10 +4,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-libra
 import { CompleteProductionOrderDialog } from "@/components/shared/dialogs/complete-production-order-dialog";
 import type { ProductionOrder } from "@/lib/types";
 
-const mocks = vi.hoisted(() => ({ check: vi.fn(), complete: vi.fn(), toast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ check: vi.fn(), detail: vi.fn(), complete: vi.fn(), toast: vi.fn() }));
 vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: mocks.toast }), useAuth: () => ({ user: null }) }));
 vi.mock("@/lib/services", () => ({
   checkMaterialsAvailability: mocks.check, completeProductionAtomic: mocks.complete,
+  getProductionOrderById: mocks.detail,
   getBranches: async () => [], createInternalSale: vi.fn(), syncInternalEntities: vi.fn(),
 }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: vi.fn(), getCurrentContext: vi.fn() }));
@@ -30,10 +31,45 @@ function deferred<T>() {
   const promise = new Promise<T>((r) => { resolve = r; });
   return { promise, resolve };
 }
-beforeEach(() => { vi.clearAllMocks(); mocks.check.mockResolvedValue(checks("A")); mocks.complete.mockResolvedValue({}); });
+beforeEach(() => { vi.clearAllMocks(); mocks.check.mockResolvedValue(checks("A")); mocks.detail.mockResolvedValue(order("A")); mocks.complete.mockResolvedValue({}); });
 afterEach(cleanup);
 
 describe("production completion UX", () => {
+  it("loads missing materials from the persisted order before enabling completion", async () => {
+    const pending = deferred<ProductionOrder>();
+    mocks.detail.mockReturnValue(pending.promise);
+    const summary = { ...order("A"), materials: undefined };
+    render(<CompleteProductionOrderDialog open order={summary} onOpenChange={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeDisabled();
+    expect(mocks.check).not.toHaveBeenCalled();
+    await act(async () => pending.resolve(order("A")));
+    await screen.findByText("Đủ NVL");
+    expect(mocks.detail).toHaveBeenCalledWith("A");
+    expect(mocks.check).toHaveBeenCalledWith("xtb", [expect.objectContaining({ productId: "A", plannedQty: 1 })]);
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeEnabled();
+  });
+  it("blocks completion when detail loading fails and retries without losing input", async () => {
+    mocks.detail.mockRejectedValueOnce(new Error("detail unavailable")).mockResolvedValueOnce(order("A"));
+    render(<CompleteProductionOrderDialog open order={{ ...order("A"), materials: undefined }} onOpenChange={vi.fn()} />);
+    await screen.findByText("Chưa tải được nguyên liệu của lệnh. Thử lại trước khi hoàn tất.");
+    expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Số lượng thực tế"), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Thử lại" }));
+    await screen.findByText("Đủ NVL");
+    expect(screen.getByLabelText("Số lượng thực tế")).toHaveValue(12);
+    expect(mocks.complete).not.toHaveBeenCalled();
+  });
+  it("does not check or display materials from a late detail response", async () => {
+    const pending = deferred<ProductionOrder>();
+    mocks.detail.mockReturnValueOnce(pending.promise);
+    mocks.check.mockResolvedValue(checks("B"));
+    const view = render(<CompleteProductionOrderDialog open order={{ ...order("A"), materials: undefined }} onOpenChange={vi.fn()} />);
+    view.rerender(<CompleteProductionOrderDialog open order={order("B")} onOpenChange={vi.fn()} />);
+    await screen.findByText("Đủ NVL");
+    await act(async () => pending.resolve(order("A")));
+    expect(mocks.check).toHaveBeenCalledTimes(1);
+    expect(mocks.check).toHaveBeenCalledWith("xtb", [expect.objectContaining({ productId: "B" })]);
+  });
   it("shows loading without reporting ingredients as sufficient", async () => {
     const pending = deferred<ReturnType<typeof checks>>();
     mocks.check.mockReturnValue(pending.promise);
