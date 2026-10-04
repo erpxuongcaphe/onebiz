@@ -48,6 +48,7 @@ function literal(value: unknown) {
 }
 function snapshot() {
   return sql(`select jsonb_build_object(
+    'products', (select jsonb_agg(to_jsonb(p) order by id) from products p),
     'stock', (select jsonb_agg(to_jsonb(s) order by product_id) from branch_stock s),
     'orders', (select jsonb_agg(to_jsonb(o) order by id) from production_orders o),
     'materials', (select jsonb_agg(to_jsonb(m) order by id) from production_order_materials m),
@@ -137,19 +138,19 @@ describe("completion dialog connected to the actual production RPC", () => {
     const success = vi.fn(), close = vi.fn();
     render(<CompleteProductionOrderDialog open order={order(retryId)} onOpenChange={close} onSuccess={success} />);
     await screen.findByText("Đủ NVL");
-    fireEvent.change(screen.getByLabelText("Số lượng thực tế"), { target: { value: "12" } });
+    fireEvent.change(screen.getByLabelText("Số lượng thực tế"), { target: { value: "8" } });
     fireEvent.click(screen.getByRole("button", { name: "Hoàn thành" }));
     await waitFor(() => expect(bridge.toast).toHaveBeenCalledWith(expect.objectContaining({ variant: "error", description: expect.stringContaining("TEST_UI_LOT_FAILURE") })));
     expect(snapshot()).toBe(before);
     expect(success).not.toHaveBeenCalled(); expect(close).not.toHaveBeenCalled();
-    expect(screen.getByLabelText("Số lượng thực tế")).toHaveValue(12);
+    expect(screen.getByLabelText("Số lượng thực tế")).toHaveValue(8);
     expect(screen.getByRole("button", { name: "Hoàn thành" })).toBeEnabled();
     sql("drop trigger test_ui_lot_failure on product_lots; drop function public.test_ui_lot_failure();");
     fireEvent.click(screen.getByRole("button", { name: "Hoàn thành" }));
     await waitFor(() => expect(success).toHaveBeenCalledTimes(1));
     expect(bridge.rpc).toHaveBeenCalledTimes(2);
     expect(stock(raw)).toBe(beforeRaw - 0.5);
-    expect(stock(prepared)).toBe(beforePrepared + 12);
+    expect(stock(prepared)).toBe(beforePrepared + 8);
     expect(Number(sql(`select count(*) from product_lots where production_order_id='${retryId}'`))).toBe(1);
   });
 });
