@@ -189,7 +189,7 @@ export function FnbPaymentDialog({
           <DialogDescription>{lineCount} món</DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto py-2 [@media(max-height:720px)]:py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto min-w-0 py-2 [@media(max-height:720px)]:py-1">
         <fieldset disabled={submitting} aria-busy={submitting} className="min-w-0 space-y-4 [@media(max-height:720px)]:space-y-3">
           {/* Order summary */}
           <div className="rounded-lg bg-muted px-3 py-2 space-y-1 text-sm">
