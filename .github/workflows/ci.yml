@@ -111,6 +111,26 @@ jobs:
           node scripts/fnb-db-test/extract-internal-sale-stock-out.mjs /tmp/fnb-internal-sale-stock-out.sql
           PGDATABASE=fnb_internal_sale_stock_out_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00418_fnb_internal_sale_stock_out.integration.sql
 
+      - name: Setup Node for connected production dialog tests
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify production dialog to actual PostgreSQL RPC
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_ui_production_test
+          FNB_UI_DB_TEST: '1'
+        run: |
+          npm ci
+          createdb fnb_ui_production_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00417_fnb_real_production_chain.integration.sql
+          npx vitest run --config scripts/fnb-db-test/vitest.production.config.ts
+
       - name: Verify complete internal-sale documents and XTB cost
         env:
           PGHOST: localhost
