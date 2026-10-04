@@ -1652,6 +1652,8 @@ function FnbPosPageInner() {
     }));
 
     try {
+      // Preserve tab/line identity before transport, without waiting for autosave.
+      await pos.flushPersistedTabs(true);
       const isAddItems = !!tab.kitchenOrderId;
 
       if (isAddItems) {

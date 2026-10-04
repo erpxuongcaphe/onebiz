@@ -22,6 +22,18 @@ const TABS = [
 ] as unknown as FnbTabSnapshot[];
 
 describe("persisted FnB tabs - ban giao quay", () => {
+  it("strict pre-send persistence fails closed while autosave remains best effort", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      setMeta.mockRejectedValueOnce(new Error("disk full"));
+      await expect(savePersistedTabs("branch-xdc", TABS, "tab-a", true)).rejects.toThrow("Chưa gửi bếp");
+      setMeta.mockRejectedValueOnce(new Error("disk full"));
+      await expect(savePersistedTabs("branch-xdc", TABS, "tab-a")).resolves.toBeUndefined();
+    } finally {
+      warning.mockRestore();
+    }
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
