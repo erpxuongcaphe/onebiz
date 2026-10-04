@@ -17,6 +17,7 @@ create function public.get_tenant_setting(uuid,text,jsonb) returns jsonb languag
 create sequence test_document_code;
 create function public.next_code(uuid,text) returns text language sql as $$ select $2 || nextval('public.test_document_code')::text $$;
 create table profiles(id uuid primary key, tenant_id uuid, is_active boolean);
+create table customers(id uuid primary key,tenant_id uuid);
 create table branches(id uuid primary key, cascade_mode text);
 create table promotions(id uuid primary key);
 create table coupons(id uuid primary key);

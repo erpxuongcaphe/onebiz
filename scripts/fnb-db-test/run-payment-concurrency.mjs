@@ -32,9 +32,15 @@ async function observe(predicate) {
 const first = start(`begin; ${actor} insert into test_payment_results values ('A',test_pay()); select pg_sleep(6); commit;`, "uat-payment-A");
 let second;
 try {
-  await observe("application_name = 'uat-payment-A' and wait_event = 'PgSleep'");
+  await Promise.race([
+    observe("application_name = 'uat-payment-A' and wait_event = 'PgSleep'"),
+    first.done.then(() => { throw new Error("First payment ended before concurrency barrier"); }),
+  ]);
   second = start(`${actor} insert into test_payment_results values ('B',test_pay());`, "uat-payment-B");
-  await observe("application_name = 'uat-payment-B' and wait_event_type = 'Lock'");
+  await Promise.race([
+    observe("application_name = 'uat-payment-B' and wait_event_type = 'Lock'"),
+    second.done.then(() => { throw new Error("Second payment did not wait for the first transaction"); }),
+  ]);
   await Promise.all([first.done, second.done]);
   console.log("PASS: two actual PostgreSQL sessions overlap; second payment waits for first transaction.");
 } finally {
