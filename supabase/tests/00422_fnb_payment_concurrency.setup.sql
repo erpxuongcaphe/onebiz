@@ -3,7 +3,7 @@
 -- No complete Supabase RLS, cost-ledger trigger or production parity claim.
 \set ON_ERROR_STOP on
 do $$ begin
-  if current_database() <> 'fnb_payment_concurrency_test' or to_regclass('public.products') is not null then
+  if current_database() not in ('fnb_payment_concurrency_test', 'fnb_payment_cost_test') or to_regclass('public.products') is not null then
     raise exception 'Requires a fresh dedicated payment concurrency database';
   end if;
 end $$;
