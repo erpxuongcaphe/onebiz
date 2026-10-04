@@ -162,6 +162,13 @@ export async function replayQueue(): Promise<SyncResult[]> {
       }
       const serverData = await executeAction(entry.action, payload);
 
+      const checkpointFirst = entry.action === "sendToKitchen" || entry.action === "fnbPayment";
+      // Never persist completion before the F&B server identity: a reload in
+      // between would leave dependent actions without a recoverable mapping.
+      if (checkpointFirst) {
+        await updatePendingOrder(entry.localId, entry.action, serverData);
+      }
+
       // Success — mark completed
       await db.put("sync_queue", {
         ...entry,
@@ -171,7 +178,9 @@ export async function replayQueue(): Promise<SyncResult[]> {
       });
 
       // Update pending order with server data
-      await updatePendingOrder(entry.localId, entry.action, serverData);
+      if (!checkpointFirst) {
+        await updatePendingOrder(entry.localId, entry.action, serverData);
+      }
 
       results.push({
         entryId: entry.id,
