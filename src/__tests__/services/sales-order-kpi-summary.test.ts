@@ -63,6 +63,17 @@ beforeEach(() => {
 });
 
 describe("chỉ số Đơn đặt hàng từ RPC 00306", () => {
+  it("filters open orders before pagination without excluding partially processed orders", async () => {
+    await getOrders({ page: 0, pageSize: 50, branchId: "branch-1", filters: { fulfillmentState: "open" } });
+    const filterIndex = queryCalls.findIndex((call) => call.method === "is" && call.args[0] === "fulfilled_by_id");
+    const rangeIndex = queryCalls.findIndex((call) => call.method === "range");
+    expect(filterIndex).toBeGreaterThan(-1);
+    expect(filterIndex).toBeLessThan(rangeIndex);
+    expect(queryCalls[filterIndex].args).toEqual(["fulfilled_by_id", null]);
+    expect(queryCalls).toContainEqual({ method: "eq", args: ["branch_id", "branch-1"] });
+    const selection = queryCalls.find((call) => call.method === "select");
+    expect(selection?.args[0]).not.toContain("con_hoan_tat");
+  });
   it("ánh xạ đủ bốn chỉ số và chuyển tiền về kiểu số", async () => {
     await expect(getSalesOrderListSummary({})).resolves.toEqual({
       tongDon: 37,

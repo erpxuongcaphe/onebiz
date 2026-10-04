@@ -171,8 +171,11 @@ describe("Bộ lọc phân biệt đủ ba mức", () => {
 describe("Modal POS vẫn chọn được đơn Đang xử lý", () => {
   const pos = readFileSync(join(process.cwd(), "src/app/pos/page.tsx"), "utf8");
 
-  it("chỉ loại đơn ĐÃ GẮN hóa đơn, không loại đơn đang xử lý", () => {
-    expect(pos).toContain("r.data.filter((o) => !o.fulfilledById)");
+  it("lọc đơn chưa chốt trên server trước phân trang, vẫn giữ đơn đang xử lý", () => {
+    expect(pos).toContain('fulfillmentState: "open"');
+    expect(pos).not.toContain("r.data.filter((o) => !o.fulfilledById)");
+    expect(pos).toContain("setTotalOrders(r.total)");
+    expect(pos).toContain('aria-label="Trang sau"');
   });
 
   it("không gọi đơn đã bán một phần là 'Chờ xử lý' và cho biết có thể bán tiếp", () => {

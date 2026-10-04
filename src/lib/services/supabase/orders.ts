@@ -168,12 +168,6 @@ export async function getOrders(
     effectiveStatuses,
   );
 
-  // CEO 14/07: đơn đã xuất hóa đơn (fulfilled_by_id) không còn là "chưa xử lý".
-  // KHÔNG lọc ở query (cột thêm ở 00188 — lọc server .is() sẽ LỖI nếu migration
-  // chưa chạy). POS "Xử lý đặt hàng" lọc client-side theo o.fulfilledById cho an
-  // toàn cả trước/sau migration (trước: cột thiếu → fulfilledById undefined →
-  // không loại gì, cũng đúng vì chưa có đơn nào fulfilled).
-
   // Tìm theo đúng nội dung đang hiển thị: mã DH gốc, mã chứng từ hiện tại,
   // tên hoặc SĐT khách. Escape wildcard để chuỗi người dùng là chuỗi thường.
   if (params.search) {
@@ -203,6 +197,9 @@ export async function getOrders(
   // chưa gắn là "processing" — không được gọi là chờ xử lý nữa.
   if (fulfillmentState === "fulfilled") {
     query = query.not("fulfilled_by_id", "is", null);
+  } else if (fulfillmentState === "open") {
+    // Includes both pending and partially processed orders, before pagination.
+    query = query.is("fulfilled_by_id", null);
   } else if (locBaMuc) {
     query = query.is("fulfilled_by_id", null);
     // Điều kiện "hóa đơn con còn hiệu lực" áp lên QUAN HỆ NHÚNG. Máy chủ tự
@@ -266,6 +263,7 @@ export async function getOrders(
   // Sort & paginate
   query = query
     .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(from, to);
 
   const { data, count, error } = await query;
