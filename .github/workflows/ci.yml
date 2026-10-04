@@ -160,6 +160,23 @@ jobs:
           node scripts/fnb-db-test/run-payment-concurrency.mjs
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00422_fnb_payment_concurrency.integration.sql
 
+      - name: Verify checkout branch WAC ledger and invoice line costs
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: fnb_payment_cost_test
+        run: |
+          createdb fnb_payment_cost_test
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          node scripts/fnb-db-test/extract-payment-posting-chain.mjs /tmp/fnb-payment-posting-chain.sql
+          node scripts/fnb-db-test/extract-supply-cost-flow.mjs /tmp/fnb-checkout-cost-ledger.sql --replace --ledger-only
+          node scripts/fnb-db-test/extract-cost-trigger.mjs /tmp/fnb-original-cost-trigger.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00423_fnb_checkout_cost_ledger.integration.sql
+          node scripts/fnb-db-test/run-payment-concurrency.mjs
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00423_fnb_checkout_cost_ledger.assertions.sql
+
       - name: Verify historical XNT valuation in an isolated database
         env:
           PGHOST: localhost

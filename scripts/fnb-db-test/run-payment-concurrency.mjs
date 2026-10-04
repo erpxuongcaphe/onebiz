@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 
-if (process.env.PGDATABASE !== "fnb_payment_concurrency_test" || process.env.PGHOST !== "localhost") {
+if (!["fnb_payment_concurrency_test", "fnb_payment_cost_test"].includes(process.env.PGDATABASE) || process.env.PGHOST !== "localhost") {
   throw new Error("Dedicated local CI database required; no production connections accepted");
 }
 const actor = "select set_config('test.actor','00000000-0000-0000-0000-000000000001',false);";

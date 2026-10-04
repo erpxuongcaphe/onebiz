@@ -8,7 +8,7 @@ const names = [
   "_post_fnb_branch_cost_in_00390",
   "_post_fnb_branch_cost_out_00390",
   "create_internal_sale_atomic",
-];
+].filter((name) => !process.argv.includes("--ledger-only") || name !== "create_internal_sale_atomic");
 
 if (!process.argv[2]) throw new Error("Temporary SQL output path required");
 
