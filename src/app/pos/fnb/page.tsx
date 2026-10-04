@@ -1733,6 +1733,7 @@ function FnbPosPageInner() {
       // Sprint POS-FNB-EXT-1: pass orderNote + delivery platform metadata.
       // Migration 00070: param đúng tên là `platformCommissionPercent` (%).
       const result = await offlineSendToKitchen({
+        idempotencyKey: `fnb-tab:${tab.id}`,
         tenantId,
         branchId: branchId!,
         createdBy: userId,

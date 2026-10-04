@@ -8,6 +8,7 @@
 import { getDb, getMeta, setMeta } from "./db";
 import { enqueue } from "./sync-manager";
 import { withQuotaRecovery, isQuotaExceededError } from "./quota-manager";
+import { sendRecoverableKitchenRequest } from "./kitchen-request";
 import {
   sendToKitchen,
   fnbPayment,
@@ -29,6 +30,8 @@ export async function offlineSendToKitchen(
   input: SendToKitchenInput,
   isOnline: boolean
 ): Promise<SendToKitchenResult & { isOffline?: boolean }> {
+  const recovered = await sendRecoverableKitchenRequest(input, isOnline);
+  if (recovered) return recovered;
   // Sprint FIX-1: gen idempotencyKey TRƯỚC để dùng cho cả online + offline.
   // Online: pass key vào server → nếu user đôi lúc cao trào click 2 lần submit
   //   nhanh, server cũng dedup. Tránh duplicate ngay cả khi không offline.

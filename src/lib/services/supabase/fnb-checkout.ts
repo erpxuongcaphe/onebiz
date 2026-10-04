@@ -309,7 +309,15 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
         "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
       );
     }
-    handleError(atomicError, "sendToKitchen:atomic_rpc");
+    try {
+      handleError(atomicError, "sendToKitchen:atomic_rpc");
+    } catch (error) {
+      // Only explicit SQL rejections prove the atomic request did not commit.
+      if (error instanceof Error && ["P0001", "PT409", "42501", "22023"].includes(atomicError.code ?? "")) {
+        Object.assign(error, { kitchenRequestRejected: true });
+      }
+      throw error;
+    }
   }
 
   throw new Error("Server không trả kết quả gửi bếp hợp lệ.");
