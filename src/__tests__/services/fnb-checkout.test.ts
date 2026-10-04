@@ -146,6 +146,19 @@ beforeEach(() => {
 // ============================================================
 
 describe("sendToKitchen", () => {
+  it.each(["P0001", "PT409", "42501", "22023"])("marks explicit SQL rejection %s as not committed", async (code) => {
+    rpcResponses.fnb_send_to_kitchen_atomic_v2 = { data: null, error: { code, message: "rejected" } };
+    await expect(sendToKitchen({ ...CTX, orderType: "takeaway", items: [] }))
+      .rejects.toMatchObject({ kitchenRequestRejected: true });
+  });
+
+  it("does not label an unknown transport error as a rolled-back request", async () => {
+    rpcResponses.fnb_send_to_kitchen_atomic_v2 = { data: null, error: { message: "Failed to fetch" } };
+    const error = await sendToKitchen({ ...CTX, orderType: "takeaway", items: [] }).catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toHaveProperty("kitchenRequestRejected");
+  });
+
   it("creates kitchen order with correct items", async () => {
     const result = await sendToKitchen({
       ...CTX,
