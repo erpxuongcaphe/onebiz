@@ -117,6 +117,7 @@ export async function offlineFnbPayment(
   }
 
   // Offline → update pending order + enqueue
+  input = { ...input, occurredAt: input.occurredAt ?? new Date().toISOString() };
   const localId = input.kitchenOrderId; // may be a local ID
   const localInvoiceCode = await getNextLocalInvoiceNumber();
 

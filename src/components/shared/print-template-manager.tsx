@@ -46,6 +46,7 @@ import type {
   ResolvedBrand,
 } from "@/lib/services";
 import { buildVietQrUrl } from "@/lib/vietqr";
+import { buildKitchenTicketHtml } from "@/lib/print-fnb";
 
 // ──────────────────────────────────────────────────────────────
 // Hằng số nhãn (Tiếng Việt có dấu)
@@ -1207,6 +1208,7 @@ function TemplateEditorDialog({
               <p>Món, số phiếu, bàn và thời gian trong bản xem trước là ví dụ, không phải giao dịch thật.</p>
             </div>
             <BillPreview
+              docType={docType}
               title={title.trim() || DOC_TYPE_LABELS[docType]}
               config={config}
               showCustomer={showCustomer}
@@ -1217,8 +1219,9 @@ function TemplateEditorDialog({
               paperSize={paperSize}
             />
             <p className="mt-2 text-xs text-muted-foreground">
-              Minh họa khổ {paperSize} — đầu trang lấy thông tin thật của doanh nghiệp/chi nhánh,
-              chỉ phản ánh bật/tắt, không phải bản in cuối.
+              {docType === "kitchen_ticket"
+                ? `Phiếu bếp minh họa khổ ${paperSize} — bàn, số lượng và yêu cầu pha chế được ưu tiên.`
+                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin doanh nghiệp/chi nhánh; chỉ phản ánh bật/tắt, không phải bản in cuối.`}
             </p>
           </div>
         </div>
@@ -1273,6 +1276,7 @@ function fmt(n: number): string {
 }
 
 function BillPreview({
+  docType,
   title,
   config,
   showCustomer,
@@ -1282,6 +1286,7 @@ function BillPreview({
   brandLoading,
   paperSize = "80mm",
 }: {
+  docType: PrintDocType;
   title: string;
   config: PrintTemplateConfig;
   showCustomer: boolean;
@@ -1291,6 +1296,31 @@ function BillPreview({
   brandLoading: boolean;
   paperSize?: PrintPaperSize;
 }) {
+  if (docType === "kitchen_ticket") {
+    const html = buildKitchenTicketHtml({
+      orderNumber: "KB-DEMO-001",
+      tableName: "Bàn 5",
+      orderType: "dine_in",
+      stationName: "BAR PHA CHẾ",
+      createdAt: "2026-10-05T10:30:00+07:00",
+      paperSize: paperSize === "58mm" ? "58mm" : "80mm",
+      style: "standard",
+      items: [
+        { name: "Cà phê sữa đá", variant: "Size L", quantity: 2, unitPrice: 35000,
+          modifierLabels: ["Đường: 70%", "Đá: ít"], note: "Pha nhạt, đá riêng" },
+        { name: "Bạc xỉu", quantity: 1, unitPrice: 32000 },
+      ],
+    });
+    return <div className="grid gap-2">
+      <p role="note" className="border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-sm">
+        Phiếu bếp trên POS hiện dùng kiểu phiếu ở <a href="/cai-dat/in-an" className="font-semibold text-primary underline">Máy in &amp; vận hành</a>.
+        Các lựa chọn mẫu chứng từ bên trái chưa áp dụng cho phiếu bếp POS. Dưới đây là phiếu vận hành kiểu tiêu chuẩn, dùng cùng bộ dựng HTML với bản in.
+      </p>
+      <iframe title="Phiếu bếp minh họa" srcDoc={html} sandbox="allow-same-origin"
+        className="mx-auto h-[520px] max-w-full border bg-white"
+        style={{ width: paperSize === "58mm" ? 240 : 322 }} />
+    </div>;
+  }
   // CEO 05/07: preview theo ĐÚNG khổ đã chọn — trước đây luôn 80mm.
   // Bill nhiệt giữ font-mono hẹp; A4/A5 rộng hơn + font sans như bản in thật.
   const isThermal = paperSize === "80mm" || paperSize === "58mm";

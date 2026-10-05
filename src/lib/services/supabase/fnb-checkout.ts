@@ -91,6 +91,8 @@ export interface SendToKitchenResult {
 }
 
 export interface FnbPaymentInput {
+  /** Actual collection time persisted by the offline payment queue. */
+  occurredAt?: string;
   kitchenOrderId: string;
   tenantId: string;
   branchId: string;
@@ -357,8 +359,7 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
   const manualDiscountOtpId = manualDiscountAmount > 0 ? input.manualDiscountOtpId ?? null : null;
   const manualDiscountReason = manualDiscountAmount > 0 ? input.manualDiscountReason ?? null : null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("fnb_complete_payment_atomic_v3", {
+  const paymentPayload = {
     p_kitchen_order_id: input.kitchenOrderId,
     p_customer_id: input.customerId ?? null,
     p_customer_name: input.customerName || "Khách lẻ",
@@ -374,12 +375,20 @@ export async function fnbPayment(input: FnbPaymentInput): Promise<FnbPaymentResu
     p_tip_amount: input.tipAmount ?? 0,
     p_promotion_id: input.promotionId ?? null,
     p_coupon_code: input.couponCode ?? null,
-  });
+  };
+  // The delegated checkout retains authorization, stock and replay guards.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase.rpc as any)(
+    input.occurredAt ? "fnb_complete_payment_timed_v1" : "fnb_complete_payment_atomic_v3",
+    input.occurredAt ? { p_payload: paymentPayload, p_occurred_at: input.occurredAt } : paymentPayload,
+  );
 
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có migration 00343. Không thể thanh toán FnB an toàn.",
+        input.occurredAt
+          ? "Chưa có migration 00429. Thanh toán offline được giữ trong hàng đợi để thử lại an toàn."
+          : "Chưa có migration 00343. Không thể thanh toán FnB an toàn.",
       );
     }
     const friendlyMessage = getFnbPaymentErrorMessage(error);

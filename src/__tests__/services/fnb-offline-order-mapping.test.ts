@@ -40,7 +40,7 @@ function enqueue(id: number, action: SyncQueueEntry["action"], payload: unknown)
   state.queue.set(id, { id, action, payload, localId: "local_test", status: "pending",
     attempts: 0, lastAttempt: null, error: null, createdAt: new Date().toISOString() });
 }
-const paymentInput = { kitchenOrderId: "local_test", tenantId: "tenant", branchId: "xtb", total: 30000 };
+const paymentInput = { kitchenOrderId: "local_test", tenantId: "tenant", branchId: "xtb", total: 30000, occurredAt: "2026-10-04T17:30:00Z" };
 
 describe("F&B offline order dependencies", () => {
   afterEach(() => { vi.unstubAllGlobals(); });
@@ -133,6 +133,15 @@ describe("F&B offline order dependencies", () => {
     expect((state.queue.get(2)!.payload as typeof paymentInput).kitchenOrderId).toBe("local_test");
     expect(state.orders.get("local_test")!.serverInvoiceId).toBe("invoice");
     expect(state.orders.get("local_test")!.items).toEqual([{ productId: "coffee" }]);
+  });
+  it("uses the original queue time for legacy payments without a timestamp", async () => {
+    state.orders.set("local_test", { ...state.orders.get("local_test")!, serverOrderId: "server-order" });
+    const legacy = { kitchenOrderId: "local_test", tenantId: "tenant", branchId: "xtb", total: 30000 };
+    enqueue(1, "fnbPayment", legacy);
+    state.queue.set(1, { ...state.queue.get(1)!, createdAt: "2026-10-04T17:31:00Z" });
+    await replayQueue();
+    expect(state.payment).toHaveBeenCalledExactlyOnceWith({ ...legacy, kitchenOrderId: "server-order", occurredAt: "2026-10-04T17:31:00Z" });
+    expect(state.queue.get(1)!.payload).toEqual(legacy);
   });
   it.each(["sendToKitchen", "fnbPayment"] as const)("persists %s linkage before completing its queue entry", async action => {
     if (action === "fnbPayment") {

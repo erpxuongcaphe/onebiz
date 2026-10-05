@@ -1,4 +1,6 @@
 "use client";
+import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
+import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
 
 import { useState, useEffect } from "react";
 import {
@@ -76,6 +78,7 @@ export function CreateCashTransactionDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const {cashTime,setCashTime} = useCashTimeDraft(open);
 
   // CEO 03/06/2026 — Sprint 3 (E1): khi category là payment KH/NCC, mở thêm
   // dropdown chọn party + reference doc để gọi recordInvoicePayment /
@@ -119,6 +122,7 @@ export function CreateCashTransactionDialog({
       note,
       selectedPartyId,
       selectedRefId,
+      cashTime,
     },
     hasContent: (draft) =>
       !!draft.amount.trim() ||
@@ -128,6 +132,7 @@ export function CreateCashTransactionDialog({
       !!draft.selectedPartyId ||
       !!draft.selectedRefId,
     restore: (draft) => {
+      if (draft.cashTime) setCashTime(draft.cashTime);
       setType(draft.type);
       setCode(draft.code);
       setAmount(draft.amount);
@@ -220,6 +225,8 @@ export function CreateCashTransactionDialog({
       if (!selectedPartyId) newErrors.reference = "Cần chọn đối tượng công nợ";
       else if (!selectedRefId) newErrors.reference = "Cần chọn chứng từ còn nợ";
     }
+    const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
+    if(timeError) newErrors.time=timeError;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -242,6 +249,9 @@ export function CreateCashTransactionDialog({
           amount: Number(amount),
           paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
           note: note || undefined,
+          occurredAt: cashInputToIso(cashTime.occurredLocal),
+          transactionDate: cashTime.transactionDate,
+          timeReason: cashTime.timeReason,
         });
       } else if (
         category === "supplier_payment" &&
@@ -253,6 +263,9 @@ export function CreateCashTransactionDialog({
           amount: Number(amount),
           paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
           note: note || undefined,
+          occurredAt: cashInputToIso(cashTime.occurredLocal),
+          transactionDate: cashTime.transactionDate,
+          timeReason: cashTime.timeReason,
         });
       } else {
         const created = await createCashTransaction({
@@ -263,6 +276,9 @@ export function CreateCashTransactionDialog({
           counterparty: counterparty || "",
           paymentMethod: method as "cash" | "transfer" | "card",
           note: note || undefined,
+          occurredAt: cashInputToIso(cashTime.occurredLocal),
+          date: cashTime.transactionDate,
+          timeReason: cashTime.timeReason,
         });
         setCode(created.code);
       }
@@ -488,6 +504,7 @@ export function CreateCashTransactionDialog({
           </div>
         </div>
 
+        <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy

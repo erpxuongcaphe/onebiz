@@ -52,7 +52,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
       if (fn === "increment_product_stock" || fn === "upsert_branch_stock" || fn === "allocate_lots_fifo") {
         return { data: null, error: null };
       }
-      if (fn === "fnb_complete_payment_atomic_v3") {
+      if (fn === "fnb_complete_payment_atomic_v3" || fn === "fnb_complete_payment_timed_v1") {
         return {
           data: {
             invoice_id: "inv-1",
@@ -285,6 +285,17 @@ describe("sendToKitchen", () => {
 // Here we only verify the TS wrapper: correct param mapping + response handling.
 
 describe("fnbPayment (atomic RPC wrapper)", () => {
+  it("keeps original offline collection time alongside the unchanged payment payload", async () => {
+    const result = await fnbPayment({ kitchenOrderId: "ko-1", ...CTX, customerName: "Khách lẻ", paymentMethod: "cash", paid: 60000,
+      occurredAt: "2026-10-04T17:30:00Z" });
+    expect(rpcCalls).toHaveLength(1);
+    expect(rpcCalls[0]).toMatchObject({ fn: "fnb_complete_payment_timed_v1", params: {
+      p_occurred_at: "2026-10-04T17:30:00Z",
+      p_payload: { p_kitchen_order_id: "ko-1", p_paid: 60000, p_payment_method: "cash", p_allow_debt: false },
+    } });
+    expect(result.invoiceId).toBe("inv-1");
+    expect(insertCalls).toHaveLength(0);
+  });
   it("nói rõ phải mở ca trước khi thanh toán lần đầu", () => {
     expect(getFnbPaymentErrorMessage({ message: "FNB_PAYMENT_OPEN_SHIFT_REQUIRED" }))
       .toBe("Cần mở ca của chính anh/chị tại chi nhánh này trước khi thanh toán.");

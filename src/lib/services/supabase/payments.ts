@@ -13,8 +13,10 @@
  */
 
 import { getClient, getCurrentContext, handleError } from "./base";
+import type { CashTimingInput } from "@/lib/cash-time";
+import { recordTimedCash } from "./cash-timing";
 
-export interface RecordPaymentInput {
+export interface RecordPaymentInput extends CashTimingInput {
   /** invoice or purchase_order ID */
   referenceId: string;
   amount: number;
@@ -31,7 +33,7 @@ export interface RecordPaymentResult {
   advanceAmount: number;
 }
 
-export interface RecordAdvanceInput {
+export interface RecordAdvanceInput extends CashTimingInput {
   partyId: string;
   branchId: string;
   amount: number;
@@ -67,7 +69,9 @@ async function recordPartyAdvance(
   const rpcName =
     type === "customer" ? "record_customer_advance" : "record_supplier_advance";
   const partyKey = type === "customer" ? "p_customer_id" : "p_supplier_id";
-  const { data, error } = await supabase.rpc(
+  const { data, error } = input.occurredAt || input.transactionDate
+    ? { data: await recordTimedCash(type === "customer" ? "customer_advance" : "supplier_advance", { ...input }, input), error: null }
+    : await supabase.rpc(
     rpcName as never,
     {
       [partyKey]: input.partyId,
@@ -156,7 +160,9 @@ export async function recordInvoicePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = await supabase.rpc(
+  const { data, error } = input.occurredAt || input.transactionDate
+    ? { data: await recordTimedCash("invoice", { ...input }, input), error: null }
+    : await supabase.rpc(
     "record_invoice_payment" as never,
     {
       p_invoice_id: input.referenceId,
@@ -194,7 +200,9 @@ export async function recordPurchasePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = await supabase.rpc(
+  const { data, error } = input.occurredAt || input.transactionDate
+    ? { data: await recordTimedCash("purchase_order", { ...input }, input), error: null }
+    : await supabase.rpc(
     "record_purchase_payment" as never,
     {
       p_purchase_order_id: input.referenceId,
@@ -341,7 +349,7 @@ export async function getPaymentHistory(
   // Cast any: generated types chưa biết cột status của cash_transactions.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.from("cash_transactions") as any)
-    .select("id, code, type, amount, payment_method, note, created_at, status")
+    .select("id, code, type, amount, payment_method, note, created_at, occurred_at, transaction_date, time_source, time_reason, status")
     .eq("tenant_id", ctx.tenantId)
     .eq("reference_type", referenceType)
     .eq("reference_id", referenceId)
@@ -358,6 +366,11 @@ export async function getPaymentHistory(
     paymentMethod: row.payment_method,
     note: row.note,
     date: row.created_at,
+    createdAt: row.created_at,
+    occurredAt: row.occurred_at ?? null,
+    transactionDate: row.transaction_date,
+    timeSource: row.time_source ?? null,
+    timeReason: row.time_reason ?? null,
     cancelled: (row as { status?: string }).status === "cancelled",
   }));
 }

@@ -570,6 +570,9 @@ export async function settleCod(input: SettleCodInput): Promise<SettleCodResult>
   if (error) {
     // PGRST202 = RPC chưa tồn tại → migration chưa chạy (KHÔNG phải lỗi quyền)
     if (error.code === "PGRST202") throw new Error(MIGRATION_00301_HINT);
+    if (error.message?.includes("BRANCH_ACCESS_DENIED")) {
+      throw new Error("Không có quyền đối soát vận đơn của chi nhánh này. Kiểm tra chi nhánh và quyền được giao.");
+    }
     handleError(error, "settleCod");
   }
   const raw = (data ?? {}) as Record<string, unknown>;

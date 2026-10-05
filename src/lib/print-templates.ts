@@ -7,6 +7,7 @@ import type { InventoryCheck, DisposalExport, InternalExport, ManufacturingOrder
 import type { PurchaseOrder, Invoice, SalesOrder } from "@/lib/types/orders";
 import type { PurchaseReturn, PurchaseOrderEntry, InputInvoice } from "@/lib/types/suppliers";
 import type { CashBookEntry } from "@/lib/types/finance";
+import { formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 import { formatCurrency as fmtNum, formatDate, formatNumber, formatUser } from "@/lib/format";
 
 /**
@@ -461,7 +462,12 @@ export function buildCashTransactionPrintData(row: CashBookEntry): DocumentPrint
     documentType: row.type === "receipt" ? "PHIẾU THU" : "PHIẾU CHI",
     documentCode: row.code,
     date: row.date,
+    dateOnly: true,
     headerFields: [
+      { label: "Ngày hạch toán", value: formatCashBookDate(row.date) },
+      { label: "Thực thu/chi lúc", value: formatCashTime(row.occurredAt) },
+      { label: "Tạo trên hệ thống lúc", value: formatCashTime(row.createdAt) },
+      ...(row.timeReason ? [{ label: "Lý do ngày giờ", value: row.timeReason }] : []),
       { label: "Loại", value: row.typeName || (row.type === "receipt" ? "Thu" : "Chi") },
       { label: "Danh mục", value: row.category || "" },
       { label: "Đối tượng", value: row.counterparty || "" },
