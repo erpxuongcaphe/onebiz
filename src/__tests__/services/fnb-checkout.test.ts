@@ -286,7 +286,7 @@ describe("sendToKitchen", () => {
 
 describe("fnbPayment (atomic RPC wrapper)", () => {
   it("keeps original offline collection time alongside the unchanged payment payload", async () => {
-    const result = await fnbPayment({ kitchenOrderId: "ko-1", ...CTX, paymentMethod: "cash", paid: 60000,
+    const result = await fnbPayment({ kitchenOrderId: "ko-1", ...CTX, customerName: "Khách lẻ", paymentMethod: "cash", paid: 60000,
       occurredAt: "2026-10-04T17:30:00Z" });
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]).toMatchObject({ fn: "fnb_complete_payment_timed_v1", params: {
