@@ -187,7 +187,7 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
           <div className="border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">
             <p className="font-semibold">Chi nhánh: {branches.find((branch) => branch.id === selectedBranchId)?.name ?? (currentBranch?.id === selectedBranchId ? currentBranch?.name : "Chưa chọn")}</p>
             {printTargetLabel && <p className="mt-1">Đích in bếp trên máy này: {printTargetLabel}</p>}
-            <p className="mt-1">Trạm chia phiếu theo công việc. Có thể kết nối USB riêng từng trạm bên dưới; nếu chưa gán, dùng đích in bếp chung. Gán thiết bị chỉ lưu trên máy/trình duyệt này và đúng chi nhánh; chế độ USB cần được chọn tại Phương thức in.</p>
+            <p className="mt-1">Trạm chia phiếu theo công việc. Có thể gán máy USB hoặc máy qua QZ riêng từng trạm; nếu chưa gán, dùng đích in bếp chung. Gán thiết bị chỉ lưu trên máy/trình duyệt này và đúng chi nhánh. Chọn phương thức USB hoặc QZ ở mục Phương thức in; khi in qua trình duyệt, chọn máy trong hộp thoại in.</p>
           </div>
           {/* Branch selector — chỉ hiện nếu user có nhiều branch FnB */}
           {branches.length > 1 && (
