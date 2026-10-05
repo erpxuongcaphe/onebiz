@@ -48,6 +48,7 @@ import type {
 } from "@/lib/services";
 import { buildKitchenTicketHtml } from "@/lib/print-fnb";
 import { PrintHtmlPreview } from "@/components/shared/print-html-preview";
+import { buildCashTransactionPrintData } from "@/lib/print-templates";
 
 // ──────────────────────────────────────────────────────────────
 // Hằng số nhãn (Tiếng Việt có dấu)
@@ -1340,7 +1341,11 @@ function BillPreview({
     itemColumns: ["Mã hàng","Tên hàng","SL","Đơn giá","Thành tiền","Ghi chú"],
     summaryRows: docType === "cash_voucher" ? [{label:"Số tiền",value:"109.000 đ",bold:true}] : [{label:"Tạm tính",value:"109.000 đ"},{label:"Giảm giá",value:"9.000 đ"},{label:"Tổng thanh toán",value:"100.000 đ",bold:true},{label:"Đã thanh toán",value:"80.000 đ"},{label:"Khách còn phải trả",value:"20.000 đ",bold:true}],
   };
-  const rendered = applyTemplateToDocData(base, {config:{...config,items:{...config.items,columns:selectedColumns}},brand:brand ?? {}});
+  const previewBase = docType === "cash_voucher" ? {...base,...buildCashTransactionPrintData({
+    id:"cash-demo",code:"PT-DEMO-001",type:"receipt",typeName:"Thu tiền",date:"2026-10-06",occurredAt:"2026-10-06T10:30:00+07:00",createdAt:"2026-10-06T10:31:00+07:00",
+    category:"Thanh toán hóa đơn",counterparty:"Nguyễn Văn An",amount:109000,createdBy:"demo",createdByName:"Nhân viên minh họa",note:"Dữ liệu minh họa — không phải phiếu thu thật.",
+  })} : base;
+  const rendered = applyTemplateToDocData(previewBase, {config:{...config,title,items:{...config.items,columns:selectedColumns}},brand:brand ?? {}});
   const html = generateDocumentHtml(rendered, paperSize ?? "80mm");
   return <div className="space-y-2">
     {brandLoading && <p className="text-sm text-muted-foreground">Đang tải thông tin thương hiệu…</p>}
