@@ -20,6 +20,21 @@ export interface ShiftCashEntry {
   createdAt: string;
 }
 
+export function shiftSalesEmptyMessage(preview: {
+  totalOrders: number;
+  cashIn: number;
+  cashOut: number;
+  totalSales: number;
+}) {
+  if (preview.totalSales === 0 && preview.totalOrders > 0) {
+    return "Doanh thu ròng bằng 0";
+  }
+  if (preview.cashIn !== 0 || preview.cashOut !== 0) {
+    return "Chưa có doanh thu bán hàng theo phương thức";
+  }
+  return "Chưa có doanh thu bán hàng";
+}
+
 export function summarizeShiftCashRows(
   rows: ShiftCashRow[],
   startingCash: number,

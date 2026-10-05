@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { summarizeShiftCashRows, type ShiftCashRow } from "@/lib/shift-cash-preview";
+import { shiftSalesEmptyMessage, summarizeShiftCashRows, type ShiftCashRow } from "@/lib/shift-cash-preview";
 
 const row = (changes: Partial<ShiftCashRow>): ShiftCashRow => ({
   code: "PT001",
@@ -16,6 +16,34 @@ const row = (changes: Partial<ShiftCashRow>): ShiftCashRow => ({
 });
 
 describe("shift cash preview", () => {
+  it("does not call a fully refunded shift empty", () => {
+    const preview = summarizeShiftCashRows([
+      row({ amount: 20000 }),
+      row({ code: "PC001", type: "payment", amount: 10000, reference_type: "sales_return" }),
+      row({ code: "PC002", type: "payment", amount: 10000, reference_type: "sales_return" }),
+    ], 0, new Set());
+    expect(preview).toMatchObject({ cashIn: 20000, cashOut: 20000, totalSales: 0, salesByMethod: {} });
+    expect(preview.cashEntries).toHaveLength(3);
+    expect(shiftSalesEmptyMessage({ ...preview, totalOrders: 1 })).toBe("Doanh thu ròng bằng 0");
+  });
+
+  it("recognizes zero-price sales even without cash movement", () => {
+    expect(shiftSalesEmptyMessage({ totalOrders: 1, totalSales: 0, cashIn: 0, cashOut: 0 }))
+      .toBe("Doanh thu ròng bằng 0");
+  });
+
+  it("does not label non-sales cash receipts as no transactions", () => {
+    expect(shiftSalesEmptyMessage({ totalOrders: 0, totalSales: 0, cashIn: 50000, cashOut: 0 }))
+      .toBe("Chưa có doanh thu bán hàng theo phương thức");
+    expect(shiftSalesEmptyMessage({ totalOrders: 0, totalSales: 0, cashIn: 0, cashOut: 50000 }))
+      .toBe("Chưa có doanh thu bán hàng theo phương thức");
+  });
+
+  it("describes an empty shift without claiming knowledge of non-cash transactions", () => {
+    expect(shiftSalesEmptyMessage({ totalOrders: 0, totalSales: 0, cashIn: 0, cashOut: 0 }))
+      .toBe("Chưa có doanh thu bán hàng");
+  });
+
   it("shows a negative drawer when refunds exceed the cash in that shift", () => {
     const result = summarizeShiftCashRows([
       row({ code: "PT001", amount: 52000 }),

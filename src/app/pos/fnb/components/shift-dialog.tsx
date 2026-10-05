@@ -30,6 +30,7 @@ import type { Shift } from "@/lib/types/shift";
 import { Icon } from "@/components/ui/icon";
 import { previewShiftClose, type ShiftPreview } from "@/lib/services/supabase/shifts";
 import { formatPaymentMethod } from "@/lib/constants/payment-methods";
+import { shiftSalesEmptyMessage } from "@/lib/shift-cash-preview";
 
 // R4: Quick-pick denominations cho mở/đóng ca — VND tiền mặt phổ biến.
 // Cashier tap pill thay vì gõ số → ít sai sót khi mở ca vội buổi sáng.
@@ -230,14 +231,14 @@ export function CloseShiftDialog({
               <div className="border border-border rounded-lg p-3 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">
-                    Doanh thu theo phương thức
+                    Doanh thu ròng theo phương thức
                   </span>
                   <span className="font-bold text-status-success tabular-nums">
                     {formatCurrency(preview.totalSales)}đ
                   </span>
                 </div>
                 {Object.keys(preview.salesByMethod).length === 0 ? (
-                  <p className="text-xs text-muted-foreground italic">Chưa có giao dịch nào trong ca</p>
+                  <p className="text-xs text-muted-foreground italic">{shiftSalesEmptyMessage(preview)}</p>
                 ) : (
                   <div className="space-y-1 pt-1 border-t border-dashed border-border">
                     {Object.entries(preview.salesByMethod).map(([m, amt]) => (
