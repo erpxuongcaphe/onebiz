@@ -335,12 +335,24 @@ export default function ModifierFnbPage() {
 
       <p className="text-sm text-muted-foreground">Thứ tự chung áp dụng cho các món/nhóm hàng đã chọn <span className="font-medium text-primary">Theo thứ tự chung</span>. Món dùng thứ tự riêng vẫn giữ cấu hình riêng.</p>
 
+      <nav aria-label="Thiết lập món F&B" className="flex flex-wrap gap-x-4 gap-y-2 border-b pb-2 text-sm font-medium text-primary">
+        <a href="/hang-hoa?scope=sku" className="underline underline-offset-4">Món và trạng thái mở bán</a>
+        <a href="/hang-hoa/cong-thuc" className="underline underline-offset-4">Công thức</a>
+        <a href="/hang-hoa/thiet-lap-gia" className="underline underline-offset-4">Giá bán</a>
+        <a href="/hang-hoa/nhom" className="underline underline-offset-4">Gán tùy chọn theo nhóm hàng</a>
+      </nav>
+      <details className="border bg-card">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-primary">Vì sao món chưa xuất hiện trên POS? · Mở kiểm tra cấu hình và món cần hoàn thiện</summary>
+        <div className="px-3 pb-3">
+          <p className="mb-2 text-sm text-muted-foreground">Kiểm tra đúng chi nhánh, kênh F&B, trạng thái mở bán, giá và công thức. Danh sách dưới đây phân biệt món đang bán với bản nháp; mở từng món để xem việc còn thiếu.</p>
       <FnbReadinessBand
         readiness={readiness}
         loading={loading}
         error={readinessError}
         branchName={currentBranch?.name}
       />
+        </div>
+      </details>
 
       {/* Empty state hint — gợi ý click preset */}
       {!loading && !loadError && groups.length === 0 && (

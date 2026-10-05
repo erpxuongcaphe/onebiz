@@ -57,9 +57,9 @@ const SAMPLE_ITEMS = [
     quantity: 2,
     unitPrice: 35000,
     toppings: [
-      { name: "Bánh mì pate", quantity: 1, price: 15000 },
+      { name: "Thạch sương sáo", quantity: 1, price: 15000 },
     ],
-    note: "Ít đường",
+    note: "Mức đường: 80% | Mức đá: Ít đá | Đá riêng, pha nhạt",
   },
   {
     name: "Bạc xỉu",
@@ -218,6 +218,10 @@ export function ReceiptPreviewPanel(props: ReceiptPreviewPanelProps) {
       </div>
 
       {/* Iframe preview — isolate CSS để không inherit Tailwind global */}
+      <div role="note" className="border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-sm">
+        <strong className="text-status-warning">Dữ liệu minh họa</strong>
+        <p>Món, số phiếu, bàn và thời gian dưới đây là ví dụ. Thông tin cửa hàng lấy từ cấu hình nếu có; phần còn thiếu dùng thông tin mẫu.</p>
+      </div>
       <div
         className="rounded-lg border border-outline-variant/40 bg-[#f3f4f6] p-4 overflow-auto"
         style={{ maxHeight: 600 }}

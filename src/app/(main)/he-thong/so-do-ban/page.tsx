@@ -90,7 +90,7 @@ export default function SoDoBanPage() {
     <div className="flex h-[calc(100dvh-4rem)] flex-col gap-2 p-2 sm:gap-3 sm:p-4">
       {/* Header — chọn chi nhánh */}
       <div className="flex items-center gap-3 flex-wrap">
-        <h1 className="text-xl font-bold">Sơ đồ bàn</h1>
+        <h1 className="text-xl font-bold">Thiết kế sơ đồ bàn</h1>
         <Select
           value={selectedBranchId}
           onValueChange={(v) => setSelectedBranchId(v ?? "")}
@@ -118,9 +118,14 @@ export default function SoDoBanPage() {
       </div>
 
       {/* Editor */}
+      <div className="flex flex-wrap items-center justify-between gap-2 border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm">
+        <p>Quản lý bố trí bàn, nền và trang trí cho <strong>{selectedBranch?.name || "chi nhánh đang chọn"}</strong>. Các thay đổi được gửi lưu ngay khi thao tác.</p>
+        <a href="/pos/fnb" className="shrink-0 font-medium text-primary underline underline-offset-4">Mở POS để phục vụ bàn</a>
+      </div>
       <div className="flex-1 min-h-0 rounded-lg border overflow-hidden">
         {loaded && selectedBranchId ? (
           <FloorPlanEditor
+            key={selectedBranchId}
             branchId={selectedBranchId}
             branchName={selectedBranch?.name}
             scope={canEditGlobal ? "global" : "branch"}

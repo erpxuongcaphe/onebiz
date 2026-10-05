@@ -14,13 +14,13 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/lib/contexts/toast-context";
 import {
   getFloorPlanZones,
-  createFloorPlanZone,
-  updateFloorPlanZone,
-  deleteFloorPlanZone,
+  createFloorPlanZone as createFloorPlanZoneRemote,
+  updateFloorPlanZone as updateFloorPlanZoneRemote,
+  deleteFloorPlanZone as deleteFloorPlanZoneRemote,
   getTablesByZone,
   getTablesByBranch,
-  updateTableLayout,
-  createTable as createTableSvc,
+  updateTableLayout as updateTableLayoutRemote,
+  createTable as createTableRemote,
   type FloorPlanZone,
   type TableLayout,
 } from "@/lib/services";
@@ -28,14 +28,15 @@ import { useAuth } from "@/lib/contexts";
 import { SHAPE_PRESETS, type ShapePreset } from "./floor-plan-shapes";
 import { DECORATION_PRESETS, type DecorationPreset } from "./decoration-shapes";
 import { useUndoStack } from "./use-undo-stack";
+import { useSaveStatus } from "./use-save-status";
 import type { CanvasTable } from "./floor-plan-canvas";
 import {
   getDecorationsByZone,
-  createDecoration,
-  updateDecoration,
-  deleteDecoration,
-  uploadFloorPlanBackground,
-  removeFloorPlanBackground,
+  createDecoration as createDecorationRemote,
+  updateDecoration as updateDecorationRemote,
+  deleteDecoration as deleteDecorationRemote,
+  uploadFloorPlanBackground as uploadFloorPlanBackgroundRemote,
+  removeFloorPlanBackground as removeFloorPlanBackgroundRemote,
   type FloorPlanDecoration,
 } from "@/lib/services/supabase/floor-plan-decorations";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,20 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const [loading, setLoading] = useState(true);
   const [uploadingBg, setUploadingBg] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+
+  const { saveStatus, trackSave } = useSaveStatus();
+  const { createFloorPlanZone, updateFloorPlanZone, deleteFloorPlanZone, updateTableLayout, createDecoration, updateDecoration, deleteDecoration, uploadFloorPlanBackground, removeFloorPlanBackground, createTableSvc } = useMemo(() => ({
+      createFloorPlanZone: (...args: Parameters<typeof createFloorPlanZoneRemote>) => trackSave(() => createFloorPlanZoneRemote(...args)),
+      updateFloorPlanZone: (...args: Parameters<typeof updateFloorPlanZoneRemote>) => trackSave(() => updateFloorPlanZoneRemote(...args)),
+      deleteFloorPlanZone: (...args: Parameters<typeof deleteFloorPlanZoneRemote>) => trackSave(() => deleteFloorPlanZoneRemote(...args)),
+      updateTableLayout: (...args: Parameters<typeof updateTableLayoutRemote>) => trackSave(() => updateTableLayoutRemote(...args)),
+      createDecoration: (...args: Parameters<typeof createDecorationRemote>) => trackSave(() => createDecorationRemote(...args)),
+      updateDecoration: (...args: Parameters<typeof updateDecorationRemote>) => trackSave(() => updateDecorationRemote(...args)),
+      deleteDecoration: (...args: Parameters<typeof deleteDecorationRemote>) => trackSave(() => deleteDecorationRemote(...args)),
+      uploadFloorPlanBackground: (...args: Parameters<typeof uploadFloorPlanBackgroundRemote>) => trackSave(() => uploadFloorPlanBackgroundRemote(...args)),
+      removeFloorPlanBackground: (...args: Parameters<typeof removeFloorPlanBackgroundRemote>) => trackSave(() => removeFloorPlanBackgroundRemote(...args)),
+      createTableSvc: (...args: Parameters<typeof createTableRemote>) => trackSave(() => createTableRemote(...args)),
+  }), [trackSave]);
 
   // ─── Undo/Redo stack ───
   type Snapshot = { tables: CanvasTable[]; decorations: FloorPlanDecoration[] };
@@ -135,7 +150,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     return () => {
       cancelled = true;
     };
-  }, [branchId, toast]);
+  }, [branchId, toast, createFloorPlanZone]);
 
   // ─── Load tables + decorations theo zone ───
   useEffect(() => {
@@ -247,7 +262,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         }),
       );
     },
-    [toast],
+    [toast, updateTableLayout],
   );
 
   // Push undo sau mỗi commit (debounced thực tế bằng React batching)
@@ -335,7 +350,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         }),
       );
     },
-    [toast],
+    [toast, updateDecoration],
   );
 
   const handleDeleteSelectedDecor = async () => {
@@ -428,7 +443,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         <div className="flex items-center gap-3 min-w-0">
           <h2 className="flex shrink-0 items-center gap-2 whitespace-nowrap text-base font-semibold">
             <Icon name="map" size={18} />
-            Sơ đồ bàn
+            Bố trí quán
           </h2>
           {branchName && (
             <span className="text-sm text-muted-foreground truncate">
@@ -437,7 +452,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           )}
           {scope === "global" && (
             <span className="text-xs bg-primary-fixed text-primary px-2 py-0.5 rounded-full font-medium">
-              Toàn hệ thống
+              Có quyền chọn nhiều chi nhánh
             </span>
           )}
         </div>
@@ -514,6 +529,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         </div>
       </div>
 
+      <div role="status" aria-live="polite" className={cn('border-b px-4 py-2 text-sm', saveStatus === 'error' ? 'bg-status-error/10 text-status-error' : saveStatus === 'saving' ? 'bg-status-warning/10 text-status-warning' : 'bg-primary/5 text-primary')}>
+        {saveStatus === 'saving' ? 'Đang lưu thay đổi…' : saveStatus === 'error' ? 'Có thay đổi chưa lưu được. Tải lại để đối chiếu trước khi tiếp tục.' : saveStatus === 'saved' ? 'Các yêu cầu lưu vừa thực hiện đã thành công.' : 'Chưa có thao tác chỉnh sửa trong lần mở này.'}
+        {' '}Phạm vi: <strong>{branchName || 'chi nhánh đang chọn'}</strong>.
+      </div>
       {/* Tabs zone — nhóm theo tầng */}
       <div className="flex items-center gap-3 px-4 py-2 border-b overflow-x-auto shrink-0 bg-surface-container-lowest">
         <button
