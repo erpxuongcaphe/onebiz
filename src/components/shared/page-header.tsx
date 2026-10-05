@@ -150,7 +150,7 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
           "inline-flex items-center justify-center gap-2 shrink-0",
           "rounded-lg text-sm font-medium",
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-          "h-8 pointer-coarse:min-h-11 px-3 cursor-pointer"
+          "h-8 pointer-coarse:min-h-[44px] px-3 cursor-pointer"
         )}
       >
         <Icon name="download" size={16} />
@@ -285,7 +285,7 @@ function MobileActions({
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "inline-flex h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 items-center justify-center rounded-lg",
+              "inline-flex h-8 w-8 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] shrink-0 items-center justify-center rounded-lg",
               "border border-input bg-background hover:bg-accent cursor-pointer"
             )}
             aria-label="Mở thêm thao tác"
@@ -347,7 +347,7 @@ function IconButton({
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 text-muted-foreground hover:text-foreground"
+      className="h-8 w-8 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] shrink-0 text-muted-foreground hover:text-foreground"
       onClick={onClick}
       title={tooltip}
     >
@@ -502,10 +502,10 @@ export function PageHeader({
         >
           {/* Sprint VISUAL-2 P1: title text-2xl font-bold (24px/700) thay text-lg font-medium (18px/500).
               Page title cần weight rõ → user/CEO scan biết section đang ở đâu. */}
-          <div className="min-w-0 shrink-0">
+          <div className={cn("min-w-0 shrink-0", compact ? "md:max-w-[40%]" : "lg:max-w-[40%]")}>
             <h1
               className={cn(
-                "font-bold text-primary leading-tight",
+                "font-bold text-primary leading-tight break-words",
                 compact ? "text-xl" : "text-2xl",
               )}
             >
@@ -550,7 +550,7 @@ export function PageHeader({
                   className={cn(
                     "inline-flex items-center justify-center rounded-lg",
                     "border border-input bg-background hover:bg-accent",
-                    "h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 cursor-pointer"
+                    "h-8 w-8 pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] shrink-0 cursor-pointer"
                   )}
                 >
                   <Icon name="more_horiz" size={16} />

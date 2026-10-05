@@ -439,7 +439,7 @@ export function DataTable<TData, TValue>({
           return (
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Icon name="more_horiz" size={16} className="text-muted-foreground" />
@@ -564,7 +564,7 @@ export function DataTable<TData, TValue>({
   const columnToggleMenu =
     columnToggle && toggleableColumns.length > 0 ? (
       <DropdownMenu>
-        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11">
+        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
           <Icon name="tune" size={15} />
           <span className="hidden lg:inline">Hiển thị cột</span>
         </DropdownMenuTrigger>
@@ -894,7 +894,7 @@ export function DataTable<TData, TValue>({
                     {rowActions && (
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          className="inline-flex pointer-coarse:min-h-11 pointer-coarse:min-w-11 items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Icon name="more_horiz" size={16} className="text-muted-foreground" />
