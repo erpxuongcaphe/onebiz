@@ -1022,6 +1022,25 @@ function TemplateEditorDialog({
             </div>
 
             {/* Đầu trang */}
+            {docType === "kitchen_ticket" ? <>
+              <ToggleGroupBox title="Bố cục phiếu bếp">
+                <p className="text-sm text-muted-foreground mb-2">Bàn, số lượng, topping, tùy chọn và yêu cầu pha chế luôn được giữ trên phiếu.</p>
+                <div className="flex flex-wrap gap-2">
+                  {([{value:"compact",label:"Gọn"},{value:"standard",label:"Tiêu chuẩn"},{value:"detailed",label:"Chi tiết · có giá"}] as const).map(option => <Button key={option.value} type="button"
+                    variant={(config.kitchen?.style ?? "standard") === option.value ? "default" : "outline"}
+                    onClick={() => setConfig(c => ({...c,kitchen:{...c.kitchen,style:option.value}}))}>{option.label}</Button>)}
+                </div>
+                <p className="text-sm font-medium mt-3 mb-2">Cỡ chữ tên món</p>
+                <div className="flex gap-2">{FONT_SIZE_OPTIONS.map(option => <Button key={option.value} type="button"
+                  variant={(config.items?.fontSize ?? "md") === option.value ? "default" : "outline"}
+                  onClick={() => setFontSize(option.value)}>{option.label}</Button>)}</div>
+              </ToggleGroupBox>
+              <ToggleGroupBox title="Chân phiếu bếp">
+                <label className="text-sm font-medium" htmlFor="kitchen-template-footer">Ghi chú cố định</label>
+                <Textarea id="kitchen-template-footer" value={config.footer?.customText ?? ""} onChange={e => setFooterText(e.target.value)} rows={2} maxLength={300}
+                  placeholder="VD: Kiểm tra yêu cầu riêng trước khi giao món" />
+              </ToggleGroupBox>
+            </> : <>
             <ToggleGroupBox title="Đầu trang">
               <div className="grid gap-x-6 sm:grid-cols-2 divide-border">
                 {HEADER_FLAGS.map((f) => (
@@ -1199,6 +1218,7 @@ function TemplateEditorDialog({
                 )}
               </div>
             </ToggleGroupBox>
+            </>}
           </div>
 
           {/* ── Cột phải: preview ── */}
@@ -1304,7 +1324,10 @@ function BillPreview({
       stationName: "BAR PHA CHẾ",
       createdAt: "2026-10-05T10:30:00+07:00",
       paperSize: paperSize === "58mm" ? "58mm" : "80mm",
-      style: "standard",
+      style: config.kitchen?.style ?? "standard",
+      title,
+      itemFontSize: config.items?.fontSize,
+      footerText: config.footer?.customText,
       items: [
         { name: "Cà phê sữa đá", variant: "Size L", quantity: 2, unitPrice: 35000,
           modifierLabels: ["Đường: 70%", "Đá: ít"], note: "Pha nhạt, đá riêng" },
@@ -1313,8 +1336,7 @@ function BillPreview({
     });
     return <div className="grid gap-2">
       <p role="note" className="border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-sm">
-        Phiếu bếp trên POS hiện dùng kiểu phiếu ở <a href="/cai-dat/in-an" className="font-semibold text-primary underline">Máy in &amp; vận hành</a>.
-        Các lựa chọn mẫu chứng từ bên trái chưa áp dụng cho phiếu bếp POS. Dưới đây là phiếu vận hành kiểu tiêu chuẩn, dùng cùng bộ dựng HTML với bản in.
+        Mẫu mặc định của chi nhánh được áp dụng khi gửi bếp và in lại từ KDS. Nếu chi nhánh chưa có mẫu, hệ thống dùng mẫu chung; nếu chưa có mẫu chung hoặc đang offline, dùng kiểu phiếu ở Máy in &amp; vận hành.
       </p>
       <iframe title="Phiếu bếp minh họa" srcDoc={html} sandbox="allow-same-origin"
         className="mx-auto h-[520px] max-w-full border bg-white"

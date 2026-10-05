@@ -13,6 +13,8 @@
  */
 
 import { printKitchenTicketV2, type KitchenTicketDataV2 } from "@/lib/print-fnb";
+import { applyKitchenTemplate, resolveKitchenPrintTemplate } from "@/lib/kitchen-print-template";
+import { loadStationPrinter } from "@/lib/printer/station-printers";
 import {
   getStationsByProductIds,
   getKitchenStationsByBranch,
@@ -20,6 +22,8 @@ import {
 } from "@/lib/services/supabase/kitchen-stations";
 
 interface RawTicketItem {
+  /** Reprints retain the station assigned when the order was sent. */
+  stationId?: string | null;
   productId: string;
   productName: string;
   variantLabel?: string | null;
@@ -49,14 +53,16 @@ export async function printKitchenTicketsByStation(
   items: RawTicketItem[],
   baseData: BaseTicketData,
   branchId: string,
+  options: { manual?: boolean } = {},
 ): Promise<number> {
   if (items.length === 0) return 0;
 
   // Bulk lookup product → station + stations metadata
   const productIds = Array.from(new Set(items.map((i) => i.productId)));
-  const [stationMap, stations] = await Promise.all([
+  const [stationMap, stations, template] = await Promise.all([
     getStationsByProductIds(productIds).catch(() => new Map<string, string | null>()),
     getKitchenStationsByBranch(branchId).catch(() => [] as KitchenStation[]),
+    resolveKitchenPrintTemplate(branchId),
   ]);
 
   const stationsById = new Map(stations.map((s) => [s.id, s] as const));
@@ -64,7 +70,7 @@ export async function printKitchenTicketsByStation(
   // Group items by station_id
   const grouped = new Map<string | "no_station", RawTicketItem[]>();
   for (const item of items) {
-    const sid = stationMap.get(item.productId) ?? null;
+    const sid = item.stationId !== undefined ? item.stationId : stationMap.get(item.productId) ?? null;
     const key = sid ?? "no_station";
     if (!grouped.has(key)) grouped.set(key, []);
     grouped.get(key)!.push(item);
@@ -83,17 +89,18 @@ export async function printKitchenTicketsByStation(
       stationKey !== "no_station" ? stationsById.get(stationKey) : null;
 
     // Skip nếu station tắt auto_print
-    if (station && station.settings.auto_print === false) continue;
+    if (!options.manual && station && station.settings.auto_print === false) continue;
 
     const stationName =
       station?.settings.header_text?.trim() ||
       station?.name?.toUpperCase() ||
       undefined; // undefined → printKitchenTicketV2 dùng "PHIẾU BAR/BẾP" mặc định
 
-    printKitchenTicketV2({
+    const ticket: KitchenTicketDataV2 = {
       ...baseData,
       stationName,
       stationColor: station?.color,
+      printer: station ? loadStationPrinter(branchId, station.id) ?? undefined : undefined,
       items: groupItems.map((it) => ({
         name: it.productName,
         variant: it.variantLabel ?? undefined,
@@ -103,7 +110,8 @@ export async function printKitchenTicketsByStation(
         modifierLabels: it.modifierLabels,
         note: it.note ?? undefined,
       })),
-    });
+    };
+    await printKitchenTicketV2(template ? applyKitchenTemplate(ticket, template.config, template.paperSize) : ticket);
     printedCount++;
   }
 

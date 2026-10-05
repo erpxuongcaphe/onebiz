@@ -41,6 +41,8 @@ import {
 } from "@/lib/services/supabase/kitchen-stations";
 import { getBranches } from "@/lib/services/supabase/branches";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
+import { requestPrinter } from "@/lib/printer/webusb-printer";
+import { loadStationPrinter, saveStationPrinter, clearStationPrinter } from "@/lib/printer/station-printers";
 
 // 8 màu predefined cho station badge — đủ phân biệt visually trong KDS
 const COLOR_PALETTE = [
@@ -180,7 +182,7 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
           <div className="border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">
             <p className="font-semibold">Chi nhánh: {branches.find((branch) => branch.id === selectedBranchId)?.name ?? (currentBranch?.id === selectedBranchId ? currentBranch?.name : "Chưa chọn")}</p>
             {printTargetLabel && <p className="mt-1">Đích in bếp trên máy này: {printTargetLabel}</p>}
-            <p className="mt-1">Trạm chia phiếu theo công việc. Các trạm dùng chung đích in bếp của máy này; chưa gán máy in riêng cho từng trạm.</p>
+            <p className="mt-1">Trạm chia phiếu theo công việc. Có thể kết nối USB riêng từng trạm bên dưới; nếu chưa gán, dùng đích in bếp chung. Gán thiết bị chỉ lưu trên máy/trình duyệt này và đúng chi nhánh; chế độ USB cần được chọn tại Phương thức in.</p>
           </div>
           {/* Branch selector — chỉ hiện nếu user có nhiều branch FnB */}
           {branches.length > 1 && (
@@ -315,6 +317,21 @@ function StationRow({
   onDelete: () => void;
 }) {
   const settings = station.settings;
+  const {toast} = useToast();
+  const [printer, setPrinter] = useState(() => loadStationPrinter(station.branchId, station.id));
+  const [connecting, setConnecting] = useState(false);
+  const connect = async () => {
+    setConnecting(true);
+    try {
+      const selected = await requestPrinter();
+      if (!selected) return;
+      saveStationPrinter(station.branchId, station.id, selected);
+      setPrinter(loadStationPrinter(station.branchId, station.id));
+      toast({variant:"success",title:`Đã gán máy in cho ${station.name}`,description:"Lưu trên trình duyệt này. Chọn phương thức USB để in trực tiếp."});
+    } catch (error) {
+      toast({variant:"error",title:"Không kết nối được máy in",description:error instanceof Error ? error.message : "Vui lòng thử lại"});
+    } finally {setConnecting(false);}
+  };
   return (
     <div className="flex items-center gap-3 rounded-lg border border-border p-3 hover:border-primary/50 transition-colors">
       {/* Color + icon badge */}
@@ -343,6 +360,14 @@ function StationRow({
               KDS
             </span>
           )}
+        </div>
+        <p className="text-sm mt-2 text-primary font-medium">Máy này: {printer ? `${printer.manufacturer} ${printer.name}${printer.serialNumber ? ` · ${printer.serialNumber}` : ""}` : "Dùng máy in bếp chung"}</p>
+        <div className="flex flex-wrap gap-2 mt-1">
+          <Button variant="outline" size="sm" disabled={connecting} onClick={connect}>{connecting ? "Đang kết nối..." : "Gán máy USB riêng"}</Button>
+          {printer && <Button variant="ghost" size="sm" onClick={() => {
+            try {clearStationPrinter(station.branchId,station.id); setPrinter(null);}
+            catch {toast({variant:"error",title:"Không lưu được lựa chọn máy in"});}
+          }}>Dùng máy chung</Button>}
         </div>
       </div>
 
@@ -461,7 +486,7 @@ function StationDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Thêm trạm chế biến" : `Sửa: ${station?.name}`}

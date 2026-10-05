@@ -46,7 +46,7 @@ import {
 } from "@/lib/services/supabase/branches";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { hapticTap, hapticSuccess } from "@/lib/offline";
-import { printKitchenTicketV2 } from "@/lib/print-fnb";
+import { printKitchenTicketsByStation } from "../print-stations";
 import type {
   KitchenOrder,
   KitchenOrderItem,
@@ -800,34 +800,28 @@ function KdsPageInner() {
 
   // ── Print kitchen ticket again (reprint) ──
   const handlePrintTicket = useCallback(
-    (order: KdsOrder) => {
+    async (order: KdsOrder) => {
       try {
-        printKitchenTicketV2({
+        await printKitchenTicketsByStation(order.items.map((it) => ({
+            productId: it.productId,
+            productName: it.productName,
+            stationId: it.kitchenStationId,
+            variantLabel: it.variantLabel,
+            quantity: it.quantity,
+            unitPrice: it.unitPrice,
+            toppings: (it.toppings ?? []).map(t => ({name:t.name, quantity:t.quantity, price:t.price})),
+            modifierLabels: it.modifierSelections?.map(s => `${s.groupName}: ${s.options.map(o => o.label).join("/")}`),
+            note: it.note,
+          })), {
           orderNumber: order.orderNumber,
           tableName: order.tableName ?? undefined,
           orderType: order.orderType,
-          items: order.items.map((it) => ({
-            name: it.productName,
-            variant: it.variantLabel ?? undefined,
-            quantity: it.quantity,
-            unitPrice: it.unitPrice,
-            toppings: (it.toppings ?? []).map((t) => ({
-              name: t.name,
-              quantity: t.quantity,
-              price: t.price,
-            })),
-            // PR 1 (P0.5): in LẠI phiếu cũng phải kèm Đường/Đá — cùng cách
-            // dựng nhãn với chỗ hiển thị trên màn KDS ngay bên dưới.
-            modifierLabels: it.modifierSelections?.map(
-              (s) => `${s.groupName}: ${s.options.map((o) => o.label).join("/")}`,
-            ),
-            note: it.note ?? undefined,
-          })),
           createdAt: order.createdAt,
           cashierName: user?.fullName,
+          orderNote: order.note ?? undefined,
           style: settings.print.kitchenTicketStyle,
           paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
-        });
+        }, order.branchId, {manual:true});
       } catch (err) {
         toast({
           title: "Không in được phiếu bếp",

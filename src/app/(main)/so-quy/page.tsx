@@ -28,7 +28,6 @@ import {
   DetailTabs,
   DetailHeader,
   DetailInfoGrid,
-  DetailItemsTable,
   AuditHistoryTab,
 } from "@/components/shared/inline-detail-panel";
 import { ConfirmDialog } from "@/components/shared/dialogs";
@@ -50,14 +49,13 @@ import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
 import { formatCurrency, formatUser, formatDateInputValue } from "@/lib/format";
 import { cashCategoryLabel as categoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
-import { exportToCsv } from "@/lib/utils/export";
+import { exportToCsv, exportToExcel } from "@/lib/utils/export";
+import { cashBookExportColumns } from "@/lib/cash-book-export";
 import {
   exportReportToExcel,
   buildInfoSheet,
   type ExcelSheet,
 } from "@/lib/utils/excel-export";
-import { exportToExcelFromSchema } from "@/lib/excel";
-import type { CashTransactionImportRow } from "@/lib/excel/schemas";
 import {
   getCashBookListWorkspace,
   getAllCashBookEntries,
@@ -624,7 +622,7 @@ export default function SoQuyPage() {
       });
 
       try {
-        exportReportToExcel({
+        await exportReportToExcel({
           kind: "so-quy",
           mode: "full",
           range: {
@@ -650,23 +648,12 @@ export default function SoQuyPage() {
       setExporting(false);
       return;
     }
-    const exportColumns = [
-      { header: "Mã phiếu", key: "code", width: 15 },
-      { header: "Ngày hạch toán", key: "date", width: 18, format: (v: string) => formatCashBookDate(v) },
-      { header: "Thực thu/chi lúc", key: "occurredAt", width: 24, format: (v: string) => formatCashTime(v) },
-      { header: "Tạo trên hệ thống lúc", key: "createdAt", width: 24, format: (v: string) => formatCashTime(v) },
-      { header: "Loại thu chi", key: "category", width: 20 },
-      { header: "Người nộp/nhận", key: "counterparty", width: 22 },
-      { header: "Chứng từ gốc", key: "referenceCode", width: 16 },
-      { header: "Giá trị", key: "amount", width: 15, format: (v: number) => v },
-    ];
-    exportToCsv(exportData, exportColumns, "so-quy");
-    toast({
-      title: "Đã xuất CSV sổ quỹ",
-      description: `${exportData.length} bút toán theo bộ lọc`,
-      variant: "success",
-    });
-    setExporting(false);
+    try {
+      await exportToCsv(exportData, cashBookExportColumns, "so-quy");
+      toast({title:"Đã xuất CSV sổ quỹ",description:`${exportData.length} bút toán theo bộ lọc`,variant:"success"});
+    } catch (error) {
+      toast({title:"Lỗi xuất CSV",description:error instanceof Error ? error.message : "Vui lòng thử lại",variant:"error"});
+    } finally {setExporting(false);}
   };
 
   const datePresetLabel =
@@ -1034,25 +1021,13 @@ export default function SoQuyPage() {
             {
               label: "Xuất Excel",
               icon: <Icon name="download" size={16} />,
-              onClick: (selectedRows) => {
-                const rows: CashTransactionImportRow[] = selectedRows.map(
-                  (e) => ({
-                    code: e.code,
-                    date: new Date(e.date),
-                    type: e.type,
-                    category: e.category,
-                    amount: e.amount,
-                    counterparty: e.counterparty,
-                    paymentMethod: "cash",
-                    note: e.note,
-                  }),
-                );
-                exportToExcelFromSchema(rows, cashTransactionExcelSchema);
-                toast({
-                  title: "Đã xuất Excel",
-                  description: `${selectedRows.length} phiếu thu/chi`,
-                  variant: "success",
-                });
+              onClick: async (selectedRows) => {
+                try {
+                  await exportToExcel(selectedRows, cashBookExportColumns, "so-quy-da-chon");
+                  toast({title:"Đã xuất Excel",description:`${selectedRows.length} phiếu thu/chi`,variant:"success"});
+                } catch (error) {
+                  toast({title:"Lỗi xuất Excel",description:error instanceof Error ? error.message : "Vui lòng thử lại",variant:"error"});
+                }
               },
             },
             {

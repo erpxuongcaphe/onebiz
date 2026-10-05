@@ -190,6 +190,10 @@ describe("C. Cài đặt in mô tả đúng nội dung phiếu bếp", () => {
 // ── Tầng B: đường in THẬT của POS ────────────────────────────────────────
 
 const phieuDaDung: string[] = [];
+vi.mock("@/lib/kitchen-print-template", async (importOriginal) => ({
+  ...await importOriginal<typeof import("@/lib/kitchen-print-template")>(),
+  resolveKitchenPrintTemplate: vi.fn().mockResolvedValue(null),
+}));
 
 vi.mock("@/lib/services/supabase/kitchen-stations", () => ({
   // Món không gắn trạm → nhánh "no_station", đúng hiện trạng tenant chưa

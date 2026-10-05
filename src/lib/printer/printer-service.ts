@@ -388,13 +388,13 @@ export class PrinterService {
 
     try {
       const bytes = buildReceiptBytes(payload);
-      await sendToUsbPrinter(printer.vendorId, printer.productId, bytes);
+      await sendToUsbPrinter(printer.vendorId, printer.productId, bytes, printer.serialNumber);
 
       // Optional: mở ngăn kéo nếu thanh toán tiền mặt
       if (options.openCashDrawer && payload.paymentMethod === "cash") {
         const drawerBytes = new EscPosBuilder(payload.paperSize).openDrawer().buildRaw();
         try {
-          await sendToUsbPrinter(printer.vendorId, printer.productId, drawerBytes);
+          await sendToUsbPrinter(printer.vendorId, printer.productId, drawerBytes, printer.serialNumber);
         } catch {
           // Ignore drawer errors — not critical
         }
@@ -427,6 +427,8 @@ export class PrinterService {
     openCashDrawer?: boolean;
     /** CEO 04/06/2026 — Sprint 5: role để dispatch đúng printer slot. */
     role?: PrinterRole;
+    /** Explicit station device; never silently reroute it to the cashier. */
+    printer?: StoredPrinter;
   }): Promise<PrintResult> {
     const backend = args.backend ?? this.configuredBackend;
 
@@ -443,18 +445,18 @@ export class PrinterService {
     if (!isWebUsbSupported()) {
       return this.fallbackRawToBrowser(args.rawHtml, "Trình duyệt không hỗ trợ WebUSB — đã chuyển sang in qua trình duyệt");
     }
-    const printer = pickPrinter(args.role);
+    const printer = args.printer ?? pickPrinter(args.role);
     if (!printer) {
       return this.fallbackRawToBrowser(args.rawHtml, "Chưa kết nối máy in USB — đã in qua trình duyệt");
     }
 
     try {
-      await sendToUsbPrinter(printer.vendorId, printer.productId, args.escposBytes);
+      await sendToUsbPrinter(printer.vendorId, printer.productId, args.escposBytes, printer.serialNumber);
 
       if (args.openCashDrawer) {
         const drawerBytes = new EscPosBuilder().openDrawer().buildRaw();
         try {
-          await sendToUsbPrinter(printer.vendorId, printer.productId, drawerBytes);
+          await sendToUsbPrinter(printer.vendorId, printer.productId, drawerBytes, printer.serialNumber);
         } catch {
           /* ignore */
         }
@@ -502,7 +504,7 @@ export class PrinterService {
           .divider()
           .text("Neu ban doc duoc dong nay => OK", { align: "center", bold: true })
           .newline();
-        await sendToUsbPrinter(printer.vendorId, printer.productId, builder.build());
+        await sendToUsbPrinter(printer.vendorId, printer.productId, builder.build(), printer.serialNumber);
         return { success: true, backend: "escpos-usb" };
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
