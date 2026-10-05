@@ -24,6 +24,16 @@ beforeEach(() => {
 });
 
 describe("F&B automatic kitchen tickets", () => {
+  it("does not reroute an inactive or foreign station to the shared printer", async () => {
+    mocks.stationMap.mockResolvedValue(new Map([["drink","inactive"]]));
+    expect(await printKitchenTicketsByStation([item("drink")],base,"xtb")).toBe(0);
+    expect(mocks.print).not.toHaveBeenCalled();
+  });
+  it("manual historical reprint retains the original local device even after station is inactive", async () => {
+    saveStationPrinter("xtb","inactive",{vendorId:1,productId:2,name:"Bar",manufacturer:"Test",serialNumber:"OLD-BAR"});
+    await printKitchenTicketsByStation([{...item("drink"),stationId:"inactive"}],base,"xtb",{manual:true});
+    expect(mocks.print.mock.calls[0][0].printer.serialNumber).toBe("OLD-BAR");
+  });
   it("applies one branch template to separate station devices without losing instructions", async () => {
     mocks.template.mockResolvedValue({config:{title:"PHA CHẾ",items:{fontSize:"lg"},kitchen:{style:"compact"}},paperSize:"58mm"});
     mocks.stationMap.mockResolvedValue(new Map([["drink","bar"],["food","kitchen"]]));

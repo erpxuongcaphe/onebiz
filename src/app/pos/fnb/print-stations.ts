@@ -88,6 +88,10 @@ export async function printKitchenTicketsByStation(
     const station =
       stationKey !== "no_station" ? stationsById.get(stationKey) : null;
 
+    // An explicitly assigned inactive/foreign station must not be redirected
+    // to the shared kitchen device. Manual historical reprints retain its slot.
+    if (!options.manual && stationKey !== "no_station" && !station) continue;
+
     // Skip nếu station tắt auto_print
     if (!options.manual && station && station.settings.auto_print === false) continue;
 
@@ -100,7 +104,7 @@ export async function printKitchenTicketsByStation(
       ...baseData,
       stationName,
       stationColor: station?.color,
-      printer: station ? loadStationPrinter(branchId, station.id) ?? undefined : undefined,
+      printer: stationKey !== "no_station" ? loadStationPrinter(branchId, stationKey) ?? undefined : undefined,
       items: groupItems.map((it) => ({
         name: it.productName,
         variant: it.variantLabel ?? undefined,
