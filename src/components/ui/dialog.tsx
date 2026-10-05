@@ -125,7 +125,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
       data-slot="dialog-title"
       className={cn(
         // 06/08 (audit popup): leading-none làm title dài xuống dòng CHỒNG chữ
-        // (line-height 1); pr-8 để title không chui dưới nút X (absolute top-2 right-2).
+        // (line-height 1); pr-12 để title không chui dưới nút X 44px trên cảm ứng.
         "font-heading text-base leading-snug font-semibold text-primary pr-12",
         className
       )}

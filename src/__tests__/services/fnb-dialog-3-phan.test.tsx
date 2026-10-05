@@ -93,14 +93,14 @@ describe("Panel tìm kiếm / chọn khách — chiều cao theo màn hình th�
 });
 
 describe("Nền dialog.tsx — title không chồng dòng, không chui dưới nút X", () => {
-  it("DialogTitle: leading-snug + pr-8 (bỏ leading-none)", () => {
+  it("DialogTitle: leading-snug + pr-12 chừa chỗ nút đóng cảm ứng", () => {
     const src = readFileSync("src/components/ui/dialog.tsx", "utf8");
     const title = src.slice(src.indexOf("function DialogTitle"));
     // soi đúng CHUỖI CLASS (comment giải thích cũng nhắc "leading-none")
     const m = title.match(/"([^"]*font-heading[^"]*)"/);
     expect(m).toBeTruthy();
     expect(m![1]).toContain("leading-snug");
-    expect(m![1]).toContain("pr-8");
+    expect(m![1]).toContain("pr-12");
     expect(m![1]).not.toContain("leading-none");
   });
 
