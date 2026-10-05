@@ -1,5 +1,5 @@
--- Keep the existing COD amount, locks, authorization and settlement logic.
--- Only the two cash voucher DATE values change to the Vietnam business day.
+-- Keep COD amount, locks and settlement logic; use Vietnam cash book days.
+-- Enforce the existing branch-access policy before any invoice/cash write.
 begin;
 create or replace function public.settle_cod_atomic(
   p_partner_id uuid,
@@ -114,6 +114,9 @@ begin
      for update;
     if not found then
       raise exception 'INVOICE_NOT_FOUND|%', v_ship.code using errcode = 'P0001';
+    end if;
+    if not public.user_has_branch_access(v_actor, v_invoice.branch_id) then
+      raise exception 'BRANCH_ACCESS_DENIED' using errcode = '42501';
     end if;
     -- kỷ luật 00213: KHÔNG thu tiền trên chứng từ chưa hoàn tất
     if v_invoice.status <> 'completed' then

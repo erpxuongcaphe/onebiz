@@ -105,3 +105,13 @@ do $$ declare r jsonb; n bigint; p numeric; msg text; begin
   perform test_assert(msg like 'SHIPMENT_ALREADY_SETTLED%' and (select count(*)=n from cash_transactions),'COD repeat creates no duplicate vouchers');
 end $$;
 select 'PASS: COD business date and receipt/fee amounts, existing duplicate guard';
+insert into shipping_orders values('00000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000002','COD-BRANCH-DENIED','00000000-0000-0000-0000-000000000010','delivered',100,null,'00000000-0000-0000-0000-000000000050',null,null,null);
+do $$ declare n bigint; d bigint; p numeric; msg text; begin
+  select count(*) into n from cash_transactions; select count(*) into d from shipping_settlements;
+  select paid into p from invoices where id='00000000-0000-0000-0000-000000000010';
+  perform set_config('test.branch','no',false);
+  begin perform settle_cod_atomic('00000000-0000-0000-0000-000000000050','[{"shipment_id":"00000000-0000-0000-0000-000000000061","partner_fee":10}]','transfer'); exception when others then msg:=sqlerrm; end;
+  perform set_config('test.branch','yes',false);
+  perform test_assert(msg='BRANCH_ACCESS_DENIED','COD enforces branch access before money');
+  perform test_assert((select count(*)=n from cash_transactions) and (select count(*)=d from shipping_settlements) and (select paid=p from invoices where id='00000000-0000-0000-0000-000000000010'),'COD branch denial rolls back settlement, cash and invoice');
+end $$;
