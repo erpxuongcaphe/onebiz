@@ -56,7 +56,7 @@ export function applyTokens(text: string, ctx: TokenContext): string {
  */
 export function applyTemplateToDocData(
   base: DocumentPrintData,
-  resolved: ResolvedPrint,
+  resolved: Pick<ResolvedPrint, "config" | "brand">,
 ): DocumentPrintData {
   // Clone nông + clone mảng items (sẽ chỉnh field từng item).
   const data: DocumentPrintData = {
@@ -113,6 +113,7 @@ export function applyTemplateToDocData(
   const f = config.footer;
   if (f) {
     if (f.signature === false) data.showSignature = false;
+    if (f.thankYou !== undefined) data.showThankYou = f.thankYou;
     if (f.thankYou === false) data.businessFooter = undefined;
     if (f.customText !== undefined && f.customText !== "") {
       const extra = applyTokens(f.customText, ctx);
@@ -132,10 +133,17 @@ export function applyTemplateToDocData(
   // ── Items: toggle cột (phần AN TOÀN — chỉ ẩn field item) ─────
   // CHỈ làm khi config.items.columns được truyền. Bỏ trống → giữ nguyên.
   const cols = config.items?.columns;
+  if (config.payment?.showDiscount === false || config.payment?.showDebt === false) {
+    data.summaryRows = base.summaryRows?.filter(row => {
+      if (config.payment?.showDiscount === false && /giảm giá/i.test(row.label)) return false;
+      if (config.payment?.showDebt === false && /nợ|còn phải trả/i.test(row.label)) return false;
+      return true;
+    });
+  }
   if (Array.isArray(cols) && data.items && data.items.length) {
     const lower = cols.map((c) => String(c).toLowerCase());
     const hasPrice = lower.includes("price") || lower.includes("unitprice");
-    const hasDiscount = lower.includes("discount");
+    const hasDiscount = lower.includes("discount") && config.payment?.showDiscount !== false;
     const hasCode = lower.includes("code");
 
     for (const it of data.items as DocumentLineItem[]) {
@@ -171,6 +179,10 @@ export function applyTemplateToDocData(
 
   // ── QR thanh toán (P6b) ─────────────────────────────────────
   // Chỉ build khi mẫu bật showQr === true VÀ brand đủ thông tin ngân hàng.
+  if (config.payment?.showQr === false) {
+    data.qrImageUrl = undefined;
+    data.qrLabel = undefined;
+  }
   if (config.payment?.showQr === true) {
     const qrBrand = resolved.brand;
     const bank = qrBrand.bankBin || qrBrand.bankCode;

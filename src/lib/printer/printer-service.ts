@@ -29,10 +29,12 @@ import {
   type PrinterRole,
 } from "./webusb-printer";
 import { formatNumber, formatDate } from "@/lib/format";
+import { loadBridgePrinter, printViaBridge, bridgeHtml, type BridgeRole } from "./qz-bridge";
+import type { PaperSize } from "@/lib/print-document";
 
 // ─── Types ───
 
-export type PrinterBackend = "browser" | "escpos-usb";
+export type PrinterBackend = "browser" | "escpos-usb" | "qz-tray";
 
 export interface PrintReceiptPayload {
   // Header
@@ -56,6 +58,7 @@ export interface PrintReceiptPayload {
     quantity: number;
     unitPrice: number;
     total: number;
+    note?: string;
   }>;
 
   // Totals
@@ -163,6 +166,7 @@ function buildReceiptBytes(payload: PrintReceiptPayload): Uint8Array {
   for (const item of payload.items) {
     const name = item.variant ? `${item.name} (${item.variant})` : item.name;
     builder.text(name);
+    if (item.note) builder.text(`  ${item.note}`);
     const qtyPrice = `${formatNumber(item.quantity)} x ${formatVnd(item.unitPrice)}`;
     builder.textTwoColumns(`  ${qtyPrice}`, formatVnd(item.total));
   }
@@ -297,13 +301,14 @@ function escapeHtml(s: string): string {
 }
 
 function openBrowserPrint(html: string): void {
-  const win = window.open("", "_blank", "width=400,height=700");
+  const win = window.open("", "_blank", "width=800,height=900");
   if (!win) {
     throw new Error("Không mở được cửa sổ in — vui lòng cho phép popup");
   }
-  win.document.write(html);
+  win.document.write(bridgeHtml(html));
   win.document.close();
   win.focus();
+  setTimeout(() => win.print(), 300);
 }
 
 // ─── Main API ───
@@ -322,6 +327,7 @@ export interface PrinterServiceOptions {
    * → tự fallback sang cashier slot.
    */
   role?: PrinterRole;
+  paperSize?: PaperSize;
 }
 
 /** Helper: chọn printer theo role với fallback sang cashier. */
@@ -355,6 +361,8 @@ export class PrinterService {
     options: PrinterServiceOptions = {}
   ): Promise<PrintResult> {
     const backend = options.backend ?? this.configuredBackend;
+
+    if (backend === "qz-tray") return this.printRaw({rawHtml: options.rawHtml ?? buildReceiptHtml(payload), backend, role: options.role, paperSize: payload.paperSize});
 
     // ─── Browser backend ───
     if (backend === "browser") {
@@ -429,8 +437,22 @@ export class PrinterService {
     role?: PrinterRole;
     /** Explicit station device; never silently reroute it to the cashier. */
     printer?: StoredPrinter;
+    paperSize?: PaperSize;
+    bridgeRole?: BridgeRole;
+    bridgePrinter?: string;
   }): Promise<PrintResult> {
     const backend = args.backend ?? this.configuredBackend;
+
+    if (backend === "qz-tray") {
+      try {
+        const name = args.bridgePrinter ?? loadBridgePrinter(args.bridgeRole ?? args.role ?? "cashier");
+        if (!name) throw new Error("Chưa chọn máy qua cầu nối. Vào Cài đặt → In ấn → Máy in & vận hành để tìm và gán máy.");
+        await printViaBridge(args.rawHtml, name, args.paperSize ?? "80mm");
+        return { success: true, backend };
+      } catch (error) {
+        return { success: false, backend, warning: `Cầu nối chưa gửi được lệnh: ${error instanceof Error ? error.message : String(error)}. Không tự chuyển máy; kiểm tra QZ Tray, quyền truy cập và máy đã chọn.` };
+      }
+    }
 
     if (backend === "browser" || !args.escposBytes) {
       try {
@@ -484,7 +506,9 @@ export class PrinterService {
    */
   async testPrint(options: PrinterServiceOptions = {}): Promise<PrintResult> {
     const backend = options.backend ?? this.configuredBackend;
-    const paperSize: PaperWidth = "80mm";
+    const paperSize: PaperWidth = options.paperSize === "58mm" ? "58mm" : "80mm";
+
+    if (backend === "qz-tray") return this.printRaw({rawHtml: `<html><meta charset="utf-8"><body><h2>ONEBIZ — IN THỬ</h2><p>Khổ ${options.paperSize ?? paperSize}</p><p>Kiểm tra chữ, lề và giấy; gửi lệnh chưa xác nhận giấy đã ra.</p></body></html>`, backend, role:options.role, paperSize:options.paperSize});
 
     if (backend === "escpos-usb") {
       if (!isWebUsbSupported()) {
@@ -562,7 +586,7 @@ export async function printReceipt(
     const settingsRaw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
     if (settingsRaw) {
       const parsed = JSON.parse(settingsRaw);
-      const backend: PrinterBackend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
+      const backend: PrinterBackend = parsed?.print?.backend === "qz-tray" ? "qz-tray" : parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
       printerService.setBackend(backend);
     }
   } catch {

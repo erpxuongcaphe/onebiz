@@ -1,3 +1,4 @@
+import { loadBridgePrinter } from "@/lib/printer/qz-bridge";
 /**
  * print-stations.ts — Helper split items theo trạm chế biến rồi in N phiếu.
  * Sprint KITCHEN-1 (CEO 07/05).
@@ -104,6 +105,7 @@ export async function printKitchenTicketsByStation(
       ...baseData,
       stationName,
       stationColor: station?.color,
+      bridgePrinter: stationKey !== "no_station" ? loadBridgePrinter("kitchen", branchId, stationKey) ?? undefined : undefined,
       printer: stationKey !== "no_station" ? loadStationPrinter(branchId, stationKey) ?? undefined : undefined,
       items: groupItems.map((it) => ({
         name: it.productName,

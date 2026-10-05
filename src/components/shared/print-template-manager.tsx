@@ -1,6 +1,7 @@
 "use client";
 
-import { formatNumber } from "@/lib/format";
+import { generateDocumentHtml, type DocumentPrintData } from "@/lib/print-document";
+import { applyTemplateToDocData } from "@/lib/print-apply-template";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -45,8 +46,9 @@ import type {
   PrintTemplate,
   ResolvedBrand,
 } from "@/lib/services";
-import { buildVietQrUrl } from "@/lib/vietqr";
 import { buildKitchenTicketHtml } from "@/lib/print-fnb";
+import { PrintHtmlPreview } from "@/components/shared/print-html-preview";
+import { buildCashTransactionPrintData } from "@/lib/print-templates";
 
 // ──────────────────────────────────────────────────────────────
 // Hằng số nhãn (Tiếng Việt có dấu)
@@ -1101,7 +1103,8 @@ function TemplateEditorDialog({
                     <p className="mb-1.5 text-sm font-medium">Cột hiển thị</p>
                     <div className="grid gap-2 sm:grid-cols-2">
                       {columnOptions.map((col) => {
-                        const checked = selectedColumns.includes(col.key);
+                        const mandatory = ["name", "qty", "total"].includes(col.key);
+                        const checked = mandatory || selectedColumns.includes(col.key);
                         return (
                           <label
                             key={col.key}
@@ -1109,6 +1112,7 @@ function TemplateEditorDialog({
                           >
                             <Checkbox
                               checked={checked}
+                              disabled={mandatory}
                               onCheckedChange={(v) => toggleColumn(col.key, v === true)}
                             />
                             {col.label}
@@ -1122,9 +1126,9 @@ function TemplateEditorDialog({
             )}
 
             {/* Thanh toán */}
-            <ToggleGroupBox title="Thanh toán">
+            {["sale_invoice", "sales_order", "sale_return", "internal_sale", "input_invoice", "purchase_order"].includes(docType) && <ToggleGroupBox title="Thanh toán">
               <div className="grid gap-x-6 sm:grid-cols-2">
-                {PAYMENT_FLAGS.map((f) => (
+                {PAYMENT_FLAGS.filter(() => ["sale_invoice", "sales_order", "sale_return", "internal_sale", "input_invoice", "purchase_order"].includes(docType)).map((f) => (
                   <Toggle
                     key={f.key}
                     label={f.label}
@@ -1135,11 +1139,12 @@ function TemplateEditorDialog({
               </div>
             </ToggleGroupBox>
 
+            }
             {/* Chân trang */}
             <ToggleGroupBox title="Chân trang">
               <div className="space-y-2">
                 <div className="grid gap-x-6 sm:grid-cols-2">
-                  {FOOTER_BOOL_FLAGS.map((f) => (
+                  {FOOTER_BOOL_FLAGS.filter(f => f.key !== "signature" || (paperSize !== "58mm" && paperSize !== "80mm")).map((f) => (
                     <Toggle
                       key={f.key}
                       label={f.label}
@@ -1161,7 +1166,7 @@ function TemplateEditorDialog({
                 </div>
 
                 {/* Ô ký tùy biến — hiện khi bật "Ô chữ ký" */}
-                {config.footer?.signature && (
+                {config.footer?.signature && paperSize !== "58mm" && paperSize !== "80mm" && (
                   <div className="space-y-1.5 rounded-lg border p-2.5">
                     <div className="flex items-center justify-between">
                       <label className="text-sm font-medium">Ô ký cuối phiếu</label>
@@ -1212,7 +1217,7 @@ function TemplateEditorDialog({
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      Ô đầu tiên tự điền tên người lập phiếu khi in. Kéo lên/xuống để đổi thứ tự.
+                      Các ô ký để trống để ký tay. Dùng nút lên/xuống để đổi thứ tự.
                     </p>
                   </div>
                 )}
@@ -1241,12 +1246,12 @@ function TemplateEditorDialog({
             <p className="mt-2 text-xs text-muted-foreground">
               {docType === "kitchen_ticket"
                 ? `Phiếu bếp minh họa khổ ${paperSize} — bàn, số lượng và yêu cầu pha chế được ưu tiên.`
-                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin doanh nghiệp/chi nhánh; chỉ phản ánh bật/tắt, không phải bản in cuối.`}
+                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin doanh nghiệp/chi nhánh; dùng cùng bộ dựng HTML với bản in thật; dữ liệu giao dịch là ví dụ.`}
             </p>
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="sticky bottom-0 border-t bg-background py-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Hủy
           </Button>
@@ -1281,20 +1286,6 @@ function ToggleGroupBox({
 // ──────────────────────────────────────────────────────────────
 // Preview bill 80mm đơn giản — phản ánh toggle
 // ──────────────────────────────────────────────────────────────
-const SAMPLE_ITEMS: {
-  code: string;
-  name: string;
-  qty: number;
-  price: number;
-}[] = [
-  { code: "CF001", name: "Cà phê sữa", qty: 2, price: 35000 },
-  { code: "CF002", name: "Bạc xỉu", qty: 1, price: 39000 },
-];
-
-function fmt(n: number): string {
-  return formatNumber(n);
-}
-
 function BillPreview({
   docType,
   title,
@@ -1338,264 +1329,26 @@ function BillPreview({
       <p role="note" className="border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-sm">
         Mẫu mặc định của chi nhánh được áp dụng khi gửi bếp và in lại từ KDS. Nếu chi nhánh chưa có mẫu, hệ thống dùng mẫu chung; nếu chưa có mẫu chung hoặc đang offline, dùng kiểu phiếu ở Máy in &amp; vận hành.
       </p>
-      <iframe title="Phiếu bếp minh họa" srcDoc={html} sandbox="allow-same-origin"
-        className="mx-auto h-[520px] max-w-full border bg-white"
-        style={{ width: paperSize === "58mm" ? 240 : 322 }} />
+      <PrintHtmlPreview title="Phiếu bếp minh họa" html={html} paperSize={paperSize === "58mm" ? "58mm" : "80mm"} />
     </div>;
   }
-  // CEO 05/07: preview theo ĐÚNG khổ đã chọn — trước đây luôn 80mm.
-  // Bill nhiệt giữ font-mono hẹp; A4/A5 rộng hơn + font sans như bản in thật.
-  const isThermal = paperSize === "80mm" || paperSize === "58mm";
-  const widthClass =
-    paperSize === "58mm"
-      ? "max-w-[210px]"
-      : paperSize === "80mm"
-        ? "max-w-[260px]"
-        : paperSize === "A5"
-          ? "max-w-[400px]"
-          : "max-w-[560px]";
-  const header = config.header ?? {};
-  const customer = config.customer ?? {};
-  const payment = config.payment ?? {};
-  const footer = config.footer ?? {};
-  const fontSize = config.items?.fontSize ?? "md";
-
-  const cols = columnOptions.filter((c) => selectedColumns.includes(c.key));
-  const hasItemsTable = columnOptions.length > 0;
-
-  // ── Nguồn dữ liệu THẬT cho đầu trang (fallback khi chưa có/đang nạp) ──
-  const businessName = brand?.businessName?.trim() || "(Chưa đặt tên doanh nghiệp)";
-  const taxCode = brand?.taxCode?.trim() || "";
-  const address = brand?.address?.trim() || "(chưa có địa chỉ)";
-  const phone = brand?.phone?.trim() || "";
-  const logoUrl = brand?.logoUrl?.trim() || "";
-
-  // ── QR thật: chỉ in khi đủ cấu hình ngân hàng (mirror logic engine in) ──
-  const bankId = brand?.bankBin || brand?.bankCode || "";
-  const bankEnough =
-    !!brand &&
-    brand.vietQrEnabled !== false &&
-    Boolean(bankId) &&
-    Boolean(brand.bankAccount);
-  let qrImageUrl = "";
-  if (bankEnough && brand) {
-    try {
-      qrImageUrl = buildVietQrUrl({
-        bank: bankId,
-        accountNumber: brand.bankAccount as string,
-        accountHolder: brand.bankHolder,
-        addInfo: "PB-0001",
-        template: "print",
-      });
-    } catch {
-      // Ngân hàng không hỗ trợ → bỏ ảnh QR, vẫn coi như "đã cấu hình".
-      qrImageUrl = "";
-    }
-  }
-
-  const itemTextSize =
-    fontSize === "sm" ? "text-[10px]" : fontSize === "lg" ? "text-[13px]" : "text-[11px]";
-
-  const subtotal = SAMPLE_ITEMS.reduce((s, it) => s + it.qty * it.price, 0);
-
-  const cellValue = (key: string, it: (typeof SAMPLE_ITEMS)[number]): string => {
-    switch (key) {
-      case "code":
-        return it.code;
-      case "name":
-        return it.name;
-      case "qty":
-        return String(it.qty);
-      case "unit":
-        return "ly";
-      case "price":
-      case "unitPrice":
-        return fmt(it.price);
-      case "discount":
-        return "0";
-      case "total":
-        return fmt(it.qty * it.price);
-      case "systemQty":
-        return String(it.qty + 1);
-      case "actualQty":
-        return String(it.qty);
-      case "diff":
-        return "-1";
-      default:
-        return "";
-    }
+  const base: DocumentPrintData = {
+    documentType: title, documentCode: docType === "cash_voucher" ? "PT-DEMO-001" : "HD-DEMO-001", date: "2026-10-06T10:30:00+07:00",
+    businessName: brand?.businessName || "(Chưa đặt tên doanh nghiệp)", businessAddress: brand?.address, businessPhone: brand?.phone,
+    createdBy: "Nhân viên minh họa", showSignature: true, branchName: "Chi nhánh minh họa",
+    headerFields: docType === "cash_voucher" ? [{label:"Người nộp / nhận",value:"Nguyễn Văn An"},{label:"Nội dung",value:"Thu tiền thanh toán hóa đơn"},{label:"Phương thức",value:"Tiền mặt"}] : [...(showCustomer ? [{label:"Khách hàng",value:"Nguyễn Văn An"},{label:"Mã KH",value:"KH-DEMO"},{label:"Điện thoại",value:"0900000000"},{label:"Địa chỉ",value:"Địa chỉ minh họa"}] : [])],
+    items: columnOptions.length ? [{code:"CF001",name:"Cà phê sữa đá",quantity:2,unitPrice:35000,total:70000,note:"Size L • Đường: 70% • Đá: ít"},{code:"CF002",name:"Bạc xỉu",quantity:1,unitPrice:39000,total:39000,note:"Pha nhạt"}] : undefined,
+    itemColumns: ["Mã hàng","Tên hàng","SL","Đơn giá","Thành tiền","Ghi chú"],
+    summaryRows: docType === "cash_voucher" ? [{label:"Số tiền",value:"109.000 đ",bold:true}] : [{label:"Tạm tính",value:"109.000 đ"},{label:"Giảm giá",value:"9.000 đ"},{label:"Tổng thanh toán",value:"100.000 đ",bold:true},{label:"Đã thanh toán",value:"80.000 đ"},{label:"Khách còn phải trả",value:"20.000 đ",bold:true}],
   };
-
-  const isNumericCol = (key: string) =>
-    ["qty", "price", "unitPrice", "discount", "total", "systemQty", "actualQty", "diff"].includes(
-      key,
-    );
-
-  return (
-    <div
-      className={`mx-auto w-full ${widthClass} rounded-md border bg-white p-3 ${
-        isThermal ? "font-mono text-xs" : "font-sans text-[12px]"
-      } leading-tight text-black shadow-sm`}
-    >
-      {/* Đầu trang — dùng THÔNG TIN THẬT của DN/chi nhánh (chỉ đọc) */}
-      <div className="text-center">
-        {header.logo &&
-          (logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={logoUrl}
-              alt="Logo"
-              className="mx-auto mb-1 h-8 w-auto max-w-[60px] object-contain"
-            />
-          ) : (
-            <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
-              LOGO
-            </div>
-          ))}
-        {header.businessName && (
-          <div className="text-[12px] font-bold uppercase">
-            {brandLoading && !brand ? "…" : businessName}
-          </div>
-        )}
-        {header.taxCode &&
-          (taxCode ? <div>MST: {taxCode}</div> : <div className="text-gray-400">(chưa có MST)</div>)}
-        {header.address && <div>{address}</div>}
-        {header.branch && <div>CN: Quán Hai Bà Trưng</div>}
-        {header.phone && phone && <div>ĐT: {phone}</div>}
-      </div>
-
-      <div className="my-1.5 border-t border-dashed border-gray-400" />
-
-      {/* Tiêu đề */}
-      <div className="text-center text-sm font-bold uppercase">{title}</div>
-      <div className="text-center text-xs text-gray-500">Số: PB-0001 · 25/06/2026</div>
-
-      {/* Khách hàng */}
-      {showCustomer && (customer.name || customer.code || customer.phone || customer.address) && (
-        <>
-          <div className="my-1.5 border-t border-dashed border-gray-400" />
-          <div className="space-y-0.5">
-            {customer.name && <div>KH: Nguyễn Văn A</div>}
-            {customer.code && <div>Mã KH: KH00123</div>}
-            {customer.phone && <div>ĐT: 0912 345 678</div>}
-            {customer.address && <div>ĐC: 45 Lê Lợi, Q.1</div>}
-          </div>
-        </>
-      )}
-
-      {/* Bảng mặt hàng */}
-      {hasItemsTable && (
-        <>
-          <div className="my-1.5 border-t border-dashed border-gray-400" />
-          {cols.length > 0 ? (
-            <table className={cn("w-full", itemTextSize)}>
-              <thead>
-                <tr className="border-b border-gray-300">
-                  {cols.map((c) => (
-                    <th
-                      key={c.key}
-                      className={cn(
-                        "py-0.5 font-semibold",
-                        isNumericCol(c.key) ? "text-right" : "text-left",
-                      )}
-                    >
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {SAMPLE_ITEMS.map((it) => (
-                  <tr key={it.code}>
-                    {cols.map((c) => (
-                      <td
-                        key={c.key}
-                        className={cn(
-                          "py-0.5",
-                          isNumericCol(c.key) ? "text-right" : "text-left",
-                        )}
-                      >
-                        {cellValue(c.key, it)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : (
-            <div className="py-1 text-center text-xs italic text-gray-400">
-              (Chưa chọn cột nào)
-            </div>
-          )}
-        </>
-      )}
-
-      {/* Tổng + thanh toán */}
-      <div className="my-1.5 border-t border-dashed border-gray-400" />
-      <div className="space-y-0.5">
-        <div className="flex justify-between font-semibold">
-          <span>Tổng cộng</span>
-          <span>{fmt(subtotal)}</span>
-        </div>
-        {payment.showDiscount && (
-          <div className="flex justify-between text-gray-600">
-            <span>Giảm giá</span>
-            <span>-0</span>
-          </div>
-        )}
-        {payment.showDebt && (
-          <div className="flex justify-between text-gray-600">
-            <span>Còn nợ</span>
-            <span>0</span>
-          </div>
-        )}
-      </div>
-
-      {payment.showQr &&
-        (bankEnough ? (
-          <div className="mt-2 flex flex-col items-center">
-            {qrImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={qrImageUrl}
-                alt="QR thanh toán"
-                className="h-16 w-16 object-contain"
-              />
-            ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
-                QR
-              </div>
-            )}
-            <div className="text-xs text-gray-500">QR thanh toán (đã cấu hình ngân hàng)</div>
-          </div>
-        ) : (
-          <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-xs leading-snug text-amber-700">
-            Bật QR nhưng chưa cấu hình ngân hàng — QR sẽ KHÔNG in. Vào Cài đặt → Thanh toán để thêm.
-          </div>
-        ))}
-
-      {/* Chân trang */}
-      {(footer.signature || footer.thankYou || footer.customText) && (
-        <div className="my-1.5 border-t border-dashed border-gray-400" />
-      )}
-      {footer.signature && (
-        <div className="mt-1 flex flex-wrap justify-around gap-x-2 gap-y-1 text-xs text-gray-600">
-          {(config.signatures ?? [{ label: "Người lập phiếu" }, { label: "Người duyệt" }]).map(
-            (s, i) => (
-              <div key={i} className="text-center">
-                <div>{s.label || "(trống)"}</div>
-                <div className="mt-4">______</div>
-              </div>
-            ),
-          )}
-        </div>
-      )}
-      {footer.customText && (
-        <div className="mt-1.5 text-center text-xs text-gray-600">{footer.customText}</div>
-      )}
-      {footer.thankYou && (
-        <div className="mt-1 text-center text-xs font-medium">Cảm ơn quý khách!</div>
-      )}
-    </div>
-  );
+  const previewBase = docType === "cash_voucher" ? {...base,...buildCashTransactionPrintData({
+    id:"cash-demo",code:"PT-DEMO-001",type:"receipt",typeName:"Thu tiền",date:"2026-10-06",occurredAt:"2026-10-06T10:30:00+07:00",createdAt:"2026-10-06T10:31:00+07:00",
+    category:"Thanh toán hóa đơn",counterparty:"Nguyễn Văn An",amount:109000,createdBy:"demo",createdByName:"Nhân viên minh họa",note:"Dữ liệu minh họa — không phải phiếu thu thật.",
+  })} : base;
+  const rendered = applyTemplateToDocData(previewBase, {config:{...config,title,items:{...config.items,columns:selectedColumns}},brand:brand ?? {}});
+  const html = generateDocumentHtml(rendered, paperSize ?? "80mm");
+  return <div className="space-y-2">
+    {brandLoading && <p className="text-sm text-muted-foreground">Đang tải thông tin thương hiệu…</p>}
+    <PrintHtmlPreview title="Bản in minh họa từ bộ dựng bản in thật" html={html} paperSize={paperSize ?? "80mm"} />
+  </div>;
 }

@@ -2336,6 +2336,8 @@ function FnbPosPageInner() {
               commissionPercent > 0;
             const commissionAmount = isPlatformOrderPrint ? serverCommissionAmount : 0;
             const printedViaTemplate = await printFnbBillWithTemplate({
+              branchName: currentBranch?.name,
+              paymentMethod: payload.paymentMethod,
               branchId,
               invoiceCode: payResult.invoiceCode,
               tableName: tab.label,

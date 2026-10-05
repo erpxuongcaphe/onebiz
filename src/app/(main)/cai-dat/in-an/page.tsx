@@ -11,7 +11,6 @@ import { Icon } from "@/components/ui/icon";
 import {
   requestPrinter,
   isWebUsbSupported,
-  testPrint,
   loadPrinterByRole,
   savePrinterByRole,
   clearPrinterByRole,
@@ -25,6 +24,10 @@ import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { BranchPrintInfoCard } from "@/components/shared/branch-print-info-card";
 import { PrintSetupChecklist } from "@/components/shared/print-setup-checklist";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
+import { BridgePrinterSetup } from "@/components/shared/bridge-printer-setup";
+import { PrinterTestPreview } from "@/components/shared/printer-test-preview";
+import { sendPrintJob, getPrintSettings } from "@/lib/printer/print-job";
+import { generateDocumentHtml, type PaperSize } from "@/lib/print-document";
 import { ReceiptPreviewPanel } from "@/components/shared/receipt-preview-panel";
 import { PrintTemplateManager } from "@/components/shared/print-template-manager";
 import {
@@ -145,6 +148,12 @@ const receiptStyles = [
 // ── Print backends ──
 const backends = [
   {
+    id: "qz-tray" as const,
+    label: "Qua QZ Tray trên máy quầy",
+    desc: "Chọn máy đã cài driver: USB, LAN, Wi-Fi hoặc Bluetooth. Cần ứng dụng QZ Tray chạy trên cùng máy tính và cấp quyền in.",
+    icon: "desktop_windows" as const,
+  },
+  {
     id: "browser" as const,
     label: "Qua trình duyệt",
     desc: "Tương thích mọi máy in đã cài driver (USB / LAN / WiFi / AirPrint). Sẽ hiện hộp thoại chọn máy in.",
@@ -153,7 +162,7 @@ const backends = [
   {
     id: "escpos-usb" as const,
     label: "Máy in nhiệt USB (ESC/POS)",
-    desc: "In tức thì, không popup. Tự cắt giấy + mở ngăn kéo. Hỗ trợ Xprinter, Epson TM, Sunmi, Gprinter...",
+    desc: "In trực tiếp tới máy nhiệt ESC/POS tương thích WebUSB. Phải in thử đúng model; driver đang giữ cổng USB có thể gây lỗi.",
     icon: "bolt" as const,
   },
 ];
@@ -377,7 +386,7 @@ function PrintSettingsPageContent() {
         if (role === "cashier") setStoredCashier(stored);
         else setStoredKitchen(stored);
         toast({
-          title: role === "cashier" ? "Đã kết nối máy in thu ngân" : "Đã kết nối máy in bếp",
+          title: role === "cashier" ? "Đã chọn máy in thu ngân" : "Đã chọn máy in bếp",
           description: `${printer.manufacturer} — ${printer.name}`,
           variant: "success",
         });
@@ -413,6 +422,7 @@ function PrintSettingsPageContent() {
         productId: storedCashier.productId,
         name: storedCashier.name,
         manufacturer: storedCashier.manufacturer,
+        serialNumber: storedCashier.serialNumber,
       },
       "kitchen",
     );
@@ -428,7 +438,8 @@ function PrintSettingsPageContent() {
     setTestStatus("testing");
     setTestError("");
     try {
-      const result = await testPrint({ backend: print.backend });
+      const paperSize = print.paperSize as PaperSize;
+      const result = await sendPrintJob({html: generateDocumentHtml({documentType:"IN THỬ ONEBIZ",documentCode:"TEST",date:new Date().toISOString(),items:[{name:"Cà phê sữa đá",quantity:2,total:70000,note:"Đường: 70% • Đá: ít"}],showSignature:false,note:"Kiểm tra chữ, lề, khổ giấy và đúng máy trước khi sử dụng."},paperSize),paperSize,role:"cashier"});
       if (result.success) {
         setTestStatus("success");
         if (result.fallback) {
@@ -438,17 +449,11 @@ function PrintSettingsPageContent() {
         setTestStatus("error");
         setTestError(result.warning ?? "Lỗi in thử");
       }
-      setTimeout(() => {
-        setTestStatus("idle");
-        setTestError("");
-      }, 4000);
+
     } catch (err) {
       setTestStatus("error");
       setTestError(err instanceof Error ? err.message : String(err));
-      setTimeout(() => {
-        setTestStatus("idle");
-        setTestError("");
-      }, 4000);
+
     }
   };
 
@@ -503,7 +508,7 @@ function PrintSettingsPageContent() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 xl:grid-cols-3">
             {backends.map((b) => {
               const isActive = print.backend === b.id;
               const disabled = b.id === "escpos-usb" && !webusbSupported;
@@ -539,6 +544,22 @@ function PrintSettingsPageContent() {
             })}
           </div>
 
+          {print.backend === "qz-tray" && <div className="space-y-3">
+            <div className="border-l-4 border-status-info bg-status-info/10 p-3 text-sm space-y-1">
+              <p className="font-semibold text-status-info">Thiết lập trên máy quầy Windows / macOS / Linux</p>
+              <ol className="list-decimal pl-5 space-y-1">
+                <li>Kết nối máy in với máy tính: cắm USB, thêm máy LAN/Wi-Fi theo IP, hoặc ghép Bluetooth; cài driver và in thử từ hệ điều hành.</li>
+                <li>Cài và mở <a href="https://qz.io/download/" target="_blank" rel="noreferrer" className="font-semibold text-primary underline">QZ Tray</a> trên cùng máy đang mở Onebiz.</li>
+                <li>Bấm Tìm máy, cấp quyền khi QZ Tray hỏi, chọn máy theo vai trò rồi in thử đúng khổ giấy.</li>
+              </ol>
+              <p>Bản tích hợp hiện cần xác nhận quyền của QZ Tray khi được hỏi. Chưa có chữ ký để bỏ toàn bộ hộp thoại. Điện thoại/tablet không dùng cầu nối localhost của máy quầy.</p>
+              <p>Bluetooth chỉ dùng được khi driver tạo máy in trong hệ điều hành; không phải kết nối Bluetooth trực tiếp từ web. Chưa kiểm chứng mọi model. Ngăn kéo ở chế độ này cấu hình qua driver nếu máy hỗ trợ.</p>
+            </div>
+            <BridgePrinterSetup role="cashier" label="Thu ngân — bill / tạm tính / báo cáo ca" paperSize={print.paperSize as PaperSize} />
+            <BridgePrinterSetup role="kitchen" label="Bếp / Bar — máy chung" paperSize={print.paperSize as PaperSize} />
+            <BridgePrinterSetup role="documents" label="Chứng từ ERP — A4 / A5" paperSize="A4" />
+          </div>}
+
           {/* USB Printer connection UI — CEO 04/06/2026 Sprint 5: 2 slot */}
           {print.backend === "escpos-usb" && (
             <div className="rounded-lg border bg-muted/30 p-4 space-y-4">
@@ -572,7 +593,7 @@ function PrintSettingsPageContent() {
               <PrinterSlotCard
                 role="kitchen"
                 label="Máy in bếp / bar"
-                sublabel="In phiếu pha chế (KHÔNG có giá, có modifier + ghi chú)"
+                sublabel="In phiếu pha chế; giá theo kiểu phiếu, giữ tuỳ chọn và ghi chú"
                 icon="restaurant"
                 stored={storedKitchen}
                 onConnect={() => handleConnectUsbPrinter("kitchen")}
@@ -594,7 +615,7 @@ function PrintSettingsPageContent() {
                 <div className="rounded-lg bg-status-success/10 border border-status-success/25 p-2 text-xs flex items-center gap-2">
                   <Icon name="info" size={14} className="text-status-success" />
                   <span className="text-status-success font-medium">
-                    Đang dùng chung 1 máy in — sau thanh toán in 2 phiếu lần lượt (HĐ trước, phiếu bếp sau)
+                    Đã chọn cùng một máy. Bill và phiếu bếp gửi theo thao tác và chế độ tự in đã bật.
                   </span>
                 </div>
               )}
@@ -621,7 +642,8 @@ function PrintSettingsPageContent() {
           )}
 
           {/* Test print */}
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex flex-wrap items-center gap-3 pt-2">
+            <PrinterTestPreview paperSize={print.paperSize as PaperSize} />
             <Button
               variant="default"
               onClick={handleTestPrint}
@@ -860,7 +882,7 @@ function PrintSettingsPageContent() {
           : storedCashier
             ? `Chưa gán máy bếp riêng; dùng máy thu ngân dự phòng (${storedCashier.name || "USB"}).`
             : "Chưa gán máy USB; nếu không có thiết bị đã lưu, sẽ mở hộp thoại in trình duyệt."
-        : "Chọn thiết bị trong hộp thoại in của trình duyệt này."} />
+        : print.backend === "qz-tray" ? "Máy QZ Tray đã chọn ở ô Bếp / Bar; mỗi trạm có thể gán máy riêng bên dưới." : "Chọn thiết bị trong hộp thoại in của trình duyệt này."} />
       </>)}
 
       {selected === "doanh-nghiep" && (<>
@@ -1216,6 +1238,17 @@ function PrinterSlotCard({
   webusbSupported: boolean;
   extraAction?: React.ReactNode;
 }) {
+  const [testing, setTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState("");
+  const testSlot = async () => {
+    setTesting(true);
+    try {
+      const paperSize = getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm";
+      const result = await sendPrintJob({html:generateDocumentHtml({documentType:label,documentCode:"TEST",date:new Date().toISOString(),items:[{name:"Cà phê sữa đá",quantity:2,total:70000,note:"Đường: 70% • Đá: ít"}],showSignature:false},paperSize),paperSize,role,printer:stored ?? undefined});
+      setTestMessage(result.warning ?? "Đã gửi lệnh; kiểm tra giấy tại máy.");
+    } catch (error) {setTestMessage(error instanceof Error ? error.message : "Không in được.");}
+    finally {setTesting(false);}
+  };
   return (
     <div
       className={cn(
@@ -1248,6 +1281,7 @@ function PrinterSlotCard({
                   <span className="text-muted-foreground">Tên:</span>{" "}
                   <span className="font-medium">{stored.name}</span>
                 </p>
+                <p className="text-xs text-muted-foreground">Đã chọn; chưa xác nhận đang online.{stored.serialNumber ? ` S/N: ${stored.serialNumber}` : ""}</p>
                 <p className="text-xs text-muted-foreground font-mono">
                   VID: 0x{stored.vendorId.toString(16).padStart(4, "0")} · PID: 0x
                   {stored.productId.toString(16).padStart(4, "0")}
@@ -1255,9 +1289,10 @@ function PrinterSlotCard({
               </div>
             ) : (
               <p className="mt-2 text-xs text-muted-foreground italic">
-                Chưa kết nối — bấm bên phải để chọn thiết bị.
+                Chưa chọn thiết bị — chọn máy rồi in thử.
               </p>
             )}
+            {testMessage && <p role="status" className="mt-2 text-sm text-status-info">{testMessage}</p>}
           </div>
         </div>
         <div className="flex flex-col gap-1.5 shrink-0">
@@ -1276,6 +1311,7 @@ function PrinterSlotCard({
               Ngắt
             </Button>
           )}
+          {stored && <Button size="sm" variant="outline" disabled={testing} onClick={testSlot}>In thử máy này</Button>}
           {extraAction}
         </div>
       </div>

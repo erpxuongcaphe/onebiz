@@ -6,9 +6,9 @@
  */
 
 import { formatCurrency, formatNumber, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
-import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 import { EscPosBuilder } from "@/lib/printer/escpos";
+import { getPrintSettings, sendPrintJob } from "@/lib/printer/print-job";
 import type { StoredPrinter } from "@/lib/printer/webusb-printer";
 
 // ============================================================
@@ -92,6 +92,7 @@ export interface KitchenTicketDataV2 {
   itemFontSize?: "sm" | "md" | "lg";
   footerText?: string;
   printer?: StoredPrinter;
+  bridgePrinter?: string;
   orderNumber: string;
   tableName?: string;
   orderType: "dine_in" | "takeaway" | "delivery";
@@ -153,36 +154,6 @@ function formatTime(iso: string): string {
 
 function formatDate(iso: string): string {
   return formatShortDate(iso);
-}
-
-/**
- * Sprint FIX-1: return boolean để caller biết popup mở thành công hay bị
- * block (browser blocker / extension chặn). Caller có thể toast lỗi nếu cần.
- */
-function openAndPrint(html: string): boolean {
-  const win = window.open("", "_blank", "width=400,height=700");
-  if (!win) {
-    // Popup blocked. Dispatch event để UI có thể hiện toast (tránh import
-    // toast vào module print → giảm coupling).
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(
-        new CustomEvent("fnb-print-failed", {
-          detail: {
-            reason: "popup_blocked",
-            message:
-              "Trình duyệt chặn cửa sổ in. Cho phép popup cho trang này rồi thử lại.",
-          },
-        }),
-      );
-    }
-    return false;
-  }
-  win.document.write(html);
-  win.document.close();
-  win.focus();
-  win.print();
-  setTimeout(() => win.close(), 1500);
-  return true;
 }
 
 function baseStyles(width: number, pageSize: string): string {
@@ -312,7 +283,8 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 }
 
 export function printPreBill(data: PreBillData): void {
-  openAndPrint(buildPreBillHtml(data));
+  data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
+  void sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier"});
 }
 
 // ============================================================
@@ -486,56 +458,9 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 }
 
 export function printFnbReceipt(data: FnbReceiptData): void {
+  data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
   const html = buildFnbReceiptHtml(data);
-
-  // Dispatch qua PrinterService:
-  //   - backend=browser: in qua window.print() với HTML đẹp ở trên
-  //   - backend=escpos-usb: build ESC/POS bytes + gửi USB (tự fallback nếu lỗi)
-  const payload: PrintReceiptPayload = {
-    invoiceCode: data.invoiceCode,
-    storeName: data.storeName,
-    storeAddress: data.storeAddress,
-    storePhone: data.storePhone,
-    customerName: data.customerName,
-    cashierName: data.cashierName,
-    createdAt: data.createdAt,
-    tableName: data.tableName,
-    orderType: data.orderType,
-    items: data.items.map((it) => ({
-      name: it.name,
-      variant: it.variant,
-      quantity: it.quantity,
-      unitPrice: it.unitPrice,
-      total: it.quantity * it.unitPrice,
-    })),
-    subtotal: data.subtotal,
-    discountAmount: data.discountAmount,
-    deliveryFee: data.deliveryFee,
-    tipAmount: data.tipAmount,
-    total: data.total,
-    paid: data.paid,
-    change: data.change,
-    paymentMethod: data.paymentMethod,
-    footer: data.footer,
-    paperSize: data.paperSize ?? "80mm",
-  };
-
-  let backend: "browser" | "escpos-usb" = "browser";
-  let openCashDrawer = false;
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
-      openCashDrawer = parsed?.print?.openCashDrawer === true;
-    }
-  } catch {
-    /* keep defaults */
-  }
-
-  printerService.setBackend(backend);
-  // CEO 04/06/2026 — Sprint 5: receipt FnB luôn dùng role="cashier".
-  void printerService.printReceipt(payload, { rawHtml: html, openCashDrawer, role: "cashier" });
+  void sendPrintJob({html,paperSize:data.paperSize ?? "80mm",role:"cashier",openCashDrawer:getPrintSettings().openCashDrawer && data.paymentMethod === "cash"});
 }
 
 // ============================================================
@@ -662,14 +587,8 @@ export async function printKitchenTicketV2(data: KitchenTicketDataV2): Promise<v
   // backend + role="kitchen". Browser → window.open như cũ; ESC/POS USB →
   // dùng printer config slot "kitchen" (user trỏ chung 1 máy hoặc khác máy).
   const html = buildKitchenTicketHtml(data);
-  let backend: "browser" | "escpos-usb" = "browser";
-  try {
-    const raw = localStorage.getItem("onebiz_settings");
-    backend = raw && JSON.parse(raw)?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
-  } catch { /* browser default */ }
-  const result = await printerService.printRaw({rawHtml: html, escposBytes: buildKitchenTicketBytes(data), role: "kitchen", backend, printer: data.printer});
+  const result = await sendPrintJob({html, paperSize: data.paperSize ?? "80mm", role: "kitchen", printer: data.printer, bridgePrinter: data.bridgePrinter});
   if (!result.success) throw new Error(result.warning ?? "Không in được phiếu bếp");
-  if (result.warning && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("fnb-print-failed", {detail: {message: result.warning}}));
 }
 
 function escapeKitchenText(text: string): string {

@@ -15,12 +15,14 @@
 
 import { resolvePrintTemplate } from "@/lib/services";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
-import { printDocument, type DocumentPrintData } from "@/lib/print-document";
+import { generateDocumentHtml, type DocumentPrintData } from "@/lib/print-document";
+import { sendPrintJob, getPrintSettings } from "@/lib/printer/print-job";
 import { formatCurrency } from "@/lib/format";
 import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 
 export interface FnbBillTemplatePayload {
   branchId: string | null | undefined;
+  branchName?: string;
   invoiceCode: string;
   /** Nhãn bàn/đơn (vd "Bàn 5", "MV-12"). */
   tableName: string;
@@ -50,6 +52,7 @@ export interface FnbBillTemplatePayload {
   platformCommissionAmount?: number;
   /** Ghi chú thêm cuối bill (vd "*** IN LẠI ***"). */
   note?: string;
+  paymentMethod?: string;
 }
 
 const money = (n: number) => `${formatCurrency(n)} đ`;
@@ -135,6 +138,7 @@ export async function printFnbBillWithTemplate(
       documentType: "HÓA ĐƠN THANH TOÁN", // mẫu in sẽ đè tiêu đề
       documentCode: p.invoiceCode,
       date: p.createdAt ?? new Date().toISOString(),
+      branchName: p.branchName,
       headerFields: [
         {
           label: p.orderType === "delivery" ? "Đơn" : "Bàn",
@@ -151,9 +155,11 @@ export async function printFnbBillWithTemplate(
       createdBy: p.cashierName,
     };
 
-    printDocument(applyTemplateToDocData(base, resolved), {
-      paperSize: resolved.paperSize,
-    });
+    const data = applyTemplateToDocData(base,resolved);
+    const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier", openCashDrawer:getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
+    // A failed send is reported by the service; don't silently retry a different
+    // bill/device after a bridge may already have queued the job.
+    if (!result.success) console.warn("[printFnbBillWithTemplate]",result.warning);
     return true;
   } catch (err) {
     console.warn("[printFnbBillWithTemplate] fallback bill nhiệt cũ:", err);

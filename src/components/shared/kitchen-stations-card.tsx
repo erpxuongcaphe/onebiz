@@ -43,6 +43,11 @@ import { getBranches } from "@/lib/services/supabase/branches";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { requestPrinter } from "@/lib/printer/webusb-printer";
 import { loadStationPrinter, saveStationPrinter, clearStationPrinter } from "@/lib/printer/station-printers";
+import { BridgePrinterSetup } from "@/components/shared/bridge-printer-setup";
+import { getPrintSettings } from "@/lib/printer/print-job";
+import { useSettings } from "@/lib/contexts/settings-context";
+import { printKitchenTicketV2 } from "@/lib/print-fnb";
+import { resolveKitchenPrintTemplate, applyKitchenTemplate } from "@/lib/kitchen-print-template";
 
 // 8 màu predefined cho station badge — đủ phân biệt visually trong KDS
 const COLOR_PALETTE = [
@@ -318,8 +323,20 @@ function StationRow({
 }) {
   const settings = station.settings;
   const {toast} = useToast();
+  const {settings: appSettings} = useSettings();
   const [printer, setPrinter] = useState(() => loadStationPrinter(station.branchId, station.id));
   const [connecting, setConnecting] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const testStation = async () => {
+    setTesting(true);
+    try {
+      const template = await resolveKitchenPrintTemplate(station.branchId);
+      const ticket = {orderNumber:"TEST-STATION",orderType:"dine_in" as const,tableName:"Bàn minh họa",stationName:station.name,createdAt:new Date().toISOString(),paperSize:getPrintSettings().paperSize === "58mm" ? "58mm" as const : "80mm" as const,printer:printer ?? undefined,items:[{name:"Cà phê sữa đá",quantity:2,unitPrice:35000,modifierLabels:["Đường: 70%","Đá: ít"],note:"Phiếu thử — không phải đơn thật"}]};
+      await printKitchenTicketV2(template ? applyKitchenTemplate(ticket,template.config,template.paperSize) : ticket);
+      toast({variant:"success",title:"Đã gửi lệnh in thử",description:"Kiểm tra giấy tại đúng máy của trạm. Không tạo đơn hay gửi món vào KDS."});
+    } catch(error) {toast({variant:"error",title:"Chưa in được phiếu thử",description:error instanceof Error ? error.message : "Kiểm tra máy in."});}
+    finally {setTesting(false);}
+  };
   const connect = async () => {
     setConnecting(true);
     try {
@@ -361,14 +378,19 @@ function StationRow({
             </span>
           )}
         </div>
-        <p className="text-sm mt-2 text-primary font-medium">Máy này: {printer ? `${printer.manufacturer} ${printer.name}${printer.serialNumber ? ` · ${printer.serialNumber}` : ""}` : "Dùng máy in bếp chung"}</p>
+        {appSettings.print.backend === "escpos-usb" && <>
+        <p className="text-sm mt-2 text-primary font-medium">USB đã chọn: {printer ? `${printer.manufacturer} ${printer.name}${printer.serialNumber ? ` · ${printer.serialNumber}` : ""}` : "Dùng máy in bếp chung"}</p>
         <div className="flex flex-wrap gap-2 mt-1">
           <Button variant="outline" size="sm" disabled={connecting} onClick={connect}>{connecting ? "Đang kết nối..." : "Gán máy USB riêng"}</Button>
+          <Button size="sm" variant="outline" disabled={testing} onClick={testStation}>In thử phiếu trạm</Button>
           {printer && <Button variant="ghost" size="sm" onClick={() => {
             try {clearStationPrinter(station.branchId,station.id); setPrinter(null);}
             catch {toast({variant:"error",title:"Không lưu được lựa chọn máy in"});}
           }}>Dùng máy chung</Button>}
         </div>
+        </>}
+        {appSettings.print.backend === "qz-tray" && <div className="mt-2"><BridgePrinterSetup role="kitchen" label={`Máy riêng — ${station.name}`} paperSize={appSettings.print.paperSize === "58mm" ? "58mm" : "80mm"} branchId={station.branchId} stationId={station.id} /></div>}
+        {appSettings.print.backend === "browser" && <p className="text-sm mt-2 text-muted-foreground">Máy đích được chọn trong hộp thoại in. Muốn gán máy tự động theo trạm, dùng QZ Tray hoặc USB trực tiếp.</p>}
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
