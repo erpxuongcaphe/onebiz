@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -90,6 +90,7 @@ export function CreateProductionOrderDialog({
   const [checkedMaterialKey, setCheckedMaterialKey] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const submittingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Load options
@@ -335,10 +336,12 @@ export function CreateProductionOrderDialog({
   // CEO 06/07/2026: tạo lệnh = HOÀN THÀNH LUÔN (bỏ bước lên kế hoạch). Tạo lệnh
   // → trừ NVL + nhập thành phẩm + tạo lô qua RPC nguyên tử 00159, trong 1 phát.
   async function handleSave() {
+    if (submittingRef.current) return;
     if (!validate()) return;
     if (!selectedBom || !canComplete) return;
     if (saving) return;
 
+    submittingRef.current = true;
     setSaving(true);
     try {
       const created = await createProductionOrder({
@@ -396,11 +399,12 @@ export function CreateProductionOrderDialog({
       });
     } finally {
       setSaving(false);
+      submittingRef.current = false;
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => { if (!submittingRef.current) onOpenChange(next); }}>
       <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Sản xuất &amp; nhập kho</DialogTitle>
@@ -410,7 +414,7 @@ export function CreateProductionOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <fieldset disabled={saving} className="grid min-w-0 gap-4 py-2">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -726,10 +730,10 @@ export function CreateProductionOrderDialog({
               rows={2}
             />
           </div>
-        </div>
+        </fieldset>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
           {/* CEO 06/07: 1 nút duy nhất — tạo lệnh = hoàn thành + nhập kho luôn */}
