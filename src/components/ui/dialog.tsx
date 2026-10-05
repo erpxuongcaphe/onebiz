@@ -86,7 +86,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex flex-col gap-1", className)}
       {...props}
     />
   )
@@ -126,7 +126,7 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
       className={cn(
         // 06/08 (audit popup): leading-none làm title dài xuống dòng CHỒNG chữ
         // (line-height 1); pr-8 để title không chui dưới nút X (absolute top-2 right-2).
-        "font-heading text-base leading-snug font-semibold pr-8",
+        "font-heading text-base leading-snug font-semibold text-primary pr-12",
         className
       )}
       {...props}
