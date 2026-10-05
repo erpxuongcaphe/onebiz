@@ -5,6 +5,7 @@
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
 import { formatNumber } from "@/lib/format";
+import { formatFinancialBucket } from "@/lib/reports/financial-bucket-label";
 import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 interface ReportPagedQuery<T> {
   range(
@@ -397,21 +398,7 @@ export async function getFinancialAnalysisDetails(
       payload.granularity === "year"
         ? payload.granularity
         : "month";
-    const formatBucket = (value: unknown) => {
-      const date = new Date(String(value));
-      if (Number.isNaN(date.getTime())) return String(value ?? "");
-      if (granularity === "day") {
-        return new Intl.DateTimeFormat("vi-VN", {
-          day: "2-digit",
-          month: "2-digit",
-          timeZone: "Asia/Ho_Chi_Minh",
-        }).format(date);
-      }
-      if (granularity === "year") {
-        return String(date.getUTCFullYear());
-      }
-      return `T${date.getUTCMonth() + 1}/${date.getUTCFullYear()}`;
-    };
+    const formatBucket = (value: unknown) => formatFinancialBucket(value, granularity);
 
     const cogsRows = Array.isArray(payload.cogs_breakdown)
       ? payload.cogs_breakdown as Array<Record<string, unknown>>
