@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { CreateProductionOrderDialog } from "@/components/shared/dialogs/create-production-order-dialog";
 
 const mocks = vi.hoisted(() => ({
@@ -45,7 +45,7 @@ vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({
   ]]),
 }));
 vi.mock("@/components/ui/dialog", () => ({
-  Dialog: ({ open, children }: { open: boolean; children: React.ReactNode }) => open ? <>{children}</> : null,
+  Dialog: ({ open, children, onOpenChange }: { open: boolean; children: React.ReactNode; onOpenChange: (open: boolean) => void }) => open ? <><button onClick={() => onOpenChange(false)}>Dismiss</button>{children}</> : null,
   DialogContent: ({ children }: { children: React.ReactNode }) => <div role="dialog">{children}</div>,
   DialogHeader: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   DialogTitle: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
@@ -87,8 +87,9 @@ describe("production branch selection", () => {
     mocks.stockUnit = "";
     mocks.unit = "";
     mocks.scopeEnabled = true;
-    mocks.createProductionOrder.mockClear();
-    mocks.completeProductionAtomic.mockClear();
+    mocks.createProductionOrder.mockReset();
+    mocks.completeProductionAtomic.mockReset();
+    mocks.toast.mockClear();
   });
 
   it("defaults to the branch currently open, not the first factory", async () => {
@@ -217,5 +218,91 @@ describe("production branch selection", () => {
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: "Sản xuất hoàn thành", description: expect.stringContaining(`2 ${expectedUnit}`),
     }));
+  });
+
+  function readyBatch() {
+    mocks.activeBranchId = "xtb";
+    mocks.available = 2;
+    mocks.costedQuantity = 2;
+    mocks.boms = [{
+      id: "bom", productId: "prepared", productCode: "SKU-BTP-TEST",
+      productName: "Thạch thử", name: "Công thức thử", isActive: true,
+      yieldQty: 1, yieldUnit: "G", items: [{
+        materialId: "ingredient", materialCode: "SKU-ING-TEST",
+        materialName: "Bột thử", quantity: 0.2, unit: "Túi",
+      }],
+    }];
+  }
+
+  it("locks one create-complete chain against same-render clicks and dismissal", async () => {
+    readyBatch();
+    let resolveCreate!: (value: { id: string; code: string }) => void;
+    let resolveComplete!: (value: string) => void;
+    mocks.createProductionOrder.mockReturnValue(new Promise((resolve) => { resolveCreate = resolve; }));
+    mocks.completeProductionAtomic.mockReturnValue(new Promise((resolve) => { resolveComplete = resolve; }));
+    const close = vi.fn();
+    const success = vi.fn();
+    render(<CreateProductionOrderDialog open onOpenChange={close} onSuccess={success} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    const finish = selectPreparedProduct();
+    await waitFor(() => expect(finish).toBeEnabled());
+    act(() => {
+      finish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      finish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(mocks.createProductionOrder).toHaveBeenCalledTimes(1);
+    expect(screen.getByDisplayValue("1")).toBeDisabled();
+    expect(screen.getByRole("combobox")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Hủy" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(close).not.toHaveBeenCalled();
+    await act(async () => resolveCreate({ id: "order", code: "SX-UAT" }));
+    expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1);
+    expect(screen.getByDisplayValue("1")).toBeDisabled();
+    expect(mocks.createProductionOrder).toHaveBeenCalledWith(expect.objectContaining({
+      branchId: "xtb", plannedQty: 1,
+      materials: [{ productId: "ingredient", plannedQty: 0.2, unit: "Túi" }],
+    }));
+    await act(async () => resolveComplete("lot"));
+    expect(close).toHaveBeenCalledWith(false);
+    expect(success).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the lock after create failure without completing a nonexistent order", async () => {
+    readyBatch();
+    mocks.createProductionOrder.mockRejectedValueOnce(new Error("CREATE_REFUSED"))
+      .mockResolvedValueOnce({ id: "retry-order", code: "SX-RETRY" });
+    mocks.completeProductionAtomic.mockResolvedValue("lot");
+    render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    const finish = selectPreparedProduct();
+    await waitFor(() => expect(finish).toBeEnabled());
+    fireEvent.click(finish);
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Lỗi tạo lệnh sản xuất" })));
+    expect(mocks.completeProductionAtomic).not.toHaveBeenCalled();
+    expect(screen.getByDisplayValue("1")).toBeEnabled();
+    fireEvent.click(finish);
+    await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1));
+    expect(mocks.completeProductionAtomic.mock.calls[0][0]).toBe("retry-order");
+    expect(mocks.createProductionOrder).toHaveBeenCalledTimes(2);
+  });
+
+  it("reports a retained order on completion failure without claiming stock receipt", async () => {
+    readyBatch();
+    mocks.createProductionOrder.mockResolvedValue({ id: "order", code: "SX-UAT" });
+    mocks.completeProductionAtomic.mockRejectedValue(new Error("FNB_BRANCH_COST_REQUIRED"));
+    const close = vi.fn();
+    render(<CreateProductionOrderDialog open onOpenChange={close} />);
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    const finish = selectPreparedProduct();
+    await waitFor(() => expect(finish).toBeEnabled());
+    fireEvent.click(finish);
+    await waitFor(() => expect(close).toHaveBeenCalledWith(false));
+    expect(mocks.createProductionOrder).toHaveBeenCalledTimes(1);
+    expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1);
+    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
+      title: "Đã tạo lệnh nhưng chưa nhập kho được", variant: "warning",
+    }));
+    expect(mocks.toast).not.toHaveBeenCalledWith(expect.objectContaining({ title: "Sản xuất hoàn thành" }));
   });
 });
