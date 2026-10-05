@@ -232,7 +232,6 @@ end;
 $$;
 
 -- Caller timezone must not change calendar grouping or totals.
-set timezone to 'UTC';
 do $$
 declare
   v_report jsonb;
@@ -242,6 +241,7 @@ declare
   v_granularity text;
   v_expected integer;
 begin
+  perform set_config('timezone', 'UTC', true);
   for v_from, v_to, v_granularity, v_expected in
     select * from (values
       ('2026-08-31T17:00:00Z'::timestamptz, '2026-09-30T17:00:00Z'::timestamptz, 'day', 30),
