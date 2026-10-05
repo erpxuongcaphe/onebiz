@@ -33,6 +33,26 @@ describe("payment RPC atomic", () => {
     vi.clearAllMocks();
   });
 
+  it("records timing and money through one atomic RPC, without a client-side update", async () => {
+    mockRpc.mockResolvedValueOnce({ data: { cash_transaction_id: "cash-timed", cash_code: "PT001", new_paid: 100, new_debt: 0 }, error: null });
+    const input = { referenceId: "invoice", amount: 100, paymentMethod: "cash" as const,
+      occurredAt: "2026-10-04T17:30:00Z", transactionDate: "2026-10-05", timeReason: "Thu trước" };
+    const result = await recordInvoicePayment(input);
+    expect(mockRpc).toHaveBeenCalledExactlyOnceWith("record_cash_transaction_timed", {
+      p_operation: "invoice", p_payload: input, p_occurred_at: input.occurredAt,
+      p_transaction_date: input.transactionDate, p_time_reason: "Thu trước",
+    });
+    expect(result.cashTransactionId).toBe("cash-timed");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when the timed RPC is unavailable, never retries the money operation", async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: "RPC missing" } });
+    await expect(recordInvoicePayment({ referenceId: "invoice", amount: 100, paymentMethod: "cash", occurredAt: "2026-10-05T01:00:00Z" })).rejects.toThrow("RPC missing");
+    expect(mockRpc).toHaveBeenCalledTimes(1);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
   it("ghi thu nợ hóa đơn qua RPC và không tin user/branch từ client", async () => {
     mockRpc.mockResolvedValueOnce({
       data: {

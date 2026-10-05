@@ -26,7 +26,7 @@ export interface CashBookEntry {
   createdAt?: string;
   /** Actual receipt/payment time, unknown for historical/date-only entries. */
   occurredAt?: string | null;
-  timeSource?: 'system' | 'entered' | 'date_only' | null;
+  timeSource?: 'system' | 'entered' | 'offline' | 'date_only' | null;
   timeReason?: string | null;
 }
 

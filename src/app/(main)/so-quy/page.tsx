@@ -180,7 +180,7 @@ function TransactionDetail({
                     { label: "Mã phiếu", value: entry.code },
                     { label: "Ngày hạch toán", value: formatCashBookDate(entry.date) },
                     { label: "Thực thu/chi lúc", value: formatCashTime(entry.occurredAt) },
-                    { label: "Nguồn thời điểm", value: entry.timeSource === "entered" ? "Người lập ghi nhận" : entry.timeSource === "system" ? "Ghi nhận tự động khi thao tác" : "Chưa có thời điểm thực thu/chi" },
+                    { label: "Nguồn thời điểm", value: entry.timeSource === "entered" ? "Người lập ghi nhận" : entry.timeSource === "offline" ? "Máy quầy ghi nhận khi offline" : entry.timeSource === "system" ? "Ghi nhận tự động khi thao tác" : "Chưa có thời điểm thực thu/chi" },
                     ...(entry.timeReason ? [{ label: "Lý do ngày giờ", value: entry.timeReason }] : []),
                     { label: "Loại phiếu", value: entry.typeName },
                     { label: "Chi nhánh", value: entry.branchName || "—" },

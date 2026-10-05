@@ -185,7 +185,7 @@ async function replayQueueOnce(): Promise<SyncResult[]> {
           localId: entry.localId, success: false, error });
         continue;
       }
-      const serverData = await executeAction(entry.action, payload);
+      const serverData = await executeAction(entry.action, payload, entry.createdAt);
 
       const checkpointFirst = entry.action === "sendToKitchen" || entry.action === "fnbPayment";
       // Never persist completion before the F&B server identity: a reload in
@@ -285,13 +285,14 @@ async function resolveKitchenOrderPayload(entry: SyncQueueEntry): Promise<unknow
 
 async function executeAction(
   action: SyncAction,
-  payload: unknown
+  payload: unknown,
+  queuedAt?: string,
 ): Promise<unknown> {
   switch (action) {
     case "sendToKitchen":
       return sendToKitchen(payload as SendToKitchenInput);
     case "fnbPayment":
-      return fnbPayment(payload as FnbPaymentInput);
+      return fnbPayment({ ...(payload as FnbPaymentInput), occurredAt: (payload as FnbPaymentInput).occurredAt ?? queuedAt });
     case "addItems": {
       // P0-8 fix 12/06/2026: forward batchId từ payload — DB UNIQUE INDEX
       // (kitchen_order_id, batch_id) chặn nếu queue replay 2 lần cùng batch.
