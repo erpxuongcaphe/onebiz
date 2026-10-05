@@ -127,7 +127,19 @@ async function recoverStuckSyncEntries(): Promise<number> {
   return recoverable.length;
 }
 
-export async function replayQueue(): Promise<SyncResult[]> {
+let activeReplay: Promise<SyncResult[]> | null = null;
+
+export function replayQueue(): Promise<SyncResult[]> {
+  // Online events and manual sync can overlap across mounted POS consumers.
+  // Share the run before its first IndexedDB await, then release on any outcome.
+  if (activeReplay) return activeReplay;
+  activeReplay = replayQueueOnce().finally(() => {
+    activeReplay = null;
+  });
+  return activeReplay;
+}
+
+async function replayQueueOnce(): Promise<SyncResult[]> {
   await recoverStuckSyncEntries();
   const db = await getDb();
   const allEntries = await db
