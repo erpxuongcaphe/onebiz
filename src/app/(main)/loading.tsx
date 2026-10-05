@@ -41,7 +41,7 @@ export default function Loading() {
       </div>
 
       {/* Content area skeleton */}
-      <div className="rounded-xl border border-border bg-white">
+      <div className="rounded-lg border border-border bg-white">
         {/* Header strip */}
         <div className="border-b border-border p-3 flex items-center gap-3">
           <div className="h-8 w-64 rounded-lg bg-muted/40 animate-pulse" />

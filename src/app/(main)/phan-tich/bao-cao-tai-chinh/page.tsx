@@ -802,7 +802,7 @@ export default function BaoCaoTaiChinhPage() {
                             <Icon name={typeIconName} size={14} className="text-muted-foreground shrink-0" />
                             <div className="min-w-0">
                               <p className="font-medium truncate">{b.branchName}</p>
-                              <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                              <p className="text-xs text-muted-foreground uppercase tracking-wide">
                                 {typeLabel}
                               </p>
                             </div>

@@ -350,7 +350,7 @@ export default function AbcAnalysisPage() {
             Không có dữ liệu
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             <ReportDataTable<AbcRow>
               columns={columns}
               tablePreferenceKey="report.abc-analysis.products"

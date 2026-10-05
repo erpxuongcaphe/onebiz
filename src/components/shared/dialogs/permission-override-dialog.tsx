@@ -303,19 +303,19 @@ function PermissionRow({
         <div className="flex items-center gap-2">
           <span className="text-sm">{label}</span>
           {hasFromRole && override === "default" && (
-            <span className="text-[10px] text-status-success font-medium">
+            <span className="text-xs text-status-success font-medium">
               ✓ có theo vai trò
             </span>
           )}
           {!hasFromRole && override === "default" && (
-            <span className="text-[10px] text-muted-foreground/60 font-medium">
+            <span className="text-xs text-muted-foreground/60 font-medium">
               · không có
             </span>
           )}
           {override !== "default" && (
             <span
               className={cn(
-                "text-[10px] px-1.5 py-0.5 rounded font-semibold uppercase",
+                "text-xs px-1.5 py-0.5 rounded font-semibold uppercase",
                 override === "grant" &&
                   "bg-status-success/15 text-status-success",
                 override === "revoke" && "bg-status-error/15 text-status-error",
@@ -325,7 +325,7 @@ function PermissionRow({
             </span>
           )}
         </div>
-        <code className="text-[10px] text-muted-foreground/70 font-mono">
+        <code className="text-xs text-muted-foreground/70 font-mono">
           {code}
         </code>
       </div>
@@ -351,12 +351,12 @@ function PermissionRow({
       </div>
       <div className="w-14 text-right shrink-0">
         {effective ? (
-          <span className="inline-flex items-center gap-0.5 text-[11px] text-status-success font-semibold">
+          <span className="inline-flex items-center gap-0.5 text-xs text-status-success font-semibold">
             <Icon name="check_circle" size={12} />
             CÓ
           </span>
         ) : (
-          <span className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground/60">
+          <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/60">
             <Icon name="block" size={12} />
             Không
           </span>
@@ -382,7 +382,7 @@ function RadioBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "px-2 py-1 text-[10px] font-medium rounded border transition-colors",
+        "px-2 py-1 text-xs font-medium rounded border transition-colors",
         active
           ? tone === "grant"
             ? "bg-status-success/15 border-status-success text-status-success"

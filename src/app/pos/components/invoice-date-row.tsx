@@ -142,7 +142,7 @@ export function InvoiceDateRow({ value, reason, onChange, canEdit }: InvoiceDate
         </span>
         {daChinh && (
           <span
-            className="shrink-0 rounded px-1 py-px text-[11px] font-medium bg-status-warning/15 text-status-warning"
+            className="shrink-0 rounded px-1 py-px text-xs font-medium bg-status-warning/15 text-status-warning"
             title={reason}
           >
             Đã chỉnh

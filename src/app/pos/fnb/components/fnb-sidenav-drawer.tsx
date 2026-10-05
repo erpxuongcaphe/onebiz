@@ -106,7 +106,7 @@ export function FnbSidenavDrawer({
 
       {/* Drawer */}
       <aside
-        className="fixed left-0 top-0 bottom-0 z-50 w-72 bg-surface-container-lowest border-r border-outline-variant/30 flex flex-col shadow-2xl animate-in slide-in-from-left duration-200"
+        className="fixed left-0 top-0 bottom-0 z-50 w-72 bg-popover text-popover-foreground border-r border-border flex flex-col ambient-shadow-floating animate-in slide-in-from-left duration-200"
         role="dialog"
         aria-label="Điều hướng"
       >
@@ -212,7 +212,7 @@ function NavSection({
 
   return (
     <div className="px-2 mb-2">
-      <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-on-surface-variant">
+      <div className="px-3 py-1.5 text-xs uppercase font-bold text-on-surface-variant">
         {label}
       </div>
       <div className="space-y-0.5">

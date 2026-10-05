@@ -69,8 +69,8 @@ export function EmptyState({
       role="status"
       className={cn(
         "flex flex-col items-center justify-center text-center",
-        compact ? "py-6 gap-2" : "py-16 gap-4",
-        !compact && "rounded-2xl border-2 border-dashed border-border/60 bg-surface-container-low/30",
+        compact ? "py-6 gap-2" : "py-10 gap-3",
+        !compact && "rounded-lg border border-dashed border-border/60 bg-transparent",
         className,
       )}
     >

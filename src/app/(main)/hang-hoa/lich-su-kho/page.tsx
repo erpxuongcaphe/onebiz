@@ -295,7 +295,7 @@ export default function LichSuKhoPage() {
             return (
               <span className="block text-right tabular-nums" title={getStockMovementPriceSource(row.original).description}>
                 {value != null ? formatCurrency(value) : "—"}
-                <span className="block text-[11px] text-muted-foreground leading-tight mt-0.5">
+                <span className="block text-xs text-muted-foreground leading-tight mt-0.5">
                   {getStockMovementPriceSource(row.original).label}
                 </span>
               </span>

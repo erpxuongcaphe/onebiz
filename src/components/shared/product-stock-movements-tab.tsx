@@ -294,7 +294,7 @@ export function ProductStockMovementsTab({
                 {canViewCost && (
                   <span className="text-right tabular-nums text-xs" title={getStockMovementPriceSource(m).description}>
                     {unitValue != null ? formatCurrency(unitValue) : "—"}
-                    <span className="block text-[10px] text-muted-foreground leading-tight mt-0.5">
+                    <span className="block text-xs text-muted-foreground leading-tight mt-0.5">
                       {getStockMovementPriceSource(m).label}
                     </span>
                   </span>

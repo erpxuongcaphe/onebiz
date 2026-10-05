@@ -37,7 +37,7 @@ export function DataTablePagination({
           value={String(pageSize)}
           onValueChange={(v) => onPageSizeChange?.(Number(v))}
         >
-          <SelectTrigger className="h-7 w-[65px] text-xs">
+          <SelectTrigger className="h-7 w-[65px] text-xs" aria-label="Số dòng mỗi trang">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -62,6 +62,7 @@ export function DataTablePagination({
           className="h-7 w-7"
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(0)}
+          aria-label="Trang đầu"
         >
           <Icon name="keyboard_double_arrow_left" size={14} />
         </Button>
@@ -71,6 +72,7 @@ export function DataTablePagination({
           className="h-7 w-7"
           disabled={pageIndex === 0}
           onClick={() => onPageChange?.(pageIndex - 1)}
+          aria-label="Trang trước"
         >
           <Icon name="chevron_left" size={14} />
         </Button>
@@ -83,6 +85,7 @@ export function DataTablePagination({
           className="h-7 w-7"
           disabled={pageIndex >= pageCount - 1}
           onClick={() => onPageChange?.(pageIndex + 1)}
+          aria-label="Trang sau"
         >
           <Icon name="chevron_right" size={14} />
         </Button>
@@ -92,6 +95,7 @@ export function DataTablePagination({
           className="h-7 w-7"
           disabled={pageIndex >= pageCount - 1}
           onClick={() => onPageChange?.(pageCount - 1)}
+          aria-label="Trang cuối"
         >
           <Icon name="keyboard_double_arrow_right" size={14} />
         </Button>

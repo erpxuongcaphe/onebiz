@@ -161,7 +161,7 @@ function BranchSelector() {
             />
             <span className="flex-1 truncate">{branch.name}</span>
             {branch.code && (
-              <span className="text-[10px] font-mono text-muted-foreground bg-surface-container px-2 py-0.5 rounded">
+              <span className="text-xs font-mono text-muted-foreground bg-surface-container px-2 py-0.5 rounded">
                 {branch.code}
               </span>
             )}
@@ -198,7 +198,7 @@ function GlobalSearchBar() {
       <span className="flex-1 truncate">
         Tìm sản phẩm, khách hàng, đơn hàng...
       </span>
-      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-lg px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+      <kbd className="hidden lg:inline-flex font-sans items-center gap-0.5 bg-surface-container-high border border-border rounded-lg px-2 py-0.5 text-xs font-semibold text-muted-foreground">
         Ctrl K
       </kbd>
     </button>
@@ -308,7 +308,7 @@ function MobileLeafLink({
         {leaf.icon && <Icon name={leaf.icon} size={16} />}
         <span className="flex-1">{leaf.label}</span>
         {leaf.comingSoon && (
-          <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
+          <span className="text-xs font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
             Soon
           </span>
         )}
@@ -380,7 +380,7 @@ function MobileSubGroupAccordion({
         {subGroup.icon && <Icon name={subGroup.icon} size={14} className="shrink-0" />}
         <span className="flex-1 text-left">{subGroup.label}</span>
         {!open && (
-          <span className="text-[10px] font-medium text-muted-foreground tabular-nums">
+          <span className="text-xs font-medium text-muted-foreground tabular-nums">
             {items.length}
           </span>
         )}
@@ -510,7 +510,7 @@ function MobileNav() {
         <nav className="p-4 space-y-3 overflow-y-auto max-h-[calc(100vh-4rem)]">
           {/* Branch selector for mobile */}
           <div className="pb-3 border-b">
-            <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase">
+            <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">
               Chi nhánh
             </div>
             {canViewAll && (
@@ -722,7 +722,7 @@ export function TopNav() {
                 <Icon name="notifications" size={16} />
               </Button>
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-[10px] font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
+                <span className="absolute top-1 right-1 h-4 min-w-4 px-1 rounded-full bg-destructive text-xs font-bold text-on-primary flex items-center justify-center pointer-events-none ring-2 ring-surface-container-lowest">
                   {unreadCount > 99 ? "99+" : unreadCount}
                 </span>
               )}
@@ -770,7 +770,7 @@ export function TopNav() {
                           POS Retail
                           <Icon name="open_in_new" size={11} className="text-muted-foreground" />
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           Hàng đóng gói, bán cho doanh nghiệp
                         </div>
                       </div>
@@ -788,7 +788,7 @@ export function TopNav() {
                           POS FnB
                           <Icon name="open_in_new" size={11} className="text-muted-foreground" />
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           Pha chế tại quán
                         </div>
                       </div>
@@ -806,7 +806,7 @@ export function TopNav() {
                           Màn hình bếp
                           <Icon name="open_in_new" size={11} className="text-muted-foreground" />
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-xs text-muted-foreground">
                           Đầu bếp xem đơn
                         </div>
                       </div>

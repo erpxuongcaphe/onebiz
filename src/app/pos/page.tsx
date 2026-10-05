@@ -2959,7 +2959,7 @@ function PosPageInner() {
                 <Icon name="close" size={14} className="text-white/60" />
               </button>
             )}
-            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-[10px] bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-white/60">
+            <kbd className="absolute right-2 top-1/2 -translate-y-1/2 font-mono text-xs bg-white/10 border border-white/20 rounded px-1.5 py-0.5 text-white/60">
               F2
             </kbd>
           </div>
@@ -3006,11 +3006,11 @@ function PosPageInner() {
           <Icon name="save" size={16} />
           <span className="hidden sm:inline">Nháp</span>
           {draftCount > 0 && (
-            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold tabular-nums">
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-xs font-bold tabular-nums">
               {draftCount > 99 ? "99+" : draftCount}
             </span>
           )}
-          <kbd className="hidden sm:inline font-mono text-[9px] bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/50">F3</kbd>
+          <kbd className="hidden sm:inline font-mono text-xs bg-white/10 border border-white/20 rounded px-1 py-0.5 text-white/50">F3</kbd>
         </button>
 
         {/* Keyboard shortcuts — touch 36px */}
@@ -3026,7 +3026,7 @@ function PosPageInner() {
           {showShortcuts && (
             <>
               <div className="fixed inset-0 z-40" onClick={() => setShowShortcuts(false)} />
-              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-pos-chrome-bg text-pos-chrome-fg shadow-2xl p-3 w-56 text-[11px]">
+              <div className="absolute right-0 top-full mt-1 z-50 rounded-lg bg-pos-chrome-bg text-pos-chrome-fg shadow-2xl p-3 w-56 text-xs">
                 <div className="font-bold text-xs mb-2 text-white/90 flex items-center gap-2">
                   <Icon name="keyboard" size={14} />
                   Phím tắt POS
@@ -3046,7 +3046,7 @@ function PosPageInner() {
                   ].map(([key, desc]) => (
                     <div key={key} className="flex items-center justify-between">
                       <span className="text-white/60">{desc}</span>
-                      <kbd className="font-mono text-[9px] bg-white/10 border border-white/20 rounded px-2 py-0.5">
+                      <kbd className="font-mono text-xs bg-white/10 border border-white/20 rounded px-2 py-0.5">
                         {key}
                       </kbd>
                     </div>
@@ -3076,7 +3076,7 @@ function PosPageInner() {
                 {user?.fullName ?? "—"}
               </p>
               {user?.email && (
-                <p className="text-[11px] text-muted-foreground truncate" title={user.email}>
+                <p className="text-xs text-muted-foreground truncate" title={user.email}>
                   {user.email}
                 </p>
               )}
@@ -3113,7 +3113,7 @@ function PosPageInner() {
               <Icon name="receipt_long" size={16} className="mr-2" />
               Đơn ca này
               {!currentShift && (
-                <span className="ml-auto text-[10px] text-muted-foreground">
+                <span className="ml-auto text-xs text-muted-foreground">
                   (Mở ca trước)
                 </span>
               )}
@@ -3209,7 +3209,7 @@ function PosPageInner() {
                     type="button"
                     onClick={() => switchTab(tab.id)}
                     className={cn(
-                      "relative group inline-flex items-center gap-1 px-3 h-8 text-[11px] font-medium whitespace-nowrap transition-all border-b-2 shrink-0",
+                      "relative group inline-flex items-center gap-1 px-3 h-8 text-xs font-medium whitespace-nowrap transition-all border-b-2 shrink-0",
                       isActive
                         ? "bg-white text-primary border-primary"
                         : "text-muted-foreground border-transparent hover:text-foreground hover:bg-muted"
@@ -3218,7 +3218,7 @@ function PosPageInner() {
                     {tab.label}
                     {count > 0 && (
                       <span className={cn(
-                        "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-[9px] font-bold",
+                        "inline-flex items-center justify-center h-4 min-w-[16px] px-1 rounded-full text-xs font-bold",
                         isActive ? "bg-primary-fixed text-primary" : "bg-muted text-muted-foreground"
                       )}>
                         {count}
@@ -3254,7 +3254,7 @@ function PosPageInner() {
 
           {/* ── Draft indicator (when loaded from F3) ── */}
           {state.loadedDraftId && (
-            <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-[11px]">
+            <div className="flex items-center gap-2 px-3 py-1 bg-status-warning/10 border-b border-status-warning/25 text-xs">
               <Icon name="save" size={14} className="text-status-warning" />
               <span className="text-status-warning font-medium">
                 {state.loadedDraftSource === "order"
@@ -3273,7 +3273,7 @@ function PosPageInner() {
                     }
                   )
                 }
-                className="ml-auto text-status-warning hover:text-status-warning text-[10px] underline"
+                className="ml-auto text-status-warning hover:text-status-warning text-xs underline"
               >
                 Huỷ
               </button>
@@ -3286,7 +3286,7 @@ function PosPageInner() {
                   Strip nhỏ hiện count + clear all để cashier thấy quy mô đơn. ── */}
           {state.lines.length > 0 && (
             <div className="flex items-center justify-between px-3 py-1 border-b border-border bg-surface-container-low shrink-0">
-              <span className="text-[10px] font-semibold text-muted-foreground uppercase">
+              <span className="text-xs font-semibold text-muted-foreground uppercase">
                 {state.lines.length} sản phẩm · {state.itemCount} món
               </span>
               <button
@@ -3301,7 +3301,7 @@ function PosPageInner() {
                     }
                   )
                 }
-                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
+                className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors"
                 title="Xoá tất cả (cần xác nhận)"
               >
                 <Icon name="delete" size={14} />
@@ -3316,7 +3316,7 @@ function PosPageInner() {
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground px-6">
                 <Icon name="shopping_cart" size={32} className="mb-2 text-muted-foreground/35" />
                 <p className="text-xs font-medium text-muted-foreground">Giỏ hàng trống</p>
-                <p className="text-[10px] text-muted-foreground/70 mt-0.5 text-center">
+                <p className="text-xs text-muted-foreground/70 mt-0.5 text-center">
                   Chọn sản phẩm bên trái hoặc nhấn F2 để tìm
                 </p>
               </div>
@@ -3371,7 +3371,7 @@ function PosPageInner() {
                 <span className="flex-1 text-left truncate font-medium">
                   {state.customer?.name ?? "Khách lẻ"}
                 </span>
-                <kbd className="font-mono text-[9px] bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
+                <kbd className="font-mono text-xs bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
                   F4
                 </kbd>
               </button>
@@ -3395,7 +3395,7 @@ function PosPageInner() {
               onChange={datNgayHoaDon}
             />
             {state.customer && (
-              <div className="flex items-center gap-3 mt-1 px-1 text-[10px] text-muted-foreground flex-wrap">
+              <div className="flex items-center gap-3 mt-1 px-1 text-xs text-muted-foreground flex-wrap">
                 {state.customer.phone && (
                   <span className="flex items-center gap-0.5">
                     <Icon name="call" size={14} />
@@ -3447,7 +3447,7 @@ function PosPageInner() {
                   return (
                     <div
                       key={free.productId}
-                      className="flex items-center justify-between text-[11px]"
+                      className="flex items-center justify-between text-xs"
                     >
                       <span className="truncate text-foreground">
                         {name} <span className="text-muted-foreground">× {formatNumber(free.quantity)}</span>
@@ -3510,7 +3510,7 @@ function PosPageInner() {
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground shrink-0">Mã KM</span>
                 {couponApplied ? (
-                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-status-success/10 text-status-success text-[11px] font-bold">
+                  <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-status-success/10 text-status-success text-xs font-bold">
                     <Icon name="check_circle" size={14} />
                     {couponApplied}
                     <button
@@ -3536,14 +3536,14 @@ function PosPageInner() {
                       }}
                       data-allow-hotkeys="true"
                       placeholder="Nhập mã"
-                      className="w-20 px-2 text-[10px] outline-none uppercase"
+                      className="w-20 px-2 text-xs outline-none uppercase"
                       maxLength={20}
                     />
                     <button
                       type="button"
                       onClick={handleApplyCoupon}
                       disabled={couponApplying || !couponCode.trim()}
-                      className="px-2 text-[10px] font-bold border-l border-border bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-2 text-xs font-bold border-l border-border bg-primary text-on-primary hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {couponApplying ? "..." : "Áp"}
                     </button>
@@ -3570,7 +3570,7 @@ function PosPageInner() {
                   <select
                     value={state.orderVatRate}
                     onChange={(e) => state.setOrderVatRate(Number(e.target.value))}
-                    className="h-6 text-[11px] border border-border rounded px-1.5 bg-white outline-none cursor-pointer"
+                    className="h-6 text-xs border border-border rounded px-1.5 bg-white outline-none cursor-pointer"
                   >
                     <option value={0}>0%</option>
                     <option value={5}>5%</option>
@@ -3578,7 +3578,7 @@ function PosPageInner() {
                     <option value={10}>10%</option>
                   </select>
                   {state.orderVatRate > 0 && (
-                    <span className="text-[11px] text-status-warning font-medium tabular-nums min-w-[64px] text-right">
+                    <span className="text-xs text-status-warning font-medium tabular-nums min-w-[64px] text-right">
                       +{formatCurrency(state.orderVatAmount)}
                     </span>
                   )}
@@ -3640,7 +3640,7 @@ function PosPageInner() {
               {/* Mixed payment breakdown */}
               {state.paymentMethod === "mixed" ? (
                 <div className="space-y-2">
-                  <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                  <label className="text-xs font-medium text-muted-foreground uppercase">
                     Chi tiết thanh toán
                   </label>
                   {([
@@ -3653,7 +3653,7 @@ function PosPageInner() {
                       <div key={pm.method} className="flex items-center gap-2">
                         <div className="flex items-center gap-1 w-20 shrink-0">
                           {pm.icon}
-                          <span className="text-[10px] text-foreground">{pm.label}</span>
+                          <span className="text-xs text-foreground">{pm.label}</span>
                         </div>
                         <input
                           type="number"
@@ -3674,7 +3674,7 @@ function PosPageInner() {
                   })}
                   {/* Breakdown summary */}
                   <div className="flex items-center justify-between pt-1 border-t border-dashed border-border">
-                    <span className="text-[10px] text-muted-foreground">Tổng đã nhập</span>
+                    <span className="text-xs text-muted-foreground">Tổng đã nhập</span>
                     <span
                       className={cn(
                         "text-xs font-bold tabular-nums",
@@ -3687,12 +3687,12 @@ function PosPageInner() {
                     </span>
                   </div>
                   {state.breakdownTotal > 0 && state.breakdownTotal < state.total && (
-                    <p className="text-[10px] text-status-warning">
+                    <p className="text-xs text-status-warning">
                       Còn thiếu {formatCurrency(state.total - state.breakdownTotal)} ₫
                     </p>
                   )}
                   {state.breakdownTotal > state.total && (
-                    <p className="text-[10px] text-status-success">
+                    <p className="text-xs text-status-success">
                       Thừa {formatCurrency(state.breakdownTotal - state.total)} ₫
                     </p>
                   )}
@@ -3702,16 +3702,16 @@ function PosPageInner() {
                   {/* Single-method: Paid amount */}
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                      <label className="text-xs font-medium text-muted-foreground uppercase">
                         Khách đưa
                       </label>
                       {state.paid > 0 && state.change > 0 && (
-                        <span className="text-[11px] font-bold text-status-success bg-status-success/10 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-status-success bg-status-success/10 px-2 py-0.5 rounded">
                           Thừa: {formatCurrency(state.change)} ₫
                         </span>
                       )}
                       {state.paid > 0 && state.debt > 0 && (
-                        <span className="text-[11px] font-bold text-status-warning bg-status-warning/10 px-2 py-0.5 rounded">
+                        <span className="text-xs font-bold text-status-warning bg-status-warning/10 px-2 py-0.5 rounded">
                           Nợ: {formatCurrency(state.debt)} ₫
                         </span>
                       )}
@@ -3764,7 +3764,7 @@ function PosPageInner() {
                 <button
                   type="button"
                   onClick={() => setNoteOpen(!noteOpen)}
-                  className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <Icon name="expand_more"
                     className={cn(
@@ -3774,7 +3774,7 @@ function PosPageInner() {
                   />
                   Ghi chú
                 </button>
-                <label className="flex items-center gap-2 text-[10px] text-muted-foreground cursor-pointer select-none">
+                <label className="flex items-center gap-2 text-xs text-muted-foreground cursor-pointer select-none">
                   <input
                     type="checkbox"
                     checked={autoPrint}
@@ -3844,7 +3844,7 @@ function PosPageInner() {
                 <Icon name="save" size={14} />
               )}
               Nháp
-              <kbd className="font-mono text-[8px] bg-surface-container-lowest border border-outline-variant/30 rounded px-0.5 text-muted-foreground">
+              <kbd className="font-mono text-xs bg-surface-container-lowest border border-outline-variant/30 rounded px-0.5 text-muted-foreground">
                 F9
               </kbd>
             </button>
@@ -3862,7 +3862,7 @@ function PosPageInner() {
                 "rounded-xl bg-primary text-on-primary font-bold hover:bg-primary-hover disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2 transition-all ambient-shadow press-scale-sm whitespace-nowrap",
                 state.sellingMode === "fast"
                   ? "h-12 text-base"
-                  : "h-10 text-[13px]"
+                  : "h-10 text-sm"
               )}
             >
               {submitting === "complete" ? (
@@ -3873,7 +3873,7 @@ function PosPageInner() {
               Thanh toán
               <kbd className={cn(
                 "font-mono bg-on-primary/15 border border-on-primary/25 rounded px-1 py-0.5 text-on-primary/90",
-                state.sellingMode === "fast" ? "text-[10px]" : "text-[9px]"
+                state.sellingMode === "fast" ? "text-xs" : "text-xs"
               )}>
                 F10
               </kbd>
@@ -3900,7 +3900,7 @@ function PosPageInner() {
             <div className="relative">
               <Icon name="shopping_cart" />
               {state.itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-status-error text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                <span className="absolute -top-1.5 -right-1.5 h-4 min-w-[16px] rounded-full bg-status-error text-white text-xs font-bold flex items-center justify-center px-0.5">
                   {state.itemCount}
                 </span>
               )}
@@ -4537,7 +4537,7 @@ function CartItem({
     >
       {/* ── Line 1: # + tên SP (full width) + xoá ── */}
       <div className="flex items-start gap-2 px-3 pt-2">
-        <span className="text-[10px] text-muted-foreground tabular-nums shrink-0 w-3 mt-0.5 text-right">
+        <span className="text-xs text-muted-foreground tabular-nums shrink-0 w-3 mt-0.5 text-right">
           {index}
         </span>
         <div className="flex-1 min-w-0">
@@ -4547,7 +4547,7 @@ function CartItem({
           >
             {line.productName}
             {line.variantLabel && (
-              <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/60 text-primary text-[9px] font-semibold">
+              <span className="ml-1 px-1 py-0.5 rounded bg-primary-fixed/60 text-primary text-xs font-semibold">
                 {line.variantLabel}
               </span>
             )}
@@ -4615,7 +4615,7 @@ function CartItem({
               }
               e.stopPropagation();
             }}
-            className="w-full h-7 px-2 rounded-md border border-primary/40 bg-surface-container-low text-[11px] focus:outline-none focus:ring-1 focus:ring-primary"
+            className="w-full h-7 px-2 rounded-md border border-primary/40 bg-surface-container-low text-xs focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
       ) : line.note ? (
@@ -4691,7 +4691,7 @@ function CartItem({
           </button>
         </div>
 
-        <span className="text-[10px] text-muted-foreground/60 shrink-0">×</span>
+        <span className="text-xs text-muted-foreground/60 shrink-0">×</span>
 
         {/* Price (click to edit) — CEO 22/05/2026: gate by permission */}
         {editingPrice && canEditPrice ? (
@@ -4710,13 +4710,13 @@ function CartItem({
               if (e.key === "Escape") setEditingPrice(false);
             }}
             data-allow-hotkeys="true"
-            className="w-20 h-6 px-1 text-right text-[11px] font-medium tabular-nums outline-none border border-primary rounded bg-white"
+            className="w-20 h-6 px-1 text-right text-xs font-medium tabular-nums outline-none border border-primary rounded bg-white"
           />
         ) : canEditPrice ? (
           <button
             type="button"
             onClick={() => setEditingPrice(true)}
-            className="text-[11px] tabular-nums font-medium hover:text-primary hover:underline decoration-dotted underline-offset-2 transition-colors"
+            className="text-xs tabular-nums font-medium hover:text-primary hover:underline decoration-dotted underline-offset-2 transition-colors"
             title="Bấm để sửa đơn giá"
           >
             {formatNumber(line.unitPrice)}
@@ -4724,7 +4724,7 @@ function CartItem({
         ) : (
           // Cashier không có quyền sửa giá → hiện static text, cursor not-allowed
           <span
-            className="text-[11px] tabular-nums font-medium text-foreground cursor-not-allowed"
+            className="text-xs tabular-nums font-medium text-foreground cursor-not-allowed"
             title="Bạn không có quyền sửa đơn giá. Liên hệ quản lý."
           >
             {formatNumber(line.unitPrice)}
@@ -4750,7 +4750,7 @@ function CartItem({
               }}
               data-allow-hotkeys="true"
               placeholder="0"
-              className="w-14 px-1 text-right text-[10px] tabular-nums outline-none"
+              className="w-14 px-1 text-right text-xs tabular-nums outline-none"
             />
             <button
               type="button"
@@ -4761,7 +4761,7 @@ function CartItem({
                   mode: line.discount.mode === "amount" ? "percent" : "amount",
                 })
               }
-              className="px-2 flex items-center justify-center text-[10px] border-l border-primary/50 font-bold bg-primary-fixed text-primary"
+              className="px-2 flex items-center justify-center text-xs border-l border-primary/50 font-bold bg-primary-fixed text-primary"
             >
               {line.discount.mode === "percent" ? "%" : "đ"}
             </button>
@@ -4772,7 +4772,7 @@ function CartItem({
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="text-[10px] font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-2 py-0.5 rounded transition-colors"
+            className="text-xs font-bold tabular-nums text-status-warning bg-status-warning/15 hover:bg-status-warning/25 px-2 py-0.5 rounded transition-colors"
             title="Bấm để sửa giảm giá dòng"
           >
             −
@@ -4786,7 +4786,7 @@ function CartItem({
           <button
             type="button"
             onClick={() => setEditingDiscount(true)}
-            className="text-[10px] font-medium text-primary/60 hover:text-primary border border-dashed border-primary/30 hover:border-primary hover:bg-primary-fixed/40 px-1 py-0.5 rounded transition-all"
+            className="text-xs font-medium text-primary/60 hover:text-primary border border-dashed border-primary/30 hover:border-primary hover:bg-primary-fixed/40 px-1 py-0.5 rounded transition-all"
             title="Thêm giảm giá cho dòng này"
           >
             + Giảm
@@ -4794,7 +4794,7 @@ function CartItem({
         )}
 
         {/* Total — pushed right */}
-        <span className="ml-auto text-[12.5px] font-bold tabular-nums text-primary">
+        <span className="ml-auto text-sm font-bold tabular-nums text-primary">
           {formatNumber(lineTotal)}
         </span>
       </div>
@@ -4920,7 +4920,7 @@ function OrderDiscountInput({
         </button>
       </div>
       {conversionText && (
-        <span className="text-[10px] text-muted-foreground tabular-nums leading-none">
+        <span className="text-xs text-muted-foreground tabular-nums leading-none">
           {conversionText}
         </span>
       )}
@@ -4945,7 +4945,7 @@ function PaymentBtn({
       type="button"
       onClick={onClick}
       className={cn(
-        "h-10 rounded-lg text-[11px] font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
+        "h-10 rounded-lg text-xs font-semibold transition-all press-scale-sm inline-flex items-center justify-center gap-1 whitespace-nowrap px-1",
         active
           ? "bg-primary text-on-primary ambient-shadow"
           : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -4978,7 +4978,7 @@ function SellingModeTab({
       type="button"
       onClick={onClick}
       className={cn(
-        "relative inline-flex items-center gap-2 px-4 text-[11px] transition-colors",
+        "relative inline-flex items-center gap-2 px-4 text-xs transition-colors",
         active
           ? "text-primary font-bold"
           : "text-on-surface-variant font-semibold hover:text-foreground"
@@ -5050,7 +5050,7 @@ function DeliveryForm({
 
   return (
     <div className="border-b border-border bg-status-warning/10 px-3 py-2 space-y-2">
-      <div className="flex items-center gap-2 text-[11px] font-semibold text-status-warning">
+      <div className="flex items-center gap-2 text-xs font-semibold text-status-warning">
         <Icon name="local_shipping" size={14} />
         Thông tin giao hàng
         <label className="ml-auto flex cursor-pointer items-center gap-1.5 font-normal text-foreground">
@@ -5070,7 +5070,7 @@ function DeliveryForm({
             onChange={(e) => update("recipientName", e.target.value)}
             placeholder="Tên người nhận"
             data-allow-hotkeys="true"
-            className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+            className="w-full h-7 px-2 pl-7 rounded border border-border text-xs outline-none focus:border-primary bg-white"
           />
           <Icon name="person" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
@@ -5081,7 +5081,7 @@ function DeliveryForm({
             onChange={(e) => update("recipientPhone", e.target.value)}
             placeholder="Số điện thoại"
             data-allow-hotkeys="true"
-            className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+            className="w-full h-7 px-2 pl-7 rounded border border-border text-xs outline-none focus:border-primary bg-white"
           />
           <Icon name="call" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
         </div>
@@ -5110,7 +5110,7 @@ function DeliveryForm({
           onChange={(e) => update("address", e.target.value)}
           placeholder="Địa chỉ giao hàng (số nhà, đường, phường/xã)"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 pl-7 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 pl-7 rounded border border-border text-xs outline-none focus:border-primary bg-white"
         />
         <Icon name="location_on" size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
       </div>
@@ -5121,7 +5121,7 @@ function DeliveryForm({
           onChange={(e) => update("district", e.target.value)}
           placeholder="Khu vực / Quận"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 rounded border border-border text-xs outline-none focus:border-primary bg-white"
         />
         <input
           type="text"
@@ -5129,7 +5129,7 @@ function DeliveryForm({
           onChange={(e) => update("ward", e.target.value)}
           placeholder="Phường / Xã"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-2 rounded border border-border text-xs outline-none focus:border-primary bg-white"
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -5140,12 +5140,12 @@ function DeliveryForm({
           onChange={(e) => update("shippingFee", Math.max(0, parseInt(e.target.value) || 0))}
           placeholder="Phí giao hàng"
           data-allow-hotkeys="true"
-          className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white tabular-nums"
+          className="w-full h-7 px-2 rounded border border-border text-xs outline-none focus:border-primary bg-white tabular-nums"
         />
         <select
           value={value.partnerId ?? ""}
           onChange={(e) => update("partnerId", e.target.value)}
-          className="w-full h-7 px-1.5 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+          className="w-full h-7 px-1.5 rounded border border-border text-xs outline-none focus:border-primary bg-white"
         >
           <option value="">Đối tác giao hàng...</option>
           {partners.map((p) => (
@@ -5162,12 +5162,12 @@ function DeliveryForm({
         <select
           value={value.codEnabled ? "cod" : "prepaid"}
           onChange={(e) => update("codEnabled", e.target.value === "cod")}
-          className="h-7 flex-1 rounded border border-border px-1.5 text-[11px] outline-none focus:border-primary bg-white"
+          className="h-7 flex-1 rounded border border-border px-1.5 text-xs outline-none focus:border-primary bg-white"
         >
           <option value="cod">Thu khi giao</option>
           <option value="prepaid">Không thu</option>
         </select>
-        <span className="whitespace-nowrap text-[10px] text-muted-foreground">
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
           {value.codEnabled ? "Người nhận trả" : "Người mua trả sau/đã trả"}
         </span>
       </div>
@@ -5177,7 +5177,7 @@ function DeliveryForm({
         onChange={(e) => update("deliveryNote", e.target.value)}
         placeholder="Ghi chú cho bưu tá..."
         data-allow-hotkeys="true"
-        className="w-full h-7 px-2 rounded border border-border text-[11px] outline-none focus:border-primary bg-white"
+        className="w-full h-7 px-2 rounded border border-border text-xs outline-none focus:border-primary bg-white"
       />
     </div>
   );
@@ -5363,7 +5363,7 @@ function ProcessOrderModal({
                     </span>
                     <span
                       className={cn(
-                        "text-[11px] font-semibold px-1.5 py-0.5 rounded",
+                        "text-xs font-semibold px-1.5 py-0.5 rounded",
                         trangThaiXuLyDon(o) === "dang_xu_ly"
                           ? "bg-primary/15 text-primary"
                           : statusTone[o.status] ?? "bg-muted",
@@ -5377,7 +5377,7 @@ function ProcessOrderModal({
                         báo cho thu ngân biết đơn này đã có hóa đơn rồi. */}
                     {trangThaiXuLyDon(o) === "dang_xu_ly" && (
                       <span
-                        className="text-[11px] font-semibold px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning"
+                        className="text-xs font-semibold px-1.5 py-0.5 rounded bg-status-warning/15 text-status-warning"
                         title={NHAN_TRANG_THAI_XU_LY.dang_xu_ly.mo_ta}
                       >
                         Đã xuất {o.completedChildCount} hóa đơn
@@ -5399,7 +5399,7 @@ function ProcessOrderModal({
                   <div className="font-bold tabular-nums text-sm">
                     {formatCurrency(o.totalAmount)}đ
                   </div>
-                  <div className="text-[11px] text-primary font-medium">
+                  <div className="text-xs text-primary font-medium">
                     Chọn →
                   </div>
                 </div>
@@ -5509,7 +5509,7 @@ function DraftListModal({
           <div className="flex items-center gap-2">
             <Icon name="save" size={16} className="text-primary" />
             <h2 className="text-sm font-bold text-foreground">Đơn nháp đã lưu</h2>
-            <kbd className="font-mono text-[9px] bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-xs bg-muted border border-border rounded px-1 py-0.5 text-muted-foreground">
               F3
             </kbd>
           </div>
@@ -5544,21 +5544,21 @@ function DraftListModal({
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => handleLoad(draft.id)}>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-primary">{draft.code}</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {formatDate(draft.createdAt)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[11px] text-foreground truncate">
+                      <span className="text-xs text-foreground truncate">
                         {draft.customerName || "Khách lẻ"}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">·</span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">·</span>
+                      <span className="text-xs text-muted-foreground">
                         {draft.itemCount} SP
                       </span>
                     </div>
                     {draft.note && (
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">{draft.note}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{draft.note}</p>
                     )}
                   </div>
 
@@ -5574,7 +5574,7 @@ function DraftListModal({
                     <button
                       type="button"
                       onClick={() => handleLoad(draft.id)}
-                      className="px-2 py-1 rounded text-[10px] font-medium bg-primary-fixed text-primary hover:bg-primary-fixed transition-colors"
+                      className="px-2 py-1 rounded text-xs font-medium bg-primary-fixed text-primary hover:bg-primary-fixed transition-colors"
                     >
                       Tải
                     </button>

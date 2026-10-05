@@ -189,7 +189,7 @@ export default function AgingReportPage() {
       cell: (r) => (
         <span
           className={cn(
-            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium",
+            "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium",
             r.agingBucket === "0-30" && "bg-status-success/10 text-status-success",
             r.agingBucket === "31-60" && "bg-status-warning/10 text-status-warning",
             r.agingBucket === "61-90" &&
@@ -208,7 +208,7 @@ export default function AgingReportPage() {
       align: "center",
       cell: (r) =>
         r.isDeadStock ? (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-status-error/10 text-status-error">
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-status-error/10 text-status-error">
             <Icon name="warning" size={12} />
             Có
           </span>

@@ -59,6 +59,8 @@ export function TableFloorPlan({
 }: TableFloorPlanProps) {
   const { currentBranch } = useAuth();
   const { toast } = useToast();
+  const [tableView, setTableView] = useState<"plan" | "list">("plan");
+  const [tableSearch, setTableSearch] = useState("");
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
@@ -198,6 +200,14 @@ export function TableFloorPlan({
 
   return (
     <div className="flex flex-col h-full">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-white dark:bg-card px-4 py-2">
+        <div><h2 className="text-base font-semibold">Chọn bàn phục vụ</h2><p className="text-xs text-muted-foreground">Chọn bàn để mở đơn; chuyển và gộp bàn trong chi tiết.</p></div>
+        <div className="flex gap-1" role="group" aria-label="Cách xem bàn">
+          <button type="button" aria-pressed={tableView === "plan"} onClick={() => setTableView("plan")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
+          <button type="button" aria-pressed={tableView === "list"} onClick={() => setTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
+        </div>
+      </div>
+      {tableView === "list" && <div className="shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm số bàn, tên hoặc khu vực..." value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /></div>}
       {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 border-b bg-card shrink-0 flex-wrap">
         {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map((s) => (
@@ -211,14 +221,14 @@ export function TableFloorPlan({
       </div>
 
       {/* Zone tabs (chỉ khi có zone) */}
-      {!useFallback && zones.length > 0 && (
+      {tableView === "plan" && !useFallback && zones.length > 0 && (
         <div className="flex items-center gap-1 px-4 py-2 border-b overflow-x-auto shrink-0 bg-surface-container-lowest">
           {zones.map((z) => (
             <button
               key={z.id}
               onClick={() => setActiveZoneId(z.id)}
               className={cn(
-                "px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors",
+                "min-h-11 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
                 activeZoneId === z.id
                   ? "bg-primary text-primary-foreground"
                   : "bg-card hover:bg-muted text-foreground",
@@ -232,7 +242,7 @@ export function TableFloorPlan({
 
       {/* Canvas hoặc Grid fallback */}
       <div className="flex-1 overflow-auto p-2 sm:p-4">
-        {!useFallback && activeZone ? (
+        {tableView === "plan" && !useFallback && activeZone ? (
           <CanvasView
             zone={activeZone}
             tables={zoneTables}
@@ -241,7 +251,7 @@ export function TableFloorPlan({
           />
         ) : (
           <GridFallback
-            tables={tables}
+            tables={tables.filter((table) => tableView === "plan" || (table.tableNumber + " " + table.name + " " + (table.zone ?? "")).toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi")))}
             onSelectTable={(t) => {
               // Convert RestaurantTable → CanvasTable shape tối thiểu
               setActionTable({
@@ -352,7 +362,7 @@ function GridFallback({
     return (
       <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
         <Icon name="group" size={40} className="mb-2" />
-        <p className="text-sm">Chưa có bàn nào</p>
+        <p className="text-sm">Không có bàn phù hợp</p>
       </div>
     );
   }
@@ -364,7 +374,7 @@ function GridFallback({
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             {zoneName}
           </h3>
-          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3 md:gap-2">
             {list.map((t) => {
               const elapsed =
                 t.status === "occupied" && t.currentOrderId
@@ -383,12 +393,13 @@ function GridFallback({
                   <span className="text-xs text-muted-foreground mt-0.5 truncate max-w-full">
                     {t.name}
                   </span>
+                  <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
                   {elapsed && (
-                    <span className="text-[10px] text-status-error mt-1">
+                    <span className="text-xs text-status-error mt-1">
                       <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}
                     </span>
                   )}
-                  <span className="text-[9px] text-muted-foreground mt-0.5">
+                  <span className="text-xs text-muted-foreground mt-0.5">
                     <Icon name="group" size={12} className="inline" /> {t.capacity}
                   </span>
                 </button>

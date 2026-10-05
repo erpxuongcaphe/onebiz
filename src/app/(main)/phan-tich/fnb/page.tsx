@@ -566,7 +566,7 @@ export default function FnbAnalyticsPage() {
                       <span className="text-xs font-medium text-foreground shrink-0 w-24 text-right">
                         {formatCurrency(t.revenue)}
                       </span>
-                      <span className="text-[10px] text-muted-foreground shrink-0">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {t.orders} đơn
                       </span>
                     </div>

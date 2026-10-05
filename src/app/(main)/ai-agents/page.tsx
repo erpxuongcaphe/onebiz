@@ -94,7 +94,7 @@ function AgentCard({
   const webhookConfigured = Boolean(agent.n8nWebhookUrl);
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-5 flex flex-col gap-4 border border-border">
+    <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-5 flex flex-col gap-4 border border-border">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <div className="size-11 rounded-xl bg-primary-fixed flex items-center justify-center shrink-0">
@@ -138,12 +138,12 @@ function AgentCard({
           <div className="font-semibold mt-0.5 flex items-baseline gap-1">
             <span>{workload.activeCount}</span>
             {workload.overdue > 0 && (
-              <span className="text-[10px] font-semibold text-status-error">
+              <span className="text-xs font-semibold text-status-error">
                 · {workload.overdue} quá hạn
               </span>
             )}
             {workload.dueToday > 0 && workload.overdue === 0 && (
-              <span className="text-[10px] font-semibold text-status-warning">
+              <span className="text-xs font-semibold text-status-warning">
                 · {workload.dueToday} hôm nay
               </span>
             )}
@@ -393,7 +393,7 @@ export default function AiAgentsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="AI Agents"
         actions={[
@@ -508,7 +508,7 @@ export default function AiAgentsPage() {
 
       {/* Empty state */}
       {agents.length === 0 ? (
-        <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-10 text-center">
+        <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-10 text-center">
           <div className="mx-auto size-16 rounded-full bg-primary-fixed flex items-center justify-center mb-4">
             <Icon name="auto_awesome" size={32} className="text-primary" />
           </div>
@@ -535,7 +535,7 @@ export default function AiAgentsPage() {
         <>
           {/* Critical tasks banner (Sprint AI-3) */}
           {criticalTasks.length > 0 && (
-            <div className="bg-status-error/5 border border-status-error/30 rounded-xl p-4">
+            <div className="bg-status-error/5 border border-status-error/30 rounded-lg p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Icon
                   name="crisis_alert"
@@ -649,7 +649,7 @@ export default function AiAgentsPage() {
 
           {/* Recent executions */}
           {executions.length > 0 && (
-            <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-5">
+            <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-5">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold">Log chạy gần đây</h3>
                 <span className="text-xs text-muted-foreground">

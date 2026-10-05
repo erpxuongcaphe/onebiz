@@ -21,31 +21,33 @@ const GRID = doc("src/app/pos/fnb/components/fnb-product-grid.tsx");
 const SIDEBAR = doc("src/app/pos/fnb/components/fnb-category-sidebar.tsx");
 
 describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () => {
-  it("CARD_HEIGHT = 170 và là hằng số duy nhất", () => {
-    expect(GRID).toContain("const CARD_HEIGHT = 170;");
-    expect((GRID.match(/const CARD_HEIGHT = /g) ?? []).length).toBe(1);
+  it("hai chế độ dùng chiều cao nhất quán cho bộ cuộn ảo", () => {
+    expect(GRID).toContain("const COMPACT_CARD_HEIGHT = 104;");
+    expect(GRID).toContain("const PHOTO_CARD_HEIGHT = 200;");
+    expect(GRID).toContain('displayMode === "photos" ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT');
   });
 
   it("virtualizer + chiều cao hàng đều đọc từ CARD_HEIGHT, không hardcode", () => {
     // CARD_HEIGHT = toàn bộ bước hàng (gồm đệm đáy). Cộng GRID_GAP vào
     // estimateSize = đúp khoảng dọc 24px trong khi ngang 12px (CEO bắt 18/08).
-    expect(GRID).toContain("estimateSize: () => CARD_HEIGHT,");
+    expect(GRID).toContain("estimateSize: () => cardHeight,");
     expect(GRID).not.toContain("CARD_HEIGHT + GRID_GAP");
-    expect(GRID).toContain("height: `${CARD_HEIGHT}px`");
+    expect(GRID).toContain("height: `${cardHeight}px`");
+    expect(GRID).toContain("rowVirtualizer.measure()");
     // Không được có height px hardcode nào khác trong style hàng/thẻ.
     const hardcoded = GRID.match(/height: `\d+px`/g) ?? [];
     expect(hardcoded).toEqual([]);
   });
 
   it("thẻ ăn chiều cao hàng qua h-full — không thể lệch với CARD_HEIGHT", () => {
-    const cardClass = GRID.slice(GRID.indexOf("group relative flex flex-col"));
+    const cardClass = GRID.slice(GRID.indexOf("group relative flex h-full"));
     expect(cardClass.slice(0, 200)).toContain("h-full");
   });
 
   it("hình học dọc: ảnh co (flex-1 min-h-0) đứng TRƯỚC khối chữ cố định — không cắt tên/giá", () => {
     // Đo thật preview 18/08 (thẻ 158px cao): ảnh 1→98, tên 102→130, giá
     // 130→149 ≤ 158. Bất biến làm nên hình học đó: thứ tự + lớp co/cố định.
-    const iAnh = GRID.indexOf("relative min-h-0 flex-1 overflow-hidden p-2");
+    const iAnh = GRID.indexOf("relative min-h-0 flex-1 overflow-hidden");
     const iChu = GRID.indexOf("flex-shrink-0 px-2.5");
     expect(iAnh).toBeGreaterThan(-1);
     expect(iChu).toBeGreaterThan(iAnh);
@@ -70,7 +72,7 @@ describe("C2 — thẻ món: ảnh → tên 2 dòng → giá dòng riêng", () =
 
   it("tên món tối đa 2 dòng + giữ chỗ cố định (thẻ không nhảy)", () => {
     expect(GRID).toContain("line-clamp-2");
-    expect(GRID).toContain("min-h-[2.1em]");
+    expect(GRID).toContain("min-h-[2.5em]");
   });
 
   it("mật độ: số cột đúng với CONTAINER THẬT đo trên preview (kể cả scrollbar)", async () => {

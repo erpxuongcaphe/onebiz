@@ -204,7 +204,7 @@ export default function FnbPresetsPage() {
 
   // CEO 13/05: bỏ max-w-4xl, để theo layout cha (max-w-6xl)
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-4">
       <div>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           Cài đặt POS FnB nâng cao
@@ -293,7 +293,7 @@ export default function FnbPresetsPage() {
                   >
                     <span
                       className={cn(
-                        "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                        "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
                         cfg.active ? "translate-x-4" : "translate-x-0",
                       )}
                     />

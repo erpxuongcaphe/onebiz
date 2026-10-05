@@ -137,7 +137,7 @@ export default function WebsitePage() {
         </div>
       </div>
 
-      <div className="flex-1 p-4 md:p-6 space-y-6">
+      <div className="flex-1 p-4 md:p-6 space-y-4">
         {/* Section 1: Thông tin website */}
         <Card>
           <CardHeader className="pb-3">

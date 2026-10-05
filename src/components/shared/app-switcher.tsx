@@ -62,7 +62,7 @@ export function AppSwitcher() {
                   fill={false}
                 />
               </span>
-              <span className="text-[11px] font-medium text-center leading-tight text-foreground">
+              <span className="text-xs font-medium text-center leading-tight text-foreground">
                 {app.label}
               </span>
             </Link>

@@ -202,7 +202,7 @@ export function BusinessLogoUpload({
             <>
               <Icon name="image" size={22} />
               <span className="text-xs">Tải logo lên</span>
-              <span className="text-[10px] opacity-70">PNG/JPG/SVG ≤ 5MB</span>
+              <span className="text-xs opacity-70">PNG/JPG/SVG ≤ 5MB</span>
             </>
           )}
         </button>

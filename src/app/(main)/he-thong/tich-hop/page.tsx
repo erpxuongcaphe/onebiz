@@ -8,7 +8,7 @@ export const metadata = {
 export default function TichHopPlaceholderPage() {
   return (
     <div className="flex-1 flex items-center justify-center p-8">
-      <div className="max-w-xl w-full bg-white rounded-xl border shadow-sm p-8">
+      <div className="max-w-xl w-full bg-white rounded-lg border shadow-none p-8">
         <div className="flex items-center gap-3 mb-4">
           <div className="h-12 w-12 rounded-lg bg-status-success/10 flex items-center justify-center">
             <Icon name="electrical_services" size={24} className="text-status-success" />

@@ -85,7 +85,7 @@ function TaskRow({
         : null;
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl border border-border ambient-shadow p-4 flex flex-col gap-3">
+    <div className="bg-surface-container-lowest rounded-lg border border-border ambient-shadow p-4 flex flex-col gap-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
@@ -379,7 +379,7 @@ export default function AgentTasksPage() {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-10 text-center">
+        <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-10 text-center">
           <div className="mx-auto size-16 rounded-full bg-status-warning/10 flex items-center justify-center mb-4">
             <Icon name="checklist" size={32} className="text-status-warning" />
           </div>

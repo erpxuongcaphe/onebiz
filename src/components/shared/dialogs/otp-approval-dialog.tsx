@@ -244,7 +244,7 @@ export function OtpApprovalDialog({
                 className="w-full text-sm border border-border rounded-md px-3 py-2 bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 resize-none"
               />
               {!reasonValid && reason.length > 0 && (
-                <p className="text-[11px] text-status-error mt-1">
+                <p className="text-xs text-status-error mt-1">
                   Lý do tối thiểu 5 ký tự.
                 </p>
               )}
@@ -258,7 +258,7 @@ export function OtpApprovalDialog({
               <div className="flex-1">
                 <div>{error}</div>
                 {attempts > 0 && attempts < 10 && (
-                  <div className="text-[10px] mt-0.5 text-status-error/70">
+                  <div className="text-xs mt-0.5 text-status-error/70">
                     Đã thử {attempts}/10 lần
                   </div>
                 )}

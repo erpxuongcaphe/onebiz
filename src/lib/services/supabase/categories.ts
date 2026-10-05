@@ -50,7 +50,9 @@ export async function getCategoriesByScope(
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("scope", scope)
-    .order("sort_order");
+    .order("sort_order")
+    .order("name")
+    .order("id");
 
   if (error) throw error;
 

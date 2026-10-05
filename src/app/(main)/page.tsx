@@ -282,7 +282,7 @@ export default function TongQuanPage() {
               <div className="mt-2 flex items-center gap-1.5">
                 <span
                   className={cn(
-                    "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
+                    "inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-xs font-semibold",
                     kpi.positive
                       ? "bg-status-success/10 text-status-success"
                       : "bg-status-error/10 text-status-error",
@@ -295,7 +295,7 @@ export default function TongQuanPage() {
               </div>
               {"isCollection" in kpi && kpi.isCollection && kpis && (
                 <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
-                  <div className="grid grid-cols-2 gap-1 text-[10px] leading-tight">
+                  <div className="grid grid-cols-2 gap-1 text-xs leading-tight">
                     <div className="rounded-md bg-surface-container px-1.5 py-1">
                       <span className="block text-muted-foreground">Tiền mặt</span>
                       <span className="font-semibold text-foreground">
@@ -309,13 +309,13 @@ export default function TongQuanPage() {
                       </span>
                     </div>
                   </div>
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>Thẻ {formatChartCurrency(kpis.todayCard)}</span>
                     <span>Giảm trừ {formatChartCurrency(kpis.todayDiscounts)}</span>
                   </div>
                   {/* Tách phí giao hàng khỏi doanh thu hàng hóa (chỉ hiện khi có ship). */}
                   {kpis.todayDeliveryFee > 0 && (
-                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>Hàng hóa {formatChartCurrency(kpis.todayGoodsRevenue)}</span>
                       <span>Phí giao {formatChartCurrency(kpis.todayDeliveryFee)}</span>
                     </div>
@@ -365,7 +365,7 @@ export default function TongQuanPage() {
               <CardTitle className="text-sm flex items-center gap-2">
                 <Icon name="warning" className="size-4 text-status-warning" />
                 Cảnh báo tài chính
-                <Badge variant="destructive" className="text-[10px] px-2 py-0 ml-1">
+                <Badge variant="destructive" className="text-xs px-2 py-0 ml-1">
                   {financialAlerts.length}
                 </Badge>
               </CardTitle>
@@ -399,7 +399,7 @@ export default function TongQuanPage() {
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{alert.title}</p>
-                    <p className="text-[10px] text-muted-foreground truncate">
+                    <p className="text-xs text-muted-foreground truncate">
                       {alert.description}
                     </p>
                   </div>
@@ -435,7 +435,7 @@ export default function TongQuanPage() {
                 {topProds.slice(0, 7).map((product, index) => (
                   <div key={product.name} className="flex items-center gap-3 py-1">
                     <span className={cn(
-                      "size-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
+                      "size-5 rounded-full flex items-center justify-center text-xs font-bold shrink-0",
                       index < 3 ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
                     )}>
                       {index + 1}
@@ -457,7 +457,7 @@ export default function TongQuanPage() {
                 <Icon name="warning" className="size-4 text-status-warning" />
                 Hàng sắp hết
               </CardTitle>
-              <Badge variant="destructive" className="text-[10px] px-2 py-0">
+              <Badge variant="destructive" className="text-xs px-2 py-0">
                 {lowStock.length}
               </Badge>
             </div>
@@ -515,7 +515,7 @@ export default function TongQuanPage() {
                           <span className="font-medium">{activity.userName}</span>{" "}
                           <span className="text-muted-foreground">{activity.action}</span>
                         </p>
-                        <p className="text-[10px] text-muted-foreground">{activity.time}</p>
+                        <p className="text-xs text-muted-foreground">{activity.time}</p>
                       </div>
                     </div>
                   );

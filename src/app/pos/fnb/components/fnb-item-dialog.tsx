@@ -225,7 +225,7 @@ function NhanNhomTuyChon({
   const noiDung = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium break-words">{ten}</span>
+        <span className="text-base font-medium break-words">{ten}</span>
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-xs font-normal whitespace-nowrap",
@@ -698,6 +698,8 @@ export function FnbItemDialog({
     return (
       <section
         key={g.id}
+        role="group"
+        aria-label={g.name}
         className={cn(
           O_NHOM,
           g.rule === "multi" && "basis-full",
@@ -769,9 +771,9 @@ export function FnbItemDialog({
           (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
       {/* 06/08 PR-B — bề ngang theo thiết bị, KHÔNG phải bản desktop thu nhỏ:
           điện thoại 95vw · tablet dọc 42rem · tablet ngang 56rem · desktop
-          68rem (1.088px, nằm trong khoảng 900–1.100 CEO chốt). Trần
+          Đợt UX 1: nhóm đơn giản 36rem, nhóm phức tạp mở tới 56rem. Trần
           `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
+      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] data-[complex=true]:sm:max-w-[48rem] data-[complex=true]:lg:max-w-[56rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4" data-complex={effectiveModifierGroups.length > 3 || (toppings?.length ?? 0) > 0}>
         {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
             tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
             một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
@@ -781,7 +783,7 @@ export function FnbItemDialog({
             {product.name}
           </DialogTitle>
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <DialogDescription className="text-[13px]">
+            <DialogDescription className="text-sm">
               Giá gốc{" "}
               <span className="whitespace-nowrap tabular-nums text-foreground">
                 {formatCurrency(product.sell_price)}đ
@@ -830,7 +832,7 @@ export function FnbItemDialog({
             DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
             Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
             còn nguyên. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}
@@ -894,7 +896,7 @@ export function FnbItemDialog({
                 để không ai tưởng món không có size rồi thêm với giá gốc. */}
             {variantsLoading && (!variants || variants.length === 0) ? (
               <section className={O_NHOM}>
-                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-9 w-20 rounded-full bg-muted animate-pulse" />
@@ -903,7 +905,7 @@ export function FnbItemDialog({
               </section>
             ) : variants && variants.length > 0 ? (
               <section className={O_NHOM}>
-                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {variants.map((v) => {
                     const chuaCoGia = v.sell_price < 0 ||
@@ -955,7 +957,7 @@ export function FnbItemDialog({
               !hasConfiguredDynamicModifiers && (
                 <>
                   <section className={O_NHOM}>
-                    <Label className="text-[13px] font-medium">Mức đường</Label>
+                    <Label className="text-sm font-medium">Mức đường</Label>
                     <div className="flex flex-wrap gap-2">
                       {SWEETNESS_OPTIONS.map((s) => (
                         <button
@@ -977,7 +979,7 @@ export function FnbItemDialog({
                   </section>
 
                   <section className={O_NHOM}>
-                    <Label className="text-[13px] font-medium">Mức đá</Label>
+                    <Label className="text-sm font-medium">Mức đá</Label>
                     <div className="flex flex-wrap gap-2">
                       {ICE_OPTIONS.map((i) => (
                         <button
@@ -1007,7 +1009,7 @@ export function FnbItemDialog({
               thật dài 30+ ký tự sẽ xuống 3 dòng → rối hơn 1 cột). */}
           {toppings && toppings.length > 0 && (
             <section className="min-w-0 space-y-1.5">
-              <Label className="text-[13px] font-medium">Topping</Label>
+              <Label className="text-sm font-medium">Topping</Label>
               <div className="grid gap-2 xl:grid-cols-2 xl:gap-x-4">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
@@ -1059,12 +1061,12 @@ export function FnbItemDialog({
           {/* Ghi chú tự do — trải hết bề ngang: chia cột cho ô nhập chữ chỉ
               làm khó gõ. */}
           <section className="min-w-0 space-y-1.5">
-            <Label className="text-[13px] font-medium flex items-center gap-2">
+            <Label className="text-sm font-medium flex items-center gap-2">
               <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2}
-              className="resize-none text-[13px]" />
+              placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
+              className="resize-none text-sm" />
           </section>
         </div>
 
@@ -1101,7 +1103,7 @@ export function FnbItemDialog({
                 : variantsLoading
                   ? "Đang tải quy cách…"
                 : invalidModifierGroupIds.size > 0
-                  ? `Còn ${invalidModifierGroupIds.size} nhóm tuỳ chọn chưa hợp lệ`
+                  ? `Kiểm tra ${effectiveModifierGroups.filter((group) => invalidModifierGroupIds.has(group.id)).map((group) => group.name).join(", ")}`
                   : lyDoChan
                     ? lyDoChan
                     : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}

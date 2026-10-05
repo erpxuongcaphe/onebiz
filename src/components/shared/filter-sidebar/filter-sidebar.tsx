@@ -77,14 +77,14 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="h-11 w-11"
               onClick={() => setMobileOpen(false)}
             >
               <Icon name="close" size={16} />
             </Button>
           </SheetTitle>
           <ScrollArea className="h-[calc(100vh-4rem)]">
-            <div className="p-4 space-y-3">{children}</div>
+            <div className="p-3 space-y-2">{children}</div>
           </ScrollArea>
         </SheetContent>
       </Sheet>
@@ -105,7 +105,7 @@ export function FilterSidebar({ children, className }: FilterSidebarProps) {
           )}
         >
           {!collapsed && (
-            <span className="text-[10px] font-bold text-muted-foreground uppercase">
+            <span className="text-xs font-bold text-muted-foreground uppercase">
               Bộ lọc
             </span>
           )}
@@ -178,7 +178,7 @@ export function FilterGroup({
         <span className="flex items-center gap-2 truncate">
           <span className="truncate">{label}</span>
           {hasActive && !open && (
-            <span className="text-[10px] font-medium text-primary bg-primary-fixed px-2 py-0.5 rounded-full">
+            <span className="text-xs font-medium text-primary bg-primary-fixed px-2 py-0.5 rounded-full">
               {activeHint}
             </span>
           )}
@@ -246,14 +246,14 @@ export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps)
   return (
     <div className="pb-2 border-b border-border/40 mb-1">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] font-bold text-primary uppercase">
+        <span className="text-xs font-bold text-primary uppercase">
           Đang lọc ({filters.length})
         </span>
         {onClearAll && filters.length > 1 && (
           <button
             type="button"
             onClick={onClearAll}
-            className="press-scale-sm text-[10px] font-semibold text-muted-foreground hover:text-destructive transition-colors"
+            className="press-scale-sm text-xs font-semibold text-muted-foreground hover:text-destructive transition-colors"
           >
             Xóa tất cả
           </button>
@@ -265,7 +265,7 @@ export function ActiveFiltersBar({ filters, onClearAll }: ActiveFiltersBarProps)
             key={f.key}
             type="button"
             onClick={f.onClear}
-            className="press-scale-sm group inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-fixed text-primary text-[11px] font-medium hover:bg-primary/15 transition-colors max-w-full"
+            className="press-scale-sm group inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-primary-fixed text-primary text-xs font-medium hover:bg-primary/15 transition-colors max-w-full"
             title={`Xóa filter: ${f.label} = ${f.value}`}
           >
             <span className="text-primary/70">{f.label}:</span>

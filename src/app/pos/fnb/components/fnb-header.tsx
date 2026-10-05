@@ -69,20 +69,17 @@ export function FnbHeader({
         iPad landscape (1024px) trước đây bị wrap 2 hàng vì branch chip + search +
         view-toggle quá rộng. Giờ chỉ no-wrap ở lg+ (1024+) cho desktop thật, tablet
         landscape vẫn flex-wrap (chấp nhận 1-2 hàng) nhưng có space breathing room. */}
-    <header className="min-h-14 bg-surface/95 backdrop-blur-md text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0 border-b border-outline-variant/30">
+    <header className="min-h-14 bg-white dark:bg-card text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0 border-b border-outline-variant/30">
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
         <button
           type="button"
           onClick={onMenuClick}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
           aria-label="Mở menu điều hướng"
           title="Menu điều hướng (☰)"
         >
-          <span className="text-lg font-bold leading-none sm:hidden" aria-hidden>
-            ≡
-          </span>
-          <Icon name="menu" size={20} className="hidden sm:block" />
+          <Icon name="menu" size={20} />
         </button>
       )}
       {!onMenuClick && !isFnb && (
@@ -121,7 +118,7 @@ export function FnbHeader({
           variant="light"
           filter={["store"]}
           showCode
-          className="w-full justify-center md:w-auto md:justify-start"
+          className="min-h-11 w-full justify-start md:max-w-[240px] md:w-auto"
         />
       </div>
 
@@ -134,12 +131,13 @@ export function FnbHeader({
       <div className="order-10 basis-full md:hidden" aria-hidden />
 
       {/* View mode toggle: Sprint UI-3 — wording chuẩn "Bán hàng / Sơ đồ bàn" */}
-      <div className="order-20 flex min-w-[154px] basis-full items-center bg-surface-container rounded-xl p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
+      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-lg p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
         <button
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
+          aria-pressed={viewMode === "menu"}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors md:flex-none",
+            "flex flex-1 items-center justify-center gap-1.5 min-h-11 px-2 sm:px-3 text-xs font-semibold rounded-lg transition-colors md:flex-none",
             viewMode === "menu"
               ? "bg-surface text-primary ambient-shadow"
               : "text-on-surface-variant hover:text-foreground",
@@ -152,6 +150,7 @@ export function FnbHeader({
         <button
           type="button"
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
+          aria-pressed={viewMode === "floorplan"}
           className={cn(
             "flex flex-1 items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors md:flex-none",
             viewMode === "floorplan"
@@ -169,11 +168,11 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="order-21 flex min-w-[150px] basis-full items-center justify-center gap-2 px-3 py-2 bg-surface-container hover:bg-surface-container-high rounded-xl text-xs sm:text-sm text-on-surface-variant transition-colors shrink-0 sm:min-w-[180px] md:order-none md:basis-auto md:flex-none lg:min-w-[220px]"
+        className="order-21 flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted md:order-none md:flex-1 md:justify-start"
         title="Tìm món (F3)"
       >
         <Icon name="search" size={16} />
-        <span>Tìm món (F3)</span>
+        <span>Tìm món</span><kbd className="ml-auto hidden rounded border border-border px-1.5 py-0.5 text-xs md:inline">F3</kbd>
       </button>
 
       {/* Day 21/05/2026 (CEO): Badge số đơn delivery hôm nay — cashier biết
@@ -229,7 +228,7 @@ export function FnbHeader({
     {/* Sprint UI-2: Order tabs row riêng dưới header (40px).
         Mockup v3: tabs có space riêng, không chen với toolbar — staff dễ
         scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
-    <div className="h-10 bg-surface-container-lowest border-b border-outline-variant/20 flex items-center px-2 sm:px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
+    <div className="h-14 bg-white dark:bg-card border-b border-outline-variant/20 flex items-center px-2 sm:px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         // Color dot theo orderType (đồng bộ với cart pill row)
@@ -240,22 +239,22 @@ export function FnbHeader({
               ? "bg-status-warning"
               : "bg-status-success";
         return (
-          <button
+          <div
             key={tab.id}
-            type="button"
-            onClick={() => switchTab(tab.id)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors shrink-0",
+              "flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors shrink-0",
               isActive
                 ? "bg-surface text-primary ambient-shadow border border-primary/20"
                 : "bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-foreground",
             )}
           >
-            <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
-            <span className="max-w-[104px] truncate sm:max-w-[140px]">{tab.label}</span>
-            <span
-              role="button"
-              tabIndex={0}
+            <button type="button" onClick={() => switchTab(tab.id)} aria-pressed={isActive} className="flex min-h-11 items-center gap-1.5 text-left">
+              <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
+              <span className="max-w-[104px] truncate sm:max-w-[140px]">{tab.label}</span>
+            </button>
+            <button
+              type="button"
+              aria-label={"Đóng đơn " + tab.label}
               onClick={(e) => {
                 e.stopPropagation();
                 // P1-3D-P2 12/06/2026 + R-6 13/06/2026 audit lần 2:
@@ -282,7 +281,8 @@ export function FnbHeader({
                 closeTab(tab.id);
               }}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
                   e.stopPropagation();
                   const hasItems = (tab.lines?.length ?? 0) > 0;
                   const sentToKitchen = !!tab.kitchenOrderId;
@@ -303,15 +303,15 @@ export function FnbHeader({
                 }
               }}
               className={cn(
-                "ml-0.5 rounded-full p-0.5 transition-colors",
+                "ml-0.5 flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
                 isActive
                   ? "text-primary hover:bg-primary/15"
                   : "text-on-surface-variant hover:bg-surface-container-highest",
               )}
             >
               <Icon name="close" size={12} />
-            </span>
-          </button>
+            </button>
+          </div>
         );
       })}
 
@@ -319,7 +319,7 @@ export function FnbHeader({
       <button
         type="button"
         onClick={createTab}
-        className="flex items-center justify-center gap-1 h-7 px-2.5 rounded-lg bg-primary-fixed text-primary hover:bg-primary hover:text-on-primary transition-colors shrink-0 text-xs font-bold"
+        className="flex items-center justify-center gap-1 min-h-11 px-3 rounded-lg bg-primary-fixed text-primary hover:bg-primary hover:text-on-primary transition-colors shrink-0 text-xs font-bold"
         title="Thêm đơn mới"
       >
         <Icon name="add" size={14} />

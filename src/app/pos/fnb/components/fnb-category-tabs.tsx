@@ -13,6 +13,7 @@ export interface FnbCategory {
   id: string;
   name: string;
   code: string;
+  sort_order?: number;
 }
 
 interface FnbCategoryTabsProps {

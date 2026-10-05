@@ -314,17 +314,17 @@ export function FnbOrderHistoryDialog({
             {/* Summary */}
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-[11px] text-muted-foreground">Tổng đơn</div>
+                <div className="text-xs text-muted-foreground">Tổng đơn</div>
                 <div className="text-lg font-bold tabular-nums">{invoices.length}</div>
               </div>
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-[11px] text-muted-foreground">Doanh thu</div>
+                <div className="text-xs text-muted-foreground">Doanh thu</div>
                 <div className="text-lg font-bold tabular-nums text-primary">
                   {formatCurrency(totalRevenue)}
                 </div>
               </div>
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-[11px] text-muted-foreground">Tiền tip</div>
+                <div className="text-xs text-muted-foreground">Tiền tip</div>
                 <div className="text-lg font-bold tabular-nums text-status-success">
                   {formatCurrency(totalTip)}
                 </div>
@@ -364,12 +364,12 @@ export function FnbOrderHistoryDialog({
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-sm">{inv.code}</span>
                           {inv.kitchenOrderNumber && (
-                            <span className="text-[10px] text-muted-foreground font-mono">
+                            <span className="text-xs text-muted-foreground font-mono">
                               {inv.kitchenOrderNumber}
                             </span>
                           )}
                           {inv.tableName && (
-                            <span className="text-[10px] px-2 py-0.5 rounded bg-primary-fixed text-primary font-semibold">
+                            <span className="text-xs px-2 py-0.5 rounded bg-primary-fixed text-primary font-semibold">
                               {inv.tableName}
                             </span>
                           )}
@@ -484,7 +484,7 @@ export function FnbOrderHistoryDialog({
                   rows={3}
                   className="resize-none"
                 />
-                <div className="text-[11px] text-muted-foreground mt-1">
+                <div className="text-xs text-muted-foreground mt-1">
                   Tối thiểu 5 ký tự. Lý do sẽ ghi vào audit log không sửa được.
                 </div>
               </div>

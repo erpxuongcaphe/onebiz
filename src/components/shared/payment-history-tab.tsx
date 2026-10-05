@@ -99,7 +99,7 @@ export function PaymentHistoryTab({
       </div>
 
       <div className="border rounded-lg divide-y overflow-hidden">
-        <div className="grid grid-cols-12 px-3 py-2 bg-muted/30 text-[11px] uppercase font-semibold text-muted-foreground">
+        <div className="grid grid-cols-12 px-3 py-2 bg-muted/30 text-xs uppercase font-semibold text-muted-foreground">
           <div className="col-span-3">Mã phiếu</div>
           <div className="col-span-2">Loại</div>
           <div className="col-span-3">Hình thức</div>

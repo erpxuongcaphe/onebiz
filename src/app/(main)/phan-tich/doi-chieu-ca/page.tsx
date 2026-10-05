@@ -540,9 +540,9 @@ export default function ReconciledShiftReportPage() {
                         <td className={cn("px-3 py-2 text-right font-medium tabular-nums", row.variance === 0 ? "text-status-success" : row.variance > 0 ? "text-status-warning" : "text-status-error")}>{row.variance > 0 && "+"}{formatCurrency(row.variance)}</td>
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap items-center justify-center gap-1">
-                            {self && <span className="inline-flex items-center gap-0.5 rounded-md bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning" title="Người đối chiếu trùng thu ngân"><Icon name="person" size={12} />Tự</span>}
-                            {big && <span className="inline-flex items-center gap-0.5 rounded-md bg-status-error/10 px-1.5 py-0.5 text-[10px] font-medium text-status-error" title="Chênh lệch trên 5% dự kiến"><Icon name="warning" size={12} />Lớn</span>}
-                            {row.wasAutoMarkedPending && <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary" title="Ca được tự động đánh dấu chờ xử lý"><Icon name="schedule" size={12} />Quên</span>}
+                            {self && <span className="inline-flex items-center gap-0.5 rounded-md bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium text-status-warning" title="Người đối chiếu trùng thu ngân"><Icon name="person" size={12} />Tự</span>}
+                            {big && <span className="inline-flex items-center gap-0.5 rounded-md bg-status-error/10 px-1.5 py-0.5 text-xs font-medium text-status-error" title="Chênh lệch trên 5% dự kiến"><Icon name="warning" size={12} />Lớn</span>}
+                            {row.wasAutoMarkedPending && <span className="inline-flex items-center gap-0.5 rounded-md bg-primary/10 px-1.5 py-0.5 text-xs font-medium text-primary" title="Ca được tự động đánh dấu chờ xử lý"><Icon name="schedule" size={12} />Quên</span>}
                           </div>
                         </td>
                         <td className="max-w-xs px-3 py-2 text-xs text-muted-foreground"><div className="line-clamp-2">{row.reason ?? "—"}</div></td>

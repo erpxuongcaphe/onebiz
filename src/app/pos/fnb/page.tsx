@@ -6,6 +6,8 @@ import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
+import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
+import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
 import {
   resolveAppliedTier,
@@ -248,6 +250,8 @@ function FnbPosPageInner() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [productDisplayMode, setProductDisplayMode] = useState<"compact" | "photos">("compact");
+  const [menuOrderOpen, setMenuOrderOpen] = useState(false);
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
@@ -427,7 +431,7 @@ function FnbPosPageInner() {
               Number.isFinite(product.sell_price) &&
               (product.sell_price > 0 || product.allow_free_sale === true),
           );
-          mustRefreshCatalog = cachedProducts.length !== cached.products.length;
+          mustRefreshCatalog = cachedProducts.length !== cached.products.length || cachedProducts.some(product => product.sort_order === undefined) || cached.categories.some(category => category.sort_order === undefined);
           if (cachedProducts.length > 0) {
             const categoryIds = new Set(
               cachedProducts
@@ -464,13 +468,17 @@ function FnbPosPageInner() {
           // filter. Its compact fingerprint is checked on every POS load so
           // a cached catalog cannot stay valid after an admin isolates a SKU
           // to another branch.
-          const menuScopes = await listFnbProductBranchMenuScopes(tenantId);
+          const [menuScopes, orderRevision] = await Promise.all([
+            listFnbProductBranchMenuScopes(tenantId),
+            readFnbMenuOrderRevision().catch(() => undefined),
+          ]);
           const needsRefresh =
             mustRefreshCatalog ||
             (await shouldRefreshMenu(
               tenantId,
               branchId,
               getFnbMenuScopeFingerprint(menuScopes),
+              orderRevision,
             ).catch(() => true));
           const supabase = getClient();
 
@@ -482,13 +490,15 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
+                  .order("sort_order")
                   .order("name")
+                  .order("id")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
                 // CEO 13/05: load platform price overrides để resolve giá theo
                 // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
@@ -568,16 +578,18 @@ function FnbPosPageInner() {
                 .filter((id): id is string => Boolean(id)),
             );
             const mappedCats = cats
-              .map((category) => ({
+              .map((category, index) => ({
                 id: category.value,
                 name: category.label,
                 code: category.value,
+                sort_order: index,
               }))
               .filter((category) => categoryIds.has(category.id));
             setCategories(mappedCats);
             setProducts(
               prods.map((p) => ({
                 id: p.id,
+                sort_order: p.sort_order,
                 name: p.name,
                 code: p.code,
                 sell_price: p.sell_price,
@@ -590,7 +602,7 @@ function FnbPosPageInner() {
             );
 
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId, branchId, menuScopes).catch((err) =>
+            prefetchMenuData(tenantId, branchId, menuScopes, orderRevision).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
@@ -964,9 +976,12 @@ function FnbPosPageInner() {
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
   const productsInCategory = useMemo(() => {
-    if (!activeCategoryId) return productsWithTier;
-    return productsWithTier.filter((p) => p.category_id === activeCategoryId);
-  }, [productsWithTier, activeCategoryId]);
+    const categoryRank = new Map(categories.map((category, index) => [category.id, index]));
+    const sorted = [...productsWithTier].sort((a, b) =>
+      (categoryRank.get(a.category_id ?? "") ?? categories.length) - (categoryRank.get(b.category_id ?? "") ?? categories.length) ||
+      (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
+    return activeCategoryId ? sorted.filter(p => p.category_id === activeCategoryId) : sorted;
+  }, [productsWithTier, activeCategoryId, categories]);
 
   const filteredProducts = useMemo(() => {
     if (!activeSubFilter) return productsInCategory;
@@ -3268,7 +3283,7 @@ function FnbPosPageInner() {
     }
     // Có branch nhưng currentBranch null — render header với chip để user chọn
     return (
-      <div className="flex h-dvh flex-col bg-surface-container-low">
+      <div className="flex h-dvh flex-col bg-slate-50 dark:bg-background">
         <FnbHeader
           tabs={[]}
           activeTabId=""
@@ -3320,7 +3335,7 @@ function FnbPosPageInner() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-surface-container-low">
+    <div className="flex h-dvh flex-col bg-slate-50 dark:bg-background">
       <ConnectionStatusBar
         status={networkStatus}
         onClick={() => setSyncDrawerOpen(true)}
@@ -3446,11 +3461,11 @@ function FnbPosPageInner() {
             FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
             có empty state "Chưa có danh mục".
-            Ẩn trên mobile (<768px) để tận hết width — mobile dùng grid 4-col.
-            md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 220px (C1). */}
+            Mobile (<768px) mở bộ chọn danh mục khi cần.
+            md+ (≥768) hiện compact 144px, xl+ (≥1280) hiện 184px. */}
         {!showFloorPlan && (
           <>
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
                 totalCount={productsWithTier.length}
@@ -3458,7 +3473,7 @@ function FnbPosPageInner() {
                 onSelect={setActiveCategoryId}
               />
             </div>
-            <div className="hidden md:block lg:hidden">
+            <div className="hidden md:block xl:hidden">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
                 totalCount={productsWithTier.length}
@@ -3471,7 +3486,7 @@ function FnbPosPageInner() {
         )}
 
         {/* Left panel: menu grid OR floor plan */}
-        <div className="flex min-w-0 flex-1 flex-col pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <div className={cn("flex min-w-0 flex-1 flex-col", pos.lineCount > 0 && !mobileCartOpen && "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0")}>
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
@@ -3522,9 +3537,18 @@ function FnbPosPageInner() {
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-blue-50/70 dark:bg-card px-2 py-1">
+                <span className="min-w-0 truncate text-base font-semibold">{activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-sm font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
+                <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Cách hiển thị món">
+                  {hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <button type="button" disabled={!networkStatus.isOnline} onClick={() => setMenuOrderOpen(true)} aria-label="Sắp xếp thực đơn" title="Sắp xếp thực đơn" className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-40"><Icon name="swap_vert" size={22} /></button>}
+                  <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
+                  <button type="button" aria-pressed={productDisplayMode === "photos"} onClick={() => setProductDisplayMode("photos")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "photos" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Có ảnh</button>
+                </div>
+              </div>
               <div className="flex-1 min-h-0">
                 <FnbProductGrid
                   products={filteredProducts}
+                  displayMode={productDisplayMode}
                   onSelectProduct={handleSelectProduct}
                   cartQtyByProductId={cartQtyByProductId}
                 />
@@ -3533,8 +3557,18 @@ function FnbPosPageInner() {
           )}
         </div>
 
-        {/* Right panel: cart */}
-        <FnbCart
+        {menuOrderOpen && hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <FnbMenuOrderDialog onClose={() => setMenuOrderOpen(false)} onSaved={async next => {
+          const categoryRanks = new Map(next.categories.map((row, index) => [row.id, index]));
+          const productRanks = new Map<string, number>();
+          const groupCounts = new Map<string, number>();
+          next.products.forEach(row => { const group = row.category_id ?? ""; const rank = (groupCounts.get(group) ?? 0) + 1; groupCounts.set(group, rank); productRanks.set(row.id, rank); });
+          setCategories(current => current.map(row => ({ ...row, sort_order: categoryRanks.get(row.id) ?? row.sort_order })).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)));
+          setProducts(current => current.map(row => ({ ...row, sort_order: productRanks.get(row.id) ?? row.sort_order })));
+          await invalidateMenuCache(tenantId).catch(() => undefined);
+          toast({ title: "Đã lưu thứ tự thực đơn", description: "POS này đã cập nhật. Máy khác nhận thứ tự mới khi tải lại thực đơn.", variant: "success" });
+        }} />}
+        {/* Selecting a table returns to its order; keep the plan full width. */}
+        {!showFloorPlan && <FnbCart
           activeTab={pos.activeTab}
           subtotal={pos.subtotal}
           total={fnbBenefitDisplay.total}
@@ -3579,7 +3613,7 @@ function FnbPosPageInner() {
           deliveryPlatformSettings={platformSettings}
           deliveryPlatformSettingsStatus={platformSettingsStatus}
           onRetryDeliveryPlatformSettings={retryFnbSettings}
-        />
+        />}
       </div>
 
       {/* Item dialog — lazy loaded */}
@@ -3715,12 +3749,12 @@ function FnbPosPageInner() {
         </Suspense>
       )}
 
-      {/* Sprint B (CEO 06/05): cart overlay hiện <lg (1024) — bao gồm mobile
-          + tablet portrait. Tablet landscape (≥lg) giữ cart fixed bên phải.
+      {/* Sprint B (CEO 06/05): cart overlay hiện <xl (1280) — bao gồm mobile
+          + tablet portrait. Desktop (≥xl) giữ cart fixed bên phải.
           Lý do: tablet portrait 768px nếu fix cart 320 → menu zone chỉ còn
           304px (~2 cols). Drawer cho phép menu tận 624px (4 cols). */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden bg-black/35 backdrop-blur-sm flex justify-end">
+        <div className="fixed inset-0 z-40 xl:hidden bg-black/35 backdrop-blur-sm flex justify-end">
           <button
             type="button"
             className="absolute inset-0 cursor-default"
@@ -3738,7 +3772,8 @@ function FnbPosPageInner() {
             <button
               type="button"
               onClick={() => setMobileCartOpen(false)}
-              className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-muted"
+              aria-label="Đóng giỏ hàng"
+              className="h-11 w-11 rounded-xl flex items-center justify-center hover:bg-muted"
             >
               <Icon name="close" size={16} />
             </button>
@@ -3809,21 +3844,21 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest lg:hidden"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest xl:hidden"
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(fnbBenefitDisplay.total)}đ`}
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
               <Icon name="shopping_cart" size={20} />
-              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-status-error text-xs font-bold flex items-center justify-center">
                 {pos.lineCount}
               </span>
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-xs font-semibold text-foreground">
+              <span className="truncate text-sm font-semibold text-foreground">
                 {pos.activeTab?.label ?? "Giỏ hàng"}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Chạm để kiểm tra đơn
               </span>
             </span>
@@ -3832,7 +3867,7 @@ function FnbPosPageInner() {
             <span className="block text-base font-black text-primary tabular-nums leading-none">
               {formatCurrency(fnbBenefitDisplay.total)}đ
             </span>
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-xs font-semibold text-primary">
               Mở giỏ
             </span>
           </span>
@@ -4145,7 +4180,7 @@ function FnbPosPageInner() {
               ["Esc", "Đóng popup"],
             ].map(([key, desc]) => (
               <div key={key} className="flex items-center justify-between py-0.5">
-                <kbd className="px-2 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
+                <kbd className="px-2 py-0.5 bg-muted border rounded text-xs font-mono">{key}</kbd>
                 <span className="text-foreground">{desc}</span>
               </div>
             ))}

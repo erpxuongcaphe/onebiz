@@ -35,7 +35,7 @@ interface ToggleRowProps {
 
 function ToggleRow({ label, description, value, onChange, disabled, warning }: ToggleRowProps) {
   return (
-    <div className="flex items-start justify-between gap-6 py-4 border-b border-border last:border-0">
+    <div className="flex items-start justify-between gap-4 py-4 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <span className="text-sm font-medium">{label}</span>
@@ -171,7 +171,7 @@ export default function CaiDatKhoHangPage() {
         subtitle="Cấu hình hành vi BOM, tồn kho khi bán hàng"
       />
 
-      <div className="px-4 pb-8 space-y-6">
+      <div className="px-4 pb-8 space-y-4">
         {!canEdit && (
           <div className="rounded-lg border border-status-warning/30 bg-status-warning/10 p-3 text-sm text-foreground">
             <Icon name="lock" size={14} className="inline-block mr-1 align-text-bottom" />

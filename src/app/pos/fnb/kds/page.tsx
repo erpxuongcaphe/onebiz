@@ -917,7 +917,7 @@ function KdsPageInner() {
         </header>
 
         <div className="flex flex-1 items-center justify-center p-6">
-          <div className="w-full max-w-xl rounded-lg border border-border bg-card p-6 text-center shadow-sm">
+          <div className="w-full max-w-xl rounded-lg border border-border bg-card p-6 text-center shadow-none">
             <div className="mx-auto mb-4 flex size-14 items-center justify-center rounded-lg bg-primary-subtle text-primary">
               <Icon name="storefront" size={28} />
             </div>
@@ -975,7 +975,7 @@ function KdsPageInner() {
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-background text-foreground">
-      <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 shadow-sm md:px-6">
+      <header className="shrink-0 border-b border-border bg-card/95 px-4 py-3 shadow-none md:px-6">
         <div className="flex flex-wrap items-center gap-3">
           {/* Left: title + status */}
           <div className="flex min-w-0 items-center gap-3">
@@ -1041,7 +1041,7 @@ function KdsPageInner() {
                 className={cn(
                   "flex items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
                   stationFilter === null
-                    ? "bg-card text-foreground shadow-sm"
+                    ? "bg-card text-foreground shadow-none"
                     : "text-muted-foreground hover:bg-card hover:text-foreground",
                 )}
                 title="Hiện tất cả trạm"
@@ -1192,7 +1192,7 @@ function KdsPageInner() {
             className={cn(
               "flex shrink-0 items-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all press-scale-sm",
               stationFilter === null
-                ? "bg-card text-foreground shadow-sm"
+                ? "bg-card text-foreground shadow-none"
                 : "text-muted-foreground hover:bg-card hover:text-foreground",
             )}
           >
@@ -1328,7 +1328,7 @@ function KdsLane({
   onMarkAllReady: (orderId: string) => void;
 }) {
   return (
-    <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-sm">
+    <section className="flex min-h-[320px] flex-col overflow-hidden rounded-lg border border-border bg-surface-container-lowest shadow-none">
       <header className="flex shrink-0 items-center gap-2 border-b border-border bg-card px-2.5 py-2">
         <div className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg border", accentClass)}>
           <Icon name={icon} size={17} />
@@ -1456,7 +1456,7 @@ function KdsOrderCard({
   return (
     <div
       className={cn(
-        "relative flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-sm",
+        "relative flex w-full flex-col overflow-hidden rounded-lg border border-border bg-card shadow-none",
         "max-h-[min(68dvh,36rem)] border-t-[3px]",
         cardAccentClass,
         order.status === "served" && "opacity-50"
@@ -1482,12 +1482,12 @@ function KdsOrderCard({
           </div>
           <div className="flex min-w-0 items-center gap-1.5">
             {preferences.showOrderType && (
-              <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-[10px] font-bold", statusPillClass)}>
+              <span className={cn("min-w-0 truncate rounded-full border px-1.5 py-0.5 text-xs font-bold", statusPillClass)}>
                 {typeLabel}
               </span>
             )}
             {preferences.showPaymentStatus && order.invoiceId && (
-              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-xs font-bold text-emerald-600 dark:text-emerald-400">
                 <Icon name="paid" size={12} />
                 Đã thu
               </span>
@@ -1626,7 +1626,7 @@ function KdsItemRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-start gap-2">
             {quantity > 1 && (
-              <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
+              <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-xs font-bold text-status-info">
                 x{formatNumber(quantity)}
               </span>
             )}
@@ -1657,7 +1657,7 @@ function KdsItemRow({
           {/* Sprint 2.4b: modifier choices (completed view — line-through) */}
           {item.modifierSelections && item.modifierSelections.length > 0 &&
             (preferences.modifierLayout === "inline" ? (
-              <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground line-through">
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground line-through">
                 {item.modifierSelections
                   .map(
                     (selection) =>
@@ -1668,7 +1668,7 @@ function KdsItemRow({
                   .join(" · ")}
               </p>
             ) : (
-              <div className="mt-0.5 space-y-0.5 text-[11px] text-muted-foreground line-through">
+              <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground line-through">
                 {item.modifierSelections.map((selection) => (
                   <span key={selection.groupId} className="block">
                     {compactModifierGroupName(selection.groupName)}:{" "}
@@ -1738,7 +1738,7 @@ function KdsItemRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-start gap-2">
           {quantity > 1 && (
-            <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-[10px] font-bold text-status-info">
+            <span className="shrink-0 rounded bg-status-info/15 px-1.5 py-0.5 text-xs font-bold text-status-info">
               x{formatNumber(quantity)}
             </span>
           )}
@@ -1773,7 +1773,7 @@ function KdsItemRow({
             Bếp đọc 1 dòng compact: "Mức đường: 70% • Mức đá: Ít • Topping: Trân châu" */}
         {item.modifierSelections && item.modifierSelections.length > 0 && (
           preferences.modifierLayout === "inline" ? (
-            <p className="mt-0.5 line-clamp-2 text-[11px] leading-4 text-status-info">
+            <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-status-info">
               {item.modifierSelections
                 .map(
                   (selection) =>
@@ -1784,7 +1784,7 @@ function KdsItemRow({
                 .join(" · ")}
             </p>
           ) : (
-            <div className="mt-0.5 space-y-0.5 text-[11px] leading-4 text-status-info">
+            <div className="mt-0.5 space-y-0.5 text-xs leading-4 text-status-info">
               {item.modifierSelections.map((sel, idx) => (
                 <span
                   key={idx}
@@ -1859,7 +1859,7 @@ function KdsDisplaySettingsDialog({
                   className={cn(
                     "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
                     preferences.itemSort === value
-                      ? "bg-card text-primary shadow-sm"
+                      ? "bg-card text-primary shadow-none"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                   aria-pressed={preferences.itemSort === value}
@@ -1916,7 +1916,7 @@ function KdsDisplaySettingsDialog({
                   className={cn(
                     "min-h-9 rounded-md px-3 text-xs font-semibold transition-colors",
                     preferences.modifierLayout === value
-                      ? "bg-card text-primary shadow-sm"
+                      ? "bg-card text-primary shadow-none"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                   aria-pressed={preferences.modifierLayout === value}

@@ -151,10 +151,10 @@ function ActionButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-xl border transition-all",
+        "flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-lg border transition-all",
         "min-h-[64px]",
         primary
-          ? "bg-primary text-primary-foreground border-primary hover:opacity-90 shadow-sm"
+          ? "bg-primary text-primary-foreground border-primary hover:opacity-90 shadow-none"
           : "border-border hover:border-primary hover:bg-primary/5",
       )}
     >

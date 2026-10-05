@@ -126,7 +126,7 @@ function ActiveOrderRow({ order }: { order: ActiveProductionOrder }) {
           </span>
         </div>
         {order.isOverdue && (
-          <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error shrink-0">
+          <span className="inline-flex items-center gap-0.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error shrink-0">
             <Icon name="schedule" size={14} />
             Quá hạn
           </span>
@@ -165,7 +165,7 @@ function ActiveOrderRow({ order }: { order: ActiveProductionOrder }) {
 function TrendTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow text-xs">
+    <div className="rounded-lg border bg-surface-container-lowest p-3 ambient-shadow text-xs">
       <p className="font-semibold text-foreground mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color }}>
@@ -227,7 +227,7 @@ export default function ProductionDashboardPage() {
   const lowStockNvl = nvl.filter((r) => r.isLow || r.isOut);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader title={`Dashboard ${labels.title}`} />
 
       {/* KPI Row — Stitch: primary-fixed tint cho tile chính + semantic token cho status */}
@@ -280,7 +280,7 @@ export default function ProductionDashboardPage() {
 
       {/* Lot alerts */}
       {((kpis?.expiredLots ?? 0) > 0 || (kpis?.expiringLots ?? 0) > 0) && (
-        <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-status-warning/10 border border-status-warning/25 ambient-shadow">
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-status-warning/10 border border-status-warning/25 ambient-shadow">
           <span className="size-9 rounded-lg bg-status-warning/15 flex items-center justify-center shrink-0">
             <Icon name="warning" size={20} className="text-status-warning" />
           </span>
@@ -433,17 +433,17 @@ export default function ProductionDashboardPage() {
                   <td className="hidden md:table-cell p-2 text-right">{formatCurrency(r.stockValue)}</td>
                   <td className="p-2 text-center">
                     {r.isOut ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">
                         <span className="size-1.5 rounded-full bg-status-error" />
                         Hết hàng
                       </span>
                     ) : r.isLow ? (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                         <span className="size-1.5 rounded-full bg-status-warning" />
                         Sắp hết
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
                         <span className="size-1.5 rounded-full bg-status-success" />
                         Đủ
                       </span>

@@ -573,7 +573,7 @@ export default function CuoiNgayPage() {
           </>
         ) : (
           /* TABLE mode */
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             <ReportDataTable<PaymentRow>
               columns={paymentColumns}
               tablePreferenceKey="report.cuoi-ngay.payments"

@@ -75,11 +75,39 @@ describe("FnbCart table transfer eligibility", () => {
   });
 });
 
+describe("flat cart line actions", () => {
+  it("keeps actions collapsed until needed, then preserves quantity/edit/remove callbacks", () => {
+    const updateLineQty = vi.fn(), removeLine = vi.fn(), onEditLine = vi.fn();
+    const line = taoDong(1, { quantity: 2, lineTotal: 90000 });
+    renderGio([line], { updateLineQty, removeLine, onEditLine });
+    expect(screen.queryByRole("button", { name: "Tăng số lượng" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /^Số lượng: 2/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Tăng số lượng" }));
+    expect(updateLineQty).toHaveBeenCalledWith(line.id, 3);
+    fireEvent.click(screen.getByRole("button", { name: "Giảm số lượng" }));
+    expect(updateLineQty).toHaveBeenCalledWith(line.id, 1);
+    fireEvent.click(screen.getByRole("button", { name: "Sửa tuỳ chọn" }));
+    expect(onEditLine).toHaveBeenCalledWith(line);
+    fireEvent.click(screen.getByRole("button", { name: "Xoá món" }));
+    expect(removeLine).toHaveBeenCalledWith(line.id);
+  });
+  it("shows sent line details while preventing direct edits", () => {
+    const line = taoDong(1);
+    renderGio([line], { activeTab: { id: "sent", label: "Bàn 1", orderType: "dine_in", kitchenOrderId: "order", lines: [], sentLines: [line] } });
+    fireEvent.click(screen.getByRole("button", { name: /^Thao tác món:/ }));
+    expect(screen.getByTestId("fnb-cart-line")).toHaveTextContent("Đã gửi bếp");
+    expect(screen.queryByRole("button", { name: "Tăng số lượng" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xoá món" })).not.toBeInTheDocument();
+  });
+});
+
 describe("C3 hành vi — fixture 20 dòng", () => {
   it("render đủ 20 dòng, mỗi dòng có nút xoá + đơn giá × SL", () => {
     const { container } = renderGio(
       Array.from({ length: 20 }, (_, i) => taoDong(i)),
     );
+    expect(screen.queryByLabelText("Xoá món")).not.toBeInTheDocument();
+    screen.getAllByRole("button", { name: /^Thao tác món:/ }).forEach(button => fireEvent.click(button));
     expect(screen.getAllByLabelText("Xoá món")).toHaveLength(20);
     // format.ts dùng NUMBER_LOCALE en-US: nghìn dấu PHẨY, thập phân dấu CHẤM.
     expect(demSpan(container, "45,000 × 1")).toBe(20);
@@ -95,6 +123,7 @@ describe("C3 hành vi — quantity thập phân 5.17 + giá 9 chữ số", () =>
         lineTotal: 638271599.13,
       }),
     ]);
+    fireEvent.click(screen.getByRole("button", { name: /^Thao tác món:/ }));
     // formatNumber (en-US) giữ thập phân "5.17" nguyên vẹn: ô SL + dòng đơn giá.
     expect(demSpan(container, "5.17")).toBeGreaterThanOrEqual(1);
     expect(demSpan(container, "123,456,789 × 5.17")).toBe(1);
@@ -170,9 +199,9 @@ describe("C3 hành vi — món đủ Size + Đường + Đá + topping + ghi ch�
     expect(screen.getByText("Lạnh")).toBeInTheDocument();
     const modifierGrid = screen.getByTestId("fnb-line-modifiers");
     const modifierCells = screen.getAllByTestId("fnb-line-modifier");
-    expect(modifierGrid.className).toContain("grid-cols-2");
+    expect(modifierGrid.className).toContain("flex-wrap");
     expect(modifierCells).toHaveLength(3);
-    expect(modifierCells[2].className).toContain("col-span-2");
+    expect(modifierCells.every(cell => cell.textContent?.trim())).toBe(true);
     expect(screen.getByText(/Trân châu đường đen/)).toBeInTheDocument();
     expect(screen.getByText(/Pudding trứng nướng/)).toBeInTheDocument();
     expect(screen.getByText(/Kem cheese/)).toBeInTheDocument();

@@ -269,7 +269,7 @@ export function FnbPaymentDialog({
                 >
                   {btn.label}
                   {btn.value > 0 && (
-                    <span className="ml-1 text-[11px] opacity-90">
+                    <span className="ml-1 text-xs opacity-90">
                       ({formatDenom(btn.value)})
                     </span>
                   )}
@@ -367,12 +367,12 @@ export function FnbPaymentDialog({
                   </span>
                 </div>
                 {totalPaid > 0 && totalPaid < total && (
-                  <p className="text-[11px] text-status-warning">
+                  <p className="text-xs text-status-warning">
                     Còn thiếu {formatCurrency(total - totalPaid)} ₫
                   </p>
                 )}
                 {totalPaid > total && (
-                  <p className="text-[11px] text-status-success">
+                  <p className="text-xs text-status-success">
                     Thừa {formatCurrency(totalPaid - total)} ₫
                   </p>
                 )}

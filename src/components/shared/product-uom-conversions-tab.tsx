@@ -187,7 +187,7 @@ export function ProductUomConversionsTab({ product }: Props) {
         {showAdd && (
           <div className="p-3 border-b bg-primary-fixed/30 grid grid-cols-12 gap-2 items-end">
             <div className="col-span-3">
-              <label className="text-[11px] text-muted-foreground block mb-0.5">
+              <label className="text-xs text-muted-foreground block mb-0.5">
                 Từ ĐVT
               </label>
               <Input
@@ -201,7 +201,7 @@ export function ProductUomConversionsTab({ product }: Props) {
               <Icon name="arrow_forward" size={16} className="text-muted-foreground" />
             </div>
             <div className="col-span-3">
-              <label className="text-[11px] text-muted-foreground block mb-0.5">
+              <label className="text-xs text-muted-foreground block mb-0.5">
                 Sang ĐVT
               </label>
               <Input
@@ -212,7 +212,7 @@ export function ProductUomConversionsTab({ product }: Props) {
               />
             </div>
             <div className="col-span-3">
-              <label className="text-[11px] text-muted-foreground block mb-0.5">
+              <label className="text-xs text-muted-foreground block mb-0.5">
                 Hệ số
               </label>
               <Input
@@ -286,7 +286,7 @@ export function ProductUomConversionsTab({ product }: Props) {
                   <td className="p-2 font-medium">{c.toUnit}</td>
                   <td className="p-2 text-right">
                     <span className="font-semibold">×{c.factor}</span>
-                    <span className="block text-[11px] text-muted-foreground">
+                    <span className="block text-xs text-muted-foreground">
                       1 {c.fromUnit} = {c.factor} {c.toUnit}
                     </span>
                   </td>
@@ -312,7 +312,7 @@ export function ProductUomConversionsTab({ product }: Props) {
 function UnitChip({ label, value }: { label: string; value: string }) {
   return (
     <span className="inline-flex flex-col items-center px-3 py-1 rounded border bg-background">
-      <span className="text-[10px] text-muted-foreground uppercase">
+      <span className="text-xs text-muted-foreground uppercase">
         {label}
       </span>
       <span className="text-xs font-semibold">{value}</span>

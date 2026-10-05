@@ -345,7 +345,7 @@ export function DataTable<TData, TValue>({
   toolbarMetrics,
   toolbarActions,
   toolbarFooter,
-  density = "comfortable",
+  density = "compact",
   renderDetail,
   expandedRow: controlledExpanded,
   onExpandedRowChange,
@@ -439,7 +439,7 @@ export function DataTable<TData, TValue>({
           return (
             <DropdownMenu>
               <DropdownMenuTrigger
-                className="inline-flex items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Icon name="more_horiz" size={16} className="text-muted-foreground" />
@@ -564,7 +564,7 @@ export function DataTable<TData, TValue>({
   const columnToggleMenu =
     columnToggle && toggleableColumns.length > 0 ? (
       <DropdownMenu>
-        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11">
+        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
           <Icon name="tune" size={15} />
           <span className="hidden lg:inline">Hiển thị cột</span>
         </DropdownMenuTrigger>
@@ -707,7 +707,7 @@ export function DataTable<TData, TValue>({
                     key={header.id}
                     data-column-id={header.id}
                     className={cn(
-                      "text-[11px] font-semibold text-muted-foreground whitespace-nowrap uppercase",
+                      "text-xs font-semibold text-muted-foreground whitespace-nowrap uppercase",
                       header.column.getCanSort() &&
                         "cursor-pointer select-none",
                       pinned && pinHeaderClass,
@@ -847,7 +847,7 @@ export function DataTable<TData, TValue>({
       </div>
 
       {/* Mobile card view */}
-      <div className="md:hidden flex-1 min-h-0 overflow-auto p-3 space-y-2">
+      <div className="md:hidden flex-1 min-h-0 overflow-auto px-3 py-2">
         {loading ? (
           Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="bg-card rounded-lg border p-3 space-y-2">
@@ -869,7 +869,7 @@ export function DataTable<TData, TValue>({
             <Fragment key={row.id}>
               <div
                 className={cn(
-                  "bg-card rounded-lg border p-3 ambient-shadow",
+                  "bg-card border-b border-border px-3 py-2",
                   (onRowClick || renderDetail) &&
                     "cursor-pointer active:bg-surface-container-low press-scale-sm",
                   expandedRowIdx === rowIndex &&
@@ -894,7 +894,7 @@ export function DataTable<TData, TValue>({
                     {rowActions && (
                       <DropdownMenu>
                         <DropdownMenuTrigger
-                          className="inline-flex items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          className="inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => e.stopPropagation()}
                         >
                           <Icon name="more_horiz" size={16} className="text-muted-foreground" />

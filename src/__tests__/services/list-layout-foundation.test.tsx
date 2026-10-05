@@ -112,14 +112,14 @@ describe("nền bố cục danh sách", () => {
     expect(clearAll).toHaveBeenCalledTimes(1);
   });
 
-  it("PageHeader chỉ gọn khi trang chủ động bật", () => {
+  it("PageHeader mặc định gọn và cho phép bật tiêu đề lớn", () => {
     const { rerender } = render(<PageHeader title="Hóa đơn" />);
     expect(screen.getByRole("heading", { name: "Hóa đơn" }).className).toContain(
-      "text-2xl",
-    );
-    rerender(<PageHeader title="Hóa đơn" density="compact" />);
-    expect(screen.getByRole("heading", { name: "Hóa đơn" }).className).toContain(
       "text-xl",
+    );
+    rerender(<PageHeader title="Hóa đơn" density="default" />);
+    expect(screen.getByRole("heading", { name: "Hóa đơn" }).className).toContain(
+      "text-2xl",
     );
   });
 

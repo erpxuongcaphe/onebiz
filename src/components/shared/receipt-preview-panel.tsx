@@ -240,7 +240,7 @@ export function ReceiptPreviewPanel(props: ReceiptPreviewPanelProps) {
         </div>
       </div>
 
-      <p className="text-[11px] text-muted-foreground leading-relaxed">
+      <p className="text-xs text-muted-foreground leading-relaxed">
         <Icon name="info" size={12} className="inline mr-1 align-text-bottom" />
         Đây là <strong>bản preview với data mẫu</strong> (2 món + 1 topping +
         ghi chú). Đổi tab/khổ giấy/kiểu phiếu để xem mẫu cập nhật ngay.

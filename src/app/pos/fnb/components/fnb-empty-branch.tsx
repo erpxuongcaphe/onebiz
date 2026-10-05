@@ -68,7 +68,7 @@ export function FnbEmptyBranch({ onMenuClick, onSearch }: FnbEmptyBranchProps) {
               href="/"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+              className="inline-flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
             >
               <Icon name="arrow_back" size={16} />
               Về trang chủ
@@ -77,7 +77,7 @@ export function FnbEmptyBranch({ onMenuClick, onSearch }: FnbEmptyBranchProps) {
           </div>
 
           {/* Tip */}
-          <div className="pt-4 px-4 py-3 rounded-xl bg-status-info/10 border border-status-info/20 text-left">
+          <div className="pt-4 px-4 py-3 rounded-lg bg-status-info/10 border border-status-info/20 text-left">
             <div className="flex items-start gap-2">
               <Icon name="lightbulb" size={16} className="text-status-info shrink-0 mt-0.5" />
               <div className="text-xs text-on-surface-variant leading-relaxed">

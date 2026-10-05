@@ -393,7 +393,7 @@ function CommandPaletteDialog({
           {searching && (
             <span className="text-xs text-muted-foreground">Đang tìm...</span>
           )}
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 text-[10px] font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded border">
             Esc
           </kbd>
         </div>
@@ -418,7 +418,7 @@ function CommandPaletteDialog({
               const startIdx = flatItems.indexOf(group.items[0]);
               return (
                 <div key={group.label} className="mb-1">
-                  <div className="px-3 pt-2 pb-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                  <div className="px-3 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                     {group.label}
                   </div>
                   {group.items.map((item, i) => {
@@ -450,7 +450,7 @@ function CommandPaletteDialog({
                           )}
                         </span>
                         {isActive && (
-                          <kbd className="text-[10px] font-mono text-muted-foreground">
+                          <kbd className="text-xs font-mono text-muted-foreground">
                             ↵
                           </kbd>
                         )}
@@ -464,7 +464,7 @@ function CommandPaletteDialog({
         </div>
 
         {/* Footer hints */}
-        <div className="px-4 py-2 border-t bg-muted/20 flex items-center gap-3 text-[11px] text-muted-foreground">
+        <div className="px-4 py-2 border-t bg-muted/20 flex items-center gap-3 text-xs text-muted-foreground">
           <span className="flex items-center gap-1">
             <kbd className="font-mono bg-background border px-1 rounded">↑↓</kbd>
             điều hướng

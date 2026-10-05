@@ -182,41 +182,41 @@ function ExpiryBadge({ dateStr }: { dateStr?: string | null }) {
 
   if (diffDays < 0) {
     return (
-      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ Đã quá hạn {Math.abs(diffDays)} ngày
       </span>
     );
   }
   if (diffDays === 0) {
     return (
-      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ Hết hạn HÔM NAY
       </span>
     );
   }
   if (diffDays <= 7) {
     return (
-      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded-md bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ Còn {diffDays} ngày — sắp hết!
       </span>
     );
   }
   if (diffDays <= 30) {
     return (
-      <span className="inline-flex items-center rounded-md bg-status-warning/15 text-status-warning border border-status-warning/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded-md bg-status-warning/15 text-status-warning border border-status-warning/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         Còn {diffDays} ngày
       </span>
     );
   }
   if (diffDays <= 90) {
     return (
-      <span className="inline-flex items-center rounded-md bg-status-warning/10 text-status-warning border border-status-warning/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded-md bg-status-warning/10 text-status-warning border border-status-warning/20 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         Còn {diffDays} ngày
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-md bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+    <span className="inline-flex items-center rounded-md bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
       Còn {diffDays} ngày
     </span>
   );
@@ -728,7 +728,7 @@ export function CreatePurchaseOrderDialog({
           <div className="mx-auto grid max-w-[1500px] gap-3 lg:grid-cols-[1fr_360px]">
             {/* Phase 1.5: banner cảnh báo khi đang sửa phiếu đã nhập kho. */}
             {isOrderedLocked && (
-              <div className="lg:col-span-2 flex items-start gap-3 rounded-xl border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
+              <div className="lg:col-span-2 flex items-start gap-3 rounded-lg border border-status-warning/40 bg-status-warning/10 p-3 text-sm">
                 <Icon name="warning" size={20} className="mt-0.5 shrink-0 text-status-warning" />
                 <div>
                   <p className="font-semibold text-status-warning">Phiếu đã nhập kho — chỉ sửa được "Đã thanh toán NCC" và "Ghi chú".</p>
@@ -740,7 +740,7 @@ export function CreatePurchaseOrderDialog({
             )}
             <fieldset disabled={isOrderedLocked} className="flex min-w-0 flex-col gap-3 disabled:opacity-60">
             <div className="grid gap-3 xl:grid-cols-2">
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">Nhà cung cấp</h3>
                   {selectedSupplier && (
@@ -793,11 +793,11 @@ export function CreatePurchaseOrderDialog({
                 {errors.supplier && <p className="mt-1 text-xs text-destructive">{errors.supplier}</p>}
               </section>
 
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold">Dòng hàng nhập</h3>
-                    <p className="text-[11px] text-muted-foreground">Chỉ hiện NVL (mua ngoài) — SKU lấy từ Retail qua Bán nội bộ</p>
+                    <p className="text-xs text-muted-foreground">Chỉ hiện NVL (mua ngoài) — SKU lấy từ Retail qua Bán nội bộ</p>
                   </div>
                   <span className="text-xs text-muted-foreground">{formatNumber(items.length)} dòng</span>
                 </div>
@@ -847,7 +847,7 @@ export function CreatePurchaseOrderDialog({
 
             </div>
 
-            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="overflow-hidden rounded-lg border bg-white shadow-none">
               <div className="hidden grid-cols-[minmax(300px,1fr)_90px_112px_150px_90px_150px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
@@ -1044,7 +1044,7 @@ export function CreatePurchaseOrderDialog({
               )}
             </div>
 
-            <section className="rounded-xl border bg-white p-3 shadow-sm">
+            <section className="rounded-lg border bg-white p-3 shadow-none">
               <label className="text-sm font-medium">Ghi chú</label>
               <textarea
                 className="mt-2 flex min-h-[52px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -1058,7 +1058,7 @@ export function CreatePurchaseOrderDialog({
 
             {/* ── Right aside — Tóm tắt phiếu + Thanh toán + Buttons ── */}
             <aside className="flex flex-col gap-3 lg:sticky lg:top-0 lg:self-start">
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <h3 className="mb-3 text-sm font-semibold">Tóm tắt phiếu</h3>
 
                 {/* Chi phí mua hàng */}
@@ -1376,7 +1376,7 @@ function FooterMetric({
 }) {
   return (
     <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
-      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="text-xs font-semibold uppercase text-muted-foreground">{label}</div>
       <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
         {value}
       </div>

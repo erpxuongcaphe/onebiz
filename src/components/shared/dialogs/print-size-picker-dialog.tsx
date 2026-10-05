@@ -103,7 +103,7 @@ export function PrintSizePickerDialog({
                       {opt.label}
                     </span>
                     {opt.id === defaultSize && (
-                      <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      <span className="text-xs uppercase tracking-wider text-muted-foreground">
                         Mặc định
                       </span>
                     )}

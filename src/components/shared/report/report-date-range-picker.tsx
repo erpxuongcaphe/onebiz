@@ -92,7 +92,7 @@ export function ReportDateRangePicker({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
           {PRESET_GROUPS.map((group) => (
             <div key={group.key} className="flex flex-col gap-1">
-              <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-1">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-2 mb-1">
                 {group.label}
               </p>
               {DATE_PRESETS.filter((p) => p.group === group.key).map((p) => (
@@ -116,12 +116,12 @@ export function ReportDateRangePicker({
 
         {/* Custom range input */}
         <div className="mt-3 pt-3 border-t border-border">
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide mb-2">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
             Tùy chỉnh
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="flex-1">
-              <label htmlFor={fromInputId} className="text-[10px] text-muted-foreground">Từ ngày</label>
+              <label htmlFor={fromInputId} className="text-xs text-muted-foreground">Từ ngày</label>
               <input
                 id={fromInputId}
                 type="date"
@@ -131,7 +131,7 @@ export function ReportDateRangePicker({
               />
             </div>
             <div className="flex-1">
-              <label htmlFor={toInputId} className="text-[10px] text-muted-foreground">Đến ngày</label>
+              <label htmlFor={toInputId} className="text-xs text-muted-foreground">Đến ngày</label>
               <input
                 id={toInputId}
                 type="date"

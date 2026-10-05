@@ -136,7 +136,7 @@ export function DebtDetailDialog({
           <div className="px-6 py-3 shrink-0 border-b bg-muted/20">
             <div className="grid grid-cols-3 gap-3 text-center">
               <div className="space-y-0.5">
-                <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                   Tổng phát sinh
                 </div>
                 <div className="text-sm font-bold tabular-nums">
@@ -144,7 +144,7 @@ export function DebtDetailDialog({
                 </div>
               </div>
               <div className="space-y-0.5">
-                <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                   Đã trả
                 </div>
                 <div className="text-sm font-bold tabular-nums text-status-success">
@@ -152,7 +152,7 @@ export function DebtDetailDialog({
                 </div>
               </div>
               <div className="space-y-0.5">
-                <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                   Còn nợ
                 </div>
                 <div className="text-sm font-bold tabular-nums text-status-error">
@@ -240,7 +240,7 @@ export function DebtDetailDialog({
                         </span>
                         <Badge
                           variant="outline"
-                          className={cn("text-[10px] font-semibold border-0", ageBadge.color)}
+                          className={cn("text-xs font-semibold border-0", ageBadge.color)}
                         >
                           <Icon name="schedule" size={10} className="mr-1" />
                           {ageBadge.label}
@@ -273,7 +273,7 @@ export function DebtDetailDialog({
                     {/* Info 3 cột */}
                     <div className="grid grid-cols-3 gap-2">
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Tổng
                         </div>
                         <div className="text-xs font-medium tabular-nums">
@@ -281,7 +281,7 @@ export function DebtDetailDialog({
                         </div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Đã trả ({paidPercent}%)
                         </div>
                         <div className="text-xs font-medium tabular-nums text-status-success">
@@ -289,7 +289,7 @@ export function DebtDetailDialog({
                         </div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Còn nợ
                         </div>
                         <div className="text-xs font-bold tabular-nums text-status-error">

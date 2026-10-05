@@ -143,20 +143,20 @@ function VarianceTab({ checkId }: { checkId: string }) {
     <div className="space-y-4">
       {/* Summary chips */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <div className="rounded-xl bg-surface-container p-3">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="rounded-lg bg-surface-container p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
             Tổng SP kiểm
           </div>
           <div className="text-lg font-semibold">{rows.length}</div>
         </div>
-        <div className="rounded-xl bg-surface-container p-3">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        <div className="rounded-lg bg-surface-container p-3">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
             Khớp kho
           </div>
           <div className="text-lg font-semibold">{matched.length}</div>
         </div>
         <div className="rounded-xl bg-status-success/10 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-status-success">
+          <div className="text-xs uppercase tracking-wider text-status-success">
             Lệch tăng
           </div>
           <div className="text-lg font-semibold text-status-success">
@@ -164,7 +164,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
           </div>
         </div>
         <div className="rounded-xl bg-status-error/10 p-3">
-          <div className="text-[10px] uppercase tracking-wider text-status-error">
+          <div className="text-xs uppercase tracking-wider text-status-error">
             Lệch giảm
           </div>
           <div className="text-lg font-semibold text-status-error">
@@ -188,23 +188,23 @@ function VarianceTab({ checkId }: { checkId: string }) {
       </div>
 
       {/* Variance table */}
-      <div className="border rounded-xl overflow-hidden">
+      <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-xs">
           <thead className="bg-surface-container-low border-b">
             <tr>
-              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Sản phẩm
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-20">
                 Hệ thống
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-20">
                 Thực tế
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-20">
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-20">
                 Lệch
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px] w-28">
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs w-28">
                 Ảnh hưởng
               </th>
             </tr>
@@ -229,7 +229,7 @@ function VarianceTab({ checkId }: { checkId: string }) {
                   <td className="px-3 py-2">
                     <div className="font-medium">{r.productName}</div>
                     {r.productCode && (
-                      <div className="text-[10px] text-muted-foreground font-mono">
+                      <div className="text-xs text-muted-foreground font-mono">
                         {r.productCode}
                       </div>
                     )}

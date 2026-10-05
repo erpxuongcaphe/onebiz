@@ -374,7 +374,7 @@ export function ProductGrid({
         className="hidden md:flex flex-col border-r bg-white shrink-0 overflow-y-auto"
         style={{ width: "clamp(160px, 12vw, 200px)" }}
       >
-        <div className="px-3 py-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
+        <div className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider border-b sticky top-0 bg-white z-10">
           Danh mục
         </div>
         <CategoryRow
@@ -548,7 +548,7 @@ function CategoryPill({
       type="button"
       onClick={onClick}
       className={cn(
-        "shrink-0 px-3 py-1 rounded-full text-[11px] font-medium transition-all whitespace-nowrap",
+        "shrink-0 px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap",
         active
           ? "bg-primary text-white shadow-sm"
           : "bg-muted text-foreground hover:bg-muted"
@@ -558,7 +558,7 @@ function CategoryPill({
       {typeof count === "number" && (
         <span
           className={cn(
-            "ml-1 text-[10px]",
+            "ml-1 text-xs",
             active ? "text-primary-fixed" : "text-muted-foreground"
           )}
         >
@@ -608,7 +608,7 @@ function ProductTile({
       }
       // CEO 08/07 (lần 2): KHÔNG tô nền/viền đỏ cả ô — rối mắt khi nhiều hàng hết.
       // Chip "Hết" đỏ đặc là đủ tín hiệu; ô giữ nền trắng bình thường, vẫn bấm được.
-      className="flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px] hover:border-primary hover:shadow-sm"
+      className="flex items-center gap-2 bg-white rounded-lg border border-border p-2 text-left transition-all press-scale-sm min-h-[60px] hover:border-primary hover:shadow-none"
       style={{ contentVisibility: "auto", containIntrinsicSize: "60px" }}
     >
       {/* Thumb 40×40 vuông — image hoặc placeholder neutral (xám nhạt + icon). */}
@@ -627,21 +627,21 @@ function ProductTile({
 
       {/* Info: tên (line-clamp-2) → price + (code|stock chip) */}
       <div className="flex-1 min-w-0">
-        <p className="text-[12.5px] font-medium text-foreground line-clamp-2 leading-tight mb-0.5">
+        <p className="text-sm font-medium text-foreground line-clamp-2 leading-tight mb-0.5">
           {product.name}
         </p>
         <div className="flex items-center justify-between gap-1">
-          <p className="text-[13px] font-bold text-primary tabular-nums">
+          <p className="text-sm font-bold text-primary tabular-nums">
             {formatCurrency(product.sellPrice ?? 0)}
           </p>
           {outOfStock ? (
-            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-status-error text-white shrink-0">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-status-error text-white shrink-0">
               Hết
             </span>
           ) : showStockChip ? (
             <span
               className={cn(
-                "text-[9px] font-semibold px-2 py-0.5 rounded-full shrink-0",
+                "text-xs font-semibold px-2 py-0.5 rounded-full shrink-0",
                 useBomAvail
                   ? "bg-primary/10 text-primary border border-primary/20"
                   : "bg-status-warning/15 text-status-warning",
@@ -652,7 +652,7 @@ function ProductTile({
           ) : useBomAvail ? (
             // Production branch + SKU has_bom: show "Khả dụng từ NVL" badge
             // (số lớn, không cần warning màu vàng)
-            <span className="text-[9px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20 shrink-0">
               ≈ {formatNumber(stock)}
             </span>
           ) : product.code ? (
@@ -660,7 +660,7 @@ function ProductTile({
             // — cashier mua nhầm SKU vì mã dài "SP-001234567" cắt còn "SP-0012...".
             // Đổi sang min-w-0 + tooltip title đầy đủ + text-[10px] (tăng từ 9px).
             <p
-              className="text-[10px] text-muted-foreground/70 font-mono min-w-0 break-all line-clamp-2"
+              className="text-xs text-muted-foreground/70 font-mono min-w-0 break-all line-clamp-2"
               title={product.code}
             >
               {product.code}

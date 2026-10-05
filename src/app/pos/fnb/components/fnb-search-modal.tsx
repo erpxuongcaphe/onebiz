@@ -105,7 +105,7 @@ export function FnbSearchModal({
       />
 
       <div className="fixed inset-x-0 top-14 mx-auto z-50 max-w-2xl px-4">
-        <div className="rounded-lg bg-card border border-border shadow-2xl overflow-hidden">
+        <div className="rounded-lg bg-popover text-popover-foreground border border-border ambient-shadow-floating overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-4 h-12 border-b border-border">
             <Icon name="search" size={16} className="text-muted-foreground shrink-0" />
@@ -119,7 +119,7 @@ export function FnbSearchModal({
               placeholder="Tìm món theo tên hoặc mã..."
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-xs bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -143,7 +143,7 @@ export function FnbSearchModal({
                     highlighted === idx && "bg-primary-fixed"
                   )}
                 >
-                  <span className="text-[11px] text-muted-foreground font-mono w-20 shrink-0 truncate">
+                  <span className="text-xs text-muted-foreground font-mono w-20 shrink-0 truncate">
                     {product.code}
                   </span>
                   <span className="flex-1 text-sm text-foreground truncate">
@@ -158,22 +158,22 @@ export function FnbSearchModal({
           </ul>
 
           {/* Footer hints */}
-          <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   Enter
                 </kbd>{" "}
                 thêm
               </span>
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   Esc
                 </kbd>{" "}
                 đóng

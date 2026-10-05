@@ -198,7 +198,7 @@ export function ModuleSidebarLayout({
                         }
                         disabled={!group.collapsible || !!search.trim()}
                         className={cn(
-                          "w-full flex items-center justify-between px-3 pb-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide",
+                          "w-full flex items-center justify-between px-3 pb-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wide",
                           group.collapsible &&
                             !search.trim() &&
                             "cursor-pointer hover:text-foreground transition-colors",
@@ -237,7 +237,7 @@ export function ModuleSidebarLayout({
                               <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} className="shrink-0" />
                               <span className="truncate flex-1">{item.label}</span>
                               {item.badge && (
-                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-status-warning/10 text-status-warning font-semibold shrink-0">
+                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-status-warning/10 text-status-warning font-semibold shrink-0">
                                   {item.badge}
                                 </span>
                               )}

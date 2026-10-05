@@ -29,11 +29,10 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
       <button
         type="button"
         onClick={onClick}
-        className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-error/80 text-white hover:bg-status-error transition-colors shrink-0"
+        className="flex items-center gap-1 min-h-11 px-2.5 rounded-lg text-xs font-semibold bg-status-error/10 text-status-error hover:bg-status-error/20 transition-colors shrink-0"
       >
         <Icon name="schedule" size={14} />
-        <span className="sm:hidden">Ca</span>
-        <span className="hidden sm:inline">Chưa mở ca</span>
+        <span>Chưa mở ca</span>
       </button>
     );
   }
@@ -50,11 +49,11 @@ export function ShiftIndicator({ shift, onClick }: ShiftIndicatorProps) {
     <button
       type="button"
       onClick={onClick}
-      className="flex items-center gap-1 px-2 py-1 rounded text-xs bg-status-success/80 text-white hover:bg-status-success transition-colors shrink-0"
+      className="flex items-center gap-1 min-h-11 px-2.5 rounded-lg text-xs font-semibold bg-status-success/10 text-status-success hover:bg-status-success/20 transition-colors shrink-0"
       title={`Ca: ${shift.cashierName ?? "—"} • ${hours}h${mins}p`}
     >
       <Icon name="schedule" size={14} />
-      <span className="hidden sm:inline">{hours}h{mins}p</span>
+      <span>{hours}h{mins}p</span>
     </button>
   );
 }

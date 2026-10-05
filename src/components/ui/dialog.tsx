@@ -54,8 +54,8 @@ function DialogContent({
       <DialogPrimitive.Popup
         data-slot="dialog-content"
         className={cn(
-          // Stitch: bỏ ring, dùng ambient-shadow để có MD3 elevation mềm hơn.
-        "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ambient-shadow duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          // Stitch: bỏ ring, dùng ambient-shadow-floating để có MD3 elevation mềm hơn.
+        "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-lg bg-popover p-4 text-sm text-popover-foreground ambient-shadow-floating duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -86,7 +86,7 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="dialog-header"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn("flex flex-col gap-1", className)}
       {...props}
     />
   )
@@ -104,7 +104,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-lg border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}
@@ -125,8 +125,8 @@ function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
       data-slot="dialog-title"
       className={cn(
         // 06/08 (audit popup): leading-none làm title dài xuống dòng CHỒNG chữ
-        // (line-height 1); pr-8 để title không chui dưới nút X (absolute top-2 right-2).
-        "font-heading text-base leading-snug font-semibold pr-8",
+        // (line-height 1); pr-12 để title không chui dưới nút X 44px trên cảm ứng.
+        "font-heading text-base leading-snug font-semibold text-primary pr-12",
         className
       )}
       {...props}

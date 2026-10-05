@@ -378,7 +378,7 @@ export default function LuongTienPage() {
         onExportFull={handleExportFull}
         exportDisabled={loading || exporting || data.length === 0 || Boolean(loadError)}
       />
-      <div className="space-y-6 p-4 sm:p-6">
+      <div className="space-y-4 p-4 sm:p-6">
       {loadError && (
         <div role="alert" className="flex items-center justify-between gap-3 border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
           <span>Không tải được báo cáo: {loadError}</span>

@@ -22,7 +22,7 @@ import { Icon } from "@/components/ui/icon";
 
 export default function InvoiceSettingsPage() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt hóa đơn</h1>
         <p className="text-muted-foreground text-sm mt-1">

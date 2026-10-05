@@ -107,19 +107,19 @@ function LeafLink({
       )}
       <span className="min-w-0 flex-1 break-words leading-5">{leaf.label}</span>
       {leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
+        <span className="text-xs font-semibold uppercase rounded px-2 py-0.5 bg-status-warning/10 text-status-warning border border-status-warning/25">
           Soon
         </span>
       )}
       {leaf.badge && !leaf.comingSoon && (
-        <span className="text-[9px] font-semibold uppercase rounded px-2 py-0.5 bg-primary/10 text-primary">
+        <span className="text-xs font-semibold uppercase rounded px-2 py-0.5 bg-primary/10 text-primary">
           {leaf.badge}
         </span>
       )}
       {leaf.mode === "pos" && !leaf.comingSoon && (
         <span
           aria-hidden
-          className="text-[9px] font-semibold uppercase rounded px-1 py-0.5 bg-status-success/10 text-status-success border border-status-success/25"
+          className="text-xs font-semibold uppercase rounded px-1 py-0.5 bg-status-success/10 text-status-success border border-status-success/25"
           title="Mở chế độ toàn màn hình"
         >
           B2B
@@ -215,7 +215,7 @@ function SubGroupSection({
   if (alwaysOpen) {
     return (
       <div className="mt-1">
-        <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-[10px] font-semibold text-sidebar-foreground/50 uppercase">
+        <div className="flex items-center gap-2 px-3 pt-2 pb-1 text-xs font-semibold text-sidebar-foreground/50 uppercase">
           {subGroup.icon && <Icon name={subGroup.icon} size={14} />}
           {subGroup.label}
         </div>
@@ -250,7 +250,7 @@ function SubGroupSection({
         )}
         <span className="flex-1 text-left">{subGroup.label}</span>
         {!open && (
-            <span className="text-[10px] font-medium text-sidebar-foreground/45 tabular-nums">
+            <span className="text-xs font-medium text-sidebar-foreground/45 tabular-nums">
             {visibleItems.length}
           </span>
         )}

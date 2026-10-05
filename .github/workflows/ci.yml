@@ -286,6 +286,16 @@ jobs:
             createdb kds_exact_return_test
             PGDATABASE=kds_exact_return_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00429_kds_exact_return_quantities.integration.sql
 
+      - name: Verify shared menu ordering in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_menu_order_test
+          PGDATABASE=fnb_menu_order_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00430_fnb_menu_order.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

@@ -268,7 +268,7 @@ export function FloorPlanCanvas({
               setUserScale(1);
               setPan({ x: 0, y: 0 });
             }}
-            className="min-w-12 border-r px-2 text-[11px] font-semibold tabular-nums hover:bg-muted"
+            className="min-w-12 border-r px-2 text-xs font-semibold tabular-nums hover:bg-muted"
             aria-label="Đặt sơ đồ vừa màn hình"
             title="Vừa màn hình"
           >
@@ -321,7 +321,7 @@ export function FloorPlanCanvas({
               width={zone.canvasWidth}
               height={zone.canvasHeight}
               fill={zone.overlayColor}
-              opacity={0.35}
+              opacity={mode === "view" ? 0.08 : 0.35}
               listening={false}
             />
           )}
@@ -329,8 +329,8 @@ export function FloorPlanCanvas({
           <ZoneLabel zone={zone} tableCount={tables.length} />
         </Layer>
 
-        {/* Layer 1.5: decorations (dưới bàn) */}
-        <Layer>
+        {/* Decorations remain visible for orientation but quieter during service. */}
+        <Layer opacity={mode === "view" ? 0.45 : 1}>
           {decorations.map((d) => (
             <DecorationNode
               key={d.id}

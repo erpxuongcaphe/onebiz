@@ -103,7 +103,7 @@ export default function AppearanceSettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Giao diện</h1>
         <p className="text-muted-foreground text-sm mt-1">

@@ -497,7 +497,7 @@ export function CreateProductionOrderDialog({
               {/* Sub-picker BOM — chỉ hiện khi SP có nhiều BOM (rare) */}
               {productId && bomsOfProduct.length > 1 && (
                 <div className="mt-1 space-y-1">
-                  <label className="text-[10px] uppercase text-muted-foreground">
+                  <label className="text-xs uppercase text-muted-foreground">
                     Sản phẩm có {bomsOfProduct.length} công thức — chọn 1
                   </label>
                   <Select
@@ -525,7 +525,7 @@ export function CreateProductionOrderDialog({
               )}
               {/* Hiển thị BOM auto-picked khi chỉ có 1 */}
               {productId && bomsOfProduct.length === 1 && selectedBom && (
-                <div className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <div className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                   <Icon name="auto_awesome" size={12} className="text-primary" />
                   Công thức áp dụng: <b>{selectedBom.name}</b> (1 mẻ ra{" "}
                   {selectedBom.yieldQty} {outputUnit})
@@ -591,7 +591,7 @@ export function CreateProductionOrderDialog({
                 value={plannedStart}
                 onChange={(e) => setPlannedStart(e.target.value)}
               />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Khi nào bắt đầu làm? (để trống = bắt đầu ngay khi tạo lệnh)
               </p>
             </div>
@@ -604,14 +604,14 @@ export function CreateProductionOrderDialog({
                 value={plannedEnd}
                 onChange={(e) => setPlannedEnd(e.target.value)}
               />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Khi nào làm xong? (để trống nếu chưa rõ — có thể cập nhật sau)
               </p>
             </div>
           </div>
 
           {/* CEO 06/07: thông tin lô thành phẩm nhập kho */}
-          <div className="rounded-xl border border-border p-3 space-y-2 bg-surface-container-lowest">
+          <div className="rounded-lg border border-border p-3 space-y-2 bg-surface-container-lowest">
             <div className="flex items-center gap-2 text-sm font-medium">
               <Icon name="package_2" size={16} className="text-primary" />
               Lô thành phẩm nhập kho

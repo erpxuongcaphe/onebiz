@@ -351,14 +351,14 @@ export default function CanhBaoPage() {
               return (
                 <Card
                   key={alert.id}
-                  className={cn("border rounded-xl", severityCfg.bg)}
+                  className={cn("border rounded-lg", severityCfg.bg)}
                 >
                   <CardHeader className="pb-1 pt-3 px-4">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-3">
                         <div
                           className={cn(
-                            "flex size-9 shrink-0 items-center justify-center rounded-xl bg-white shadow-sm mt-0.5"
+                            "flex size-9 shrink-0 items-center justify-center rounded-lg bg-white shadow-none mt-0.5"
                           )}
                         >
                           <Icon name={typeIconName} size={16} className={cn(severityCfg.iconColor)} />
@@ -368,7 +368,7 @@ export default function CanhBaoPage() {
                             {alert.title}
                             <Badge
                               className={cn(
-                                "text-[10px] px-2 py-0 font-medium",
+                                "text-xs px-2 py-0 font-medium",
                                 severityCfg.badgeBg
                               )}
                             >
@@ -397,7 +397,7 @@ export default function CanhBaoPage() {
                               ? alert.value
                               : formatCurrency(alert.value)}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">
+                        <p className="text-xs text-muted-foreground">
                           {alert.type === "overdue_debt"
                             ? "VND"
                             : alert.type === "low_stock"

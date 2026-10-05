@@ -392,7 +392,7 @@ export default function ModifierFnbPage() {
           onRetry={() => void refresh()}
         />
       ) : groups.length === 0 ? (
-        <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center">
+        <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
           <Icon name="tune" size={36} className="text-muted-foreground" />
           <p className="text-sm font-medium">Chưa có nhóm tuỳ chọn nào</p>
           <p className="text-xs text-muted-foreground">
@@ -402,7 +402,7 @@ export default function ModifierFnbPage() {
       ) : groupsHienThi.length === 0 ? (
         // Không khớp bộ lọc KHÁC hẳn chưa có dữ liệu — nói rõ để người dùng
         // biết phải xoá bộ lọc chứ không tưởng là mất dữ liệu.
-        <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-xl border border-dashed text-center">
+        <div className="flex h-64 flex-col items-center justify-center gap-2 rounded-lg border border-dashed text-center">
           <Icon name="search_off" size={36} className="text-muted-foreground" />
           <p className="text-sm font-medium">Không có nhóm nào khớp bộ lọc</p>
           <p className="text-xs text-muted-foreground">
@@ -420,7 +420,7 @@ export default function ModifierFnbPage() {
             const opts = optionsByGroup[g.id] ?? [];
             const loadingOpts = loadingOptions[g.id];
             return (
-              <div key={g.id} className="rounded-xl border bg-card">
+              <div key={g.id} className="rounded-lg border bg-card">
                 {/* Group row */}
                 <div className="flex items-center gap-3 p-3">
                   <button

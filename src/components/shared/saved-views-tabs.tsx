@@ -246,14 +246,14 @@ export function SavedViewsTabs({ currentFilters, onApply }: SavedViewsTabsProps)
                 maxLength={50}
                 className="h-10 w-full rounded-md border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-primary/30"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Ngắn gọn 2–4 từ. Đặt tên dễ nhớ.
               </p>
             </div>
 
             {/* Preview filter đang lưu */}
             <div className="rounded-md bg-muted/30 border border-border p-2.5 space-y-1">
-              <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
+              <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
                 Bộ lọc sẽ lưu
               </p>
               <div className="flex flex-wrap gap-1">
@@ -305,7 +305,7 @@ export function SavedViewsTabs({ currentFilters, onApply }: SavedViewsTabsProps)
                   return labels.map((l) => (
                     <span
                       key={l}
-                      className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-medium"
+                      className="inline-flex items-center px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium"
                     >
                       {l}
                     </span>

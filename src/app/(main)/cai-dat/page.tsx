@@ -112,7 +112,7 @@ const GROUPS: SettingGroup[] = [
 
 export default function CaiDatHubPage() {
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-6xl mx-auto">
+    <div className="p-4 md:p-6 space-y-4 max-w-6xl mx-auto">
       <header>
         <h1 className="text-2xl font-bold flex items-center gap-2">
           <Icon name="settings" size={26} className="text-primary" />
@@ -135,7 +135,7 @@ export default function CaiDatHubPage() {
                 href={it.href}
                 className={cn(
                   "group flex items-start gap-3 p-4 rounded-lg border bg-card",
-                  "hover:border-primary hover:shadow-sm transition-all",
+                  "hover:border-primary hover:shadow-none transition-all",
                   it.highlight && "border-primary/40 bg-primary/[0.02]",
                 )}
               >

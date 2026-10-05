@@ -74,41 +74,41 @@ function ExpiryBadge({ dateStr }: { dateStr?: string | null }) {
 
   if (diffDays < 0) {
     return (
-      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ Quá hạn {Math.abs(diffDays)}d
       </span>
     );
   }
   if (diffDays === 0) {
     return (
-      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ HÔM NAY
       </span>
     );
   }
   if (diffDays <= 7) {
     return (
-      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded bg-status-danger/15 text-status-danger border border-status-danger/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         ⚠ {diffDays}d
       </span>
     );
   }
   if (diffDays <= 30) {
     return (
-      <span className="inline-flex items-center rounded bg-status-warning/15 text-status-warning border border-status-warning/30 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded bg-status-warning/15 text-status-warning border border-status-warning/30 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         {diffDays}d
       </span>
     );
   }
   if (diffDays <= 90) {
     return (
-      <span className="inline-flex items-center rounded bg-status-warning/10 text-status-warning border border-status-warning/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+      <span className="inline-flex items-center rounded bg-status-warning/10 text-status-warning border border-status-warning/20 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
         {diffDays}d
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-[10px] font-medium whitespace-nowrap">
+    <span className="inline-flex items-center rounded bg-primary/10 text-primary border border-primary/20 px-1.5 py-0.5 text-xs font-medium whitespace-nowrap">
       {diffDays}d
     </span>
   );
@@ -426,7 +426,7 @@ export function AssignExpiryDialog({
           <DialogTitle className="flex items-center gap-2">
             <Icon name="event" size={20} className="text-primary" />
             Gắn HSD cho tồn cũ — bulk
-            <span className="ml-2 inline-flex items-center rounded-full bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 text-[10px] font-semibold uppercase">
+            <span className="ml-2 inline-flex items-center rounded-full bg-primary/15 text-primary border border-primary/30 px-2 py-0.5 text-xs font-semibold uppercase">
               Owner / admin
             </span>
           </DialogTitle>
@@ -463,7 +463,7 @@ export function AssignExpiryDialog({
                 {branches.map((b) => (
                   <SelectItem key={b.id} value={b.id}>
                     {b.name}{" "}
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       ({b.branchType})
                     </span>
                   </SelectItem>
@@ -559,7 +559,7 @@ export function AssignExpiryDialog({
           </label>
           <div className="h-6 w-px bg-border" />
           <div className="space-y-0.5">
-            <label className="text-[10px] font-medium text-muted-foreground uppercase">
+            <label className="text-xs font-medium text-muted-foreground uppercase">
               HSD chung
             </label>
             <Input
@@ -570,7 +570,7 @@ export function AssignExpiryDialog({
             />
           </div>
           <div className="space-y-0.5">
-            <label className="text-[10px] font-medium text-muted-foreground uppercase">
+            <label className="text-xs font-medium text-muted-foreground uppercase">
               Số lô prefix (auto)
             </label>
             <Input
@@ -678,12 +678,12 @@ export function AssignExpiryDialog({
                       <td className="p-2">
                         <div className="font-medium">{p.productName}</div>
                         {p.categoryName && (
-                          <div className="text-[10px] text-muted-foreground">
+                          <div className="text-xs text-muted-foreground">
                             {p.categoryName}
                           </div>
                         )}
                         {failedReason && (
-                          <div className="text-[10px] text-status-danger mt-0.5 flex items-center gap-1">
+                          <div className="text-xs text-status-danger mt-0.5 flex items-center gap-1">
                             <Icon name="error" size={11} />
                             {failedReason}
                           </div>
@@ -691,20 +691,20 @@ export function AssignExpiryDialog({
                       </td>
                       <td className="p-2 text-right whitespace-nowrap">
                         <b>{formatNumber(p.branchStock)}</b>{" "}
-                        <span className="text-[10px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {p.stockUnit}
                         </span>
                       </td>
                       <td className="p-2 text-center">
                         {p.totalLotsActive > 0 ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {p.totalLotsActive} lot
                             </span>
                             <ExpiryBadge dateStr={p.earliestLotExpiry} />
                           </div>
                         ) : (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             —
                           </span>
                         )}

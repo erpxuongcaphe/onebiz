@@ -70,7 +70,7 @@ export function FnbSubcategoryPills({
       role="tablist"
       aria-label={`Phân loại trong ${activeCategoryName}`}
     >
-      <span className="text-[11px] uppercase font-bold text-on-surface-variant mr-1 shrink-0">
+      <span className="text-xs uppercase font-bold text-on-surface-variant mr-1 shrink-0">
         {activeCategoryName}
       </span>
       <Pill
@@ -110,7 +110,7 @@ function Pill({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors press-scale-sm shrink-0",
+        "flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors press-scale-sm shrink-0",
         active
           ? "bg-surface text-primary ambient-shadow border border-primary/20"
           : "bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-foreground",

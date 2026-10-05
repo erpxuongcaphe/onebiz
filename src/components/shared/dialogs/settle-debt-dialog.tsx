@@ -441,7 +441,7 @@ export function SettleDebtDialog({
                     className={cn(
                       "border rounded-lg p-3 space-y-2.5 transition-all",
                       d.allocate > 0
-                        ? "border-status-success/40 bg-status-success/5 shadow-sm"
+                        ? "border-status-success/40 bg-status-success/5 shadow-none"
                         : "border-border bg-card",
                     )}
                   >
@@ -450,7 +450,7 @@ export function SettleDebtDialog({
                       <span className="font-mono text-primary font-bold text-sm">
                         {d.code}
                       </span>
-                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                         <Icon name="schedule" size={11} />
                         {d.ageDays === 0
                           ? "Hôm nay"
@@ -463,7 +463,7 @@ export function SettleDebtDialog({
                     {/* Row info: 3 cột rõ ràng — không dính */}
                     <div className="grid grid-cols-3 gap-2">
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Tổng
                         </div>
                         <div className="text-xs font-medium tabular-nums">
@@ -471,7 +471,7 @@ export function SettleDebtDialog({
                         </div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Đã trả
                         </div>
                         <div className="text-xs font-medium tabular-nums text-muted-foreground">
@@ -479,7 +479,7 @@ export function SettleDebtDialog({
                         </div>
                       </div>
                       <div className="space-y-0.5">
-                        <div className="text-[10px] uppercase font-medium text-muted-foreground tracking-wide">
+                        <div className="text-xs uppercase font-medium text-muted-foreground tracking-wide">
                           Còn nợ
                         </div>
                         <div className="text-xs font-bold tabular-nums text-status-error">
@@ -500,7 +500,7 @@ export function SettleDebtDialog({
                         </span>
                       </div>
                     ) : (
-                      <div className="text-[11px] text-muted-foreground italic text-center py-1">
+                      <div className="text-xs text-muted-foreground italic text-center py-1">
                         Chưa phân bổ vào chứng từ này
                       </div>
                     )}
@@ -574,7 +574,7 @@ function SummaryRow({
         : "text-foreground";
   return (
     <div className="border rounded-lg p-3 bg-card">
-      <p className="text-[11px] uppercase font-semibold text-muted-foreground tracking-wide">
+      <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
         {label}
       </p>
       <p className={cn("text-base font-bold tabular-nums mt-0.5", toneColor)}>

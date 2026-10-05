@@ -215,12 +215,12 @@ export function PosPinSwitchDialog({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{u.fullName}</div>
-                      <div className="text-[11px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {u.roleName ?? u.role}
                       </div>
                     </div>
                     {u.isLocked ? (
-                      <span className="text-[11px] text-status-error flex items-center gap-1 shrink-0">
+                      <span className="text-xs text-status-error flex items-center gap-1 shrink-0">
                         <Icon name="lock" size={12} /> Đang bị khoá
                       </span>
                     ) : (

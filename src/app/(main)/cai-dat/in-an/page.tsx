@@ -111,7 +111,7 @@ function Toggle({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0"
           )}
         />
@@ -453,7 +453,7 @@ function PrintSettingsPageContent() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt in ấn</h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -476,7 +476,7 @@ function PrintSettingsPageContent() {
         />
 
         {/* CỘT PHẢI — nội dung của mục đang chọn */}
-        <div className="min-w-0 flex-1 space-y-6">
+        <div className="min-w-0 flex-1 space-y-4">
 
       {/* ── Mục có channel + docType → quản lý mẫu in ngữ cảnh cố định ── */}
       {selectedItem.channel && selectedItem.docType && (
@@ -924,7 +924,7 @@ function PrintSettingsPageContent() {
             Cài đặt in F&amp;B
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-4">
           {/* Auto-print toggles */}
           <div>
             <h4 className="text-sm font-semibold mb-2">Tự động in</h4>
@@ -1116,7 +1116,7 @@ function PrintSettingsNav({
     <nav className="space-y-4">
       {PRINT_NAV.map((group) => (
         <div key={group.label} className="space-y-1">
-          <p className="px-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             {group.label}
           </p>
           <div className="space-y-0.5">
@@ -1156,7 +1156,7 @@ function PrintSettingsNav({
         <button
           type="button"
           onClick={onToggleNav}
-          className="flex w-full items-center justify-between rounded-xl border border-border bg-card px-3 py-2.5 text-left"
+          className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-left"
           aria-expanded={navOpen}
         >
           <span className="flex items-center gap-2 min-w-0">
@@ -1166,7 +1166,7 @@ function PrintSettingsNav({
           <Icon name={navOpen ? "expand_less" : "expand_more"} size={20} className="shrink-0 text-muted-foreground" />
         </button>
         {navOpen && (
-          <div className="mt-2 rounded-xl border border-border bg-card p-2">
+          <div className="mt-2 rounded-lg border border-border bg-card p-2">
             {list}
           </div>
         )}
@@ -1236,7 +1236,7 @@ function PrinterSlotCard({
                   <span className="text-muted-foreground">Tên:</span>{" "}
                   <span className="font-medium">{stored.name}</span>
                 </p>
-                <p className="text-[11px] text-muted-foreground font-mono">
+                <p className="text-xs text-muted-foreground font-mono">
                   VID: 0x{stored.vendorId.toString(16).padStart(4, "0")} · PID: 0x
                   {stored.productId.toString(16).padStart(4, "0")}
                 </p>

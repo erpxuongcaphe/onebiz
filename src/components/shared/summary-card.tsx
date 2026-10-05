@@ -52,7 +52,7 @@ export function SummaryCard({
   const isDanger = danger || tone === "error";
   const isWarning = tone === "warning";
   const cardClassName = cn(
-    "border rounded-lg p-2 sm:p-2.5 bg-white border-l-2 transition-colors min-w-0",
+    "border rounded-lg p-2 sm:p-2.5 bg-card border-l-2 transition-colors min-w-0",
     !isHighlight && !isDanger && !isWarning && "border-border border-l-primary/40",
     isHighlight && "border-primary/30 border-l-primary bg-primary/5",
     isDanger && "border-destructive/30 border-l-destructive bg-destructive/5",
@@ -65,11 +65,11 @@ export function SummaryCard({
 
   const content = (
     <>
-      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground mb-0.5">
+      <div className="flex items-center gap-2 text-xs sm:text-xs text-muted-foreground mb-0.5">
         {iconNode}
         <span className="truncate">{label}</span>
         {typeof count === "number" && (
-          <span className="ml-auto text-[11px] sm:text-xs font-medium text-muted-foreground tabular-nums">
+          <span className="ml-auto text-xs sm:text-xs font-medium text-muted-foreground tabular-nums">
             {formatNumber(count)}
           </span>
         )}
@@ -91,7 +91,7 @@ export function SummaryCard({
         </div>
       )}
       {hint && !loading && (
-        <div className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
+        <div className="text-xs sm:text-xs text-muted-foreground mt-0.5 truncate">
           {hint}
         </div>
       )}

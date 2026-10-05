@@ -326,13 +326,13 @@ export default function PlatformPricesBulkEditorPage() {
       )}
 
       {/* Quick actions toolbar */}
-      <div className="bg-surface border border-border rounded-xl p-3 space-y-3">
+      <div className="bg-surface border border-border rounded-lg p-3 space-y-3">
         <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Thao tác nhanh — áp cho sản phẩm và size đang hiện ({targets.length})
         </h3>
         <div className="flex flex-wrap items-end gap-2">
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-muted-foreground">Nền tảng</label>
+            <label className="text-xs text-muted-foreground">Nền tảng</label>
             <select
               value={quickPlatform}
               onChange={(e) => setQuickPlatform(e.target.value as DeliveryPlatform)}
@@ -345,7 +345,7 @@ export default function PlatformPricesBulkEditorPage() {
             </select>
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-[11px] text-muted-foreground">
+            <label className="text-xs text-muted-foreground">
               Cộng thêm vào giá niêm yết (đ)
             </label>
             <Input
@@ -385,7 +385,7 @@ export default function PlatformPricesBulkEditorPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-2">
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] text-muted-foreground">Tìm sản phẩm</label>
+          <label className="text-xs text-muted-foreground">Tìm sản phẩm</label>
           <Input
             placeholder="Tên / mã SP..."
             value={search}
@@ -394,7 +394,7 @@ export default function PlatformPricesBulkEditorPage() {
           />
         </div>
         <div className="flex flex-col gap-1">
-          <label className="text-[11px] text-muted-foreground">Danh mục</label>
+          <label className="text-xs text-muted-foreground">Danh mục</label>
           <select
             value={categoryId}
             onChange={(e) => setCategoryId(e.target.value)}
@@ -418,7 +418,7 @@ export default function PlatformPricesBulkEditorPage() {
       </div>
 
       {/* Matrix table */}
-      <div className="bg-surface border border-border rounded-xl overflow-hidden">
+      <div className="bg-surface border border-border rounded-lg overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-sm text-muted-foreground">
             <Icon name="progress_activity" size={24} className="inline-block animate-spin" />
@@ -432,7 +432,7 @@ export default function PlatformPricesBulkEditorPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-surface-container-low border-b border-border sticky top-0">
-                <tr className="text-left text-[11px] text-muted-foreground uppercase tracking-wider">
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider">
                   <th className="px-3 py-2 font-medium min-w-[200px]">Sản phẩm</th>
                   <th className="px-3 py-2 font-medium text-right min-w-[110px]">
                     🏠 Tại quán
@@ -454,18 +454,18 @@ export default function PlatformPricesBulkEditorPage() {
                   )}>
                     <td className={cn("px-3 py-2", target.isVariant && "pl-8")}>
                       <div className={cn(
-                        "font-medium text-[13px] truncate max-w-[300px]",
+                        "font-medium text-sm truncate max-w-[300px]",
                         target.isVariant && "flex items-center gap-1.5",
                       )} title={target.label}>
                         {target.isVariant && <Icon name="subdirectory_arrow_right" size={14} className="text-muted-foreground" />}
                         {target.label}
                       </div>
-                      <div className="text-[10px] text-muted-foreground">
+                      <div className="text-xs text-muted-foreground">
                         {target.isVariant ? "Giá riêng theo size" : target.code}
                         {!target.isVariant && target.categoryName && <> · {target.categoryName}</>}
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono text-[13px] tabular-nums text-muted-foreground">
+                    <td className="px-3 py-2 text-right font-mono text-sm tabular-nums text-muted-foreground">
                       {formatCurrency(target.basePrice)}
                     </td>
                     {OVERRIDE_PLATFORMS.map((platform) => {
@@ -503,7 +503,7 @@ export default function PlatformPricesBulkEditorPage() {
 
       {/* Save bar (sticky) */}
       {dirtyCount > 0 && (
-        <div className="sticky bottom-4 flex justify-end gap-2 bg-surface border border-border rounded-xl p-3 shadow-lg">
+        <div className="sticky bottom-4 flex justify-end gap-2 bg-surface border border-border rounded-lg p-3 shadow-lg">
           <Badge className="bg-status-warning/10 text-status-warning border-status-warning/30">
             {dirtyCount} thay đổi
           </Badge>

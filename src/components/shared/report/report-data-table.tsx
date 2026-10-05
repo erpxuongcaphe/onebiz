@@ -385,7 +385,7 @@ export function ReportDataTable<T>({
                       >
                         <span className="min-w-0 flex-1 truncate">{column.label}</span>
                         {required && (
-                          <span className="text-[10px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             Bắt buộc
                           </span>
                         )}

@@ -111,7 +111,7 @@ export default function SoDoBanPage() {
           </SelectContent>
         </Select>
         {!canEditGlobal && (
-          <span className="text-[10px] bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
+          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded-full font-medium">
             Khoá theo chi nhánh
           </span>
         )}

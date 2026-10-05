@@ -332,7 +332,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
               >
                 <span
                   className={cn(
-                    "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                    "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
                     isActive ? "translate-x-4" : "translate-x-0",
                   )}
                 />
@@ -449,7 +449,7 @@ export default function CouponSettingsPage() {
 
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-2xl font-bold">Mã giảm giá (Coupon)</h1>
@@ -593,7 +593,7 @@ export default function CouponSettingsPage() {
                         >
                           <span
                             className={cn(
-                              "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+                              "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
                               c.isActive ? "translate-x-4" : "translate-x-0",
                             )}
                           />

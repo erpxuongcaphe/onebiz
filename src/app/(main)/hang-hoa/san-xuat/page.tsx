@@ -591,7 +591,7 @@ export default function SanXuatPage() {
                     <span className="font-medium text-primary text-xs">
                       {order.code}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatDate(order.createdAt)}
                     </span>
                   </div>

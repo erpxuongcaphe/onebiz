@@ -182,7 +182,7 @@ export function ChildSalesBlock({
   const coDieuChinh = rows.some((r) => r.delta !== 0);
 
   return (
-    <div className="rounded-xl border p-4 space-y-3">
+    <div className="rounded-lg border p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="font-semibold flex items-center gap-2">
           <Icon name="receipt_long" size={18} />
