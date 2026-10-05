@@ -173,6 +173,33 @@ describe("P0.2 — rule_override cấp món phải được áp vào kết quả
 });
 
 describe("P0.3 — thứ tự phải theo sort_order của LIÊN KẾT", () => {
+  it("uses shared group rank only for scopes explicitly opting into common order", async () => {
+    duLieu = {
+      product_modifier_groups: [
+        { id: "l1", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "ice", rule_override: "single_required", sort_order: 0, use_common_order: true },
+        { id: "l2", tenant_id: "tenant-1", product_id: "sp1", modifier_group_id: "sugar", rule_override: null, sort_order: 1, use_common_order: true },
+      ],
+      modifier_groups: [NHOM("ice", "Mức đá", "single", 20), NHOM("sugar", "Mức đường", "single", 10)],
+    };
+    const common = await getEffectiveModifierGroupsForProduct("sp1", null);
+    expect(common.map(group => group.id)).toEqual(["sugar", "ice"]);
+    expect(common.find(group => group.id === "ice")?.rule).toBe("single_required");
+    (duLieu.product_modifier_groups as Array<Record<string, unknown>>).forEach(link => { link.use_common_order = false; });
+    expect((await getEffectiveModifierGroupsForProduct("sp1", null)).map(group => group.id)).toEqual(["ice", "sugar"]);
+  });
+  it("propagates a new shared group order through category inheritance on the next read", async () => {
+    duLieu = {
+      category_modifier_groups: [
+        { id: "c1", tenant_id: "tenant-1", category_id: "cat1", modifier_group_id: "ice", sort_order: 0, use_common_order: true },
+        { id: "c2", tenant_id: "tenant-1", category_id: "cat1", modifier_group_id: "sugar", sort_order: 1, use_common_order: true },
+      ],
+      modifier_groups: [NHOM("ice", "Mức đá", "single", 20), NHOM("sugar", "Mức đường", "single", 10)],
+    };
+    expect((await getEffectiveModifierGroupsForProduct("sp1", "cat1")).map(group => group.id)).toEqual(["sugar", "ice"]);
+    (duLieu.modifier_groups[0] as Record<string, unknown>).sort_order = 5;
+    expect((await getEffectiveModifierGroupsForProduct("sp1", "cat1")).map(group => group.id)).toEqual(["ice", "sugar"]);
+    expect((await getEffectiveModifierGroupsForProduct("sp2", "cat1")).map(group => group.id)).toEqual(["ice", "sugar"]);
+  });
   it("cấp món: link đảo thứ tự → POS phải theo link, không theo nhóm", async () => {
     duLieu = {
       product_modifier_groups: [

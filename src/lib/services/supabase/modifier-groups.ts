@@ -9,6 +9,7 @@
  */
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { modifierOrderMode } from "@/lib/modifier-display-order";
 
 export type ModifierRule = "single_required" | "single" | "multi";
 export type ModifierChannel = "fnb" | "retail" | "all";
@@ -106,20 +107,43 @@ async function requireTenantModifierOption(id: string, tenantId: string): Promis
   if (!data) throw new Error("Không tìm thấy tùy chọn trong công ty hiện tại.");
 }
 
-async function requireTenantModifierGroups(groupIds: string[], tenantId: string): Promise<void> {
-  const ids = [...new Set(groupIds)];
-  if (ids.length === 0) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getClient() as any;
-  const { data, error } = await supabase
-    .from("modifier_groups")
-    .select("id")
-    .eq("tenant_id", tenantId)
-    .in("id", ids);
-  if (error) handleError(error, "requireTenantModifierGroups");
-  if ((data ?? []).length !== ids.length) {
-    throw new Error("Có nhóm tùy chọn không thuộc công ty hiện tại.");
+function throwModifierOrderError(error: { message: string } | null): void {
+  if (!error) return;
+  const messages: Record<string, string> = {
+    MODIFIER_ORDER_CONFLICT: "Danh sách hoặc thứ tự đã thay đổi ở máy khác. Đóng màn sắp xếp, tải lại rồi thử lại.",
+    MODIFIER_ORDER_PERMISSION_DENIED: "Anh cần quyền chỉnh sửa sản phẩm để sắp xếp tùy chọn.",
+    MODIFIER_ORDER_TARGET_INVALID: "Không tìm thấy món hoặc nhóm hàng F&B trong công ty hiện tại.",
+    MODIFIER_ORDER_GROUP_INVALID: "Có nhóm tùy chọn không còn khả dụng cho F&B. Tải lại danh sách rồi thử lại.",
+    MODIFIER_ORDER_INVALID: "Danh sách sắp xếp không hợp lệ. Tải lại rồi thử lại.",
+  };
+  if (messages[error.message]) throw new Error(messages[error.message]);
+  handleError(error, "saveModifierOrder");
+}
+
+async function saveModifierLinks(target: "product" | "category", id: string, groupIds: string[], useCommonOrder: boolean) {
+  if (!id || groupIds.some(groupId => !groupId) || new Set(groupIds).size !== groupIds.length) {
+    throw new Error("Danh sách nhóm tùy chọn không hợp lệ hoặc bị lặp.");
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (getClient() as any).rpc("save_fnb_modifier_links_atomic", {
+    p_target: target, p_target_id: id, p_group_ids: groupIds, p_use_common_order: useCommonOrder,
+  });
+  throwModifierOrderError(error);
+}
+
+export async function saveModifierDisplayOrder(
+  kind: "groups" | "options", parentId: string | null,
+  source: { id: string; sortOrder: number }[], orderedIds: string[],
+): Promise<void> {
+  if (orderedIds.length !== source.length || new Set(orderedIds).size !== orderedIds.length ||
+    orderedIds.some(id => !source.some(row => row.id === id))) throw new Error("Danh sách sắp xếp không hợp lệ.");
+  // Snapshot rejects stale writes without changing labels, defaults, prices or recipes.
+  const snapshot = [...source].sort((a, b) => a.id.localeCompare(b.id)).map(row => ({ id: row.id, sort_order: row.sortOrder }));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (getClient() as any).rpc("save_fnb_modifier_display_order_atomic", {
+    p_kind: kind, p_parent_id: parentId, p_ids: orderedIds, p_snapshot: snapshot,
+  });
+  throwModifierOrderError(error);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -525,6 +549,7 @@ export interface CategoryModifierLink {
   categoryId: string;
   modifierGroupId: string;
   sortOrder: number;
+  useCommonOrder: boolean;
 }
 
 export async function listCategoryModifierLinks(
@@ -535,7 +560,7 @@ export async function listCategoryModifierLinks(
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("category_modifier_groups")
-    .select("id, category_id, modifier_group_id, sort_order")
+    .select("id, category_id, modifier_group_id, sort_order, use_common_order")
     .eq("category_id", categoryId)
     .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
@@ -545,62 +570,27 @@ export async function listCategoryModifierLinks(
     category_id: string;
     modifier_group_id: string;
     sort_order: number;
+    use_common_order?: boolean;
   }>).map((r) => ({
     id: r.id,
     categoryId: r.category_id,
     modifierGroupId: r.modifier_group_id,
     sortOrder: r.sort_order,
+    useCommonOrder: r.use_common_order === true,
   }));
 }
 
 /**
  * Set toàn bộ modifier groups cho category — replace pattern.
- * Truyền array groupIds → service tự diff (insert mới, xoá cũ).
+ * Truyền mảng groupIds đúng thứ tự → máy chủ lưu toàn bộ liên kết nguyên tử.
  * Idempotent: gọi nhiều lần với cùng input → kết quả như nhau.
  */
 export async function setCategoryModifierGroups(
   categoryId: string,
   groupIds: string[],
+  useCommonOrder = false,
 ): Promise<void> {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const supabase = getClient() as any;
-  const tenantId = await getCurrentTenantId();
-  await requireTenantRecord("categories", categoryId, tenantId);
-  await requireTenantModifierGroups(groupIds, tenantId);
-
-  const existing = await listCategoryModifierLinks(categoryId);
-  const existingIds = new Set(existing.map((l) => l.modifierGroupId));
-  const newIds = new Set(groupIds);
-
-  // Xoá những link không còn trong list mới
-  const toDelete = existing.filter((l) => !newIds.has(l.modifierGroupId));
-  if (toDelete.length > 0) {
-    const { error } = await supabase
-      .from("category_modifier_groups")
-      .delete()
-      .in(
-        "id",
-        toDelete.map((l) => l.id),
-      )
-      .eq("tenant_id", tenantId);
-    if (error) handleError(error, "setCategoryModifierGroups.delete");
-  }
-
-  // Thêm mới
-  const toInsert = groupIds
-    .filter((id) => !existingIds.has(id))
-    .map((id, idx) => ({
-      tenant_id: tenantId,
-      category_id: categoryId,
-      modifier_group_id: id,
-      sort_order: existing.length + idx,
-    }));
-  if (toInsert.length > 0) {
-    const { error } = await supabase
-      .from("category_modifier_groups")
-      .insert(toInsert);
-    if (error) handleError(error, "setCategoryModifierGroups.insert");
-  }
+  await saveModifierLinks("category", categoryId, groupIds, useCommonOrder);
 }
 
 // ────────────────────────────────────────────────────────────
@@ -615,6 +605,7 @@ export interface ProductModifierLink {
   modifierGroupId: string;
   ruleOverride: ModifierRule | null;
   sortOrder: number;
+  useCommonOrder: boolean;
 }
 
 export async function listProductModifierLinks(
@@ -625,7 +616,7 @@ export async function listProductModifierLinks(
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("product_modifier_groups")
-    .select("id, product_id, modifier_group_id, rule_override, sort_order")
+    .select("id, product_id, modifier_group_id, rule_override, sort_order, use_common_order")
     .eq("product_id", productId)
     .eq("tenant_id", tenantId)
     .order("sort_order", { ascending: true });
@@ -636,22 +627,29 @@ export async function listProductModifierLinks(
     modifier_group_id: string;
     rule_override: ModifierRule | null;
     sort_order: number;
+    use_common_order?: boolean;
   }>).map((r) => ({
     id: r.id,
     productId: r.product_id,
     modifierGroupId: r.modifier_group_id,
     ruleOverride: r.rule_override,
     sortOrder: r.sort_order,
+    useCommonOrder: r.use_common_order === true,
   }));
 }
 
 export async function setProductModifierGroups(
   productId: string,
   groupIds: string[],
+  useCommonOrder?: boolean,
 ): Promise<void> {
   if (!productId) throw new Error("Sản phẩm không hợp lệ.");
   if (groupIds.some((id) => !id) || new Set(groupIds).size !== groupIds.length) {
     throw new Error("Danh sách nhóm tùy chọn không hợp lệ hoặc bị lặp.");
+  }
+  if (useCommonOrder !== undefined) {
+    await saveModifierLinks("product", productId, groupIds, useCommonOrder);
+    return;
   }
 
   // 00356: máy chủ tự xác định tenant/người thao tác, khóa sản phẩm và thay
@@ -691,7 +689,7 @@ export async function getEffectiveModifierGroupsForProduct(
   // còn cần `sortOrder` và `ruleOverride` — bản cũ chỉ lấy id rồi vứt hết.
   // (category_modifier_groups KHÔNG có rule_override — khớp máy chủ, chỉ
   // coalesce trên liên kết cấp món.)
-  const links: Array<{ modifierGroupId: string; sortOrder: number; ruleOverride?: ModifierRule | null }> =
+  const links: Array<{ modifierGroupId: string; sortOrder: number; useCommonOrder?: boolean; ruleOverride?: ModifierRule | null }> =
     productLinks.length > 0
       ? productLinks
       : categoryId
@@ -718,26 +716,26 @@ export async function getEffectiveModifierGroupsForProduct(
   const theoId = new Map(
     ((data ?? []) as RawGroup[]).map((row) => [row.id, mapGroup(row)]),
   );
+  const commonOrder = modifierOrderMode(links) === "common";
+  const rank = (link: typeof links[number]) => commonOrder
+    ? theoId.get(link.modifierGroupId)?.sortOrder ?? 0 : link.sortOrder ?? 0;
 
-  // P0.2 + P0.3: áp rule_override và sắp theo sort_order của LIÊN KẾT.
-  //  • rule hiệu lực = coalesce(link.rule_override, group.rule) — y máy chủ.
-  //    Lệch nhau thì POS cho bỏ qua trong khi máy chủ chặn gửi bếp (hoặc
-  //    ngược lại: POS bắt buộc oan).
-  //  • thứ tự do người quản lý đặt Ở LIÊN KẾT, không phải sort_order của
-  //    bản thân nhóm — bản cũ sắp theo nhóm nên thứ tự riêng bị bỏ qua.
+  // Rule still matches the server. Existing links retain their custom rank;
+  // only explicitly shared scopes follow the current global group order.
   return links
     .slice()
-    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+    .sort((a, b) => rank(a) - rank(b) ||
+      (theoId.get(a.modifierGroupId)?.name ?? "").localeCompare(theoId.get(b.modifierGroupId)?.name ?? "", "vi") ||
+      a.modifierGroupId.localeCompare(b.modifierGroupId))
     .map((l) => {
       const g = theoId.get(l.modifierGroupId);
       if (!g) return null; // đã tắt, sai kênh, hoặc link mồ côi
       return {
         ...g,
         rule: l.ruleOverride ?? g.rule,
-        // Popup phải theo thứ tự người quản lý đặt trên liên kết.
-        // Nếu giữ sortOrder của bản thân nhóm, tầng giao diện sẽ
-        // vô tình xếp lại và làm mất ý nghĩa của liên kết.
-        sortOrder: l.sortOrder ?? 0,
+        // The popup receives the effective rank, rather than sorting again by
+        // a different source and losing the selected common/custom mode.
+        sortOrder: rank(l),
       };
     })
     .filter((g): g is ModifierGroup => g !== null);

@@ -1094,7 +1094,10 @@ function FnbPosPageInner() {
   const loadModifierForProduct = useCallback(
     async (productId: string, categoryId: string | null) => {
       const cached = readModifierCache(productId);
-      if (cached) return cached;
+      // Online: read current groups/options every time a new popup is opened.
+      // Offline: preserve the existing guarded cache behavior. An already open
+      // popup and sent line snapshots are never silently reordered.
+      if (cached && !navigator.onLine) return cached;
       try {
         const groups = await getEffectiveModifierGroupsForProduct(
           productId,
@@ -1407,7 +1410,7 @@ function FnbPosPageInner() {
           // SP không có biến thể nhưng vẫn có thể có Đường/Đá/Topping.
           // Nếu cache modifier chưa có/hết hạn thì PHẢI chờ lần đọc đang chạy;
           // không được đoán "không có" rồi quick-add bỏ qua tuỳ chọn bắt buộc.
-          const modData = readModifierCache(product.id) ?? await modifierPromise;
+          const modData = await modifierPromise;
           if (itemLoadRequestRef.current !== requestId) return;
           setItemModifierData(modData);
           if (modData.groups.length > 0 || modData.failed) {

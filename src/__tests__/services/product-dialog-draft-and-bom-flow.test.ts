@@ -132,7 +132,7 @@ describe("product dialog draft and inline BOM flow", () => {
   it("persists product modifier links before guarded exact BOM quantities", () => {
     const editStart = dialog.indexOf("if (isEdit && initialData)");
     const editModifierSave = dialog.indexOf(
-      "await setProductModifierGroups(initialData.id, ids)",
+      "await setProductModifierGroups(initialData.id, ids, modifierDisplayOrderMode",
       editStart,
     );
     const editExactSave = dialog.indexOf(
