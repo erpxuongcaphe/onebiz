@@ -64,6 +64,7 @@ export function TableFloorPlan({
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
+  const [loadedZoneId, setLoadedZoneId] = useState<string | null>(null);
   // POS and the editor share the exact same saved plan. POS renders these
   // decorations read-only, so a cashier can orient themselves without being
   // able to accidentally change the layout during service.
@@ -120,6 +121,7 @@ export function TableFloorPlan({
     if (!activeZoneId) {
       setZoneTables([]);
       setDecorations([]);
+      setLoadedZoneId(null);
       return;
     }
     let cancelled = false;
@@ -164,12 +166,14 @@ export function TableFloorPlan({
           .filter(Boolean) as CanvasTable[];
         setZoneTables(merged);
         setDecorations(loadedDecorations);
+        setLoadedZoneId(activeZoneId);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
         console.error("[FloorPlan] load tables for zone failed:", err);
         setZoneTables([]);
         setDecorations([]);
+        setLoadedZoneId(activeZoneId);
         toast({
           title: "Không tải được bàn trong khu vực",
           description:
@@ -226,7 +230,10 @@ export function TableFloorPlan({
           {zones.map((z) => (
             <button
               key={z.id}
-              onClick={() => setActiveZoneId(z.id)}
+              onClick={() => {
+                setActionTable(null);
+                setActiveZoneId(z.id);
+              }}
               className={cn(
                 "min-h-11 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
                 activeZoneId === z.id
@@ -243,12 +250,19 @@ export function TableFloorPlan({
       {/* Canvas hoặc Grid fallback */}
       <div className="flex-1 overflow-auto p-2 sm:p-4">
         {tableView === "plan" && !useFallback && activeZone ? (
+          loadedZoneId !== activeZoneId ? (
+            <div role="status" className="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Icon name="progress_activity" size={18} className="animate-spin" />
+              Đang tải bàn {activeZone.name}...
+            </div>
+          ) : (
           <CanvasView
             zone={activeZone}
             tables={zoneTables}
             decorations={decorations}
             onSelect={(ct) => setActionTable(ct)}
           />
+          )
         ) : (
           <GridFallback
             tables={tables.filter((table) => tableView === "plan" || (table.tableNumber + " " + table.name + " " + (table.zone ?? "")).toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi")))}
@@ -282,7 +296,7 @@ export function TableFloorPlan({
         table={actionTable}
         zoneName={
           actionTable
-            ? activeZone?.name ?? tables.find((t) => t.id === actionTable.id)?.zone ?? undefined
+            ? tables.find((t) => t.id === actionTable.id)?.zone ?? activeZone?.name ?? undefined
             : undefined
         }
         onAction={handleAction}
