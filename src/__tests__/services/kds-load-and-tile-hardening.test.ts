@@ -139,7 +139,7 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
     );
     expect(kds).toContain("#{order.orderNumber}");
     expect(kds).toContain("compactModifierGroupName(selection.groupName)");
-    expect(kds).toContain("prepareKdsItemGroups(order.items, preferences)");
+    expect(kds).toContain("prepareKdsItemGroups(projectKitchenReturnItems(order.items, order.returnLines), preferences)");
     expect(kds).toContain('"flex min-h-11 w-full cursor-pointer items-start gap-2 rounded-lg border p-2');
   });
 

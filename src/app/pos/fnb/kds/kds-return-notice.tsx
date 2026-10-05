@@ -1,8 +1,9 @@
 import type { KitchenReturnSummary } from "@/lib/services/supabase/kitchen-return-summary";
 import { formatNumber } from "@/lib/format";
 
-export function KdsReturnNotice({ summary }: {
+export function KdsReturnNotice({ summary, exactReturnedQuantity = 0 }: {
   summary: KitchenReturnSummary | null;
+  exactReturnedQuantity?: number;
 }) {
   if (summary === null) {
     return <p role="status" className="border-b border-status-warning/30 bg-status-warning/10 px-2.5 py-2 text-xs text-foreground">
@@ -12,6 +13,10 @@ export function KdsReturnNotice({ summary }: {
   if (summary.returnedQuantity <= 0) return null;
   return <div role="status" className="border-b border-status-warning/30 bg-status-warning/10 px-2.5 py-2 text-xs text-foreground">
     <p className="font-semibold">Đã trả {formatNumber(summary.returnedQuantity)}/{formatNumber(summary.soldQuantity)} phần</p>
-    <p>Số lượng bên dưới là lúc gọi món. Xác nhận món còn làm với thu ngân.</p>
+    <p>{exactReturnedQuantity > 0
+      ? exactReturnedQuantity >= summary.returnedQuantity
+        ? "Số lượng bên dưới đã trừ phần trả theo đúng dòng món."
+        : "Đã cập nhật dòng có liên kết. Phần trả còn lại cần đối chiếu với thu ngân."
+      : "Số lượng bên dưới là lúc gọi món. Xác nhận món còn làm với thu ngân."}</p>
   </div>;
 }

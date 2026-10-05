@@ -2882,6 +2882,10 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
+      fnb_kitchen_return_lines: {
+        Args: { p_branch_id: string };
+        Returns: { kitchen_order_id: string; kitchen_order_item_id: string; remaining_quantity: number; returned_quantity: number }[];
+      };
       fnb_kitchen_return_summary: {
         Args: { p_branch_id: string };
         Returns: { kitchen_order_id: string; sold_quantity: number; returned_quantity: number }[];

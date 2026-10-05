@@ -36,8 +36,9 @@ import {
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
-import { getKitchenReturnSummaries, type KitchenReturnSummary } from "@/lib/services/supabase/kitchen-return-summary";
+import { getKitchenReturnSummaries, getKitchenReturnLines, type KitchenReturnSummary, type KitchenReturnLine } from "@/lib/services/supabase/kitchen-return-summary";
 import { KdsReturnNotice } from "./kds-return-notice";
+import { getKitchenActionItems, projectKitchenReturnItems } from "./kds-return-quantities";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
 import {
   getBranchSettings,
@@ -215,6 +216,7 @@ function getKitchenLoadMessage(err: unknown): string {
 interface KdsOrder extends KitchenOrder {
   items: KitchenOrderItem[];
   returnSummary?: KitchenReturnSummary | null;
+  returnLines?: Map<string, KitchenReturnLine> | null;
 }
 
 // ── Page ──
@@ -428,9 +430,11 @@ function KdsPageInner() {
       const enriched = await getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES);
       // One branch-scoped read for paid orders, not an invoice query per ticket.
       let returns: Map<string, KitchenReturnSummary> | null = null;
+      let returnLines: Map<string, KitchenReturnLine> | null = null;
       if (enriched.some((order) => order.invoiceId)) {
         try {
           returns = await getKitchenReturnSummaries(branchId);
+          returnLines = await getKitchenReturnLines(branchId);
         } catch (error) {
           console.error("KDS return summary unavailable:", error);
         }
@@ -474,6 +478,7 @@ function KdsPageInner() {
 
       setOrders(enriched.map((order) => ({
         ...order,
+        returnLines: order.invoiceId ? returnLines : undefined,
         returnSummary: order.invoiceId
           ? returns === null ? null : returns.get(order.id) ?? { soldQuantity: 0, returnedQuantity: 0 }
           : undefined,
@@ -594,7 +599,7 @@ function KdsPageInner() {
     for (const order of orders) {
       if (order.status === "served" || order.status === "cancelled") continue;
       if (order.items.length === 0) continue;
-      const allReady = order.items.every((i) => i.status === "ready");
+      const allReady = getKitchenActionItems(order.items, order.returnLines).every((i) => i.status === "ready");
       if (allReady) continue;
       if (getUrgency(order.createdAt) !== "overdue") continue;
       if (overdueAlertedRef.current.has(order.id)) continue;
@@ -699,7 +704,7 @@ function KdsPageInner() {
       const order = orders.find((o) => o.id === orderId);
       if (!order) return;
 
-      const toMark = order.items.filter((i) => i.status !== "ready");
+      const toMark = getKitchenActionItems(order.items, order.returnLines).filter((i) => i.status !== "ready");
       if (toMark.length === 0) return;
 
       const itemIds = toMark.map((item) => item.id);
@@ -714,7 +719,7 @@ function KdsPageInner() {
             ? {
                 ...o,
                 items: o.items.map((i) =>
-                  i.status !== "ready" ? { ...i, status: "ready" as KitchenItemStatus } : i
+                  itemIds.includes(i.id) ? { ...i, status: "ready" as KitchenItemStatus } : i
                 ),
               }
             : o
@@ -1408,9 +1413,9 @@ function KdsOrderCard({
   onServed: () => void;
   onMarkAllReady: () => void;
 }) {
-  const allReady =
-    order.items.length > 0 && order.items.every((i) => i.status === "ready");
-  const pendingCount = order.items.filter((i) => i.status !== "ready").length;
+  const actionItems = getKitchenActionItems(order.items, order.returnLines);
+  const allReady = order.items.length > 0 && actionItems.every((i) => i.status === "ready");
+  const pendingCount = actionItems.filter((i) => i.status !== "ready").length;
   const urgency = getUrgency(order.createdAt);
 
   // Order type label
@@ -1420,7 +1425,11 @@ function KdsOrderCard({
       : order.orderType === "takeaway"
         ? "Mang về"
         : "Giao";
-  const itemGroups = prepareKdsItemGroups(order.items, preferences);
+  const itemGroups = prepareKdsItemGroups(projectKitchenReturnItems(order.items, order.returnLines), preferences);
+  const matchedReturned = order.items.reduce((sum, item) => {
+    const line = order.returnLines?.get(item.id);
+    return sum + (line?.kitchenOrderId === order.id ? line.returnedQuantity : 0);
+  }, 0);
 
   // Header color theme based on urgency
   const cardAccentClass =
@@ -1490,19 +1499,34 @@ function KdsOrderCard({
       </div>
 
       {/* ── Items list ── */}
-      {order.returnSummary !== undefined && <KdsReturnNotice summary={order.returnSummary} />}
+      {order.returnSummary !== undefined && <KdsReturnNotice
+        summary={order.returnLines === null ? null : order.returnSummary}
+        exactReturnedQuantity={matchedReturned}
+      />}
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-surface-container-lowest p-1.5">
-        {itemGroups.map((group) => (
+        {itemGroups.map((group) => {
+          const returned = group.items.reduce((sum, item) => sum + (order.returnLines?.get(item.id)?.returnedQuantity ?? 0), 0);
+          const original = order.items.filter((item) => group.items.some((source) => source.id === item.id))
+            .reduce((sum, item) => sum + item.quantity, 0);
+          return <div key={group.key}>
+          {returned > 0 && <p className="px-2 py-1 text-xs font-semibold text-foreground">
+            Gọi {formatNumber(original)} · Đã trả {formatNumber(returned)}
+          </p>}
+          {group.quantity <= 0 ? <div className="border border-border px-2 py-2 text-xs text-muted-foreground">
+            <span className="font-semibold">{group.representative.productName}</span> · Đã trả hết
+            {group.representative.variantLabel && <p>{group.representative.variantLabel}</p>}
+            {group.representative.note && <p className="break-words">{group.representative.note}</p>}
+          </div> :
           <KdsItemRow
-            key={group.key}
             item={group.representative}
             quantity={group.quantity}
             preferences={preferences}
             isPending={isOrderPending || group.items.some((item) => pendingItemIds.has(item.id))}
             onToggle={() => onItemToggle(group.items)}
             onRecall={() => onItemRecall(group.items)}
-          />
-        ))}
+          />}
+          </div>;
+        })}
       </div>
 
       {/* ── Action buttons ── */}

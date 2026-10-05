@@ -283,6 +283,8 @@ jobs:
         run: |
           createdb kitchen_line_source_test
           PGDATABASE=kitchen_line_source_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00428_fnb_kitchen_line_source.integration.sql
+            createdb kds_exact_return_test
+            PGDATABASE=kds_exact_return_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00429_kds_exact_return_quantities.integration.sql
 
       - name: Verify shared menu ordering in an isolated database
         env:
