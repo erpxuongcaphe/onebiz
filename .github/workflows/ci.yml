@@ -190,6 +190,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00422_fnb_payment_concurrency.setup.sql
           node scripts/fnb-db-test/run-payment-concurrency.mjs
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00422_fnb_payment_concurrency.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00433_fnb_cash_time_candidate.integration.sql
 
       - name: Verify checkout branch WAC ledger and invoice line costs
         env:

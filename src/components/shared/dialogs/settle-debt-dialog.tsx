@@ -524,9 +524,8 @@ export function SettleDebtDialog({
               </div>
             )}
           </div>
+          <CashTimeFields value={cashTime} onChange={setCashTime} error={timeError} />
         </div>
-
-        <div className="px-6 pb-3"><CashTimeFields value={cashTime} onChange={setCashTime} error={timeError} /></div>
         <DialogFooter className="px-6 pb-6 pt-3 border-t shrink-0">
           <Button
             variant="outline"

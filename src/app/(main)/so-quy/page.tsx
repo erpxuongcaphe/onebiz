@@ -48,7 +48,7 @@ import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dial
 import { downloadTemplate } from "@/lib/excel";
 import { cashTransactionExcelSchema } from "@/lib/excel/schemas";
 import { bulkImportCashTransactions } from "@/lib/services/supabase/excel-import";
-import { formatCurrency, formatDate, formatUser, formatDateInputValue } from "@/lib/format";
+import { formatCurrency, formatUser, formatDateInputValue } from "@/lib/format";
 import { cashCategoryLabel as categoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 import { exportToCsv } from "@/lib/utils/export";
 import {
