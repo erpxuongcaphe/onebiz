@@ -86,3 +86,22 @@ do $$ declare n bigint; payload jsonb:='{"referenceId":"00000000-0000-0000-0000-
   perform test_assert((select count(*)=n from cash_transactions),'rejected requests leave no cash rows');
 end $$;
 select 'cash timing: legacy, five flows, timezone, auth, tenant, branch, rollback PASS';
+-- COD is another automatic source of cash vouchers: same amount behavior,
+-- business day follows collection, not the older sales invoice.
+create table delivery_partners(id uuid primary key,tenant_id uuid,name text);
+create table shipping_settlements(id uuid primary key,tenant_id uuid,code text,partner_id uuid,payment_method text,note text,created_by uuid,branch_id uuid,total_cod numeric,total_partner_fee numeric,net_amount numeric,fee_cash_tx_id uuid);
+create table shipping_orders(id uuid primary key,tenant_id uuid,code text,invoice_id uuid,status text,cod_amount numeric,settlement_id uuid,partner_id uuid,cod_collected_at timestamptz,partner_fee numeric,updated_at timestamptz);
+\ir ../migrations/00430_cod_cash_business_date.sql
+insert into delivery_partners values('00000000-0000-0000-0000-000000000050','00000000-0000-0000-0000-000000000002','COD partner');
+insert into shipping_orders values('00000000-0000-0000-0000-000000000060','00000000-0000-0000-0000-000000000002','COD-SHIP','00000000-0000-0000-0000-000000000010','delivered',200,null,'00000000-0000-0000-0000-000000000050',null,null,null);
+do $$ declare r jsonb; n bigint; p numeric; msg text; begin
+  select paid into p from invoices where id='00000000-0000-0000-0000-000000000010';
+  r:=settle_cod_atomic('00000000-0000-0000-0000-000000000050','[{"shipment_id":"00000000-0000-0000-0000-000000000060","partner_fee":10}]','transfer');
+  perform test_assert((r->>'total_cod')::numeric=200 and (r->>'total_partner_fee')::numeric=10 and (r->>'net_amount')::numeric=190,'COD money semantics unchanged');
+  perform test_assert((select paid=p+200 from invoices where id='00000000-0000-0000-0000-000000000010'),'COD pays invoice debt');
+  perform test_assert((select transaction_date=(now() at time zone 'Asia/Ho_Chi_Minh')::date and occurred_at is not null and time_source='system' from cash_transactions where reference_type='shipping_settlement' and reference_id=(r->>'settlement_id')::uuid),'COD fee uses business day and system occurrence');
+  select count(*) into n from cash_transactions;
+  begin perform settle_cod_atomic('00000000-0000-0000-0000-000000000050','[{"shipment_id":"00000000-0000-0000-0000-000000000060","partner_fee":10}]','transfer'); exception when others then msg:=sqlerrm; end;
+  perform test_assert(msg like 'SHIPMENT_ALREADY_SETTLED%' and (select count(*)=n from cash_transactions),'COD repeat creates no duplicate vouchers');
+end $$;
+select 'PASS: COD business date and receipt/fee amounts, existing duplicate guard';
