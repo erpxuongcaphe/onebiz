@@ -46,6 +46,8 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["save_fnb_modifier_links_atomic", "00426"],
+  ["save_fnb_modifier_display_order_atomic", "00426"],
   ["fnb_kitchen_return_lines", "00424"],
   ["fnb_kitchen_return_summary", "00422"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
@@ -54,6 +56,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["product_modifier_groups.use_common_order", "00426"],
+  ["category_modifier_groups.use_common_order", "00426"],
   ["products.allow_free_sale", "00391"],
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);

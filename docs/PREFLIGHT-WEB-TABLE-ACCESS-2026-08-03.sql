@@ -33,8 +33,6 @@ with required(relation_name, operation) as (
     ('categories', 'insert'),
     ('categories', 'select'),
     ('categories', 'update'),
-    ('category_modifier_groups', 'delete'),
-    ('category_modifier_groups', 'insert'),
     ('category_modifier_groups', 'select'),
     ('conversation_messages', 'insert'),
     ('conversation_messages', 'select'),
