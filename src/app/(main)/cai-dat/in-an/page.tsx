@@ -156,7 +156,7 @@ const backends = [
   {
     id: "browser" as const,
     label: "Qua trình duyệt",
-    desc: "Tương thích mọi máy in đã cài driver (USB / LAN / WiFi / AirPrint). Sẽ hiện hộp thoại chọn máy in.",
+    desc: "Dùng máy in đã cài driver hoặc được hệ điều hành hỗ trợ (USB / LAN / Wi-Fi / AirPrint). Chọn máy trong hộp thoại in; in thử đúng thiết bị trước khi dùng.",
     icon: "print" as const,
   },
   {
@@ -516,8 +516,8 @@ function PrintSettingsPageContent() {
                 <button
                   key={b.id}
                   type="button"
-                  disabled={disabled}
-                  onClick={() => update({ backend: b.id })}
+                  disabled={disabled || testStatus === "testing"}
+                  onClick={() => { update({ backend: b.id }); setTestError(""); setTestStatus("idle"); }}
                   className={cn(
                     "flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors",
                     isActive
