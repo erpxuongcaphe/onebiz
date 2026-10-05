@@ -708,7 +708,7 @@ export function CreateProductionOrderDialog({
                   Thiếu nguyên liệu tại chi nhánh này. Nhập đủ tồn rồi mới hoàn thành mẻ.
                 </div>
               )}
-              {hasCostMismatch && (
+              {hasCostMismatch && !hasShortage && (
                 <div className="text-xs text-destructive flex items-center gap-2 bg-destructive/5 rounded p-2">
                   <Icon name="warning" size={14} />
                   Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp. Cần đối soát trước khi hoàn thành mẻ.
