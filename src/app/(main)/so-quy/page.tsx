@@ -1,5 +1,5 @@
 "use client";
-import { formatCashBookDate, formatCashTime } from "@/lib/cash-time";
+import { cashBookDate, formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
@@ -518,7 +518,7 @@ export default function SoQuyPage() {
         { date: string; receipt: number; payment: number }
       >();
       for (const e of sortedData) {
-        const dayKey = e.date.slice(0, 10);
+        const dayKey = cashBookDate(e.date);
         const existing = dailyMap.get(dayKey) ?? {
           date: dayKey,
           receipt: 0,

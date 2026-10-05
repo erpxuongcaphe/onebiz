@@ -10,8 +10,12 @@ export function cashInputToIso(value: string): string {
   return date.toISOString();
 }
 export function cashBookDate(value: string): string {
-  const date = value.slice(0,10);
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const date = new Date(value + 'T00:00:00+07:00');
+    return Number.isFinite(date.getTime()) && cashDateTimeInput(date).slice(0,10) === value ? value : '';
+  }
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? cashDateTimeInput(date).slice(0,10) : '';
 }
 export function formatCashBookDate(value: string): string {
   const date = cashBookDate(value);

@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { cashDateTimeInput, cashInputToIso, formatCashBookDate, formatCashTime, validateCashTime } from "@/lib/cash-time";
+import { cashBookDate, cashDateTimeInput, cashInputToIso, formatCashBookDate, formatCashTime, validateCashTime } from "@/lib/cash-time";
 
 describe("cash time business dates", () => {
   const now = new Date("2026-10-05T05:00:00Z");
   it("uses Vietnam's day across the UTC midnight boundary", () => {
     expect(cashDateTimeInput(new Date("2026-10-04T17:30:00Z"))).toBe("2026-10-05T00:30");
     expect(cashInputToIso("2026-10-05T00:30")).toBe("2026-10-04T17:30:00.000Z");
+    expect(cashBookDate("2026-10-04T17:00:00Z")).toBe("2026-10-05");
+    expect(cashBookDate("2026-10-05")).toBe("2026-10-05");
+    expect(cashBookDate("2026-02-30")).toBe("");
   });
   it("rejects impossible dates rather than normalizing silently", () => {
     expect(() => cashInputToIso("2026-02-30T10:00")).toThrow();
