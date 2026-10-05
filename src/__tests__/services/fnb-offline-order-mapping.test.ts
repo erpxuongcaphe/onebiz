@@ -6,6 +6,7 @@ const state = vi.hoisted(() => ({
   orders: new Map<string, PendingOrder>(),
   send: vi.fn(), payment: vi.fn(), add: vi.fn(), retail: vi.fn(),
   checkpointFailures: 0,
+  readFailures: 0,
   writes: [] as string[],
 }));
 vi.mock("@/lib/offline/db", () => ({ getDb: async () => ({
@@ -20,7 +21,13 @@ vi.mock("@/lib/offline/db", () => ({ getDb: async () => ({
     else state.orders.set((value as PendingOrder).localId, value as PendingOrder);
   },
   transaction: () => ({ objectStore: () => ({ index: () => ({
-    getAll: async (status: string) => [...state.queue.values()].filter(entry => entry.status === status),
+    getAll: async (status: string) => {
+      if (state.readFailures > 0) {
+        state.readFailures--;
+        throw new Error("queue read failed");
+      }
+      return [...state.queue.values()].filter(entry => entry.status === status);
+    },
   }) }) }),
 }) }));
 vi.mock("@/lib/services/supabase/fnb-checkout", () => ({
@@ -38,13 +45,46 @@ const paymentInput = { kitchenOrderId: "local_test", tenantId: "tenant", branchI
 describe("F&B offline order dependencies", () => {
   beforeEach(() => {
     vi.clearAllMocks(); state.queue.clear(); state.orders.clear();
-    state.checkpointFailures = 0; state.writes.length = 0;
+    state.checkpointFailures = 0; state.readFailures = 0; state.writes.length = 0;
     state.orders.set("local_test", { localId: "local_test", tenantId: "tenant", branchId: "xtb",
       localOrderNumber: "OFF-1", orderType: "takeaway", items: [{ productId: "coffee" }],
       status: "pending_payment", paymentData: paymentInput, createdAt: "now", updatedAt: "now" });
     state.send.mockResolvedValue({ kitchenOrderId: "server-order", orderNumber: "KB-UAT" });
     state.payment.mockResolvedValue({ invoiceId: "invoice", invoiceCode: "HD-UAT" });
     state.add.mockResolvedValue(undefined);
+  });
+  it("shares an in-flight replay instead of sending the same offline order twice", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    state.send.mockImplementation(async () => {
+      await gate;
+      return { kitchenOrderId: "server-order", orderNumber: "KB-UAT" };
+    });
+    enqueue(1, "sendToKitchen", { idempotencyKey: "stable-order" });
+    const first = replayQueue();
+    const second = replayQueue();
+    release();
+    const [firstResults, secondResults] = await Promise.all([first, second]);
+    expect(state.send).toHaveBeenCalledTimes(1);
+    expect(firstResults).toEqual(secondResults);
+    expect(state.queue.get(1)?.status).toBe("completed");
+    await replayQueue();
+    expect(state.send).toHaveBeenCalledTimes(1);
+    enqueue(2, "sendToKitchen", { idempotencyKey: "next-order" });
+    await replayQueue();
+    expect(state.send).toHaveBeenCalledTimes(2);
+    expect(state.send).toHaveBeenLastCalledWith({ idempotencyKey: "next-order" });
+  });
+  it("releases the shared replay after an IndexedDB failure without discarding pending work", async () => {
+    enqueue(1, "sendToKitchen", { idempotencyKey: "stable-order" });
+    state.readFailures = 1;
+    const outcomes = await Promise.allSettled([replayQueue(), replayQueue()]);
+    expect(outcomes.map(result => result.status)).toEqual(["rejected", "rejected"]);
+    expect(state.send).not.toHaveBeenCalled();
+    expect(state.queue.get(1)?.status).toBe("pending");
+    await replayQueue();
+    expect(state.send).toHaveBeenCalledTimes(1);
+    expect(state.queue.get(1)?.status).toBe("completed");
   });
   it("maps queued payment to the server order without rewriting the saved payload", async () => {
     enqueue(1, "sendToKitchen", { idempotencyKey: "local_test" });
