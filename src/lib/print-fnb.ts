@@ -593,13 +593,13 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Phiếu bếp ${data.orderNumber}</title>
 <style>${baseStyles(width, pageSize)}
-.order-number{font-size:${style === "compact" ? "24px" : "28px"};font-weight:bold;letter-spacing:2px}
-.table-label{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin:4px 0}
+.order-number{font-size:${style === "compact" ? "12px" : "14px"};overflow-wrap:anywhere;margin:4px 0}
+.table-label{font-size:${style === "compact" ? "22px" : "26px"};font-weight:bold;margin:4px 0}
 .type-badge{display:inline-block;padding:2px 8px;border:2px solid #000;font-size:14px;font-weight:bold;margin:4px 0}
 .item{margin:${style === "compact" ? "4px" : "6px"} 0;padding-bottom:${style === "compact" ? "4px" : "6px"};border-bottom:1px dotted #ccc}
 .item:last-child{border-bottom:none}
 .item-name{font-size:${style === "compact" ? "14px" : "18px"};font-weight:bold}
-.qty{font-size:${style === "compact" ? "16px" : "20px"};margin-right:4px}
+.qty{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin-right:4px}
 .variant{font-size:${style === "compact" ? "12px" : "14px"};font-weight:normal;color:#333}
 .toppings{font-size:14px;padding-left:24px;margin-top:2px}
 .modifier{font-size:14px;font-weight:bold;padding:3px 24px;margin-top:2px;background:#e3f2fd;border-left:4px solid #1976d2;color:#0d47a1}
@@ -615,13 +615,13 @@ ${supplementBanner}
   <div style="font-size:14px;letter-spacing:3px;font-weight:bold;${data.stationColor ? `color:${data.stationColor};` : ""}padding:6px 0;${data.stationColor ? `border:2px solid ${data.stationColor};` : "border:1px solid #000;"}margin-bottom:4px">
     ${data.stationName ?? "PHIẾU BAR/BẾP"}
   </div>
-  <div class="order-number">${data.orderNumber}</div>
+  <div class="table-label">${tableLabel}</div>
+  <div class="order-number">Phiếu: ${data.orderNumber}</div>
 </div>
 
 <div class="line"></div>
 
 <div class="center">
-  <div class="table-label">${tableLabel}</div>
   <div class="type-badge">${typeLabel.toUpperCase()}</div>
 </div>
 

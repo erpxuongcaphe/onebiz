@@ -461,6 +461,12 @@ function PrintSettingsPageContent() {
         </p>
       </div>
 
+      <div className="grid gap-2 sm:grid-cols-3 text-sm" aria-label="Phạm vi cấu hình in">
+        <div className="border-l-4 border-primary bg-primary/5 px-3 py-2"><strong className="text-primary">Máy / trình duyệt này</strong><p>Phương thức in, kết nối USB, khổ giấy và tự in ở mục Máy in &amp; vận hành. Các lựa chọn này lưu ngay trên trình duyệt hiện tại.</p></div>
+        <div className="border-l-4 border-status-success bg-status-success/5 px-3 py-2"><strong className="text-status-success">Chi nhánh được chọn</strong><p>Thông tin chi nhánh và trạm Bar/Bếp. Kiểm tra tên chi nhánh trong từng mục trước khi lưu.</p></div>
+        <div className="border-l-4 border-status-warning bg-status-warning/5 px-3 py-2"><strong className="text-status-warning">Mẫu và thương hiệu dùng chung</strong><p>Thông tin doanh nghiệp dùng chung. Mẫu in có phạm vi riêng theo chi nhánh hoặc dùng chung; xem phạm vi tại danh sách mẫu.</p></div>
+      </div>
+
       {/* ── Master–detail (CEO 30/06): nav trái + khung sửa/xem trước phải ── */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         {/* CỘT TRÁI — nav danh sách (sticky desktop, accordion mobile) */}
@@ -848,7 +854,13 @@ function PrintSettingsPageContent() {
 
       {selected === "may-in" && (<>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
-      <KitchenStationsCard />
+      <KitchenStationsCard printTargetLabel={print.backend === "escpos-usb"
+        ? storedKitchen
+          ? storedKitchen.name || "Máy USB đã gán cho bếp"
+          : storedCashier
+            ? `Chưa gán máy bếp riêng; dùng máy thu ngân dự phòng (${storedCashier.name || "USB"}).`
+            : "Chưa gán máy USB; nếu không có thiết bị đã lưu, sẽ mở hộp thoại in trình duyệt."
+        : "Chọn thiết bị trong hộp thoại in của trình duyệt này."} />
       </>)}
 
       {selected === "doanh-nghiep" && (<>

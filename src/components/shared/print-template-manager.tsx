@@ -1202,7 +1202,10 @@ function TemplateEditorDialog({
 
           {/* ── Cột phải: preview ── */}
           <div className="lg:sticky lg:top-0 lg:self-start">
-            <p className="mb-2 text-sm font-medium text-muted-foreground">Xem trước</p>
+            <div role="note" className="mb-2 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+              <p className="font-semibold">Xem trước · dữ liệu minh họa</p>
+              <p>Món, số phiếu, bàn và thời gian trong bản xem trước là ví dụ, không phải giao dịch thật.</p>
+            </div>
             <BillPreview
               title={title.trim() || DOC_TYPE_LABELS[docType]}
               config={config}

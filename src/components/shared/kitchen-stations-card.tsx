@@ -73,9 +73,10 @@ const ICON_PRESETS = [
 interface KitchenStationsCardProps {
   /** Override branchId — mặc định lấy currentBranch từ useAuth. */
   branchId?: string;
+  printTargetLabel?: string;
 }
 
-export function KitchenStationsCard({ branchId: branchIdProp }: KitchenStationsCardProps) {
+export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }: KitchenStationsCardProps) {
   const { currentBranch } = useAuth();
   const { toast } = useToast();
   const branchId = branchIdProp ?? currentBranch?.id;
@@ -176,6 +177,11 @@ export function KitchenStationsCard({ branchId: branchIdProp }: KitchenStationsC
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">
+            <p className="font-semibold">Chi nhánh: {branches.find((branch) => branch.id === selectedBranchId)?.name ?? (currentBranch?.id === selectedBranchId ? currentBranch?.name : "Chưa chọn")}</p>
+            {printTargetLabel && <p className="mt-1">Đích in bếp trên máy này: {printTargetLabel}</p>}
+            <p className="mt-1">Trạm chia phiếu theo công việc. Các trạm dùng chung đích in bếp của máy này; chưa gán máy in riêng cho từng trạm.</p>
+          </div>
           {/* Branch selector — chỉ hiện nếu user có nhiều branch FnB */}
           {branches.length > 1 && (
             <div className="space-y-1">
