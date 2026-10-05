@@ -649,7 +649,10 @@ describe("FnbCart — component", () => {
     );
 
     expect(screen.getAllByText("Đã gửi bếp").length).toBeGreaterThanOrEqual(1);
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác món: Cà phê sữa" }));
     expect(screen.getByText(/Không sửa trực tiếp/)).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Xoá món" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Sửa tuỳ chọn" })).toBeNull();
     expect(screen.getByRole("button", { name: /Gửi thêm/i })).toBeDisabled();
     expect(screen.getByRole("button", { name: /Thanh toán/i })).not.toBeDisabled();
   });
@@ -707,15 +710,13 @@ describe("FnbCart — component", () => {
     expect(classes).not.toContain("lg:flex");
   });
 
-  it("mobile=false (default) → hidden lg:flex (visible on tablet landscape+)", () => {
+  it("mobile=false (default) → hidden xl:flex (visible on desktop)", () => {
     const { container } = render(<FnbCart {...baseProps} />);
     const rootDiv = container.firstElementChild as HTMLElement;
     const classes = rootDiv.className.split(/\s+/);
     expect(classes).toContain("hidden");
-    // Sprint B (CEO 06/05): cart fixed CHỈ trên lg+ (tablet landscape +
-    // desktop). Tablet portrait (md 768-1023) chuyển sang FAB + drawer
-    // để menu zone tận full width 624px (4 cols thay vì bị chèn còn 304px).
-    expect(classes).toContain("lg:flex");
+    // Tablet dùng giỏ dạng drawer để giữ đủ không gian ảnh và tên món.
+    expect(classes).toContain("xl:flex");
   });
 
   it("click customer bar → gọi onCustomerClick", () => {

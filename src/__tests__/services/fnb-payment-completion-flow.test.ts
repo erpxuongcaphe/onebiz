@@ -17,9 +17,9 @@ describe("FnB payment completion flow", () => {
     expect(paymentFlow).toContain('title: "Thanh toán thành công"');
   });
 
-  it("gives the cart more room on large cashier displays and keeps order tools collapsible", () => {
-    expect(cart).toContain("xl:w-[460px]");
-    expect(cart).toContain("2xl:w-[520px]");
+  it("bounds the flat cart width and keeps order tools collapsible", () => {
+    expect(cart).toContain("w-[360px]");
+    expect(cart).toContain("2xl:w-[400px]");
     expect(cart).toContain("Ưu đãi &amp; thao tác");
     expect(cart).toContain('!moPhanPhu && "hidden"');
   });

@@ -85,7 +85,7 @@ interface PageHeaderProps {
   onHelp?: () => void;
   children?: ReactNode;
   className?: string;
-  /** Chế độ gọn cho trang danh sách V2; mặc định giữ nguyên giao diện cũ. */
+  /** Mặc định gọn; density="default" dùng tiêu đề lớn khi trang cần. */
   density?: "default" | "compact";
 }
 

@@ -116,7 +116,7 @@ describe("PR-B · ba trạng thái của nhóm tuỳ chọn", () => {
 
   it("chọn đủ mục bắt buộc → hết cảnh báo, nút thêm mở khoá", () => {
     moPopup();
-    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Kiểm tra Size" })).toBeDisabled();
     fireEvent.click(screen.getByText("Vừa"));
     expect(screen.queryByText("Chưa chọn — bắt buộc")).toBeNull();
     const nut = screen.getByText(/Thêm vào đơn/).closest("button")!;
@@ -168,9 +168,9 @@ describe("Giới hạn nhóm chọn nhiều", () => {
     moPopup({ dynamicModifiers: duLieuChonNhieu(2, 3) });
     expect(screen.getByText("Topping")).toBeTruthy();
     expect(screen.getByText(/Chọn từ 2 đến 3/)).toBeTruthy();
-    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/).closest("button")?.disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Kiểm tra Topping" })).toBeDisabled();
     fireEvent.click(screen.getByText("Trân châu"));
-    expect(screen.getByText(/nhóm tuỳ chọn chưa hợp lệ/).closest("button")?.disabled).toBe(true);
+    expect(screen.getByRole("button", { name: "Kiểm tra Topping" })).toBeDisabled();
     fireEvent.click(screen.getByText("Thạch"));
     expect(screen.getByText(/Thêm vào đơn/).closest("button")?.disabled).toBe(false);
   });
@@ -229,8 +229,8 @@ describe("PR-B · thứ tự nhóm ĐỨNG YÊN khi đang chọn", () => {
    * mà render() trả về — soi nhầm chỗ là ra mảng rỗng và test xanh giả.
    */
   function thuTuNhom(): string[] {
-    return [...document.body.querySelectorAll("section")]
-      .map((s) => s.querySelector("span.text-sm.font-medium")?.textContent ?? "")
+    return screen.getAllByRole("group")
+      .map((s) => s.getAttribute("aria-label") ?? "")
       .filter(Boolean);
   }
 
@@ -359,16 +359,16 @@ describe("PR-B · khoá các ràng buộc bố cục", () => {
   const lop = cacClassName(nguon);
 
   it("bề ngang riêng cho từng thiết bị, không phải bản desktop thu nhỏ", () => {
-    expect(nguon).toContain("sm:max-w-[42rem]");
-    expect(nguon).toContain("lg:max-w-[56rem]");
-    expect(nguon).toContain("xl:max-w-[68rem]");
+    expect(nguon).toContain("sm:max-w-[36rem]");
+    expect(nguon).toContain("data-[complex=true]:sm:max-w-[48rem]");
+    expect(nguon).toContain("data-[complex=true]:lg:max-w-[56rem]");
   });
 
   it("thân xếp theo NỘI DUNG, không chia đều mỗi nhóm một cột", () => {
     // CEO bác bản trước vì mọi nhóm bị nhét vào cùng một lưới cột bằng nhau.
     // Nay thân là CỘT DỌC, và khu lựa chọn ngắn là hàng ngang tự xuống dòng
     // với mỗi ô RỘNG THEO NỘI DUNG (`flex-auto` = khởi điểm bằng nội dung).
-    expect(nguon).toContain("flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4");
+    expect(nguon).toContain("flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2");
     expect(nguon).toContain("flex flex-wrap items-start gap-x-6 gap-y-3.5");
     expect(nguon).toContain("sm:flex-auto");
     // Đo trên bản xem trước: lưới chia đều ép "Mức đường" (5 lựa chọn) xuống

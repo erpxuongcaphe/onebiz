@@ -698,6 +698,8 @@ export function FnbItemDialog({
     return (
       <section
         key={g.id}
+        role="group"
+        aria-label={g.name}
         className={cn(
           O_NHOM,
           g.rule === "multi" && "basis-full",

@@ -152,7 +152,8 @@ describe("KDS hien thi dung tren dien thoai va tablet", () => {
 describe("Ô món POS FnB không cắt mất tên", () => {
   it("ảnh co được, không còn khung vuông cứng", () => {
     expect(tile).not.toContain("aspect-square overflow-hidden relative p-2 flex-shrink-0");
-    expect(tile).toContain("relative min-h-0 flex-1 overflow-hidden p-2");
+    expect(tile).toContain("relative min-h-0 flex-1 overflow-hidden");
+    expect(tile).toContain("object-contain");
   });
 
   it("khối tên món luôn được giữ chỗ", () => {
