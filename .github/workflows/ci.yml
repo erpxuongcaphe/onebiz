@@ -274,6 +274,16 @@ jobs:
           createdb kitchen_return_summary_test
           PGDATABASE=kitchen_return_summary_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00427_kitchen_return_summary.integration.sql
 
+      - name: Verify exact F&B kitchen line source in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb kitchen_line_source_test
+          PGDATABASE=kitchen_line_source_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00428_fnb_kitchen_line_source.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
