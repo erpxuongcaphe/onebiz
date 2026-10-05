@@ -50,6 +50,7 @@ import type {
 import { Icon } from "@/components/ui/icon";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { getDsoDisplay } from "@/lib/reports/dso-display";
 import {
   buildSalesInvoiceRangeLink,
   buildSalesReturnRangeLink,
@@ -521,7 +522,7 @@ export default function BaoCaoTaiChinhPage() {
           { metric: "Số ngày bán hết trung bình", value: exportTurnover.valuationComplete ? exportTurnover.avgDaysToSell : null, unit: "ngày" },
           { metric: "Giá vốn bán trong kỳ", value: exportTurnover.valuationComplete ? exportTurnover.totalCogsPeriod : null, unit: "VND" },
           { metric: "Giá trị tồn kho trung bình", value: exportTurnover.valuationComplete ? exportTurnover.avgInventoryValue : null, unit: "VND" },
-          { metric: "Số ngày thu tiền trung bình (DSO)", value: exportDso.dso ?? 0, unit: "ngày" },
+          { metric: "Số ngày thu tiền trung bình (DSO)", value: getDsoDisplay(exportDso).days ?? "Chưa đủ dữ liệu", unit: "ngày" },
           { metric: "Tổng phải thu hiện tại", value: exportDso.totalReceivables ?? 0, unit: "VND" },
           { metric: "Doanh thu trung bình/ngày", value: Math.round(exportDso.avgDailyRevenue ?? 0), unit: "VND" },
         ],
@@ -1369,9 +1370,9 @@ export default function BaoCaoTaiChinhPage() {
                   <span className="text-xs">Số ngày thu tiền</span>
                 </div>
                 <p
-                  className={`text-3xl font-bold ${(dso?.dso ?? 0) > 30 ? "text-status-error" : "text-status-success"}`}
+                  className={`text-3xl font-bold ${getDsoDisplay(dso).tone}`}
                 >
-                  {dso?.dso ?? 0}
+                  {getDsoDisplay(dso).days ?? "—"}
                 </p>
                 <p className="text-xs text-muted-foreground">ngày</p>
               </div>
@@ -1398,13 +1399,9 @@ export default function BaoCaoTaiChinhPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">Đánh giá</span>
                 <span
-                  className={`font-medium ${(dso?.dso ?? 0) <= 15 ? "text-status-success" : (dso?.dso ?? 0) <= 30 ? "text-status-warning" : "text-status-error"}`}
+                  className={`font-medium ${getDsoDisplay(dso).tone}`}
                 >
-                  {(dso?.dso ?? 0) <= 15
-                    ? "Tốt"
-                    : (dso?.dso ?? 0) <= 30
-                      ? "Trung bình"
-                      : "Cần cải thiện"}
+                  {getDsoDisplay(dso).rating}
                 </span>
               </div>
             </div>
