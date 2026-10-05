@@ -14,6 +14,12 @@ describe("KDS partial return notice", () => {
     render(<KdsReturnNotice summary={null} />);
     expect(screen.getByRole("status").textContent).toContain("Chưa kiểm tra được hoàn trả");
   });
+  it("distinguishes exact source updates from legacy or topping-only returns", () => {
+    const { rerender } = render(<KdsReturnNotice summary={{ soldQuantity: 3, returnedQuantity: 1 }} exactReturnedQuantity={1} />);
+    expect(screen.getByRole("status").textContent).toContain("đúng dòng món");
+    rerender(<KdsReturnNotice summary={{ soldQuantity: 3, returnedQuantity: 2 }} exactReturnedQuantity={1} />);
+    expect(screen.getByRole("status").textContent).toContain("Phần trả còn lại");
+  });
   it("does not clutter orders with no returns", () => {
     render(<KdsReturnNotice summary={{ soldQuantity: 2, returnedQuantity: 0 }} />);
     expect(screen.queryByRole("status")).toBeNull();

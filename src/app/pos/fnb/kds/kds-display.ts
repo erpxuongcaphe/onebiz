@@ -55,7 +55,7 @@ export function prepareKdsItemGroups(
   const groupIndexes = new Map<string, number>();
 
   for (const item of items) {
-    const identity = getKdsItemIdentity(item);
+    const identity = JSON.stringify([getKdsItemIdentity(item), item.quantity <= 0]);
     const existingIndex = preferences.combineIdenticalItems
       ? groupIndexes.get(identity)
       : undefined;
