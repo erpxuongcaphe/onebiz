@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { generateDocumentHtml, type PaperSize } from "@/lib/print-document";
+import { PrintHtmlPreview } from "@/components/shared/print-html-preview";
 
 export function PrinterTestPreview({paperSize}: {paperSize:PaperSize}) {
   const [open,setOpen]=useState(false);
@@ -29,7 +30,7 @@ export function PrinterTestPreview({paperSize}: {paperSize:PaperSize}) {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader><DialogTitle className="text-primary">Bản thử {paperSize}</DialogTitle><DialogDescription>Dữ liệu minh họa. Xem trước và kiểm tra ảnh không gửi lệnh tới máy in.</DialogDescription></DialogHeader>
-        <iframe title="Bản thử theo khổ giấy" srcDoc={html} sandbox="allow-same-origin" className="mx-auto max-w-full border bg-white h-[400px]" style={{width:paperSize==="58mm"?58/25.4*96:paperSize==="80mm"?80/25.4*96:500}} />
+        <PrintHtmlPreview title="Bản thử theo khổ giấy" html={html} paperSize={paperSize} height={400} />
         {image && <div><p className="text-sm font-semibold text-primary">Ảnh sẽ gửi qua USB</p>
           {/* Locally generated data URI; no remote image optimization needed. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -47,6 +47,7 @@ import type {
   ResolvedBrand,
 } from "@/lib/services";
 import { buildKitchenTicketHtml } from "@/lib/print-fnb";
+import { PrintHtmlPreview } from "@/components/shared/print-html-preview";
 
 // ──────────────────────────────────────────────────────────────
 // Hằng số nhãn (Tiếng Việt có dấu)
@@ -1327,9 +1328,7 @@ function BillPreview({
       <p role="note" className="border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-sm">
         Mẫu mặc định của chi nhánh được áp dụng khi gửi bếp và in lại từ KDS. Nếu chi nhánh chưa có mẫu, hệ thống dùng mẫu chung; nếu chưa có mẫu chung hoặc đang offline, dùng kiểu phiếu ở Máy in &amp; vận hành.
       </p>
-      <iframe title="Phiếu bếp minh họa" srcDoc={html} sandbox="allow-same-origin"
-        className="mx-auto h-[520px] max-w-full border bg-white"
-        style={{ width: (paperSize === "58mm" ? 58 : 80) / 25.4 * 96 }} />
+      <PrintHtmlPreview title="Phiếu bếp minh họa" html={html} paperSize={paperSize === "58mm" ? "58mm" : "80mm"} />
     </div>;
   }
   const base: DocumentPrintData = {
@@ -1345,6 +1344,6 @@ function BillPreview({
   const html = generateDocumentHtml(rendered, paperSize ?? "80mm");
   return <div className="space-y-2">
     {brandLoading && <p className="text-sm text-muted-foreground">Đang tải thông tin thương hiệu…</p>}
-    <iframe title="Bản in minh họa từ bộ dựng bản in thật" srcDoc={html} sandbox="allow-same-origin" className="mx-auto h-[520px] max-w-full border bg-white" style={{width:paperSize === "58mm" ? 58 / 25.4 * 96 : paperSize === "80mm" ? 80 / 25.4 * 96 : paperSize === "A5" ? 560 : 794}} />
+    <PrintHtmlPreview title="Bản in minh họa từ bộ dựng bản in thật" html={html} paperSize={paperSize ?? "80mm"} />
   </div>;
 }
