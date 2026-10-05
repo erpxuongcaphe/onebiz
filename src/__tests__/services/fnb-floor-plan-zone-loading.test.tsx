@@ -1,0 +1,88 @@
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { RestaurantTable } from "@/lib/types/fnb";
+
+const mocks = vi.hoisted(() => ({
+  zones: vi.fn(),
+  tables: vi.fn(),
+  decorations: vi.fn(),
+  toast: vi.fn(),
+}));
+
+vi.mock("@/lib/services", () => ({
+  getFloorPlanZones: mocks.zones,
+  getTablesByZone: mocks.tables,
+  getDecorationsByZone: mocks.decorations,
+}));
+vi.mock("@/lib/contexts", () => ({
+  useAuth: () => ({ currentBranch: { id: "xtb" } }),
+}));
+vi.mock("@/lib/contexts/toast-context", () => ({
+  useToast: () => ({ toast: mocks.toast }),
+}));
+vi.mock("next/dynamic", () => ({
+  default: () => function Canvas(props: {
+    tables: Array<{ id: string; name: string }>;
+    onSelectTable: (table: { id: string; name: string }) => void;
+  }) {
+    return <div>{props.tables.map((table) => (
+      <button key={table.id} onClick={() => props.onSelectTable(table)}>{table.name}</button>
+    ))}</div>;
+  },
+}));
+vi.mock("@/components/shared/floor-plan/table-action-sheet", () => ({
+  TableActionSheet: ({ table, zoneName }: { table: unknown; zoneName?: string }) =>
+    table ? <div data-testid="action-zone">{zoneName}</div> : null,
+}));
+
+import { TableFloorPlan } from "@/app/pos/fnb/components/table-floor-plan";
+
+const tables = [
+  { id: "inside-1", tableNumber: 1, name: "Ban 1", zone: "Trong Nha", status: "available", capacity: 2 },
+  { id: "outside-10", tableNumber: 10, name: "Ban 10", zone: "Ngoai San", status: "available", capacity: 2 },
+] as RestaurantTable[];
+
+function layout(id: string) {
+  return [{ id, shape: "square", width: 60, height: 60, positionX: 0, positionY: 0 }];
+}
+
+describe("POS floor plan keeps table actions in the selected zone", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.zones.mockResolvedValue([
+      { id: "inside", name: "Trong Nha", width: 1000, height: 700 },
+      { id: "outside", name: "Ngoai San", width: 1000, height: 700 },
+    ]);
+    mocks.decorations.mockResolvedValue([]);
+    vi.stubGlobal("ResizeObserver", class {
+      constructor(private callback: (entries: unknown[]) => void) {}
+      observe() { this.callback([{ contentRect: { width: 1000 } }]); }
+      disconnect() {}
+    });
+  });
+
+  it("hides the previous zone's tables until the new zone resolves", async () => {
+    let resolveOutside!: (value: ReturnType<typeof layout>) => void;
+    mocks.tables.mockImplementation((zone: string) => zone === "inside"
+      ? Promise.resolve(layout("inside-1"))
+      : new Promise((resolve) => { resolveOutside = resolve; }));
+    render(<TableFloorPlan tables={tables} onSelectTable={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Ban 1" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ngoai San" }));
+    expect(screen.queryByRole("button", { name: "Ban 1" })).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("Ngoai San");
+    await act(async () => resolveOutside(layout("outside-10")));
+    expect(await screen.findByRole("button", { name: "Ban 10" })).toBeInTheDocument();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("does not label a list action with the last canvas zone", async () => {
+    mocks.tables.mockResolvedValue(layout("inside-1"));
+    render(<TableFloorPlan tables={tables} onSelectTable={vi.fn()} />);
+    await screen.findByRole("button", { name: "Ban 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Danh sách" }));
+    fireEvent.click(screen.getByRole("button", { name: /10\s*Ban 10/ }));
+    expect(screen.getByTestId("action-zone")).toHaveTextContent("Ngoai San");
+  });
+});
