@@ -6,8 +6,10 @@
  */
 
 import { formatCurrency, formatNumber, formatTime as formatTimeHelper, formatShortDate } from "@/lib/format";
-import { printerService, type PrintReceiptPayload, type PrinterRole } from "@/lib/printer";
+import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
+import { EscPosBuilder } from "@/lib/printer/escpos";
+import type { StoredPrinter } from "@/lib/printer/webusb-printer";
 
 // ============================================================
 // Types
@@ -86,6 +88,10 @@ export interface FnbReceiptData extends PreBillData {
 }
 
 export interface KitchenTicketDataV2 {
+  title?: string;
+  itemFontSize?: "sm" | "md" | "lg";
+  footerText?: string;
+  printer?: StoredPrinter;
   orderNumber: string;
   tableName?: string;
   orderType: "dine_in" | "takeaway" | "delivery";
@@ -547,6 +553,8 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const tableLabel = data.tableName ?? typeLabel;
   const time = formatTime(data.createdAt);
   const date = formatDate(data.createdAt);
+  const itemFontSize = data.itemFontSize === "lg" ? 22 : data.itemFontSize === "sm" ? 14 : data.itemFontSize === "md" ? 18 : style === "compact" ? 14 : 18;
+  const stationColor = /^#[0-9a-f]{6}$/i.test(data.stationColor ?? "") ? data.stationColor : undefined;
 
   const itemsHtml = data.items.map((item) => {
     // Mọi kiểu phiếu đều phải giữ đủ thông tin pha chế. "Gọn" chỉ giảm
@@ -554,8 +562,8 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
     let html = `<div class="item">
       <div class="item-name">
         <span class="qty">${formatNumber(item.quantity)}x</span>
-        ${item.name}
-        ${item.variant ? `<span class="variant">(${item.variant})</span>` : ""}
+        ${escapeKitchenText(item.name)}
+        ${item.variant ? `<span class="variant">(${escapeKitchenText(item.variant)})</span>` : ""}
       </div>`;
 
     if (item.toppings && item.toppings.length > 0) {
@@ -563,17 +571,17 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
         .filter(t => t.quantity > 0)
         .map(t => `${t.name} x${formatNumber(t.quantity)}`);
       if (toppingTexts.length > 0) {
-        html += `<div class="toppings">+ ${toppingTexts.join(", ")}</div>`;
+        html += `<div class="toppings">+ ${escapeKitchenText(toppingTexts.join(", "))}</div>`;
       }
     }
     // CEO 01/06/2026 — Sprint 2.4b: print modifier choices lên phiếu bếp.
     // Format compact: "▸ Mức đường: 70% • Mức đá: Ít • Topping: Trân châu"
     if (item.modifierLabels && item.modifierLabels.length > 0) {
-      html += `<div class="modifier">▸ ${item.modifierLabels.join(" • ")}</div>`;
+      html += `<div class="modifier">▸ ${escapeKitchenText(item.modifierLabels.join(" • "))}</div>`;
     }
     const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
     if (freeTextNote) {
-      html += `<div class="note">** ${freeTextNote}</div>`;
+      html += `<div class="note">** ${escapeKitchenText(freeTextNote)}</div>`;
     }
     if (style === "detailed") {
       html += `<div class="price">${formatCurrency(item.unitPrice)} x ${item.quantity}</div>`;
@@ -591,14 +599,14 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
     : "";
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Phiếu bếp ${data.orderNumber}</title>
+<html><head><meta charset="utf-8"><title>Phiếu bếp ${escapeKitchenText(data.orderNumber)}</title>
 <style>${baseStyles(width, pageSize)}
 .order-number{font-size:${style === "compact" ? "12px" : "14px"};overflow-wrap:anywhere;margin:4px 0}
 .table-label{font-size:${style === "compact" ? "22px" : "26px"};font-weight:bold;margin:4px 0}
 .type-badge{display:inline-block;padding:2px 8px;border:2px solid #000;font-size:14px;font-weight:bold;margin:4px 0}
 .item{margin:${style === "compact" ? "4px" : "6px"} 0;padding-bottom:${style === "compact" ? "4px" : "6px"};border-bottom:1px dotted #ccc}
 .item:last-child{border-bottom:none}
-.item-name{font-size:${style === "compact" ? "14px" : "18px"};font-weight:bold}
+.item-name{font-size:${itemFontSize}px;font-weight:bold;overflow-wrap:anywhere}
 .qty{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin-right:4px}
 .variant{font-size:${style === "compact" ? "12px" : "14px"};font-weight:normal;color:#333}
 .toppings{font-size:14px;padding-left:24px;margin-top:2px}
@@ -612,22 +620,23 @@ ${offlineBanner}
 ${supplementBanner}
 
 <div class="center">
-  <div style="font-size:14px;letter-spacing:3px;font-weight:bold;${data.stationColor ? `color:${data.stationColor};` : ""}padding:6px 0;${data.stationColor ? `border:2px solid ${data.stationColor};` : "border:1px solid #000;"}margin-bottom:4px">
-    ${data.stationName ?? "PHIẾU BAR/BẾP"}
+  ${data.title ? `<div class="bold">${escapeKitchenText(data.title)}</div>` : ""}
+  <div style="font-size:14px;letter-spacing:3px;font-weight:bold;${stationColor ? `color:${stationColor};` : ""}padding:6px 0;${stationColor ? `border:2px solid ${stationColor};` : "border:1px solid #000;"}margin-bottom:4px">
+    ${escapeKitchenText(data.stationName ?? "PHIẾU BAR/BẾP")}
   </div>
-  <div class="table-label">${tableLabel}</div>
-  <div class="order-number">Phiếu: ${data.orderNumber}</div>
+  <div class="table-label">${escapeKitchenText(tableLabel)}</div>
+  <div class="order-number">Phiếu: ${escapeKitchenText(data.orderNumber)}</div>
 </div>
 
 <div class="line"></div>
 
 <div class="center">
-  <div class="type-badge">${typeLabel.toUpperCase()}</div>
+  <div class="type-badge">${escapeKitchenText(typeLabel.toUpperCase())}</div>
 </div>
 
 ${
   data.orderNote
-    ? `<div style="margin:8px 0;padding:8px;background:#f3f4f6;border-left:4px solid #000;font-size:14px;font-weight:bold;line-height:1.4">📝 GHI CHÚ ĐƠN:<br/>${data.orderNote}</div>`
+    ? `<div style="margin:8px 0;padding:8px;background:#f3f4f6;border-left:4px solid #000;font-size:14px;font-weight:bold;line-height:1.4">📝 GHI CHÚ ĐƠN:<br/>${escapeKitchenText(data.orderNote)}</div>`
     : ""
 }
 
@@ -639,7 +648,8 @@ ${itemsHtml}
 
 <div class="center">
   <div class="time">${time}</div>
-  <div style="font-size:11px;color:#666">${date}${data.cashierName ? ` \u2022 ${data.cashierName}` : ""}</div>
+  <div style="font-size:11px;color:#666">${date}${data.cashierName ? ` \u2022 ${escapeKitchenText(data.cashierName)}` : ""}</div>
+  ${data.footerText ? `<div>${escapeKitchenText(data.footerText)}</div>` : ""}
 </div>
 
 </body></html>`;
@@ -647,43 +657,45 @@ ${itemsHtml}
   return html;
 }
 
-export function printKitchenTicketV2(data: KitchenTicketDataV2): void {
+export async function printKitchenTicketV2(data: KitchenTicketDataV2): Promise<void> {
   // CEO 04/06/2026 — Sprint 5 multi-printer: kitchen ticket dispatch theo
   // backend + role="kitchen". Browser → window.open như cũ; ESC/POS USB →
   // dùng printer config slot "kitchen" (user trỏ chung 1 máy hoặc khác máy).
   const html = buildKitchenTicketHtml(data);
-  dispatchPrintByRole(html, "kitchen");
-}
-
-/**
- * Dispatch print theo role. Đọc backend từ localStorage settings.print.backend.
- *   - "browser"   → window.open + window.print (in qua dialog browser, user
- *                    chọn máy in trong popup OS).
- *   - "escpos-usb"→ printer-service.printRaw({rawHtml, role}). Service tự lookup
- *                    printer config theo role (cashier/kitchen). Nếu role không
- *                    có printer config riêng → fallback sang cashier slot.
- *
- * Khi anh trỏ 2 role vào cùng device → in 2 lần liên tục trên 1 máy in.
- * Khi anh trỏ 2 device khác nhau → in tách biệt.
- */
-function dispatchPrintByRole(html: string, role: PrinterRole): void {
   let backend: "browser" | "escpos-usb" = "browser";
   try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
-    }
-  } catch {
-    /* keep default */
-  }
+    const raw = localStorage.getItem("onebiz_settings");
+    backend = raw && JSON.parse(raw)?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
+  } catch { /* browser default */ }
+  const result = await printerService.printRaw({rawHtml: html, escposBytes: buildKitchenTicketBytes(data), role: "kitchen", backend, printer: data.printer});
+  if (!result.success) throw new Error(result.warning ?? "Không in được phiếu bếp");
+  if (result.warning && typeof window !== "undefined") window.dispatchEvent(new CustomEvent("fnb-print-failed", {detail: {message: result.warning}}));
+}
 
-  if (backend === "browser") {
-    openAndPrint(html);
-    return;
-  }
+function escapeKitchenText(text: string): string {
+  return text.replace(/[&<>"']/g, c => ({"&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;"}[c]!));
+}
 
-  // ESC/POS USB — pass role để printer-service lookup đúng slot
-  printerService.setBackend("escpos-usb");
-  void printerService.printRaw({ rawHtml: html, role, backend: "escpos-usb" });
+export function buildKitchenTicketBytes(data: KitchenTicketDataV2): Uint8Array {
+  const b = new EscPosBuilder(data.paperSize ?? "80mm");
+  if (data.isOffline) b.text("CHO DONG BO", {bold:true, align:"center"});
+  if (data.isSupplement) b.text("BO SUNG", {bold:true, size:"double", align:"center"});
+  if (data.title) b.text(data.title, {bold:true, align:"center"});
+  b.text(data.stationName ?? "PHIEU BAR/BEP", {bold:true, align:"center"});
+  b.text(data.tableName ?? ORDER_TYPE_VN[data.orderType], {bold:true, size:"double", align:"center"});
+  b.text(`Phieu: ${data.orderNumber}`).text(ORDER_TYPE_VN[data.orderType]).divider();
+  if (data.orderNote) b.text(`GHI CHU DON: ${data.orderNote}`, {bold:true});
+  for (const item of data.items) {
+    b.text(`${formatNumber(item.quantity)}x ${item.name}${item.variant ? ` (${item.variant})` : ""}`, {bold:true, size:data.itemFontSize === "lg" ? "double" : "normal"});
+    for (const topping of item.toppings ?? []) if (topping.quantity > 0) b.text(`+ ${topping.name} x${formatNumber(topping.quantity)}`);
+    for (const label of item.modifierLabels ?? []) b.text(`> ${label}`, {bold:true});
+    const note = getFnbFreeTextNote(item.note, item.modifierLabels);
+    if (note) b.text(`** ${note}`, {bold:true});
+    if (data.style === "detailed") b.text(`${formatCurrency(item.unitPrice)} x ${formatNumber(item.quantity)}`);
+    b.divider();
+  }
+  b.text(`${formatTime(data.createdAt)} ${formatDate(data.createdAt)}`, {align:"center"});
+  if (data.cashierName) b.text(data.cashierName, {align:"center"});
+  if (data.footerText) b.text(data.footerText, {align:"center"});
+  return b.build();
 }

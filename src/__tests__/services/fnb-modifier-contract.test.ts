@@ -319,6 +319,6 @@ describe("P0.5 — phiếu bếp in giấy phải kèm modifier (Đường/Đá)
   });
 
   it("KDS in lại phiếu cũng truyền modifierLabels", () => {
-    expect(khoiLoiGoi(kds, "printKitchenTicketV2(")).toContain("modifierLabels");
+    expect(khoiLoiGoi(kds, "printKitchenTicketsByStation(")).toContain("modifierLabels");
   });
 });

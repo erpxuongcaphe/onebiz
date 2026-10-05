@@ -47,6 +47,8 @@ export interface PrintTemplateConfig {
   };
   customer?: { name?: boolean; code?: boolean; phone?: boolean; address?: boolean };
   items?: { fontSize?: "sm" | "md" | "lg"; columns?: string[] };
+  /** Kitchen tickets always retain quantities and preparation instructions. */
+  kitchen?: { style?: "compact" | "standard" | "detailed" };
   payment?: { showQr?: boolean; showDiscount?: boolean; showDebt?: boolean };
   footer?: { signature?: boolean; thankYou?: boolean; customText?: string };
   /** Ô ký tùy biến cuối phiếu. undefined → mặc định [Người lập phiếu, Người duyệt]. */

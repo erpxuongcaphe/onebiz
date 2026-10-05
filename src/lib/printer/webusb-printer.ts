@@ -105,6 +105,7 @@ export interface ConnectedPrinter {
   productId: number;
   name: string;
   manufacturer: string;
+  serialNumber?: string;
 }
 
 /** Check if browser supports WebUSB */
@@ -137,6 +138,7 @@ export async function requestPrinter(): Promise<ConnectedPrinter | null> {
     return {
       vendorId: device.vendorId,
       productId: device.productId,
+      serialNumber: device.serialNumber || undefined,
       name: device.productName ?? "Unknown Printer",
       manufacturer:
         device.manufacturerName ??
@@ -156,15 +158,13 @@ export async function requestPrinter(): Promise<ConnectedPrinter | null> {
  * Lấy device đã paired trước đó (không cần user gesture).
  * Dùng để reconnect sau reload trang.
  */
-async function getPairedDevice(vendorId: number, productId: number): Promise<USBDevice | null> {
+async function getPairedDevice(vendorId: number, productId: number, serialNumber?: string): Promise<USBDevice | null> {
   const usb = getUSB();
   if (!usb) return null;
-  try {
-    const devices = await usb.getDevices();
-    return devices.find((d) => d.vendorId === vendorId && d.productId === productId) ?? null;
-  } catch {
-    return null;
-  }
+  const devices = await usb.getDevices();
+  const matches = devices.filter((d) => d.vendorId === vendorId && d.productId === productId && (!serialNumber || d.serialNumber === serialNumber));
+  if (matches.length > 1) throw new Error("Có nhiều máy in cùng model. Hãy kết nối máy có số serial riêng hoặc chỉ ghép một máy model này.");
+  return matches[0] ?? null;
 }
 
 /**
@@ -174,9 +174,10 @@ async function getPairedDevice(vendorId: number, productId: number): Promise<USB
 export async function sendToUsbPrinter(
   vendorId: number,
   productId: number,
-  data: Uint8Array
+  data: Uint8Array,
+  serialNumber?: string
 ): Promise<void> {
-  const device = await getPairedDevice(vendorId, productId);
+  const device = await getPairedDevice(vendorId, productId, serialNumber);
   if (!device) {
     throw new Error(
       "Không tìm thấy máy in đã kết nối. Vui lòng vào Cài đặt → In ấn → Kết nối lại máy in."
@@ -255,6 +256,7 @@ export interface StoredPrinter {
   productId: number;
   name: string;
   manufacturer: string;
+  serialNumber?: string;
   connectedAt: string;
   /** CEO 04/06/2026: vai trò máy in. */
   role?: PrinterRole;
@@ -353,5 +355,6 @@ export function isSamePrinterAcrossRoles(): boolean {
   return (
     cashier.vendorId === kitchen.vendorId &&
     cashier.productId === kitchen.productId
+    && cashier.serialNumber === kitchen.serialNumber
   );
 }
