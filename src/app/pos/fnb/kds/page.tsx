@@ -36,6 +36,8 @@ import {
   updateKitchenItemStatus,
 } from "@/lib/services/supabase/kitchen-orders";
 import { getClient } from "@/lib/services/supabase/base";
+import { getKitchenReturnSummaries, type KitchenReturnSummary } from "@/lib/services/supabase/kitchen-return-summary";
+import { KdsReturnNotice } from "./kds-return-notice";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
 import {
   getBranchSettings,
@@ -212,6 +214,7 @@ function getKitchenLoadMessage(err: unknown): string {
 
 interface KdsOrder extends KitchenOrder {
   items: KitchenOrderItem[];
+  returnSummary?: KitchenReturnSummary | null;
 }
 
 // ── Page ──
@@ -423,6 +426,15 @@ function KdsPageInner() {
     }
     try {
       const enriched = await getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES);
+      // One branch-scoped read for paid orders, not an invoice query per ticket.
+      let returns: Map<string, KitchenReturnSummary> | null = null;
+      if (enriched.some((order) => order.invoiceId)) {
+        try {
+          returns = await getKitchenReturnSummaries(branchId);
+        } catch (error) {
+          console.error("KDS return summary unavailable:", error);
+        }
+      }
       if (
         requestId !== fetchRequestIdRef.current ||
         activeBranchIdRef.current !== requestedBranchId
@@ -460,7 +472,12 @@ function KdsPageInner() {
         );
       });
 
-      setOrders(enriched);
+      setOrders(enriched.map((order) => ({
+        ...order,
+        returnSummary: order.invoiceId
+          ? returns === null ? null : returns.get(order.id) ?? { soldQuantity: 0, returnedQuantity: 0 }
+          : undefined,
+      })));
       fetchErrorShownRef.current = false;
       setFetchError(null);
       setLastFetchAt(Date.now());
@@ -1473,6 +1490,7 @@ function KdsOrderCard({
       </div>
 
       {/* ── Items list ── */}
+      {order.returnSummary !== undefined && <KdsReturnNotice summary={order.returnSummary} />}
       <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto bg-surface-container-lowest p-1.5">
         {itemGroups.map((group) => (
           <KdsItemRow

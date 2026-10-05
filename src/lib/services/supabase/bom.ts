@@ -58,15 +58,21 @@ export async function getBomAvailabilityBatch(
 export async function getAllBOMs(params?: {
   /** Filter: chỉ lấy BOM đã được sử dụng tại chi nhánh này (join production_orders). */
   usedAtBranchId?: string;
+  /** New-order picker only; retain inactive outputs for formula/history views. */
+  activeProductsOnly?: boolean;
 }): Promise<BOM[]> {
   const tenantId = await getCurrentTenantId();
   let query = supabase
     .from("bom")
-    .select("*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
+    .select(params?.activeProductsOnly
+      ? "*, products!bom_product_id_fkey!inner(name, code, channel, is_fnb_stock_item), branches:branch_id(name)"
+      : "*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("branch_id", { ascending: true, nullsFirst: true })
     .order("created_at", { ascending: false });
+
+  if (params?.activeProductsOnly) query = query.eq("products.is_active", true);
 
   // Nếu có filter branch → chỉ trả BOM có ít nhất 1 production_order tại branch đó.
   if (params?.usedAtBranchId) {
