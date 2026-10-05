@@ -15,6 +15,6 @@ export function PrintHtmlPreview({html,paperSize,title,height=520}:{html:string;
   },[]);
   const scale=available?Math.min(1,available/width):1;
   return <div ref={container} className="w-full overflow-hidden" style={{height}}>
-    <iframe title={title} srcDoc={html} sandbox="allow-same-origin" className="block border bg-white" style={{width,height:height/scale,transform:`scale(${scale})`,transformOrigin:"top left",marginLeft:available?Math.max(0,(available-width*scale)/2):0}} />
+    <iframe title={title} srcDoc={html} sandbox="allow-same-origin" className="block border-0 bg-white ring-1 ring-border" style={{width,height:height/scale,transform:`scale(${scale})`,transformOrigin:"top left",marginLeft:available?Math.max(0,(available-width*scale)/2):0}} />
   </div>;
 }
