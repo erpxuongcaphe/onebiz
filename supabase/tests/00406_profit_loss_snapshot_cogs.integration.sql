@@ -153,6 +153,7 @@ insert into public.return_items(
 \ir ../migrations/00406_profit_loss_snapshot_cogs.sql
 \ir ../migrations/00407_exclude_ascii_sales_return_refunds_from_pnl.sql
 \ir ../migrations/00407_exclude_ascii_sales_return_refunds_from_pnl.sql
+\ir ../migrations/00427_financial_report_vietnam_buckets.sql
 
 do $$
 declare
@@ -227,5 +228,50 @@ begin
      or jsonb_array_length(v_current->'cogs_breakdown') <> 3 then
     raise exception 'financial detail mismatch: %', v_current;
   end if;
+end;
+$$;
+
+-- Caller timezone must not change calendar grouping or totals.
+set timezone to 'UTC';
+do $$
+declare
+  v_report jsonb;
+  v_other jsonb;
+  v_from timestamptz;
+  v_to timestamptz;
+  v_granularity text;
+  v_expected integer;
+begin
+  for v_from, v_to, v_granularity, v_expected in
+    select * from (values
+      ('2026-08-31T17:00:00Z'::timestamptz, '2026-09-30T17:00:00Z'::timestamptz, 'day', 30),
+      ('2025-12-31T17:00:00Z'::timestamptz, '2026-12-31T17:00:00Z'::timestamptz, 'month', 12),
+      ('2024-12-31T17:00:00Z'::timestamptz, '2026-12-31T17:00:00Z'::timestamptz, 'year', 2)
+    ) ranges
+  loop
+    v_report := public.get_financial_analysis_details_report_v2(
+      v_from, v_to, '40000000-0000-0000-0000-000000000001', false, 10
+    );
+    if v_report->>'granularity' <> v_granularity
+       or jsonb_array_length(v_report->'margin_trend') <> v_expected
+       or (v_report->'margin_trend'->0->>'bucket_start')::timestamptz <> v_from then
+      raise exception 'Vietnam calendar bucket boundary mismatch: %', v_report;
+    end if;
+    if (select sum((x->>'revenue')::numeric)
+        from jsonb_array_elements(v_report->'margin_trend') x) <> 120
+       or (select sum((x->>'cogs')::numeric)
+        from jsonb_array_elements(v_report->'margin_trend') x) <> 20 then
+      raise exception 'Bucket totals differ from immutable sale/return snapshots';
+    end if;
+    perform set_config('timezone', 'America/New_York', true);
+    v_other := public.get_financial_analysis_details_report_v2(
+      v_from, v_to, '40000000-0000-0000-0000-000000000001', false, 10
+    );
+    if v_report->'margin_trend' <> v_other->'margin_trend'
+       or current_setting('timezone') <> 'America/New_York' then
+      raise exception 'Report leaked or depended on caller timezone';
+    end if;
+    perform set_config('timezone', 'UTC', true);
+  end loop;
 end;
 $$;

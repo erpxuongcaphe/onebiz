@@ -1222,6 +1222,7 @@ export async function getOrderStatusDistribution(
     completed: "Hoàn thành",
     draft: "Nháp",
     confirmed: "Đã xác nhận",
+    delivering: "Đang giao",
     cancelled: "Đã hủy",
   };
 
@@ -1267,6 +1268,9 @@ export async function getRecentOrders(
     const d = new Date(inv.ngay_chung_tu as string);
     const statusMap: Record<string, string> = {
       completed: "Hoàn thành",
+      draft: "Nháp",
+      confirmed: "Đã xác nhận",
+      delivering: "Đang giao",
       pending: "Chờ xử lý",
       processing: "Đang giao",
       cancelled: "Đã hủy",
