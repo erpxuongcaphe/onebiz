@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingOrder, SyncQueueEntry } from "@/lib/offline/db";
 
 const state = vi.hoisted(() => ({
@@ -43,6 +43,7 @@ function enqueue(id: number, action: SyncQueueEntry["action"], payload: unknown)
 const paymentInput = { kitchenOrderId: "local_test", tenantId: "tenant", branchId: "xtb", total: 30000 };
 
 describe("F&B offline order dependencies", () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
   beforeEach(() => {
     vi.clearAllMocks(); state.queue.clear(); state.orders.clear();
     state.checkpointFailures = 0; state.readFailures = 0; state.writes.length = 0;
@@ -52,6 +53,44 @@ describe("F&B offline order dependencies", () => {
     state.send.mockResolvedValue({ kitchenOrderId: "server-order", orderNumber: "KB-UAT" });
     state.payment.mockResolvedValue({ invoiceId: "invoice", invoiceCode: "HD-UAT" });
     state.add.mockResolvedValue(undefined);
+  });
+  function installSharedBrowserLock() {
+    let tail = Promise.resolve();
+    const request = vi.fn((_name: string, _options: unknown, callback: () => Promise<unknown>) => {
+      const run = tail.then(callback);
+      tail = run.then(() => undefined, () => undefined);
+      return run;
+    });
+    vi.stubGlobal("navigator", { locks: { request } });
+    return request;
+  }
+  it("serializes independent tab runtimes before reading the shared pending snapshot", async () => {
+    const request = installSharedBrowserLock();
+    vi.resetModules();
+    const otherTab = await import("@/lib/offline/sync-manager");
+    enqueue(1, "sendToKitchen", { idempotencyKey: "stable-order" });
+    enqueue(2, "addItems", { kitchenOrderId: "local_test", items: [], batchId: "stable-batch" });
+    enqueue(3, "fnbPayment", paymentInput);
+    await Promise.all([replayQueue(), otherTab.replayQueue()]);
+    expect(state.send).toHaveBeenCalledTimes(1);
+    expect(state.add).toHaveBeenCalledTimes(1);
+    expect(state.payment).toHaveBeenCalledTimes(1);
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls.every(([name, options]) =>
+      name === "onebiz-offline-queue-replay" && JSON.stringify(options) === '{"mode":"exclusive"}',
+    )).toBe(true);
+    expect([...state.queue.values()].every(entry => entry.status === "completed")).toBe(true);
+  });
+  it("lets another tab recover after the lock holder fails reading IndexedDB", async () => {
+    installSharedBrowserLock();
+    vi.resetModules();
+    const otherTab = await import("@/lib/offline/sync-manager");
+    enqueue(1, "sendToKitchen", { idempotencyKey: "stable-order" });
+    state.readFailures = 1;
+    const outcomes = await Promise.allSettled([replayQueue(), otherTab.replayQueue()]);
+    expect(outcomes.map(result => result.status)).toEqual(["rejected", "fulfilled"]);
+    expect(state.send).toHaveBeenCalledTimes(1);
+    expect(state.queue.get(1)?.status).toBe("completed");
   });
   it("shares an in-flight replay instead of sending the same offline order twice", async () => {
     let release!: () => void;
