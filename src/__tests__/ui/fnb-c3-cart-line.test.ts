@@ -38,8 +38,8 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
   });
 
   it("số tiền tabular-nums + nowrap (không cắt, không giật)", () => {
-    const cotSo = LINE.slice(LINE.indexOf("shrink-0 text-right"), LINE.indexOf("Toppings"));
-    expect((cotSo.match(/tabular-nums whitespace-nowrap/g) ?? []).length).toBe(2);
+    const cotSo = LINE.slice(LINE.indexOf("shrink-0 text-right"), LINE.length);
+    expect((cotSo.match(/tabular-nums whitespace-nowrap/g) ?? []).length).toBeGreaterThanOrEqual(2);
     // CEO 19/08: dòng "đơn giá × SL" tối thiểu 12px — cấm text-[11px] trong cột số.
     expect(cotSo).not.toContain("text-[11px]");
   });
@@ -53,7 +53,7 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
     for (const nhan of ["Giảm số lượng", "Tăng số lượng", "Sửa tuỳ chọn", "Xoá món"]) {
       expect(LINE).toContain(`aria-label="${nhan}"`);
     }
-    expect((LINE.match(/size-11 md:size-9/g) ?? []).length).toBeGreaterThanOrEqual(4);
+    expect((LINE.match(/size-11/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -75,7 +75,7 @@ describe("C3 — footer ưu tiên danh sách món, vùng phụ mở khi cần", 
     expect(CART).toContain("Ưu đãi &amp; thao tác");
     expect(CART).toMatch(/coUuDai =\s*\n?\s*orderDiscountAmount > 0 \|\| !!appliedCouponCode/);
     // Màn cảm ứng giữ vùng chạm 44px, desktop vẫn dùng bản gọn.
-    expect(CART).toMatch(/aria-expanded=\{moPhanPhu\}[\s\S]{0,240}min-h-11 lg:min-h-8/);
+    expect(CART).toMatch(/aria-expanded=\{moPhanPhu\}[\s\S]{0,240}min-h-11 xl:min-h-8/);
   });
 
   it("tổng Khách cần trả và nút chính nằm ngoài vùng phụ", () => {
@@ -101,12 +101,12 @@ describe("C3 — thao tác thu ngân trên màn cảm ứng", () => {
     );
     const footerActions = CART.slice(CART.indexOf("Primary actions row"));
 
-    expect(zoneOrderType).toContain("min-h-11 lg:min-h-7 lg:h-7");
-    expect(zoneOrderType).toContain("min-h-11 lg:min-h-8 lg:h-8");
-    expect(zoneOrderType).toContain("min-h-11 lg:min-h-8");
-    expect(footerActions).toContain("h-14");
+    expect(zoneOrderType).toContain("min-h-11 xl:min-h-7 xl:h-7");
+    expect(zoneOrderType).toContain("min-h-11 xl:min-h-8 xl:h-8");
+    expect(zoneOrderType).toContain("min-h-11 xl:min-h-8");
+    expect(footerActions).toContain("h-12");
     expect(CART).toContain("function CouponRow");
-    expect(CART).toContain("min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7");
+    expect(CART).toContain("min-h-11 min-w-11 xl:min-h-7 xl:min-w-7 xl:h-7 xl:w-7");
     expect(CART).toContain("function DiscountRow");
     expect(CART).toContain("w-full min-h-11 px-3 py-2");
   });

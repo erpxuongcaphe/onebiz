@@ -2,7 +2,7 @@
 
 /** FnbCart — Right sidebar cart panel for F&B POS */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -252,8 +252,8 @@ export function FnbCart({
         : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
-      <div className="p-2.5 border-b border-outline-variant/20 bg-amber-50/50 dark:bg-card shrink-0 [@media(max-height:720px)]:p-2.5">
-        <div className="flex items-center justify-between mb-2">
+      <div className="px-2.5 py-2 border-b border-outline-variant/20 bg-white dark:bg-card shrink-0 [@media(max-height:720px)]:p-2.5">
+        <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
               {activeTab?.label ?? "Đơn hàng"}
@@ -320,7 +320,7 @@ export function FnbCart({
         <button
           type="button"
           onClick={onCustomerClick}
-          className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container-low text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
+          className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
         >
           <Icon name="person" size={16} className="text-muted-foreground shrink-0" />
           <span className="truncate flex-1 text-left">
@@ -380,7 +380,7 @@ export function FnbCart({
           đổi loại đơn đã in vé bếp gây phục vụ nhầm. */}
       <div className="px-3 pt-2 pb-1.5 shrink-0 [@media(max-height:720px)]:px-2.5 [@media(max-height:720px)]:pt-1.5 [@media(max-height:720px)]:pb-1">
         {onChangeOrderType && !activeTab?.kitchenOrderId ? (
-          <div className="inline-flex items-center rounded-full p-0.5 bg-surface-container-low border border-outline-variant/30">
+          <div className="inline-flex items-center gap-1">
             {([
               { key: "dine_in", label: "Tại quán", icon: "restaurant" },
               { key: "takeaway", label: "Mang về", icon: "takeout_dining" },
@@ -393,9 +393,9 @@ export function FnbCart({
                   type="button"
                   onClick={() => onChangeOrderType(opt.key)}
                   className={cn(
-                    "inline-flex items-center gap-1 px-3 min-h-11 xl:min-h-7 xl:h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
+                    "inline-flex items-center gap-1 px-3 min-h-11 xl:min-h-7 xl:h-7 rounded-md text-xs font-medium transition-colors press-scale-sm",
                     isActive
-                      ? "bg-primary text-on-primary ambient-shadow"
+                      ? "bg-primary/10 text-primary"
                       : "text-muted-foreground hover:text-foreground",
                   )}
                   aria-pressed={isActive}
@@ -695,7 +695,7 @@ export function FnbCart({
         // cho danh sách co dưới chiều cao nội dung, giỏ nhiều món đẩy footer
         // (Bếp/Thanh toán) tràn khỏi màn (điện thoại 812px hụt 126px).
         <ScrollArea className="flex-1 min-h-0">
-          <div className="p-2.5 flex flex-col gap-1.5">
+          <div className="px-0.5 flex flex-col">
             {/* CEO 04/07: món MỚI thêm hiện TRÊN CÙNG — chỉ đảo hiển thị,
                 data giữ cũ→mới nên lưu đơn/in bill/KDS không đổi. */}
             {[...lines].reverse().map((line) => {
@@ -716,7 +716,7 @@ export function FnbCart({
       )}
 
       {/* ── Footer: totals + discount + actions — secondary tools collapse ── */}
-      <div className="border-t border-outline-variant/20 bg-surface-container-lowest p-3 shrink-0 space-y-2 [@media(max-height:720px)]:p-3 [@media(max-height:540px)]:p-2.5">
+      <div className="border-t border-outline-variant/20 bg-white dark:bg-card p-2.5 shrink-0 space-y-1.5 [@media(max-height:720px)]:p-3 [@media(max-height:540px)]:p-2.5">
         {/* Thao tác ít dùng không được chiếm chiều cao danh sách món. Tổng tiền
             và hai nút chính luôn nằm ngoài vùng thu gọn. */}
         {!isEmpty && (
@@ -724,7 +724,7 @@ export function FnbCart({
           type="button"
           onClick={() => setMoPhanPhu((v) => !v)}
           aria-expanded={moPhanPhu}
-          className="flex w-full min-h-11 xl:min-h-8 items-center justify-between gap-2 rounded-md bg-surface-container-low px-2.5 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+          className="flex w-full min-h-11 xl:min-h-8 items-center justify-between gap-2 rounded-md px-1 py-1 text-sm font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Icon name="sell" size={13} className="shrink-0" />
@@ -884,7 +884,7 @@ export function FnbCart({
           if (!isPlatformOrder) {
             // Đơn tại quán / takeaway / direct: hiển thị như cũ
             return (
-              <div className="flex items-end justify-between border-t border-outline-variant/20 pt-3 [@media(max-height:720px)]:pt-2">
+              <div className="flex items-end justify-between pt-1.5 [@media(max-height:720px)]:pt-2">
                 <span className="text-sm font-semibold text-foreground pb-0.5">
                   Khách cần trả
                 </span>
@@ -965,7 +965,7 @@ export function FnbCart({
             onClick={onSendToKitchen}
             disabled={unsentLineCount === 0 || kitchenSubmitting}
             className={cn(
-              "flex-[0.4] h-14 rounded-lg font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
+              "flex-[0.4] h-12 rounded-md font-semibold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               activeTab?.kitchenOrderId
                 ? "bg-status-info/15 text-status-info hover:bg-status-info/25 disabled:opacity-40 disabled:pointer-events-none"
                 : "bg-surface-container-high text-on-surface hover:bg-surface-container disabled:opacity-40 disabled:pointer-events-none"
@@ -990,7 +990,7 @@ export function FnbCart({
             disabled={isEmpty || !canCheckout}
             title={canCheckout ? "Thanh toán (F9)" : "Tài khoản này chỉ được nhận món và gửi bếp"}
             className={cn(
-              "flex-[0.6] h-14 rounded-lg font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm ambient-shadow",
+              "flex-[0.6] h-12 rounded-md font-bold text-sm flex flex-col items-center justify-center gap-0.5 transition-all press-scale-sm",
               "bg-primary text-on-primary hover:bg-primary-hover disabled:opacity-40 disabled:pointer-events-none"
             )}
           >
@@ -1206,162 +1206,53 @@ function DiscountRow({
 }
 
 function CartLineItem({
-  line,
-  onUpdateQty,
-  onRemove,
-  onEdit,
-  sentToKitchen = false,
+  line, onUpdateQty, onRemove, onEdit, sentToKitchen = false,
 }: {
   line: FnbOrderLine;
   onUpdateQty?: (qty: number) => void;
   onRemove?: () => void;
-  /** Phase 1A.2: optional. Khi có → render nút "Sửa" mở lại item dialog. */
   onEdit?: () => void;
-  /** Dòng đã nằm trên đơn bếp: chỉ đọc để không sửa/gửi trùng. */
   sentToKitchen?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const detailId = useId();
   const modifierDetails = getCartModifierDetails(line);
-
-  // Stitch FnB mockup cart line:
-  // - Wrap card: bg-surface-container-low rounded-lg p-3
-  // - Name font-heading semibold + line-total text-primary
-  // - Qty controls: pill group bg-surface-container rounded-full
-  // - Remove: subtle icon top-right, visible on hover
   return (
-    <div className="group relative bg-surface-container-low rounded-lg p-2.5 hover:bg-surface-container transition-colors">
-      <div className="flex items-start justify-between gap-2">
-        {/* Tên/size ở hàng chính; lựa chọn luôn dùng toàn bộ chiều ngang bên dưới. */}
-        <div className="flex-1 min-w-0">
-          <p className="font-heading text-sm font-semibold text-foreground leading-tight line-clamp-2 break-words">
-            {line.productName}
-          </p>
-          {line.variantLabel && (
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {line.variantLabel}
-            </p>
-          )}
-        </div>
-
-        {/* C3: cột số bên phải — thành tiền (đậm) + đơn giá × SL (dòng phụ).
-            CHỈ render giá trị có sẵn (unitPrice/quantity/lineTotal từ state),
-            không tự tính lại; tabular-nums + nowrap để không cắt/không giật. */}
-        <div className="shrink-0 text-right">
-          <span className="block text-sm font-bold text-primary tabular-nums whitespace-nowrap">
-            {formatCurrency(line.lineTotal)}
-          </span>
-          <span className="block text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-            {formatCurrency(line.unitPrice)} × {formatNumber(line.quantity)}
-          </span>
-        </div>
-      </div>
-
-      {modifierDetails.length > 0 && (
-        <div
-          className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-1 border-l-2 border-primary/35 pl-2 text-xs leading-snug"
-          aria-label="Tùy chọn món"
-          data-testid="fnb-line-modifiers"
-        >
-          {modifierDetails.map((detail, index) => {
-            const isLastOddItem =
-              modifierDetails.length % 2 === 1 && index === modifierDetails.length - 1;
-
-            return (
-              <p
-                key={detail.id}
-                className={cn(
-                  "min-w-0 break-words text-muted-foreground",
-                  isLastOddItem && "col-span-2",
-                )}
-                data-testid="fnb-line-modifier"
-              >
-                <span className="text-foreground/70">{detail.label}: </span>
-                <span className="font-medium text-foreground">{detail.value}</span>
-              </p>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Toppings */}
-      {line.toppings.length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {line.toppings.map((t, i) => (
-            <p key={i} className="text-xs text-muted-foreground">
-              + {t.name} x{formatNumber(t.quantity)}{" "}
-              <span className="text-muted-foreground/80 tabular-nums">
-                {formatCurrency(t.price)}
-              </span>
-            </p>
-          ))}
-        </div>
-      )}
-      {line.note && (
-        <div className="mt-1.5 flex items-start gap-1.5 border-l-2 border-status-warning pl-2 text-xs leading-snug text-status-warning">
-          <Icon name="sticky_note_2" size={14} className="mt-px shrink-0" />
-          <p className="min-w-0 whitespace-pre-wrap break-words">{line.note}</p>
-        </div>
-      )}
-      {sentToKitchen && (
-        <p className="mt-1.5 text-xs font-medium text-status-info">
-          Đã gửi bếp
-        </p>
-      )}
-
-      {/* Qty controls + remove — Stitch pill group.
-          POS-FIX-C1: tăng touch target lên 36px md+, 44px touch device.
-          Trước đây size-7 (28px) — barista đeo găng tap nhầm sang nút xoá. */}
-      <div className="flex items-center justify-between mt-2">
+    <div data-testid="fnb-cart-line" className="border-b border-border/70 px-2 py-1 last:border-b-0">
+      <div data-testid="fnb-cart-line-main" className="flex min-h-11 items-center gap-1.5">
+        <p title={line.productName} className="min-w-0 flex-1 text-sm font-semibold leading-snug text-foreground line-clamp-2 break-words">{line.productName}</p>
         {sentToKitchen ? (
-          <span className="text-xs text-muted-foreground">Không sửa trực tiếp sau khi gửi bếp</span>
+          <span className="min-w-9 px-1 text-center text-sm font-semibold tabular-nums whitespace-nowrap" aria-label={"Số lượng: " + formatNumber(line.quantity)}>{formatNumber(line.quantity)}</span>
         ) : (
-        <div className="inline-flex items-center gap-0.5 bg-surface-container-lowest rounded-full p-0.5 border border-outline-variant/15">
-          <button
-            type="button"
-            onClick={() => onUpdateQty?.(line.quantity - 1)}
-            className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:bg-surface-container-high hover:text-foreground active:bg-surface-container transition-colors press-scale-sm"
-            aria-label="Giảm số lượng"
-          >
-            <Icon name="remove" size={16} />
-          </button>
-          {/* C3: min-w thay w cứng — số thập phân "5,17" không tràn, 1 chữ
-              số không giật nhờ tabular-nums + min-w giữ bề rộng tối thiểu. */}
-          <span className="text-sm font-semibold min-w-9 px-1 text-center tabular-nums whitespace-nowrap text-foreground">
-            {formatNumber(line.quantity)}
-          </span>
-          <button
-            type="button"
-            onClick={() => onUpdateQty?.(line.quantity + 1)}
-            className="size-11 md:size-9 rounded-full flex items-center justify-center text-primary hover:bg-primary-fixed active:bg-primary-fixed/70 transition-colors press-scale-sm"
-            aria-label="Tăng số lượng"
-          >
-            <Icon name="add" size={16} />
-          </button>
-        </div>
+          <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls={detailId} aria-label={"Số lượng: " + formatNumber(line.quantity) + " — " + line.productName} title="Đổi số lượng" className="min-h-11 min-w-11 rounded-md px-1 text-center text-sm font-semibold tabular-nums whitespace-nowrap text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary">×{formatNumber(line.quantity)}</button>
         )}
-
-        {!sentToKitchen && <div className="flex items-center gap-1">
-          {onEdit && (
-            <button
-              type="button"
-              onClick={onEdit}
-              className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary-fixed transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
-              title="Sửa tuỳ chọn"
-              aria-label="Sửa tuỳ chọn"
-            >
-              <Icon name="tune" size={16} />
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onRemove}
-            className="size-11 md:size-9 rounded-full flex items-center justify-center text-muted-foreground hover:text-status-error hover:bg-status-error/10 transition-colors opacity-60 md:opacity-0 md:group-hover:opacity-100 press-scale-sm"
-            title="Xoá"
-            aria-label="Xoá món"
-          >
-            <Icon name="delete" size={16} />
-          </button>
-        </div>}
+        <span className="shrink-0 text-right text-sm font-bold text-primary tabular-nums whitespace-nowrap" title={"Đơn giá " + formatCurrency(line.unitPrice) + "đ × " + formatNumber(line.quantity)}>{formatCurrency(line.lineTotal)}</span>
+        <button type="button" aria-label={"Thao tác món: " + line.productName} aria-expanded={expanded} aria-controls={detailId} onClick={() => setExpanded(value => !value)} className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Icon name={expanded ? "expand_less" : "more_horiz"} size={20} /></button>
       </div>
+      {(line.variantLabel || modifierDetails.length > 0) && (
+        <div className="flex flex-wrap gap-x-2 gap-y-0.5 pb-1 text-xs leading-snug" aria-label="Tùy chọn món" data-testid="fnb-line-modifiers">
+          {line.variantLabel && <span className="font-medium text-foreground">{line.variantLabel}</span>}
+          {modifierDetails.map(detail => <p key={detail.id} className="min-w-0 break-words text-muted-foreground" data-testid="fnb-line-modifier"><span>{detail.label}: </span><span className="font-medium text-foreground">{detail.value}</span></p>)}
+        </div>
+      )}
+      {line.toppings.length > 0 && <div className="flex flex-wrap gap-x-2 gap-y-0.5 pb-1 text-xs leading-snug text-muted-foreground">{line.toppings.map((t, i) => <span key={i}>+ {t.name} x{formatNumber(t.quantity)} <span className="tabular-nums">{formatCurrency(t.price)}</span></span>)}</div>}
+      {line.note && <div className="mb-1 flex items-start gap-1 border-l-2 border-status-warning pl-1.5 text-xs leading-snug text-status-warning"><Icon name="sticky_note_2" size={14} className="mt-px shrink-0" /><p className="min-w-0 whitespace-pre-wrap break-words">{line.note}</p></div>}
+      {sentToKitchen && <p className="pb-1 text-xs font-medium text-status-info">Đã gửi bếp</p>}
+      {expanded && <div id={detailId} className="border-t border-dashed border-border py-1">
+        <p className="pb-1 text-sm font-medium break-words text-foreground">{line.productName}</p>
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground"><span>Đơn giá × SL</span><span className="tabular-nums whitespace-nowrap">{formatCurrency(line.unitPrice)} × {formatNumber(line.quantity)}</span></div>
+        {sentToKitchen ? <p className="pt-1 text-xs text-muted-foreground">Không sửa trực tiếp sau khi gửi bếp</p> : <div className="flex items-center justify-between gap-1">
+          <div className="inline-flex items-center gap-0.5">
+            <button type="button" onClick={() => onUpdateQty?.(line.quantity - 1)} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary" aria-label="Giảm số lượng"><Icon name="remove" size={18} /></button>
+            <span className="text-sm font-semibold min-w-9 px-1 text-center tabular-nums whitespace-nowrap text-foreground">{formatNumber(line.quantity)}</span>
+            <button type="button" onClick={() => onUpdateQty?.(line.quantity + 1)} className="flex size-11 items-center justify-center rounded-md text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary" aria-label="Tăng số lượng"><Icon name="add" size={18} /></button>
+          </div>
+          <div className="flex items-center gap-1">
+            {onEdit && <button type="button" onClick={onEdit} className="flex size-11 items-center justify-center rounded-md text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary" title="Sửa tuỳ chọn" aria-label="Sửa tuỳ chọn"><Icon name="tune" size={18} /></button>}
+            <button type="button" onClick={onRemove} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:text-status-error hover:bg-status-error/10 focus-visible:ring-2 focus-visible:ring-primary" title="Xoá" aria-label="Xoá món"><Icon name="delete" size={18} /></button>
+          </div>
+        </div>}
+      </div>}
     </div>
   );
 }
