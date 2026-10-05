@@ -7,8 +7,8 @@
  * "Danh mục nên để qua cột trái cho dễ xem hơn" + "tablet thực đơn hãy kéo dọc".
  *
  * Width:
- *   - Desktop (≥1024px) → 200px (đủ cho icon + label dài "Trà sữa truyền thống")
- *   - Tablet (768-1023px) → 144px (gọn hơn để tận menu zone width)
+ *   - Desktop (≥1280px) → 184px (đủ cho icon + label dài "Trà sữa truyền thống")
+ *   - Tablet (768-1279px) → 144px (gọn hơn để tận menu zone width)
  * Mobile (<768px) component KHÔNG render (parent tự fallback sang horizontal pills
  * hoặc grid — sẽ làm ở Sprint B).
  *
@@ -71,10 +71,10 @@ export function FnbCategorySidebar({
       className={cn(
         // C1 (CEO 18/08): danh mục nền trung tính nhạt (container) — khác khu
         // món (container-low) và giỏ (container-lowest); ranh giới 1px rõ hơn.
-        "shrink-0 bg-surface-container border-r border-outline-variant/30 flex flex-col overflow-hidden",
-        compact ? "w-36" : "w-[220px]",
+        "h-full shrink-0 bg-white dark:bg-card border-r border-border flex flex-col overflow-hidden",
+        compact ? "w-36" : "w-[184px]",
       )}
-      style={{ width: compact ? 144 : 220 }}
+      style={{ width: compact ? 144 : 184 }}
       aria-label="Danh mục"
     >
       <div className="flex-1 overflow-y-auto p-1.5 space-y-0.5">
@@ -129,14 +129,15 @@ function CategoryButton({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={active}
       className={cn(
         // C2 (CEO 18/08): vùng chạm ≥44px (min-h-11) + vạch chỉ báo trái khi
         // đang chọn (relative để đặt vạch absolute).
         "relative w-full flex items-center gap-2 rounded-lg text-left transition-colors press-scale-sm min-h-11",
         compact ? "px-2 py-2 text-xs" : "px-3 py-2 text-sm",
         active
-          ? "bg-primary-fixed text-primary font-bold ambient-shadow"
-          : "text-on-surface-variant hover:bg-surface-container-high hover:text-foreground",
+          ? "bg-primary/10 text-primary font-bold"
+          : "text-on-surface-variant hover:bg-muted hover:text-foreground",
       )}
       title={label}
     >
@@ -161,7 +162,7 @@ function CategoryButton({
           "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
           active
             ? "bg-primary text-on-primary"
-            : "bg-surface-container-high text-on-surface-variant",
+            : "bg-muted text-muted-foreground",
         )}
       >
         {count}

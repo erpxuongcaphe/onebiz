@@ -321,7 +321,7 @@ export function FloorPlanCanvas({
               width={zone.canvasWidth}
               height={zone.canvasHeight}
               fill={zone.overlayColor}
-              opacity={0.35}
+              opacity={mode === "view" ? 0.08 : 0.35}
               listening={false}
             />
           )}
@@ -329,8 +329,8 @@ export function FloorPlanCanvas({
           <ZoneLabel zone={zone} tableCount={tables.length} />
         </Layer>
 
-        {/* Layer 1.5: decorations (dưới bàn) */}
-        <Layer>
+        {/* Decorations remain visible for orientation but quieter during service. */}
+        <Layer opacity={mode === "view" ? 0.45 : 1}>
           {decorations.map((d) => (
             <DecorationNode
               key={d.id}

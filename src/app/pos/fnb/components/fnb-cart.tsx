@@ -244,20 +244,12 @@ export function FnbCart({
       // C1: màn quá thấp (bàn phím điện thoại mở → còn ~500px) thì phần cố
       // định của giỏ (đầu + footer ≈ 600px) không thể lọt hết — cho cột giỏ
       // cuộn dự phòng để nút Bếp/Thanh toán luôn với tới được.
-      "flex flex-col bg-surface-container-lowest h-full overflow-hidden [@media(max-height:620px)]:overflow-y-auto",
+      "flex flex-col bg-white dark:bg-card h-full overflow-hidden [@media(max-height:620px)]:overflow-y-auto",
       mobile
         ? "w-full"
-        // Sprint B (CEO 06/05): cart fixed right CHỈ hiện trên lg+ (tablet
-        // landscape + desktop). Tablet portrait (md) chuyển sang FAB + drawer
-        // giống mobile để menu zone tận full width 624px.
-        // C1 (CEO 18/08): bỏ card nổi (rounded/shadow/margin) — giỏ là CỘT
-        // liền khối full-height, ranh giới = 1px border-l + nền trắng lowest
-        // khác nền khu món (container-low). Bề rộng vào dải 390–440.
-        //   md (768-1023, portrait) → hidden, FAB hiển thị
-        //   lg (1024+) 390px · xl (1280+) 460px · 2xl (1536+) 520px.
-        // Một giỏ đông món cần giữ trọn tên, cỡ và tuỳ chọn pha chế; chỉ màn
-        // lớn mới lấy thêm chiều ngang để lưới menu vẫn có không gian thao tác.
-        : "w-[390px] xl:w-[460px] 2xl:w-[520px] hidden lg:flex border-l border-outline-variant/30"
+        // Keep tablets on the drawer so menu cards retain usable width.
+        // Desktop cart width stays bounded even on larger screens.
+        : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
       <div className="p-3 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0 [@media(max-height:720px)]:p-2.5">
@@ -401,7 +393,7 @@ export function FnbCart({
                   type="button"
                   onClick={() => onChangeOrderType(opt.key)}
                   className={cn(
-                    "inline-flex items-center gap-1 px-3 min-h-11 lg:min-h-7 lg:h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
+                    "inline-flex items-center gap-1 px-3 min-h-11 xl:min-h-7 xl:h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
                     isActive
                       ? "bg-primary text-on-primary ambient-shadow"
                       : "text-muted-foreground hover:text-foreground",
@@ -531,7 +523,7 @@ export function FnbCart({
                       onChange={(e) =>
                         onDeliveryFeeChange?.(parseInt(e.target.value) || 0)
                       }
-                      className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
+                      className="min-h-11 xl:min-h-8 xl:h-8 text-xs"
                       placeholder="0"
                     />
                   </div>
@@ -555,7 +547,7 @@ export function FnbCart({
                           parseInt(e.target.value) || 0,
                         )
                       }
-                      className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
+                      className="min-h-11 xl:min-h-8 xl:h-8 text-xs"
                       placeholder="0"
                     />
                   </div>
@@ -595,7 +587,7 @@ export function FnbCart({
                           type="button"
                           onClick={() => onDeliveryTierChange(tier.code, tier.fee)}
                           className={cn(
-                            "min-h-11 lg:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                            "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
                             isActive
                               ? "bg-primary text-on-primary"
                               : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -613,7 +605,7 @@ export function FnbCart({
                       type="button"
                       onClick={() => onDeliveryTierChange("custom")}
                       className={cn(
-                        "min-h-11 lg:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
                         activeTab.deliveryDistanceTier === "custom"
                           ? "bg-primary text-on-primary"
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -636,7 +628,7 @@ export function FnbCart({
                         onChange={(e) =>
                           onDeliveryFeeChange(parseInt(e.target.value) || 0)
                         }
-                        className="min-h-11 lg:min-h-8 lg:h-8 text-xs"
+                        className="min-h-11 xl:min-h-8 xl:h-8 text-xs"
                         placeholder="0"
                       />
                     </div>
@@ -662,7 +654,7 @@ export function FnbCart({
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
                     }
-                    className="w-full min-h-11 lg:min-h-8 lg:h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full min-h-11 xl:min-h-8 xl:h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">— Chưa gán (gán sau) —</option>
                     {staffOptions.map((s) => (
@@ -732,7 +724,7 @@ export function FnbCart({
           type="button"
           onClick={() => setMoPhanPhu((v) => !v)}
           aria-expanded={moPhanPhu}
-          className="flex w-full min-h-11 lg:min-h-8 items-center justify-between gap-2 rounded-md bg-surface-container-low px-2.5 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
+          className="flex w-full min-h-11 xl:min-h-8 items-center justify-between gap-2 rounded-md bg-surface-container-low px-2.5 py-1.5 text-xs font-medium text-on-surface-variant hover:bg-surface-container transition-colors"
         >
           <span className="flex items-center gap-1.5 min-w-0">
             <Icon name="sell" size={13} className="shrink-0" />
@@ -947,7 +939,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onPrintPreBill}
-                className="flex-1 min-h-11 lg:min-h-8 lg:h-8 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 min-h-11 xl:min-h-8 xl:h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="description" size={14} className="mr-1" />
                 Tạm tính
@@ -957,7 +949,7 @@ export function FnbCart({
               <Button
                 variant="outline"
                 onClick={onSplitBill}
-                className="flex-1 min-h-11 lg:min-h-8 lg:h-8 text-xs rounded-lg border-outline-variant/40"
+                className="flex-1 min-h-11 xl:min-h-8 xl:h-8 text-xs rounded-lg border-outline-variant/40"
               >
                 <Icon name="content_cut" size={14} className="mr-1" />
                 Tách bill
@@ -1030,7 +1022,7 @@ function CouponRow({
     return (
       <div className="flex items-center gap-2">
         <span className="text-xs text-muted-foreground shrink-0">Mã</span>
-        <div className="flex-1 min-w-0 flex items-center gap-2 px-3 min-h-11 lg:min-h-7 lg:h-7 rounded bg-status-success/10 border border-status-success/30">
+        <div className="flex-1 min-w-0 flex items-center gap-2 px-3 min-h-11 xl:min-h-7 xl:h-7 rounded bg-status-success/10 border border-status-success/30">
           <Icon name="local_offer" size={14} className="text-status-success shrink-0" />
           <span className="text-xs font-semibold text-status-success truncate tabular-nums">
             {appliedCode}
@@ -1040,7 +1032,7 @@ function CouponRow({
           <button
             type="button"
             onClick={onRemove}
-            className="min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-status-error hover:border-status-error flex items-center justify-center shrink-0 transition-colors"
+            className="min-h-11 min-w-11 xl:min-h-7 xl:min-w-7 xl:h-7 xl:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-status-error hover:border-status-error flex items-center justify-center shrink-0 transition-colors"
             title="Bỏ mã khuyến mãi"
             aria-label="Bỏ mã"
           >
@@ -1073,14 +1065,14 @@ function CouponRow({
         }}
         placeholder="Nhập mã khuyến mãi"
         disabled={applying}
-        className="min-h-11 lg:min-h-7 lg:h-7 text-sm lg:text-xs flex-1 min-w-0 font-mono uppercase"
+        className="min-h-11 xl:min-h-7 xl:h-7 text-sm xl:text-xs flex-1 min-w-0 font-mono uppercase"
       />
       <button
         type="button"
         onClick={handleApply}
         disabled={!code.trim() || applying}
         className={cn(
-          "min-h-11 lg:min-h-7 lg:h-7 px-3 rounded border text-xs font-semibold shrink-0 transition-colors",
+          "min-h-11 xl:min-h-7 xl:h-7 px-3 rounded border text-xs font-semibold shrink-0 transition-colors",
           code.trim() && !applying
             ? "bg-primary text-on-primary border-primary hover:bg-primary-hover"
             : "bg-surface-container-low text-muted-foreground border-border opacity-60"
@@ -1148,13 +1140,13 @@ function DiscountRow({
           value={localValue}
           onChange={(e) => handleValueChange(e.target.value)}
           placeholder="0"
-          className="min-h-11 lg:min-h-7 lg:h-7 text-sm lg:text-xs flex-1 min-w-0 tabular-nums"
+          className="min-h-11 xl:min-h-7 xl:h-7 text-sm xl:text-xs flex-1 min-w-0 tabular-nums"
         />
         <button
           type="button"
           onClick={toggleMode}
           className={cn(
-            "min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
+            "min-h-11 min-w-11 xl:min-h-7 xl:min-w-7 xl:h-7 xl:w-7 rounded border flex items-center justify-center shrink-0 transition-colors",
             mode === "percent"
               ? "bg-primary-fixed border-primary text-primary"
               : "bg-surface-container-low border-border text-muted-foreground",
@@ -1173,7 +1165,7 @@ function DiscountRow({
             <button
               type="button"
               onClick={() => setPresetMenuOpen((v) => !v)}
-              className="min-h-11 min-w-11 lg:min-h-7 lg:min-w-7 lg:h-7 lg:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-primary hover:border-primary flex items-center justify-center transition-colors"
+              className="min-h-11 min-w-11 xl:min-h-7 xl:min-w-7 xl:h-7 xl:w-7 rounded border border-border bg-surface-container-low text-muted-foreground hover:text-primary hover:border-primary flex items-center justify-center transition-colors"
               title="Khuyến mãi nhanh"
             >
               <Icon name="local_offer" size={14} className="md:h-3 md:w-3" />

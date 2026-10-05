@@ -123,7 +123,7 @@ export function FnbLoadingSkeleton({
       {/* Body 3 cột — sidebar + menu grid + cart */}
       <div className="flex min-h-0 flex-1 flex-col md:flex-row">
         {/* Categories sidebar 200px (lg) — ẩn trên mobile */}
-        <aside className="hidden lg:flex w-50 shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex-col p-1.5 gap-1.5">
+        <aside className="hidden xl:flex w-[184px] shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex-col p-1.5 gap-1.5">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
@@ -134,7 +134,7 @@ export function FnbLoadingSkeleton({
         </aside>
 
         {/* Compact sidebar 144px (md only) */}
-        <aside className="hidden md:flex lg:hidden w-36 shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex-col p-1.5 gap-1.5">
+        <aside className="hidden md:flex xl:hidden w-36 shrink-0 bg-surface-container-lowest border-r border-outline-variant/20 flex-col p-1.5 gap-1.5">
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
@@ -145,11 +145,11 @@ export function FnbLoadingSkeleton({
         </aside>
 
         {/* Mobile category grid 4-col */}
-        <div className="md:hidden grid grid-cols-4 gap-1.5 p-2 shrink-0 max-h-[140px] bg-surface-container-lowest border-b border-outline-variant/20">
+        <div className="md:hidden grid grid-cols-4 gap-1.5 p-2 shrink-0 max-h-11 bg-surface-container-lowest border-b border-outline-variant/20">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="h-14 rounded-xl bg-surface-container animate-pulse"
+              className="h-8 rounded-xl bg-surface-container animate-pulse"
               style={{ animationDelay: `${i * 80}ms` }}
             />
           ))}
@@ -165,7 +165,7 @@ export function FnbLoadingSkeleton({
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 {/* Image area aspect-square */}
-                <div className="aspect-square bg-surface-container animate-pulse" />
+                <div className="h-6 bg-surface-container animate-pulse" />
                 {/* Name + meta */}
                 <div className="p-3 space-y-1.5">
                   <div className="h-3.5 w-3/4 rounded bg-surface-container animate-pulse" />
@@ -177,7 +177,7 @@ export function FnbLoadingSkeleton({
         </div>
 
         {/* Cart skeleton 320px (lg+) — ẩn mobile/tablet portrait */}
-        <aside className="hidden lg:flex w-[320px] xl:w-[400px] flex-col shrink-0 bg-surface-container-lowest rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3 overflow-hidden">
+        <aside className="hidden xl:flex w-[360px] 2xl:w-[400px] flex-col shrink-0 bg-surface-container-lowest rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3 overflow-hidden">
           {/* Cart header */}
           <div className="p-4 border-b border-outline-variant/20 space-y-2">
             <div className="h-5 w-32 rounded bg-surface-container animate-pulse" />

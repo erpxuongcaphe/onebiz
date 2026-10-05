@@ -248,6 +248,7 @@ function FnbPosPageInner() {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
+  const [productDisplayMode, setProductDisplayMode] = useState<"compact" | "photos">("compact");
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
@@ -3268,7 +3269,7 @@ function FnbPosPageInner() {
     }
     // Có branch nhưng currentBranch null — render header với chip để user chọn
     return (
-      <div className="flex h-dvh flex-col bg-surface-container-low">
+      <div className="flex h-dvh flex-col bg-slate-50 dark:bg-background">
         <FnbHeader
           tabs={[]}
           activeTabId=""
@@ -3320,7 +3321,7 @@ function FnbPosPageInner() {
   }
 
   return (
-    <div className="flex h-dvh flex-col bg-surface-container-low">
+    <div className="flex h-dvh flex-col bg-slate-50 dark:bg-background">
       <ConnectionStatusBar
         status={networkStatus}
         onClick={() => setSyncDrawerOpen(true)}
@@ -3446,11 +3447,11 @@ function FnbPosPageInner() {
             FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
             có empty state "Chưa có danh mục".
-            Ẩn trên mobile (<768px) để tận hết width — mobile dùng grid 4-col.
-            md+ (≥768) hiện compact 144px, lg+ (≥1024) hiện 220px (C1). */}
+            Mobile (<768px) mở bộ chọn danh mục khi cần.
+            md+ (≥768) hiện compact 144px, xl+ (≥1280) hiện 184px. */}
         {!showFloorPlan && (
           <>
-            <div className="hidden lg:block">
+            <div className="hidden xl:block">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
                 totalCount={productsWithTier.length}
@@ -3458,7 +3459,7 @@ function FnbPosPageInner() {
                 onSelect={setActiveCategoryId}
               />
             </div>
-            <div className="hidden md:block lg:hidden">
+            <div className="hidden md:block xl:hidden">
               <FnbCategorySidebar
                 categories={categoriesWithCount}
                 totalCount={productsWithTier.length}
@@ -3471,7 +3472,7 @@ function FnbPosPageInner() {
         )}
 
         {/* Left panel: menu grid OR floor plan */}
-        <div className="flex min-w-0 flex-1 flex-col pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0">
+        <div className={cn("flex min-w-0 flex-1 flex-col", pos.lineCount > 0 && !mobileCartOpen && "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0")}>
           {showFloorPlan ? (
             <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Icon name="progress_activity" size={24} className="animate-spin text-muted-foreground" /></div>}>
               <TableFloorPlan
@@ -3522,9 +3523,17 @@ function FnbPosPageInner() {
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}
+              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white dark:bg-card px-3 py-2">
+                <span className="min-w-0 truncate text-sm font-semibold">{activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-xs font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
+                <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Cách hiển thị món">
+                  <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-3 text-xs font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
+                  <button type="button" aria-pressed={productDisplayMode === "photos"} onClick={() => setProductDisplayMode("photos")} className={cn("min-h-11 rounded-lg px-3 text-xs font-semibold", productDisplayMode === "photos" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Có ảnh</button>
+                </div>
+              </div>
               <div className="flex-1 min-h-0">
                 <FnbProductGrid
                   products={filteredProducts}
+                  displayMode={productDisplayMode}
                   onSelectProduct={handleSelectProduct}
                   cartQtyByProductId={cartQtyByProductId}
                 />
@@ -3533,8 +3542,8 @@ function FnbPosPageInner() {
           )}
         </div>
 
-        {/* Right panel: cart */}
-        <FnbCart
+        {/* Selecting a table returns to its order; keep the plan full width. */}
+        {!showFloorPlan && <FnbCart
           activeTab={pos.activeTab}
           subtotal={pos.subtotal}
           total={fnbBenefitDisplay.total}
@@ -3579,7 +3588,7 @@ function FnbPosPageInner() {
           deliveryPlatformSettings={platformSettings}
           deliveryPlatformSettingsStatus={platformSettingsStatus}
           onRetryDeliveryPlatformSettings={retryFnbSettings}
-        />
+        />}
       </div>
 
       {/* Item dialog — lazy loaded */}
@@ -3715,12 +3724,12 @@ function FnbPosPageInner() {
         </Suspense>
       )}
 
-      {/* Sprint B (CEO 06/05): cart overlay hiện <lg (1024) — bao gồm mobile
-          + tablet portrait. Tablet landscape (≥lg) giữ cart fixed bên phải.
+      {/* Sprint B (CEO 06/05): cart overlay hiện <xl (1280) — bao gồm mobile
+          + tablet portrait. Desktop (≥xl) giữ cart fixed bên phải.
           Lý do: tablet portrait 768px nếu fix cart 320 → menu zone chỉ còn
           304px (~2 cols). Drawer cho phép menu tận 624px (4 cols). */}
       {mobileCartOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden bg-black/35 backdrop-blur-sm flex justify-end">
+        <div className="fixed inset-0 z-40 xl:hidden bg-black/35 backdrop-blur-sm flex justify-end">
           <button
             type="button"
             className="absolute inset-0 cursor-default"
@@ -3738,7 +3747,8 @@ function FnbPosPageInner() {
             <button
               type="button"
               onClick={() => setMobileCartOpen(false)}
-              className="h-9 w-9 rounded-xl flex items-center justify-center hover:bg-muted"
+              aria-label="Đóng giỏ hàng"
+              className="h-11 w-11 rounded-xl flex items-center justify-center hover:bg-muted"
             >
               <Icon name="close" size={16} />
             </button>
@@ -3809,7 +3819,7 @@ function FnbPosPageInner() {
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
-          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest lg:hidden"
+          className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest xl:hidden"
           aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(fnbBenefitDisplay.total)}đ`}
         >
           <span className="flex min-w-0 items-center gap-2">
@@ -3820,10 +3830,10 @@ function FnbPosPageInner() {
               </span>
             </span>
             <span className="flex min-w-0 flex-col leading-tight">
-              <span className="truncate text-xs font-semibold text-foreground">
+              <span className="truncate text-sm font-semibold text-foreground">
                 {pos.activeTab?.label ?? "Giỏ hàng"}
               </span>
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Chạm để kiểm tra đơn
               </span>
             </span>

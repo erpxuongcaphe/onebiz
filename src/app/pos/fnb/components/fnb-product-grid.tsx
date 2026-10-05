@@ -23,6 +23,7 @@ export interface FnbProduct {
 
 interface FnbProductGridProps {
   products: FnbProduct[];
+  displayMode?: "compact" | "photos";
   onSelectProduct: (product: FnbProduct) => void;
   /**
    * Có hiển thị overlay "Hết hàng" khi stock<=0 hay không.
@@ -39,28 +40,13 @@ interface FnbProductGridProps {
   cartQtyByProductId?: Record<string, number>;
 }
 
-// Grid config — responsive column count + fixed row height cho virtualizer.
-// CARD_HEIGHT = chiều cao Ô HÀNG (gồm paddingBottom GRID_GAP ở đáy ô);
-// thẻ thật (h-full) = CARD_HEIGHT − GRID_GAP = 158px. Ảnh KHÔNG vuông —
-// flex-1 min-h-0 co theo chiều cao còn lại nên bề rộng thẻ (147–200px tuỳ
-// số cột) không ảnh hưởng hình học dọc; khối tên+giá flex-shrink-0 cố định.
-// Đo thật trên preview 18/08 (thẻ 201×158): ảnh 1→98, tên 102→130,
-// giá 130→149 ≤ 158 — không chồng, không cắt.
-// C2 (CEO 18/08): thu thẻ 220→170px để tăng mật độ. Khối chữ dưới CỐ ĐỊNH
-// (tên 2 dòng + giá dòng riêng ≈ 64px), ảnh chiếm phần còn lại (min-h-0 co
-// được). ⚠️ Đổi chiều cao thẻ PHẢI đổi hằng số này (bộ cuộn ảo tính vị trí
-// hàng theo nó) — có test khoá fnb-c2-card-grid.test.ts.
-const CARD_HEIGHT = 170; // px — ảnh co giãn (~90-100px) + tên 2 dòng + giá
+// Row heights include the bottom gap and drive both virtualizer and rendered rows.
+// Compact mode prioritizes names/prices; photo mode retains the taller image cards.
+const COMPACT_CARD_HEIGHT = 112;
+const PHOTO_CARD_HEIGHT = 170;
 const GRID_GAP = 12; // px — tương ứng gap-3 Tailwind
 const ROW_PADDING = 12; // px — p-3 wrapper
-// Container width breakpoints (KHÔNG phải viewport — đã trừ sidebar + giỏ).
-// C2: hạ ngưỡng để desktop đạt 5-6 món/hàng. Sau C1: desktop 1536 → container
-// 1536-220-440-24 ≈ 852 → 5 cột (ô ~161px); 1920 → ~1236 → 6 cột (ô ~194px);
-// tablet ngang 1180 → ~546 → 3 cột; tablet dọc 820 (không giỏ) → ~660 → 4 cột;
-// điện thoại 375 → ~351 → 2 cột. Ô hẹp nhất ~153px vẫn đủ tên 2 dòng + giá.
-// Ngưỡng có DỰ PHÒNG ~30px cho thanh cuộn dọc (10-17px tuỳ máy) + sai số:
-// đo preview 18/08 desktop 1536 → contentRect thật 842px (không phải 852 trên
-// giấy) vì scrollbar ăn vào — ngưỡng 850 làm rơi oan xuống 4 cột.
+// Menu container widths, after subtracting category sidebar and cart.
 const COLS_BREAKPOINTS = [
   { minWidth: 1080, cols: 6 },
   { minWidth: 820, cols: 5 },
@@ -78,12 +64,14 @@ export function getColsForWidth(width: number): number {
 
 export function FnbProductGrid({
   products,
+  displayMode = "compact",
   onSelectProduct,
   enforceStock = false,
   cartQtyByProductId,
 }: FnbProductGridProps) {
   const parentRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>(0);
+  const hasProducts = products.length > 0;
 
   // ResizeObserver — track parent width để tính số cột động theo viewport.
   // Lý do không dùng CSS grid responsive thuần: virtualizer cần biết cols fixed
@@ -98,7 +86,7 @@ export function FnbProductGrid({
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [hasProducts]);
 
   const cols = containerWidth > 0 ? getColsForWidth(containerWidth) : 2;
   const rows = useMemo(
@@ -106,14 +94,18 @@ export function FnbProductGrid({
     [products.length, cols],
   );
 
+  const cardHeight = displayMode === "photos" ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT;
   const rowVirtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => parentRef.current,
-    // CARD_HEIGHT là TOÀN BỘ bước hàng (đã gồm đệm đáy GRID_GAP trong ô) —
-    // cộng thêm GRID_GAP ở đây là đúp khoảng cách dọc thành 24px (CEO bắt 18/08).
-    estimateSize: () => CARD_HEIGHT,
+    // The same row step includes its bottom gap in both display modes.
+    estimateSize: () => cardHeight,
     overscan: 3, // render trước/sau 3 hàng để scroll mượt
   });
+
+  useEffect(() => {
+    rowVirtualizer.measure();
+  }, [cardHeight, cols, rowVirtualizer]);
 
   if (products.length === 0) {
     return (
@@ -152,7 +144,7 @@ export function FnbProductGrid({
                 top: 0,
                 left: 0,
                 width: "100%",
-                height: `${CARD_HEIGHT}px`,
+                height: `${cardHeight}px`,
                 transform: `translateY(${virtualRow.start}px)`,
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
                 gap: `${GRID_GAP}px`,
@@ -163,6 +155,7 @@ export function FnbProductGrid({
                 <ProductCard
                   key={product.id}
                   product={product}
+                  compact={displayMode === "compact"}
                   onClick={() => onSelectProduct(product)}
                   enforceStock={enforceStock}
                   cartQty={cartQtyByProductId?.[product.id] ?? 0}
@@ -183,11 +176,13 @@ export function FnbProductGrid({
 
 function ProductCard({
   product,
+  compact,
   onClick,
   enforceStock,
   cartQty,
 }: {
   product: FnbProduct;
+  compact: boolean;
   onClick: () => void;
   enforceStock: boolean;
   cartQty: number;
@@ -203,90 +198,43 @@ function ProductCard({
   const [imageError, setImageError] = useState(false);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
+    <button type="button" onClick={onClick} disabled={outOfStock}
+      aria-label={product.name + ", " + formatCurrency(product.sell_price) + "đ"}
       className={cn(
-        "group relative flex flex-col bg-surface-container-low rounded-xl overflow-hidden press-scale-sm transition-all duration-200 text-left h-full",
-        // Sprint POS-FNB-1: dùng ambient-shadow-elevated cho hover (tier 2)
-        // → depth rõ hơn, card "nổi" lên khi hover, đúng pattern Stitch.
-        "hover:bg-surface-container-lowest hover:ambient-shadow-elevated border border-transparent hover:border-outline-variant/20",
-        outOfStock && "opacity-50 pointer-events-none",
-      )}
-    >
-      {/* Ảnh — 04/08 BỎ tỉ lệ vuông cố định (ảnh vuông từng ăn hết ô, đẩy
-          tên ra ngoài overflow-hidden); C2 giữ nguyên cấu trúc: ảnh flex-1
-          min-h-0 co theo chiều cao còn lại, khối tên+giá bên dưới giữ chỗ
-          cố định. CẤM đưa tỉ lệ vuông/chiều cao cứng trở lại — test
-          kds-tile + fnb-c2-card-grid khoá. */}
-      <div className="relative min-h-0 flex-1 overflow-hidden p-2">
-        {product.image_url && !imageError ? (
-          <>
-            {!imageLoaded && (
-              <Skeleton className="absolute inset-2 rounded-lg" />
-            )}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={product.image_url}
-              alt={product.name}
-              className={cn(
-                "h-full w-full object-cover rounded-lg group-hover:scale-105 transition-transform duration-500",
-                !imageLoaded && "opacity-0",
-              )}
-              loading="lazy"
-              onLoad={() => setImageLoaded(true)}
-              onError={() => {
-                setImageError(true);
-                setImageLoaded(true);
-              }}
-            />
-          </>
-        ) : (
-          <div className="h-full w-full rounded-lg bg-primary-fixed/40 flex items-center justify-center">
-            <Icon name="local_cafe" size={32} className="text-primary/60" />
-          </div>
-        )}
-
-        {/* Qty-in-cart badge — top-left khi món đã trong giỏ. Giúp
-            cashier thấy ngay món nào đã chọn bao nhiêu (KiotViet/Toast
-            pattern). Pure additive, không đổi flow. */}
-        {cartQty > 0 && (
-          <div
-            className="absolute top-3 left-3 flex h-6 min-w-6 items-center justify-center rounded-full bg-status-success px-1.5 text-[11px] font-bold leading-none text-white ambient-shadow tabular-nums"
-            aria-label={`Đã thêm ${cartQty} vào giỏ`}
-          >
-            {cartQty}
-          </div>
-        )}
-
-        {/* Out of stock overlay */}
-        {outOfStock && (
-          <div className="absolute inset-2 bg-surface-container-lowest/60 backdrop-blur-sm rounded-lg flex items-center justify-center">
-            <Badge variant="destructive" className="text-xs px-2 py-1 font-bold">
-              Hết hàng
-            </Badge>
-          </div>
-        )}
-      </div>
-
-      {/* C2 — thứ tự CEO chốt: ảnh → tên → GIÁ → còn/hết. Giá bỏ badge đè
-          ảnh, xuống dòng riêng dưới tên: luôn thấy, không bị che, không "...".
-          flex-shrink-0 để khối chữ LUÔN có chỗ, không bị ảnh đẩy ra ngoài. */}
-      <div className="flex-shrink-0 px-2.5 pb-2 pt-1">
-        <h3 className="font-heading font-semibold text-[13px] text-foreground line-clamp-2 leading-tight min-h-[2.1em]">
-          {product.name}
-        </h3>
-        <div className="flex items-baseline justify-between gap-1">
-          <span className="text-[13px] font-bold text-primary tabular-nums whitespace-nowrap">
-            {formatCurrency(product.sell_price)}đ
-          </span>
-          {enforceStock && (
-            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
-              {outOfStock ? "Hết hàng" : "Sẵn sàng"}
-            </span>
+        "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-card",
+        cartQty > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/40",
+        compact ? "justify-between p-3" : "",
+        outOfStock && "opacity-50",
+      )}>
+      {!compact && (
+        <div className="relative min-h-0 flex-1 overflow-hidden p-2">
+          {product.image_url && !imageError ? (
+            <>
+              {!imageLoaded && <Skeleton className="absolute inset-2 rounded-lg" />}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={product.image_url} alt="" loading="lazy"
+                className={cn("h-full w-full rounded-lg object-cover", !imageLoaded && "opacity-0")}
+                onLoad={() => setImageLoaded(true)}
+                onError={() => { setImageError(true); setImageLoaded(true); }} />
+            </>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-lg bg-muted/40">
+              <Icon name="local_cafe" size={24} className="text-muted-foreground/50" />
+            </div>
           )}
         </div>
+      )}
+      <div className={cn("flex min-w-0 flex-col gap-2", !compact && "flex-shrink-0 px-3 pb-3 pt-1")}>
+        <h3 className="line-clamp-2 min-h-[2.5em] text-sm font-semibold leading-tight text-foreground">{product.name}</h3>
+        <div className="flex items-center justify-between gap-1">
+          <span className="whitespace-nowrap text-sm font-bold tabular-nums text-foreground">{formatCurrency(product.sell_price)}đ</span>
+          {cartQty > 0 && (
+            <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-primary px-1 text-xs font-bold tabular-nums text-primary-foreground" aria-label={"Đã thêm " + cartQty + " vào giỏ"}>{cartQty}</span>
+          )}
+          {enforceStock && cartQty === 0 && <span className="whitespace-nowrap text-[11px] text-muted-foreground">{outOfStock ? "Hết hàng" : "Sẵn sàng"}</span>}
+        </div>
       </div>
+      {outOfStock && !compact && <Badge variant="destructive" className="absolute left-3 top-3">Hết hàng</Badge>}
     </button>
   );
 }

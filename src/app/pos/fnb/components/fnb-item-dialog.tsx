@@ -769,9 +769,9 @@ export function FnbItemDialog({
           (cn dùng tailwind-merge nên `flex` thay `grid` của nền đúng cách.) */}
       {/* 06/08 PR-B — bề ngang theo thiết bị, KHÔNG phải bản desktop thu nhỏ:
           điện thoại 95vw · tablet dọc 42rem · tablet ngang 56rem · desktop
-          68rem (1.088px, nằm trong khoảng 900–1.100 CEO chốt). Trần
+          Đợt UX 1: nhóm đơn giản 36rem, nhóm phức tạp mở tới 56rem. Trần
           `max-w-[calc(100%-2rem)]` của nền vẫn giữ ở cỡ nhỏ. */}
-      <DialogContent className="max-w-[95vw] sm:max-w-[42rem] lg:max-w-[56rem] xl:max-w-[68rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4">
+      <DialogContent className="max-w-[95vw] sm:max-w-[36rem] data-[complex=true]:sm:max-w-[48rem] data-[complex=true]:lg:max-w-[56rem] max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col [@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)] [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:p-4" data-complex={effectiveModifierGroups.length > 3 || (toppings?.length ?? 0) > 0}>
         {/* 07/08 (CEO chốt): ĐẦU POPUP GỘP — tên món · giá gốc · SỐ LƯỢNG ·
             tổng tạm tính, tất cả trong một khu gọn. Trước đây "Số lượng" là
             một khối riêng chiếm nguyên một cột rồi bỏ trống bên dưới, còn
@@ -1063,7 +1063,7 @@ export function FnbItemDialog({
               <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
-              placeholder="VD: không cay, ấm nóng, ăn riêng..." rows={2}
+              placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
               className="resize-none text-[13px]" />
           </section>
         </div>
@@ -1101,7 +1101,7 @@ export function FnbItemDialog({
                 : variantsLoading
                   ? "Đang tải quy cách…"
                 : invalidModifierGroupIds.size > 0
-                  ? `Còn ${invalidModifierGroupIds.size} nhóm tuỳ chọn chưa hợp lệ`
+                  ? `Kiểm tra ${effectiveModifierGroups.filter((group) => invalidModifierGroupIds.has(group.id)).map((group) => group.name).join(", ")}`
                   : lyDoChan
                     ? lyDoChan
                     : `${confirmLabel ?? "Thêm vào đơn"} — ${formatCurrency(lineTotal)}đ`}

@@ -29,7 +29,7 @@ describe("POS FnB responsive shell", () => {
       "bottom-[calc(0.75rem+env(safe-area-inset-bottom))]",
     );
     expect(page).toContain(
-      "pb-[calc(6rem+env(safe-area-inset-bottom))] lg:pb-0",
+      "pb-[calc(6rem+env(safe-area-inset-bottom))] xl:pb-0",
     );
     expect(page).toContain("pb-[env(safe-area-inset-bottom)]");
   });
