@@ -933,7 +933,7 @@ function PrintSettingsPageContent() {
                 checked={print.autoPrintKitchen}
                 onCheckedChange={(v) => update({ autoPrintKitchen: v })}
                 label="Phiếu bếp/bar"
-                description="Tự động in phiếu khi gửi bếp"
+                description="In đơn mới và món bổ sung khi gửi bếp"
                 helpTip={
                   <>
                     <strong>Bật:</strong> Bấm “Gửi bếp” trong POS FnB → phiếu

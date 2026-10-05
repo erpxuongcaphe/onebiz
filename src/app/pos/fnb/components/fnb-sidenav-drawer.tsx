@@ -22,6 +22,7 @@ import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { PERMISSIONS } from "@/lib/permissions/constants";
+import { KitchenPrintToggle } from "./kitchen-print-toggle";
 
 interface FnbSidenavDrawerProps {
   open: boolean;
@@ -143,6 +144,7 @@ export function FnbSidenavDrawer({
         <div className="border-t border-outline-variant/20 p-2 space-y-1">
           {/* Sprint B.5 (CEO 12/05): switch user qua PIN POS — nhanh 5s
               thay vì logout/login email/password 30-45s */}
+          <KitchenPrintToggle />
           {onSwitchUser && (
             <button
               type="button"
