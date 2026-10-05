@@ -32,6 +32,7 @@ import { useToast } from "@/lib/contexts";
 import { useAuth } from "@/lib/contexts/auth-context";
 import { getFnbReadiness, type FnbReadiness } from "@/lib/services/supabase/fnb-readiness";
 import { FnbReadinessBand } from "./fnb-readiness-band";
+import { ModifierDisplayOrderDialog } from "@/components/shared/dialogs/modifier-display-order-dialog";
 import {
   listModifierGroups,
   createModifierGroup,
@@ -92,6 +93,7 @@ export default function ModifierFnbPage() {
   const [readinessError, setReadinessError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [orderDialog, setOrderDialog] = useState<"groups" | ModifierGroup | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [optionsByGroup, setOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
   const [loadingOptions, setLoadingOptions] = useState<Record<string, boolean>>({});
@@ -217,12 +219,12 @@ export default function ModifierFnbPage() {
   async function handleSeedPreset() {
     if (
       !window.confirm(
-        "Tạo sẵn 4 nhóm tuỳ chọn chuẩn FnB Việt:\n\n" +
-          "• Size (M / L / XL — bắt buộc)\n" +
+        "Tạo sẵn 3 nhóm tuỳ chọn chuẩn FnB Việt:\n\n" +
           "• Mức đường (0 / 30 / 50 / 70 / 100% — scale BOM)\n" +
           "• Mức đá (Không / Ít / Vừa / Nhiều)\n" +
           "• Topping (rỗng — anh tự thêm sau vì cần link NVL)\n\n" +
-          "Nhóm nào đã có sẽ được bỏ qua, không trùng.\n" +
+          "Size có giá/công thức riêng được thiết lập tại quy cách món.\n" +
+          "Nhóm đang dùng được giữ nguyên; nhóm đã tắt được khôi phục.\n" +
           "Anh có thể sửa/xoá sau khi tạo. Tiếp tục?",
       )
     )
@@ -303,11 +305,18 @@ export default function ModifierFnbPage() {
     <div className="flex flex-col gap-4 p-4 md:p-6">
       <PageHeader
         title="Tuỳ chọn món FnB"
-        subtitle="Quản lý nhóm tuỳ chọn (Size, Mức đường, Mức đá, Topping...) — gắn vào nhóm SP hoặc SP riêng để hiện trên POS FnB."
+        subtitle="Quản lý Mức đường, Mức đá, Topping và thứ tự dùng chung trên POS. Size có giá/công thức riêng được thiết lập tại quy cách món."
         searchPlaceholder="Tìm theo tên nhóm tuỳ chọn..."
         searchValue={tuKhoa}
         onSearchChange={setTuKhoa}
         actions={[
+          {
+            label: "Sắp xếp nhóm",
+            icon: <Icon name="swap_vert" size={18} />,
+            variant: "outline",
+            onClick: () => setOrderDialog("groups"),
+            disabled: loading || Boolean(loadError) || groups.length < 2,
+          },
           {
             label: seeding ? "Đang tạo..." : "Tạo bộ tuỳ chọn mẫu",
             icon: <Icon name="auto_awesome" size={18} />,
@@ -324,6 +333,8 @@ export default function ModifierFnbPage() {
         ]}
       />
 
+      <p className="text-sm text-muted-foreground">Thứ tự chung áp dụng cho các món/nhóm hàng đã chọn <span className="font-medium text-primary">Theo thứ tự chung</span>. Món dùng thứ tự riêng vẫn giữ cấu hình riêng.</p>
+
       <FnbReadinessBand
         readiness={readiness}
         loading={loading}
@@ -339,7 +350,7 @@ export default function ModifierFnbPage() {
             <div className="space-y-1">
               <p className="font-medium text-status-info">Mới setup quán cà phê?</p>
               <p className="text-xs text-muted-foreground">
-                Bấm <span className="font-semibold">"Tạo bộ tuỳ chọn mẫu"</span> ở góc trên để tự sinh sẵn 4 nhóm chuẩn (Size + Mức đường + Mức đá + Topping). Sau đó vào trang <a href="/hang-hoa/nhom" className="text-primary underline">Nhóm hàng</a> để gán cho từng nhóm SP — tất cả món trong nhóm sẽ tự thừa kế.
+                Bấm <span className="font-semibold">Tạo bộ tuỳ chọn mẫu</span> ở góc trên để tạo Mức đường, Mức đá và Topping. Size có giá/công thức riêng được thiết lập tại quy cách món. Sau đó vào trang <a href="/hang-hoa/nhom" className="text-primary underline">Nhóm hàng</a> để gán cho từng nhóm SP — các món không gán riêng sẽ kế thừa.
               </p>
             </div>
           </div>
@@ -461,10 +472,15 @@ export default function ModifierFnbPage() {
                   <div className="border-t bg-muted/30 px-4 py-3">
                     <div className="mb-2 flex items-center justify-between">
                       <h4 className="text-sm font-medium">Lựa chọn trong "{g.name}"</h4>
+                      <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" disabled={loadingOpts || Boolean(optionErrors[g.id]) || opts.length < 2} onClick={() => setOrderDialog(g)}>
+                        <Icon name="swap_vert" size={16} className="mr-1" />Sắp xếp lựa chọn
+                      </Button>
                       <Button size="sm" onClick={() => openCreateOption(g)}>
                         <Icon name="add" size={14} className="mr-1" />
                         Thêm lựa chọn
                       </Button>
+                      </div>
                     </div>
                     {loadingOpts ? (
                       <p className="py-2 text-xs text-muted-foreground">Đang tải lựa chọn...</p>
@@ -534,6 +550,22 @@ export default function ModifierFnbPage() {
       )}
 
       {/* Dialogs */}
+      {orderDialog && <ModifierDisplayOrderDialog
+        kind={orderDialog === "groups" ? "groups" : "options"}
+        parentId={orderDialog === "groups" ? undefined : orderDialog.id}
+        title={orderDialog === "groups" ? "Sắp xếp nhóm tùy chọn chung" : `Sắp xếp lựa chọn · ${orderDialog.name}`}
+        rows={orderDialog === "groups" ? groups.map(group => ({ ...group, name: `${group.name} · ${CHANNEL_LABEL[group.channel]}` })) :
+          (optionsByGroup[orderDialog.id] ?? []).map(option => ({ id: option.id, name: option.label, sortOrder: option.sortOrder }))}
+        onClose={() => setOrderDialog(null)}
+        onSaved={async () => {
+          if (orderDialog === "groups") await refresh();
+          else {
+            const list = await listModifierOptions(orderDialog.id);
+            setOptionsByGroup(previous => ({ ...previous, [orderDialog.id]: list }));
+          }
+          toast({ variant: "success", title: "Đã lưu thứ tự tùy chọn", description: "POS nhận thứ tự mới ở lần mở món tiếp theo khi có mạng." });
+        }}
+      />}
       {groupDialog.open && (
         <GroupDialog
           editing={groupDialog.editing}

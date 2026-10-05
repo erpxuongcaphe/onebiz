@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { ModifierOrderPicker } from "@/components/shared/modifier-order-picker";
+import { modifierOrderMode, orderedModifierIds, type ModifierOrderMode } from "@/lib/modifier-display-order";
 import {
   Dialog,
   DialogContent,
@@ -468,6 +470,7 @@ export function CreateProductDialog({
     "inherit",
   );
   const [loadingModifierPicker, setLoadingModifierPicker] = useState(false);
+  const [modifierDisplayOrderMode, setModifierDisplayOrderMode] = useState<ModifierOrderMode>("common");
 
   // A FnB SKU is global until an explicit branch policy is saved. This is
   // intentionally separate from the product form, so changing a price can
@@ -586,13 +589,15 @@ export function CreateProductDialog({
   const perSizeModifierGroups = useMemo(
     () =>
       modifierMode === "override"
-        ? availableFnbModifierGroups.filter((group) => productModifierGroupIds.has(group.id))
+        ? orderedModifierIds(availableFnbModifierGroups, productModifierGroupIds, modifierDisplayOrderMode)
+            .flatMap(id => availableFnbModifierGroups.filter(group => group.id === id))
         : inheritedModifierGroups,
     [
       availableFnbModifierGroups,
       inheritedModifierGroups,
       modifierMode,
       productModifierGroupIds,
+      modifierDisplayOrderMode,
     ],
   );
   const perSizeModifierGroupKey = perSizeModifierGroups
@@ -1012,6 +1017,7 @@ export function CreateProductDialog({
       allowFreeSale,
       innerTab,
       modifierMode,
+      modifierDisplayOrderMode,
       productModifierGroupIds: Array.from(productModifierGroupIds),
       fnbMenuScopeMode,
       fnbMenuBranchIds: Array.from(fnbMenuBranchIds),
@@ -1066,6 +1072,7 @@ export function CreateProductDialog({
       setAllowFreeSale(draft.allowFreeSale);
       setInnerTab(draft.innerTab);
       setModifierMode(draft.modifierMode);
+      setModifierDisplayOrderMode(draft.modifierDisplayOrderMode ?? "custom");
       setProductModifierGroupIds(new Set(draft.productModifierGroupIds));
       setFnbMenuScopeMode(draft.fnbMenuScopeMode);
       setFnbMenuBranchIds(new Set(draft.fnbMenuBranchIds));
@@ -1117,6 +1124,7 @@ export function CreateProductDialog({
         loadedModifierDraftKeyRef.current = null;
         setProductModifierGroupIds(new Set());
         setModifierMode("inherit");
+        setModifierDisplayOrderMode("common");
       }
       return;
     }
@@ -1138,9 +1146,9 @@ export function CreateProductDialog({
         if (categoryId) {
           const links = await withFnbSetupTimeout(listCategoryModifierLinks(categoryId));
           if (cancelled) return;
-          const inheritedIds = new Set(links.map((l) => l.modifierGroupId));
+          const inheritedIds = orderedModifierIds(fnbGroups, links.map(link => link.modifierGroupId), modifierOrderMode(links));
           setInheritedModifierGroups(
-            fnbGroups.filter((g) => inheritedIds.has(g.id)),
+            inheritedIds.flatMap(id => fnbGroups.filter(group => group.id === id)),
           );
         } else {
           setInheritedModifierGroups([]);
@@ -1159,13 +1167,16 @@ export function CreateProductDialog({
               setProductModifierGroupIds(
                 new Set(productLinks.map((l) => l.modifierGroupId)),
               );
+              setModifierDisplayOrderMode(modifierOrderMode(productLinks));
             } else {
               setModifierMode("inherit");
               setProductModifierGroupIds(new Set());
+              setModifierDisplayOrderMode("common");
             }
           } else {
             setModifierMode("inherit");
             setProductModifierGroupIds(new Set());
+            setModifierDisplayOrderMode("common");
           }
           loadedModifierDraftKeyRef.current = dialogProductKey;
         }
@@ -2365,7 +2376,7 @@ export function CreateProductDialog({
               modifierMode === "override"
                 ? Array.from(productModifierGroupIds)
                 : [];
-            await setProductModifierGroups(initialData.id, ids);
+            await setProductModifierGroups(initialData.id, ids, modifierDisplayOrderMode === "common");
           } catch (modErr) {
             console.warn("Save product modifier links failed:", modErr);
             setInnerTab("modifier");
@@ -2616,7 +2627,7 @@ export function CreateProductDialog({
         created?.id &&
         scope === "sku" &&
         channel === "fnb" &&
-        !createAtomicallyWithFnbSizes &&
+        (!createAtomicallyWithFnbSizes || modifierDisplayOrderMode === "common") &&
         modifierMode === "override" &&
         productModifierGroupIds.size > 0
       ) {
@@ -2624,6 +2635,7 @@ export function CreateProductDialog({
           await setProductModifierGroups(
             created.id,
             Array.from(productModifierGroupIds),
+            modifierDisplayOrderMode === "common",
           );
         } catch (modErr) {
           console.warn(
@@ -4504,6 +4516,11 @@ export function CreateProductDialog({
                             ⚠️ SP này sẽ dùng {productModifierGroupIds.size} nhóm trên — KHÔNG thừa kế nhóm hàng nữa.
                           </p>
                         )}
+                        <ModifierOrderPicker groups={availableFnbModifierGroups}
+                          selectedIds={productModifierGroupIds} mode={modifierDisplayOrderMode}
+                          onModeChange={setModifierDisplayOrderMode} onOrderChange={setProductModifierGroupIds}
+                          disabled={loadingModifierPicker || !modifierGroupsReady}
+                        />
                       </>
                     )}
                   </div>

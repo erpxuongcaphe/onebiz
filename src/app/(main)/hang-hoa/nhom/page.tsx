@@ -56,6 +56,8 @@ import {
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import type { ProductCategory } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { ModifierOrderPicker } from "@/components/shared/modifier-order-picker";
+import { modifierOrderMode, type ModifierOrderMode } from "@/lib/modifier-display-order";
 // Day 22/05/2026 (CEO V3): Excel import/export categories
 import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
 import { downloadTemplate, exportToExcelFromSchema } from "@/lib/excel";
@@ -291,6 +293,8 @@ export default function NhomHangPage() {
     Set<string>
   >(new Set());
   const [loadingModifiers, setLoadingModifiers] = useState(false);
+  const [modifierDisplayOrderMode, setModifierDisplayOrderMode] = useState<ModifierOrderMode>("common");
+  const [modifierLoadError, setModifierLoadError] = useState(false);
 
   // Nhóm SKU phải theo đúng kênh bán của chi nhánh đang chọn. `undefined`
   // là trạng thái đang xác định kênh; trong lúc đó bảng được giữ loading để
@@ -373,6 +377,7 @@ export default function NhomHangPage() {
     }
     let cancelled = false;
     setLoadingModifiers(true);
+    setModifierLoadError(false);
     (async () => {
       try {
         const groups = await listModifierGroups();
@@ -388,12 +393,15 @@ export default function NhomHangPage() {
           setSelectedModifierGroupIds(
             new Set(links.map((l) => l.modifierGroupId)),
           );
+          setModifierDisplayOrderMode(modifierOrderMode(links));
         } else {
           setSelectedModifierGroupIds(new Set());
+          setModifierDisplayOrderMode("common");
         }
       } catch (err) {
         if (!cancelled) {
           console.warn("Load modifier groups failed:", err);
+          setModifierLoadError(true);
         }
       } finally {
         if (!cancelled) setLoadingModifiers(false);
@@ -527,6 +535,10 @@ export default function NhomHangPage() {
   }
 
   async function handleSave() {
+    if (scope === "sku" && categoryChannel === "fnb" && (loadingModifiers || modifierLoadError)) {
+      toast({ variant: "error", title: "Chưa tải được tùy chọn", description: "Đóng và mở lại nhóm hàng trước khi lưu để giữ đúng cấu hình hiện có." });
+      return;
+    }
     const trimmedName = categoryName.trim();
     const trimmedCode = categoryCode.trim().toUpperCase();
     const newErrors: typeof errors = {};
@@ -578,6 +590,7 @@ export default function NhomHangPage() {
           await setCategoryModifierGroups(
             savedCategoryId,
             Array.from(selectedModifierGroupIds),
+            modifierDisplayOrderMode === "common",
           );
         } catch (modErr) {
           console.warn("Save modifier groups failed:", modErr);
@@ -1256,7 +1269,7 @@ export default function NhomHangPage() {
                     >
                       Tuỳ chọn món FnB
                     </a>{" "}
-                    để tạo (có nút "Tạo bộ tuỳ chọn mẫu" sinh sẵn 4 nhóm).
+                      để tạo (bộ mẫu gồm Mức đường, Mức đá và Topping).
                   </p>
                 ) : (
                   <div className="grid grid-cols-2 gap-1.5 mt-2">
@@ -1294,6 +1307,12 @@ export default function NhomHangPage() {
                     trong nhóm này sẽ tự thừa kế.
                   </p>
                 )}
+                {modifierLoadError && <p role="alert" className="text-sm text-destructive">Không tải được tùy chọn. Đóng và mở lại nhóm hàng để thử lại.</p>}
+                {!loadingModifiers && !modifierLoadError && availableModifierGroups.length > 0 && <ModifierOrderPicker
+                  groups={availableModifierGroups} selectedIds={selectedModifierGroupIds}
+                  mode={modifierDisplayOrderMode} onModeChange={setModifierDisplayOrderMode}
+                  onOrderChange={setSelectedModifierGroupIds}
+                />}
               </div>
             )}
           </div>
