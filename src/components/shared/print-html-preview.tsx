@@ -6,7 +6,7 @@ import type {PaperSize} from "@/lib/print-document";
 export function PrintHtmlPreview({html,paperSize,title,height=520}:{html:string;paperSize:PaperSize;title:string;height?:number}) {
   const container=useRef<HTMLDivElement>(null);
   const [available,setAvailable]=useState(0);
-  const width=(paperSize==="58mm"?58:paperSize==="80mm"?80:paperSize==="A5"?148:210)/25.4*96;
+  const width=Math.ceil((paperSize==="58mm"?58:paperSize==="80mm"?80:paperSize==="A5"?148:210)/25.4*96);
   useEffect(()=>{
     const element=container.current;if(!element)return;
     const resize=()=>setAvailable(element.clientWidth);

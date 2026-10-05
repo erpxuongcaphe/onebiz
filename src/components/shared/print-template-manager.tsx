@@ -955,7 +955,7 @@ function TemplateEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto">
+      <DialogContent className="md:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{editId ? "Sửa mẫu in" : "Tạo mẫu in"}</DialogTitle>
           <DialogDescription>
@@ -963,9 +963,9 @@ function TemplateEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
           {/* ── Cột trái: form ── */}
-          <div className="space-y-5">
+          <div className="min-w-0 space-y-5">
             {/* Tên mẫu */}
             <div className="space-y-1.5">
               <label className="text-sm font-medium">
@@ -1185,7 +1185,7 @@ function TemplateEditorDialog({
                             value={s.label}
                             onChange={(e) => setSignatureLabel(i, e.target.value)}
                             placeholder="VD: Thủ kho, Kế toán, Khách hàng…"
-                            className="flex-1"
+                            className="min-w-0 flex-1"
                           />
                           <button
                             type="button"
@@ -1227,7 +1227,7 @@ function TemplateEditorDialog({
           </div>
 
           {/* ── Cột phải: preview ── */}
-          <div className="lg:sticky lg:top-0 lg:self-start">
+          <div className="min-w-0 lg:sticky lg:top-0 lg:self-start">
             <div role="note" className="mb-2 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
               <p className="font-semibold">Xem trước · dữ liệu minh họa</p>
               <p>Món, số phiếu, bàn và thời gian trong bản xem trước là ví dụ, không phải giao dịch thật.</p>
@@ -1243,6 +1243,11 @@ function TemplateEditorDialog({
               brandLoading={brandLoading}
               paperSize={paperSize}
             />
+            {!brandLoading && config.payment?.showQr === true && ["sale_invoice", "sales_order", "sale_return", "internal_sale", "input_invoice", "purchase_order"].includes(docType) && (!brand?.bankAccount || !(brand?.bankBin || brand?.bankCode) || brand?.vietQrEnabled === false) && (
+              <p role="note" className="mt-2 border-l-4 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                QR chưa xuất hiện vì chưa đủ thông tin ngân hàng hoặc VietQR đang tắt. Kiểm tra Cài đặt → Thanh toán trước khi in QR thật.
+              </p>
+            )}
             <p className="mt-2 text-xs text-muted-foreground">
               {docType === "kitchen_ticket"
                 ? `Phiếu bếp minh họa khổ ${paperSize} — bàn, số lượng và yêu cầu pha chế được ưu tiên.`

@@ -156,7 +156,7 @@ const backends = [
   {
     id: "browser" as const,
     label: "Qua trình duyệt",
-    desc: "Tương thích mọi máy in đã cài driver (USB / LAN / WiFi / AirPrint). Sẽ hiện hộp thoại chọn máy in.",
+    desc: "Dùng máy in đã cài driver hoặc được hệ điều hành hỗ trợ (USB / LAN / Wi-Fi / AirPrint). Chọn máy trong hộp thoại in; in thử đúng thiết bị trước khi dùng.",
     icon: "print" as const,
   },
   {
@@ -508,7 +508,7 @@ function PrintSettingsPageContent() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-2 xl:grid-cols-3">
+          <div className="grid gap-2" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))" }}>
             {backends.map((b) => {
               const isActive = print.backend === b.id;
               const disabled = b.id === "escpos-usb" && !webusbSupported;
@@ -516,8 +516,8 @@ function PrintSettingsPageContent() {
                 <button
                   key={b.id}
                   type="button"
-                  disabled={disabled}
-                  onClick={() => update({ backend: b.id })}
+                  disabled={disabled || testStatus === "testing"}
+                  onClick={() => { update({ backend: b.id }); setTestError(""); setTestStatus("idle"); }}
                   className={cn(
                     "flex flex-col items-start gap-2 rounded-lg border p-4 text-left transition-colors",
                     isActive
@@ -533,7 +533,7 @@ function PrintSettingsPageContent() {
                     />
                     <span className="text-sm font-semibold">{b.label}</span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{b.desc}</span>
+                  <span className="text-sm text-muted-foreground">{b.desc}</span>
                   {disabled && (
                     <span className="mt-1 text-xs text-status-warning">
                       Trình duyệt hiện tại không hỗ trợ WebUSB — vui lòng dùng Chrome/Edge
