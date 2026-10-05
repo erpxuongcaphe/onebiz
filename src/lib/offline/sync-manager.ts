@@ -133,10 +133,23 @@ export function replayQueue(): Promise<SyncResult[]> {
   // Online events and manual sync can overlap across mounted POS consumers.
   // Share the run before its first IndexedDB await, then release on any outcome.
   if (activeReplay) return activeReplay;
-  activeReplay = replayQueueOnce().finally(() => {
+  activeReplay = replayWithBrowserLock().finally(() => {
     activeReplay = null;
   });
   return activeReplay;
+}
+
+async function replayWithBrowserLock(): Promise<SyncResult[]> {
+  // IndexedDB is shared by same-origin tabs; claim the whole FIFO run before
+  // reading pending entries. Backend idempotency still protects other devices.
+  if (typeof navigator !== "undefined" && navigator.locks?.request) {
+    return navigator.locks.request(
+      "onebiz-offline-queue-replay",
+      { mode: "exclusive" },
+      replayQueueOnce,
+    );
+  }
+  return replayQueueOnce();
 }
 
 async function replayQueueOnce(): Promise<SyncResult[]> {
