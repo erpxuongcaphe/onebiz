@@ -13,6 +13,7 @@ export interface FnbProduct {
   code: string;
   sell_price: number;
   image_url?: string;
+  sort_order?: number;
   stock: number;
   category_id: string | null;
   /** Sprint UI-4: dùng cho sub-category pills (group by brand). Null nếu chưa gán. */
@@ -42,10 +43,10 @@ interface FnbProductGridProps {
 
 // Row heights include the bottom gap and drive both virtualizer and rendered rows.
 // Compact mode prioritizes names/prices; photo mode retains the taller image cards.
-const COMPACT_CARD_HEIGHT = 112;
-const PHOTO_CARD_HEIGHT = 170;
-const GRID_GAP = 12; // px — tương ứng gap-3 Tailwind
-const ROW_PADDING = 12; // px — p-3 wrapper
+const COMPACT_CARD_HEIGHT = 104;
+const PHOTO_CARD_HEIGHT = 200;
+const GRID_GAP = 8;
+const ROW_PADDING = 8;
 // Menu container widths, after subtracting category sidebar and cart.
 const COLS_BREAKPOINTS = [
   { minWidth: 1080, cols: 6 },
@@ -194,40 +195,44 @@ function ProductCard({
   const outOfStock = enforceStock && product.stock <= 0;
   // CEO 22/05/2026: rollback POS guard — cho phép bán SP giá 0đ tự do
   // (KM, tặng kèm, miễn phí intentional). Cashier tự chịu trách nhiệm.
-  const [imageLoaded, setImageLoaded] = useState(false);
-  const [imageError, setImageError] = useState(false);
+  const [loadedUrl, setLoadedUrl] = useState<string | undefined>();
+  const [failedUrl, setFailedUrl] = useState<string | undefined>();
+  const imageLoaded = loadedUrl === product.image_url;
+  const imageError = Boolean(product.image_url && failedUrl === product.image_url);
 
   return (
     <button type="button" onClick={onClick} disabled={outOfStock}
       aria-label={product.name + ", " + formatCurrency(product.sell_price) + "đ"}
+      title={product.name}
       className={cn(
         "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-card",
         cartQty > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/40",
-        compact ? "justify-between p-3" : "",
+        compact ? "justify-between p-2.5" : "",
         outOfStock && "opacity-50",
       )}>
       {!compact && (
-        <div className="relative min-h-0 flex-1 overflow-hidden p-2">
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-slate-100/70 p-1 dark:bg-muted/30">
           {product.image_url && !imageError ? (
             <>
               {!imageLoaded && <Skeleton className="absolute inset-2 rounded-lg" />}
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={product.image_url} alt="" loading="lazy"
-                className={cn("h-full w-full rounded-lg object-cover", !imageLoaded && "opacity-0")}
-                onLoad={() => setImageLoaded(true)}
-                onError={() => { setImageError(true); setImageLoaded(true); }} />
+                className={cn("h-full w-full rounded-md object-contain", !imageLoaded && "opacity-0")}
+                onLoad={() => setLoadedUrl(product.image_url)}
+                onError={() => { setFailedUrl(product.image_url); setLoadedUrl(product.image_url); }} />
             </>
           ) : (
-            <div className="flex h-full items-center justify-center rounded-lg bg-muted/40">
-              <Icon name="local_cafe" size={24} className="text-muted-foreground/50" />
+            <div className="flex h-full flex-col items-center justify-center gap-1 rounded-md text-slate-600 dark:text-muted-foreground">
+              <span className="text-xl font-bold" aria-hidden>{product.name.split(/\s+/).slice(0, 2).map(word => word[0]).join("")}</span>
+              <span className="text-xs">{imageError ? "Ảnh chưa tải được" : "Chưa có ảnh"}</span>
             </div>
           )}
         </div>
       )}
-      <div className={cn("flex min-w-0 flex-col gap-2", !compact && "flex-shrink-0 px-3 pb-3 pt-1")}>
-        <h3 className="line-clamp-2 min-h-[2.5em] text-sm font-semibold leading-tight text-foreground">{product.name}</h3>
+      <div className={cn("flex min-w-0 flex-col gap-1", !compact && "flex-shrink-0 px-2.5 pb-2 pt-1.5")}>
+        <h3 className="line-clamp-2 min-h-[2.5em] text-base font-semibold leading-tight text-foreground">{product.name}</h3>
         <div className="flex items-center justify-between gap-1">
-          <span className="whitespace-nowrap text-sm font-bold tabular-nums text-foreground">{formatCurrency(product.sell_price)}đ</span>
+          <span className="whitespace-nowrap text-base font-bold tabular-nums text-primary">{formatCurrency(product.sell_price)}đ</span>
           {cartQty > 0 && (
             <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-primary px-1 text-xs font-bold tabular-nums text-primary-foreground" aria-label={"Đã thêm " + cartQty + " vào giỏ"}>{cartQty}</span>
           )}

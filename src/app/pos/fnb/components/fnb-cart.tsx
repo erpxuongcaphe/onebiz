@@ -252,7 +252,7 @@ export function FnbCart({
         : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
-      <div className="p-3 border-b border-outline-variant/20 bg-surface-container-lowest shrink-0 [@media(max-height:720px)]:p-2.5">
+      <div className="p-2.5 border-b border-outline-variant/20 bg-amber-50/50 dark:bg-card shrink-0 [@media(max-height:720px)]:p-2.5">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
@@ -261,14 +261,14 @@ export function FnbCart({
             {!isEmpty && (
               <Badge
                 variant="secondary"
-                className="text-[10px] shrink-0 bg-surface-container-high text-on-surface-variant border-0 font-semibold"
+                className="text-xs shrink-0 bg-surface-container-high text-on-surface-variant border-0 font-semibold"
               >
                 {lineCount} món
               </Badge>
             )}
             {activeTab?.kitchenOrderId && (
               <span
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold shrink-0"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-xs font-semibold shrink-0"
                 title="Đơn đã được gửi xuống bếp. Thêm món sẽ gửi bổ sung."
               >
                 <Icon name="ramen_dining" size={14} />
@@ -326,7 +326,7 @@ export function FnbCart({
           <span className="truncate flex-1 text-left">
             {activeTab?.customerName ?? "Khách lẻ"}
           </span>
-          <kbd className="text-[10px] text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-2 py-0.5">
+          <kbd className="text-xs text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-2 py-0.5">
             F4
           </kbd>
         </button>
@@ -420,7 +420,7 @@ export function FnbCart({
             />
             {orderTypeLabel}
             {activeTab?.kitchenOrderId && (
-              <span className="text-[10px] text-muted-foreground ml-1">
+              <span className="text-xs text-muted-foreground ml-1">
                 (đã gửi bếp)
               </span>
             )}
@@ -435,7 +435,7 @@ export function FnbCart({
           !activeTab?.kitchenOrderId && (
             <div className="mt-3 p-3 rounded-lg bg-surface-container-low border border-outline-variant/20 space-y-2.5">
               <div className="flex items-center gap-1">
-                <span className="text-[11px] uppercase font-bold text-on-surface-variant">
+                <span className="text-xs uppercase font-bold text-on-surface-variant">
                   Sàn giao hàng
                 </span>
                 <HelpTip>
@@ -487,7 +487,7 @@ export function FnbCart({
                       onClick={() => onDeliveryPlatformChange(p.key)}
                       disabled={!isSelectable}
                       className={cn(
-                        "min-h-11 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                        "min-h-11 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                         isActive
                           ? p.activeClassName
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -508,7 +508,7 @@ export function FnbCart({
               {(activeTab.deliveryPlatform ?? "direct") !== "direct" && (
                 <div className="grid grid-cols-2 gap-2">
                   <div className="space-y-0.5">
-                    <label className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                    <label className="text-xs text-on-surface-variant flex items-center gap-1">
                       Phí giao khách trả (₫)
                       <HelpTip>
                         Khoản này được cộng vào tổng khách cần trả. Phí/chiết
@@ -528,7 +528,7 @@ export function FnbCart({
                     />
                   </div>
                   <div className="space-y-0.5">
-                    <label className="text-[10px] text-on-surface-variant flex items-center gap-1">
+                    <label className="text-xs text-on-surface-variant flex items-center gap-1">
                       CK sàn (%)
                       <HelpTip>
                         % chiết khấu sàn lấy của quán. Shopee Food / Grab Food
@@ -569,7 +569,7 @@ export function FnbCart({
               {selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
-                    <span className="text-[11px] uppercase font-bold text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold text-on-surface-variant">
                       Cấp ngưỡng km
                     </span>
                     <HelpTip>
@@ -587,7 +587,7 @@ export function FnbCart({
                           type="button"
                           onClick={() => onDeliveryTierChange(tier.code, tier.fee)}
                           className={cn(
-                            "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                            "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
                             isActive
                               ? "bg-primary text-on-primary"
                               : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -605,7 +605,7 @@ export function FnbCart({
                       type="button"
                       onClick={() => onDeliveryTierChange("custom")}
                       className={cn(
-                        "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-colors",
+                        "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
                         activeTab.deliveryDistanceTier === "custom"
                           ? "bg-primary text-on-primary"
                           : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
@@ -617,7 +617,7 @@ export function FnbCart({
                   {/* Khi 'custom' → input fee tay */}
                   {activeTab.deliveryDistanceTier === "custom" && onDeliveryFeeChange && (
                     <div className="grid grid-cols-2 gap-2 pt-1">
-                      <label className="text-[10px] text-on-surface-variant col-span-2">
+                      <label className="text-xs text-on-surface-variant col-span-2">
                         Phí giao khách trả (VND)
                       </label>
                       <Input
@@ -640,7 +640,7 @@ export function FnbCart({
               {staffOptions && onDeliveryStaffChange && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
-                    <span className="text-[11px] uppercase font-bold text-on-surface-variant">
+                    <span className="text-xs uppercase font-bold text-on-surface-variant">
                       Nhân viên giao
                     </span>
                     <HelpTip>
@@ -678,7 +678,7 @@ export function FnbCart({
         <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 px-4 py-6 text-center">
           <Icon name="local_cafe" size={20} className="text-muted-foreground/50" />
           <p className="text-xs font-medium">Chưa có món — chọn từ thực đơn</p>
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground/80">
+          <div className="flex items-center gap-1 text-xs text-muted-foreground/80">
             <kbd className="font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5">
               F3
             </kbd>
@@ -759,7 +759,7 @@ export function FnbCart({
                 return (
                   <div
                     key={free.productId}
-                    className="flex items-center justify-between text-[11px]"
+                    className="flex items-center justify-between text-xs"
                   >
                     <span className="truncate text-foreground">
                       {name}{" "}
@@ -1156,7 +1156,7 @@ function DiscountRow({
           {mode === "percent" ? (
             <Icon name="percent" size={14} className="md:h-3 md:w-3" />
           ) : (
-            <span className="text-xs md:text-[10px] font-bold">đ</span>
+            <span className="text-xs md:text-xs font-bold">đ</span>
           )}
         </button>
         {/* Sprint POS-FNB-EXT-1: Preset dropdown trigger */}
@@ -1177,7 +1177,7 @@ function DiscountRow({
                   onClick={() => setPresetMenuOpen(false)}
                 />
                 <div className="absolute right-0 top-full mt-1 z-50 w-52 rounded-lg border border-outline-variant/30 bg-surface-container-lowest shadow-lg overflow-hidden">
-                  <div className="px-3 py-2 text-[10px] uppercase font-bold text-on-surface-variant border-b border-outline-variant/20">
+                  <div className="px-3 py-2 text-xs uppercase font-bold text-on-surface-variant border-b border-outline-variant/20">
                     Khuyến mãi nhanh
                   </div>
                   {presets.map((p) => (
@@ -1236,7 +1236,7 @@ function CartLineItem({
             {line.productName}
           </p>
           {line.variantLabel && (
-            <p className="text-[11px] text-muted-foreground mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {line.variantLabel}
             </p>
           )}
@@ -1286,7 +1286,7 @@ function CartLineItem({
       {line.toppings.length > 0 && (
         <div className="mt-2 space-y-0.5">
           {line.toppings.map((t, i) => (
-            <p key={i} className="text-[11px] text-muted-foreground">
+            <p key={i} className="text-xs text-muted-foreground">
               + {t.name} x{formatNumber(t.quantity)}{" "}
               <span className="text-muted-foreground/80 tabular-nums">
                 {formatCurrency(t.price)}
@@ -1296,13 +1296,13 @@ function CartLineItem({
         </div>
       )}
       {line.note && (
-        <div className="mt-1.5 flex items-start gap-1.5 border-l-2 border-status-warning pl-2 text-[11px] leading-snug text-status-warning">
+        <div className="mt-1.5 flex items-start gap-1.5 border-l-2 border-status-warning pl-2 text-xs leading-snug text-status-warning">
           <Icon name="sticky_note_2" size={14} className="mt-px shrink-0" />
           <p className="min-w-0 whitespace-pre-wrap break-words">{line.note}</p>
         </div>
       )}
       {sentToKitchen && (
-        <p className="mt-1.5 text-[11px] font-medium text-status-info">
+        <p className="mt-1.5 text-xs font-medium text-status-info">
           Đã gửi bếp
         </p>
       )}

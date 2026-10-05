@@ -49,7 +49,7 @@ export function FnbCategoryGrid({
     <div className="shrink-0 border-b border-border bg-white dark:bg-card">
       <button type="button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded} aria-controls="fnb-mobile-categories" className="flex min-h-11 w-full items-center justify-between gap-2 px-3 text-sm">
         <span className="flex min-w-0 items-center gap-2"><Icon name="category" size={18} /><span className="truncate font-semibold">{activeName}</span></span>
-        <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground">Danh mục<Icon name={expanded ? "expand_less" : "expand_more"} size={18} /></span>
+        <span className="flex shrink-0 items-center gap-1 text-sm text-muted-foreground">Danh mục<Icon name={expanded ? "expand_less" : "expand_more"} size={18} /></span>
       </button>
       {expanded && <div id="fnb-mobile-categories"
       className="grid grid-cols-4 gap-1.5 p-2 bg-surface-container-lowest border-b border-outline-variant/20 max-h-[240px] overflow-y-auto shrink-0"
@@ -99,7 +99,7 @@ function CategoryTile({
       aria-pressed={active}
       onClick={onClick}
       className={cn(
-        "relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[11px] transition-colors press-scale-sm min-h-[64px]",
+        "relative flex flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-sm transition-colors press-scale-sm min-h-[64px]",
         active
           ? "bg-primary text-on-primary font-bold ambient-shadow"
           : "bg-surface-container-low text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -119,7 +119,7 @@ function CategoryTile({
       </span>
       <span
         className={cn(
-          "absolute top-1 right-1 rounded-md px-1 py-0 text-[9px] font-semibold tabular-nums leading-tight",
+          "absolute top-1 right-1 rounded-md px-1 py-0 text-xs font-semibold tabular-nums leading-tight",
           active
             ? "bg-on-primary/20 text-on-primary"
             : "bg-surface-container text-on-surface-variant",

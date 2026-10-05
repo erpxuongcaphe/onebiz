@@ -6,6 +6,8 @@ import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
+import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
+import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
 import {
   resolveAppliedTier,
@@ -249,6 +251,7 @@ function FnbPosPageInner() {
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [productDisplayMode, setProductDisplayMode] = useState<"compact" | "photos">("compact");
+  const [menuOrderOpen, setMenuOrderOpen] = useState(false);
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
@@ -428,7 +431,7 @@ function FnbPosPageInner() {
               Number.isFinite(product.sell_price) &&
               (product.sell_price > 0 || product.allow_free_sale === true),
           );
-          mustRefreshCatalog = cachedProducts.length !== cached.products.length;
+          mustRefreshCatalog = cachedProducts.length !== cached.products.length || cachedProducts.some(product => product.sort_order === undefined) || cached.categories.some(category => category.sort_order === undefined);
           if (cachedProducts.length > 0) {
             const categoryIds = new Set(
               cachedProducts
@@ -465,13 +468,17 @@ function FnbPosPageInner() {
           // filter. Its compact fingerprint is checked on every POS load so
           // a cached catalog cannot stay valid after an admin isolates a SKU
           // to another branch.
-          const menuScopes = await listFnbProductBranchMenuScopes(tenantId);
+          const [menuScopes, orderRevision] = await Promise.all([
+            listFnbProductBranchMenuScopes(tenantId),
+            readFnbMenuOrderRevision().catch(() => undefined),
+          ]);
           const needsRefresh =
             mustRefreshCatalog ||
             (await shouldRefreshMenu(
               tenantId,
               branchId,
               getFnbMenuScopeFingerprint(menuScopes),
+              orderRevision,
             ).catch(() => true));
           const supabase = getClient();
 
@@ -483,13 +490,15 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
+                  .order("sort_order")
                   .order("name")
+                  .order("id")
                   .limit(5000), // CEO 12/05: bỏ giới hạn 200 SP — product grid đã virtualize (@tanstack/react-virtual) nên DOM safe; payload ~1MB cho 5000 SP, mạng 4G ~1-2s, chấp nhận được. Cap 5000 để tránh Supabase PostgREST default cap.
                 // CEO 13/05: load platform price overrides để resolve giá theo
                 // tab.deliveryPlatform. Map sang Record<productId, Record<platform, price>>.
@@ -569,16 +578,18 @@ function FnbPosPageInner() {
                 .filter((id): id is string => Boolean(id)),
             );
             const mappedCats = cats
-              .map((category) => ({
+              .map((category, index) => ({
                 id: category.value,
                 name: category.label,
                 code: category.value,
+                sort_order: index,
               }))
               .filter((category) => categoryIds.has(category.id));
             setCategories(mappedCats);
             setProducts(
               prods.map((p) => ({
                 id: p.id,
+                sort_order: p.sort_order,
                 name: p.name,
                 code: p.code,
                 sell_price: p.sell_price,
@@ -591,7 +602,7 @@ function FnbPosPageInner() {
             );
 
             // Update cache in background — fail OK, retry next session.
-            prefetchMenuData(tenantId, branchId, menuScopes).catch((err) =>
+            prefetchMenuData(tenantId, branchId, menuScopes, orderRevision).catch((err) =>
               console.warn("[FnB] prefetchMenuData failed:", err),
             );
           }
@@ -965,9 +976,12 @@ function FnbPosPageInner() {
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
   const productsInCategory = useMemo(() => {
-    if (!activeCategoryId) return productsWithTier;
-    return productsWithTier.filter((p) => p.category_id === activeCategoryId);
-  }, [productsWithTier, activeCategoryId]);
+    const categoryRank = new Map(categories.map((category, index) => [category.id, index]));
+    const sorted = [...productsWithTier].sort((a, b) =>
+      (categoryRank.get(a.category_id ?? "") ?? categories.length) - (categoryRank.get(b.category_id ?? "") ?? categories.length) ||
+      (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
+    return activeCategoryId ? sorted.filter(p => p.category_id === activeCategoryId) : sorted;
+  }, [productsWithTier, activeCategoryId, categories]);
 
   const filteredProducts = useMemo(() => {
     if (!activeSubFilter) return productsInCategory;
@@ -3523,11 +3537,12 @@ function FnbPosPageInner() {
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}
-              <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-white dark:bg-card px-3 py-2">
-                <span className="min-w-0 truncate text-sm font-semibold">{activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-xs font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
+              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-blue-50/70 dark:bg-card px-2 py-1">
+                <span className="min-w-0 truncate text-base font-semibold">{activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-sm font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
                 <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Cách hiển thị món">
-                  <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-3 text-xs font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
-                  <button type="button" aria-pressed={productDisplayMode === "photos"} onClick={() => setProductDisplayMode("photos")} className={cn("min-h-11 rounded-lg px-3 text-xs font-semibold", productDisplayMode === "photos" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Có ảnh</button>
+                  {hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <button type="button" disabled={!networkStatus.isOnline} onClick={() => setMenuOrderOpen(true)} aria-label="Sắp xếp thực đơn" title="Sắp xếp thực đơn" className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-40"><Icon name="swap_vert" size={22} /></button>}
+                  <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
+                  <button type="button" aria-pressed={productDisplayMode === "photos"} onClick={() => setProductDisplayMode("photos")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "photos" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Có ảnh</button>
                 </div>
               </div>
               <div className="flex-1 min-h-0">
@@ -3542,6 +3557,16 @@ function FnbPosPageInner() {
           )}
         </div>
 
+        {menuOrderOpen && hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <FnbMenuOrderDialog onClose={() => setMenuOrderOpen(false)} onSaved={async next => {
+          const categoryRanks = new Map(next.categories.map((row, index) => [row.id, index]));
+          const productRanks = new Map<string, number>();
+          const groupCounts = new Map<string, number>();
+          next.products.forEach(row => { const group = row.category_id ?? ""; const rank = (groupCounts.get(group) ?? 0) + 1; groupCounts.set(group, rank); productRanks.set(row.id, rank); });
+          setCategories(current => current.map(row => ({ ...row, sort_order: categoryRanks.get(row.id) ?? row.sort_order })).sort((a, b) => (a.sort_order ?? Infinity) - (b.sort_order ?? Infinity)));
+          setProducts(current => current.map(row => ({ ...row, sort_order: productRanks.get(row.id) ?? row.sort_order })));
+          await invalidateMenuCache(tenantId).catch(() => undefined);
+          toast({ title: "Đã lưu thứ tự thực đơn", description: "POS này đã cập nhật. Máy khác nhận thứ tự mới khi tải lại thực đơn.", variant: "success" });
+        }} />}
         {/* Selecting a table returns to its order; keep the plan full width. */}
         {!showFloorPlan && <FnbCart
           activeTab={pos.activeTab}

@@ -71,7 +71,7 @@ export function FnbCategorySidebar({
       className={cn(
         // C1 (CEO 18/08): danh mục nền trung tính nhạt (container) — khác khu
         // món (container-low) và giỏ (container-lowest); ranh giới 1px rõ hơn.
-        "h-full shrink-0 bg-white dark:bg-card border-r border-border flex flex-col overflow-hidden",
+        "h-full shrink-0 bg-blue-50/70 dark:bg-card border-r border-border flex flex-col overflow-hidden",
         compact ? "w-36" : "w-[184px]",
       )}
       style={{ width: compact ? 144 : 184 }}
@@ -134,7 +134,7 @@ function CategoryButton({
         // C2 (CEO 18/08): vùng chạm ≥44px (min-h-11) + vạch chỉ báo trái khi
         // đang chọn (relative để đặt vạch absolute).
         "relative w-full flex items-center gap-2 rounded-lg text-left transition-colors press-scale-sm min-h-11",
-        compact ? "px-2 py-2 text-xs" : "px-3 py-2 text-sm",
+        compact ? "px-2 py-1.5 text-sm" : "px-2.5 py-1.5 text-base",
         active
           ? "bg-primary/10 text-primary font-bold"
           : "text-on-surface-variant hover:bg-muted hover:text-foreground",

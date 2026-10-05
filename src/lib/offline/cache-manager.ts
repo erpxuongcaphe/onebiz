@@ -69,6 +69,7 @@ export async function prefetchMenuData(
   tenantId: string,
   branchId: string | null | undefined,
   knownScopes?: FnbProductBranchMenuScope[],
+  knownOrderRevision?: string,
 ): Promise<void> {
   const supabase = getClient();
   const cachedBranchId = normalizedMenuBranchId(branchId);
@@ -76,21 +77,25 @@ export async function prefetchMenuData(
   // Fetch categories
   const { data: cats } = await supabase
     .from("categories")
-    .select("id, name, code")
+    .select("id, name, code, sort_order")
     .eq("tenant_id", tenantId)
     .eq("scope", "sku")
-    .order("sort_order");
+    .order("sort_order")
+    .order("name")
+    .order("id");
 
   // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
     .from("products")
-    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale")
+    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .eq("allow_sale", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
-    .order("name");
+    .order("sort_order")
+    .order("name")
+    .order("id");
 
   // Scope rows are small but authoritative. Fetch them alongside the catalog
   // unless POS has already obtained the same snapshot for this refresh.
@@ -144,7 +149,7 @@ export async function prefetchMenuData(
         tenantId,
         branchId: cachedBranchId,
         _type: "category",
-        data: { id: c.id, name: c.name, code: c.code },
+        data: { id: c.id, name: c.name, code: c.code, sort_order: c.sort_order },
       });
     }
 
@@ -164,6 +169,7 @@ export async function prefetchMenuData(
           image_url: (p as Record<string, unknown>).image_url,
           stock: p.stock,
           category_id: p.category_id,
+          sort_order: p.sort_order,
         },
       });
     }
@@ -186,6 +192,7 @@ export async function prefetchMenuData(
   const version = computeVersion(visibleProducts, toppings);
   await setMeta(menuMetaKey(tenantId, "last_sync", branchId), Date.now());
   await setMeta(menuMetaKey(tenantId, "version", branchId), version);
+  if (knownOrderRevision !== undefined) await setMeta(menuMetaKey(tenantId, "order_revision", branchId), knownOrderRevision);
   await setMeta(
     menuMetaKey(tenantId, "scope_fingerprint", branchId),
     getFnbMenuScopeFingerprint(scopes),
@@ -320,6 +327,8 @@ export async function getMenuFromCache(
     }
   }
 
+  categories.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
+  products.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
   return { categories, products, toppings };
 }
 
@@ -418,11 +427,13 @@ export async function shouldRefreshMenu(
   tenantId: string,
   branchId: string | null | undefined,
   scopeFingerprint?: string,
+  orderRevision?: string,
 ): Promise<boolean> {
   const lastSync = await getMeta<number>(
     menuMetaKey(tenantId, "last_sync", branchId),
   );
   if (!lastSync) return true;
+  if (orderRevision !== undefined && await getMeta<string>(menuMetaKey(tenantId, "order_revision", branchId)) !== orderRevision) return true;
   if (scopeFingerprint !== undefined) {
     const cachedFingerprint = await getMeta<string>(
       menuMetaKey(tenantId, "scope_fingerprint", branchId),

@@ -225,7 +225,7 @@ function NhanNhomTuyChon({
   const noiDung = (
     <>
       <span className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium break-words">{ten}</span>
+        <span className="text-base font-medium break-words">{ten}</span>
         <span
           className={cn(
             "rounded-full px-2 py-0.5 text-xs font-normal whitespace-nowrap",
@@ -830,7 +830,7 @@ export function FnbItemDialog({
             DÀI (Topping) chiếm TOÀN chiều ngang ở dưới.
             Đổi bố cục hoàn toàn bằng CSS → xoay máy không remount, lựa chọn
             còn nguyên. */}
-        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-2 flex flex-col gap-4 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
+        <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-1 flex flex-col gap-2 [@media(max-height:720px)]:gap-3 [@media(max-height:720px)]:py-1">
           {/* 06/08 — tải tuỳ chọn HỎNG: nói thật, không im lặng coi như món
               "không có tuỳ chọn". Nút xác nhận bị khoá cho tới khi tải lại
               được, vì thêm vào giỏ lúc này là bếp pha sai + mất tiền topping. */}

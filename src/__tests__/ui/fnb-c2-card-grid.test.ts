@@ -22,8 +22,8 @@ const SIDEBAR = doc("src/app/pos/fnb/components/fnb-category-sidebar.tsx");
 
 describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () => {
   it("hai chế độ dùng chiều cao nhất quán cho bộ cuộn ảo", () => {
-    expect(GRID).toContain("const COMPACT_CARD_HEIGHT = 112;");
-    expect(GRID).toContain("const PHOTO_CARD_HEIGHT = 170;");
+    expect(GRID).toContain("const COMPACT_CARD_HEIGHT = 104;");
+    expect(GRID).toContain("const PHOTO_CARD_HEIGHT = 200;");
     expect(GRID).toContain('displayMode === "photos" ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT');
   });
 
@@ -47,8 +47,8 @@ describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () =
   it("hình học dọc: ảnh co (flex-1 min-h-0) đứng TRƯỚC khối chữ cố định — không cắt tên/giá", () => {
     // Đo thật preview 18/08 (thẻ 158px cao): ảnh 1→98, tên 102→130, giá
     // 130→149 ≤ 158. Bất biến làm nên hình học đó: thứ tự + lớp co/cố định.
-    const iAnh = GRID.indexOf("relative min-h-0 flex-1 overflow-hidden p-2");
-    const iChu = GRID.indexOf("flex-shrink-0 px-3");
+    const iAnh = GRID.indexOf("relative min-h-0 flex-1 overflow-hidden");
+    const iChu = GRID.indexOf("flex-shrink-0 px-2.5");
     expect(iAnh).toBeGreaterThan(-1);
     expect(iChu).toBeGreaterThan(iAnh);
     // Cấm ảnh vuông/chiều cao cứng quay lại — nó từng đẩy tên ra ngoài.
@@ -64,7 +64,7 @@ describe("C2 — thẻ món: ảnh → tên 2 dòng → giá dòng riêng", () =
   });
 
   it("giá nằm trong khối chữ, tabular-nums, không xuống dòng", () => {
-    const textBlock = GRID.slice(GRID.indexOf("flex-shrink-0 px-3"));
+    const textBlock = GRID.slice(GRID.indexOf("flex-shrink-0 px-2.5"));
     expect(textBlock).toContain("formatCurrency(product.sell_price)");
     expect(textBlock).toContain("tabular-nums");
     expect(textBlock).toContain("whitespace-nowrap");
