@@ -35,8 +35,8 @@ insert into products values
  ('00000000-0000-0000-0000-000000000023','00000000-0000-0000-0000-000000000002','Retail','00000000-0000-0000-0000-000000000010','retail','sku',true,true,7,50000),
  ('00000000-0000-0000-0000-000000000024','00000000-0000-0000-0000-000000000098','Foreign','00000000-0000-0000-0000-000000000012','fnb','sku',true,true,7,60000),
  ('00000000-0000-0000-0000-000000000025','00000000-0000-0000-0000-000000000002','Inactive','00000000-0000-0000-0000-000000000010','fnb','sku',false,true,7,70000);
-\ir ../migrations/00424_fnb_menu_display_order.sql
-\ir ../migrations/00424_fnb_menu_display_order.sql
+\ir ../migrations/00425_fnb_menu_display_order.sql
+\ir ../migrations/00425_fnb_menu_display_order.sql
 create function test_menu_snapshot() returns jsonb language sql as $$
  select jsonb_build_object(
   'categories',(select jsonb_agg(jsonb_build_object('id',id,'name',name,'sort_order',sort_order) order by id)

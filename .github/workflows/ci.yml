@@ -292,7 +292,7 @@ jobs:
           PGPASSWORD: postgres
         run: |
           createdb fnb_menu_order_test
-          PGDATABASE=fnb_menu_order_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00429_fnb_menu_order.integration.sql
+          PGDATABASE=fnb_menu_order_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00430_fnb_menu_order.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest

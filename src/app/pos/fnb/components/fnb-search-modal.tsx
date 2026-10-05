@@ -105,7 +105,7 @@ export function FnbSearchModal({
       />
 
       <div className="fixed inset-x-0 top-14 mx-auto z-50 max-w-2xl px-4">
-        <div className="rounded-lg bg-card border border-border shadow-2xl overflow-hidden">
+        <div className="rounded-lg bg-popover text-popover-foreground border border-border ambient-shadow-floating overflow-hidden">
           {/* Search input */}
           <div className="flex items-center gap-2 px-4 h-12 border-b border-border">
             <Icon name="search" size={16} className="text-muted-foreground shrink-0" />

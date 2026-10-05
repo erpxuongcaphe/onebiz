@@ -16,7 +16,7 @@ Rà soát lần này chuẩn hóa literal `className` bằng TypeScript AST, cù
 
 ## Kiểm tra hoàn tất ngày 05/10/2026
 
-- Đã tích hợp origin/main tại `8f9fe289`, giữ thay đổi KDS hoàn trả và khóa biểu mẫu sản xuất. Migration menu chưa phát hành đổi từ 00422 sang `00424_fnb_menu_display_order.sql` để không trùng migration KDS.
+- Đã tích hợp origin/main tại `8f9fe289`, giữ thay đổi KDS hoàn trả và khóa biểu mẫu sản xuất. Migration menu chưa phát hành dùng `00425_fnb_menu_display_order.sql` để không trùng migration KDS 00424 trong PR #496 đang làm song song.
 - Build Next.js production bằng webpack đạt, TypeScript đạt và tạo 140 trang tĩnh. Dùng biến giả giống CI, không ghi dữ liệu thật. Bản kiểm tra source giống nhau trên ổ E tránh lỗi đường dẫn thư viện junction C/E của worktree Windows.
 - 298 kiểm tra smoke/báo cáo/UI đạt. Bộ 62 kiểm tra mục tiêu cho giỏ, menu, KDS, sản xuất và header đạt sau cập nhật kỳ vọng chữ 11px sang text-xs ở hai trường hợp trong bài kiểm tra dialog. Các chốt chiều cao và ẩn phím tắt trên mobile vẫn giữ.
 - Kiểm tra component thực với dữ liệu minh họa ở 1440/1024/768/390px và chữ 90%: không tràn trang; phân trang, tab bàn phím, Escape đóng dialog và trả focus, Select mở đủ vùng bấm cảm ứng đạt.
