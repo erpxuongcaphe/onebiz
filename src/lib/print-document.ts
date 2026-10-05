@@ -5,6 +5,7 @@
 
 import { formatCurrency, formatDate, formatNumber, formatShortDate } from "@/lib/format";
 import { formatCashBookDate } from "@/lib/cash-time";
+import { sendPrintJob } from "./printer/print-job";
 
 export interface DocumentLineItem {
   name: string;
@@ -35,6 +36,7 @@ export interface DocumentPrintData {
   businessPhone?: string;
   businessLogoUrl?: string;
   businessFooter?: string;
+  showThankYou?: boolean;
 
   // Header fields (key-value pairs shown below title)
   headerFields?: { label: string; value: string }[];
@@ -93,17 +95,7 @@ export function printDocument(
 ): void {
   const paperSize = options.paperSize ?? "A4";
   const html = generateDocumentHtml(data, paperSize);
-  const w = window.open("", "_blank", "width=800,height=900");
-  if (!w) {
-    alert("Không thể mở cửa sổ in. Vui lòng cho phép popup.");
-    return;
-  }
-  w.document.write(html);
-  w.document.close();
-  w.focus();
-  setTimeout(() => {
-    w.print();
-  }, 300);
+  void sendPrintJob({html,paperSize,role:paperSize === "A4" || paperSize === "A5" ? "documents" : "cashier"});
 }
 
 /** Lấy margin + base font-size phù hợp với cỡ giấy. */
@@ -133,22 +125,22 @@ function getPageStyles(paperSize: PaperSize): {
       return {
         pageSize: "80mm auto",
         margin: "0",
-        bodyFontSize: "10px",
+        bodyFontSize: "12px",
         bodyPadding: "4mm",
         headerDocFontSize: "12px",
-        itemsFontSize: "9px",
-        summaryFontSize: "10px",
+        itemsFontSize: "12px",
+        summaryFontSize: "12px",
       };
     case "58mm":
       // Receipt 58mm — body-width 54mm
       return {
         pageSize: "58mm auto",
         margin: "0",
-        bodyFontSize: "9px",
+        bodyFontSize: "11px",
         bodyPadding: "2mm",
         headerDocFontSize: "11px",
-        itemsFontSize: "8px",
-        summaryFontSize: "9px",
+        itemsFontSize: "11px",
+        summaryFontSize: "11px",
       };
     case "A4":
     default:
@@ -245,9 +237,9 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
       const rows = d.items
         .map(
           (it) => `<div class="t-item">
-        <div class="t-name">${esc(it.name)}</div>${it.note ? `
+        <div class="t-name">${hasCode && it.code ? `${esc(it.code)} · ` : ""}${esc(it.name)}</div>${it.note ? `
         <div class="t-note">↳ ${esc(it.note)}</div>` : ""}
-        <div class="t-line"><span>${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""} × ${money(it.unitPrice ?? 0)}</span><span class="t-total tnum">${money(it.total)}</span></div>
+        <div class="t-line"><span>${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""}${hasPriceCol ? ` × ${money(it.unitPrice ?? 0)}` : ""}</span><span class="t-total tnum">${money(it.total)}</span></div>${hasDiscountCol && it.discount ? `<div class="t-note">Giảm giá: ${money(it.discount)}</div>` : ""}
       </div>`,
         )
         .join("");
@@ -360,9 +352,9 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   /* Thermal items — 2 dòng/món */
   .t-items { margin: 8px 0; }
   .t-item { margin-bottom: 5px; }
-  .t-name { font-weight: 600; }
+  .t-name { font-weight: 600; overflow-wrap: anywhere; }
   .t-note { font-style: italic; font-size: 0.92em; }
-  .t-line { display: flex; justify-content: space-between; gap: 8px; }
+  .t-line { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; }
   .t-total { font-weight: 600; }
   .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }${
     // CHỈ phát CSS khi itemFontSize được set (sm/lg) — undefined/md → không phát gì
@@ -451,7 +443,7 @@ ${
 ${
   d.businessFooter
     ? `<div class="bizfooter">${esc(d.businessFooter)}</div>`
-    : isThermal
+    : isThermal && d.showThankYou !== false
       ? `<div class="bizfooter">Cảm ơn Quý khách!</div>`
       : ""
 }

@@ -78,7 +78,7 @@ export interface AppSettings {
      *                    (silent, tức thì, hỗ trợ cắt giấy + mở ngăn kéo).
      *                    Tự fallback "browser" nếu WebUSB lỗi.
      */
-    backend: "browser" | "escpos-usb";
+    backend: "browser" | "escpos-usb" | "qz-tray";
     /** Mở ngăn kéo tiền mặt khi thanh toán cash (chỉ ESC/POS) */
     openCashDrawer: boolean;
     // Printer connection (legacy — giữ backward compat)

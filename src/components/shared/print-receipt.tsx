@@ -1,8 +1,8 @@
 "use client";
+import { sendPrintJob, getPrintSettings } from "@/lib/printer/print-job";
 
 import { useRef, useCallback } from "react";
 import { formatCurrency, formatNumber } from "@/lib/format";
-import { printerService, type PrintReceiptPayload } from "@/lib/printer";
 
 export interface ReceiptData {
   invoiceCode: string;
@@ -312,46 +312,6 @@ ${data.note ? `<div class="line"></div><div style="font-size:10px">Ghi chu: ${da
 <script>window.onload=function(){window.print();window.close()}<\/script>
 </body></html>`;
 
-  // Build payload cho ESC/POS backend
-  const payload: PrintReceiptPayload = {
-    invoiceCode: data.invoiceCode,
-    storeName: data.storeName,
-    storeAddress: data.storeAddress,
-    storePhone: data.storePhone,
-    customerName: data.customerName,
-    cashierName: data.cashierName,
-    createdAt: data.date,
-    items: data.items.map((it) => ({
-      name: it.name,
-      quantity: it.quantity,
-      unitPrice: it.unitPrice,
-      total: it.total,
-    })),
-    subtotal: data.subtotal,
-    discountAmount: data.discountAmount,
-    deliveryFee: data.shippingFee, // CEO 08/07: phí ship → bill nhiệt ESC/POS
-    total: data.total,
-    paid: data.paid,
-    change: data.change,
-    paymentMethod: data.paymentMethod,
-    paperSize: width,
-    orderType: "retail",
-  };
-
-  // Đọc backend + openCashDrawer từ settings
-  let backend: "browser" | "escpos-usb" = "browser";
-  let openCashDrawer = false;
-  try {
-    const raw = typeof window !== "undefined" ? localStorage.getItem("onebiz_settings") : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      backend = parsed?.print?.backend === "escpos-usb" ? "escpos-usb" : "browser";
-      openCashDrawer = parsed?.print?.openCashDrawer === true;
-    }
-  } catch {
-    /* keep defaults */
-  }
-
-  printerService.setBackend(backend);
-  void printerService.printReceipt(payload, { rawHtml, openCashDrawer });
+  // The same HTML feeds browser, driver bridge and USB raster output.
+  void sendPrintJob({html: rawHtml, paperSize: width, role: "cashier", openCashDrawer: getPrintSettings().openCashDrawer && data.paymentMethod === "cash"});
 }
