@@ -118,6 +118,7 @@ describe("production branch selection", () => {
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
     const finish = selectPreparedProduct();
     await waitFor(() => expect(screen.getByText(/Thiếu nguyên liệu tại chi nhánh này/)).toBeTruthy());
+    expect(screen.queryByText(/Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp/)).toBeNull();
     expect(finish).toBeDisabled();
     expect(mocks.createProductionOrder).not.toHaveBeenCalled();
 
