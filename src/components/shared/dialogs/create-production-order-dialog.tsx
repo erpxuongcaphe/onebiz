@@ -98,7 +98,7 @@ export function CreateProductionOrderDialog({
     if (!open) return;
     (async () => {
       try {
-        const [bomList, brList] = await Promise.all([getAllBOMs(), getBranches()]);
+        const [bomList, brList] = await Promise.all([getAllBOMs({ activeProductsOnly: true }), getBranches()]);
         setBoms(bomList);
         setBranches(brList);
         setBranchId(
