@@ -1,4 +1,6 @@
 "use client";
+import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
+import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -68,6 +70,7 @@ export function RecordAdvanceDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const {cashTime,setCashTime} = useCashTimeDraft(open);
   const [partySearch, setPartySearch] = useState("");
   const [selectedParty, setSelectedParty] = useState<PartyOption | null>(null);
   const [partyOptions, setPartyOptions] = useState<PartyOption[]>([]);
@@ -148,6 +151,8 @@ export function RecordAdvanceDialog({
     if (note.trim().length < 3) {
       nextErrors.note = "Nhập lý do để đối soát khoản trả trước";
     }
+    const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
+    if(timeError) nextErrors.time=timeError;
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0 || !branchId || !selectedParty)
       return;
@@ -161,6 +166,9 @@ export function RecordAdvanceDialog({
         amount,
         paymentMethod,
         note: note.trim(),
+        occurredAt: cashInputToIso(cashTime.occurredLocal),
+        transactionDate: cashTime.transactionDate,
+        timeReason: cashTime.timeReason,
       });
       toast({
         title: isCustomer
@@ -384,6 +392,7 @@ export function RecordAdvanceDialog({
           </div>
         </div>
 
+        <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         <DialogFooter>
           <Button
             variant="outline"

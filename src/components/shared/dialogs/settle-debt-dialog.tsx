@@ -1,4 +1,6 @@
 "use client";
+import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
+import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
 
 /**
  * SettleDebtDialog — Thanh toán tổng nợ KH / Trả tổng nợ NCC
@@ -95,6 +97,8 @@ export function SettleDebtDialog({
   const [note, setNote] = useState("");
   const [noteError, setNoteError] = useState("");
   const [saving, setSaving] = useState(false);
+  const {cashTime,setCashTime} = useCashTimeDraft(open);
+  const [timeError,setTimeError] = useState<string>();
 
   // Reset khi đóng/mở
   useEffect(() => {
@@ -104,6 +108,7 @@ export function SettleDebtDialog({
       setPaymentMethod("cash");
       setNote("");
       setNoteError("");
+      setTimeError(undefined);
       return;
     }
     let cancelled = false;
@@ -150,6 +155,9 @@ export function SettleDebtDialog({
   const docsCount = allocatedDocs.filter((d) => d.allocate > 0).length;
 
   const handleConfirm = useCallback(async () => {
+    const timingError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
+    setTimeError(timingError || undefined);
+    if(timingError) return;
     const amount = Number(totalAmount) || 0;
     if (amount <= 0) {
       toast({
@@ -197,6 +205,9 @@ export function SettleDebtDialog({
               referenceId: d.id,
               amount: d.allocate,
               paymentMethod,
+              occurredAt: cashInputToIso(cashTime.occurredLocal),
+              transactionDate: cashTime.transactionDate,
+              timeReason: cashTime.timeReason,
               note: note
                 ? `${note} — phân bổ HĐ ${d.code}`
                 : `Thu nợ tổng KH ${partyName} — HĐ ${d.code}`,
@@ -208,6 +219,9 @@ export function SettleDebtDialog({
               amount:
                 d.allocate + (isLastAllocation ? Math.max(0, remainder) : 0),
               paymentMethod,
+              occurredAt: cashInputToIso(cashTime.occurredLocal),
+              transactionDate: cashTime.transactionDate,
+              timeReason: cashTime.timeReason,
               note: note
                 ? `${note} — phân bổ PO ${d.code}`
                 : `Trả nợ tổng NCC ${partyName} — PO ${d.code}`,
@@ -260,6 +274,7 @@ export function SettleDebtDialog({
     onSuccess,
     totalAlloc,
     remainder,
+    cashTime,
   ]);
 
   const titleLabel =
@@ -511,6 +526,7 @@ export function SettleDebtDialog({
           </div>
         </div>
 
+        <div className="px-6 pb-3"><CashTimeFields value={cashTime} onChange={setCashTime} error={timeError} /></div>
         <DialogFooter className="px-6 pb-6 pt-3 border-t shrink-0">
           <Button
             variant="outline"

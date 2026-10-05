@@ -25,6 +25,8 @@ import {
   recordPurchasePayment,
 } from "@/lib/services/supabase/payments";
 import { Icon } from "@/components/ui/icon";
+import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
+import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
 
 interface RecordPaymentDialogProps {
   open: boolean;
@@ -54,6 +56,7 @@ export function RecordPaymentDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const {cashTime,setCashTime} = useCashTimeDraft(open);
 
   const isInvoice = type === "invoice";
   const title = isInvoice ? "Ghi nhận thu nợ" : "Ghi nhận trả nợ NCC";
@@ -78,6 +81,8 @@ export function RecordPaymentDialog({
     if (!isInvoice && amount > currentDebt && note.trim().length < 3) {
       newErrors.note = "Cần ghi lý do cho khoản ứng trước nhà cung cấp";
     }
+    const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
+    if(timeError) newErrors.time=timeError;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -91,6 +96,9 @@ export function RecordPaymentDialog({
         amount,
         paymentMethod,
         note: note || undefined,
+        occurredAt: cashInputToIso(cashTime.occurredLocal),
+        transactionDate: cashTime.transactionDate,
+        timeReason: cashTime.timeReason,
       };
 
       const result = isInvoice
@@ -120,7 +128,7 @@ export function RecordPaymentDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>
@@ -210,6 +218,7 @@ export function RecordPaymentDialog({
           </div>
         </div>
 
+        <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy

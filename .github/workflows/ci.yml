@@ -34,6 +34,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
+      - name: Verify cash occurrence dates and authorization in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb cash_time_test
+          PGDATABASE=cash_time_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00432_cash_transaction_time.integration.sql
+
       - name: Apply migration and verify F&B return-cost behavior
         env:
           PGHOST: localhost

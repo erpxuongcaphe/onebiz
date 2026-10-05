@@ -24,6 +24,10 @@ export interface CashBookEntry {
   status?: "draft" | "completed" | "cancelled";
   /** Thời điểm hệ thống tạo bản ghi, tách khỏi ngày hạch toán. */
   createdAt?: string;
+  /** Actual receipt/payment time, unknown for historical/date-only entries. */
+  occurredAt?: string | null;
+  timeSource?: 'system' | 'entered' | 'date_only' | null;
+  timeReason?: string | null;
 }
 
 // Giao dịch thu chi (alias vì CashBookEntry đã chứa toàn bộ field)

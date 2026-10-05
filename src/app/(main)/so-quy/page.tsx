@@ -1,4 +1,5 @@
 "use client";
+import { formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
@@ -165,7 +166,7 @@ function TransactionDetail({
                         Người tạo: <strong>{formatUser(entry.createdByName, entry.createdBy)}</strong>
                       </span>
                       <span>
-                        Ngày tạo: <strong>{formatDate(entry.date)}</strong>
+                        Tạo trên hệ thống lúc: <strong>{formatCashTime(entry.createdAt)}</strong>
                       </span>
                       <span>
                         Loại thu chi: <strong>{categoryLabel(entry.category)}</strong>
@@ -177,6 +178,10 @@ function TransactionDetail({
                 <DetailInfoGrid
                   fields={[
                     { label: "Mã phiếu", value: entry.code },
+                    { label: "Ngày hạch toán", value: formatCashBookDate(entry.date) },
+                    { label: "Thực thu/chi lúc", value: formatCashTime(entry.occurredAt) },
+                    { label: "Nguồn thời điểm", value: entry.timeSource === "entered" ? "Người lập ghi nhận" : entry.timeSource === "system" ? "Ghi nhận tự động khi thao tác" : "Chưa có thời điểm thực thu/chi" },
+                    ...(entry.timeReason ? [{ label: "Lý do ngày giờ", value: entry.timeReason }] : []),
                     { label: "Loại phiếu", value: entry.typeName },
                     { label: "Chi nhánh", value: entry.branchName || "—" },
                     { label: "Người nộp/nhận", value: entry.counterparty },
@@ -458,7 +463,10 @@ export default function SoQuyPage() {
         runningBalance = runningBalance + thu - chi;
         return {
           code: e.code,
-          date: formatDate(e.date),
+          date: formatCashBookDate(e.date),
+          occurredAt: formatCashTime(e.occurredAt),
+          createdAt: formatCashTime(e.createdAt),
+          timeReason: e.timeReason || "",
           category: e.category,
           counterparty: e.counterparty ?? "",
           note: e.note ?? "",
@@ -476,7 +484,10 @@ export default function SoQuyPage() {
         ],
         columns: [
           { label: "Mã phiếu", key: "code", width: 14 },
-          { label: "Ngày", key: "date", width: 14, format: "text" },
+          { label: "Ngày hạch toán", key: "date", width: 16, format: "text" },
+          { label: "Thực thu/chi lúc", key: "occurredAt", width: 24, format: "text" },
+          { label: "Tạo trên hệ thống lúc", key: "createdAt", width: 24, format: "text" },
+          { label: "Lý do ngày giờ", key: "timeReason", width: 30, format: "text" },
           { label: "Nhóm bút toán", key: "category", width: 22 },
           { label: "Đối tác", key: "counterparty", width: 24 },
           { label: "Diễn giải", key: "note", width: 32 },
@@ -507,7 +518,7 @@ export default function SoQuyPage() {
         { date: string; receipt: number; payment: number }
       >();
       for (const e of sortedData) {
-        const dayKey = formatDateInputValue(new Date(e.date));
+        const dayKey = e.date.slice(0, 10);
         const existing = dailyMap.get(dayKey) ?? {
           date: dayKey,
           receipt: 0,
@@ -524,7 +535,7 @@ export default function SoQuyPage() {
           const balanceStart = dailyBalance;
           dailyBalance = dailyBalance + r.receipt - r.payment;
           return {
-            date: formatDate(r.date),
+            date: formatCashBookDate(r.date),
             balanceStart,
             receipt: r.receipt,
             payment: r.payment,
@@ -641,7 +652,9 @@ export default function SoQuyPage() {
     }
     const exportColumns = [
       { header: "Mã phiếu", key: "code", width: 15 },
-      { header: "Thời gian", key: "date", width: 18, format: (v: string) => formatDate(v) },
+      { header: "Ngày hạch toán", key: "date", width: 18, format: (v: string) => formatCashBookDate(v) },
+      { header: "Thực thu/chi lúc", key: "occurredAt", width: 24, format: (v: string) => formatCashTime(v) },
+      { header: "Tạo trên hệ thống lúc", key: "createdAt", width: 24, format: (v: string) => formatCashTime(v) },
       { header: "Loại thu chi", key: "category", width: 20 },
       { header: "Người nộp/nhận", key: "counterparty", width: 22 },
       { header: "Chứng từ gốc", key: "referenceCode", width: 16 },
@@ -684,7 +697,7 @@ export default function SoQuyPage() {
     if (datePreset !== "this_month") {
       chips.push({
         key: "date",
-        label: "Thời gian",
+        label: "Ngày hạch toán",
         value:
           datePreset === "custom"
             ? `${dateFrom || "..."} – ${dateTo || "..."}`
@@ -782,9 +795,13 @@ export default function SoQuyPage() {
     },
     {
       accessorKey: "date",
-      header: "Thời gian",
+      header: "Ngày hạch toán",
       size: 150,
-      cell: ({ row }) => formatDate(row.original.date),
+      cell: ({ row }) => formatCashBookDate(row.original.date),
+    },
+    {
+      accessorKey: "occurredAt", header: "Thực thu/chi lúc", size: 195,
+      cell: ({row}) => <span className="text-sm tabular-nums">{formatCashTime(row.original.occurredAt)}</span>,
     },
     {
       accessorKey: "category",

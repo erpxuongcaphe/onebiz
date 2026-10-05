@@ -8,7 +8,8 @@
 
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatShortDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
+import { formatCashTime, formatCashBookDate } from "@/lib/cash-time";
 import { getPaymentHistory } from "@/lib/services/supabase/payments";
 
 interface PaymentHistoryTabProps {
@@ -24,6 +25,9 @@ type PaymentRow = {
   paymentMethod: string;
   note: string | null;
   date: string;
+  createdAt?: string;
+  occurredAt?: string | null;
+  transactionDate?: string;
   cancelled?: boolean;
 };
 
@@ -104,7 +108,7 @@ export function PaymentHistoryTab({
           <div className="col-span-2">Loại</div>
           <div className="col-span-3">Hình thức</div>
           <div className="col-span-2 text-right">Số tiền</div>
-          <div className="col-span-2 text-right">Ngày</div>
+          <div className="col-span-2 text-right">Ngày hạch toán</div>
         </div>
         {rows.map((r) => (
           <div
@@ -139,8 +143,9 @@ export function PaymentHistoryTab({
               {formatCurrency(Number(r.amount ?? 0))}
             </div>
             <div className="col-span-2 text-right text-xs text-muted-foreground">
-              {formatShortDate(r.date)}
+              {formatCashBookDate(r.transactionDate || r.date)}
             </div>
+            <div className="col-span-12 mt-1 text-xs text-muted-foreground">Thực thu/chi: {formatCashTime(r.occurredAt)} · Tạo trên hệ thống: {formatCashTime(r.createdAt || r.date)}</div>
             {r.note && (
               <div className="col-span-12 mt-1 text-xs text-muted-foreground italic">
                 {r.note}

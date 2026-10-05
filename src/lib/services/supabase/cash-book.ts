@@ -3,7 +3,9 @@
  */
 
 import type { CashBookEntry, CashTransaction, QueryParams, QueryResult } from "@/lib/types";
-import { applyCreatedAtRangeFilter, toCreatedAtStartIso } from "@/lib/utils/list-date-preset-range";
+import type { CashTimingInput } from "@/lib/cash-time";
+import { recordTimedCash } from "./cash-timing";
+import { cashBookDate } from "@/lib/cash-time";
 import {
   getClient,
   getCurrentContext,
@@ -11,6 +13,15 @@ import {
   getPaginationRange,
   handleError,
 } from "./base";
+
+/** Cash balances use DATE bookkeeping boundaries, never creation timestamps. */
+function applyCashDateRange<T>(query: T, filters?: {dateFrom?: unknown; dateTo?: unknown}): T {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let q = query as any;
+  if (typeof filters?.dateFrom === "string" && filters.dateFrom) q = q.gte("transaction_date", cashBookDate(filters.dateFrom));
+  if (typeof filters?.dateTo === "string" && filters.dateTo) q = q.lte("transaction_date", cashBookDate(filters.dateTo));
+  return q;
+}
 
 export interface CashBookWorkspaceParams {
   page: number;
@@ -147,7 +158,7 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
   if (params.filters?.category && params.filters.category !== "all") {
     query = query.eq("category", params.filters.category as string);
   }
-  query = applyCreatedAtRangeFilter(query, params.filters);
+  query = applyCashDateRange(query, params.filters);
   // Filter: branch
   if (params.branchId) {
     query = query.eq("branch_id", params.branchId);
@@ -170,6 +181,7 @@ export async function getCashBookEntries(params: QueryParams): Promise<QueryResu
 
   // Sort & paginate
   query = query
+    .order("transaction_date", { ascending: false })
     .order("created_at", { ascending: false })
     .range(from, to);
 
@@ -226,7 +238,7 @@ export async function getCashBookSummaryAsync(params?: {
     .eq("tenant_id", tenantId);
 
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
-  query = applyCreatedAtRangeFilter(query, params);
+  query = applyCashDateRange(query, params);
   // CEO 11/06/2026 (P0-3 audit): filter status — KHÔNG cộng phiếu cancelled.
   if (params?.statuses && params.statuses.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -255,7 +267,7 @@ export async function getCashBookSummaryAsync(params?: {
       .from("cash_transactions")
       .select("type, amount")
       .eq("tenant_id", tenantId)
-      .lt("created_at", toCreatedAtStartIso(params.dateFrom) ?? params.dateFrom);
+      .lt("transaction_date", cashBookDate(params.dateFrom));
     if (params?.branchId) openingQ = openingQ.eq("branch_id", params.branchId);
     // P0-3: cũng phải loại cancelled cho opening balance
     if (params?.statuses && params.statuses.length > 0) {
@@ -280,7 +292,7 @@ export async function getCashBookSummaryAsync(params?: {
 /**
  * Tạo phiếu thu/chi mới.
  */
-export interface CreateManualCashTransactionInput {
+export interface CreateManualCashTransactionInput extends CashTimingInput {
   branchId: string;
   code?: string | null;
   type: "receipt" | "payment";
@@ -296,7 +308,9 @@ export async function createManualCashTransactionAtomic(
   input: CreateManualCashTransactionInput,
 ): Promise<CashBookEntry> {
   const supabase = getClient();
-  const { data, error } = await (supabase.rpc as any)(
+  const { data, error } = input.occurredAt || input.transactionDate
+    ? { data: await recordTimedCash("manual", { ...input }, { ...input, timeReason: input.timeReason || input.note }), error: null }
+    : await (supabase.rpc as any)(
     "create_manual_cash_transaction_atomic",
     {
       p_requested_code: input.code?.trim() || null,
@@ -326,6 +340,9 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
     counterparty: tx.counterparty,
     paymentMethod: tx.paymentMethod,
     note: tx.note,
+    occurredAt: tx.occurredAt,
+    transactionDate: tx.date,
+    timeReason: tx.timeReason,
   });
 }
 
@@ -394,5 +411,8 @@ function mapCashEntry(row: any): CashBookEntry {
     referenceCode: row.reference_code ?? undefined,
     status: row.status ?? undefined,
     createdAt: row.created_at ?? undefined,
+    occurredAt: row.occurred_at ?? null,
+    timeSource: row.time_source ?? null,
+    timeReason: row.time_reason ?? null,
   };
 }
