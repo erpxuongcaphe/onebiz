@@ -293,12 +293,12 @@ export function CompleteProductionOrderDialog({
                 {checking ? (
                   <Icon name="progress_activity" size={14} className="animate-spin" />
                 ) : checkError || detailError ? null : hasShortage ? (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
                     <span className="size-1.5 rounded-full bg-status-warning" />
                     Thiếu NVL
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-success/10 text-status-success">
                     <span className="size-1.5 rounded-full bg-status-success" />
                     Đủ NVL
                   </span>
@@ -335,7 +335,7 @@ export function CompleteProductionOrderDialog({
           )}
 
           {/* Auto-sell to warehouse toggle */}
-          <div className="rounded-xl border border-border p-3 space-y-2 bg-surface-container-lowest">
+          <div className="rounded-lg border border-border p-3 space-y-2 bg-surface-container-lowest">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="autoSell"

@@ -1,5 +1,7 @@
 # Design System — OneBiz ERP
 
+> **Cập nhật được duyệt 05/10/2026:** toàn ERP/POS áp dụng [chuẩn giao diện phẳng](flat-ui-standard-2026-10-05.md). Quy tắc mới ưu tiên khi khác các quy tắc Stitch lịch sử bên dưới.
+
 > **Sprint VISUAL-1** (CEO 04/05/2026) — chuẩn hoá scale toàn web sau khi 40+ commit fix nhỏ tích lũy → web siêu vẹo.
 >
 > Preview live: `/mockup/design-system`

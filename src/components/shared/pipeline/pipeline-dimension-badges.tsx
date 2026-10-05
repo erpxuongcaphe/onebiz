@@ -63,7 +63,7 @@ export function PipelineDimensionBadges({
         return (
           <span
             key={key}
-            className="inline-flex items-center gap-1 rounded text-[11px] px-2 py-0.5 border"
+            className="inline-flex items-center gap-1 rounded text-xs px-2 py-0.5 border"
             style={{
               backgroundColor: `${color}1a`,
               color,

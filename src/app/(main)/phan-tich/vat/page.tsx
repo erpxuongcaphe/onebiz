@@ -307,7 +307,7 @@ export default function VatReportPage() {
       {/* VAT breakdown theo thuế suất — CFO khai tờ 01/GTGT */}
       {(report?.outputByRate.length || report?.inputByRate.length) ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="rounded-xl border border-border bg-surface-container-lowest p-4">
+          <div className="rounded-lg border border-border bg-surface-container-lowest p-4">
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Icon name="trending_up" size={16} className="text-primary" />
               VAT đầu ra theo thuế suất
@@ -349,7 +349,7 @@ export default function VatReportPage() {
             </ReportTableFrame>
           </div>
 
-          <div className="rounded-xl border border-border bg-surface-container-lowest p-4">
+          <div className="rounded-lg border border-border bg-surface-container-lowest p-4">
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <Icon name="trending_down" size={16} className="text-status-success" />
               VAT đầu vào theo thuế suất

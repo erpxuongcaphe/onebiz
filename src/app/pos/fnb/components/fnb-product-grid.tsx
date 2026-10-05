@@ -205,7 +205,7 @@ function ProductCard({
       aria-label={product.name + ", " + formatCurrency(product.sell_price) + "đ"}
       title={product.name}
       className={cn(
-        "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-xl border bg-white text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-card",
+        "group relative flex h-full min-w-0 flex-col overflow-hidden rounded-lg border bg-white text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:bg-card",
         cartQty > 0 ? "border-primary/50 bg-primary/5" : "border-border hover:border-primary/40 hover:bg-muted/40",
         compact ? "justify-between p-2.5" : "",
         outOfStock && "opacity-50",
@@ -236,7 +236,7 @@ function ProductCard({
           {cartQty > 0 && (
             <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md bg-primary px-1 text-xs font-bold tabular-nums text-primary-foreground" aria-label={"Đã thêm " + cartQty + " vào giỏ"}>{cartQty}</span>
           )}
-          {enforceStock && cartQty === 0 && <span className="whitespace-nowrap text-[11px] text-muted-foreground">{outOfStock ? "Hết hàng" : "Sẵn sàng"}</span>}
+          {enforceStock && cartQty === 0 && <span className="whitespace-nowrap text-xs text-muted-foreground">{outOfStock ? "Hết hàng" : "Sẵn sàng"}</span>}
         </div>
       </div>
       {outOfStock && !compact && <Badge variant="destructive" className="absolute left-3 top-3">Hết hàng</Badge>}

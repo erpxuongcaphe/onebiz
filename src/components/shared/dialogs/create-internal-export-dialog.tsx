@@ -218,7 +218,7 @@ export function CreateInternalExportDialog({
         <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
           <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(320px,0.85fr)_minmax(420px,1.15fr)]">
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <h3 className="mb-2 text-sm font-semibold">Nơi nhận / mục đích</h3>
                 <Input
                   value={destination}
@@ -229,7 +229,7 @@ export function CreateInternalExportDialog({
                 {errors.destination && <p className="mt-1 text-xs text-destructive">{errors.destination}</p>}
               </section>
 
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <h3 className="text-sm font-semibold">Dòng hàng xuất</h3>
                   <span className="text-xs text-muted-foreground">{formatNumber(items.length)} dòng</span>
@@ -279,7 +279,7 @@ export function CreateInternalExportDialog({
               </section>
             </div>
 
-            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
+            <div className="overflow-hidden rounded-lg border bg-white shadow-none">
               <div className="hidden grid-cols-[minmax(300px,1fr)_90px_110px_120px_140px_150px_44px] gap-2 border-b bg-muted/50 px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
@@ -350,7 +350,7 @@ export function CreateInternalExportDialog({
               )}
             </div>
 
-            <section className="rounded-xl border bg-white p-3 shadow-sm">
+            <section className="rounded-lg border bg-white p-3 shadow-none">
               <label className="text-sm font-medium">Ghi chú</label>
               <textarea
                 className="mt-2 flex min-h-[52px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -398,7 +398,7 @@ function FooterMetric({
 }) {
   return (
     <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
-      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="text-xs font-semibold uppercase text-muted-foreground">{label}</div>
       <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg text-primary" : ""}`}>
         {value}
       </div>

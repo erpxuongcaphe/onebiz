@@ -138,7 +138,7 @@ export function VariantPickerDialog({
                   type="button"
                   onClick={() => setSelectedId(v.id)}
                   className={cn(
-                    "w-full flex items-center gap-3 rounded-xl border px-3 py-3 text-left transition-colors",
+                    "w-full flex items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors",
                     isSelected
                       ? "border-primary bg-primary-fixed/40 ring-2 ring-primary/30"
                       : "border-border bg-surface-container-lowest hover:bg-surface-container-low"
@@ -160,7 +160,7 @@ export function VariantPickerDialog({
                         {v.name}
                       </span>
                       {v.isDefault && (
-                        <span className="px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-[10px] font-semibold">
+                        <span className="px-2 py-0.5 rounded-full bg-status-info/10 text-status-info text-xs font-semibold">
                           Mặc định
                         </span>
                       )}
@@ -176,7 +176,7 @@ export function VariantPickerDialog({
                       {formatCurrency(v.sellPrice)}
                     </div>
                     {v.sku && (
-                      <div className="text-[10px] text-muted-foreground font-mono mt-0.5">
+                      <div className="text-xs text-muted-foreground font-mono mt-0.5">
                         {v.sku}
                       </div>
                     )}
@@ -187,7 +187,7 @@ export function VariantPickerDialog({
           </div>
 
           {/* Quantity picker */}
-          <div className="flex items-center justify-between rounded-xl bg-surface-container-low px-3 py-3">
+          <div className="flex items-center justify-between rounded-lg bg-surface-container-low px-3 py-3">
             <span className="text-sm font-medium text-foreground">Số lượng</span>
             <div className="flex items-center gap-2">
               <Button

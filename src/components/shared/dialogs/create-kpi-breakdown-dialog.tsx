@@ -271,7 +271,7 @@ export function CreateKpiBreakdownDialog({
               <select
                 value={kpiType}
                 onChange={(e) => setKpiType(e.target.value as KpiType)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {TYPE_OPTIONS.map((t) => (
                   <option key={t} value={t}>
@@ -287,7 +287,7 @@ export function CreateKpiBreakdownDialog({
               <select
                 value={period}
                 onChange={(e) => handlePeriodChange(e.target.value as KpiPeriod)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {PERIOD_OPTIONS.map((p) => (
                   <option key={p} value={p}>
@@ -371,7 +371,7 @@ export function CreateKpiBreakdownDialog({
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Toàn doanh nghiệp —</option>
                 {branches.map((b) => (
@@ -392,7 +392,7 @@ export function CreateKpiBreakdownDialog({
               value={parentId}
               onChange={(e) => setParentId(e.target.value)}
               disabled={Boolean(parentKpi)}
-              className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
+              className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
             >
               <option value="">— KPI gốc (không có cha) —</option>
               {allKpis

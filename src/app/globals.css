@@ -174,16 +174,13 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.175 0.015 260);
 
-  /* Stitch / Material Design 3 surface-container scale.
-     Giá trị chính xác từ mockup Stitch (tailwind.config inline):
-     - lowest #ffffff, low #eff4ff, default #e6eeff,
-       high #dce9ff, highest #d5e3fc
-     Surface có BLUE-TINT (không phải neutral gray) → khớp với Stitch brand. */
+  /* Approved 05/10/2026: neutral flat surfaces. Reserve blue for active
+     controls rather than colouring every nested section. */
   --surface-container-lowest: oklch(1 0 0);          /* #FFFFFF */
-  --surface-container-low: oklch(0.97 0.015 265);    /* ≈ #EFF4FF */
-  --surface-container: oklch(0.95 0.025 265);        /* ≈ #E6EEFF */
-  --surface-container-high: oklch(0.93 0.035 265);   /* ≈ #DCE9FF */
-  --surface-container-highest: oklch(0.91 0.045 265);/* ≈ #D5E3FC */
+  --surface-container-low: oklch(0.98 0.003 260);
+  --surface-container: oklch(0.96 0.004 260);
+  --surface-container-high: oklch(0.94 0.005 260);
+  --surface-container-highest: oklch(0.92 0.006 260);
   --on-surface: oklch(0.175 0.015 260);              /* ≈ #0D1C2E dark blue-gray */
   --on-surface-variant: oklch(0.40 0.012 260);       /* ≈ #434654 */
   --on-primary: oklch(1 0 0);
@@ -351,9 +348,8 @@
      Sprint POS-FNB-1 (CEO 06/05): bổ sung 3 tier elevation cho hierarchy
      visual rõ ràng (rest / hover / floating). */
   .ambient-shadow {
-    /* Tier 1 — rest state cards */
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.04),
-      0 1px 2px rgba(0, 0, 0, 0.04);
+    /* Approved flat UI: content panels use separators, floating layers use floating elevation. */
+    box-shadow: none;
   }
   .ambient-shadow-elevated {
     /* Tier 2 — hover/active state, dialogs */

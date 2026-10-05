@@ -442,7 +442,7 @@ function QuanLyBanPage() {
 
   if (!activeBranchId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Quản lý Bàn &amp; Khu vực</h1>
@@ -497,7 +497,7 @@ function QuanLyBanPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
@@ -635,7 +635,7 @@ function QuanLyBanPage() {
                         {z.name}
                         <span
                           className={cn(
-                            "px-1.5 py-0 rounded text-[10px] tabular-nums",
+                            "px-1.5 py-0 rounded text-xs tabular-nums",
                             isActive
                               ? "bg-on-primary/20"
                               : "bg-surface-container-lowest",
@@ -841,12 +841,12 @@ function QuanLyBanPage() {
                     </span>
 
                     {/* Name */}
-                    <span className="text-[10px] text-muted-foreground truncate max-w-full">
+                    <span className="text-xs text-muted-foreground truncate max-w-full">
                       {table.name}
                     </span>
 
                     {/* Capacity */}
-                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                    <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                       <Icon name="group" className="size-2.5" />
                       {table.capacity} chỗ
                     </span>
@@ -855,7 +855,7 @@ function QuanLyBanPage() {
                     <Badge
                       variant="outline"
                       className={cn(
-                        "text-[10px] mt-0.5",
+                        "text-xs mt-0.5",
                         table.status === "available" && "text-status-success border-status-success/25",
                         table.status === "occupied" && "text-status-error border-status-error/25",
                         table.status === "reserved" && "text-status-warning border-status-warning/25",

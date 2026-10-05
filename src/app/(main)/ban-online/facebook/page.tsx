@@ -280,7 +280,7 @@ export default function FacebookPage() {
                         {conv.lastMessage}
                       </p>
                       {conv.unread > 0 && (
-                        <Badge className="h-5 min-w-5 px-2 text-[10px] rounded-full bg-primary ml-2 shrink-0">
+                        <Badge className="h-5 min-w-5 px-2 text-xs rounded-full bg-primary ml-2 shrink-0">
                           {conv.unread}
                         </Badge>
                       )}
@@ -335,7 +335,7 @@ export default function FacebookPage() {
                     <p className="text-sm leading-relaxed">{msg.text}</p>
                     <p
                       className={cn(
-                        "text-[10px] mt-1",
+                        "text-xs mt-1",
                         msg.sender === "shop"
                           ? "text-primary-fixed"
                           : "text-muted-foreground"

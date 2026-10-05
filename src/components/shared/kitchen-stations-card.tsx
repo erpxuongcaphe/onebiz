@@ -326,13 +326,13 @@ function StationRow({
         </div>
         <div className="flex items-center gap-2 mt-1 flex-wrap">
           {settings.auto_print !== false && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-status-success/10 text-status-success">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-status-success/10 text-status-success">
               <Icon name="print" size={12} />
               Tự in
             </span>
           )}
           {settings.show_on_kds !== false && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-status-info/10 text-status-info">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold bg-status-info/10 text-status-info">
               <Icon name="monitor" size={12} />
               KDS
             </span>
@@ -631,7 +631,7 @@ function ToggleRow({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0",
           )}
         />

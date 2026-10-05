@@ -378,7 +378,7 @@ function BranchSettingsPageInner() {
   const officeCount = branches.filter((b) => b.branchType === "office").length;
 
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Quản lý chi nhánh</h1>

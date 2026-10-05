@@ -50,7 +50,7 @@ function Toggle({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0"
           )}
         />
@@ -149,7 +149,7 @@ export default function SalesSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt bán hàng</h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -249,7 +249,7 @@ export default function SalesSettingsPage() {
                   <p className="font-medium text-foreground">Đã nâng cấp sang OTP per-user</p>
                   <p className="text-muted-foreground mt-1">
                     Từ Sprint B.6 (CEO 12/05/2026), giảm giá vượt ngưỡng KHÔNG còn dùng PIN chung. Mỗi
-                    quản lý có quyền <code className="bg-muted px-1 rounded text-[10px]">pos_fnb.discount</code>
+                    quản lý có quyền <code className="bg-muted px-1 rounded text-xs">pos_fnb.discount</code>
                     {" "}vào <Link href="/cap-otp" className="text-primary underline">/cap-otp</Link> để cấp OTP 6 số
                     (TTL 2 phút). Cashier nhập OTP → server verify manager đã duyệt → audit log lưu cả 2.
                   </p>

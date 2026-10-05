@@ -202,7 +202,7 @@ export function BranchPrintInfoCard() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold">{branch.name}</span>
                         {hasOverride && (
-                          <Badge variant="outline" className="text-[11px]">
+                          <Badge variant="outline" className="text-xs">
                             Có chỉnh riêng
                           </Badge>
                         )}

@@ -211,13 +211,13 @@ export function AutoBreakdownDialog({
 
         <div className="grid gap-4 py-2">
           {/* Parent KPI info */}
-          <div className="rounded-xl border border-border bg-surface-container p-3">
+          <div className="rounded-lg border border-border bg-surface-container p-3">
             <div className="flex items-center gap-2 mb-1">
               <Icon name="account_tree" size={16} className="text-primary" />
               <span className="font-semibold text-sm">
                 {parentKpi.kpiName}
               </span>
-              <span className="text-[10px] uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
+              <span className="text-xs uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
                 {KPI_PERIOD_LABELS[parentKpi.period]}
               </span>
             </div>
@@ -242,7 +242,7 @@ export function AutoBreakdownDialog({
                 type="button"
                 onClick={() => setStrategy("time")}
                 className={cn(
-                  "rounded-xl border p-3 text-left transition-colors press-scale-sm",
+                  "rounded-lg border p-3 text-left transition-colors press-scale-sm",
                   strategy === "time"
                     ? "border-primary bg-primary-fixed"
                     : "border-border bg-surface-container-lowest hover:bg-surface-container",
@@ -268,7 +268,7 @@ export function AutoBreakdownDialog({
                 type="button"
                 onClick={() => setStrategy("branch")}
                 className={cn(
-                  "rounded-xl border p-3 text-left transition-colors press-scale-sm",
+                  "rounded-lg border p-3 text-left transition-colors press-scale-sm",
                   strategy === "branch"
                     ? "border-primary bg-primary-fixed"
                     : "border-border bg-surface-container-lowest hover:bg-surface-container",
@@ -311,7 +311,7 @@ export function AutoBreakdownDialog({
                   onChange={(e) =>
                     setTargetSubPeriod(e.target.value as KpiPeriod)
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {validTargetSubPeriods.map((p) => (
                     <option key={p} value={p}>
@@ -335,14 +335,14 @@ export function AutoBreakdownDialog({
                     type="button"
                     onClick={() => setBranchDistribution("even")}
                     className={cn(
-                      "rounded-xl border p-3 text-left transition-colors press-scale-sm",
+                      "rounded-lg border p-3 text-left transition-colors press-scale-sm",
                       branchDistribution === "even"
                         ? "border-primary bg-primary-fixed"
                         : "border-border bg-surface-container-lowest hover:bg-surface-container",
                     )}
                   >
                     <div className="text-sm font-semibold">Chia đều</div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Mỗi chi nhánh nhận target như nhau
                     </p>
                   </button>
@@ -350,7 +350,7 @@ export function AutoBreakdownDialog({
                     type="button"
                     onClick={() => setBranchDistribution("historical")}
                     className={cn(
-                      "rounded-xl border p-3 text-left transition-colors press-scale-sm",
+                      "rounded-lg border p-3 text-left transition-colors press-scale-sm",
                       branchDistribution === "historical"
                         ? "border-primary bg-primary-fixed"
                         : "border-border bg-surface-container-lowest hover:bg-surface-container",
@@ -359,7 +359,7 @@ export function AutoBreakdownDialog({
                     <div className="text-sm font-semibold">
                       Theo lịch sử (90 ngày)
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Chi nhánh doanh thu cao nhận target cao
                     </p>
                   </button>
@@ -382,7 +382,7 @@ export function AutoBreakdownDialog({
                       : "Chọn tất cả"}
                   </Button>
                 </div>
-                <div className="rounded-xl border border-border bg-surface-container-lowest max-h-48 overflow-y-auto">
+                <div className="rounded-lg border border-border bg-surface-container-lowest max-h-48 overflow-y-auto">
                   {branches.length === 0 ? (
                     <p className="p-3 text-xs text-muted-foreground">
                       Chưa có chi nhánh active
@@ -400,7 +400,7 @@ export function AutoBreakdownDialog({
                           className="size-4 rounded border-border accent-primary"
                         />
                         <span className="text-sm flex-1">{b.name}</span>
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <span className="text-xs uppercase tracking-wider text-muted-foreground">
                           {(
                             {
                               store: "Cửa hàng FnB",
@@ -419,7 +419,7 @@ export function AutoBreakdownDialog({
           )}
 
           {/* Preview */}
-          <div className="rounded-xl bg-status-info/5 border border-status-info/20 p-3 flex items-start gap-2">
+          <div className="rounded-lg bg-status-info/5 border border-status-info/20 p-3 flex items-start gap-2">
             <Icon
               name="info"
               size={16}

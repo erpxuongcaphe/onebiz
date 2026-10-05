@@ -664,7 +664,7 @@ export default function ThietLapGiaPage() {
           <Icon name="filter_alt" size={15} />
           Bộ lọc
           {activeFilters.length > 0 && (
-            <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+            <span className="rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground">
               {activeFilters.length}
             </span>
           )}

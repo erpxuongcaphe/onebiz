@@ -202,7 +202,7 @@ export default function DeliveryFeeSettingsPage() {
                 </div>
                 <div className="flex-1 grid grid-cols-2 gap-2">
                   <div className="space-y-0.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">
                       Nhãn hiển thị
                     </Label>
                     <Input
@@ -221,7 +221,7 @@ export default function DeliveryFeeSettingsPage() {
                     />
                   </div>
                   <div className="space-y-0.5">
-                    <Label className="text-[10px] uppercase font-bold text-muted-foreground">
+                    <Label className="text-xs uppercase font-bold text-muted-foreground">
                       Phí (VND)
                     </Label>
                     <Input
@@ -317,7 +317,7 @@ export default function DeliveryFeeSettingsPage() {
                             <>
                               <div className="font-bold tabular-nums">
                                 {formatCurrency(override.fee)}
-                                <span className="text-[10px] text-status-warning ml-1">
+                                <span className="text-xs text-status-warning ml-1">
                                   override
                                 </span>
                               </div>
@@ -327,7 +327,7 @@ export default function DeliveryFeeSettingsPage() {
                                 onClick={() =>
                                   void handleDeleteOverride(branch.id, code)
                                 }
-                                className="text-[11px] text-status-error hover:underline"
+                                className="text-xs text-status-error hover:underline"
                               >
                                 Xóa override
                               </button>
@@ -343,7 +343,7 @@ export default function DeliveryFeeSettingsPage() {
                                 onClick={() =>
                                   void handleCreateOverride(branch.id, code, tenant)
                                 }
-                                className="text-[11px] text-primary hover:underline"
+                                className="text-xs text-primary hover:underline"
                               >
                                 + Tạo override
                               </button>

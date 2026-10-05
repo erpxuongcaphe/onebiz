@@ -150,7 +150,7 @@ export function ProductAutocomplete({
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
             {loading && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-xs bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -212,19 +212,19 @@ export function ProductAutocomplete({
           <div className="flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
-                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-xs">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-xs">
                   Enter
                 </kbd>{" "}
                 thêm
               </span>
               <span>
-                <kbd className="font-mono bg-background border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-background border border-border rounded px-1 text-xs">
                   Esc
                 </kbd>{" "}
                 đóng

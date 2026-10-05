@@ -164,7 +164,7 @@ export default function PaymentSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt thanh toán</h1>
         <p className="text-muted-foreground text-sm mt-1">
@@ -185,7 +185,7 @@ export default function PaymentSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-4">
             {/* Left: form */}
             <div className="space-y-4">
               <div className="space-y-1.5">
@@ -315,7 +315,7 @@ export default function PaymentSettingsPage() {
                       alt="VietQR preview"
                       className="max-w-[280px] w-full h-auto"
                     />
-                    <p className="text-[11px] text-muted-foreground text-center">
+                    <p className="text-xs text-muted-foreground text-center">
                       <Icon name="info" size={11} className="inline mr-0.5 align-text-bottom" />
                       QR demo với số tiền <strong>250.000đ</strong> + mã{" "}
                       <code className="font-mono">HD-DEMO-001</code>. Bill

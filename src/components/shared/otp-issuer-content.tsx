@@ -236,21 +236,21 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
     <>
       <div className={cn("mx-auto space-y-4", maxWidth)}>
         {/* Hero — 1 nút cấp OTP duy nhất */}
-        <section className="bg-surface border border-border rounded-2xl p-5 sm:p-6 shadow-sm">
+        <section className="bg-surface border border-border rounded-lg p-5 sm:p-6 shadow-none">
           <div className="flex items-center gap-3 mb-4">
             <div className="h-11 w-11 rounded-xl bg-status-warning/10 flex items-center justify-center shrink-0">
               <Icon name="vpn_key" size={22} className="text-status-warning" />
             </div>
             <div>
               <h2 className="text-base font-bold leading-tight">Cấp OTP duyệt từ xa</h2>
-              <p className="text-[11px] text-muted-foreground mt-0.5">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 Cashier gọi xin → chọn action → đọc mã 6 số qua điện thoại
               </p>
             </div>
           </div>
 
           {/* Action selector */}
-          <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Loại OTP cần cấp
           </label>
           <div className="mt-1.5 space-y-1.5">
@@ -277,13 +277,13 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
                 <Icon name={selectedAction.icon} size={14} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {selectedAction.description}
                 </p>
                 {!canIssueSelected && (
-                  <p className="text-[11px] text-status-warning mt-0.5 flex items-center gap-1">
+                  <p className="text-xs text-status-warning mt-0.5 flex items-center gap-1">
                     <Icon name="lock" size={11} />
-                    Bạn không có quyền cấp loại này — cần <code className="text-[10px] bg-muted px-1 rounded">{selectedAction.requiredPermission}</code>
+                    Bạn không có quyền cấp loại này — cần <code className="text-xs bg-muted px-1 rounded">{selectedAction.requiredPermission}</code>
                   </p>
                 )}
               </div>
@@ -299,7 +299,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
                   size={14}
                   className="text-primary shrink-0 mt-0.5"
                 />
-                <p className="text-[11px] text-foreground leading-relaxed">
+                <p className="text-xs text-foreground leading-relaxed">
                   <b>Bảo mật:</b> hỏi cashier đọc mã để OTP chỉ dùng được cho đúng
                   bill đó — chống reuse OTP cho bill khác.
                 </p>
@@ -308,7 +308,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
                 <div>
                   <label
                     htmlFor="target-invoice-code"
-                    className="block text-[11px] font-medium mb-1"
+                    className="block text-xs font-medium mb-1"
                   >
                     Mã hoá đơn <span className="text-status-error">*</span>
                   </label>
@@ -327,7 +327,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
                 <div>
                   <label
                     htmlFor="target-ko-number"
-                    className="block text-[11px] font-medium mb-1"
+                    className="block text-xs font-medium mb-1"
                   >
                     Mã đơn bếp <span className="text-status-error">*</span>
                   </label>
@@ -368,7 +368,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
           </Button>
 
           {/* Quick hint */}
-          <div className="mt-3 text-[10px] text-muted-foreground text-center">
+          <div className="mt-3 text-xs text-muted-foreground text-center">
             Mã 6 số · TTL 2 phút · dùng 1 lần · {user?.fullName ?? "—"}
           </div>
         </section>
@@ -395,7 +395,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
             </Button>
           </div>
 
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <div className="bg-surface border border-border rounded-lg overflow-hidden">
             {loadingRecent ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 <Icon
@@ -457,11 +457,11 @@ function RecentOtpRow({ otp }: { otp: RecentManagerOtp }) {
     <div className="flex items-center gap-3 p-3 hover:bg-surface-container-low transition-colors">
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium">{otp.actionLabel}</div>
-        <div className="text-[11px] text-muted-foreground mt-0.5">
+        <div className="text-xs text-muted-foreground mt-0.5">
           {dateLabel} · {timeLabel}
         </div>
       </div>
-      <Badge variant="outline" className={cn("text-[10px]", statusStyle)}>
+      <Badge variant="outline" className={cn("text-xs", statusStyle)}>
         {statusLabel}
       </Badge>
     </div>

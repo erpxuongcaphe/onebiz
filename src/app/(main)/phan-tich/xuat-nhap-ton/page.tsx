@@ -669,7 +669,7 @@ export default function XuatNhapTonPage() {
             Không có dữ liệu
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             {subMode === "summary" ? (
               <ReportDataTable
                 columns={summaryColumns}

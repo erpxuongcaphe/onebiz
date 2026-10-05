@@ -224,7 +224,7 @@ export function FloorPlanEditor({ tables, onSaved }: FloorPlanEditorProps) {
   return (
     <div
       ref={canvasRef}
-      className="relative w-full h-[640px] rounded-xl border border-outline-variant/30 bg-surface-container-lowest overflow-hidden select-none"
+      className="relative w-full h-[640px] rounded-lg border border-outline-variant/30 bg-surface-container-lowest overflow-hidden select-none"
       style={{
         backgroundImage:
           "linear-gradient(rgba(148,163,184,0.18) 1px, transparent 1px), linear-gradient(90deg, rgba(148,163,184,0.18) 1px, transparent 1px)",
@@ -312,8 +312,8 @@ function DraggableTable({
       title={`Bàn ${table.name} (${table.capacity} chỗ) — kéo để di chuyển`}
     >
       <div className="font-black text-base leading-none">{table.tableNumber}</div>
-      <div className="text-[10px] mt-0.5 max-w-full truncate px-1">{table.name}</div>
-      <div className="text-[9px] mt-0.5 flex items-center gap-0.5 opacity-80">
+      <div className="text-xs mt-0.5 max-w-full truncate px-1">{table.name}</div>
+      <div className="text-xs mt-0.5 flex items-center gap-0.5 opacity-80">
         <Icon name="group" size={10} />
         <span>{table.capacity}</span>
       </div>

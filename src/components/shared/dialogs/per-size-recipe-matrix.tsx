@@ -246,7 +246,7 @@ function MaterialSearchCell({
         />
       )}
       {open && (
-        <div className="mt-1 max-h-48 min-w-[280px] overflow-y-auto rounded-md border bg-popover shadow-sm">
+        <div className="mt-1 max-h-48 min-w-[280px] overflow-y-auto rounded-md border bg-popover shadow-none">
           {results.length === 0 ? (
             <p className="p-3 text-xs text-muted-foreground">Không tìm thấy nguyên liệu.</p>
           ) : (

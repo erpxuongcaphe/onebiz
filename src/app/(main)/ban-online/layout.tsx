@@ -70,7 +70,7 @@ export default function BanOnlineLayout({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex min-w-[72px] flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-[10px] transition-colors",
+                  "flex min-w-[72px] flex-col items-center gap-0.5 rounded-lg px-2 py-2 text-xs transition-colors",
                   isActive
                     ? "bg-primary-fixed text-primary font-semibold"
                     : "text-muted-foreground"

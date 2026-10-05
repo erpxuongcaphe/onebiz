@@ -18,7 +18,7 @@ export default function MainError({
 
   return (
     <div className="flex-1 flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center space-y-6">
+      <div className="max-w-md w-full text-center space-y-4">
         <div className="mx-auto h-16 w-16 rounded-full bg-status-error/10 flex items-center justify-center">
           <Icon name="error" size={32} className="text-status-error" />
         </div>

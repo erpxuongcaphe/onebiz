@@ -75,7 +75,7 @@ export function FnbHeader({
         <button
           type="button"
           onClick={onMenuClick}
-          className="w-11 h-11 rounded-xl flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
+          className="w-11 h-11 rounded-lg flex items-center justify-center text-on-surface-variant hover:text-foreground hover:bg-surface-container transition-colors shrink-0"
           aria-label="Mở menu điều hướng"
           title="Menu điều hướng (☰)"
         >
@@ -131,7 +131,7 @@ export function FnbHeader({
       <div className="order-10 basis-full md:hidden" aria-hidden />
 
       {/* View mode toggle: Sprint UI-3 — wording chuẩn "Bán hàng / Sơ đồ bàn" */}
-      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-xl p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
+      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-lg p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
         <button
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
@@ -168,7 +168,7 @@ export function FnbHeader({
       <button
         type="button"
         onClick={onSearch}
-        className="order-21 flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-xl border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted md:order-none md:flex-1 md:justify-start"
+        className="order-21 flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted md:order-none md:flex-1 md:justify-start"
         title="Tìm món (F3)"
       >
         <Icon name="search" size={16} />

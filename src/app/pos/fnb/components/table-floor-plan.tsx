@@ -395,11 +395,11 @@ function GridFallback({
                   </span>
                   <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
                   {elapsed && (
-                    <span className="text-[10px] text-status-error mt-1">
+                    <span className="text-xs text-status-error mt-1">
                       <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}
                     </span>
                   )}
-                  <span className="text-[9px] text-muted-foreground mt-0.5">
+                  <span className="text-xs text-muted-foreground mt-0.5">
                     <Icon name="group" size={12} className="inline" /> {t.capacity}
                   </span>
                 </button>

@@ -120,7 +120,7 @@ function DraftCard({
     <div
       className={cn(
         "group relative bg-white border border-border rounded-lg p-3 transition-all",
-        "hover:border-primary hover:shadow-sm cursor-pointer",
+        "hover:border-primary hover:shadow-none cursor-pointer",
       )}
       onClick={onSelect}
     >
@@ -131,20 +131,20 @@ function DraftCard({
         </span>
         {draft.autoSaved ? (
           <span
-            className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-warning/15 text-status-warning"
+            className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-warning/15 text-status-warning"
             title="Tự động lưu (recovery — TTL 30 ngày)"
           >
             Tự động
           </span>
         ) : (
           <span
-            className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-success/15 text-status-success"
+            className="text-xs font-semibold uppercase tracking-wider px-2 py-0.5 rounded bg-status-success/15 text-status-success"
             title="Đã lưu nháp F9 (sticky)"
           >
             Đã lưu
           </span>
         )}
-        <span className="ml-auto text-[10px] text-muted-foreground">
+        <span className="ml-auto text-xs text-muted-foreground">
           {relativeTime}
         </span>
         <button
@@ -161,7 +161,7 @@ function DraftCard({
       </div>
 
       {/* Người tạo + khách */}
-      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mb-1">
+      <div className="flex items-center gap-3 text-xs text-muted-foreground mb-1">
         {draft.createdByName && (
           <span className="flex items-center gap-1">
             <Icon name="badge" size={14} />
@@ -176,7 +176,7 @@ function DraftCard({
 
       {/* Items summary (3 tên đầu) */}
       {draft.itemsSummary && draft.itemsSummary.length > 0 && (
-        <p className="text-[11px] text-muted-foreground mb-2 line-clamp-1">
+        <p className="text-xs text-muted-foreground mb-2 line-clamp-1">
           {draft.itemsSummary.join(", ")}
           {draft.itemCount > 3 && ` · +${draft.itemCount - 3}`}
         </p>
@@ -184,7 +184,7 @@ function DraftCard({
 
       {/* Tổng + nút Tiếp tục */}
       <div className="flex items-center justify-between mt-2">
-        <span className="text-[11px] text-muted-foreground">
+        <span className="text-xs text-muted-foreground">
           <span className="font-semibold text-foreground tabular-nums">
             {draft.itemCount}
           </span>{" "}
@@ -193,7 +193,7 @@ function DraftCard({
             {formatNumber(draft.total)}đ
           </span>
         </span>
-        <span className="text-[11px] font-semibold text-primary inline-flex items-center gap-0.5">
+        <span className="text-xs font-semibold text-primary inline-flex items-center gap-0.5">
           Tiếp tục
           <Icon name="arrow_forward" size={14} />
         </span>

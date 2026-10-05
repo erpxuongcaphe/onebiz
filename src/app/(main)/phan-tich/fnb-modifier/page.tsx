@@ -189,7 +189,7 @@ export default function FnbModifierReportPage() {
       </div>
 
       {loading ? (
-        <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
+        <div className="rounded-lg border bg-card p-8 text-center text-sm text-muted-foreground">
           <Icon name="progress_activity" size={20} className="mr-2 inline animate-spin" />
           Đang tải...
         </div>
@@ -200,7 +200,7 @@ export default function FnbModifierReportPage() {
           onRetry={() => void fetchData()}
         />
       ) : stats.length === 0 ? (
-        <div className="rounded-xl border-2 border-dashed p-10 text-center">
+        <div className="rounded-lg border-2 border-dashed p-10 text-center">
           <Icon name="insights" size={36} className="mx-auto mb-2 text-muted-foreground/40" />
           <p className="text-sm font-medium">Chưa có dữ liệu tuỳ chọn</p>
           <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
@@ -218,7 +218,7 @@ export default function FnbModifierReportPage() {
             const groupTotal = rows.reduce((s, r) => s + r.count, 0);
             const groupRev = rows.reduce((s, r) => s + r.totalPriceDelta, 0);
             return (
-              <div key={gid} className="rounded-xl border bg-card overflow-hidden">
+              <div key={gid} className="rounded-lg border bg-card overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 bg-surface-container-low border-b">
                   <div>
                     <h3 className="font-semibold">{rows[0].groupName}</h3>

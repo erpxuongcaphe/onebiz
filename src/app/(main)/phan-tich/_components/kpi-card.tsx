@@ -69,7 +69,7 @@ export function KpiCard({
             {value}
           </p>
           {subValue && (
-            <div className="mt-1 text-[11px] text-muted-foreground">{subValue}</div>
+            <div className="mt-1 text-xs text-muted-foreground">{subValue}</div>
           )}
           {change && (
             <span

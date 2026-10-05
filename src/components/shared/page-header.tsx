@@ -150,7 +150,7 @@ function ExportButton({ onExport }: { onExport: ExportHandlers }) {
           "inline-flex items-center justify-center gap-2 shrink-0",
           "rounded-lg text-sm font-medium",
           "border border-input bg-background hover:bg-accent hover:text-accent-foreground",
-          "h-8 px-3 cursor-pointer"
+          "h-8 pointer-coarse:min-h-11 px-3 cursor-pointer"
         )}
       >
         <Icon name="download" size={16} />
@@ -285,7 +285,7 @@ function MobileActions({
         <DropdownMenu>
           <DropdownMenuTrigger
             className={cn(
-              "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg",
+              "inline-flex h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 items-center justify-center rounded-lg",
               "border border-input bg-background hover:bg-accent cursor-pointer"
             )}
             aria-label="Mở thêm thao tác"
@@ -347,7 +347,7 @@ function IconButton({
     <Button
       variant="ghost"
       size="icon"
-      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground"
+      className="h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 text-muted-foreground hover:text-foreground"
       onClick={onClick}
       title={tooltip}
     >
@@ -462,7 +462,7 @@ export function PageHeader({
   onHelp,
   children,
   className,
-  density = "default",
+  density = "compact",
 }: PageHeaderProps) {
   const mainActions = actions.filter((a) => !a.overflow);
   const overflowActions = actions.filter((a) => a.overflow);
@@ -505,7 +505,7 @@ export function PageHeader({
           <div className="min-w-0 shrink-0">
             <h1
               className={cn(
-                "font-bold text-on-surface leading-tight",
+                "font-bold text-primary leading-tight",
                 compact ? "text-xl" : "text-2xl",
               )}
             >
@@ -550,7 +550,7 @@ export function PageHeader({
                   className={cn(
                     "inline-flex items-center justify-center rounded-lg",
                     "border border-input bg-background hover:bg-accent",
-                    "h-8 w-8 shrink-0 cursor-pointer"
+                    "h-8 w-8 pointer-coarse:min-h-11 pointer-coarse:min-w-11 shrink-0 cursor-pointer"
                   )}
                 >
                   <Icon name="more_horiz" size={16} />

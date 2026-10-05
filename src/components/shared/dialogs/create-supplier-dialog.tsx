@@ -218,7 +218,7 @@ export function CreateSupplierDialog({
               <Icon name="location_on" size={16} className="text-primary" />
               <span className="text-sm font-semibold">Địa chỉ</span>
               {isEditing && address && !houseNumber && !street && !ward && !province && (
-                <span className="text-[11px] text-status-warning">
+                <span className="text-xs text-status-warning">
                   · Có địa chỉ cũ chưa tách — cập nhật để filter dễ hơn
                 </span>
               )}
@@ -226,7 +226,7 @@ export function CreateSupplierDialog({
 
             {isEditing && address && !houseNumber && !street && !ward && !province && (
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">
+                <label className="text-xs text-muted-foreground">
                   Địa chỉ cũ (text)
                 </label>
                 <Input
@@ -239,7 +239,7 @@ export function CreateSupplierDialog({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Số nhà</label>
+                <label className="text-xs text-muted-foreground">Số nhà</label>
                 <Input
                   value={houseNumber}
                   onChange={(e) => setHouseNumber(e.target.value)}
@@ -247,7 +247,7 @@ export function CreateSupplierDialog({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Tên đường</label>
+                <label className="text-xs text-muted-foreground">Tên đường</label>
                 <Input
                   value={street}
                   onChange={(e) => setStreet(e.target.value)}
@@ -255,7 +255,7 @@ export function CreateSupplierDialog({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Khu phố / Thôn</label>
+                <label className="text-xs text-muted-foreground">Khu phố / Thôn</label>
                 <Input
                   value={quarter}
                   onChange={(e) => setQuarter(e.target.value)}
@@ -263,7 +263,7 @@ export function CreateSupplierDialog({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Phường / Xã</label>
+                <label className="text-xs text-muted-foreground">Phường / Xã</label>
                 <Input
                   value={ward}
                   onChange={(e) => setWard(e.target.value)}
@@ -271,7 +271,7 @@ export function CreateSupplierDialog({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[11px] text-muted-foreground">Tỉnh / Thành phố</label>
+                <label className="text-xs text-muted-foreground">Tỉnh / Thành phố</label>
                 <Select
                   value={province || "__none__"}
                   onValueChange={(v) => setProvince(v === "__none__" ? "" : (v ?? ""))}
@@ -294,7 +294,7 @@ export function CreateSupplierDialog({
                 </Select>
               </div>
               <div className="space-y-1 sm:col-span-2">
-                <label className="text-[11px] text-muted-foreground">Quốc gia</label>
+                <label className="text-xs text-muted-foreground">Quốc gia</label>
                 <Input
                   value={country}
                   onChange={(e) => setCountry(e.target.value)}

@@ -441,7 +441,7 @@ export default function LotTraceabilityPage() {
             </p>
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             <ReportDataTable<LotRow>
               columns={columns}
               tablePreferenceKey="report.lot-traceability.lots"

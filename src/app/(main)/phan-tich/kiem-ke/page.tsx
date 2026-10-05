@@ -345,7 +345,7 @@ export default function KiemKeReportPage() {
             Chưa có phiếu kiểm kê nào trong kỳ này
           </div>
         ) : (
-          <div className="bg-surface-container-lowest rounded-xl ambient-shadow">
+          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
             <ReportDataTable<InventoryCheckReportRow>
               columns={columns}
               tablePreferenceKey="report.kiem-ke.checks"

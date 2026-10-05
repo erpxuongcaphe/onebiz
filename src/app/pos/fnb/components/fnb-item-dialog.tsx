@@ -781,7 +781,7 @@ export function FnbItemDialog({
             {product.name}
           </DialogTitle>
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <DialogDescription className="text-[13px]">
+            <DialogDescription className="text-sm">
               Giá gốc{" "}
               <span className="whitespace-nowrap tabular-nums text-foreground">
                 {formatCurrency(product.sell_price)}đ
@@ -894,7 +894,7 @@ export function FnbItemDialog({
                 để không ai tưởng món không có size rồi thêm với giá gốc. */}
             {variantsLoading && (!variants || variants.length === 0) ? (
               <section className={O_NHOM}>
-                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {[1, 2, 3].map((i) => (
                     <div key={i} className="h-9 w-20 rounded-full bg-muted animate-pulse" />
@@ -903,7 +903,7 @@ export function FnbItemDialog({
               </section>
             ) : variants && variants.length > 0 ? (
               <section className={O_NHOM}>
-                <Label className="text-[13px] font-medium">Kích cỡ</Label>
+                <Label className="text-sm font-medium">Kích cỡ</Label>
                 <div className="flex flex-wrap gap-2">
                   {variants.map((v) => {
                     const chuaCoGia = v.sell_price < 0 ||
@@ -955,7 +955,7 @@ export function FnbItemDialog({
               !hasConfiguredDynamicModifiers && (
                 <>
                   <section className={O_NHOM}>
-                    <Label className="text-[13px] font-medium">Mức đường</Label>
+                    <Label className="text-sm font-medium">Mức đường</Label>
                     <div className="flex flex-wrap gap-2">
                       {SWEETNESS_OPTIONS.map((s) => (
                         <button
@@ -977,7 +977,7 @@ export function FnbItemDialog({
                   </section>
 
                   <section className={O_NHOM}>
-                    <Label className="text-[13px] font-medium">Mức đá</Label>
+                    <Label className="text-sm font-medium">Mức đá</Label>
                     <div className="flex flex-wrap gap-2">
                       {ICE_OPTIONS.map((i) => (
                         <button
@@ -1007,7 +1007,7 @@ export function FnbItemDialog({
               thật dài 30+ ký tự sẽ xuống 3 dòng → rối hơn 1 cột). */}
           {toppings && toppings.length > 0 && (
             <section className="min-w-0 space-y-1.5">
-              <Label className="text-[13px] font-medium">Topping</Label>
+              <Label className="text-sm font-medium">Topping</Label>
               <div className="grid gap-2 xl:grid-cols-2 xl:gap-x-4">
                 {toppings.map((t) => {
                   const qty = toppingQtys.get(t.id) ?? 0;
@@ -1059,12 +1059,12 @@ export function FnbItemDialog({
           {/* Ghi chú tự do — trải hết bề ngang: chia cột cho ô nhập chữ chỉ
               làm khó gõ. */}
           <section className="min-w-0 space-y-1.5">
-            <Label className="text-[13px] font-medium flex items-center gap-2">
+            <Label className="text-sm font-medium flex items-center gap-2">
               <Icon name="sticky_note_2" size={16} /> Ghi chú thêm
             </Label>
             <Textarea value={note} onChange={(e) => setNote(e.target.value)}
               placeholder="VD: ít ngọt, đá riêng, pha ấm..." rows={2}
-              className="resize-none text-[13px]" />
+              className="resize-none text-sm" />
           </section>
         </div>
 

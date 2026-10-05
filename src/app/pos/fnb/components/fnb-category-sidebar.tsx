@@ -159,7 +159,7 @@ function CategoryButton({
       <span className="flex-1 min-w-0 line-clamp-2 leading-snug font-medium">{label}</span>
       <span
         className={cn(
-          "shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums",
+          "shrink-0 rounded-md px-1.5 py-0.5 text-xs font-semibold tabular-nums",
           active
             ? "bg-primary text-on-primary"
             : "bg-muted text-muted-foreground",

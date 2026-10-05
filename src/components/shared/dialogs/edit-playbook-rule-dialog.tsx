@@ -165,7 +165,7 @@ export function EditPlaybookRuleDialog({
             </div>
             <div className="space-y-2 flex flex-col justify-end">
               <Label className="invisible">Enabled</Label>
-              <label className="flex items-center gap-2 h-10 px-3 rounded-xl border border-border bg-surface-container-lowest cursor-pointer">
+              <label className="flex items-center gap-2 h-10 px-3 rounded-lg border border-border bg-surface-container-lowest cursor-pointer">
                 <Checkbox
                   checked={rule.enabled}
                   onCheckedChange={(c) =>
@@ -178,7 +178,7 @@ export function EditPlaybookRuleDialog({
           </div>
 
           {/* Filter KPI type + period */}
-          <div className="rounded-xl border border-border bg-surface-container/30 p-3 space-y-3">
+          <div className="rounded-lg border border-border bg-surface-container/30 p-3 space-y-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <Icon name="filter_alt" size={16} className="text-primary" />
               Lọc KPI
@@ -236,7 +236,7 @@ export function EditPlaybookRuleDialog({
           </div>
 
           {/* Trigger */}
-          <div className="rounded-xl border border-border bg-surface-container/30 p-3 space-y-3">
+          <div className="rounded-lg border border-border bg-surface-container/30 p-3 space-y-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <Icon name="bolt" size={16} className="text-primary" />
               Điều kiện kích hoạt (trigger)
@@ -251,7 +251,7 @@ export function EditPlaybookRuleDialog({
                     trigger: e.target.value as PlaybookTriggerType,
                   }))
                 }
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {ALL_TRIGGERS.map((t) => (
                   <option key={t} value={t}>
@@ -362,7 +362,7 @@ export function EditPlaybookRuleDialog({
           </div>
 
           {/* Action */}
-          <div className="rounded-xl border border-border bg-surface-container/30 p-3 space-y-3">
+          <div className="rounded-lg border border-border bg-surface-container/30 p-3 space-y-3">
             <div className="text-sm font-semibold flex items-center gap-2">
               <Icon name="add_task" size={16} className="text-primary" />
               Task tạo ra khi trigger khớp
@@ -420,7 +420,7 @@ export function EditPlaybookRuleDialog({
                       },
                     }))
                   }
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {ALL_PRIORITIES.map((p) => (
                     <option key={p} value={p}>

@@ -40,7 +40,7 @@ function Toggle({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0"
           )}
         />
@@ -83,7 +83,7 @@ export default function NotificationSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Cài đặt thông báo</h1>
         <p className="text-muted-foreground text-sm mt-1">

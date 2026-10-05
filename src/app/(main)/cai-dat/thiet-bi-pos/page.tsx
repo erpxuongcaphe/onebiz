@@ -58,7 +58,7 @@ export default function DeviceBindingSettingsPage() {
   // Owner-only gate. Staff thấy trang "không có quyền" thay vì form.
   if (user && user.role !== "owner") {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold">Khoá thiết bị POS</h1>
         </div>
@@ -120,7 +120,7 @@ export default function DeviceBindingSettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Khoá thiết bị POS</h1>
         <p className="text-muted-foreground text-sm mt-1">

@@ -2873,7 +2873,7 @@ export function CreateProductDialog({
                 <Icon name="straighten" size={14} className="mr-1" />
                 Quy cách
                 {variantItems.length > 0 && (
-                  <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 text-[10px] font-bold rounded-full bg-primary text-primary-foreground">
+                  <span className="ml-1 inline-flex items-center justify-center h-4 min-w-[16px] px-1 text-xs font-bold rounded-full bg-primary text-primary-foreground">
                     {variantItems.length}
                   </span>
                 )}
@@ -4896,7 +4896,7 @@ export function CreateProductDialog({
 
               return (
                 <>
-                  <div className="flex items-center justify-between px-1 py-1.5 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-between px-1 py-1.5 text-xs text-muted-foreground">
                     <span>
                       <b className="text-foreground">{filtered.length}</b> SP
                       phù hợp
@@ -4923,7 +4923,7 @@ export function CreateProductDialog({
                     ) : (
                       <>
                         {/* Select-all header sticky */}
-                        <div className="sticky top-0 z-10 px-3 py-2 bg-muted/80 backdrop-blur border-b flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <div className="sticky top-0 z-10 px-3 py-2 bg-muted/80 backdrop-blur border-b flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
                           <Checkbox
                             checked={allFilteredSelected}
                             onCheckedChange={(v) => {
@@ -4972,14 +4972,14 @@ export function CreateProductDialog({
                                   >
                                     {isSelected && <Icon name="check" size={14} />}
                                   </span>
-                                  <span className="font-mono text-[11px] text-muted-foreground min-w-[80px]">
+                                  <span className="font-mono text-xs text-muted-foreground min-w-[80px]">
                                     {p.code}
                                   </span>
                                   <span className="flex-1 min-w-0">
                                     <span className="block truncate font-medium text-sm">
                                       {p.name}
                                     </span>
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-xs text-muted-foreground">
                                       {p.inventoryRole === "fnb_stock_item"
                                         ? "Bán thành phẩm F&B"
                                         : p.productType === "sku"
@@ -5021,7 +5021,7 @@ export function CreateProductDialog({
                                   {(p.isFnbStockItem
                                     ? fnbPreparedCostByProductId[p.id]?.unitCost ?? 0
                                     : getBomComponentUnitPrice(p, usesFnbRecipeCosts ? "fnb" : channel)) > 0 ? (
-                                    <span className="text-right text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                                    <span className="text-right text-xs text-muted-foreground tabular-nums whitespace-nowrap">
                                       <span className="block">
                                         {formatCurrency(
                                           p.isFnbStockItem
@@ -5030,13 +5030,13 @@ export function CreateProductDialog({
                                         )}
                                       </span>
                                       {usesFnbRecipeCosts && (
-                                        <span className="block text-[10px]">
+                                        <span className="block text-xs">
                                           {p.isFnbStockItem ? "Bình quân quán" : "Giá cấp nội bộ"}
                                         </span>
                                       )}
                                     </span>
                                   ) : usesFnbRecipeCosts && p.isFnbStockItem ? (
-                                    <span className="text-[11px] text-destructive whitespace-nowrap">
+                                    <span className="text-xs text-destructive whitespace-nowrap">
                                       Chưa có giá vốn BTP
                                     </span>
                                   ) : null}

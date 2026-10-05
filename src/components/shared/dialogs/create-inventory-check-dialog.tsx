@@ -388,11 +388,11 @@ export function CreateInventoryCheckDialog({
         <div className="min-h-0 flex-1 overflow-y-auto bg-surface-container-low p-3 md:p-4">
           <div className="mx-auto flex max-w-[1380px] flex-col gap-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(420px,1fr)_minmax(320px,0.75fr)]">
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div>
                     <h3 className="text-sm font-semibold">Sản phẩm kiểm kho</h3>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       NVL / hàng giữ tồn tại chi nhánh (không gồm món menu F&amp;B)
                     </p>
                   </div>
@@ -450,7 +450,7 @@ export function CreateInventoryCheckDialog({
                 {errors.items && <p className="mt-1 text-xs text-destructive">{errors.items}</p>}
               </section>
 
-              <section className="rounded-xl border bg-white p-3 shadow-sm">
+              <section className="rounded-lg border bg-white p-3 shadow-none">
                 <h3 className="mb-2 text-sm font-semibold">Ghi chú</h3>
                 <textarea
                   className="flex min-h-[74px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
@@ -462,8 +462,8 @@ export function CreateInventoryCheckDialog({
               </section>
             </div>
 
-            <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] gap-3 border-b bg-muted/50 px-3 py-2.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground md:grid">
+            <div className="overflow-hidden rounded-lg border bg-white shadow-none">
+              <div className="hidden grid-cols-[minmax(220px,1fr)_60px_148px_268px_120px_150px_40px] gap-3 border-b bg-muted/50 px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground md:grid">
                 <span>Sản phẩm</span>
                 <span className="flex justify-center">ĐVT</span>
                 <span className="flex justify-end">Tồn kho</span>
@@ -518,18 +518,18 @@ export function CreateInventoryCheckDialog({
 
                         {/* Tồn kho */}
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
-                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
+                          <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
                           <div className="text-right">
                             <div className="text-sm font-medium tabular-nums">{formatNumber(item.systemStock)}</div>
                             {sysConvText && (
-                              <div className="text-[11px] tabular-nums text-muted-foreground">{sysConvText}</div>
+                              <div className="text-xs tabular-nums text-muted-foreground">{sysConvText}</div>
                             )}
                           </div>
                         </div>
 
                         {/* Thực tế (nhập) */}
                         <div className="md:block">
-                          <span className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground md:hidden">
+                          <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
                             Thực tế (nhập)
                           </span>
                           {item.convFactor ? (
@@ -544,7 +544,7 @@ export function CreateInventoryCheckDialog({
                                     className="h-9 text-right"
                                     aria-label={`Số ${item.convBigUnit} ${item.productName}`}
                                   />
-                                  <div className="mt-1 text-center text-[10px] font-medium text-muted-foreground">
+                                  <div className="mt-1 text-center text-xs font-medium text-muted-foreground">
                                     {item.convBigUnit}
                                   </div>
                                 </div>
@@ -557,12 +557,12 @@ export function CreateInventoryCheckDialog({
                                     className="h-9 text-right"
                                     aria-label={`Số lẻ ${item.productName}`}
                                   />
-                                  <div className="mt-1 text-center text-[10px] font-medium text-muted-foreground">
+                                  <div className="mt-1 text-center text-xs font-medium text-muted-foreground">
                                     {item.unit} lẻ
                                   </div>
                                 </div>
                               </div>
-                              <div className="text-right text-[11px] text-muted-foreground">
+                              <div className="text-right text-xs text-muted-foreground">
                                 ={" "}
                                 <b className="tabular-nums text-foreground">{formatNumber(lineActual(item))}</b>{" "}
                                 {item.unit}
@@ -582,19 +582,19 @@ export function CreateInventoryCheckDialog({
 
                         {/* SL lệch */}
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
-                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">SL lệch</span>
+                          <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">SL lệch</span>
                           <div className="text-right">
                             <span className={`text-sm font-bold tabular-nums ${diffColor}`}>
                               {diff > 0 ? "+" : ""}
                               {formatNumber(diff)}
                             </span>
-                            <span className="ml-1 text-[10px] text-muted-foreground">{item.unit}</span>
+                            <span className="ml-1 text-xs text-muted-foreground">{item.unit}</span>
                           </div>
                         </div>
 
                         {/* Giá trị lệch (tiền) */}
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
-                          <span className="text-[11px] font-medium uppercase text-muted-foreground md:hidden">Giá trị lệch</span>
+                          <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">Giá trị lệch</span>
                           <span
                             className={`text-sm font-bold tabular-nums ${item.costPrice > 0 ? diffColor : "text-muted-foreground"}`}
                           >
@@ -676,7 +676,7 @@ function FooterMetric({
           : "";
   return (
     <div className="rounded-lg border bg-surface-container-lowest px-3 py-2">
-      <div className="text-[11px] font-semibold uppercase text-muted-foreground">{label}</div>
+      <div className="text-xs font-semibold uppercase text-muted-foreground">{label}</div>
       <div className={`mt-0.5 break-words font-bold leading-tight tabular-nums ${strong ? "text-lg" : ""} ${toneClass}`}>
         {value}
       </div>

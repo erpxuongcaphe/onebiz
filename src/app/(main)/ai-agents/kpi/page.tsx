@@ -95,7 +95,7 @@ function KpiNode({
   return (
     <div>
       <div
-        className="rounded-xl bg-surface-container-lowest ambient-shadow border border-border p-4 mb-2 group"
+        className="rounded-lg bg-surface-container-lowest ambient-shadow border border-border p-4 mb-2 group"
         style={{ marginLeft: `${depth * 16}px` }}
       >
         <div className="flex items-start justify-between gap-3 mb-2">
@@ -104,10 +104,10 @@ function KpiNode({
               <span className="font-semibold text-sm truncate">
                 {node.kpiName}
               </span>
-              <span className="text-[10px] uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
+              <span className="text-xs uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
                 {KPI_PERIOD_LABELS[node.period as KpiPeriod] ?? node.period}
               </span>
-              <span className="text-[10px] uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-surface-container text-muted-foreground">
+              <span className="text-xs uppercase tracking-wider font-medium rounded-full px-2 py-0.5 bg-surface-container text-muted-foreground">
                 {KPI_TYPE_LABELS[node.kpiType] ?? node.kpiType}
               </span>
             </div>
@@ -471,7 +471,7 @@ export default function KpiBreakdownPage() {
       </p>
 
       {tree.length === 0 ? (
-        <div className="bg-surface-container-lowest rounded-xl ambient-shadow p-10 text-center">
+        <div className="bg-surface-container-lowest rounded-lg ambient-shadow p-10 text-center">
           <div className="mx-auto size-16 rounded-full bg-status-info/10 flex items-center justify-center mb-4">
             <Icon name="trending_up" size={32} className="text-status-info" />
           </div>

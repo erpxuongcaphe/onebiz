@@ -55,7 +55,7 @@ export function ReceiverCustomerSelect({
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         placeholder="Chọn khách đã lưu..."
-        className={compact ? "h-7 text-[11px]" : undefined}
+        className={compact ? "h-7 text-xs" : undefined}
         data-allow-hotkeys="true"
       />
       {open && query.trim() && (

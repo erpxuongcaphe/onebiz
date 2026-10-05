@@ -166,7 +166,7 @@ export function SetPinDialog({
         <div className="space-y-4 py-2">
           {/* Step 1: nhập PIN lần 1 */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               PIN mới (6 số)
             </label>
             <div className="flex justify-center gap-2 mt-1.5">
@@ -201,7 +201,7 @@ export function SetPinDialog({
 
           {/* Step 2: re-confirm PIN */}
           <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Xác nhận lại PIN
             </label>
             <div className="flex justify-center gap-2 mt-1.5">
@@ -238,7 +238,7 @@ export function SetPinDialog({
               ))}
             </div>
             {pin2Ready && !pinsMatch && (
-              <p className="text-[11px] text-status-error mt-1 text-center">
+              <p className="text-xs text-status-error mt-1 text-center">
                 <Icon name="error" size={11} className="inline-block mr-0.5" />
                 Hai PIN không khớp
               </p>
@@ -253,7 +253,7 @@ export function SetPinDialog({
               type="button"
               onClick={generateRandomPin}
               disabled={submitting}
-              className="text-[11px] h-7"
+              className="text-xs h-7"
             >
               <Icon name="casino" size={12} className="mr-1" />
               Sinh PIN ngẫu nhiên

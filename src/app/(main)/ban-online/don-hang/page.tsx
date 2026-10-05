@@ -117,7 +117,7 @@ export default function DonHangOnlinePage() {
               {tab.label}
               <span
                 className={cn(
-                  "ml-1 text-[10px] rounded-full px-2 py-0.5",
+                  "ml-1 text-xs rounded-full px-2 py-0.5",
                   activeFilter === tab.key
                     ? "bg-white/20 text-white"
                     : "bg-muted text-foreground"

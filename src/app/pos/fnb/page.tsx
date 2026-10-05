@@ -3850,7 +3850,7 @@ function FnbPosPageInner() {
           <span className="flex min-w-0 items-center gap-2">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
               <Icon name="shopping_cart" size={20} />
-              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-status-error text-[10px] font-bold flex items-center justify-center">
+              <span className="absolute -top-1.5 -right-1.5 h-5 min-w-5 px-1 rounded-full bg-status-error text-xs font-bold flex items-center justify-center">
                 {pos.lineCount}
               </span>
             </span>
@@ -3867,7 +3867,7 @@ function FnbPosPageInner() {
             <span className="block text-base font-black text-primary tabular-nums leading-none">
               {formatCurrency(fnbBenefitDisplay.total)}đ
             </span>
-            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-[10px] font-semibold text-primary">
+            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-xs font-semibold text-primary">
               Mở giỏ
             </span>
           </span>
@@ -4180,7 +4180,7 @@ function FnbPosPageInner() {
               ["Esc", "Đóng popup"],
             ].map(([key, desc]) => (
               <div key={key} className="flex items-center justify-between py-0.5">
-                <kbd className="px-2 py-0.5 bg-muted border rounded text-[11px] font-mono">{key}</kbd>
+                <kbd className="px-2 py-0.5 bg-muted border rounded text-xs font-mono">{key}</kbd>
                 <span className="text-foreground">{desc}</span>
               </div>
             ))}

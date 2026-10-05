@@ -268,7 +268,7 @@ export function FloorPlanCanvas({
               setUserScale(1);
               setPan({ x: 0, y: 0 });
             }}
-            className="min-w-12 border-r px-2 text-[11px] font-semibold tabular-nums hover:bg-muted"
+            className="min-w-12 border-r px-2 text-xs font-semibold tabular-nums hover:bg-muted"
             aria-label="Đặt sơ đồ vừa màn hình"
             title="Vừa màn hình"
           >

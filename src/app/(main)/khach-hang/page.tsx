@@ -281,7 +281,7 @@ export default function KhachHangPage() {
             {tierName && (
               <Badge
                 variant="outline"
-                className="bg-primary-fixed/15 text-primary border-primary/25 text-[10px] uppercase font-semibold"
+                className="bg-primary-fixed/15 text-primary border-primary/25 text-xs uppercase font-semibold"
               >
                 {tierName}
               </Badge>
@@ -1251,7 +1251,7 @@ function CustomerDetailPanel({
                 <span className="inline-flex items-center gap-2">
                   <Badge
                     variant="outline"
-                    className="bg-primary-fixed/15 text-primary border-primary/25 text-[10px] uppercase font-semibold"
+                    className="bg-primary-fixed/15 text-primary border-primary/25 text-xs uppercase font-semibold"
                   >
                     {customer.loyaltyTierName}
                   </Badge>

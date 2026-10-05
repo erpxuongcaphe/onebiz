@@ -171,7 +171,7 @@ function PaymentHistoryTab({ orderId }: { orderId: string }) {
   return (
     <div className="space-y-3">
       {/* Summary */}
-      <div className="flex items-center justify-between rounded-xl bg-surface-container px-3 py-2">
+      <div className="flex items-center justify-between rounded-lg bg-surface-container px-3 py-2">
         <span className="text-xs text-muted-foreground">
           {rows.length} lần thanh toán
         </span>
@@ -181,23 +181,23 @@ function PaymentHistoryTab({ orderId }: { orderId: string }) {
       </div>
 
       {/* List */}
-      <div className="border rounded-xl overflow-hidden">
+      <div className="border rounded-lg overflow-hidden">
         <table className="w-full text-xs">
           <thead className="bg-surface-container-low border-b">
             <tr>
-              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Mã phiếu
               </th>
-              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Ngày
               </th>
-              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Phương thức
               </th>
-              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-right px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Số tiền
               </th>
-              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-2 font-medium uppercase tracking-wider text-xs">
                 Ghi chú
               </th>
             </tr>
@@ -342,7 +342,7 @@ function PurchaseOrderDetail({
                   Phiếu đã hủy. Số lượng và giá trị bên dưới là thông tin gốc để tra cứu; không còn hàng chờ nhận.
                 </div>
               ) : (
-              <div className="rounded-xl border bg-surface-container-lowest p-3">
+              <div className="rounded-lg border bg-surface-container-lowest p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold">Tiến độ nhận hàng</div>
@@ -1121,7 +1121,7 @@ export default function NhapHangPage() {
                   <span className="font-medium text-primary text-xs">
                     {order.code}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {formatDate(order.date)}
                   </span>
                 </div>
@@ -1561,7 +1561,7 @@ export default function NhapHangPage() {
                 rows={3}
                 className="resize-none"
               />
-              <div className="text-[11px] text-muted-foreground mt-1">
+              <div className="text-xs text-muted-foreground mt-1">
                 Tối thiểu 5 ký tự. Ghi vào audit log để báo cáo loss/short receipt.
               </div>
             </div>

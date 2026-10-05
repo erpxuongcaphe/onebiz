@@ -107,7 +107,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
     execution.errorMessage;
 
   return (
-    <div className="bg-surface-container-lowest rounded-xl border border-border p-3">
+    <div className="bg-surface-container-lowest rounded-lg border border-border p-3">
       <div
         className="flex items-center gap-3 cursor-pointer"
         onClick={() => hasPayload && setOpen((o) => !o)}
@@ -147,7 +147,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
         <div className="mt-3 space-y-2 text-xs">
           {execution.errorMessage && (
             <div className="rounded-lg bg-status-error/5 border border-status-error/20 p-3">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-status-error mb-1">
+              <div className="text-xs uppercase tracking-wider font-semibold text-status-error mb-1">
                 Lỗi
               </div>
               <div className="text-status-error font-mono whitespace-pre-wrap break-words">
@@ -157,7 +157,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
           )}
           {Object.keys(execution.inputData).length > 0 && (
             <div className="rounded-lg bg-surface-container p-3">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+              <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Input
               </div>
               <pre className="font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-auto">
@@ -167,7 +167,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
           )}
           {Object.keys(execution.outputData).length > 0 && (
             <div className="rounded-lg bg-surface-container p-3">
-              <div className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">
+              <div className="text-xs uppercase tracking-wider font-semibold text-muted-foreground mb-1">
                 Output
               </div>
               <pre className="font-mono text-xs whitespace-pre-wrap break-words max-h-48 overflow-auto">
@@ -177,7 +177,7 @@ function ExecutionCard({ execution }: { execution: AgentExecution }) {
           )}
           {execution.tokenUsage && (
             <div className="rounded-lg bg-primary-fixed/40 p-3 text-primary">
-              <div className="text-[10px] uppercase tracking-wider font-semibold mb-1">
+              <div className="text-xs uppercase tracking-wider font-semibold mb-1">
                 Token usage
               </div>
               <div className="flex gap-3 font-mono">
@@ -650,7 +650,7 @@ export default function AgentDetailPage() {
       />
 
       {/* Header card */}
-      <div className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 flex items-center gap-4">
+      <div className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 flex items-center gap-4">
         <div className="size-14 rounded-xl bg-primary-fixed flex items-center justify-center shrink-0">
           <Icon name={iconName} size={28} className="text-primary" />
         </div>
@@ -659,7 +659,7 @@ export default function AgentDetailPage() {
             <span className="font-mono text-xs text-muted-foreground">
               {agent.code}
             </span>
-            <span className="text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
+            <span className="text-xs uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
               {AGENT_ROLE_LABELS[agent.role] ?? agent.role}
             </span>
             <span
@@ -684,7 +684,7 @@ export default function AgentDetailPage() {
         {/* Main form */}
         <div className="lg:col-span-2 space-y-4">
           {/* Basic info */}
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-4">
             <h3 className="font-semibold flex items-center gap-2">
               <Icon name="info" size={16} className="text-primary" />
               Thông tin cơ bản
@@ -706,7 +706,7 @@ export default function AgentDetailPage() {
                   id="agent-role"
                   value={role}
                   onChange={(e) => setRole(e.target.value as AgentRole)}
-                  className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                  className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
                 >
                   {ROLE_OPTIONS.map((r) => (
                     <option key={r} value={r}>
@@ -738,7 +738,7 @@ export default function AgentDetailPage() {
           </section>
 
           {/* n8n integration */}
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-4">
             <div className="flex items-center justify-between gap-2">
               <h3 className="font-semibold flex items-center gap-2">
                 <Icon name="hub" size={16} className="text-primary" />
@@ -805,7 +805,7 @@ export default function AgentDetailPage() {
           </section>
 
           {/* Prompt template */}
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-3">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
               <Icon name="auto_awesome" size={16} className="text-primary" />
               Prompt template
@@ -861,7 +861,7 @@ export default function AgentDetailPage() {
             });
 
             return (
-              <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+              <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div>
                     <h3 className="font-semibold flex items-center gap-2">
@@ -915,7 +915,7 @@ export default function AgentDetailPage() {
                 </div>
 
                 {sorted.length === 0 ? (
-                  <div className="text-center py-8 border border-dashed border-border rounded-xl text-sm text-muted-foreground">
+                  <div className="text-center py-8 border border-dashed border-border rounded-lg text-sm text-muted-foreground">
                     <Icon
                       name="inbox"
                       size={28}
@@ -942,7 +942,7 @@ export default function AgentDetailPage() {
                       return (
                         <li
                           key={task.id}
-                          className="rounded-xl border border-border bg-surface-container-lowest p-3 space-y-2"
+                          className="rounded-lg border border-border bg-surface-container-lowest p-3 space-y-2"
                         >
                           <div className="flex items-start gap-3">
                             <div className="min-w-0 flex-1">
@@ -1126,7 +1126,7 @@ export default function AgentDetailPage() {
           })()}
 
           {/* Playbook (Sprint AI-2) */}
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-4">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-4">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h3 className="font-semibold flex items-center gap-2">
@@ -1164,7 +1164,7 @@ export default function AgentDetailPage() {
             </div>
 
             {playbookRules.length === 0 ? (
-              <div className="text-center py-8 border border-dashed border-border rounded-xl text-sm text-muted-foreground">
+              <div className="text-center py-8 border border-dashed border-border rounded-lg text-sm text-muted-foreground">
                 <Icon
                   name="playlist_add"
                   size={28}
@@ -1209,7 +1209,7 @@ export default function AgentDetailPage() {
                           <span className="font-medium text-sm">
                             {rule.name || "(chưa đặt tên)"}
                           </span>
-                          <span className="text-[10px] uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
+                          <span className="text-xs uppercase tracking-wider font-semibold rounded-full px-2 py-0.5 bg-primary-fixed text-primary">
                             {PLAYBOOK_TRIGGER_LABELS[rule.trigger]}
                           </span>
                           <span
@@ -1306,7 +1306,7 @@ export default function AgentDetailPage() {
           </section>
 
           {/* Config JSON */}
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5 space-y-3">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5 space-y-3">
             <h3 className="font-semibold flex items-center gap-2">
               <Icon name="tune" size={16} className="text-primary" />
               Config (JSON)
@@ -1333,7 +1333,7 @@ export default function AgentDetailPage() {
           </section>
 
           {/* Save bar */}
-          <div className="sticky bottom-4 flex justify-end gap-2 bg-surface-container-lowest/80 backdrop-blur-md rounded-xl border border-border ambient-shadow p-3">
+          <div className="sticky bottom-4 flex justify-end gap-2 bg-surface-container-lowest/80 backdrop-blur-md rounded-lg border border-border ambient-shadow p-3">
             <Link href="/ai-agents">
               <Button variant="outline" disabled={saving}>
                 Huỷ
@@ -1357,7 +1357,7 @@ export default function AgentDetailPage() {
 
         {/* Sidebar — executions */}
         <aside className="space-y-3">
-          <section className="bg-surface-container-lowest rounded-xl ambient-shadow border border-border p-5">
+          <section className="bg-surface-container-lowest rounded-lg ambient-shadow border border-border p-5">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold flex items-center gap-2">
                 <Icon name="history" size={16} className="text-primary" />

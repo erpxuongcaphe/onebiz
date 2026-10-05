@@ -265,7 +265,7 @@ export default function ZaloPage() {
                       </p>
                       {conv.unread > 0 && (
                         <span
-                          className="size-5 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 ml-1"
+                          className="size-5 rounded-full text-white text-xs font-bold flex items-center justify-center shrink-0 ml-1"
                           style={{ backgroundColor: ZALO_BLUE }}
                         >
                           {conv.unread}
@@ -334,7 +334,7 @@ export default function ZaloPage() {
                     <p className="text-sm leading-relaxed">{msg.text}</p>
                     <p
                       className={cn(
-                        "text-[10px] mt-1",
+                        "text-xs mt-1",
                         msg.sender === "shop"
                           ? "text-primary-fixed"
                           : "text-muted-foreground"

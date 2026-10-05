@@ -921,7 +921,7 @@ export function BOMEditorDialog({
                                     placeholder={item.unit}
                                     aria-label={`${item.materialName} - ${option.label}`}
                                   />
-                                  <span className="block text-right text-[11px] text-muted-foreground">
+                                  <span className="block text-right text-xs text-muted-foreground">
                                     {stockQuantity == null
                                       ? `Nhập ${item.unit}`
                                       : `Trừ ${formatRecipeQuantity(stockQuantity)} ${item.stockUnit}`}

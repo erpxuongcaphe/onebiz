@@ -489,7 +489,7 @@ export default function HoaDonDauVaoPage() {
               className="w-full px-3 py-2 text-sm rounded-md border border-border bg-surface resize-none focus:outline-none focus:ring-2 focus:ring-primary/40"
             />
             {cancelReason.length > 0 && cancelReason.trim().length < 5 && (
-              <p className="text-[11px] text-status-error">
+              <p className="text-xs text-status-error">
                 Lý do tối thiểu 5 ký tự.
               </p>
             )}

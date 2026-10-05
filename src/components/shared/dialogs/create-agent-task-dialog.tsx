@@ -215,7 +215,7 @@ export function CreateAgentTaskDialog({
                 onChange={(e) =>
                   setPriority(e.target.value as AgentTaskPriority)
                 }
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 {PRIORITY_OPTIONS.map((p) => (
                   <option key={p} value={p}>
@@ -241,7 +241,7 @@ export function CreateAgentTaskDialog({
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Toàn doanh nghiệp —</option>
                 {branches.map((b) => (
@@ -276,7 +276,7 @@ export function CreateAgentTaskDialog({
               <select
                 value={agentId}
                 onChange={(e) => setAgentId(e.target.value)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20"
               >
                 <option value="">— Không gắn agent —</option>
                 {agents.map((a) => (
@@ -292,7 +292,7 @@ export function CreateAgentTaskDialog({
                 value={kpiId}
                 onChange={(e) => setKpiId(e.target.value)}
                 disabled={Boolean(kpiBreakdown)}
-                className="h-10 w-full rounded-xl border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
+                className="h-10 w-full rounded-lg border border-input bg-surface-container-lowest px-4 py-2 text-sm outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/20 disabled:opacity-60"
               >
                 <option value="">— Không gắn KPI —</option>
                 {kpis.map((k) => (

@@ -239,7 +239,7 @@ export function PartialReceiveDialog({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-border bg-surface-container-lowest">
+              <div className="rounded-lg border border-border bg-surface-container-lowest">
                 <div className="hidden grid-cols-[40px_minmax(220px,1fr)_150px_150px_140px] gap-3 border-b bg-surface-container-low px-3 py-2 text-xs font-semibold uppercase text-muted-foreground md:grid">
                   <span />
                   <span>Mặt hàng</span>

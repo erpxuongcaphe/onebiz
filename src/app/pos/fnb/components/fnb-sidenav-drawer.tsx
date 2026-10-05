@@ -212,7 +212,7 @@ function NavSection({
 
   return (
     <div className="px-2 mb-2">
-      <div className="px-3 py-1.5 text-[10px] uppercase font-bold text-on-surface-variant">
+      <div className="px-3 py-1.5 text-xs uppercase font-bold text-on-surface-variant">
         {label}
       </div>
       <div className="space-y-0.5">

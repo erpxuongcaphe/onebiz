@@ -103,9 +103,9 @@ function ThietLapPage() {
         </p>
       </div>
 
-      <div className="p-4 lg:p-6 max-w-3xl space-y-6">
+      <div className="p-4 lg:p-6 max-w-3xl space-y-4">
         {/* Section: Thông tin pháp lý */}
-        <section className="bg-surface-container-lowest border border-border rounded-xl p-5 ambient-shadow">
+        <section className="bg-surface-container-lowest border border-border rounded-lg p-5 ambient-shadow">
           <div className="flex items-center gap-2 mb-4">
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-primary-fixed text-primary">
               <Icon name="business" size={16} />
@@ -188,7 +188,7 @@ function ThietLapPage() {
         </section>
 
         {/* Section: Tài khoản ngân hàng (cho hóa đơn convertible) */}
-        <section className="bg-surface-container-lowest border border-border rounded-xl p-5 ambient-shadow">
+        <section className="bg-surface-container-lowest border border-border rounded-lg p-5 ambient-shadow">
           <div className="flex items-center gap-2 mb-4">
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-success/10 text-status-success">
               <Icon name="account_balance" size={16} />
@@ -224,7 +224,7 @@ function ThietLapPage() {
         </section>
 
         {/* Section: Branding (logo + footer) */}
-        <section className="bg-surface-container-lowest border border-border rounded-xl p-5 ambient-shadow">
+        <section className="bg-surface-container-lowest border border-border rounded-lg p-5 ambient-shadow">
           <div className="flex items-center gap-2 mb-4">
             <span className="inline-flex size-8 items-center justify-center rounded-lg bg-status-warning/10 text-status-warning">
               <Icon name="palette" size={16} />

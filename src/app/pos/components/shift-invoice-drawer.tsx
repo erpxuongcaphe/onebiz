@@ -157,7 +157,7 @@ export function ShiftInvoiceDrawer({
           {/* KPI ca: tổng đơn + doanh số */}
           <div className="grid grid-cols-2 gap-2 mt-2">
             <div className="rounded-lg border p-2 bg-surface-container-low">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">
                 Số đơn
               </div>
               <div className="text-lg font-semibold tabular-nums">
@@ -165,7 +165,7 @@ export function ShiftInvoiceDrawer({
               </div>
             </div>
             <div className="rounded-lg border p-2 bg-surface-container-low">
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
+              <div className="text-xs text-muted-foreground uppercase tracking-wider">
                 Doanh số
               </div>
               <div className="text-lg font-semibold tabular-nums text-primary">
@@ -196,7 +196,7 @@ export function ShiftInvoiceDrawer({
                     <span className="font-mono text-sm font-semibold text-foreground">
                       {inv.code}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {formatTime(inv.date)}
                     </span>
                   </div>
@@ -227,7 +227,7 @@ export function ShiftInvoiceDrawer({
           )}
         </div>
 
-        <div className="px-4 py-2 border-t bg-surface-container-lowest text-[11px] text-muted-foreground">
+        <div className="px-4 py-2 border-t bg-surface-container-lowest text-xs text-muted-foreground">
           {invoices.length === 50 && (
             <div className={cn("inline-flex items-center gap-1")}>
               <Icon name="info" size={14} />

@@ -47,7 +47,7 @@ export function FilterPanel({
             <Icon name="filter_alt" size={17} />
             {title}
             {activeCount > 0 && (
-              <span className="rounded-full bg-primary-fixed px-2 py-0.5 text-[11px] font-semibold text-primary">
+              <span className="rounded-full bg-primary-fixed px-2 py-0.5 text-xs font-semibold text-primary">
                 {activeCount}
               </span>
             )}

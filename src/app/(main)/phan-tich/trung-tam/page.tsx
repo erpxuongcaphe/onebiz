@@ -147,7 +147,7 @@ export default function ReportCenterPage() {
         {!query && (favorites.length > 0 || recent.length > 0) ? (
           <div
             className={cn(
-              "grid gap-6",
+              "grid gap-4",
               favorites.length > 0 && recent.length > 0 && "xl:grid-cols-2",
             )}
           >

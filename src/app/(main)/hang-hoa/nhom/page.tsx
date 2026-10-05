@@ -782,7 +782,7 @@ export default function NhomHangPage() {
                 <div className="flex items-center gap-1.5">
                   {hasRetail && (
                     <span
-                      className="inline-flex items-center rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] font-medium"
+                      className="inline-flex items-center rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 text-xs font-medium"
                       title={`${slot?.retail} SP retail`}
                     >
                       Retail
@@ -790,7 +790,7 @@ export default function NhomHangPage() {
                   )}
                   {hasFnb && (
                     <span
-                      className="inline-flex items-center rounded bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/30 px-1.5 py-0.5 text-[10px] font-medium"
+                      className="inline-flex items-center rounded bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/30 px-1.5 py-0.5 text-xs font-medium"
                       title={`${slot?.fnb} SP FnB`}
                     >
                       FnB
@@ -997,7 +997,7 @@ export default function NhomHangPage() {
             <Icon name="filter_alt" size={15} />
             Bộ lọc
             {activeFilters.length > 0 && (
-              <span className="rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+              <span className="rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground">
                 {activeFilters.length}
               </span>
             )}

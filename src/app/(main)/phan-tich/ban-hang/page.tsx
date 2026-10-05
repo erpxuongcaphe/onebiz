@@ -120,7 +120,7 @@ function SalesOverviewTooltip({
           ? formatChartTooltipCurrency(value)
           : `${formatNumber(value)} ${metric === "orderCount" ? "đơn" : "món"}`}
       </p>
-      <p className="mt-1 text-[11px] text-muted-foreground">
+      <p className="mt-1 text-xs text-muted-foreground">
         {selectedMetric.label}
       </p>
     </div>
@@ -982,11 +982,11 @@ export default function BanHangPage() {
             </div>
             <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
               <div className="border border-border bg-background px-3 py-2">
-                <p className="text-[11px] font-medium text-muted-foreground">Ngày có phát sinh</p>
+                <p className="text-xs font-medium text-muted-foreground">Ngày có phát sinh</p>
                 <p className="mt-1 text-lg font-semibold tabular-nums">{formatNumber(overviewInsights.activeDays)}</p>
               </div>
               <div className="border border-border bg-background px-3 py-2">
-                <p className="text-[11px] font-medium text-muted-foreground">Ngày cao nhất</p>
+                <p className="text-xs font-medium text-muted-foreground">Ngày cao nhất</p>
                 <p className="mt-1 text-sm font-semibold">
                   {overviewInsights.bestDay
                     ? `${formatReportDate(overviewInsights.bestDay.date)} · ${
@@ -998,7 +998,7 @@ export default function BanHangPage() {
                 </p>
               </div>
               <div className="border border-border bg-background px-3 py-2">
-                <p className="text-[11px] font-medium text-muted-foreground">Giờ doanh thu cao nhất</p>
+                <p className="text-xs font-medium text-muted-foreground">Giờ doanh thu cao nhất</p>
                 <p className="mt-1 text-sm font-semibold">
                   {overviewInsights.peakHour
                     ? `${overviewInsights.peakHour.label} · ${formatCurrency(overviewInsights.peakHour.value)}đ`
@@ -1006,7 +1006,7 @@ export default function BanHangPage() {
                 </p>
               </div>
               <div className="border border-border bg-background px-3 py-2">
-                <p className="text-[11px] font-medium text-muted-foreground">Trả hàng trong kỳ</p>
+                <p className="text-xs font-medium text-muted-foreground">Trả hàng trong kỳ</p>
                 <p className="mt-1 text-sm font-semibold text-status-warning">
                   {formatCurrency(overviewInsights.returnAmount)}đ
                 </p>

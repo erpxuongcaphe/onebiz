@@ -120,7 +120,7 @@ function RevenueTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow">
+    <div className="rounded-lg border bg-surface-container-lowest p-3 ambient-shadow">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className="text-sm font-bold text-primary">
         {formatChartTooltipCurrency(payload[0].value)}
@@ -140,7 +140,7 @@ function OrdersTooltip({
 }) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="rounded-xl border bg-surface-container-lowest p-3 ambient-shadow">
+    <div className="rounded-lg border bg-surface-container-lowest p-3 ambient-shadow">
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       {payload.map((entry) => (
         <p key={entry.dataKey} className="text-sm" style={{ color: entry.color }}>

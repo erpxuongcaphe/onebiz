@@ -436,7 +436,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             </span>
           )}
           {scope === "global" && (
-            <span className="text-[10px] bg-primary-fixed text-primary px-2 py-0.5 rounded-full font-medium">
+            <span className="text-xs bg-primary-fixed text-primary px-2 py-0.5 rounded-full font-medium">
               Toàn hệ thống
             </span>
           )}
@@ -482,7 +482,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           {activeZone?.overlayColor && (
             <button
               onClick={() => handleOverlayColorChange(null)}
-              className="text-[10px] text-status-error hover:underline"
+              className="text-xs text-status-error hover:underline"
               title="Bỏ phủ màu"
             >Bỏ</button>
           )}
@@ -532,7 +532,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           .sort((a, b) => a - b)
           .map((floor) => (
             <div key={floor} className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
+              <span className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
                 {floor === 1 ? "Trệt" : `Lầu ${floor - 1}`}:
               </span>
               {zones
@@ -584,7 +584,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           )}
         >
           {/* Bàn */}
-          <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
+          <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
             Mẫu bàn
           </p>
           <div className="grid grid-cols-2 gap-1.5">
@@ -592,7 +592,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               <button
                 key={p.key}
                 onClick={() => handleAddShape(p)}
-                className="flex flex-col items-center gap-1 p-2 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-[10px]"
+                className="flex flex-col items-center gap-1 p-2 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-xs"
                 title={`Thêm ${p.label}`}
               >
                 <Icon name={p.icon} size={20} className="text-muted-foreground" />
@@ -603,7 +603,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
           {/* Trang trí */}
           <div className="border-t pt-3">
-            <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide mb-1.5">
+            <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide mb-1.5">
               Đồ trang trí
             </p>
             <div className="grid grid-cols-2 gap-1.5">
@@ -611,7 +611,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 <button
                   key={d.kind}
                   onClick={() => handleAddDecoration(d)}
-                  className="flex flex-col items-center gap-1 p-2 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-[10px]"
+                  className="flex flex-col items-center gap-1 p-2 rounded-lg border border-border hover:border-primary hover:bg-primary/5 transition-colors text-xs"
                   title={`Thêm ${d.label}`}
                 >
                   <Icon name={d.icon} size={18} style={{ color: d.color }} />
@@ -630,11 +630,11 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               )}
               {selectedDecoration && (
                 <div className="mt-2 space-y-2 rounded-md border border-border bg-background p-2">
-                  <p className="text-[10px] uppercase font-semibold tracking-wide text-muted-foreground">
+                  <p className="text-xs uppercase font-semibold tracking-wide text-muted-foreground">
                     Vật đang chọn
                   </p>
                   <div>
-                    <Label htmlFor="decoration-label" className="text-[10px]">Tên hiển thị</Label>
+                    <Label htmlFor="decoration-label" className="text-xs">Tên hiển thị</Label>
                     <Input
                       id="decoration-label"
                       value={selectedDecoration.label ?? ""}
@@ -676,16 +676,16 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
 
           {/* Ảnh nền */}
           <div className="border-t pt-3">
-            <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide mb-1.5">
+            <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide mb-1.5">
               Ảnh nền quán
             </p>
             {activeZone?.backgroundUrl ? (
               <div className="space-y-1.5">
-                <p className="text-[10px] text-muted-foreground truncate">
+                <p className="text-xs text-muted-foreground truncate">
                   Đã có ảnh nền
                 </p>
                 <div className="space-y-1">
-                  <Label className="text-[10px]">Độ trong {activeZone.backgroundOpacity}%</Label>
+                  <Label className="text-xs">Độ trong {activeZone.backgroundOpacity}%</Label>
                   <input
                     type="range"
                     min={0}
@@ -705,7 +705,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               </div>
             ) : (
               <label className="block">
-                <span className="cursor-pointer flex flex-col items-center gap-1 p-3 rounded-lg border border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors text-[10px]">
+                <span className="cursor-pointer flex flex-col items-center gap-1 p-3 rounded-lg border border-dashed border-border hover:border-primary hover:bg-primary/5 transition-colors text-xs">
                   <Icon name={uploadingBg ? "progress_activity" : "add_photo_alternate"} size={20} className={uploadingBg ? "animate-spin" : "text-muted-foreground"} />
                   <span className="font-medium text-center">
                     {uploadingBg ? "Đang tải..." : "Tải ảnh nền"}
@@ -729,12 +729,12 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           {/* Thuộc tính bàn đang chọn */}
           {selectedTable && (
             <div className="mt-4 border-t pt-3 space-y-2">
-              <p className="text-[10px] uppercase font-semibold text-muted-foreground tracking-wide">
+              <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
                 Bàn đang chọn
               </p>
               <div className="space-y-1.5 text-xs">
                 <div>
-                  <Label htmlFor="t-name" className="text-[10px]">Tên</Label>
+                  <Label htmlFor="t-name" className="text-xs">Tên</Label>
                   <Input
                     id="t-name"
                     value={selectedTable.name ?? ""}

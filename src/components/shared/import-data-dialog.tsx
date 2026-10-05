@@ -155,7 +155,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
                   <p className="font-semibold text-sm leading-tight">
                     {m.title}
                   </p>
-                  <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
+                  <p className="text-xs text-muted-foreground leading-snug mt-0.5">
                     {m.description}
                   </p>
                 </div>
@@ -186,7 +186,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
           ))}
         </div>
 
-        <div className="rounded-lg bg-primary-fixed/40 border border-primary-fixed-dim p-3 text-[11px] text-foreground/80 leading-snug">
+        <div className="rounded-lg bg-primary-fixed/40 border border-primary-fixed-dim p-3 text-xs text-foreground/80 leading-snug">
           <strong className="text-primary">Quy trình:</strong> Tải mẫu →
           điền dữ liệu → vào trang tương ứng → bấm &quot;Nhập Excel&quot; →
           preview &amp; validate → xác nhận ghi DB.

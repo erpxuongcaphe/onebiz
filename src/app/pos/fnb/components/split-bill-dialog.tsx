@@ -123,7 +123,7 @@ export function SplitBillDialog({
             onClick={() => setActiveTab("items")}
             className={cn(
               "flex-1 px-3 py-2 rounded text-sm font-medium transition-colors",
-              activeTab === "items" ? "bg-card shadow-sm" : "text-muted-foreground"
+              activeTab === "items" ? "bg-card shadow-none" : "text-muted-foreground"
             )}
           >
             <Icon name="content_cut" size={14} className="inline mr-1" />
@@ -135,7 +135,7 @@ export function SplitBillDialog({
             onClick={() => setActiveTab("equal")}
             className={cn(
               "flex-1 px-3 py-2 rounded text-sm font-medium transition-colors",
-              activeTab === "equal" ? "bg-card shadow-sm" : "text-muted-foreground"
+              activeTab === "equal" ? "bg-card shadow-none" : "text-muted-foreground"
             )}
           >
             <Icon name="group" size={14} className="inline mr-1" />

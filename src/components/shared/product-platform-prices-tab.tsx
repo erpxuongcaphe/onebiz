@@ -244,7 +244,7 @@ export function ProductPlatformPricesTab({
                   <span className="text-sm font-mono tabular-nums">
                     {formatCurrency(basePrice)}
                   </span>
-                  <span className="text-[10px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     (= giá niêm yết)
                   </span>
                 </div>
@@ -263,7 +263,7 @@ export function ProductPlatformPricesTab({
                   {diff !== 0 && (
                     <span
                       className={cn(
-                        "text-[11px] font-medium",
+                        "text-xs font-medium",
                         diff > 0 ? "text-status-success" : "text-status-error",
                       )}
                     >

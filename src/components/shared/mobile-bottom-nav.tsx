@@ -215,7 +215,7 @@ export function MobileBottomNav() {
                   <Sheet open={posOpen} onOpenChange={setPosOpen}>
                     <SheetTrigger className="absolute -top-5 press-scale flex h-14 w-14 flex-col items-center justify-center rounded-full bg-primary text-primary-foreground ambient-shadow-lg">
                       <Icon name={tab.icon} size={24} fill />
-                      <span className="mt-0.5 text-[9px] font-semibold leading-tight">
+                      <span className="mt-0.5 text-xs font-semibold leading-tight">
                         POS
                       </span>
                     </SheetTrigger>
@@ -304,7 +304,7 @@ export function MobileBottomNav() {
                 )}
               >
                 <Icon name={tab.icon} size={20} fill={active} weight={active ? 500 : 400} />
-                <span className="text-[11px] font-medium">{tab.label}</span>
+                <span className="text-xs font-medium">{tab.label}</span>
               </Link>
             );
           })}
@@ -319,7 +319,7 @@ export function MobileBottomNav() {
           >
             <SheetTrigger className="flex flex-col press-scale-sm items-center justify-center flex-1 gap-0.5 text-muted-foreground hover:text-foreground">
               <Icon name="more_horiz" size={20} />
-              <span className="text-[11px] font-medium">Thêm</span>
+              <span className="text-xs font-medium">Thêm</span>
             </SheetTrigger>
             <SheetContent
               side="bottom"
@@ -434,7 +434,7 @@ function MoreSheetContent({
         {searchResults ? (
           searchResults.length > 0 ? (
             <section>
-              <div className="text-[11px] text-muted-foreground px-1 pb-2">
+              <div className="text-xs text-muted-foreground px-1 pb-2">
                 {searchResults.length} kết quả cho &quot;{searchQuery}&quot;
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -507,13 +507,13 @@ function MenuGroupSection({
         />
         <span
           className={cn(
-            "text-[11px] font-semibold uppercase tracking-wide",
+            "text-xs font-semibold uppercase tracking-wide",
             hasActive ? "text-primary" : "text-muted-foreground",
           )}
         >
           {group.label}
         </span>
-        <span className="text-[10px] text-muted-foreground/70 font-normal normal-case">
+        <span className="text-xs text-muted-foreground/70 font-normal normal-case">
           · {flatLeaves.length}
         </span>
       </div>
@@ -564,16 +564,16 @@ function MenuCardItem({
         weight={active ? 500 : 400}
         className={cn("shrink-0 mt-0.5", active ? "text-primary" : "text-muted-foreground")}
       />
-      <span className="text-[11px] font-medium text-center leading-tight line-clamp-2">
+      <span className="text-xs font-medium text-center leading-tight line-clamp-2">
         {leaf.label}
       </span>
       {leaf.comingSoon && (
-        <span className="absolute top-1 right-1 text-[8px] font-bold uppercase rounded-full px-1.5 py-0.5 bg-status-warning/15 text-status-warning border border-status-warning/30 leading-tight">
+        <span className="absolute top-1 right-1 text-xs font-bold uppercase rounded-full px-1.5 py-0.5 bg-status-warning/15 text-status-warning border border-status-warning/30 leading-tight">
           Soon
         </span>
       )}
       {leaf.badge && !leaf.comingSoon && (
-        <span className="absolute top-1 right-1 text-[8px] font-bold uppercase rounded-full px-1.5 py-0.5 bg-primary/15 text-primary border border-primary/30 leading-tight">
+        <span className="absolute top-1 right-1 text-xs font-bold uppercase rounded-full px-1.5 py-0.5 bg-primary/15 text-primary border border-primary/30 leading-tight">
           {leaf.badge}
         </span>
       )}

@@ -224,7 +224,7 @@ function PermissionSettingsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Phân quyền</h1>
@@ -319,14 +319,14 @@ function PermissionSettingsPage() {
                           <div className="flex items-center justify-between mb-2">
                             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                               {group.group}
-                              <span className="ml-2 text-[10px] font-normal normal-case">
+                              <span className="ml-2 text-xs font-normal normal-case">
                                 ({enabledCount}/{groupCodes.length})
                               </span>
                             </h4>
                             <button
                               type="button"
                               onClick={() => toggleGroup(groupCodes)}
-                              className="text-[10px] text-primary hover:underline"
+                              className="text-xs text-primary hover:underline"
                             >
                               {allOn ? "Bỏ tất cả" : "Bật tất cả"}
                             </button>

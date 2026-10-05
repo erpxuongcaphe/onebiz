@@ -261,7 +261,7 @@ export function ReportTableDisplayMenu({
                             {column.label}
                           </span>
                           {column.required && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {LABEL.required}
                             </span>
                           )}

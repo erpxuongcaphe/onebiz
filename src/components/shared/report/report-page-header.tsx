@@ -84,7 +84,7 @@ export function ReportPageHeader({
     <div className="bg-surface-container-lowest border-b border-border px-4 lg:px-6 py-3">
       <div className="grid gap-3 xl:grid-cols-[minmax(260px,1fr)_auto] xl:items-center">
         <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-semibold leading-6 text-foreground break-words">
+          <h1 className="text-xl font-bold leading-6 text-primary break-words">
             {title}
           </h1>
           {subtitle && (
@@ -140,7 +140,7 @@ export function ReportPageHeader({
                       <p className="font-medium text-foreground">
                         Xuất nội dung đang xem
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Một trang tính, đúng nội dung trên màn hình
                       </p>
                     </div>
@@ -160,7 +160,7 @@ export function ReportPageHeader({
                       <p className="font-medium text-foreground">
                         Xuất báo cáo đầy đủ
                       </p>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Nhiều trang tính để đối chiếu số liệu
                       </p>
                     </div>

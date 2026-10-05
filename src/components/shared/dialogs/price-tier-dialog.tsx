@@ -146,7 +146,7 @@ export function PriceTierDialog({
                 onChange={(e) => setPriority(e.target.value)}
                 placeholder="0"
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Số nhỏ hơn = ưu tiên cao hơn
               </p>
             </div>
@@ -204,14 +204,14 @@ export function PriceTierDialog({
                         {opt.title}
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {opt.desc}
                     </span>
                   </button>
                 );
               })}
             </div>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               {scope === "retail" &&
                 "Bảng giá này sẽ chọn được khi gán KH B2B (đại lý / quán)."}
               {scope === "fnb" &&

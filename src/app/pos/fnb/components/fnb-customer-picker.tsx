@@ -144,7 +144,7 @@ export function FnbCustomerPicker({
             {loading && (
               <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />
             )}
-            <kbd className="font-mono text-[10px] bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
+            <kbd className="font-mono text-xs bg-muted border border-border rounded px-2 py-0.5 text-muted-foreground">
               Esc
             </kbd>
           </div>
@@ -168,7 +168,7 @@ export function FnbCustomerPicker({
                 <div className="text-sm font-medium text-foreground">
                   Khách lẻ
                 </div>
-                <div className="text-[11px] text-muted-foreground">
+                <div className="text-xs text-muted-foreground">
                   Không gán khách hàng
                 </div>
               </div>
@@ -194,12 +194,12 @@ export function FnbCustomerPicker({
                     <div className="text-sm font-medium text-foreground truncate">
                       {c.name}
                     </div>
-                    <div className="text-[11px] text-muted-foreground">
+                    <div className="text-xs text-muted-foreground">
                       {c.phone || c.code || "—"}
                     </div>
                   </div>
                   {c.currentDebt > 0 && (
-                    <div className="text-[11px] text-status-error font-medium shrink-0">
+                    <div className="text-xs text-status-error font-medium shrink-0">
                       Nợ {formatCurrency(c.currentDebt)} ₫
                     </div>
                   )}
@@ -208,22 +208,22 @@ export function FnbCustomerPicker({
             })}
           </ul>
 
-          <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-[11px] text-muted-foreground">
+          <div className="hidden sm:flex items-center justify-between px-4 h-8 bg-muted/50 border-t border-border text-xs text-muted-foreground">
             <div className="flex items-center gap-3">
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   ↑ ↓
                 </kbd>{" "}
                 chọn
               </span>
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   Enter
                 </kbd>{" "}
                 chọn KH
               </span>
               <span>
-                <kbd className="font-mono bg-card border border-border rounded px-1 text-[10px]">
+                <kbd className="font-mono bg-card border border-border rounded px-1 text-xs">
                   Esc
                 </kbd>{" "}
                 đóng

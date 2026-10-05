@@ -72,7 +72,7 @@ export default function LanguageSettingsPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Ngôn ngữ & Vùng</h1>
         <p className="text-muted-foreground text-sm mt-1">

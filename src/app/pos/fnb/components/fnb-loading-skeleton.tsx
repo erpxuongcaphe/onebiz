@@ -43,7 +43,7 @@ export function FnbLoadingSkeleton({
       {/* Header skeleton — match đúng h-16 + light theme thật */}
       <header className="min-h-14 bg-surface/95 backdrop-blur-md border-b border-outline-variant/30 flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0">
         {/* ☰ button */}
-        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-surface-container animate-pulse" />
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-surface-container animate-pulse" />
         {/* Logo placeholder */}
         <div className="hidden sm:block w-7 h-7 rounded bg-surface-container animate-pulse" />
         {/* Branch chip placeholder */}
@@ -51,9 +51,9 @@ export function FnbLoadingSkeleton({
         {/* Shift indicator placeholder */}
         <div className="h-7 w-24 rounded-full bg-surface-container animate-pulse" />
         {/* View toggle placeholder */}
-        <div className="order-20 h-9 min-w-[154px] flex-1 rounded-xl bg-surface-container animate-pulse md:order-none md:w-44 md:flex-none" />
+        <div className="order-20 h-9 min-w-[154px] flex-1 rounded-lg bg-surface-container animate-pulse md:order-none md:w-44 md:flex-none" />
         {/* Search bar placeholder */}
-        <div className="order-21 h-9 min-w-[150px] flex-1 rounded-xl bg-surface-container animate-pulse md:order-none md:w-56 md:flex-none" />
+        <div className="order-21 h-9 min-w-[150px] flex-1 rounded-lg bg-surface-container animate-pulse md:order-none md:w-56 md:flex-none" />
         {/* Filler */}
         <div className="hidden md:block flex-1" />
         {/* KDS button placeholder */}
@@ -68,7 +68,7 @@ export function FnbLoadingSkeleton({
 
       {showProgressHint && (
         <div className="border-b border-outline-variant/20 bg-surface-container-lowest px-3 py-2">
-          <div className="mx-auto flex max-w-3xl flex-col gap-2 rounded-xl border border-outline-variant/30 bg-white/80 px-3 py-2 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="mx-auto flex max-w-3xl flex-col gap-2 rounded-lg border border-outline-variant/30 bg-white/80 px-3 py-2 shadow-none sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
                 <Icon
@@ -149,7 +149,7 @@ export function FnbLoadingSkeleton({
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={i}
-              className="h-8 rounded-xl bg-surface-container animate-pulse"
+              className="h-8 rounded-lg bg-surface-container animate-pulse"
               style={{ animationDelay: `${i * 80}ms` }}
             />
           ))}
@@ -161,7 +161,7 @@ export function FnbLoadingSkeleton({
             {Array.from({ length: 12 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-surface-container-low rounded-xl overflow-hidden flex flex-col"
+                className="bg-surface-container-low rounded-lg overflow-hidden flex flex-col"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
                 {/* Image area aspect-square */}
@@ -177,7 +177,7 @@ export function FnbLoadingSkeleton({
         </div>
 
         {/* Cart skeleton 320px (lg+) — ẩn mobile/tablet portrait */}
-        <aside className="hidden xl:flex w-[360px] 2xl:w-[400px] flex-col shrink-0 bg-surface-container-lowest rounded-xl ambient-shadow border border-outline-variant/20 my-3 mr-3 overflow-hidden">
+        <aside className="hidden xl:flex w-[360px] 2xl:w-[400px] flex-col shrink-0 bg-surface-container-lowest rounded-lg ambient-shadow border border-outline-variant/20 my-3 mr-3 overflow-hidden">
           {/* Cart header */}
           <div className="p-4 border-b border-outline-variant/20 space-y-2">
             <div className="h-5 w-32 rounded bg-surface-container animate-pulse" />

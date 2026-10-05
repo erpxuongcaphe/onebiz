@@ -259,7 +259,7 @@ function Toggle({
       >
         <span
           className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform",
+            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0",
           )}
         />
@@ -1379,7 +1379,7 @@ function BillPreview({
   return (
     <div
       className={`mx-auto w-full ${widthClass} rounded-md border bg-white p-3 ${
-        isThermal ? "font-mono text-[11px]" : "font-sans text-[12px]"
+        isThermal ? "font-mono text-xs" : "font-sans text-[12px]"
       } leading-tight text-black shadow-sm`}
     >
       {/* Đầu trang — dùng THÔNG TIN THẬT của DN/chi nhánh (chỉ đọc) */}
@@ -1393,7 +1393,7 @@ function BillPreview({
               className="mx-auto mb-1 h-8 w-auto max-w-[60px] object-contain"
             />
           ) : (
-            <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
+            <div className="mx-auto mb-1 flex h-8 w-8 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
               LOGO
             </div>
           ))}
@@ -1412,8 +1412,8 @@ function BillPreview({
       <div className="my-1.5 border-t border-dashed border-gray-400" />
 
       {/* Tiêu đề */}
-      <div className="text-center text-[13px] font-bold uppercase">{title}</div>
-      <div className="text-center text-[10px] text-gray-500">Số: PB-0001 · 25/06/2026</div>
+      <div className="text-center text-sm font-bold uppercase">{title}</div>
+      <div className="text-center text-xs text-gray-500">Số: PB-0001 · 25/06/2026</div>
 
       {/* Khách hàng */}
       {showCustomer && (customer.name || customer.code || customer.phone || customer.address) && (
@@ -1468,7 +1468,7 @@ function BillPreview({
               </tbody>
             </table>
           ) : (
-            <div className="py-1 text-center text-[10px] italic text-gray-400">
+            <div className="py-1 text-center text-xs italic text-gray-400">
               (Chưa chọn cột nào)
             </div>
           )}
@@ -1507,14 +1507,14 @@ function BillPreview({
                 className="h-16 w-16 object-contain"
               />
             ) : (
-              <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-200 text-[8px] text-gray-500">
+              <div className="flex h-14 w-14 items-center justify-center rounded bg-gray-200 text-xs text-gray-500">
                 QR
               </div>
             )}
-            <div className="text-[9px] text-gray-500">QR thanh toán (đã cấu hình ngân hàng)</div>
+            <div className="text-xs text-gray-500">QR thanh toán (đã cấu hình ngân hàng)</div>
           </div>
         ) : (
-          <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-[9px] leading-snug text-amber-700">
+          <div className="mt-2 rounded border border-amber-400 bg-amber-50 px-2 py-1.5 text-xs leading-snug text-amber-700">
             Bật QR nhưng chưa cấu hình ngân hàng — QR sẽ KHÔNG in. Vào Cài đặt → Thanh toán để thêm.
           </div>
         ))}
@@ -1524,7 +1524,7 @@ function BillPreview({
         <div className="my-1.5 border-t border-dashed border-gray-400" />
       )}
       {footer.signature && (
-        <div className="mt-1 flex flex-wrap justify-around gap-x-2 gap-y-1 text-[9px] text-gray-600">
+        <div className="mt-1 flex flex-wrap justify-around gap-x-2 gap-y-1 text-xs text-gray-600">
           {(config.signatures ?? [{ label: "Người lập phiếu" }, { label: "Người duyệt" }]).map(
             (s, i) => (
               <div key={i} className="text-center">
@@ -1536,10 +1536,10 @@ function BillPreview({
         </div>
       )}
       {footer.customText && (
-        <div className="mt-1.5 text-center text-[9px] text-gray-600">{footer.customText}</div>
+        <div className="mt-1.5 text-center text-xs text-gray-600">{footer.customText}</div>
       )}
       {footer.thankYou && (
-        <div className="mt-1 text-center text-[10px] font-medium">Cảm ơn quý khách!</div>
+        <div className="mt-1 text-center text-xs font-medium">Cảm ơn quý khách!</div>
       )}
     </div>
   );
