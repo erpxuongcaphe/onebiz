@@ -111,6 +111,9 @@ export interface DataTableProps<T> {
   pageSizeOptions?: number[];
   /** Only paginate when the result is larger than this value. */
   paginationThreshold?: number;
+  /** Let the report share its exact sorting with exports. */
+  sortState?: { id: string; direction: "asc" | "desc" } | null;
+  onSortChange?: (sort: { id: string; direction: "asc" | "desc" }) => void;
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
@@ -137,6 +140,8 @@ export function ReportDataTable<T>({
   defaultPageSize = 50,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   paginationThreshold = 50,
+  sortState: controlledSort,
+  onSortChange,
 }: DataTableProps<T>) {
   const pathname = usePathname();
   const preferenceKey = useMemo(
@@ -156,7 +161,8 @@ export function ReportDataTable<T>({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [pageState, setPageState] = useState({ key: "", index: 0 });
   const [pageSize, setPageSize] = useState(defaultPageSize);
-  const [sortState, setSortState] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const [localSort, setLocalSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const sortState = controlledSort === undefined ? localSort : controlledSort;
   const columnEntries = useMemo(
     () =>
       columns.map((column, index) => ({
@@ -466,10 +472,11 @@ export function ReportDataTable<T>({
                   <button
                     type="button"
                     className="inline-flex items-center gap-1 text-inherit hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    onClick={() => setSortState((current) => ({
-                      id,
-                      direction: current?.id === id && current.direction === "asc" ? "desc" : "asc",
-                    }))}
+                    onClick={() => {
+                      const next = { id, direction: sortState?.id === id && sortState.direction === "asc" ? "desc" as const : "asc" as const };
+                      if (onSortChange) onSortChange(next);
+                      else setLocalSort(next);
+                    }}
                     aria-label={`Sắp xếp ${col.label}${sortState?.id === id ? (sortState.direction === "asc" ? " giảm dần" : " tăng dần") : " tăng dần"}`}
                   >
                     {col.label}

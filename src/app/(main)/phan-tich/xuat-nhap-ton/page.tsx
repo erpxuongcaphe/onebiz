@@ -32,6 +32,7 @@ import { getXntReport, type XntRow, type XntReportResult } from "@/lib/services"
 import { cn } from "@/lib/utils";
 import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
 import { filterXntRows, sumXntRows, type XntRowFilter } from "@/lib/reports/xnt-view";
+import { sortReportRows } from "@/lib/reports/table-sort";
 
 type SubMode = "summary" | "detail";
 
@@ -62,6 +63,7 @@ export default function XuatNhapTonPage() {
 
   const [subMode, setSubMode] = useState<SubMode>("summary");
   const [rowFilter, setRowFilter] = useState<XntRowFilter>("activity");
+  const [sortState, setSortState] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
@@ -107,8 +109,11 @@ export default function XuatNhapTonPage() {
   const branchName =
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
   const visibleRows = useMemo(
-    () => filterXntRows(data?.rows ?? [], rowFilter),
-    [data?.rows, rowFilter],
+    () => {
+      const filtered = filterXntRows(data?.rows ?? [], rowFilter);
+      return sortState ? sortReportRows(filtered, (row) => row[sortState.id as keyof XntRow], sortState.direction) : filtered;
+    },
+    [data?.rows, rowFilter, sortState],
   );
   const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
   const incompleteVisibleCount = visibleSubtotal.incompleteValuationCount;
@@ -291,7 +296,7 @@ export default function XuatNhapTonPage() {
             { label: "Tồn cuối kỳ", key: "closingQty", width: 12, format: "number" },
             { label: "GT cuối kỳ", key: "closingValue", width: 16, format: "currency" },
           ],
-          rows: data.rows.map((r) => ({
+          rows: visibleRows.map((r) => ({
             code: r.code,
             name: r.name,
             unit: r.unit,
@@ -305,16 +310,16 @@ export default function XuatNhapTonPage() {
             closingQty: r.closingQty,
             closingValue: r.closingValue,
           })),
-          footerLabel: `SL mặt hàng: ${data.subtotal.productCount}`,
+          footerLabel: `SL mặt hàng: ${visibleSubtotal.productCount}`,
           footer: {
-            openingQty: data.subtotal.openingQty,
-            openingValue: data.subtotal.openingValue,
-            totalIn: data.subtotal.totalIn,
-            inValue: data.subtotal.inValue,
-            totalOut: data.subtotal.totalOut,
-            outValue: data.subtotal.outValue,
-            closingQty: data.subtotal.closingQty,
-            closingValue: data.subtotal.closingValue,
+            openingQty: visibleSubtotal.openingQty,
+            openingValue: visibleSubtotal.openingValue,
+            totalIn: visibleSubtotal.totalIn,
+            inValue: visibleSubtotal.inValue,
+            totalOut: visibleSubtotal.totalOut,
+            outValue: visibleSubtotal.outValue,
+            closingQty: visibleSubtotal.closingQty,
+            closingValue: visibleSubtotal.closingValue,
           },
         },
         // Sheet 2 — Chi tiết NHẬP/XUẤT 20 cột
@@ -349,7 +354,7 @@ export default function XuatNhapTonPage() {
             { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
             { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
           ],
-          rows: data.rows.map((r) => ({
+          rows: visibleRows.map((r) => ({
             code: r.code,
             name: r.name,
             openingQty: r.openingQty,
@@ -383,6 +388,9 @@ export default function XuatNhapTonPage() {
             { key: "Từ ngày", value: range.from },
             { key: "Đến ngày", value: range.to },
             { key: "Chi nhánh", value: branchName },
+            { key: "Tìm mặt hàng", value: debouncedSearch || "Tất cả" },
+            { key: "Lọc tồn", value: rowFilter === "activity" ? "Có phát sinh" : rowFilter === "closing-stock" ? "Tồn cuối khác 0" : "Tất cả" },
+            { key: "Sắp xếp", value: sortState ? `${sortState.id} (${sortState.direction})` : "Theo dữ liệu báo cáo" },
             { key: "Cơ sở giá trị tồn", value: "Snapshot giá vốn tại từng phát sinh; dòng thiếu lịch sử không được ước tính" },
             { key: "Người xuất", value: "—" },
             {
@@ -393,7 +401,7 @@ export default function XuatNhapTonPage() {
         },
       ],
     });
-  }, [data, range, branchName]);
+  }, [data, range, branchName, visibleRows, visibleSubtotal, debouncedSearch, rowFilter, sortState]);
 
   // ========================================================
   // Render: column definitions
@@ -570,7 +578,7 @@ export default function XuatNhapTonPage() {
         <p>{HISTORICAL_VALUE_NOTE} Bấm mã hàng để đối chiếu phát sinh.</p>
         {!loading && incompleteVisibleCount > 0 && (
           <p className="mt-1 font-medium text-status-warning" role="status">
-            {incompleteVisibleCount} mặt hàng đang thiếu giá vốn lịch sử; tổng giá trị được để trống để tránh cộng sai.
+            {incompleteVisibleCount} mặt hàng chưa đủ căn cứ định giá tồn; giá trị từng cột thiếu dữ liệu được để trống để tránh cộng sai.
           </p>
         )}
       </div>
@@ -581,7 +589,7 @@ export default function XuatNhapTonPage() {
           {SUB_MODES.map((m) => (
             <button
               key={m.key}
-              onClick={() => setSubMode(m.key)}
+              onClick={() => { setSubMode(m.key); setSortState(null); }}
               className={cn(
                 "inline-flex items-center gap-1 px-3 h-7 rounded-full text-xs font-medium transition-colors press-scale-sm",
                 subMode === m.key
@@ -675,6 +683,8 @@ export default function XuatNhapTonPage() {
                 columns={summaryColumns}
                 tablePreferenceKey="report.xuat-nhap-ton.summary"
                 rows={visibleRows}
+                sortState={sortState}
+                onSortChange={setSortState}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
                 defaultPageSize={50}
@@ -687,6 +697,8 @@ export default function XuatNhapTonPage() {
                 tablePreferenceKey="report.xuat-nhap-ton.detail"
                 columnGroups={detailColumnGroups}
                 rows={visibleRows}
+                sortState={sortState}
+                onSortChange={setSortState}
                 getRowKey={(r) => r.productId}
                 subtotalLabel={subtotalLabel}
                 defaultPageSize={50}
