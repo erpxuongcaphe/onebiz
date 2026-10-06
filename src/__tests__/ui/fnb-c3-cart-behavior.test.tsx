@@ -76,6 +76,25 @@ describe("FnbCart table transfer eligibility", () => {
 });
 
 describe("flat cart line actions", () => {
+  it("keeps checkout and kitchen actions outside the collapsible tools in delivery mode", () => {
+    const payment = vi.fn(), kitchen = vi.fn();
+    const line = taoDong(1);
+    renderGio([line], {
+      activeTab: { id: "delivery", label: "Giao hàng", orderType: "delivery", lines: [line] },
+      onPayment: payment, onSendToKitchen: kitchen,
+    });
+    const checkout = screen.getByRole("button", { name: /Thanh toán/ });
+    const send = screen.getByRole("button", { name: /Bếp/ });
+    expect(checkout.closest('[aria-label="Chi tiết ưu đãi"]')).toBeNull();
+    expect(send.closest('[aria-label="Chi tiết ưu đãi"]')).toBeNull();
+    expect(checkout).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: /Ưu đãi & thao tác/ }));
+    expect(checkout).toBeVisible();
+    fireEvent.click(checkout);
+    fireEvent.click(send);
+    expect(payment).toHaveBeenCalledOnce();
+    expect(kitchen).toHaveBeenCalledOnce();
+  });
   it("keeps actions collapsed until needed, then preserves quantity/edit/remove callbacks", () => {
     const updateLineQty = vi.fn(), removeLine = vi.fn(), onEditLine = vi.fn();
     const line = taoDong(1, { quantity: 2, lineTotal: 90000 });

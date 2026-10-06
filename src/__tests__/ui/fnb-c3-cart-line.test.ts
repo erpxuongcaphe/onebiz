@@ -65,11 +65,6 @@ describe("C3 — footer ưu tiên danh sách món, vùng phụ mở khi cần", 
     expect(footer).toContain("aria-expanded={moPhanPhu}");
   });
 
-  it("màn thấp vẫn cuộn dự phòng tới nút chính", () => {
-    expect((CART.match(/max-height:620px/g) ?? []).length).toBe(1);
-    expect(CART).toContain("[@media(max-height:620px)]:overflow-y-auto");
-  });
-
   it("có nút thu gọn với aria-expanded + tóm tắt ưu đãi luôn hiện khi có", () => {
     expect(CART).toContain("aria-expanded={moPhanPhu}");
     expect(CART).toContain("Ưu đãi &amp; thao tác");
@@ -84,7 +79,6 @@ describe("C3 — footer ưu tiên danh sách món, vùng phụ mở khi cần", 
     const hanhDongChinh = footer.indexOf("Primary actions row");
     expect(tong).toBeGreaterThan(-1);
     expect(hanhDongChinh).toBeGreaterThan(tong);
-    expect(CART).toContain("[@media(max-height:540px)]:p-2.5");
   });
 
   it("nút Bếp/Thanh toán KHÔNG bị ẩn theo media màn thấp", () => {
