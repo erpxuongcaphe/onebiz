@@ -578,8 +578,8 @@ export function FnbCart({
                   </select>
                   {/* Khi 'custom' → input fee tay */}
                   {activeTab.deliveryDistanceTier === "custom" && onDeliveryFeeChange && (
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <label className="text-xs text-on-surface-variant col-span-2">
+                    <div className="space-y-1 pt-1">
+                      <label className="text-xs text-on-surface-variant">
                         Phí giao khách trả (VND)
                       </label>
                       <Input
@@ -590,7 +590,8 @@ export function FnbCart({
                         onChange={(e) =>
                           onDeliveryFeeChange(parseInt(e.target.value) || 0)
                         }
-                        className="min-h-11 xl:min-h-8 xl:h-8 text-xs"
+                        aria-label="Phí tự giao khách trả"
+                        className="w-full min-h-11 text-sm"
                         placeholder="0"
                       />
                     </div>
@@ -619,7 +620,7 @@ export function FnbCart({
                     }
                     className="w-full min-h-11 px-2 text-sm rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
-                    <option value="">— Chưa gán (gán sau) —</option>
+                    <option value="">Chưa gán</option>
                     {staffOptions.map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.name}
