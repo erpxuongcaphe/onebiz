@@ -100,7 +100,10 @@ describe("report data integrity", () => {
     expect(inventoryPage).toContain("key={`${product.productId}-${product.name}-${product.unit ?? \"\"}`}");
     expect(inventoryPage).toContain("canSumQuantity");
     expect(analytics).toContain("dayKeysForRange(customRange, days)");
-    expect(analytics).toContain("if (!inbound.has(key)) continue");
+    expect(analytics).toContain("aggregateStockMovementRows(data as unknown as MovementSourceRow[], dayKeys, includeYear)");
+    expect(analytics).toContain('.order("id", { ascending: true }), "[getStockMovements]"');
+    expect(inventoryPage).toContain("date: m.date, code: m.code, name: m.name, unit: m.unit");
+    expect(inventoryPage).toContain("data={movementChartRows}");
   });
   it("paginates finance, executive, channel, and stock aggregates", () => {
     expect(analytics).toContain("fetchAllPostgrestRows");
