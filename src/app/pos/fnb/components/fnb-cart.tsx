@@ -241,9 +241,8 @@ export function FnbCart({
   // - Footer: summary + 2 primary buttons (Bếp F10 / Thanh toán F9)
   return (
     <div className={cn(
-      // C1: màn quá thấp (bàn phím điện thoại mở → còn ~500px) thì phần cố
-      // định của giỏ (đầu + footer ≈ 600px) không thể lọt hết — cho cột giỏ
-      // cuộn dự phòng để nút Bếp/Thanh toán luôn với tới được.
+      // Head and footer scroll independently when space is limited;
+      // the item list can shrink without pushing checkout off screen.
       "flex flex-col bg-white dark:bg-card h-full min-h-0 overflow-hidden",
       mobile
         ? "w-full"
@@ -252,7 +251,8 @@ export function FnbCart({
         : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
-      <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card shrink-0 max-h-[50%] overflow-y-auto">
+      <div className="shrink-0 max-h-[50%] overflow-y-auto">
+      <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
@@ -631,6 +631,8 @@ export function FnbCart({
               )}
             </div>
           )}
+      </div>
+
       </div>
 
       {/* ── Cart lines ── */}
