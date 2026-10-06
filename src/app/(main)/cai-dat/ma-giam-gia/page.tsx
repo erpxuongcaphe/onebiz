@@ -1,5 +1,7 @@
 "use client";
 
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+
 /**
  * Cài đặt mã giảm giá (Coupon) — C-1
  *
@@ -580,24 +582,7 @@ export default function CouponSettingsPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={c.isActive}
-                          onClick={() => handleToggleActive(c)}
-                          className={cn(
-                            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mr-1",
-                            c.isActive ? "bg-primary" : "bg-muted",
-                          )}
-                          title={c.isActive ? "Tắt" : "Bật"}
-                        >
-                          <span
-                            className={cn(
-                              "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
-                              c.isActive ? "translate-x-4" : "translate-x-0",
-                            )}
-                          />
-                        </button>
+                        <SettingsSwitch label={`Bật mã giảm giá ${c.code}`} checked={c.isActive} onCheckedChange={() => handleToggleActive(c)} />
                         <Button
                           variant="ghost"
                           size="sm"

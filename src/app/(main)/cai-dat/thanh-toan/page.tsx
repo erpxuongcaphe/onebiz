@@ -1,5 +1,7 @@
 "use client";
 
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+
 /**
  * Cài đặt thanh toán — Sprint C (CEO 14/05/2026).
  *
@@ -266,25 +268,7 @@ export default function PaymentSettingsPage() {
               </div>
 
               <div className="flex items-start gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={vietQrEnabled}
-                  disabled={!canEnableQr}
-                  onClick={() => setVietQrEnabled(!vietQrEnabled)}
-                  className={cn(
-                    "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors mt-0.5",
-                    vietQrEnabled ? "bg-primary" : "bg-muted",
-                    !canEnableQr && "opacity-40 cursor-not-allowed",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                      vietQrEnabled ? "translate-x-4" : "translate-x-0.5",
-                    )}
-                  />
-                </button>
+                <SettingsSwitch label="Bật in QR tự động trên bill" checked={vietQrEnabled} disabled={!canEnableQr} onCheckedChange={setVietQrEnabled} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium">
                     Bật in QR tự động trên bill

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import {
   formatCurrency,
   formatNumber,
+  formatStockQuantity,
   formatChartCurrency,
   formatShortDate,
 } from "@/lib/format";
@@ -440,8 +441,8 @@ export default function TongQuanPage() {
                     )}>
                       {index + 1}
                     </span>
-                    <span className="text-sm flex-1 truncate">{product.name}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">{product.qty} sp</span>
+                    <span className="text-sm flex-1 min-w-0 break-words">{product.name}</span>
+                    <span className="text-sm text-muted-foreground tabular-nums shrink-0">{formatStockQuantity(product.qty)} sp</span>
                   </div>
                 ))}
               </div>

@@ -215,6 +215,7 @@ export function ModuleSidebarLayout({
                             <Link
                               key={item.href}
                               href={item.href}
+                              title={item.label}
                               className={cn(
                                 "flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors press-scale-sm",
                                 active
@@ -223,12 +224,14 @@ export function ModuleSidebarLayout({
                               )}
                             >
                               <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} className="shrink-0" />
-                              <span className="truncate flex-1">{item.label}</span>
-                              {item.badge && (
-                                <span className="text-xs px-1.5 py-0.5 rounded-full bg-status-warning/10 text-status-warning font-semibold shrink-0">
-                                  {item.badge}
-                                </span>
-                              )}
+                              <span className="min-w-0 flex-1 leading-snug">
+                                <span className="block break-words">{item.label}</span>
+                                {item.badge && (
+                                  <span className="mt-0.5 inline-block text-xs px-1.5 py-0.5 rounded-full bg-status-warning/10 text-status-warning font-semibold">
+                                    {item.badge}
+                                  </span>
+                                )}
+                              </span>
                             </Link>
                           );
                         })}

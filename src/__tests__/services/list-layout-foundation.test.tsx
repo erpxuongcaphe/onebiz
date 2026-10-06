@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FilterChips } from "@/components/shared/filter-chips";
@@ -20,6 +20,20 @@ beforeAll(() => {
 });
 
 describe("nền bố cục danh sách", () => {
+  it("chọn dòng và đổi cột qua các điều khiển có tên rõ", async () => {
+    type Row = { code: string; name: string };
+    const columns: ColumnDef<Row>[] = [
+      { accessorKey: "code", header: "Mã" },
+      { accessorKey: "name", header: "Tên" },
+    ];
+    render(<DataTable columns={columns} data={[{ code: "HD001", name: "Một" }, { code: "HD002", name: "Hai" }]} selectable columnToggle />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Chọn tất cả dòng trong trang" }));
+    expect(screen.getAllByRole("checkbox", { name: "Chọn dòng 2" }).every(node => node.getAttribute("aria-checked") === "true")).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Chọn cột hiển thị" }));
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Mã", exact: true }));
+    await waitFor(() => expect(screen.queryByRole("columnheader", { name: "Mã", exact: true })).not.toBeInTheDocument());
+    expect(screen.getByRole("columnheader", { name: "Tên", exact: true })).toBeInTheDocument();
+  });
   it("dải gọn phân tách chỉ số và công cụ", () => {
     render(
       <ListStrip metrics={<span>34 hóa đơn</span>} tools={<button>Cột</button>} />,
