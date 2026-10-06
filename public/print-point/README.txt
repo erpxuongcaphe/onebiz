@@ -8,16 +8,22 @@ Không cam kết mọi máy nhiệt hoặc máy Bluetooth đều đáp ứng.
 
 1. Cài driver; in thử từ Windows. Chỉ dùng sau khi thử tiếng Việt, QR, lề, cắt.
 2. Cài Node.js LTS từ nodejs.org. Tạo thư mục riêng tại máy quầy.
-3. Tải agent.mjs, spool.ps1, onebiz-print-point.json vào cùng thư mục.
+3. Tải bộ ZIP và giải nén; đặt onebiz-print-point.json vào cùng thư mục
+có agent.mjs, spool.ps1, run.ps1 và setup.ps1.
 JSON có mã riêng: giữ kín tại quầy, chỉ người quản lý máy được đọc.
 Không dùng service-role key hoặc mật khẩu tài khoản nhân viên.
-4. Mở terminal tại thư mục, chạy: node agent.mjs
-5. Quản lý gán máy/khổ giấy và bật điểm in trong Cài đặt → In ấn.
+4. Lưu điểm in và bật nhận phiếu. Chạy setup.ps1 để đăng ký chạy nền
+khi đăng nhập Windows, hoặc chạy node agent.mjs để kiểm tra thủ công.
+5. Bấm Cập nhật trong Cài đặt → In ấn để lấy tên máy Windows; gán máy/
+khổ giấy cho từng nơi nhận và lưu. Danh sách máy được quét lại mỗi 5 phút.
 Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh.
 6. Gửi phiếu thử và kiểm tra giấy. Windows đã nhận không bảo đảm giấy đã ra.
 
 KHỞI ĐỘNG CÙNG WINDOWS
-Dùng Task Scheduler, tạo task cho tài khoản máy quầy:
+setup.ps1 tạo task cho tài khoản Windows hiện tại, chạy với quyền thường,
+không lưu mật khẩu và không cài service. Nếu task cùng điểm đã tồn tại,
+script dừng để quản lý kiểm tra, không ghi đè.
+Nếu cần cấu hình thủ công, dùng Task Scheduler:
 - Trigger: At log on (đăng nhập tài khoản quầy).
 - Action: node.exe (chọn đường dẫn Node.js đã cài).
 - Arguments: agent.mjs

@@ -29,11 +29,20 @@ export async function runAgent(configPath) {
     return response.json();
   };
   const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+  const discover=()=>new Promise(done=>{
+    const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-Command','[Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); @(Get-CimInstance Win32_Printer | Select-Object -ExpandProperty Name) | ConvertTo-Json -Compress'],{windowsHide:true,stdio:['ignore','pipe','pipe']});
+    let out='';child.stdout.on('data',b=>{out+=b.toString();});child.stderr.on('data',()=>{});
+    const timer=setTimeout(()=>{child.kill();done([]);},10000);
+    child.on('error',()=>{clearTimeout(timer);done([]);});
+    child.on('close',()=>{clearTimeout(timer);try{const names=JSON.parse(out||'[]');done((Array.isArray(names)?names:[names]).filter(n=>typeof n==='string').slice(0,100));}catch{done([]);}});
+  });
+  let lastDiscovery=0;
   let stopped=false;
   process.on('SIGINT',()=>{stopped=true;}); process.on('SIGTERM',()=>{stopped=true;});
   console.log('Onebiz · Điểm in đang chạy. Giữ máy bật.');
   while(!stopped) {
     try {
+      if(Date.now()-lastDiscovery>300000){await call('heartbeat',{printers:await discover()});lastDiscovery=Date.now();}
       const job=await call('claim');
       if(!job){await sleep(2500);continue;}
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;

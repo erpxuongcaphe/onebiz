@@ -3,7 +3,7 @@ begin;
 create table public.fnb_print_points (
   id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id),
   branch_id uuid not null references public.branches(id), name text not null,
-  enabled boolean not null default false, routes jsonb not null default '[]',
+  enabled boolean not null default false, routes jsonb not null default '[]', detected_printers jsonb not null default '[]',
   token_hash bytea, last_seen_at timestamptz, updated_at timestamptz not null default now(),
   unique(branch_id)
 );
@@ -111,8 +111,8 @@ begin
   v_tenant:=public._fnb_print_access_v1(p_branch);
   if p_id is null or nullif(trim(p_label),'') is null or length(p_label)>80 then raise exception 'Thông tin phiếu không hợp lệ.'; end if;
   if p_route='cashier' then
-    if not (coalesce(public.user_has_permission(auth.uid(),'pos_fnb.checkout'),false) or coalesce(public.user_has_permission(auth.uid(),'pos_fnb.view_orders'),false)) then raise exception 'Không có quyền in bill.' using errcode='42501'; end if;
-  elsif not coalesce(public.user_has_permission(auth.uid(),'pos_fnb.send_kitchen'),false) then raise exception 'Không có quyền gửi phiếu bếp.' using errcode='42501'; end if;
+    if not (coalesce(public.user_has_permission(auth.uid(),'pos_fnb.checkout'),false) or coalesce(public.user_has_permission(auth.uid(),'pos_fnb.view_orders'),false) or coalesce(public.user_has_permission(auth.uid(),'system.manage_branches'),false)) then raise exception 'Không có quyền in bill.' using errcode='42501'; end if;
+  elsif not (coalesce(public.user_has_permission(auth.uid(),'pos_fnb.send_kitchen'),false) or coalesce(public.user_has_permission(auth.uid(),'system.manage_branches'),false)) then raise exception 'Không có quyền gửi phiếu bếp.' using errcode='42501'; end if;
   if length(p_bytes)>2400000 or p_bytes is null then raise exception 'Phiếu quá dài. Chia nội dung rồi gửi lại.'; end if;
   v_bytes:=decode(p_bytes,'base64');
   if octet_length(v_bytes)<20 or substring(v_bytes from 1 for 5)<>decode('1b401b6101','hex') then raise exception 'Dữ liệu in không hợp lệ.'; end if;
@@ -144,7 +144,12 @@ begin
   -- Expired sends are ambiguous. Never reclaim automatically.
   update public.fnb_print_jobs set status='unknown',message='Điểm in mất kết nối trong lúc xử lý. Kiểm tra giấy trước khi in lại.',finished_at=now()
     where point_id=p_point and status='sending' and claimed_at<now()-interval '2 minutes';
-  if p_action='claim' then
+  if p_action='heartbeat' then
+    if jsonb_typeof(p_data->'printers') is distinct from 'array' or jsonb_array_length(p_data->'printers')>100
+      or exists(select 1 from jsonb_array_elements(p_data->'printers') p where jsonb_typeof(p)<>'string' or length(p#>>'{}')>200) then raise exception 'INVALID_PRINTER_LIST'; end if;
+    update public.fnb_print_points set detected_printers=p_data->'printers' where id=p_point;
+    return jsonb_build_object('ok',true);
+  elsif p_action='claim' then
     if exists(select 1 from public.fnb_print_jobs where point_id=p_point and status='sending') then return null; end if;
     select * into v_job from public.fnb_print_jobs where point_id=p_point and status='queued' order by created_at,id for update skip locked limit 1;
     if not found then return null; end if;

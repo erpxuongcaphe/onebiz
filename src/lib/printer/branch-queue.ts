@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaperWidth } from "./escpos";
 
 export interface PrintRoute { key: string; label: string; printer: string; paper: PaperWidth }
-export interface PrintPoint { id: string; name: string; enabled: boolean; connected?: boolean; routes: PrintRoute[]; last_seen_at: string | null }
+export interface PrintPoint { id: string; name: string; enabled: boolean; connected?: boolean; detected_printers?: string[]; routes: PrintRoute[]; last_seen_at: string | null }
 export interface BranchPrintJob { id: string; label: string; route_label: string; status: "queued" | "sending" | "handed_off" | "failed" | "unknown" | "cancelled"; created_at: string; actor_name: string; message: string | null }
 
 // New RPCs are typed here until the generated production schema is refreshed.
