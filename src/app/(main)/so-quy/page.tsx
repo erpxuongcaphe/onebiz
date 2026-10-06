@@ -982,6 +982,7 @@ export default function SoQuyPage() {
                 size="sm"
                 className="h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11"
                 onClick={() => setFilterOpen(true)}
+                aria-label={`Chọn thời gian: ${datePresetLabel}`}
               >
                 <Icon name="calendar_today" size={15} />
                 <span className="hidden sm:inline">{datePresetLabel}</span>

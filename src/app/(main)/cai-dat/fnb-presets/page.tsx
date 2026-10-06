@@ -1,5 +1,7 @@
 "use client";
 
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+
 /**
  * Cài đặt POS FnB nâng cao — Sprint POS-FNB-EXT-1 (CEO 08/05).
  *
@@ -265,6 +267,7 @@ export default function FnbPresetsPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <Label className="text-xs">CK %</Label>
                   <Input
+                    aria-label={`Chiết khấu ${meta.label} (%)`}
                     type="number"
                     min={0}
                     max={100}
@@ -281,23 +284,7 @@ export default function FnbPresetsPage() {
                     disabled={!cfg.active}
                     className="w-20 h-9 text-sm"
                   />
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={cfg.active}
-                    onClick={() => updatePlatform(meta.key, { active: !cfg.active })}
-                    className={cn(
-                      "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-                      cfg.active ? "bg-primary" : "bg-muted",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
-                        cfg.active ? "translate-x-4" : "translate-x-0",
-                      )}
-                    />
-                  </button>
+                  <SettingsSwitch label={`Bật ${meta.label} trên POS`} checked={cfg.active} onCheckedChange={(active) => updatePlatform(meta.key, { active })} />
                 </div>
               </div>
             );

@@ -1,5 +1,7 @@
 "use client";
 
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+
 /**
  * Cài đặt mã giảm giá (Coupon) — C-1
  *
@@ -19,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -176,11 +179,11 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex sm:max-w-xl max-h-[90dvh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Sửa coupon" : "Tạo coupon"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        <DialogBody className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Mã coupon *</label>
@@ -315,8 +318,11 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           <div className="rounded-lg border p-3">
             <button
               type="button"
+              role="switch"
+              aria-label="Kích hoạt"
+              aria-checked={isActive}
               onClick={() => setIsActive(!isActive)}
-              className="flex w-full items-center justify-between"
+              className="flex min-h-11 w-full items-center justify-between"
             >
               <div className="text-left">
                 <div className="text-sm font-medium">Kích hoạt</div>
@@ -339,7 +345,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
               </span>
             </button>
           </div>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
@@ -580,24 +586,7 @@ export default function CouponSettingsPage() {
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={c.isActive}
-                          onClick={() => handleToggleActive(c)}
-                          className={cn(
-                            "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors mr-1",
-                            c.isActive ? "bg-primary" : "bg-muted",
-                          )}
-                          title={c.isActive ? "Tắt" : "Bật"}
-                        >
-                          <span
-                            className={cn(
-                              "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
-                              c.isActive ? "translate-x-4" : "translate-x-0",
-                            )}
-                          />
-                        </button>
+                        <SettingsSwitch label={`Bật mã giảm giá ${c.code}`} checked={c.isActive} onCheckedChange={() => handleToggleActive(c)} />
                         <Button
                           variant="ghost"
                           size="sm"

@@ -400,6 +400,7 @@ export function DataTable<TData, TValue>({
         id: "select",
         header: ({ table }) => (
           <Checkbox
+            aria-label="Chọn tất cả dòng trong trang"
             checked={table.getIsAllPageRowsSelected()}
             onCheckedChange={(value) =>
               table.toggleAllPageRowsSelected(!!value)
@@ -408,6 +409,7 @@ export function DataTable<TData, TValue>({
         ),
         cell: ({ row }) => (
           <Checkbox
+            aria-label={`Chọn dòng ${row.index + 1}`}
             checked={row.getIsSelected()}
             onCheckedChange={(value) => row.toggleSelected(!!value)}
             onClick={(e) => e.stopPropagation()}
@@ -564,7 +566,7 @@ export function DataTable<TData, TValue>({
   const columnToggleMenu =
     columnToggle && toggleableColumns.length > 0 ? (
       <DropdownMenu>
-        <DropdownMenuTrigger className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
+        <DropdownMenuTrigger aria-label="Chọn cột hiển thị" className="inline-flex h-8 items-center gap-1.5 rounded-md border border-input bg-background px-2.5 text-xs font-medium hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-[44px]">
           <Icon name="tune" size={15} />
           <span className="hidden lg:inline">Hiển thị cột</span>
         </DropdownMenuTrigger>
@@ -882,6 +884,7 @@ export function DataTable<TData, TValue>({
                   <div className="flex items-center justify-between mb-2">
                     {selectable ? (
                       <Checkbox
+                        aria-label={`Chọn dòng ${row.index + 1}`}
                         checked={row.getIsSelected()}
                         onCheckedChange={(value) =>
                           row.toggleSelected(!!value)
@@ -894,6 +897,7 @@ export function DataTable<TData, TValue>({
                     {rowActions && (
                       <DropdownMenu>
                         <DropdownMenuTrigger
+                          aria-label={`Mở menu dòng ${row.index + 1}`}
                           className="inline-flex pointer-coarse:min-h-[44px] pointer-coarse:min-w-[44px] items-center justify-center rounded-lg p-2 hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           onClick={(e) => e.stopPropagation()}
                         >

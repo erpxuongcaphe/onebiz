@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogTitle,
   DialogDescription,
@@ -281,7 +282,7 @@ export function CreatePromotionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex sm:max-w-2xl max-h-[90dvh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {isEditing ? "Sửa chương trình khuyến mãi" : "Tạo chương trình khuyến mãi"}
@@ -291,7 +292,7 @@ export function CreatePromotionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <DialogBody className="grid gap-4 py-2">
           {/* Name */}
           <div className="space-y-2">
             <label className="text-sm font-medium">
@@ -684,6 +685,9 @@ export function CreatePromotionDialog({
           <div className="space-y-1 rounded-lg border p-3">
             <button
               type="button"
+              role="switch"
+              aria-label="Kích hoạt"
+              aria-checked={isActive}
               onClick={() => setIsActive(!isActive)}
               className="flex w-full items-center justify-between py-2"
             >
@@ -709,6 +713,9 @@ export function CreatePromotionDialog({
             </button>
             <button
               type="button"
+              role="switch"
+              aria-label="Tự động áp dụng"
+              aria-checked={autoApply}
               onClick={() => setAutoApply(!autoApply)}
               className="flex w-full items-center justify-between py-2"
             >
@@ -733,7 +740,7 @@ export function CreatePromotionDialog({
               </span>
             </button>
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>

@@ -1,5 +1,7 @@
 "use client";
 
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
+
 /**
  * Cài đặt Kho & BOM (CEO 18/05/2026)
  *
@@ -10,7 +12,7 @@
  * Chỉ owner/admin được sửa (server enforce qua RPC set_tenant_setting).
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useId } from "react";
 import { PageHeader } from "@/components/shared/page-header";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/lib/contexts";
@@ -34,11 +36,12 @@ interface ToggleRowProps {
 }
 
 function ToggleRow({ label, description, value, onChange, disabled, warning }: ToggleRowProps) {
+  const id = useId();
   return (
     <div className="flex items-start justify-between gap-4 py-4 border-b border-border last:border-0">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-sm font-medium">{label}</span>
+          <label htmlFor={id} className="cursor-pointer text-sm font-medium">{label}</label>
           {value && (
             <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5">
               Đang bật
@@ -53,25 +56,7 @@ function ToggleRow({ label, description, value, onChange, disabled, warning }: T
           </p>
         )}
       </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(!value)}
-        className={
-          "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors " +
-          (value ? "bg-primary" : "bg-surface-container-highest") +
-          (disabled ? " opacity-50 cursor-not-allowed" : "")
-        }
-        aria-checked={value}
-        role="switch"
-      >
-        <span
-          className={
-            "inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition " +
-            (value ? "translate-x-5" : "translate-x-0")
-          }
-        />
-      </button>
+      <SettingsSwitch id={id} label={label} checked={value} disabled={disabled} onCheckedChange={onChange} />
     </div>
   );
 }

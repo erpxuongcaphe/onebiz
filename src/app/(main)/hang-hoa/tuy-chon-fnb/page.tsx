@@ -445,16 +445,18 @@ export default function ModifierFnbPage() {
             return (
               <div key={g.id} className="rounded-lg border bg-card">
                 {/* Group row */}
-                <div className="flex items-center gap-3 p-3">
+                <div className="flex flex-wrap items-start gap-2 p-3 sm:flex-nowrap sm:items-center sm:gap-3">
                   <button
                     type="button"
                     onClick={() => toggleExpand(g.id)}
-                    className="flex flex-1 items-center gap-3 text-left"
+                    aria-expanded={expanded}
+                    aria-controls={expanded ? `modifier-options-${g.id}` : undefined}
+                    className="flex w-full min-w-0 items-start gap-2 text-left sm:w-auto sm:flex-1 sm:items-center sm:gap-3"
                   >
                     <Icon name={expanded ? "expand_more" : "chevron_right"} size={20} className="text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold">{g.name}</h3>
+                      <h3 className="break-words font-semibold">{g.name}</h3>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
                         <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", RULE_BADGE[g.rule])}>
                           {moTaQuyTac(g).split(" — ")[0]}
                         </span>
@@ -481,8 +483,8 @@ export default function ModifierFnbPage() {
 
                 {/* Expanded options */}
                 {expanded && (
-                  <div className="border-t bg-muted/30 px-4 py-3">
-                    <div className="mb-2 flex items-center justify-between">
+                  <div id={`modifier-options-${g.id}`} className="border-t bg-muted/30 px-3 py-2 sm:px-4 sm:py-3">
+                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                       <h4 className="text-sm font-medium">Lựa chọn trong "{g.name}"</h4>
                       <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" disabled={loadingOpts || Boolean(optionErrors[g.id]) || opts.length < 2} onClick={() => setOrderDialog(g)}>
@@ -520,8 +522,8 @@ export default function ModifierFnbPage() {
                         {opts.map((o) => (
                           <div key={o.id} className="flex items-center gap-2 rounded-md bg-card p-2 text-sm">
                             <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{o.label}</span>
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="break-words font-medium">{o.label}</span>
                                 {o.isDefault && (
                                   <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
                                     mặc định

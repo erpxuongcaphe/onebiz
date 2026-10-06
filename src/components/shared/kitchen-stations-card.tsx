@@ -15,7 +15,7 @@
  * Sort_order: stations xuất hiện theo thứ tự trong UI + KDS + phiếu in.
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,8 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -30,6 +32,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
+import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { HelpTip } from "@/components/shared/help-tip";
 import {
   getKitchenStationsByBranch,
@@ -95,9 +98,12 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
   const [editing, setEditing] = useState<KitchenStation | null>(null);
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<KitchenStation | null>(null);
+  const selectedBranch = branches.find((branch) => branch.id === selectedBranchId);
+  const loadSequence = useRef(0);
 
   const reload = useCallback(async () => {
-    if (!selectedBranchId) {
+    const sequence = ++loadSequence.current;
+    if (!selectedBranchId || !branches.some((branch) => branch.id === selectedBranchId)) {
       setStations([]);
       setLoading(false);
       return;
@@ -105,17 +111,18 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
     setLoading(true);
     try {
       const data = await getKitchenStationsByBranch(selectedBranchId);
-      setStations(data);
+      if (sequence === loadSequence.current) setStations(data);
     } catch (err) {
+      if (sequence !== loadSequence.current) return;
       toast({
         variant: "error",
         title: "Lỗi tải trạm",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
       });
     } finally {
-      setLoading(false);
+      if (sequence === loadSequence.current) setLoading(false);
     }
-  }, [selectedBranchId, toast]);
+  }, [selectedBranchId, branches, toast]);
 
   useEffect(() => {
     reload();
@@ -132,10 +139,13 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
           (b) => b.branchType === "store" || !b.branchType,
         );
         setBranches(stores);
-        // Auto select default branch nếu chưa có
-        if (!selectedBranchId && stores.length > 0) {
-          setSelectedBranchId(stores.find((b) => b.isDefault)?.id ?? stores[0].id);
-        }
+        // Keep the visible scope and query scope identical. A warehouse is
+        // not a kitchen branch; ask for an explicit store instead of showing
+        // the browser's first option while querying the warehouse id.
+        setSelectedBranchId(stores.find((branch) => branch.id === branchId)?.id);
+        setCreating(false);
+        setEditing(null);
+        setDeleting(null);
       })
       .catch(() => {
         if (!cancelled) setBranches([]);
@@ -143,7 +153,7 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
     return () => {
       cancelled = true;
     };
-  }, [selectedBranchId]);
+  }, [branchId]);
 
   const handleDelete = useCallback(async () => {
     if (!deleting) return;
@@ -185,12 +195,12 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="border-l-4 border-sky-500 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:bg-sky-950/30 dark:text-sky-100">
-            <p className="font-semibold">Chi nhánh: {branches.find((branch) => branch.id === selectedBranchId)?.name ?? (currentBranch?.id === selectedBranchId ? currentBranch?.name : "Chưa chọn")}</p>
+            <p className="font-semibold">Chi nhánh: {selectedBranch?.name ?? "Chọn quán bên dưới"}</p>
             {printTargetLabel && <p className="mt-1">Đích in bếp trên máy này: {printTargetLabel}</p>}
             <p className="mt-1">Trạm chia phiếu theo công việc. Có thể gán máy USB hoặc máy qua QZ riêng từng trạm; nếu chưa gán, dùng đích in bếp chung. Gán thiết bị chỉ lưu trên máy/trình duyệt này và đúng chi nhánh. Chọn phương thức USB hoặc QZ ở mục Phương thức in; khi in qua trình duyệt, chọn máy trong hộp thoại in.</p>
           </div>
           {/* Branch selector — chỉ hiện nếu user có nhiều branch FnB */}
-          {branches.length > 1 && (
+          {branches.length > 0 && (
             <div className="space-y-1">
               <Label className="text-sm font-medium flex items-center gap-1">
                 Chi nhánh
@@ -201,10 +211,18 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
                 </HelpTip>
               </Label>
               <select
-                value={selectedBranchId ?? ""}
-                onChange={(e) => setSelectedBranchId(e.target.value)}
-                className="w-full max-w-sm h-9 px-3 rounded-lg border border-input bg-background text-sm"
+                aria-label="Chi nhánh trạm chế biến"
+                value={selectedBranch?.id ?? ""}
+                onChange={(e) => {
+                  setSelectedBranchId(e.target.value);
+                  setStations([]);
+                  setCreating(false);
+                  setEditing(null);
+                  setDeleting(null);
+                }}
+                className="w-full max-w-sm h-11 px-3 rounded-lg border border-input bg-background text-sm"
               >
+                <option value="" disabled>Chọn quán để cấu hình trạm</option>
                 {branches.map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.code ? `${b.code} — ${b.name}` : b.name}
@@ -223,9 +241,9 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
             <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
               <Icon name="ramen_dining" size={36} className="text-muted-foreground opacity-40" />
               <p className="text-sm text-muted-foreground">
-                Chưa có trạm chế biến cho quán này.
+                {selectedBranch ? "Chưa có trạm chế biến cho quán này." : "Chọn chi nhánh quán trước khi xem hoặc tạo trạm."}
               </p>
-              <Button size="sm" onClick={() => setCreating(true)}>
+              <Button size="sm" disabled={!selectedBranch} onClick={() => setCreating(true)}>
                 <Icon name="add" size={14} className="mr-1" />
                 Tạo trạm đầu tiên
               </Button>
@@ -255,10 +273,11 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
       </Card>
 
       {/* Create dialog */}
-      {creating && selectedBranchId && (
+      {creating && selectedBranch && (
         <StationDialog
           mode="create"
-          branchId={selectedBranchId}
+          branchId={selectedBranch.id}
+          branchName={selectedBranch.name}
           existingCount={stations.length}
           onClose={() => setCreating(false)}
           onSuccess={() => {
@@ -274,6 +293,7 @@ export function KitchenStationsCard({ branchId: branchIdProp, printTargetLabel }
           mode="edit"
           station={editing}
           branchId={editing.branchId}
+          branchName={branches.find(branch => branch.id === editing.branchId)?.name}
           existingCount={stations.length}
           onClose={() => setEditing(null)}
           onSuccess={() => {
@@ -417,6 +437,7 @@ function StationDialog({
   mode,
   station,
   branchId,
+  branchName,
   existingCount,
   onClose,
   onSuccess,
@@ -424,6 +445,7 @@ function StationDialog({
   mode: "create" | "edit";
   station?: KitchenStation;
   branchId: string;
+  branchName?: string;
   existingCount: number;
   onClose: () => void;
   onSuccess: () => void;
@@ -508,14 +530,15 @@ function StationDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="flex max-w-lg max-h-[90dvh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Thêm trạm chế biến" : `Sửa: ${station?.name}`}
           </DialogTitle>
+          <DialogDescription>Chi nhánh: {branchName ?? branchId}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <DialogBody className="space-y-4">
           {/* Name */}
           <div className="space-y-1">
             <Label className="flex items-center gap-1">
@@ -526,6 +549,7 @@ function StationDialog({
               </HelpTip>
             </Label>
             <Input
+              aria-label="Tên trạm"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="VD: Bar pha chế"
@@ -550,10 +574,12 @@ function StationDialog({
                   type="button"
                   onClick={() => setColor(c.hex)}
                   className={cn(
-                    "w-10 h-10 rounded-xl ring-2 transition-all",
+                    "w-11 h-11 rounded-xl ring-2 transition-all",
                     color === c.hex ? "ring-foreground scale-110" : "ring-transparent",
                   )}
                   style={{ backgroundColor: c.hex }}
+                  aria-label={`Màu ${c.name}`}
+                  aria-pressed={color === c.hex}
                   title={c.name}
                 />
               ))}
@@ -569,7 +595,7 @@ function StationDialog({
                 chế biến để staff nhận biết nhanh.
               </HelpTip>
             </Label>
-            <div className="grid grid-cols-6 gap-2">
+            <div className="grid grid-cols-5 gap-2 sm:grid-cols-6">
               {ICON_PRESETS.map((i) => (
                 <button
                   key={i.name}
@@ -581,6 +607,8 @@ function StationDialog({
                       ? "ring-primary bg-primary/5"
                       : "ring-transparent bg-surface-container hover:bg-surface-container-high",
                   )}
+                  aria-label={`Biểu tượng ${i.label}`}
+                  aria-pressed={icon === i.name}
                   title={i.label}
                 >
                   <Icon name={i.name} size={18} className={icon === i.name ? "text-primary" : ""} />
@@ -615,6 +643,7 @@ function StationDialog({
               </HelpTip>
             </Label>
             <Input
+              aria-label="Header phiếu in"
               value={headerText}
               onChange={(e) => setHeaderText(e.target.value)}
               placeholder={`Mặc định: ${name.toUpperCase() || "TÊN TRẠM"}`}
@@ -632,13 +661,14 @@ function StationDialog({
               </HelpTip>
             </Label>
             <Input
+              aria-label="Thứ tự sắp xếp"
               type="number"
               min={1}
               value={sortOrder}
               onChange={(e) => setSortOrder(parseInt(e.target.value) || 1)}
             />
           </div>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={saving}>
@@ -666,29 +696,14 @@ function ToggleRow({
   label: string;
   helpTip?: string;
 }) {
+  const id = useId();
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm font-medium flex items-center">
-        {label}
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center text-sm font-medium">
+        <label htmlFor={id}>{label}</label>
         {helpTip && <HelpTip>{helpTip}</HelpTip>}
-      </span>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onCheckedChange(!checked)}
-        className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-          checked ? "bg-primary" : "bg-muted",
-        )}
-      >
-        <span
-          className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
-            checked ? "translate-x-4" : "translate-x-0",
-          )}
-        />
-      </button>
+      </div>
+      <SettingsSwitch id={id} checked={checked} onCheckedChange={onCheckedChange} label={label} />
     </div>
   );
 }
