@@ -187,6 +187,8 @@ export interface CustomerSegment {
 
 export interface TopCustomer {
   customerId: string;
+  code?: string;
+  groupName?: string;
   rank: number;
   name: string;
   orders: number;
@@ -1809,7 +1811,7 @@ export async function getTopCustomersByRevenue(
     () => {
       let query = supabase
         .from("invoices")
-        .select("customer_id, total, customers(name)")
+        .select("customer_id, total, customers(name, code, customer_groups!customers_group_id_fkey(name))")
         .eq("tenant_id", tenantId)
         .eq("status", "completed")
         .gte("ngay_chung_tu", resolved.start)
@@ -1822,12 +1824,14 @@ export async function getTopCustomersByRevenue(
     "[getTopCustomersByRevenue]",
   );
 
-  const totals = new Map<string, { name: string; orders: number; revenue: number }>();
+  const totals = new Map<string, { name: string; code?: string; groupName?: string; orders: number; revenue: number }>();
   for (const invoice of invoices) {
     const customerId = String(invoice.customer_id ?? "");
-    const customer = invoice.customers as { name?: string } | null;
+    const customer = invoice.customers as { name?: string; code?: string; customer_groups?: { name?: string } | null } | null;
     const current = totals.get(customerId) ?? {
       name: customer?.name ?? "N/A",
+      code: customer?.code,
+      groupName: customer?.customer_groups?.name,
       orders: 0,
       revenue: 0,
     };
