@@ -1,4 +1,5 @@
 -- New external customers receive codes atomically. Existing customer history is untouched.
+begin;
 alter table public.customer_groups add column if not exists code text;
 update public.customer_groups
 set code = substring(upper(btrim(note)) from '^([A-Z][A-Z0-9]{1,7})(?:[[:space:]]+-[[:space:]]+.*)?$')
@@ -56,3 +57,4 @@ end; $$;
 revoke all on function public.assign_group_customer_code() from public,anon,authenticated;
 create trigger customers_assign_group_code before insert on public.customers for each row execute function public.assign_group_customer_code();
 notify pgrst,'reload schema';
+commit;
