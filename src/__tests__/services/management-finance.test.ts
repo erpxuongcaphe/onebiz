@@ -1,11 +1,27 @@
 import {beforeEach, describe, expect, it, vi} from 'vitest';
 const mocks = vi.hoisted(() => ({rpc: vi.fn()}));
 vi.mock('@/lib/services/supabase/base', () => ({getClient: () => ({rpc: mocks.rpc}), handleError: (e: Error) => {throw e;}}));
-import {getAllFinanceRows, getFinanceWorkspace, saveFinanceDocument, settleFinanceDocument, cancelFinanceDocument} from '@/lib/services/supabase/management-finance';
+import {getAllFinanceRows, getFinanceWorkspace, saveFinanceDocument, settleFinanceDocument, cancelFinanceDocument, getFinanceCashLinks, saveFinanceCategory} from '@/lib/services/supabase/management-finance';
 const filters = {from: '2026-09-01', to: '2026-09-30', branchId: 'xtb'};
 const workspace = (items: unknown[], total = items.length) => ({data: {items, total, summary: {income: 0, expense: 0, non_pnl: 0}}, error: null});
 beforeEach(() => mocks.rpc.mockReset());
 describe('management finance service', () => {
+  it('reads cash sources by payment period and physical branch across complete pages',async () => {
+    mocks.rpc.mockResolvedValueOnce(workspace([{cash_id:'first'}],2)).mockResolvedValueOnce(workspace([{cash_id:'second'}],2));
+    expect(await getFinanceCashLinks('2026-10-01','2026-10-31','paying-branch')).toHaveLength(2);
+    expect(mocks.rpc.mock.calls[1]).toEqual(['get_management_finance_cash_links',{p_date_from:'2026-10-01',p_date_to:'2026-10-31',p_branch_id:'paying-branch',p_page:1,p_page_size:200}]);
+  });
+  it('rejects duplicate or incomplete cash links instead of silently assigning sources',async () => {
+    mocks.rpc.mockResolvedValueOnce(workspace([{cash_id:'same'}],2)).mockResolvedValueOnce(workspace([{cash_id:'same'}],2));
+    await expect(getFinanceCashLinks(filters.from,filters.to)).rejects.toThrow('trùng');
+    mocks.rpc.mockResolvedValue(workspace([],1));
+    await expect(getFinanceCashLinks(filters.from,filters.to)).rejects.toThrow('chưa tải đủ');
+  });
+  it('saves the explicit activity in the atomic category RPC',async () => {
+    mocks.rpc.mockResolvedValue({data:{id:'category'},error:null});
+    await saveFinanceCategory({code:' custom ',name:' Name ',kind:'expense',parentId:'parent',cashFlowActivity:'investing'});
+    expect(mocks.rpc).toHaveBeenCalledWith('save_management_finance_category_with_cash_flow',{p_code:'CUSTOM',p_name:'Name',p_kind:'expense',p_parent_id:'parent',p_cash_flow_activity:'investing'});
+  });
   it('preserves recognition-date and branch filters for the server snapshot', async () => {
     mocks.rpc.mockResolvedValue(workspace([]));
     await getFinanceWorkspace({...filters, kind: 'expense', search: '  rent  '});
