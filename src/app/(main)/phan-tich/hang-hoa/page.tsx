@@ -189,7 +189,9 @@ export default function HangHoaPage() {
   const [productSearch, setProductSearch] = useState("");
   const [productCategory, setProductCategory] = useState("");
   const [productActivity, setProductActivity] = useState<"all" | "sold" | "returned">("all");
-  const [productSort, setProductSort] = useState<"netRevenue" | "revenue" | "quantity" | "returnedValue" | "name">("netRevenue");
+  const [productUnit, setProductUnit] = useState("");
+  const [productSortDirection, setProductSortDirection] = useState<"asc" | "desc">("desc");
+  const [productSort, setProductSort] = useState<"netRevenue" | "revenue" | "quantity" | "returnedQty" | "netQty" | "returnedValue" | "code" | "unit" | "name">("netRevenue");
   const [productPage, setProductPage] = useState(1);
   const requestIdRef = useRef(0);
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
@@ -202,16 +204,20 @@ export default function HangHoaPage() {
     const filtered = reconciledProducts.filter((product) =>
       `${product.name} ${product.code ?? ""}`.toLocaleLowerCase("vi").includes(needle)
       && (!productCategory || (product.category ?? "Chưa phân loại") === productCategory)
+      && (!productUnit || (product.unit ?? "Chưa có ĐVT") === productUnit)
       && (productActivity === "all" || (productActivity === "sold" ? product.qty > 0 : product.returnedQty > 0)),
     );
     return [...filtered].sort((a, b) => {
-      if (productSort === "name") return a.name.localeCompare(b.name, "vi");
-      if (productSort === "quantity") return b.qty - a.qty;
-      if (productSort === "returnedValue") return b.returnedValue - a.returnedValue;
-      return productSort === "revenue" ? b.revenue - a.revenue : b.netRevenue - a.netRevenue;
+      const direction = productSortDirection === "asc" ? 1 : -1;
+      const comparison = productSort === "name" || productSort === "code" || productSort === "unit"
+        ? (a[productSort] ?? "").localeCompare(b[productSort] ?? "", "vi", { numeric: true })
+        : productSort === "quantity" ? a.qty - b.qty
+        : a[productSort] - b[productSort];
+      return comparison * direction || (a.code ?? a.name).localeCompare(b.code ?? b.name, "vi", { numeric: true });
     });
-  }, [reconciledProducts, productSearch, productSort, productCategory, productActivity]);
-  const productCategories = [...new Set(reconciledProducts.map((product) => product.category ?? "Chưa phân loại"))].sort((a, b) => a.localeCompare(b, "vi"));
+  }, [reconciledProducts, productSearch, productSort, productSortDirection, productUnit, productCategory, productActivity]);
+  const productCategories = [...new Set([...reconciledProducts.map((product) => product.category ?? "Chưa phân loại"), ...(productCategory ? [productCategory] : [])])].sort((a, b) => a.localeCompare(b, "vi"));
+  const productUnits = [...new Set([...reconciledProducts.map((product) => product.unit ?? "Chưa có ĐVT"), ...(productUnit ? [productUnit] : [])])].sort((a, b) => a.localeCompare(b, "vi"));
   const canSumQuantity = new Set(visibleProducts.map((product) => product.unit ?? "")).size === 1 && visibleProducts.every((product) => Boolean(product.unit));
   const visibleProductTotals = useMemo(
     () => visibleProducts.reduce((totals, product) => ({
@@ -729,6 +735,9 @@ export default function HangHoaPage() {
                 value={productCategory}
                 onChange={(event) => { setProductCategory(event.target.value); setProductPage(1); }}
               ><option value="">Tất cả nhóm hàng</option>{productCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+              <select aria-label="Đơn vị tính mặt hàng" className="h-9 rounded border border-input bg-background px-3 text-sm" value={productUnit} onChange={(event) => { setProductUnit(event.target.value); setProductPage(1); }}>
+                <option value="">Tất cả ĐVT</option>{productUnits.map((unit) => <option key={unit} value={unit}>{unit}</option>)}
+              </select>
               <select aria-label="Phát sinh mặt hàng" className="h-9 rounded border border-input bg-background px-3 text-sm" value={productActivity} onChange={(event) => { setProductActivity(event.target.value as typeof productActivity); setProductPage(1); }}>
                 <option value="all">Bán và trả</option><option value="sold">Có bán</option><option value="returned">Có trả</option>
               </select>
@@ -738,11 +747,18 @@ export default function HangHoaPage() {
                 value={productSort}
                 onChange={(event) => { setProductSort(event.target.value as typeof productSort); setProductPage(1); }}
               >
-                <option value="netRevenue">Doanh thu thuần cao nhất</option>
-                <option value="revenue">Doanh thu sau giảm giá cao nhất</option>
-                <option value="quantity">Số lượng bán nhiều nhất</option>
-                <option value="returnedValue">Tiền trả cao nhất</option>
-                <option value="name">Tên A–Z</option>
+                <option value="netRevenue">Doanh thu thuần</option>
+                <option value="revenue">Doanh thu sau giảm giá</option>
+                <option value="quantity">Số lượng bán</option>
+                <option value="returnedQty">Số lượng trả</option>
+                <option value="netQty">Số lượng ròng</option>
+                <option value="returnedValue">Giá trị trả</option>
+                <option value="code">Mã hàng</option>
+                <option value="name">Tên mặt hàng</option>
+                <option value="unit">Đơn vị tính</option>
+              </select>
+              <select aria-label="Chiều sắp xếp mặt hàng" className="h-9 rounded border border-input bg-background px-3 text-sm" value={productSortDirection} onChange={(event) => { setProductSortDirection(event.target.value as "asc" | "desc"); setProductPage(1); }}>
+                <option value="desc">Giảm dần</option><option value="asc">Tăng dần</option>
               </select>
             </div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
