@@ -9,8 +9,8 @@
  * Trả về true nếu ĐÃ in qua mẫu; false nếu chưa có mẫu/lỗi → caller PHẢI
  * fallback printFnbReceipt cũ (không bao giờ kẹt quầy — giống POS Retail).
  *
- * Giữ NGUYÊN ngoài scope: bill TẠM TÍNH (pre-bill) + phiếu bếp (kitchen
- * ticket) vẫn chạy print-fnb.ts.
+ * Tạm tính dùng cùng mẫu sale_invoice và chỉ đổi tiêu đề/phần tiền đã thu.
+ * Phiếu bếp tiếp tục dùng mẫu riêng.
  */
 
 import { resolvePrintTemplate } from "@/lib/services";
@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/format";
 import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 
 export interface FnbBillTemplatePayload {
+  billPhase?: "prebill" | "receipt";
   branchId: string | null | undefined;
   branchName?: string;
   invoiceCode: string;
@@ -91,11 +92,13 @@ export async function printFnbBillWithTemplate(
         note: itemNote || undefined,
       });
       for (const t of it.toppings ?? []) {
+        if (t.quantity <= 0) continue;
+        const toppingQuantity = t.quantity * it.quantity;
         items.push({
           name: `+ ${t.name}`,
-          quantity: t.quantity,
+          quantity: toppingQuantity,
           unitPrice: t.price,
-          total: t.quantity * t.price,
+          total: toppingQuantity * t.price,
         });
       }
     }
@@ -122,16 +125,18 @@ export async function printFnbBillWithTemplate(
       });
     } else {
       summaryRows.push({ label: "Tổng cộng", value: money(p.total), bold: true });
-      summaryRows.push({ label: "Khách đã thanh toán", value: money(p.paid) });
-      const change = p.paid - p.total;
-      if (change > 0)
-        summaryRows.push({ label: "Tiền thối lại", value: money(change) });
-      else
-        summaryRows.push({
-          label: "Khách còn phải trả",
-          value: money(Math.max(-change, 0)),
-          tone: -change > 0 ? "danger" : "success",
-        });
+      if (p.billPhase !== "prebill") {
+        summaryRows.push({ label: "Tiền khách đưa", value: money(p.paid) });
+        const change = p.paid - p.total;
+        if (change > 0)
+          summaryRows.push({ label: "Tiền thối lại", value: money(change) });
+        else
+          summaryRows.push({
+            label: "Khách còn phải trả",
+            value: money(Math.max(-change, 0)),
+            tone: -change > 0 ? "danger" : "success",
+          });
+      }
     }
 
     const base: DocumentPrintData = {
@@ -156,7 +161,8 @@ export async function printFnbBillWithTemplate(
     };
 
     const data = applyTemplateToDocData(base,resolved);
-    const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier",branchId:p.branchId ?? undefined,label:`Bill ${p.invoiceCode}`.slice(0,80),buildHtml:paper=>generateDocumentHtml(data,paper),openCashDrawer:getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
+    if (p.billPhase === "prebill") data.documentType = "PHIẾU TẠM TÍNH";
+    const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier",branchId:p.branchId ?? undefined,label:`${p.billPhase === "prebill" ? "Tạm tính" : "Bill"} ${p.invoiceCode}`.slice(0,80),buildHtml:paper=>generateDocumentHtml(data,paper),openCashDrawer:p.billPhase !== "prebill" && getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
     // A failed send is reported by the service; don't silently retry a different
     // bill/device after a bridge may already have queued the job.
     if (!result.success) console.warn("[printFnbBillWithTemplate]",result.warning);

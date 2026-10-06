@@ -31,6 +31,12 @@ export interface FnbPrintItem {
 }
 
 export interface PreBillData {
+  branchName?: string;
+  customerName?: string;
+  tipAmount?: number;
+  receiptStyle?: "minimal" | "standard" | "full";
+  showQr?: boolean;
+  bankInfo?: FnbReceiptData["bankInfo"];
   branchId?: string;
   orderNumber: string;
   tableName?: string;
@@ -61,6 +67,7 @@ export interface PreBillData {
 }
 
 export interface FnbReceiptData extends PreBillData {
+  billPhase?: "prebill" | "receipt";
   invoiceCode: string;
   paymentMethod: "cash" | "transfer" | "card" | "mixed";
   paid: number;
@@ -186,108 +193,20 @@ td{padding:1px 0;font-size:12px;vertical-align:top}
  * dùng được. Logic 100% giống printPreBill — chỉ skip openAndPrint.
  */
 export function buildPreBillHtml(data: PreBillData): string {
-  const width = getWidth(data.paperSize);
-  const pageSize = getPageSize(data.paperSize);
-  const typeLabel = ORDER_TYPE_VN[data.orderType] ?? data.orderType;
-  const tableLabel = data.tableName ?? typeLabel;
-
-  const itemsHtml = data.items.map((item) => {
-    const itemTotal = item.quantity * item.unitPrice;
-    let html = `<tr>
-      <td style="width:50%">${formatNumber(item.quantity)}x ${item.name}${item.variant ? ` (${item.variant})` : ""}</td>
-      <td class="right">${formatCurrency(itemTotal)}</td>
-    </tr>`;
-
-    if (item.toppings && item.toppings.length > 0) {
-      for (const t of item.toppings) {
-        if (t.quantity <= 0) continue;
-        const tTotal = t.quantity * item.quantity * t.price;
-        html += `<tr><td style="padding-left:12px;font-size:11px;color:#555">+ ${t.name} x${formatNumber(t.quantity)}</td>
-          <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
-      }
-    }
-    // CEO 01/06/2026 — Sprint 2.4b: in modifier choices lên phiếu bếp
-    if (item.modifierLabels && item.modifierLabels.length > 0) {
-      const label = item.modifierLabels.join(" • ");
-      html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;color:#1976d2">▸ ${label}</td></tr>`;
-    }
-    const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
-    if (freeTextNote) {
-      html += `<tr><td colspan="2" style="padding-left:12px;font-size:11px;font-style:italic;color:#888">* ${freeTextNote}</td></tr>`;
-    }
-    return html;
-  }).join("");
-
-  // Migration 00070: platform order → tách "Khách trả app" vs "Quán thực thu"
-  const isPlatformOrder =
-    data.orderType === "delivery" &&
-    !!data.deliveryPlatform &&
-    data.deliveryPlatform !== "direct" &&
-    (data.platformCommissionPercent ?? 0) > 0;
-  const commissionAmount = isPlatformOrder ? (data.platformCommissionAmount ?? 0) : 0;
-  const grossTotal = data.total + commissionAmount; // gross = net + commission
-  const platformLabel = ({
-    shopee_food: "Shopee Food",
-    grab_food: "Grab Food",
-    gojek: "Gojek",
-    be: "Be",
-    other: "Sàn khác",
-  } as Record<string, string>)[data.deliveryPlatform ?? ""] ?? "Sàn";
-
-  const totalsHtml = isPlatformOrder
-    ? `<tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>
-       ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
-       ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
-       <tr><td>Khách trả qua ${platformLabel}</td><td class="right" style="text-decoration:line-through;color:#888">${formatCurrency(grossTotal)}</td></tr>
-       <tr><td>Phí sàn (${data.platformCommissionPercent}%)</td><td class="right">-${formatCurrency(commissionAmount)}</td></tr>
-       <tr class="bold"><td style="font-size:16px;padding-top:4px">QUÁN THỰC THU</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>`
-    : `<tr><td>Tạm tính</td><td class="right">${formatCurrency(data.subtotal)}</td></tr>
-       ${data.discountAmount > 0 ? `<tr><td>Giảm giá</td><td class="right">-${formatCurrency(data.discountAmount)}</td></tr>` : ""}
-       ${data.deliveryFee > 0 ? `<tr><td>Phí giao hàng</td><td class="right">${formatCurrency(data.deliveryFee)}</td></tr>` : ""}
-       <tr class="bold"><td style="font-size:16px;padding-top:4px">TỔNG CỘNG</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>`;
-
-  const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Tạm tính ${data.orderNumber}</title>
-<style>${baseStyles(width, pageSize)}
-.title{font-size:20px;font-weight:bold;letter-spacing:1px}
-.order-info{font-size:14px;margin:4px 0}
-</style></head><body>
-
-${data.storeName ? `<div class="center bold" style="font-size:14px">${data.storeName}</div>` : ""}
-${data.storeAddress ? `<div class="center" style="font-size:10px;color:#666">${data.storeAddress}</div>` : ""}
-${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: ${data.storePhone}</div>` : ""}
-
-<div class="center" style="margin-top:6px">
-  <div class="title">PHIẾU TẠM TÍNH</div>
-  <div class="order-info">${data.orderNumber} — ${tableLabel}</div>
-  <div style="font-size:11px;color:#888">${typeLabel}${isPlatformOrder ? ` • ${platformLabel}` : ""} • ${formatTime(data.createdAt)} ${formatDate(data.createdAt)}</div>
-</div>
-
-<div class="line"></div>
-
-<table>${itemsHtml}</table>
-
-<div class="line"></div>
-
-<table>${totalsHtml}</table>
-
-<div class="line"></div>
-
-<div class="center" style="font-size:12px;font-style:italic;margin:6px 0">
-  ${isPlatformOrder ? "Đơn sàn — số trên là số quán thực thu (đã trừ phí sàn)." : "Đây là phiếu tạm tính, chưa phải hoá đơn thanh toán"}
-</div>
-
-${data.cashierName ? `<div class="center" style="font-size:10px;color:#888">Thu ngân: ${data.cashierName}</div>` : ""}
-${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
-
-</body></html>`;
-
-  return html;
+  return buildFnbReceiptHtml({...data, invoiceCode: data.orderNumber, paymentMethod: "transfer", paid: 0, change: 0, billPhase: "prebill"});
 }
 
 export function printPreBill(data: PreBillData): void {
   data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
-  void sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Tạm tính ${data.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildPreBillHtml({...data,paperSize})});
+  void (async () => {
+    const { printFnbBillWithTemplate } = await import("./print-fnb-template");
+    const printed = await printFnbBillWithTemplate({
+      ...data, branchId: data.branchId, invoiceCode: data.orderNumber,
+      tableName: data.tableName ?? data.orderNumber, tipAmount: data.tipAmount ?? 0,
+      paid: 0, billPhase: "prebill",
+    });
+    if (!printed) await sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Tạm tính ${data.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildPreBillHtml({...data,paperSize})});
+  })();
 }
 
 // ============================================================
@@ -307,6 +226,8 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   const typeLabel = ORDER_TYPE_VN[data.orderType] ?? data.orderType;
   const tableLabel = data.tableName ?? typeLabel;
   const style = data.receiptStyle ?? "standard";
+  const isPreBill = data.billPhase === "prebill";
+  const billTitle = isPreBill ? "PHIẾU TẠM TÍNH" : "HOÁ ĐƠN THANH TOÁN";
   const paymentLabel = PAYMENT_METHOD_VN[data.paymentMethod] ?? data.paymentMethod;
 
   // Migration 00070: platform order → tách "Khách trả app" vs "Quán thực thu"
@@ -363,7 +284,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   // (VietQR.io CDN). Khi POS in qua nhiệt 58/80mm, browser sẽ tự fetch
   // image embed vào bill. Offline: image broken → fallback text dưới.
   let qrHtml = "";
-  if (data.showQr && data.bankInfo && data.paymentMethod !== "cash") {
+  if (data.showQr && data.bankInfo) {
     const info = data.bankInfo;
     if (info.vietQrEnabled && info.bankBin && info.bankAccount) {
       // Build VietQR URL inline (không import vietqr.ts để tránh circular dep)
@@ -407,7 +328,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   }
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>Hoá đơn ${data.invoiceCode}</title>
+<html><head><meta charset="utf-8"><title>${billTitle} ${data.invoiceCode}</title>
 <style>${baseStyles(width, pageSize)}
 .title{font-size:20px;font-weight:bold;letter-spacing:1px}
 .invoice-code{font-size:14px;margin:2px 0}
@@ -419,7 +340,7 @@ ${data.storeAddress ? `<div class="center" style="font-size:10px;color:#666">${d
 ${data.storePhone ? `<div class="center" style="font-size:10px;color:#666">ĐT: ${data.storePhone}</div>` : ""}
 
 <div class="center" style="margin-top:6px">
-  <div class="title">HOÁ ĐƠN THANH TOÁN</div>
+  <div class="title">${billTitle}</div>
   <div class="invoice-code">${data.invoiceCode}</div>
   <div style="font-size:11px;color:#888">${data.orderNumber} — ${tableLabel} — ${typeLabel}</div>
   <div style="font-size:11px;color:#888">${formatTime(data.createdAt)} ${formatDate(data.createdAt)}</div>
@@ -440,13 +361,14 @@ ${itemsHtml ? `<table>${itemsHtml}</table><div class="line"></div>` : ""}
   <tr class="bold"><td style="font-size:16px;padding-top:4px">${isPlatformOrder ? "QUÁN THỰC THU" : "TỔNG CỘNG"}</td><td class="right" style="font-size:16px;padding-top:4px">${formatCurrency(data.total)}</td></tr>
 </table>
 
-<div class="line-thin"></div>
+${!isPreBill ? `<div data-fnb-payment><div class="line-thin"></div>
 
 <table>
   <tr><td>Thanh toán</td><td class="right bold">${isPlatformOrder ? "Chuyển khoản (sàn)" : paymentLabel}</td></tr>
   ${isPlatformOrder ? `<tr><td colspan="2" style="font-style:italic;color:#666;font-size:11px">Khách đã thanh toán qua app — sàn chuyển khoản về quán sau khi đối soát.</td></tr>` : `<tr><td>Tiền khách đưa</td><td class="right">${formatCurrency(data.paid)}</td></tr>`}
   ${!isPlatformOrder && data.change > 0 ? `<tr class="bold"><td>Tiền thừa</td><td class="right">${formatCurrency(data.change)}</td></tr>` : ""}
 </table>
+</div>` : ""}
 
 ${qrHtml}
 
