@@ -33,6 +33,7 @@ import {
   formatChartCurrency,
   formatChartTooltipCurrency,
   formatNumber,
+  formatStockQuantity,
 } from "@/lib/format";
 import {
   getInventoryKpis,
@@ -118,7 +119,7 @@ function StockMovementTooltip({
           className="text-sm font-bold"
           style={{ color: p.color }}
         >
-          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {formatNumber(p.value)} {p.payload?.unit || "(chưa có ĐVT)"}
+          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {formatStockQuantity(p.value)} {p.payload?.unit || "(chưa có ĐVT)"}
         </p>
       ))}
     </div>
@@ -804,7 +805,28 @@ export default function HangHoaPage() {
               <ReportTableFrame tablePreferenceKey="report.products.categories"><div className="max-h-80 overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Nhóm hàng</th><th className="py-2 text-right font-medium">Số mặt hàng</th></tr></thead><tbody>{categories.map((category) => <tr key={category.name} className="border-b last:border-0"><td className="py-2">{category.name}</td><td className="py-2 text-right tabular-nums">{formatNumber(category.value)}</td></tr>)}</tbody></table></div></ReportTableFrame>
             </ChartCard>
             <ChartCard title="Nhập, xuất kho theo ngày" subtitle={selectedPeriodLabel}>
-              <ReportTableFrame tablePreferenceKey="report.products.movements"><div className="max-h-80 overflow-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Ngày</th><th className="py-2 text-left font-medium">Mã hàng</th><th className="py-2 text-left font-medium">Mặt hàng</th><th className="py-2 text-left font-medium">ĐVT</th><th className="py-2 text-right font-medium">Nhập</th><th className="py-2 text-right font-medium">Xuất</th></tr></thead><tbody>{movements.map((movement) => <tr key={`${movement.date}-${movement.productId}-${movement.unit}`} className="border-b last:border-0"><td className="py-2 pr-3">{movement.day}</td><td className="py-2 pr-3">{movement.code || "—"}</td><td className="py-2 pr-3">{movement.name}</td><td className="py-2 pr-3">{movement.unit || "Chưa có ĐVT"}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.nhap)}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.xuat)}</td></tr>)}</tbody></table></div></ReportTableFrame>
+              <ReportTableFrame tablePreferenceKey="report.products.movements">
+                <div className="max-h-80 overflow-auto">
+                  {movements.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">Không có nhập, xuất kho trong kỳ</p> : <table className="w-full min-w-[640px] text-sm">
+                    <thead><tr className="border-b">
+                      <th className="py-2 text-left font-medium">Ngày</th>
+                      <th className="py-2 text-left font-medium">Mã hàng</th>
+                      <th className="py-2 text-left font-medium">Mặt hàng</th>
+                      <th className="py-2 text-left font-medium">ĐVT</th>
+                      <th className="py-2 text-right font-medium">Nhập</th>
+                      <th className="py-2 text-right font-medium">Xuất</th>
+                    </tr></thead>
+                    <tbody>{movements.map((movement) => <tr key={`${movement.date}-${movement.productId}-${movement.unit}`} className="border-b last:border-0">
+                      <td className="py-2 pr-3">{movement.day}</td>
+                      <td className="py-2 pr-3">{movement.code || "—"}</td>
+                      <td className="py-2 pr-3">{movement.name}</td>
+                      <td className="py-2 pr-3">{movement.unit || "Chưa có ĐVT"}</td>
+                      <td className="py-2 text-right tabular-nums">{formatStockQuantity(movement.nhap)}</td>
+                      <td className="py-2 text-right tabular-nums">{formatStockQuantity(movement.xuat)}</td>
+                    </tr>)}</tbody>
+                  </table>}
+                </div>
+              </ReportTableFrame>
             </ChartCard>
           </div>
         </div>}
