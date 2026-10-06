@@ -46,3 +46,14 @@ it("supports keyboard selection and shows optional lot fields with visible label
  expect(screen.getByRole("button",{name:"Xem trước tồn"}).getAttribute("form")).toBe("opening-manual-form");
  expect(mocks.preview).not.toHaveBeenCalled();
 });
+it("filters unfinished rows but restores the full draft when review finds missing data",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);await add();
+ fireEvent.change(screen.getByLabelText("Số lượng (G)"),{target:{value:"2"}});fireEvent.change(screen.getByLabelText("Giá vốn / G"),{target:{value:"250"}});
+ mocks.search.mockResolvedValue([{id:"p2",code:"SUA",name:"Sữa",unit:"G"}]);
+ fireEvent.change(screen.getByLabelText("Thêm hàng"),{target:{value:"SUA"}});fireEvent.click(await screen.findByRole("option",{name:/SUA.*Sữa/}));
+ fireEvent.click(screen.getByRole("button",{name:"Chưa đủ thông tin (1)"}));
+ expect(screen.queryByText("Trà")).toBeNull();expect(screen.getByText("Sữa")).toBeTruthy();
+ fireEvent.click(screen.getByRole("button",{name:"Xem trước tồn"}));
+ expect(await screen.findByRole("alert")).toHaveTextContent("SUA: nhập đủ");expect(screen.getByText("Trà")).toBeTruthy();
+ expect(screen.getByText("Còn thiếu số lượng và giá vốn.")).toBeTruthy();expect(mocks.preview).not.toHaveBeenCalled();expect(mocks.commit).not.toHaveBeenCalled();
+});
