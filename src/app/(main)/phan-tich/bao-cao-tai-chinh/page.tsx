@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { cogsReportRows, type CogsSort, type SortDirection } from "@/lib/reports/management-table-view";
 import Link from "next/link";
 import {
   LineChart,
@@ -182,6 +183,15 @@ export default function BaoCaoTaiChinhPage() {
   } | null>(null);
   const [branchPnL, setBranchPnL] = useState<BranchPnLRow[]>([]);
   const [cogsItems, setCogsItems] = useState<COGSItem[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [cogsSearch, setCogsSearch] = useState("");
+  const [cogsCompleteness, setCogsCompleteness] = useState<"all" | "complete" | "missing">("all");
+  const [cogsSort, setCogsSort] = useState<CogsSort>("totalCost");
+  const [cogsDirection, setCogsDirection] = useState<SortDirection>("desc");
+  const [cogsPage, setCogsPage] = useState(0);
+  const visibleCogs = useMemo(() => cogsReportRows(cogsItems, cogsSearch, cogsCompleteness, cogsSort, cogsDirection), [cogsItems, cogsSearch, cogsCompleteness, cogsSort, cogsDirection]);
+  const cogsPageCount = Math.max(1, Math.ceil(visibleCogs.length / 50));
+  const currentCogsPage = Math.min(cogsPage, cogsPageCount - 1);
   const [cogsTotalCount, setCogsTotalCount] = useState(0);
   const [loadingMoreCogs, setLoadingMoreCogs] = useState(false);
   const requestIdRef = useRef(0);
@@ -200,6 +210,7 @@ export default function BaoCaoTaiChinhPage() {
     setLoadingMoreCogs(false);
     try {
       setLoading(true);
+      setLoadError(null);
       const bid = activeBranchId;
       // Ở chế độ "Tất cả" mới load 2 report nội bộ; khi chọn 1 branch cụ thể
       // các số liệu consolidated/so sánh branch không có ý nghĩa → skip.
@@ -211,7 +222,7 @@ export default function BaoCaoTaiChinhPage() {
             bid,
             range,
             fetchConsolidated && ceoView,
-            10,
+            50_000,
           ),
           fetchConsolidated
             ? getConsolidatedPnL(range)
@@ -234,6 +245,10 @@ export default function BaoCaoTaiChinhPage() {
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch P&L data:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo kết quả kinh doanh.");
+      setPnl(null);
+      setConsolidated(null);
+      setCogsItems([]);
       toast({
         title: "Lỗi tải báo cáo kết quả vận hành",
         description: err instanceof Error ? err.message : "Vui lòng thử lại",
@@ -346,6 +361,14 @@ export default function BaoCaoTaiChinhPage() {
           titleRows,
         ));
       }
+      viewSheets.push({ name: "Giá vốn đã lọc", columns: [
+        { label: "Mặt hàng", key: "productName", width: 36 },
+        { label: "SL bán ròng", key: "qtySold", width: 18, format: "number" },
+        { label: "Giá vốn bình quân", key: "costPrice", width: 20, format: "currency" },
+        { label: "Tổng giá vốn", key: "totalCost", width: 22, format: "currency" },
+        { label: "Tỷ trọng", key: "pctOfCogs", width: 16, format: "percent" },
+        { label: "Dòng thiếu căn cứ", key: "missingCostLines", width: 20, format: "number" },
+      ], rows: visibleCogs.map(row => ({ ...row, costPrice: row.costComplete ? row.costPrice : null, totalCost: row.costComplete ? row.totalCost : null, pctOfCogs: row.costComplete ? row.pctOfCogs : null })) });
       await exportReportToExcel({
         kind: "bao-cao-tai-chinh",
         mode: "view",
@@ -386,7 +409,7 @@ export default function BaoCaoTaiChinhPage() {
       if (exportDetails.cogsItems.length < exportDetails.cogsTotalCount) {
         throw new Error("Chưa tải đủ toàn bộ sản phẩm để xuất file.");
       }
-      const exportCogsItems = exportDetails.cogsItems;
+      const exportCogsItems = cogsReportRows(exportDetails.cogsItems, cogsSearch, cogsCompleteness, cogsSort, cogsDirection);
       const exportMarginTrend = exportDetails.marginTrend;
       const exportTurnover = exportDetails.turnover;
       const exportDso = exportDetails.dso;
@@ -583,6 +606,8 @@ export default function BaoCaoTaiChinhPage() {
       </div>
     );
   }
+
+  if (loadError) return <div role="alert" className="p-6 text-sm text-destructive">{loadError}<button type="button" className="ml-3 underline" onClick={fetchData}>Thử lại</button></div>;
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
@@ -1425,8 +1450,14 @@ export default function BaoCaoTaiChinhPage() {
         {cogsItems.length > 0 && (
           <ChartCard
             title="Chi tiết giá vốn theo sản phẩm"
-            subtitle={`${selectedPeriodLabel} · ${formatNumber(cogsItems.length)}/${formatNumber(cogsTotalCount)} mặt hàng`}
+            subtitle={`${selectedPeriodLabel} · ${formatNumber(visibleCogs.length)} kết quả lọc / ${formatNumber(cogsTotalCount)} mặt hàng`}
           >
+            <div className="mb-3 flex flex-wrap gap-2">
+              <input aria-label="Tìm mặt hàng giá vốn" placeholder="Tên mặt hàng" className="h-10 min-w-48 flex-1 rounded border bg-background px-3 text-sm" value={cogsSearch} onChange={event => { setCogsSearch(event.target.value); setCogsPage(0); }} />
+              <select aria-label="Tình trạng giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsCompleteness} onChange={event => { setCogsCompleteness(event.target.value as typeof cogsCompleteness); setCogsPage(0); }}><option value="all">Tất cả giá vốn</option><option value="complete">Đủ căn cứ</option><option value="missing">Thiếu căn cứ</option></select>
+              <select aria-label="Sắp xếp giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsSort} onChange={event => { setCogsSort(event.target.value as CogsSort); setCogsPage(0); }}>{Object.entries({ productName: "Tên mặt hàng", qtySold: "SL bán ròng", costPrice: "Giá vốn bình quân", totalCost: "Tổng giá vốn", pctOfCogs: "Tỷ trọng", missingCostLines: "Dòng thiếu giá" }).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+              <select aria-label="Chiều sắp xếp giá vốn" className="h-10 rounded border bg-background px-3 text-sm" value={cogsDirection} onChange={event => { setCogsDirection(event.target.value as SortDirection); setCogsPage(0); }}><option value="desc">Giảm dần</option><option value="asc">Tăng dần</option></select>
+            </div>
             <ReportTableFrame tablePreferenceKey="report.financial-results.materials">
               <div className="overflow-x-auto">
               <table className="w-full text-sm">
@@ -1451,13 +1482,13 @@ export default function BaoCaoTaiChinhPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {cogsItems.map((item, i) => (
+                  {visibleCogs.slice(currentCogsPage * 50, (currentCogsPage + 1) * 50).map((item, i) => (
                     <tr
                       key={item.productName}
                       className="border-b last:border-0"
                     >
                       <td className="py-3 pr-4 text-muted-foreground">
-                        {i + 1}
+                        {currentCogsPage * 50 + i + 1}
                       </td>
                       <td className="py-3 pr-4 font-medium">
                         {item.productName}
@@ -1481,6 +1512,7 @@ export default function BaoCaoTaiChinhPage() {
                     </tr>
                   ))}
                 </tbody>
+                <tfoot><tr className="border-t-2 bg-muted/40 font-semibold"><td colSpan={4} className="py-3">Tổng giá vốn của {visibleCogs.length} kết quả lọc</td><td className="py-3 text-right tabular-nums">{visibleCogs.every(row => row.costComplete) ? formatCurrency(visibleCogs.reduce((sum, row) => sum + row.totalCost, 0)) : "Chưa đủ dữ liệu"}</td><td /></tr></tfoot>
               </table>
               {cogsItems.length < cogsTotalCount && (
                 <div className="border-t border-border py-3 text-center">
@@ -1497,6 +1529,7 @@ export default function BaoCaoTaiChinhPage() {
               )}
               </div>
             </ReportTableFrame>
+            {cogsPageCount > 1 && <div className="mt-3 flex items-center justify-end gap-3 text-sm"><button type="button" disabled={currentCogsPage === 0} className="disabled:opacity-40" onClick={() => setCogsPage(currentCogsPage - 1)}>Trước</button><span>{currentCogsPage + 1}/{cogsPageCount}</span><button type="button" disabled={currentCogsPage + 1 === cogsPageCount} className="disabled:opacity-40" onClick={() => setCogsPage(currentCogsPage + 1)}>Sau</button></div>}
           </ChartCard>
         )}
       </div>

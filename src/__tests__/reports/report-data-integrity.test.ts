@@ -6,13 +6,21 @@ describe("report data integrity", () => {
     const fixedViews = [
       "abc-analysis", "kiem-ke", "khuyen-mai", "kenh-ban", "fnb-shipper",
       "tai-chinh", "dat-hang", "customer-cohort", "lot-traceability",
-      "xuat-nhap-ton", "khach-hang",
+      "xuat-nhap-ton",
     ];
     for (const route of fixedViews) {
       const page = readFileSync(`src/app/(main)/phan-tich/${route}/page.tsx`, "utf8");
       expect(page, route).not.toContain("onViewModeChange={setViewMode}");
       if (route === "kenh-ban") expect(page).not.toContain("Historical trend placeholder");
     }
+  });
+  it("customer report defaults to tables and only shows supplemental charts when requested", () => {
+    const page = readFileSync("src/app/(main)/phan-tich/khach-hang/page.tsx", "utf8");
+    expect(page).toContain('defaultViewMode: "table"');
+    expect(page).toContain('viewMode !== "table"');
+    expect(page).toContain("onViewModeChange={setViewMode}");
+    expect(page).toContain("getTopCustomersByRevenue(null, activeBranchId, range)");
+    expect(page).toContain("visibleCustomers.map");
   });
 
   const analytics = readFileSync("src/lib/services/supabase/analytics.ts", "utf8");
