@@ -46,6 +46,8 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
+  ["get_cash_performers", "00435"],
+  ["record_cash_transaction_context", "00435"],
   ["record_cash_transaction_timed", "00428"],
   ["fnb_complete_payment_timed_v1", "00429"],
   ["save_fnb_modifier_links_atomic", "00426"],
@@ -58,6 +60,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["cash_transactions.performed_by", "00435"],
+  ["cash_transactions.performed_by_name", "00435"],
   ["cash_transactions.occurred_at", "00428"],
   ["cash_transactions.time_source", "00428"],
   ["cash_transactions.time_reason", "00428"],
