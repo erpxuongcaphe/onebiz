@@ -15,7 +15,7 @@ create function public.user_has_branch_access(p_actor uuid,p_branch uuid) return
 insert into tenants values('10000000-0000-0000-0000-000000000001');
 insert into branches values('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',true);
 insert into profiles values('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Nhân viên',true);
-\ir ../migrations/20261006110000_fnb_branch_print_queue.sql
+\ir ../migrations/00433_fnb_branch_print_queue.sql
 select set_config('test.actor','30000000-0000-0000-0000-000000000001',false);
 select set_config('test.branch','20000000-0000-0000-0000-000000000001',false);
 select set_config('test.permission','manager',false);

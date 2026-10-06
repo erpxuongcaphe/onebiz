@@ -12,6 +12,7 @@ export function FnbBranchPrintControl({ branchId }: { branchId?: string }) {
   const { settings, updateSettings } = useSettings();
   const [open, setOpen] = useState(false), [point, setPoint] = useState<PrintPoint | null>(null), [jobs, setJobs] = useState<BranchPrintJob[]>([]), [error, setError] = useState("");
   const active = settings.print.backend === "branch-queue";
+  const [checkedAt, setCheckedAt] = useState(0);
   const { toast } = useToast();
   useEffect(() => {
     const handler = (event: Event) => {
@@ -25,7 +26,7 @@ export function FnbBranchPrintControl({ branchId }: { branchId?: string }) {
     if (!open || !branchId) return;
     let disposed = false;
     const load = async () => {
-      try { const state = await getBranchPrintState(branchId); if (!disposed) { setPoint(state.point); setJobs(state.jobs); setError(""); } }
+      try { const state = await getBranchPrintState(branchId); if (!disposed) { setPoint(state.point); setJobs(state.jobs); setCheckedAt(Date.now()); setError(""); } }
       catch (e) { if (!disposed) setError(e instanceof Error ? e.message : "Không tải được tuyến in."); }
     };
     void load(); const timer = setInterval(load, 10000);
@@ -37,7 +38,7 @@ export function FnbBranchPrintControl({ branchId }: { branchId?: string }) {
   </div><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto"><DialogHeader><DialogTitle className="text-primary">In phiếu tại chi nhánh</DialogTitle></DialogHeader>
     <p className="text-sm">Dùng tài khoản của bạn để gửi bill và phiếu bếp tới máy đã được quản lý gán. Không cần kết nối máy in vào điện thoại.</p>
     {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
-    <p className="text-sm font-semibold">{point?.enabled ? `${point.name} · ${point.last_seen_at && Date.now()-new Date(point.last_seen_at).getTime()<20000 ? "Vừa kết nối" : "Chưa có kết nối gần đây; phiếu sẽ chờ"}` : "Chi nhánh chưa bật điểm in; nhờ quản lý thiết lập."}</p>
+    <p className="text-sm font-semibold">{point?.enabled ? `${point.name} · ${point.last_seen_at && checkedAt-new Date(point.last_seen_at).getTime()<20000 ? "Vừa kết nối" : "Chưa có kết nối gần đây; phiếu sẽ chờ"}` : "Chi nhánh chưa bật điểm in; nhờ quản lý thiết lập."}</p>
     <div className="flex flex-wrap gap-2"><Button className="min-h-11" disabled={!point?.enabled || !!error || !branchId} onClick={() => { updateSettings("print", { backend: "branch-queue" }); setOpen(false); }}>Dùng điểm in chi nhánh</Button><Button className="min-h-11" variant="outline" onClick={() => { updateSettings("print", { backend: "browser" }); setOpen(false); }}>In thủ công trên thiết bị</Button></div>
     {point?.routes.map(route => <p key={route.key} className="border-b py-1 text-sm"><strong>{route.label}</strong> → {route.printer} · {route.paper === "58mm" ? "58" : "80"} mm</p>)}
     <p className="text-sm text-muted-foreground">“Windows đã nhận” chưa xác nhận giấy đã ra. Phiếu cần kiểm tra giấy phải báo quản lý, tránh gửi lại nhiều lần.</p>
