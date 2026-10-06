@@ -905,6 +905,13 @@ function FnbPosPageInner() {
     [pos.total, pos.orderDiscountAmount, pos.activeTab?.persistedOrderDiscountAmount, appliedPromotion?.discountAmount, couponApplied?.discount],
   );
 
+  const activeDeliveryFee = pos.activeTab?.deliveryFee ?? 0;
+  const activeCommissionPercent = pos.activeTab?.orderType === "delivery" &&
+    pos.activeTab.deliveryPlatform && pos.activeTab.deliveryPlatform !== "direct"
+    ? pos.activeTab.platformCommissionPercent ?? 0 : 0;
+  const activeGrossBeforeTip = fnbBenefitDisplay.total + activeDeliveryFee;
+  const activeSettlement = previewFnbSettlement(activeGrossBeforeTip, 0, activeCommissionPercent);
+
   useEffect(() => {
     const promotionTabId = pos.activeTabId;
     if (!branchId || !promotionTabId) return;
@@ -3592,7 +3599,7 @@ function FnbPosPageInner() {
         {!showFloorPlan && <FnbCart
           activeTab={pos.activeTab}
           subtotal={pos.subtotal}
-          total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
+          total={activeGrossBeforeTip}
           orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
           persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
           manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
@@ -3688,9 +3695,9 @@ function FnbPosPageInner() {
             persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
             promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
             couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
-            total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
-            deliveryFee={pos.activeTab?.deliveryFee ?? 0}
-            commissionPercent={pos.activeTab?.orderType === "delivery" && pos.activeTab.deliveryPlatform && pos.activeTab.deliveryPlatform !== "direct" ? pos.activeTab.platformCommissionPercent ?? 0 : 0}
+            total={activeGrossBeforeTip}
+            deliveryFee={activeDeliveryFee}
+            commissionPercent={activeCommissionPercent}
             lineCount={pos.lineCount}
             orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
             initialCustomerName={pos.activeTab?.customerName}
@@ -3805,7 +3812,7 @@ function FnbPosPageInner() {
             <FnbCart
               activeTab={pos.activeTab}
               subtotal={pos.subtotal}
-              total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
+              total={activeGrossBeforeTip}
               orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
               persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
               manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
@@ -3868,7 +3875,7 @@ function FnbPosPageInner() {
           type="button"
           onClick={() => setMobileCartOpen(true)}
           className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 flex items-center justify-between gap-3 rounded-2xl border border-primary/20 bg-surface-container-lowest/95 px-3 py-2.5 text-left ambient-shadow-floating backdrop-blur-md transition-colors hover:bg-surface-container-lowest xl:hidden"
-          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, tổng ${formatCurrency(fnbBenefitDisplay.total)}đ`}
+          aria-label={`Mở giỏ hàng tab ${pos.activeTab?.label}, ${pos.lineCount} món, ${activeCommissionPercent > 0 ? "quán thực thu" : "tổng"} ${formatCurrency(activeSettlement.net)}đ`}
         >
           <span className="flex min-w-0 items-center gap-2">
             <span className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-on-primary">
@@ -3888,7 +3895,7 @@ function FnbPosPageInner() {
           </span>
           <span className="shrink-0 text-right">
             <span className="block text-base font-black text-primary tabular-nums leading-none">
-              {formatCurrency(fnbBenefitDisplay.total)}đ
+              {formatCurrency(activeSettlement.net)}đ
             </span>
             <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-primary-fixed px-2 py-0.5 text-xs font-semibold text-primary">
               Mở giỏ
