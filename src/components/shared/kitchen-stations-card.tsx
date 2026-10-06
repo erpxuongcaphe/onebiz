@@ -530,7 +530,7 @@ function StationDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="flex max-w-lg max-h-[90dvh] flex-col overflow-hidden">
+      <DialogContent className="flex sm:max-w-lg max-h-[90dvh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {mode === "create" ? "Thêm trạm chế biến" : `Sửa: ${station?.name}`}

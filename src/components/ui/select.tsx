@@ -6,7 +6,26 @@ import { Select as SelectPrimitive } from "@base-ui/react/select"
 import { cn } from "@/lib/utils"
 import { Icon } from "@/components/ui/icon";
 
-const Select = SelectPrimitive.Root
+function Select<Value, Multiple extends boolean | undefined = false>({
+  children,
+  items,
+  ...props
+}: SelectPrimitive.Root.Props<Value, Multiple>) {
+  // Popup items are unmounted while closed. Supply their labels to Base UI
+  // before the first open so the trigger never falls back to a technical id.
+  const childItems = React.useMemo(() => {
+    const labels = new Map<Value, React.ReactNode>()
+    const visit = (nodes: React.ReactNode) => React.Children.forEach(nodes, node => {
+      if (!React.isValidElement(node)) return
+      const child = node as React.ReactElement<{ value: Value; children?: React.ReactNode }>
+      if (child.type === SelectItem) labels.set(child.props.value, child.props.children)
+      else if (child.type !== Select) visit(child.props.children)
+    })
+    if (items === undefined) visit(children)
+    return Array.from(labels, ([value, label]) => ({ value, label }))
+  }, [children, items])
+  return <SelectPrimitive.Root {...props} items={items ?? (childItems.length ? childItems : undefined)}>{children}</SelectPrimitive.Root>
+}
 
 function SelectGroup({ className, ...props }: SelectPrimitive.Group.Props) {
   return (
