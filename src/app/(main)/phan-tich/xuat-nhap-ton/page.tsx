@@ -121,8 +121,14 @@ export default function XuatNhapTonPage() {
   );
   const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
   const quantityTotals = useMemo(() => sumXntQuantities(visibleRows), [visibleRows]);
-  const categories = useMemo(() => [...new Set((data?.rows ?? []).map((row) => row.categoryName ?? ""))].sort((a, b) => a.localeCompare(b, "vi")), [data?.rows]);
-  const units = useMemo(() => [...new Set((data?.rows ?? []).map((row) => row.unit))].sort((a, b) => a.localeCompare(b, "vi")), [data?.rows]);
+  const categories = useMemo(() => [...new Set([
+    ...(data?.rows ?? []).map((row) => row.categoryName ?? ""),
+    ...(categoryFilter === undefined ? [] : [categoryFilter]),
+  ])].sort((a, b) => a.localeCompare(b, "vi")), [data?.rows, categoryFilter]);
+  const units = useMemo(() => [...new Set([
+    ...(data?.rows ?? []).map((row) => row.unit),
+    ...(unitFilter === undefined ? [] : [unitFilter]),
+  ])].sort((a, b) => a.localeCompare(b, "vi")), [data?.rows, unitFilter]);
   const formatQuantityTotal = (value: number | null) => value === null ? "Nhiều ĐVT" : formatNumber(value);
   const incompleteVisibleCount = visibleSubtotal.incompleteValuationCount;
 
