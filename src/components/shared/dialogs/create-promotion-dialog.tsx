@@ -320,13 +320,13 @@ export function CreatePromotionDialog({
           </div>
 
           {/* Type + Channel — same row */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Loại khuyến mãi <span className="text-destructive">*</span>
               </label>
               <Select value={type} onValueChange={(v) => setType(v as Promotion["type"])}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Loại khuyến mãi" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -342,7 +342,7 @@ export function CreatePromotionDialog({
                 Kênh áp dụng <span className="text-destructive">*</span>
               </label>
               <Select value={channel} onValueChange={(v) => setChannel(v as PromotionChannel)}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger aria-label="Kênh áp dụng" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
