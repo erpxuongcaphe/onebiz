@@ -30,6 +30,7 @@ export interface SalesReturnRow {
   createdByName: string | null;
   productId: string;
   productName: string;
+  unit?: string;
   quantity: number;
   unitPrice: number;
   returnValue: number;
@@ -96,6 +97,7 @@ export async function getSalesReturnReport(params?: {
       createdByName: r.created_by_name,
       productId: r.product_id,
       productName: r.product_name,
+      unit: r.unit ?? undefined,
       quantity: Number(r.quantity ?? 0),
       unitPrice: Number(r.unit_price ?? 0),
       returnValue: Number(r.return_value ?? 0),

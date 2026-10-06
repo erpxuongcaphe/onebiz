@@ -13,6 +13,7 @@ import { toCreatedAtRangeWindow } from "@/lib/utils/list-date-preset-range";
 import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
 import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/channel-report";
+import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregation";
 
 // === Shared Types ===
 
@@ -48,6 +49,9 @@ export interface TopProductRevenue {
   productId: string;
   name: string;
   code?: string;
+  unit?: string;
+  category?: string;
+  discountAmount?: number;
   qty: number;
   revenue: number;
 }
@@ -1426,11 +1430,12 @@ export async function getTopProductsByRevenue(
   while (true) {
     let query = supabase
       .from("invoice_items")
-      .select("product_id, product_name, quantity, total, products!invoice_items_product_id_fkey(code), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
+      .select("id, invoice_id, product_id, product_name, unit, quantity, total, discount, products!invoice_items_product_id_fkey(code, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id, discount_amount)")
       .eq("invoices.tenant_id", tenantId)
       .gte("invoices.ngay_chung_tu", resolved.start)
       .lt("invoices.ngay_chung_tu", resolved.end)
       .eq("invoices.status", "completed")
+      .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1);
     if (branchId) query = query.eq("invoices.branch_id", branchId);
 
@@ -1442,22 +1447,17 @@ export async function getTopProductsByRevenue(
     offset += page.length;
   }
 
-  const totals = new Map<string, TopProductRevenue>();
-  for (const item of rows) {
-    const name = String(item.product_name ?? "");
-    const productId = String(item.product_id ?? "");
-    const product = item.products as { code?: string } | null;
-    // One SKU can have separate F&B size lines with different prices.
-    const key = productId ? `${productId}:${name}` : name;
-    const current = totals.get(key) ?? { productId, name, code: product?.code, qty: 0, revenue: 0 };
-    current.qty += Number(item.quantity ?? 0);
-    current.revenue += Number(item.total ?? 0);
-    totals.set(key, current);
-  }
-
-  return Array.from(totals.values())
-    .sort((a, b) => b.revenue - a.revenue)
-    .slice(0, limit > 0 ? limit : undefined);
+  return aggregateProductSaleLines(rows.map((item) => {
+    const product = item.products as { code?: string; categories?: { name?: string } | null } | null;
+    const invoice = item.invoices as { discount_amount?: number } | null;
+    return {
+      id: String(item.id), invoiceId: String(item.invoice_id), productId: String(item.product_id ?? ""),
+      name: String(item.product_name ?? ""), code: product?.code, unit: String(item.unit ?? ""),
+      category: product?.categories?.name,
+      quantity: Number(item.quantity ?? 0), total: Number(item.total ?? 0),
+      lineDiscount: Number(item.discount ?? 0), invoiceDiscount: Number(invoice?.discount_amount ?? 0),
+    };
+  })).slice(0, limit > 0 ? limit : undefined);
 }
 
 /**
