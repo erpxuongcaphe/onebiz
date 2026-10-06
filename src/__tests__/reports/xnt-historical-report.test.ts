@@ -104,7 +104,7 @@ describe("historical XNT report", () => {
     expect(page.match(/outInternal: r\.outInternal/g)).toHaveLength(2);
     expect(page).toContain('label: "Xuất nội bộ"');
     expect(page).toContain("Giá trị được tính từ giá vốn chốt tại từng phát sinh kho");
-    expect(page).toContain("tổng giá trị được để trống để tránh cộng sai");
+    expect(page).toContain("giá trị từng cột thiếu dữ liệu được để trống để tránh cộng sai");
   });
 
   it("does not turn incomplete legacy valuation into a plausible zero", async () => {
@@ -134,5 +134,16 @@ describe("historical XNT report", () => {
     expect(result.rows[0].valuationComplete).toBe(false);
     expect(result.subtotal.closingValue).toBeNull();
     expect(result.subtotal.incompleteValuationCount).toBe(1);
+  });
+
+  it("preserves valid period values when opening and closing history are incomplete", async () => {
+    rpc.mockResolvedValueOnce({ data: [{
+      product_id: "old-opening", code: "NVL-001", name: "Cà phê", unit: "G",
+      opening_qty: 10, in_supplier: 2, out_sale: 3, closing_qty: 9,
+      opening_value: null, in_value: 300, out_value: 420, closing_value: null,
+      valuation_complete: false, missing_cost_movement_count: 1,
+    }], error: null });
+    const result = await getXntReport({ range: { from: "2026-01-01", to: "2026-01-31" } });
+    expect(result.subtotal).toMatchObject({ openingValue: null, inValue: 300, outValue: 420, closingValue: null });
   });
 });

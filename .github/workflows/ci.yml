@@ -280,6 +280,9 @@ jobs:
           PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00411_strict_fnb_bom_xnt_cost.sql
           PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00411_strict_fnb_bom_xnt_cost.sql
           PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00411_strict_fnb_bom_xnt_cost.integration.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00441_xnt_independent_period_values.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/migrations/00441_xnt_independent_period_values.sql
+          PGDATABASE=xnt_valuation_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00441_xnt_independent_period_values.integration.sql
 
       - name: Verify sales-return source identity in an isolated database
         env:

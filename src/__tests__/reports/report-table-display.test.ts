@@ -59,6 +59,8 @@ describe("report table display controls", () => {
     expect(xntReport).toContain("debouncedSearch");
     expect(xntReport).toContain("setDebouncedSearch(search.trim())");
     expect(xntReport).toContain("pageSizeOptions={[25, 50, 100, 200]}");
-    expect(xntReport.match(/rows: data\.rows\.map/g)?.length ?? 0).toBeGreaterThan(1);
+    expect(xntReport.match(/rows: visibleRows\.map/g)).toHaveLength(4);
+    expect(xntReport).toContain("sortState={sortState}");
+    expect(xntReport).toContain("onSortChange={setSortState}");
   });
 });
