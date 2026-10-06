@@ -355,7 +355,10 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTabId && !t.kitchenOrderId
-          ? { ...t, orderType: next }
+          ? { ...t, orderType: next, ...(next !== "delivery" ? {
+              deliveryPlatform: undefined, deliveryFee: 0, platformCommissionPercent: 0,
+              deliveryDistanceTier: undefined, deliveryStaffId: undefined,
+            } : {}) }
           : t,
       ),
     );

@@ -30,6 +30,20 @@ function makeLine(overrides: Partial<{
 // ============================================================
 
 describe("useFnbPosState", () => {
+  it("clears hidden delivery charges when an unsent order changes to takeaway", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    act(() => result.current.setActiveTabOrderType("delivery"));
+    act(() => {
+      result.current.setDeliveryPlatform(result.current.activeTabId, "grab_food", 25);
+      result.current.setDeliveryTier(result.current.activeTabId, "near", 5000);
+      result.current.setDeliveryStaff(result.current.activeTabId, "shipper");
+    });
+    act(() => result.current.setActiveTabOrderType("takeaway"));
+    expect(result.current.activeTab).toMatchObject({ orderType: "takeaway", deliveryFee: 0, platformCommissionPercent: 0 });
+    expect(result.current.activeTab?.deliveryPlatform).toBeUndefined();
+    expect(result.current.activeTab?.deliveryDistanceTier).toBeUndefined();
+    expect(result.current.activeTab?.deliveryStaffId).toBeUndefined();
+  });
   it("only acknowledges the kitchen request snapshot, retaining newly added items", () => {
     const { result } = renderHook(() => useFnbPosState());
     act(() => result.current.addLine(makeLine()));
@@ -921,6 +935,26 @@ describe("FnbPaymentDialog — component", () => {
     render(<FnbPaymentDialog {...baseProps} />);
     expect(screen.getByText("Tạm tính")).toBeDefined();
     expect(screen.getByText("Tổng cộng")).toBeDefined();
+  });
+
+  it("uses the delivery-inclusive amount for the exact cash payment", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    render(<FnbPaymentDialog {...baseProps} subtotal={30000} total={35000} deliveryFee={5000} onConfirm={onConfirm} />);
+    expect(screen.getByText("Phí giao hàng")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Đủ" }));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ paid: 35000 })));
+  });
+
+  it("collects platform net after commission on delivery and tip", async () => {
+    const onConfirm = vi.fn().mockResolvedValue(true);
+    render(<FnbPaymentDialog {...baseProps} subtotal={30000} total={35000} deliveryFee={5000} commissionPercent={25} onConfirm={onConfirm} />);
+    fireEvent.change(screen.getByLabelText(/Tiền tip/), { target: { value: "1000" } });
+    expect(screen.getByText("Quán thực thu")).toBeVisible();
+    expect(screen.getByText("Phí sàn (25%)")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Đủ" }));
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    await waitFor(() => expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ paid: 27000, tipAmount: 1000 })));
   });
 
   it("hiện giảm giá khi discountAmount > 0", () => {

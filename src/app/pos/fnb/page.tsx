@@ -104,6 +104,7 @@ import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format";
 import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
+import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 import { cn } from "@/lib/utils";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
@@ -2170,10 +2171,9 @@ function FnbPosPageInner() {
     // trừ phí sàn. Phiếu tạm phải bám cùng công thức để thu ngân không báo sai.
     const deliveryFee = tab.deliveryFee ?? 0;
     const grossTotal = fnbBenefitDisplay.total + deliveryFee;
-    const commissionAmount = isPlatformOrder
-      ? Math.round((grossTotal * commissionPercent) / 100)
-      : 0;
-    const netTotal = grossTotal - commissionAmount;
+    const settlement = previewFnbSettlement(grossTotal, 0, isPlatformOrder ? commissionPercent : 0);
+    const commissionAmount = settlement.commission;
+    const netTotal = settlement.net;
 
     printPreBill({
       branchId: branchId ?? undefined,
@@ -3592,7 +3592,7 @@ function FnbPosPageInner() {
         {!showFloorPlan && <FnbCart
           activeTab={pos.activeTab}
           subtotal={pos.subtotal}
-          total={fnbBenefitDisplay.total}
+          total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
           orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
           persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
           manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
@@ -3688,7 +3688,9 @@ function FnbPosPageInner() {
             persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
             promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
             couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
-            total={fnbBenefitDisplay.total}
+            total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
+            deliveryFee={pos.activeTab?.deliveryFee ?? 0}
+            commissionPercent={pos.activeTab?.orderType === "delivery" && pos.activeTab.deliveryPlatform && pos.activeTab.deliveryPlatform !== "direct" ? pos.activeTab.platformCommissionPercent ?? 0 : 0}
             lineCount={pos.lineCount}
             orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
             initialCustomerName={pos.activeTab?.customerName}
@@ -3803,7 +3805,7 @@ function FnbPosPageInner() {
             <FnbCart
               activeTab={pos.activeTab}
               subtotal={pos.subtotal}
-              total={fnbBenefitDisplay.total}
+              total={fnbBenefitDisplay.total + (pos.activeTab?.deliveryFee ?? 0)}
               orderDiscountAmount={fnbBenefitDisplay.totalDiscountAmount}
               persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
               manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}

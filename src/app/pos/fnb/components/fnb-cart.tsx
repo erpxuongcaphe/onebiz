@@ -19,6 +19,7 @@ import type {
 import type { DeliveryPlatformSettings } from "@/lib/services/supabase/fnb-platform-settings";
 import { Icon } from "@/components/ui/icon";
 import { HelpTip } from "@/components/shared/help-tip";
+import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platform metadata
 const DELIVERY_PLATFORMS: {
@@ -831,6 +832,12 @@ export function FnbCart({
         )}
         </div>
 
+        {(activeTab?.deliveryFee ?? 0) > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Phí giao hàng</span>
+            <span className="tabular-nums text-foreground">+{formatCurrency(activeTab!.deliveryFee!)}đ</span>
+          </div>
+        )}
         {(() => {
           // CEO 13/05 (Migration 00070): tách 2 số rõ ràng cho đơn online sàn.
           // - Khách trả qua app = total gross (chỉ cashier audit, không phải tiền quán nhận)
@@ -842,10 +849,9 @@ export function FnbCart({
             !!activeTab.deliveryPlatform &&
             activeTab.deliveryPlatform !== "direct" &&
             commissionPercent > 0;
-          const commissionAmount = isPlatformOrder
-            ? Math.round((total * commissionPercent) / 100)
-            : 0;
-          const netReceived = total - commissionAmount;
+          const settlement = previewFnbSettlement(total, 0, isPlatformOrder ? commissionPercent : 0);
+          const commissionAmount = settlement.commission;
+          const netReceived = settlement.net;
 
           if (!isPlatformOrder) {
             // Đơn tại quán / takeaway / direct: hiển thị như cũ
