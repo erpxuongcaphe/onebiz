@@ -12,7 +12,7 @@ create table public.fnb_print_jobs (
   branch_id uuid not null references public.branches(id), point_id uuid not null references public.fnb_print_points(id),
   actor_id uuid not null references public.profiles(id), actor_name text not null,
   label text not null, route_key text not null, route_label text not null, printer text not null,
-  paper text not null check(paper in ('58mm','80mm')), bytes_base64 text not null,
+  paper text not null check(paper in ('58mm','80mm')), bytes_base64 text not null, payload_hash bytea not null,
   status text not null default 'queued' check(status in ('queued','sending','handed_off','failed','unknown','cancelled')),
   message text, created_at timestamptz not null default now(), claimed_at timestamptz,
   claim_id uuid, finished_at timestamptz, last_action_by uuid references public.profiles(id)
@@ -82,8 +82,8 @@ begin
       update public.fnb_print_jobs set status='cancelled',bytes_base64='',last_action_by=auth.uid(),finished_at=now(),message='Quản lý dừng lệnh.' where id=v_job.id;
     else
       -- Reprinting is a new audited job. The original never loses its history.
-      insert into public.fnb_print_jobs(id,tenant_id,branch_id,point_id,actor_id,actor_name,label,route_key,route_label,printer,paper,bytes_base64,message)
-      values(gen_random_uuid(),v_tenant,p_branch,v_job.point_id,auth.uid(),(select full_name from public.profiles where id=auth.uid()),'IN LẠI · '||left(v_job.label,65),v_job.route_key,v_job.route_label,v_job.printer,v_job.paper,v_job.bytes_base64,'In lại có xác nhận từ lệnh '||v_job.id::text);
+      insert into public.fnb_print_jobs(id,tenant_id,branch_id,point_id,actor_id,actor_name,label,route_key,route_label,printer,paper,bytes_base64,payload_hash,message)
+      values(gen_random_uuid(),v_tenant,p_branch,v_job.point_id,auth.uid(),(select full_name from public.profiles where id=auth.uid()),'IN LẠI · '||left(v_job.label,65),v_job.route_key,v_job.route_label,v_job.printer,v_job.paper,v_job.bytes_base64,v_job.payload_hash,'In lại có xác nhận từ lệnh '||v_job.id::text);
       update public.fnb_print_jobs set status='cancelled',bytes_base64='',last_action_by=auth.uid(),finished_at=now(),message='Đã tạo lệnh in lại; xem lịch sử lệnh mới.' where id=v_job.id;
     end if;
     return jsonb_build_object('ok',true);
@@ -113,6 +113,9 @@ begin
   if p_route='cashier' then
     if not (coalesce(public.user_has_permission(auth.uid(),'pos_fnb.checkout'),false) or coalesce(public.user_has_permission(auth.uid(),'pos_fnb.view_orders'),false)) then raise exception 'Không có quyền in bill.' using errcode='42501'; end if;
   elsif not coalesce(public.user_has_permission(auth.uid(),'pos_fnb.send_kitchen'),false) then raise exception 'Không có quyền gửi phiếu bếp.' using errcode='42501'; end if;
+  if length(p_bytes)>2400000 or p_bytes is null then raise exception 'Phiếu quá dài. Chia nội dung rồi gửi lại.'; end if;
+  v_bytes:=decode(p_bytes,'base64');
+  if octet_length(v_bytes)<20 or substring(v_bytes from 1 for 5)<>decode('1b401b6101','hex') then raise exception 'Dữ liệu in không hợp lệ.'; end if;
   perform pg_advisory_xact_lock(hashtextextended('fnb-print:'||p_branch::text,0));
   select * into v_point from public.fnb_print_points where branch_id=p_branch and tenant_id=v_tenant and enabled for share;
   if not found then raise exception 'Chi nhánh chưa bật điểm in.'; end if;
@@ -120,15 +123,12 @@ begin
   if v_route is null or v_route->>'paper' is distinct from p_paper then raise exception 'Nơi nhận chưa gán máy hoặc khổ giấy đã thay đổi. Hãy tải lại và gửi lại.'; end if;
   select * into v_job from public.fnb_print_jobs where id=p_id;
   if found then
-    if v_job.tenant_id<>v_tenant or v_job.branch_id<>p_branch or v_job.actor_id<>auth.uid() or v_job.route_key<>p_route or v_job.bytes_base64<>p_bytes then raise exception 'Mã lệnh đã được dùng cho phiếu khác.'; end if;
+    if v_job.tenant_id<>v_tenant or v_job.branch_id<>p_branch or v_job.actor_id<>auth.uid() or v_job.route_key<>p_route or v_job.payload_hash<>digest(v_bytes,'sha256') then raise exception 'Mã lệnh đã được dùng cho phiếu khác.'; end if;
     return jsonb_build_object('id',v_job.id,'route_label',v_job.route_label);
   end if;
-  if length(p_bytes)>2400000 or p_bytes is null then raise exception 'Phiếu quá dài. Chia nội dung rồi gửi lại.'; end if;
-  v_bytes:=decode(p_bytes,'base64');
-  if octet_length(v_bytes)<20 or substring(v_bytes from 1 for 5)<>decode('1b401b6101','hex') then raise exception 'Dữ liệu in không hợp lệ.'; end if;
   if (select count(*) from public.fnb_print_jobs where point_id=v_point.id and status='queued')>=100 then raise exception 'Điểm in có quá nhiều phiếu chờ. Nhờ quản lý kiểm tra.'; end if;
-  insert into public.fnb_print_jobs(id,tenant_id,branch_id,point_id,actor_id,actor_name,label,route_key,route_label,printer,paper,bytes_base64)
-  values(p_id,v_tenant,p_branch,v_point.id,auth.uid(),(select full_name from public.profiles where id=auth.uid()),trim(p_label),p_route,v_route->>'label',v_route->>'printer',p_paper,p_bytes);
+  insert into public.fnb_print_jobs(id,tenant_id,branch_id,point_id,actor_id,actor_name,label,route_key,route_label,printer,paper,bytes_base64,payload_hash)
+  values(p_id,v_tenant,p_branch,v_point.id,auth.uid(),(select full_name from public.profiles where id=auth.uid()),trim(p_label),p_route,v_route->>'label',v_route->>'printer',p_paper,p_bytes,digest(v_bytes,'sha256'));
   return jsonb_build_object('id',p_id,'route_label',v_route->>'label');
 end $$;
 

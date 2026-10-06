@@ -39,6 +39,8 @@ begin
   perform public.fnb_print_agent_v1((creds->>'id')::uuid,creds->>'token','finish',jsonb_build_object('id',job,'claim_id',claimed->>'claim_id','status','handed_off','message','Windows received'));
   if (select status from fnb_print_jobs where id=job)<>'handed_off' then raise exception 'Finish failed'; end if;
   if (select bytes_base64 from fnb_print_jobs where id=job)<>'' then raise exception 'Delivered payload retained unnecessarily'; end if;
+  perform public.fnb_print_enqueue_v1(branch,job,'kitchen','Bếp bàn 1','58mm',payload);
+  if (select count(*) from fnb_print_jobs)<>1 then raise exception 'Delivered request duplicated'; end if;
   perform public.fnb_print_enqueue_v1(branch,'40000000-0000-0000-0000-000000000002','kitchen','Bổ sung','58mm',payload);
   claimed:=public.fnb_print_agent_v1((creds->>'id')::uuid,creds->>'token','claim');
   update fnb_print_jobs set claimed_at=now()-interval '3 minutes' where id=(claimed->>'id')::uuid;
