@@ -22,7 +22,6 @@ export async function sendPrintJob(args: { html: string; bytes?: Uint8Array; pap
   if (fnbBranchQueue && args.branchId && args.role !== "documents") {
     let result: PrintResult;
     try {
-      if (!args.branchId || args.role === "documents") throw new Error("Chưa có chi nhánh/nơi nhận F&B. Với chứng từ ERP, chọn phương thức in thủ công trong Cài đặt → In ấn.");
       const { enqueueBranchPrint } = await import("./branch-queue");
       const job = await enqueueBranchPrint({ branchId: args.branchId, routeKey: args.stationId ?? args.role ?? "cashier", label: args.label ?? "Phiếu F&B", html: args.html, paper: args.paperSize, buildHtml: args.buildHtml, jobId: args.jobId ?? crypto.randomUUID() });
       result = { success: true, backend: "branch-queue", queued: { id: job.id, routeLabel: job.route_label } };
