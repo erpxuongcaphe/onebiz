@@ -13,6 +13,20 @@ const preview=[{productId:"p",productCode:"TRA",productName:"Trà",unit:"G",bran
  quantity:0.0042,costPrice:250,costBefore:null,delta:0.0042,value:1.05,latestMovement:null,latestCost:null,costTracked:false,fnb:true,lotNumber:null,expiryDate:null}];
 beforeEach(()=>{rpc.mockReset();props.current=null;});afterEach(cleanup);
 describe("safe opening stock",()=>{
+ it("discards a delayed preview after closing the dialog",async()=>{
+  render(<OpeningStockDialog open onOpenChange={()=>{}} onFinished={()=>{}}/>);
+  fireEvent.change(screen.getByLabelText("Lý do / nguồn đối chiếu"),{target:{value:"Chuyển nguồn"}});
+  let finish:(value:any)=>void=()=>{};
+  rpc.mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  let pending:Promise<unknown>;
+  await act(async()=>{pending=props.current.preparePreview(rows,new File(["x"],"ton.xlsx"));});
+  await act(async()=>{props.current.onOpenChange(false);});
+  await act(async()=>{
+   finish({data:preview,error:null});
+   await expect(pending!).rejects.toThrow("đã đóng");
+  });
+  expect(props.current.confirmDisabled).toBe(true);
+ });
  it("loads the server snapshot and keeps one request id when the response is retried",async()=>{
   rpc.mockResolvedValueOnce({data:preview,error:null});
   const value=await previewOpeningStock(rows);expect(value).toEqual(preview);

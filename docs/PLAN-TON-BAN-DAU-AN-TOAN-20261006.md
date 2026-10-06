@@ -6,7 +6,7 @@ Mục tiêu: quán mới, chuyển phần mềm, bắt đầu quản lý kho ho�
 
 Giữ lối vào Kho → Tồn kho → Nhập tồn ban đầu. Ba bước: chọn mục đích/thời điểm và file; xem trước chi nhánh, đơn vị, lượng trước/sau và giá trị; xác nhận. Không bắt người dùng mở khóa toàn hệ thống để làm việc bình thường. Khóa tenant cũ vẫn được tôn trọng nếu quản lý đã chủ động chốt.
 
-File cũ tiếp tục dùng được. Mỗi đợt một chi nhánh để tránh nhập nhầm. Không cộng tổng số lượng khác đơn vị. Dòng không có trong file không đổi; 0 là đưa về 0, không phải bỏ qua. Giá vốn 0 cần nhãn rõ, không suy giá thiếu thành 0.
+File cũ tiếp tục dùng được. Mỗi đợt một chi nhánh để tránh nhập nhầm. Không cộng tổng số lượng khác đơn vị. Dòng không có trong file không đổi; lượng 0 là khai rõ không có hàng, không phải bỏ qua. Công cụ khởi tạo không đưa hàng đang có về 0: dùng Kiểm kho để xử lý chênh lệch đó. Giá vốn 0 cần xác nhận rõ, không suy giá thiếu thành 0.
 
 Giữ Kiểm kê để xử lý chênh lệch sau vận hành. Giữ bổ sung giá vốn đầu kỳ tại Hàng cấp cho quán, với liên kết dễ thấy. Đã có sự kiện giá vốn thì không ghi đè bằng công cụ khởi tạo; hướng dẫn kiểm kê/đối soát theo đúng nghiệp vụ.
 

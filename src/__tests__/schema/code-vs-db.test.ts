@@ -80,6 +80,7 @@ const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
+  ["inventory_opening_batches", "00442"],
   ["fnb_branch_product_cost_balances", "00390"],
   ["fnb_branch_product_cost_events", "00390"],
 ]);

@@ -64,6 +64,8 @@ interface ImportExcelDialogProps<TRow> {
   previewContent?: ReactNode;
   instructions?: ReactNode;
   confirmDisabled?: boolean;
+  /** Only for commits with a server-side idempotency key. */
+  retryOnFailure?: boolean;
 }
 
 export function ImportExcelDialog<TRow>({
@@ -72,7 +74,7 @@ export function ImportExcelDialog<TRow>({
   schema,
   onCommit,
   onFinished,
-  preparePreview, uploadContent, previewContent, instructions, confirmDisabled,
+  preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -103,7 +105,7 @@ export function ImportExcelDialog<TRow>({
   function handleClose(openNext: boolean) {
     if (step === "importing") return; // block close khi đang commit
     if (!openNext) {
-      const wasDone = step === "done";
+      const wasDone = step === "done" && (importResult?.successCount ?? 0) > 0;
       reset();
       onOpenChange(false);
       if (wasDone) onFinished?.();
@@ -352,7 +354,12 @@ export function ImportExcelDialog<TRow>({
             </Button>
           )}
           {step === "done" && (
-            <Button onClick={() => handleClose(false)}>Đóng</Button>
+            <>
+              {retryOnFailure && importResult?.successCount === 0 && importResult.failureCount > 0 && (
+                <Button variant="outline" onClick={handleConfirmImport}>Thử lại cùng đợt</Button>
+              )}
+              <Button onClick={() => handleClose(false)}>Đóng</Button>
+            </>
           )}
         </DialogFooter>
       </DialogContent>
@@ -562,7 +569,7 @@ function DoneSection({
           </p>
           {!allOk && (
             <p className="text-xs text-muted-foreground mt-0.5">
-              Những dòng lỗi đã được rollback, dữ liệu còn lại được ghi nhận.
+              Kiểm tra chi tiết lỗi bên dưới. Nếu mất kết nối, kết quả có thể chưa được trình duyệt nhận lại.
             </p>
           )}
         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef,useState } from "react";
 import Link from "next/link";
 import { ImportExcelDialog } from "./import-excel-dialog";
 import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { formatCurrency, formatStockQuantity } from "@/lib/format";
 import { commitOpeningStock, previewOpeningStock, openingPurposeLabels, type OpeningPurpose, type OpeningPreviewRow } from "@/lib/services/supabase/opening-stock";
+const unitCostFormat=new Intl.NumberFormat("en-US",{maximumFractionDigits:6});
 
 function localNow() {
   const date=new Date();
@@ -17,6 +18,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
   open:boolean;onOpenChange:(open:boolean)=>void;onFinished:()=>void;
 }) {
   const [purpose,setPurpose]=useState<OpeningPurpose>("migration");
+  const requestGeneration=useRef(0);
   const [sourceAt,setSourceAt]=useState(localNow);
   const [reason,setReason]=useState("");
   const [preview,setPreview]=useState<OpeningPreviewRow[]>([]);
@@ -24,17 +26,19 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
   const [prepared,setPrepared]=useState<{id:string;rows:InitialStockImportRow[];purpose:OpeningPurpose;sourceAt:string;reason:string;fileName:string}|null>(null);
   const needsZero=preview.some(row=>row.quantity>0&&row.costPrice===0);
   async function prepare(rows:InitialStockImportRow[],file:File) {
+    const generation=++requestGeneration.current;
     setPrepared(null);setPreview([]);setZeroConfirmed(false);
     const date=new Date(sourceAt);
     if(!reason.trim()||!Number.isFinite(date.getTime())) throw new Error("Nhập lý do và ngày giờ chốt dữ liệu trước khi chọn file.");
     if(purpose==="opening_cost" && rows.some(row=>row.quantity===0)) throw new Error("Bổ sung giá vốn dùng cho hàng đang có lượng dương. Hãy bỏ các dòng lượng 0 hoặc chọn mục đích khởi tạo tồn.");
     const next=await previewOpeningStock(rows);
+    if(generation!==requestGeneration.current) throw new Error("Lượt xem trước đã đóng.");
     if(purpose==="opening_cost"&&next.some(row=>row.delta!==0)) throw new Error("Bổ sung giá vốn giữ nguyên số lượng. Hãy điền lượng đúng bằng tồn đang có tại quán.");
     setPreview(next);
     setPrepared({id:crypto.randomUUID(),rows,purpose,sourceAt:date.toISOString(),reason:reason.trim(),fileName:file.name});
   }
-  return <ImportExcelDialog open={open} onOpenChange={onOpenChange} schema={initialStockExcelSchema}
-    preparePreview={prepare} onFinished={onFinished}
+  return <ImportExcelDialog open={open} onOpenChange={next=>{if(!next){requestGeneration.current++;setPrepared(null);}onOpenChange(next);}} schema={initialStockExcelSchema}
+    preparePreview={prepare} onFinished={onFinished} retryOnFailure
     confirmDisabled={!prepared || (needsZero&&!zeroConfirmed)}
     onCommit={async()=>{
       if(!prepared) throw new Error("Chọn lại file để cập nhật xem trước.");
@@ -75,7 +79,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
           <td className="p-2">{row.unit}</td><td className="p-2 tabular-nums">{formatStockQuantity(row.quantityBefore)}</td>
           <td className="p-2 tabular-nums font-medium">{formatStockQuantity(row.quantity)}</td>
           <td className="p-2 tabular-nums text-primary">{row.delta>0?"+":""}{formatStockQuantity(row.delta)}</td>
-          <td className="p-2 tabular-nums">{formatCurrency(row.costPrice)}</td><td className="p-2 tabular-nums">{formatCurrency(row.value)}</td>
+          <td className="p-2 tabular-nums">{unitCostFormat.format(row.costPrice)}</td><td className="p-2 tabular-nums">{formatCurrency(row.value)}</td>
         </tr>)}</tbody></table></div>
       {preview.some(row=>row.lotNumber||row.expiryDate)&&<div className="text-xs text-muted-foreground space-y-1">{preview.filter(row=>row.lotNumber||row.expiryDate).map(row=><p key={row.productId}>{row.productCode}: lô {row.lotNumber??"tự tạo"} · HSD {row.expiryDate??"chưa xác định"}</p>)}</div>}
       {needsZero&&<label className="flex gap-2 items-start bg-status-warning/10 p-3 text-sm">

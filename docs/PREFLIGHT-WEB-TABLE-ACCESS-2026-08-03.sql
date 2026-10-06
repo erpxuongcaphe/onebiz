@@ -77,6 +77,7 @@ with required(relation_name, operation) as (
     ('internal_sales', 'select'),
     ('inventory_check_items', 'select'),
     ('inventory_checks', 'select'),
+    ('inventory_opening_batches', 'select'),
     ('invoice_items', 'select'),
     ('invoices', 'select'),
     ('kitchen_order_items', 'select'),
