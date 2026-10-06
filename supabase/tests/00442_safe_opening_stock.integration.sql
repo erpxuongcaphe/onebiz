@@ -26,12 +26,23 @@ create table product_lots(tenant_id uuid,branch_id uuid,product_id uuid,variant_
 create function user_has_permission(uuid,text) returns boolean language sql stable as $$ select coalesce(current_setting('test.denied',true),'')<>'yes' $$;
 create function user_has_branch_access(uuid,uuid) returns boolean language sql stable as $$select exists(select 1 from branches b join profiles p on p.tenant_id=b.tenant_id where b.id=$2 and p.id=$1)$$;
 create function get_tenant_setting(uuid,text,jsonb) returns jsonb language sql stable as $$select $3$$;
+-- The production wrapper is extracted verbatim; its delegated implementation
+-- is inert here so we can prove only opening resets are rejected by the guard.
+create function _apply_manual_stock_movement_auth_impl_00246(uuid,uuid,uuid,jsonb) returns jsonb language sql as $$select '{"ok":true}'::jsonb$$;
+create function _reconcile_product_lots_to_branch_00284(uuid,uuid,uuid,text,uuid,uuid,text) returns void language plpgsql as $$begin return;end$$;
 \i /tmp/opening-stock-helpers.sql
 \ir ../migrations/00442_safe_opening_stock_batches.sql
 
 insert into tenants values('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 insert into profiles values('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000010',false);
+do $$begin
+ begin
+  perform apply_manual_stock_movement_atomic(null,null,null,'[{"reference_type":"initial_stock_reset"}]');
+  raise exception 'LEGACY_RESET_NOT_BLOCKED';
+ exception when others then if sqlerrm not like '%OPENING_WORKFLOW_REQUIRED%' then raise;end if;end;
+ if apply_manual_stock_movement_atomic(null,null,null,'[]')->>'ok'<>'true' then raise exception 'REGULAR_ADJUSTMENT_CHANGED';end if;
+end$$;
 insert into branches values('00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000001','QUAN','outlet');
 insert into fnb_supply_branch_scopes values('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000020',true);
 insert into products(id,tenant_id,code,name,unit,cost_price,product_type,channel,inventory_role) values

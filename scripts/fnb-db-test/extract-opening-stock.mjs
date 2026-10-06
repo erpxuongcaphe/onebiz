@@ -1,5 +1,6 @@
 import {readFileSync,writeFileSync} from "node:fs";
 const sources=[
+  ["00287_complete_fifo_workflow_coverage.sql","apply_manual_stock_movement_atomic"],
   ["00011_atomic_stock_rpcs.sql","increment_product_stock"],
   ["00156_branch_stock_null_variant_guard.sql","upsert_branch_stock"],
   ["00390_fnb_branch_cost_ledger.sql","_fnb_branch_cost_tracking_enabled_00390"],

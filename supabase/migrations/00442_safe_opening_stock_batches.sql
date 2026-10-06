@@ -187,11 +187,15 @@ begin
   if to_regprocedure('public.apply_manual_stock_movement_atomic(uuid,uuid,uuid,jsonb)') is not null then
     definition:=pg_get_functiondef('public.apply_manual_stock_movement_atomic(uuid,uuid,uuid,jsonb)'::regprocedure);
     if position('OPENING_WORKFLOW_REQUIRED' in definition)=0 then
-      if position('v_reference_type := nullif(v_item->>''reference_type'', '''');' in definition)=0 then
+      if position('v_result := public._apply_manual_stock_movement_auth_impl_00246(' in definition)>0 then
+        definition:=replace(definition,'v_result := public._apply_manual_stock_movement_auth_impl_00246(',
+          E'if exists(select 1 from jsonb_array_elements(p_items) item where item->>''reference_type'' = ''initial_stock_reset'') then raise exception ''OPENING_WORKFLOW_REQUIRED''; end if;\n  v_result := public._apply_manual_stock_movement_auth_impl_00246(');
+      elsif position('v_reference_type := nullif(v_item->>''reference_type'', '''');' in definition)>0 then
+        definition:=replace(definition,'v_reference_type := nullif(v_item->>''reference_type'', '''');',
+          E'v_reference_type := nullif(v_item->>''reference_type'', '''');\n    if v_reference_type = ''initial_stock_reset'' then raise exception ''OPENING_WORKFLOW_REQUIRED''; end if;');
+      else
         raise exception 'OPENING_LEGACY_GUARD_BOUNDARY_CHANGED';
       end if;
-      definition:=replace(definition,'v_reference_type := nullif(v_item->>''reference_type'', '''');',
-        E'v_reference_type := nullif(v_item->>''reference_type'', '''');\n    if v_reference_type = ''initial_stock_reset'' then raise exception ''OPENING_WORKFLOW_REQUIRED''; end if;');
       execute definition;
     end if;
   end if;
