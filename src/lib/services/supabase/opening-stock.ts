@@ -28,7 +28,8 @@ export async function searchOpeningStockCandidates(branchId:string,search:string
   const term=search.replace(/[(),%_\\]/g," ").trim();
   if(!term) return [];
   const groups=["or(inventory_role.is.null,inventory_role.neq.fnb_menu_item)","or(product_type.neq.sku,channel.is.null,channel.neq.fnb)",
-    ...(branch.cascade_mode==="production"?["or(has_bom.is.null,has_bom.is.false)"]:[]),`or(code.ilike.%${term}%,name.ilike.%${term}%)`];
+    // Generated database types predate cascade_mode; the production column is verified by migration tests.
+    ...((branch as unknown as {cascade_mode:string}).cascade_mode==="production"?["or(has_bom.is.null,has_bom.is.false)"]:[]),`or(code.ilike.%${term}%,name.ilike.%${term}%)`];
   const {data,error}=await client.from("products").select("id,code,name,unit").eq("tenant_id",tenantId).eq("is_active",true).or(`and(${groups.join(",")})`).order("name").limit(20);
   if(error) throw new Error("Không tìm được danh mục. Kiểm tra kết nối rồi thử lại.");
   return data??[];
