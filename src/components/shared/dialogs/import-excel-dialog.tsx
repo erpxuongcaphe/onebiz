@@ -381,7 +381,7 @@ export function ImportExcelDialog<TRow>({
           {step === "done" && (
             <>
               {retryOnFailure && importResult?.successCount === 0 && importResult.failureCount > 0 && (
-                <Button variant="outline" onClick={handleConfirmImport}>Thử lại cùng đợt</Button>
+                <><Button variant="outline" onClick={handleConfirmImport}>Thử lại cùng đợt</Button><Button variant="outline" onClick={reset}>{entryContent ? "Sửa dữ liệu" : "Chọn file khác"}</Button></>
               )}
               <Button onClick={() => handleClose(false)}>Đóng</Button>
             </>
