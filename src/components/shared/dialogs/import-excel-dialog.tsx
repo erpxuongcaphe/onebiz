@@ -18,7 +18,7 @@
  *   - [x] Preview + confirm trước khi commit (step "preview" ≠ "importing")
  */
 
-import { useRef, useState, type ChangeEvent, type DragEvent } from "react";
+import { useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -59,6 +59,11 @@ interface ImportExcelDialogProps<TRow> {
   onCommit: (validRows: TRow[]) => Promise<ImportBatchResult>;
   /** Optional: gọi sau khi import xong và user đóng dialog — để parent refresh data */
   onFinished?: () => void;
+  preparePreview?: (rows: TRow[], file: File) => Promise<void>;
+  uploadContent?: ReactNode;
+  previewContent?: ReactNode;
+  instructions?: ReactNode;
+  confirmDisabled?: boolean;
 }
 
 export function ImportExcelDialog<TRow>({
@@ -67,6 +72,7 @@ export function ImportExcelDialog<TRow>({
   schema,
   onCommit,
   onFinished,
+  preparePreview, uploadContent, previewContent, instructions, confirmDisabled,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -79,8 +85,12 @@ export function ImportExcelDialog<TRow>({
   );
   const [parseError, setParseError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const generation = useRef(0);
+  const [preparing, setPreparing] = useState(false);
 
   function reset() {
+    generation.current++;
+    setPreparing(false);
     setStep("upload");
     setFile(null);
     setParseResult(null);
@@ -103,18 +113,28 @@ export function ImportExcelDialog<TRow>({
   }
 
   async function handleFileChosen(f: File) {
+    const request = ++generation.current;
+    setPreparing(true);
     setFile(f);
     setParseError(null);
     try {
       const result = await parseExcelFile<TRow>(f, schema);
+      if (request !== generation.current) return;
+      if (!result.tableErrors.length && !result.errorRows.length && result.validRows.length && preparePreview) {
+        await preparePreview(result.validRows, f);
+      }
+      if (request !== generation.current) return;
       setParseResult(result);
       setStep("preview");
     } catch (err) {
+      if (request !== generation.current) return;
       setParseError(
         err instanceof Error
-          ? `Không đọc được file: ${err.message}`
+          ? (preparePreview ? err.message : `Không đọc được file: ${err.message}`)
           : "Không đọc được file Excel"
       );
+    } finally {
+      if (request === generation.current) setPreparing(false);
     }
   }
 
@@ -132,6 +152,7 @@ export function ImportExcelDialog<TRow>({
 
   async function handleConfirmImport() {
     if (!parseResult) return;
+    if (!canConfirm || confirmDisabled) return;
     const toCommit = parseResult.validRows;
     if (toCommit.length === 0) return;
     setStep("importing");
@@ -185,6 +206,8 @@ export function ImportExcelDialog<TRow>({
 
         {step === "upload" && (
           <div className="space-y-3">
+            {uploadContent}
+            {preparing && <p role="status" className="text-sm text-primary">Đang kiểm tra file và đối chiếu dữ liệu hiện tại...</p>}
             <div
               onDragOver={(e) => {
                 e.preventDefault();
@@ -212,6 +235,7 @@ export function ImportExcelDialog<TRow>({
                 <Button
                   variant="outline"
                   size="sm"
+                  disabled={preparing}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <Icon name="folder_open" size={16} className="mr-1" />
@@ -245,7 +269,7 @@ export function ImportExcelDialog<TRow>({
               <p className="font-medium text-foreground mb-1">
                 Lưu ý khi nhập liệu:
               </p>
-              <ul className="list-disc pl-4 space-y-0.5">
+              {instructions ?? <ul className="list-disc pl-4 space-y-0.5">
                 <li>Tải file mẫu để có đúng tên cột và định dạng.</li>
                 <li>
                   Cột bắt buộc không được để trống, sẽ bị báo lỗi khi upload.
@@ -265,20 +289,22 @@ export function ImportExcelDialog<TRow>({
                   Tồn kho <b className="text-foreground">không</b> đổi qua đường
                   này; muốn đổi tồn thì dùng phiếu nhập hoặc tồn đầu kỳ.
                 </li>
-              </ul>
+              </ul>}
             </div>
           </div>
         )}
 
         {step === "preview" && parseResult && (
-          <PreviewSection
+          <div className="max-h-[65vh] overflow-y-auto space-y-3">
+          {canConfirm && previewContent ? previewContent : <PreviewSection
             schema={schema}
             result={parseResult}
             file={file}
             onBack={() => {
               reset();
             }}
-          />
+          />}
+          </div>
         )}
 
         {step === "importing" && (
@@ -310,7 +336,7 @@ export function ImportExcelDialog<TRow>({
                 Chọn file khác
               </Button>
               <Button
-                disabled={!canConfirm}
+                disabled={!canConfirm || confirmDisabled}
                 onClick={handleConfirmImport}
               >
                 <Icon name="check" size={16} className="mr-1" />

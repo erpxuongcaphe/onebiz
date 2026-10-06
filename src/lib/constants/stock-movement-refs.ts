@@ -41,6 +41,7 @@ export const REFERENCE_TYPE_LABELS: Record<string, string> = {
   internal_sale: "Bán nội bộ",
   input_invoice: "Hóa đơn đầu vào",
   initial_stock_import: "Nhập tồn đầu kỳ",
+  initial_stock_opening: "Tồn ban đầu",
   production_reconcile: "Đối soát sản xuất",
   production_complete: "Nhập kho sản xuất",
   production_consume: "Tiêu hao sản xuất",
