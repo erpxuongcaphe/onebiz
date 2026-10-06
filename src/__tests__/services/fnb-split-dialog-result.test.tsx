@@ -40,7 +40,7 @@ describe("F&B split result", () => {
     fireEvent.click(screen.getByRole("button", { name: "Tách 1 món" }));
     expect(screen.getByRole("button", { name: "Hủy" })).toBeDisabled();
     expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
     fireEvent.click(screen.getByRole("button", { name: "Tách 1 món" }));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(byItems).toHaveBeenCalledTimes(1);

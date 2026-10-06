@@ -74,7 +74,7 @@ function DialogContent({
           >
             <Icon name="close"
             />
-            <span className="sr-only">Close</span>
+            <span className="sr-only">Đóng</span>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Popup>
@@ -92,6 +92,11 @@ function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
+/** Scroll region for large forms; keep header and actions outside it. */
+function DialogBody({ className, ...props }: React.ComponentProps<"div">) {
+  return <div data-slot="dialog-body" className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain", className)} {...props} />
+}
+
 function DialogFooter({
   className,
   showCloseButton = false,
@@ -104,7 +109,7 @@ function DialogFooter({
     <div
       data-slot="dialog-footer"
       className={cn(
-        "-mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-lg border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        "-mx-4 -mb-4 flex shrink-0 flex-row flex-wrap justify-end gap-2 rounded-b-lg border-t bg-muted/50 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:p-4",
         className
       )}
       {...props}
@@ -112,7 +117,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close render={<Button variant="outline" />}>
-          Close
+          Đóng
         </DialogPrimitive.Close>
       )}
     </div>
@@ -156,6 +161,7 @@ export {
   DialogContent,
   DialogDescription,
   DialogFooter,
+  DialogBody,
   DialogHeader,
   DialogOverlay,
   DialogPortal,

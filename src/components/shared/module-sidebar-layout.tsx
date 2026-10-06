@@ -4,7 +4,7 @@
 // ModuleSidebarLayout — sub-layout sidebar tái sử dụng
 // Dùng cho các module có nhiều trang con (Cài đặt, Phân tích, Cấu hình...)
 // - Desktop: sidebar trái cố định
-// - Mobile: thanh tab cuộn ngang sticky dưới top-nav
+// - Mobile: danh sách chọn mục gọn dưới top-nav
 // - Hỗ trợ group section
 // - Day 21/05/2026 (CEO): bổ sung search bar + collapsible groups
 //   để menu "tinh tế, gọn gàng có thể chọn khi cần" khi có nhiều trang con
@@ -12,10 +12,9 @@
 // ---------------------------------------------------------------------------
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
-import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
 export interface ModuleNavItem {
@@ -77,6 +76,7 @@ export function ModuleSidebarLayout({
   children,
 }: ModuleSidebarLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [search, setSearch] = useState("");
   const [openMap, setOpenMap] = useState<Record<number, boolean>>(() => {
     const init: Record<number, boolean> = {};
@@ -133,50 +133,38 @@ export function ModuleSidebarLayout({
       .filter((g) => g.items.length > 0);
   }, [nav, search, enableSearch]);
 
-  // Flatten for mobile horizontal scroll (use filtered when searching)
-  const flatItems = filteredNav.flatMap((g) => g.items);
+  const activeItem = nav.flatMap((g) => g.items).filter(isActive)
+    .sort((a, b) => b.href.length - a.href.length)[0];
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
-      {/* Mobile horizontal tabs */}
-      <div className="lg:hidden border-b bg-background sticky top-16 z-40">
-        {enableSearch && (
-          <div className="px-3 py-2 border-b">
-            <SearchInput value={search} onChange={setSearch} />
-          </div>
-        )}
-        <ScrollArea className="w-full">
-          <div className="flex gap-1 p-1.5">
-            {flatItems.map((item) => {
-              const active = isActive(item);
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex flex-col items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors min-w-[64px]",
-                    active
-                      ? "bg-primary-fixed text-primary"
-                      : "text-muted-foreground hover:bg-surface-container hover:text-foreground"
-                  )}
-                >
-                  <Icon name={item.icon} size={16} fill={active} weight={active ? 500 : 400} />
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
+      <div className="lg:hidden border-b bg-background sticky top-0 z-30 px-3 py-2">
+        <select
+          aria-label={`Mục ${title}`}
+          value={activeItem?.href ?? ""}
+          onChange={(event) => router.push(event.target.value)}
+          className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
+          {!activeItem && <option value="" disabled>Chọn mục {title.toLowerCase()}</option>}
+          {nav.map((group, index) => (
+            <optgroup key={index} label={group.label || title}>
+              {group.items.map((item) => (
+                <option key={item.href} value={item.href}>
+                  {item.label}{item.badge ? ` · ${item.badge}` : ""}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
       </div>
 
       <div className="flex">
         {/* Desktop sidebar */}
-        <aside className="hidden lg:block w-60 shrink-0 border-r bg-background sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+        <aside className="hidden lg:block w-48 shrink-0 border-r bg-background sticky top-0 h-[calc(100dvh-4rem)] overflow-y-auto">
           <div className="p-3 space-y-3">
             <h2 className="text-base font-semibold">{title}</h2>
             {enableSearch && (
-              <SearchInput value={search} onChange={setSearch} />
+              <SearchInput value={search} onChange={setSearch} title={title} />
             )}
             <nav className="space-y-3">
               {filteredNav.length === 0 && (
@@ -267,9 +255,11 @@ export function ModuleSidebarLayout({
 function SearchInput({
   value,
   onChange,
+  title,
 }: {
   value: string;
   onChange: (v: string) => void;
+  title: string;
 }) {
   return (
     <div className="relative">
@@ -282,7 +272,8 @@ function SearchInput({
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder="Tìm báo cáo…"
+        aria-label={`Tìm mục ${title.toLowerCase()}`}
+        placeholder="Tìm mục…"
         className="w-full pl-8 pr-7 py-1.5 text-sm rounded-lg border bg-surface-container-low focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
       />
       {value && (

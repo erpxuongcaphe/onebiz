@@ -26,7 +26,7 @@ export function ListMetric({
   tone = "default",
 }: ListMetricProps) {
   const className = cn(
-    "inline-flex h-9 shrink-0 items-center gap-2 rounded-md border px-2.5 text-left transition-colors",
+    "inline-flex min-h-9 min-w-0 items-center gap-2 rounded-md border px-2.5 py-1 text-left transition-colors md:h-9 md:shrink-0 md:py-0",
     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 pointer-coarse:min-h-11",
     selected
       ? "border-primary bg-primary-fixed text-primary"
@@ -41,7 +41,7 @@ export function ListMetric({
       {icon && <span className="shrink-0 text-muted-foreground">{icon}</span>}
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="max-w-40 truncate text-xs font-bold tabular-nums" title={hint}>
+        <span className="break-words text-sm font-bold tabular-nums md:whitespace-nowrap" title={hint}>
           {loading ? "Đang tải..." : value}
         </span>
       </span>

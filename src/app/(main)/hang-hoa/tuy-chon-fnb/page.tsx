@@ -470,11 +470,11 @@ export default function ModifierFnbPage() {
                       <p className="text-xs text-muted-foreground">{moTaQuyTac(g)}</p>
                     </div>
                   </button>
-                  <Button variant="outline" size="sm" onClick={() => openEditGroup(g)}>
+                  <Button variant="outline" size="sm" aria-label={`Sửa nhóm ${g.name}`} onClick={() => openEditGroup(g)}>
                     <Icon name="edit" size={14} className="mr-1" />
                     Sửa
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => handleDeleteGroup(g)} className="text-status-error hover:bg-status-error/10">
+                  <Button variant="ghost" size="sm" aria-label={`Xóa nhóm ${g.name}`} onClick={() => handleDeleteGroup(g)} className="text-status-error hover:bg-status-error/10">
                     <Icon name="delete" size={14} />
                   </Button>
                 </div>
@@ -543,10 +543,10 @@ export default function ModifierFnbPage() {
                                 )}
                               </div>
                             </div>
-                            <Button variant="ghost" size="sm" onClick={() => openEditOption(g, o)}>
+                            <Button variant="ghost" size="sm" aria-label={`Sửa lựa chọn ${o.label}`} onClick={() => openEditOption(g, o)}>
                               <Icon name="edit" size={12} />
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteOption(o)} className="text-status-error hover:bg-status-error/10">
+                            <Button variant="ghost" size="sm" aria-label={`Xóa lựa chọn ${o.label}`} onClick={() => handleDeleteOption(o)} className="text-status-error hover:bg-status-error/10">
                               <Icon name="delete" size={12} />
                             </Button>
                           </div>

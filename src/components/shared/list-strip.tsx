@@ -24,15 +24,15 @@ export function ListStrip({
     <section
       aria-label={ariaLabel}
       className={cn(
-        "flex h-12 min-h-12 items-center gap-2 border-b bg-surface-container-lowest px-3",
+        "flex flex-col gap-1 border-b bg-surface-container-lowest px-3 py-2 md:h-12 md:min-h-12 md:flex-row md:items-center md:gap-2 md:py-0",
         className,
       )}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap no-scrollbar">
+      <div className="grid w-full min-w-0 grid-cols-2 gap-x-2 gap-y-1 md:flex md:flex-1 md:items-center md:gap-1.5 md:overflow-x-auto md:whitespace-nowrap">
         {metrics}
       </div>
       {tools && (
-        <div className="flex shrink-0 items-center gap-1.5">{tools}</div>
+        <div className="flex shrink-0 items-center justify-end gap-1.5">{tools}</div>
       )}
     </section>
   );
