@@ -1,6 +1,8 @@
 \set ON_ERROR_STOP on
 -- Runs after the 00438 fixture in the same isolated database.
 \ir ../migrations/00440_management_finance_cash_flow_sources.sql
+-- Session settings do not survive the separate psql process used by CI.
+select set_config('test.actor','00000000-0000-0000-0000-000000000001',false);
 do $$ declare v_category uuid; v_event jsonb; v_cash jsonb; v_payload jsonb; v_result jsonb; v_count bigint; begin
  select id into v_category from public.management_finance_categories where tenant_id='10000000-0000-0000-0000-000000000001' and code='CP-VH-DIEN';
  if (public.get_management_finance_cash_links('2026-09-01','2026-09-30')->>'total')::integer<>0 then raise exception 'recognition mistaken for cash'; end if;
