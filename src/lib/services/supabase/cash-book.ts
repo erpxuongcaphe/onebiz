@@ -245,7 +245,9 @@ export async function getCashBookSummaryAsync(params?: {
       if (params?.branchId) query = query.eq("branch_id", params.branchId);
       if (beforePeriod) query = query.lt("transaction_date", cashBookDate(params!.dateFrom!));
       else query = applyCashDateRange(query, params);
-      if (params?.statuses?.length) query = query.in("status", params.statuses);
+      // Existing callers also support legacy pending vouchers outside generated enums.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (params?.statuses?.length) query = (query as any).in("status", params.statuses);
       else query = query.neq("status", "cancelled");
       const { data, error } = await query.order("id").range(offset, offset + 999);
       if (error) handleError(error, "getCashBookSummaryAsync");
