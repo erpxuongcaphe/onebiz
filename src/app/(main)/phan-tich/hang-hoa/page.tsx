@@ -1,5 +1,8 @@
 "use client";
 
+import { stockMovementSeries } from "@/lib/reports/stock-movement-aggregation";
+import { dayKeysForRange } from "@/lib/utils/report-date-keys";
+
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   LineChart,
@@ -102,7 +105,7 @@ function StockMovementTooltip({
   label,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; color: string }>;
+  payload?: Array<{ value: number; dataKey: string; color: string; payload?: { unit?: string } }>;
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
@@ -115,7 +118,7 @@ function StockMovementTooltip({
           className="text-sm font-bold"
           style={{ color: p.color }}
         >
-          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {formatNumber(p.value)} sản phẩm
+          {p.dataKey === "nhap" ? "Nhập" : "Xuất"}: {formatNumber(p.value)} {p.payload?.unit || "(chưa có ĐVT)"}
         </p>
       ))}
     </div>
@@ -175,6 +178,11 @@ export default function HangHoaPage() {
   const [returnRetryToken, setReturnRetryToken] = useState(0);
   const [categories, setCategories] = useState<{ name: string; value: number }[]>([]);
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
+  const [movementProduct, setMovementProduct] = useState("");
+  const movementProducts = useMemo(() => [...new Map(movements.map((row) => [row.productId, row])).values()], [movements]);
+  const activeMovementProduct = movementProducts.some((row) => row.productId === movementProduct)
+    ? movementProduct : movementProducts[0]?.productId ?? "";
+  const movementChartRows = useMemo(() => stockMovementSeries(movements, activeMovementProduct, dayKeysForRange(range)), [movements, activeMovementProduct, range]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [productCategory, setProductCategory] = useState("");
@@ -360,11 +368,14 @@ export default function HangHoaPage() {
           titleRows: ["XUẤT - NHẬP THEO NGÀY", ...title.slice(1)],
           columns: [
             { label: "Ngày", key: "date", width: 14 },
+            { label: "Mã hàng", key: "code", width: 20 },
+            { label: "Mặt hàng", key: "name", width: 32 },
+            { label: "ĐVT", key: "unit", width: 12 },
             { label: "Nhập", key: "imported", width: 12, format: "number" },
             { label: "Xuất", key: "exported", width: 12, format: "number" },
           ],
           rows: movements.map((m) => ({
-            date: m.day, imported: m.nhap, exported: m.xuat,
+            date: m.date, code: m.code, name: m.name, unit: m.unit || "Chưa có ĐVT", imported: m.nhap, exported: m.xuat,
           })),
         },
         {
@@ -631,6 +642,9 @@ export default function HangHoaPage() {
           title="Biến động xuất nhập kho"
           subtitle={`${selectedPeriodLabel} · Nhập so với xuất`}
         >
+          {movementProducts.length > 0 && <select aria-label="Mặt hàng xem biến động kho" value={activeMovementProduct} onChange={(event) => setMovementProduct(event.target.value)} className="mb-3 h-10 w-full max-w-lg rounded-md border bg-background px-3 text-sm">
+            {movementProducts.map((row) => <option key={row.productId} value={row.productId}>{row.code} · {row.name} ({row.unit || "Chưa có ĐVT"})</option>)}
+          </select>}
           <div className="h-56 md:h-72">
             {movements.length === 0 ? (
               <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
@@ -639,7 +653,7 @@ export default function HangHoaPage() {
             ) : (
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <LineChart
-                  data={movements}
+                  data={movementChartRows}
                   margin={{ top: 5, right: 10, left: 0, bottom: 0 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
@@ -790,7 +804,7 @@ export default function HangHoaPage() {
               <ReportTableFrame tablePreferenceKey="report.products.categories"><div className="max-h-80 overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Nhóm hàng</th><th className="py-2 text-right font-medium">Số mặt hàng</th></tr></thead><tbody>{categories.map((category) => <tr key={category.name} className="border-b last:border-0"><td className="py-2">{category.name}</td><td className="py-2 text-right tabular-nums">{formatNumber(category.value)}</td></tr>)}</tbody></table></div></ReportTableFrame>
             </ChartCard>
             <ChartCard title="Nhập, xuất kho theo ngày" subtitle={selectedPeriodLabel}>
-              <ReportTableFrame tablePreferenceKey="report.products.movements"><div className="max-h-80 overflow-auto"><table className="w-full text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Ngày</th><th className="py-2 text-right font-medium">Nhập</th><th className="py-2 text-right font-medium">Xuất</th></tr></thead><tbody>{movements.map((movement) => <tr key={movement.day} className="border-b last:border-0"><td className="py-2">{movement.day}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.nhap)}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.xuat)}</td></tr>)}</tbody></table></div></ReportTableFrame>
+              <ReportTableFrame tablePreferenceKey="report.products.movements"><div className="max-h-80 overflow-auto"><table className="w-full min-w-[640px] text-sm"><thead><tr className="border-b"><th className="py-2 text-left font-medium">Ngày</th><th className="py-2 text-left font-medium">Mã hàng</th><th className="py-2 text-left font-medium">Mặt hàng</th><th className="py-2 text-left font-medium">ĐVT</th><th className="py-2 text-right font-medium">Nhập</th><th className="py-2 text-right font-medium">Xuất</th></tr></thead><tbody>{movements.map((movement) => <tr key={`${movement.date}-${movement.productId}-${movement.unit}`} className="border-b last:border-0"><td className="py-2 pr-3">{movement.day}</td><td className="py-2 pr-3">{movement.code || "—"}</td><td className="py-2 pr-3">{movement.name}</td><td className="py-2 pr-3">{movement.unit || "Chưa có ĐVT"}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.nhap)}</td><td className="py-2 text-right tabular-nums">{formatNumber(movement.xuat)}</td></tr>)}</tbody></table></div></ReportTableFrame>
             </ChartCard>
           </div>
         </div>}
