@@ -785,6 +785,7 @@ export default function TonKhoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [openingMode,setOpeningMode]=useState<"file"|"manual">("file");
   const [openingHistoryOpen, setOpeningHistoryOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
@@ -1106,9 +1107,10 @@ export default function TonKhoPage() {
               ? "Nhập tồn đầu kỳ (đã khóa)"
               : "Nhập tồn kho đầu kỳ",
             icon: <Icon name={inventoryLocked ? "lock" : "upload"} size={16} />,
-            onClick: () => setImportOpen(true),
+            onClick: () => {setOpeningMode("file");setImportOpen(true);},
             disabled: inventoryLocked,
           },
+          {label:"Nhập trực tiếp",icon:<Icon name="edit_note" size={16}/>,onClick:()=>{setOpeningMode("manual");setImportOpen(true);},disabled:inventoryLocked},
           {label:"Lịch sử tồn ban đầu",icon:<Icon name="history" size={16}/>,variant:"ghost",onClick:()=>setOpeningHistoryOpen(true)},
           // CEO 28/05/2026: nút Chốt & khóa / Mở khóa — chỉ ai có quyền inventory.lock.
           ...(canLock
@@ -1297,6 +1299,7 @@ export default function TonKhoPage() {
 
       <OpeningStockHistoryDialog open={openingHistoryOpen} onOpenChange={setOpeningHistoryOpen} branchId={branchFilter!=="all"?branchFilter:undefined}/>
       <OpeningStockDialog
+        key={openingMode+String(importOpen)} mode={openingMode}
         open={importOpen}
         onOpenChange={setImportOpen}
         onFinished={() => {
