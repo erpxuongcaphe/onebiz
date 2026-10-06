@@ -34,6 +34,24 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
+      - name: Verify invoice code allocation in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb invoice_code_test
+          PGDATABASE=invoice_code_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00433_invoice_code_collision_guard.integration.sql
+          export PGDATABASE=invoice_code_test
+          psql -v ON_ERROR_STOP=1 -c "UPDATE public.code_sequences SET prefix='HD',current_number=1000 WHERE entity_type='invoice';"
+          psql -v ON_ERROR_STOP=1 -c "BEGIN; SELECT public.next_code('10000000-0000-0000-0000-000000000001','invoice'); SELECT pg_sleep(2); COMMIT;" > /tmp/invoice-first.txt &
+          first_pid=$!
+          psql -v ON_ERROR_STOP=1 -c "SELECT public.next_code('10000000-0000-0000-0000-000000000001','invoice');" > /tmp/invoice-second.txt
+          wait "$first_pid"
+          grep -q 'HD001001' /tmp/invoice-first.txt /tmp/invoice-second.txt
+          grep -q 'HD001002' /tmp/invoice-first.txt /tmp/invoice-second.txt
+
       - name: Verify cash occurrence dates and authorization in an isolated database
         env:
           PGHOST: localhost
