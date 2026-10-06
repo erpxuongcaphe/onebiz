@@ -1,7 +1,8 @@
 -- New external customers receive codes atomically. Existing customer history is untouched.
 alter table public.customer_groups add column if not exists code text;
-update public.customer_groups set code = upper(btrim(note))
-where code is null and upper(btrim(note)) ~ '^[A-Z][A-Z0-9]{1,7}$';
+update public.customer_groups
+set code = substring(upper(btrim(note)) from '^([A-Z][A-Z0-9]{1,7})(?:[[:space:]]+-[[:space:]]+.*)?$')
+where code is null and upper(btrim(note)) ~ '^[A-Z][A-Z0-9]{1,7}([[:space:]]+-[[:space:]]+.*)?$';
 alter table public.customer_groups add constraint customer_group_code_format
   check (code is null or code ~ '^[A-Z][A-Z0-9]{1,7}$');
 create unique index customer_groups_tenant_code_unique on public.customer_groups(tenant_id,code) where code is not null;

@@ -12,7 +12,7 @@ create table public.customer_groups(id uuid primary key,tenant_id uuid,name text
 create table public.customers(id uuid primary key default gen_random_uuid(),tenant_id uuid,code text not null,name text check(name<>'FAIL'),group_id uuid,is_internal boolean default false,branch_id uuid,unique(tenant_id,code));
 insert into public.tenants values('10000000-0000-0000-0000-000000000001'),('10000000-0000-0000-0000-000000000002');
 insert into public.profiles values('00000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001',true),('00000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002',true);
-insert into public.customer_groups values('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Retail','KLE'),('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','Other tenant','KSI');
+insert into public.customer_groups values('20000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','Retail','KLE - Existing catalog prefix'),('20000000-0000-0000-0000-000000000002','10000000-0000-0000-0000-000000000002','Other tenant','KSI');
 insert into public.branches values('30000000-0000-0000-0000-000000000001','10000000-0000-0000-0000-000000000001','XTB');
 insert into public.customers(tenant_id,code,name) values('10000000-0000-0000-0000-000000000001','KHA-KLE-001','Historical'),('10000000-0000-0000-0000-000000000001','OLD-CODE','Ungrouped historical');
 \ir ../migrations/00437_customer_group_code_allocation.sql
