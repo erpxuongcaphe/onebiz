@@ -381,7 +381,7 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
   if (format === "number") {
     const n = typeof value === "number" ? value : Number(value);
     return {
-      v: Number.isFinite(n) ? roundDecimals(n) : 0,
+      v: Number.isFinite(n) ? n : 0,
       t: "n",
       z: "#,##0.##",
       s: STYLE_DATA_NUMBER,
