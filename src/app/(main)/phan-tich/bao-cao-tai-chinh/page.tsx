@@ -328,6 +328,7 @@ export default function BaoCaoTaiChinhPage() {
               previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
             { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+            { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
               current: cur.cogsComplete ? cur.netProfit : null,
@@ -426,6 +427,7 @@ export default function BaoCaoTaiChinhPage() {
               previousRate: prev.cogsComplete ? prev.grossMargin : null,
             },
             { label: "(-) Chi phí vận hành", current: cur.operatingExpense, previous: prev.operatingExpense },
+            { label: "(+) Thu nhập khác ghi nhận", current: cur.otherIncome ?? 0, previous: prev.otherIncome ?? 0 },
             {
               label: "= Kết quả vận hành",
               current: cur.cogsComplete ? cur.netProfit : null,
@@ -1033,6 +1035,11 @@ export default function BaoCaoTaiChinhPage() {
                     cur: cur?.operatingExpense ?? 0,
                     prev: prev?.operatingExpense ?? 0,
                     negative: true,
+                  },
+                  {
+                    label: "(+) Thu nhập khác ghi nhận",
+                    cur: cur?.otherIncome ?? 0,
+                    prev: prev?.otherIncome ?? 0,
                   },
                   {
                     label: "= Kết quả vận hành",

@@ -74,6 +74,8 @@ export interface ProfitAndLoss {
   grossProfit: number;
   grossMargin: number;
   operatingExpense: number;
+  otherIncome?: number;
+  legacyCashExpense?: number;
   netProfit: number;
   netMargin: number;
 }
@@ -300,6 +302,8 @@ export async function getProfitAndLoss(
           number(payload.current.delivery_fee),
           currentBasis.complete,
           currentBasis.missingSalesCostLines + currentBasis.missingReturnCostLines,
+          number(payload.current.other_income),
+          number(payload.current.legacy_cash_expense),
         ),
         previous: buildPnL(
           previousMonth,
@@ -311,6 +315,8 @@ export async function getProfitAndLoss(
           number(payload.previous.delivery_fee),
           previousBasis.complete,
           previousBasis.missingSalesCostLines + previousBasis.missingReturnCostLines,
+          number(payload.previous.other_income),
+          number(payload.previous.legacy_cash_expense),
         ),
         cogsCostBasis: {
           current: currentBasis,
@@ -337,13 +343,15 @@ function buildPnL(
   deliveryFee: number = 0,
   cogsComplete: boolean = true,
   missingCostLines: number = 0,
+  otherIncome: number = 0,
+  legacyCashExpense: number = 0,
 ): ProfitAndLoss {
   // CEO 08/07: lãi gộp/biên tính trên doanh thu HÀNG HÓA (ship thu hộ, không vào lãi).
   // Phí giao hàng là khoản THU HỘ đơn vị vận chuyển → tách khỏi doanh thu hàng hóa
   // trước khi tính lãi. revenue (tổng, gồm ship) GIỮ để hiển thị "Tổng doanh thu".
   const goodsRevenue = revenue - deliveryFee;
   const grossProfit = goodsRevenue - cogs;
-  const netProfit = grossProfit - opEx;
+  const netProfit = grossProfit + otherIncome - opEx;
   return {
     period,
     revenue,
@@ -355,6 +363,8 @@ function buildPnL(
     grossProfit,
     grossMargin: goodsRevenue > 0 ? Math.round((grossProfit / goodsRevenue) * 1000) / 10 : 0,
     operatingExpense: opEx,
+    otherIncome,
+    legacyCashExpense,
     netProfit,
     netMargin: goodsRevenue > 0 ? Math.round((netProfit / goodsRevenue) * 1000) / 10 : 0,
   };
