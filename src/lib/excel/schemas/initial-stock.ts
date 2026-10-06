@@ -1,9 +1,8 @@
 /**
  * Excel schema: Tồn kho ban đầu (initial stock import)
  *
- * Dùng khi khởi tạo chi nhánh mới — nhập tồn kho thực tế ở thời điểm chốt
- * vào hệ thống. Backend sẽ tạo 1 phiếu điều chỉnh kho (stock_adjustment)
- * để ghi nhận.
+ * Dùng khi chuyển phần mềm, khởi tạo kho hoặc bổ sung giá vốn ban đầu.
+ * Backend đối chiếu rồi ghi nguyên đợt bằng RPC; không sửa lịch sử phát sinh.
  */
 
 import type { ExcelSchema } from "../types";

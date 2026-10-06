@@ -13,6 +13,14 @@ const preview=[{productId:"p",productCode:"TRA",productName:"Trà",unit:"G",bran
  quantity:0.0042,costPrice:250,costBefore:null,delta:0.0042,value:1.05,latestMovement:null,latestCost:null,costTracked:false,fnb:true,lotNumber:null,expiryDate:null}];
 beforeEach(()=>{rpc.mockReset();props.current=null;});afterEach(cleanup);
 describe("safe opening stock",()=>{
+ it("rejects a future source time before requesting a server preview",async()=>{
+  render(<OpeningStockDialog open onOpenChange={()=>{}} onFinished={()=>{}}/>);
+  fireEvent.change(screen.getByLabelText("Lý do / nguồn đối chiếu"),{target:{value:"Nguồn cũ"}});
+  fireEvent.change(screen.getByLabelText("Ngày giờ chốt ở nguồn cũ"),{target:{value:"2099-01-01T12:00"}});
+  await expect(props.current.preparePreview(rows,new File(["x"],"ton.xlsx"))).rejects.toThrow("tương lai");
+  expect(rpc).not.toHaveBeenCalled();
+  expect(openingError("OPENING_WORKFLOW_REQUIRED").message).toContain("Tải lại trang Tồn kho");
+ });
  it("discards a delayed preview after closing the dialog",async()=>{
   render(<OpeningStockDialog open onOpenChange={()=>{}} onFinished={()=>{}}/>);
   fireEvent.change(screen.getByLabelText("Lý do / nguồn đối chiếu"),{target:{value:"Chuyển nguồn"}});

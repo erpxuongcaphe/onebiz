@@ -38,6 +38,7 @@ const messages: Record<string,string> = {
   OPENING_CONTEXT_REQUIRED: "Cần chọn mục đích, thời điểm chốt hợp lệ và lý do (tối đa 500 ký tự).",
   INVENTORY_LOCKED: "Quản lý đã chốt khóa tồn đầu kỳ của hệ thống. Cần mở khóa tại trang Tồn kho trước khi nhập.",
   OPENING_LOT_MISMATCH: "Sổ lô còn hàng nhưng tồn bằng 0. Hãy đối soát sổ lô trước để không nhập trùng",
+  OPENING_WORKFLOW_REQUIRED: "Luồng nhập tồn cũ đã được thay bằng bước xem trước. Tải lại trang Tồn kho rồi chọn Nhập tồn kho đầu kỳ.",
 };
 export function openingError(message: string): Error {
   const code = Object.keys(messages).find(key => message.includes(key));
