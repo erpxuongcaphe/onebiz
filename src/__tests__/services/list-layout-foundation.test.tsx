@@ -30,9 +30,9 @@ describe("nền bố cục danh sách", () => {
     fireEvent.click(screen.getByRole("checkbox", { name: "Chọn tất cả dòng trong trang" }));
     expect(screen.getAllByRole("checkbox", { name: "Chọn dòng 2" }).every(node => node.getAttribute("aria-checked") === "true")).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Chọn cột hiển thị" }));
-    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: "Mã", exact: true }));
-    await waitFor(() => expect(screen.queryByRole("columnheader", { name: "Mã", exact: true })).not.toBeInTheDocument());
-    expect(screen.getByRole("columnheader", { name: "Tên", exact: true })).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole("menuitemcheckbox", { name: /^Mã$/ }));
+    await waitFor(() => expect(screen.queryByRole("columnheader", { name: /^Mã$/ })).not.toBeInTheDocument());
+    expect(screen.getByRole("columnheader", { name: /^Tên$/ })).toBeInTheDocument();
   });
   it("dải gọn phân tách chỉ số và công cụ", () => {
     render(
