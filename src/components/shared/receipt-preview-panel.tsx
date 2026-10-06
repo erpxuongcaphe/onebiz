@@ -92,6 +92,13 @@ export function ReceiptPreviewPanel(props: ReceiptPreviewPanelProps) {
       storePhone: props.showStorePhone !== false ? props.storePhone ?? "0912 345 678" : undefined,
       paperSize: previewPaper,
       footer: props.footer ?? "Cảm ơn quý khách — hẹn gặp lại!",
+      receiptStyle: props.receiptStyle,
+      showQr: props.showQr,
+      bankInfo: props.showQr && props.bankName && props.bankAccount ? {
+        bankName: props.bankName,
+        bankAccount: props.bankAccount,
+        bankHolder: props.bankHolder ?? "",
+      } : undefined,
     };
 
     const subtotal = SAMPLE_ITEMS.reduce(

@@ -2177,6 +2177,17 @@ function FnbPosPageInner() {
 
     printPreBill({
       branchId: branchId ?? undefined,
+      branchName: currentBranch?.name,
+      customerName: tab.customerName,
+      receiptStyle: settings.print.receiptStyle,
+      showQr: settings.print.showQr,
+      bankInfo: settings.print.showQr ? {
+        bankName: settings.payment.bankName,
+        bankAccount: settings.payment.bankAccount,
+        bankHolder: settings.payment.bankHolder,
+        bankBin: settings.payment.bankBin,
+        vietQrEnabled: settings.payment.vietQrEnabled,
+      } : undefined,
       orderNumber: tab.label,
       tableName: tab.label,
       orderType: tab.orderType,
@@ -2206,7 +2217,7 @@ function FnbPosPageInner() {
       platformCommissionPercent: isPlatformOrder ? commissionPercent : undefined,
       platformCommissionAmount: isPlatformOrder ? commissionAmount : undefined,
     });
-  }, [pos, settings, user, fnbBenefitDisplay]);
+  }, [pos, settings, user, fnbBenefitDisplay, currentBranch?.name, branchId]);
 
   // P1-3D-P1 12/06/2026: submit-lock chống double-click / F9-spam tạo 2 kitchen
   // order. POS Retail có submitLockRef nhưng FnB trước đây thiếu — dialog đóng
