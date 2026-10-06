@@ -3372,11 +3372,11 @@ function FnbPosPageInner() {
         onShiftClick={canCheckout ? handleShiftClick : undefined}
         viewMode={showFloorPlan ? "floorplan" : "menu"}
         onMenuClick={() => setSidenavOpen(true)}
+        orderActions={<FnbBranchPrintControl key={branchId} branchId={branchId ?? undefined} compact />}
         deliveryCountToday={deliveryCountToday}
       />
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
-      <FnbBranchPrintControl key={branchId} branchId={branchId ?? undefined} />
       <FnbSidenavDrawer
         open={sidenavOpen}
         onClose={() => setSidenavOpen(false)}

@@ -244,7 +244,7 @@ export function FnbCart({
       // C1: màn quá thấp (bàn phím điện thoại mở → còn ~500px) thì phần cố
       // định của giỏ (đầu + footer ≈ 600px) không thể lọt hết — cho cột giỏ
       // cuộn dự phòng để nút Bếp/Thanh toán luôn với tới được.
-      "flex flex-col bg-white dark:bg-card h-full overflow-hidden [@media(max-height:620px)]:overflow-y-auto",
+      "flex flex-col bg-white dark:bg-card h-full min-h-0 overflow-hidden",
       mobile
         ? "w-full"
         // Keep tablets on the drawer so menu cards retain usable width.
@@ -252,7 +252,7 @@ export function FnbCart({
         : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
-      <div className="px-2.5 py-2 border-b border-outline-variant/20 bg-white dark:bg-card shrink-0 [@media(max-height:720px)]:p-2.5">
+      <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card shrink-0 max-h-[50%] overflow-y-auto">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
@@ -433,7 +433,7 @@ export function FnbCart({
         {activeTab?.orderType === "delivery" &&
           onDeliveryPlatformChange &&
           !activeTab?.kitchenOrderId && (
-            <div className="mt-3 p-3 rounded-lg bg-surface-container-low border border-outline-variant/20 space-y-2.5">
+            <div className="mt-2 border-t border-border pt-2 space-y-1">
               <div className="flex items-center gap-1">
                 <span className="text-xs uppercase font-bold text-on-surface-variant">
                   Sàn giao hàng
@@ -474,35 +474,18 @@ export function FnbCart({
               ) : deliveryPlatformSettingsStatus === "loading" ? (
                 <p className="text-xs text-muted-foreground">Đang tải cấu hình sàn...</p>
               ) : (
-                <div className="flex gap-1 flex-wrap">
-                  {enabledDeliveryPlatforms.map((p) => {
-                  const isActive =
-                    selectedPlatform === p.key;
-                  const isSelectable =
-                    p.key === "direct" || deliveryPlatformSettings?.[p.key]?.active === true;
-                  return (
-                    <button
-                      key={p.key}
-                      type="button"
-                      onClick={() => onDeliveryPlatformChange(p.key)}
-                      disabled={!isSelectable}
-                      className={cn(
-                        "min-h-11 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50",
-                        isActive
-                          ? p.activeClassName
-                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-                      )}
-                      title={
-                        isSelectable
-                          ? undefined
-                          : "Sàn này đã được tắt trong Cài đặt POS F&B"
-                      }
-                    >
-                      {p.label}
-                    </button>
-                  );
-                  })}
-                </div>
+                <select
+                  aria-label="Sàn giao hàng"
+                  value={selectedPlatform}
+                  onChange={event => onDeliveryPlatformChange(event.target.value as DeliveryPlatform)}
+                  className="w-full min-h-11 rounded-md border border-border bg-background px-2 text-sm font-medium text-primary focus-visible:outline-2 focus-visible:outline-primary"
+                >
+                  {enabledDeliveryPlatforms.map(platform => (
+                    <option key={platform.key} value={platform.key} disabled={platform.key !== "direct" && deliveryPlatformSettings?.[platform.key]?.active !== true}>
+                      {platform.label}
+                    </option>
+                  ))}
+                </select>
               )}
               {/* Fee + Commission inputs row */}
               {(activeTab.deliveryPlatform ?? "direct") !== "direct" && (
@@ -564,13 +547,13 @@ export function FnbCart({
           (activeTab?.deliveryPlatform ?? "direct") === "direct" &&
           !activeTab?.kitchenOrderId &&
           (selfDeliveryTiers || staffOptions) && (
-            <div className="mt-3 p-3 rounded-lg bg-surface-container-low border border-outline-variant/20 space-y-3">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               {/* Tier picker */}
               {selfDeliveryTiers && selfDeliveryTiers.length > 0 && onDeliveryTierChange && (
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-1">
                     <span className="text-xs uppercase font-bold text-on-surface-variant">
-                      Cấp ngưỡng km
+                      Khoảng cách giao
                     </span>
                     <HelpTip>
                       Chọn khoảng cách giao → tự áp phí theo cấu hình tại
@@ -578,42 +561,20 @@ export function FnbCart({
                       muốn nhập tay con số khác.
                     </HelpTip>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {selfDeliveryTiers.map((tier) => {
-                      const isActive = activeTab.deliveryDistanceTier === tier.code;
-                      return (
-                        <button
-                          key={tier.code}
-                          type="button"
-                          onClick={() => onDeliveryTierChange(tier.code, tier.fee)}
-                          className={cn(
-                            "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
-                            isActive
-                              ? "bg-primary text-on-primary"
-                              : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-                          )}
-                          title={`${tier.label} → ${formatCurrency(tier.fee)}`}
-                        >
-                          {tier.label}
-                          <span className="ml-1 opacity-75">
-                            ({formatCurrency(tier.fee)})
-                          </span>
-                        </button>
-                      );
-                    })}
-                    <button
-                      type="button"
-                      onClick={() => onDeliveryTierChange("custom")}
-                      className={cn(
-                        "min-h-11 xl:min-h-8 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors",
-                        activeTab.deliveryDistanceTier === "custom"
-                          ? "bg-primary text-on-primary"
-                          : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high",
-                      )}
-                    >
-                      Tự nhập
-                    </button>
-                  </div>
+                  <select
+                    aria-label="Khoảng cách giao"
+                    value={activeTab.deliveryDistanceTier ?? ""}
+                    onChange={event => {
+                      const code = event.target.value;
+                      const tier = selfDeliveryTiers.find(item => item.code === code);
+                      onDeliveryTierChange(code, tier?.fee);
+                    }}
+                    className="w-full min-h-11 rounded-md border border-border bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-primary"
+                  >
+                    <option value="" disabled>Chọn khoảng cách</option>
+                    {selfDeliveryTiers.map(tier => <option key={tier.code} value={tier.code}>{tier.label} · {formatCurrency(tier.fee)}đ</option>)}
+                    <option value="custom">Tự nhập phí</option>
+                  </select>
                   {/* Khi 'custom' → input fee tay */}
                   {activeTab.deliveryDistanceTier === "custom" && onDeliveryFeeChange && (
                     <div className="grid grid-cols-2 gap-2 pt-1">
@@ -650,11 +611,12 @@ export function FnbCart({
                     </HelpTip>
                   </div>
                   <select
+                    aria-label="Nhân viên giao"
                     value={activeTab.deliveryStaffId ?? ""}
                     onChange={(e) =>
                       onDeliveryStaffChange(e.target.value || undefined)
                     }
-                    className="w-full min-h-11 xl:min-h-8 xl:h-8 px-2 text-xs rounded-md border bg-surface-container-lowest focus:outline-none focus:ring-2 focus:ring-primary/40"
+                    className="w-full min-h-11 px-2 text-sm rounded-md border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">— Chưa gán (gán sau) —</option>
                     {staffOptions.map((s) => (
@@ -675,7 +637,7 @@ export function FnbCart({
         // cao so với bản cũ. Bỏ icon cup to + giảm padding + dồn shortcut
         // F3/F4 vào cùng dòng. Tránh khoảng trống lớn khi section "Giao
         // hàng" đã chiếm nhiều space ở trên.
-        <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground gap-2 px-4 py-6 text-center">
+        <div className="flex-1 min-h-0 overflow-hidden flex flex-col items-center justify-center text-muted-foreground gap-1 px-3 py-2 text-center">
           <Icon name="local_cafe" size={20} className="text-muted-foreground/50" />
           <p className="text-xs font-medium">Chưa có món — chọn từ thực đơn</p>
           <div className="flex items-center gap-1 text-xs text-muted-foreground/80">
@@ -716,7 +678,7 @@ export function FnbCart({
       )}
 
       {/* ── Footer: totals + discount + actions — secondary tools collapse ── */}
-      <div className="border-t border-outline-variant/20 bg-white dark:bg-card p-2.5 shrink-0 space-y-1.5 [@media(max-height:720px)]:p-3 [@media(max-height:540px)]:p-2.5">
+      <div className="border-t border-outline-variant/20 bg-white dark:bg-card p-2.5 shrink-0 max-h-[50%] overflow-y-auto space-y-1.5">
         {/* Thao tác ít dùng không được chiếm chiều cao danh sách món. Tổng tiền
             và hai nút chính luôn nằm ngoài vùng thu gọn. */}
         {!isEmpty && (
@@ -742,7 +704,7 @@ export function FnbCart({
         </button>
         )}
 
-        <div className={cn("space-y-3 [@media(max-height:720px)]:space-y-2", !moPhanPhu && "hidden")}>
+        <div role="region" aria-label="Chi tiết ưu đãi" className={cn("max-h-[25dvh] overflow-y-auto space-y-2", !moPhanPhu && "hidden")}>
         {/* KM-3: Free items section — quà tặng kèm (BOGO + gift) */}
         {freeItems && freeItems.length > 0 && (
           <div className="bg-status-warning/10 border border-status-warning/30 rounded-lg p-2 space-y-1">
@@ -959,7 +921,7 @@ export function FnbCart({
         )}
 
         {/* Primary actions row — Stitch spec: 40/60 split */}
-        <div className="flex gap-2 pt-1">
+        <div className="sticky bottom-0 flex gap-2 bg-white dark:bg-card pt-1">
           <button
             type="button"
             onClick={onSendToKitchen}

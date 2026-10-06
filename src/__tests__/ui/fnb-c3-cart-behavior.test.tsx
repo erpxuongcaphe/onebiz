@@ -219,7 +219,7 @@ describe("C3 hành vi — thu gọn màn thấp KHÔNG ẩn cứng chức năng"
     const nut = screen.getByRole("button", { name: /Ưu đãi/ });
     expect(nut).toHaveAttribute("aria-expanded", "false");
     const inputTruoc = screen.getByPlaceholderText("Nhập mã khuyến mãi");
-    const nhom = inputTruoc.closest('div[class*="space-y-3"]')!;
+    const nhom = inputTruoc.closest('[aria-label="Chi tiết ưu đãi"]')!;
     expect(nhom.className).toContain("hidden");
 
     fireEvent.click(nut);

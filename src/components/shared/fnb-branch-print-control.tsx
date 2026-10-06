@@ -8,7 +8,7 @@ import { PrintJobList } from "./branch-print-setup";
 import { useToast } from "@/lib/contexts/toast-context";
 import type { PrintResult } from "@/lib/printer/printer-service";
 
-export function FnbBranchPrintControl({ branchId }: { branchId?: string }) {
+export function FnbBranchPrintControl({ branchId, compact = false }: { branchId?: string; compact?: boolean }) {
   const { settings, updateSettings } = useSettings();
   const [open, setOpen] = useState(false), [point, setPoint] = useState<PrintPoint | null>(null), [jobs, setJobs] = useState<BranchPrintJob[]>([]), [error, setError] = useState("");
   const active = settings.print.fnbBranchQueue;
@@ -31,9 +31,9 @@ export function FnbBranchPrintControl({ branchId }: { branchId?: string }) {
     void load(); const timer = setInterval(load, 10000);
     return () => { disposed = true; clearInterval(timer); };
   }, [open, branchId]);
-  return <><div className="flex shrink-0 items-center justify-between gap-2 border-b bg-background px-3 py-1 text-sm">
-    <span className="truncate">{active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"}</span>
-    <Button className="min-h-11 shrink-0 text-primary" variant="ghost" size="sm" onClick={() => setOpen(true)}>Nơi nhận & lệnh in</Button>
+  return <><div className={compact ? "shrink-0" : "flex shrink-0 items-center justify-between gap-2 border-b bg-background px-3 py-1 text-sm"}>
+    {!compact && <span className="truncate">{active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"}</span>}
+    <Button aria-label="Nơi nhận & lệnh in" title={active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"} className="min-h-11 shrink-0 text-primary" variant="ghost" size="sm" onClick={() => setOpen(true)}>{compact ? <><span className="sm:hidden">In F&B</span><span className="hidden sm:inline">{active ? "In: chi nhánh" : "In: thiết bị này"}</span></> : "Nơi nhận & lệnh in"}</Button>
   </div><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto"><DialogHeader><DialogTitle className="text-primary">In phiếu tại chi nhánh</DialogTitle></DialogHeader>
     <p className="text-sm">Nơi nhận do quản lý gán theo chi nhánh. Chọn chế độ một lần trên trình duyệt này; các lần in sau tự dùng đúng nơi nhận, không cần chọn máy lại.</p>
     <div className="divide-y rounded border text-sm">
