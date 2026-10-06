@@ -67,6 +67,8 @@ interface ImportExcelDialogProps<TRow> {
   confirmDisabled?: boolean;
   /** Only for commits with a server-side idempotency key. */
   retryOnFailure?: boolean;
+  entryContent?: (preview: (rows: TRow[]) => Promise<void>, busy: boolean) => ReactNode;
+  title?: string;
 }
 
 export function ImportExcelDialog<TRow>({
@@ -75,7 +77,7 @@ export function ImportExcelDialog<TRow>({
   schema,
   onCommit,
   onFinished,
-  preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure,
+  preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure, entryContent, title,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -141,6 +143,22 @@ export function ImportExcelDialog<TRow>({
     }
   }
 
+  async function handleManualPreview(rows: TRow[]) {
+    const request = ++generation.current;
+    setPreparing(true);setParseError(null);
+    try {
+      if (!rows.length || !preparePreview) throw new Error("Thêm ít nhất một mã hàng trước khi xem trước.");
+      await preparePreview(rows, new File([], "Nhập trực tiếp trên web"));
+      if (request !== generation.current) return;
+      setParseResult({validRows:rows,errorRows:[],tableErrors:[],totalRows:rows.length});
+      setStep("preview");
+    } catch (error) {
+      if (request === generation.current) setParseError(error instanceof Error ? error.message : "Không thể xem trước.");
+    } finally {
+      if (request === generation.current) setPreparing(false);
+    }
+  }
+
   function handleDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragOver(false);
@@ -197,25 +215,26 @@ export function ImportExcelDialog<TRow>({
           <DialogTitle>
             <span className="inline-flex items-center gap-2">
               <Icon name="upload" size={16} />
-              Nhập Excel: {schema.name}
+              {title ?? `Nhập Excel: ${schema.name}`}
             </span>
           </DialogTitle>
           <DialogDescription>
             {step === "upload" &&
-              "Chọn file .xlsx / .xls / .csv đúng theo mẫu để nhập dữ liệu hàng loạt."}
+              (entryContent ? "Chọn chi nhánh và hàng cần nhập, xem trước rồi xác nhận." : "Chọn file .xlsx / .xls / .csv đúng theo mẫu để nhập dữ liệu hàng loạt.")}
             {step === "preview" &&
               "Xem trước dữ liệu + lỗi. Xác nhận để ghi vào hệ thống."}
             {step === "importing" && "Đang ghi dữ liệu, vui lòng chờ..."}
-            {step === "done" && "Hoàn tất nhập Excel."}
+            {step === "done" && "Kết quả đợt nhập."}
           </DialogDescription>
         </DialogHeader>
 
         <DialogBody>
+        {entryContent && <div hidden={step !== "upload"} className="space-y-3"><fieldset disabled={preparing}>{uploadContent}</fieldset>{entryContent(handleManualPreview, preparing)}</div>}
         {step === "upload" && (
           <div className="space-y-3">
-            {uploadContent}
-            {preparing && <p role="status" className="text-sm text-primary">Đang kiểm tra file và đối chiếu dữ liệu hiện tại...</p>}
-            <div
+            {!entryContent && uploadContent}
+            {preparing && <p role="status" className="text-sm text-primary">Đang đối chiếu dữ liệu hiện tại...</p>}
+            {!entryContent && <div
               onDragOver={(e) => {
                 e.preventDefault();
                 setDragOver(true);
@@ -264,7 +283,7 @@ export function ImportExcelDialog<TRow>({
                 className="hidden"
                 onChange={handleSelect}
               />
-            </div>
+            </div>}
 
             {parseError && (
               <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
@@ -341,7 +360,7 @@ export function ImportExcelDialog<TRow>({
           {step === "preview" && (
             <>
               <Button variant="outline" onClick={reset}>
-                Chọn file khác
+                {entryContent ? "Sửa dữ liệu" : "Chọn file khác"}
               </Button>
               <Button
                 disabled={!canConfirm || confirmDisabled}

@@ -1,4 +1,4 @@
-import { getClient } from "./base";
+import { getClient, getCurrentTenantId } from "./base";
 import type { InitialStockImportRow } from "@/lib/excel/schemas";
 import { formatDateInputValue } from "@/lib/format";
 
@@ -19,6 +19,20 @@ export interface OpeningBatch {
   purpose: OpeningPurpose; reason: string; file_name: string | null;
   total_value: number; rows: OpeningPreviewRow[];
 }
+export interface OpeningStockCandidate {id:string;code:string;name:string;unit:string}
+export async function searchOpeningStockCandidates(branchId:string,search:string):Promise<OpeningStockCandidate[]> {
+  const tenantId=await getCurrentTenantId();
+  const client=getClient();
+  const {data:branch,error:branchError}=await client.from("branches").select("cascade_mode").eq("tenant_id",tenantId).eq("id",branchId).single();
+  if(branchError) throw new Error("Không đọc được chi nhánh. Kiểm tra kết nối rồi thử lại.");
+  const term=search.replace(/[(),%_\\]/g," ").trim();
+  if(!term) return [];
+  const groups=["or(inventory_role.is.null,inventory_role.neq.fnb_menu_item)","or(product_type.neq.sku,channel.is.null,channel.neq.fnb)",
+    ...(branch.cascade_mode==="production"?["or(has_bom.is.null,has_bom.is.false)"]:[]),`or(code.ilike.%${term}%,name.ilike.%${term}%)`];
+  const {data,error}=await client.from("products").select("id,code,name,unit").eq("tenant_id",tenantId).eq("is_active",true).or(`and(${groups.join(",")})`).order("name").limit(20);
+  if(error) throw new Error("Không tìm được danh mục. Kiểm tra kết nối rồi thử lại.");
+  return data??[];
+}
 const messages: Record<string,string> = {
   OPENING_PERMISSION_DENIED: "Anh/chị chưa có quyền điều chỉnh tồn kho.",
   OPENING_BRANCH_DENIED: "Mã chi nhánh chưa đúng hoặc tài khoản chưa có quyền tại chi nhánh này.",
@@ -33,7 +47,7 @@ const messages: Record<string,string> = {
   OPENING_USE_STOCKTAKE: "Mã đã có tồn hoặc phát sinh vận hành. Muốn đổi số lượng hãy dùng Kiểm kho; bổ sung giá vốn thì giữ nguyên lượng đang có",
   OPENING_COST_ALREADY_TRACKED: "Mã đã có lịch sử giá vốn. Không ghi đè đầu kỳ; hãy đối soát giá vốn/kiểm kê",
   OPENING_SHARED_COST_CONFLICT: "Giá vốn dùng chung khác file và chi nhánh khác đang có hàng. Cần đối soát trước khi đổi giá",
-  OPENING_PREVIEW_CHANGED: "Tồn hoặc giá vốn đã thay đổi sau khi xem trước. Chọn lại file để cập nhật; chưa ghi dữ liệu.",
+  OPENING_PREVIEW_CHANGED: "Tồn hoặc giá vốn đã thay đổi sau khi xem trước. Xem trước lại dữ liệu để cập nhật; chưa ghi dữ liệu.",
   OPENING_REPLAY_CONFLICT: "Mã đợt nhập đã được dùng cho dữ liệu khác. Đóng rồi mở lại để tạo đợt mới.",
   OPENING_CONTEXT_REQUIRED: "Cần chọn mục đích, thời điểm chốt hợp lệ và lý do (tối đa 500 ký tự).",
   INVENTORY_LOCKED: "Quản lý đã chốt khóa tồn đầu kỳ của hệ thống. Cần mở khóa tại trang Tồn kho trước khi nhập.",

@@ -3,6 +3,7 @@
 import { useRef,useState } from "react";
 import Link from "next/link";
 import { ImportExcelDialog } from "./import-excel-dialog";
+import { OpeningStockManualEntry } from "./opening-stock-manual-entry";
 import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,8 +15,8 @@ function localNow() {
   const date=new Date();
   return new Date(date.getTime()-date.getTimezoneOffset()*60000).toISOString().slice(0,16);
 }
-export function OpeningStockDialog({open,onOpenChange,onFinished}: {
-  open:boolean;onOpenChange:(open:boolean)=>void;onFinished:()=>void;
+export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
+  open:boolean;onOpenChange:(open:boolean)=>void;onFinished:()=>void;mode?:"file"|"manual";
 }) {
   const [purpose,setPurpose]=useState<OpeningPurpose>("migration");
   const requestGeneration=useRef(0);
@@ -29,7 +30,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
     const generation=++requestGeneration.current;
     setPrepared(null);setPreview([]);setZeroConfirmed(false);
     const date=new Date(sourceAt);
-    if(!reason.trim()||!Number.isFinite(date.getTime())) throw new Error("Nhập lý do và ngày giờ chốt dữ liệu trước khi chọn file.");
+    if(!reason.trim()||!Number.isFinite(date.getTime())) throw new Error("Nhập lý do và ngày giờ chốt dữ liệu trước khi xem trước.");
     if(date.getTime()>Date.now()+5*60*1000) throw new Error("Ngày giờ chốt dữ liệu không được ở tương lai. Kiểm tra lại giờ trên thiết bị hoặc chọn đúng thời điểm chốt nguồn.");
     if(purpose==="opening_cost" && rows.some(row=>row.quantity===0)) throw new Error("Bổ sung giá vốn dùng cho hàng đang có lượng dương. Hãy bỏ các dòng lượng 0 hoặc chọn mục đích khởi tạo tồn.");
     const next=await previewOpeningStock(rows);
@@ -39,6 +40,8 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
     setPrepared({id:crypto.randomUUID(),rows,purpose,sourceAt:date.toISOString(),reason:reason.trim(),fileName:file.name});
   }
   return <ImportExcelDialog open={open} onOpenChange={next=>{if(!next){requestGeneration.current++;setPrepared(null);}onOpenChange(next);}} schema={initialStockExcelSchema}
+    title={mode==="manual"?"Nhập tồn ban đầu trực tiếp":undefined}
+    entryContent={mode==="manual"?(onPreview,busy)=><OpeningStockManualEntry onPreview={onPreview} busy={busy}/>:undefined}
     preparePreview={prepare} onFinished={onFinished} retryOnFailure
     confirmDisabled={!prepared || (needsZero&&!zeroConfirmed)}
     onCommit={async()=>{
@@ -60,16 +63,16 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
       <p className="text-xs text-muted-foreground">Ngày giờ nguồn dùng để đối chiếu; hệ thống ghi nhận khi anh/chị xác nhận, không sửa ngược lịch sử.</p>
     </div>}
     instructions={<ul className="list-disc pl-4 space-y-1">
-      <li>Một file, một chi nhánh. Chi nhánh nhận tồn theo mã trong file; kiểm tra ở bước xem trước.</li>
+      <li>{mode==="manual"?"Một đợt, một chi nhánh. Kiểm tra chi nhánh nhận tồn ở bước xem trước.":"Một file, một chi nhánh. Chi nhánh nhận tồn theo mã trong file; kiểm tra ở bước xem trước."}</li>
       <li>Nhập mã nguyên liệu, bao bì hoặc bán thành phẩm giữ tồn. Mã phải có sẵn.</li>
       <li>Lượng và đơn giá theo đơn vị tồn Onebiz. Mã không có trong file giữ nguyên.</li>
       <li>Đã có phát sinh thì đổi lượng tại <Link className="text-primary underline" href="/hang-hoa/kiem-kho">Kiểm kho</Link>; không ghi đè đầu kỳ để sửa lịch sử.</li>
-      <li>Toàn bộ file cùng thành công hoặc không ghi. Không tạo công nợ hay phiếu thu/chi.</li>
+      <li>Toàn bộ đợt cùng thành công hoặc không ghi. Không tạo công nợ hay phiếu thu/chi.</li>
     </ul>}
     previewContent={<div className="space-y-3">
       <div className="border-b pb-3 text-sm space-y-1">
         <p><b className="text-primary">{preview[0]?.branchCode}</b> · {prepared&&openingPurposeLabels[prepared.purpose]} · {preview.length} mã</p>
-        <p>Giá trị tồn trong file: <b>{formatCurrency(preview.reduce((sum,row)=>sum+Number(row.value),0))}</b></p>
+        <p>Giá trị tồn đợt nhập: <b>{formatCurrency(preview.reduce((sum,row)=>sum+Number(row.value),0))}</b></p>
         <p className="text-muted-foreground">{prepared?.reason} · Chốt nguồn: {prepared&&new Date(prepared.sourceAt).toLocaleString("vi-VN")}</p>
         <p className="text-muted-foreground">{preview[0]?.fnb ? "Giá vốn riêng của quán; không đổi giá Retail." : "Chi nhánh này dùng giá vốn danh mục chung. Không cho đổi giá nếu chi nhánh khác đang có hàng."}</p>
       </div>
