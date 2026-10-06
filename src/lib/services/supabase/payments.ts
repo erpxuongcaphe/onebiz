@@ -17,6 +17,7 @@ import type { CashTimingInput } from "@/lib/cash-time";
 import { recordTimedCash } from "./cash-timing";
 
 export interface RecordPaymentInput extends CashTimingInput {
+  branchId?: string;
   /** invoice or purchase_order ID */
   referenceId: string;
   amount: number;
@@ -69,7 +70,7 @@ async function recordPartyAdvance(
   const rpcName =
     type === "customer" ? "record_customer_advance" : "record_supplier_advance";
   const partyKey = type === "customer" ? "p_customer_id" : "p_supplier_id";
-  const { data, error } = input.occurredAt || input.transactionDate
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
     ? { data: await recordTimedCash(type === "customer" ? "customer_advance" : "supplier_advance", { ...input }, input), error: null }
     : await supabase.rpc(
     rpcName as never,
@@ -160,7 +161,7 @@ export async function recordInvoicePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = input.occurredAt || input.transactionDate
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
     ? { data: await recordTimedCash("invoice", { ...input }, input), error: null }
     : await supabase.rpc(
     "record_invoice_payment" as never,
@@ -200,7 +201,7 @@ export async function recordPurchasePayment(
   const supabase = getClient();
   await getCurrentContext();
 
-  const { data, error } = input.occurredAt || input.transactionDate
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
     ? { data: await recordTimedCash("purchase_order", { ...input }, input), error: null }
     : await supabase.rpc(
     "record_purchase_payment" as never,

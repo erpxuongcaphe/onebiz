@@ -34,7 +34,7 @@ describe("same F&B bill layout before and after payment", () => {
   });
   it("keeps template common totals/items identical and adds collection rows only after payment", async () => {
     mock.resolve.mockResolvedValue({ paperSize: "80mm" });
-    const payload = { ...data, invoiceCode: "DEMO", tableName: "Bàn 5", tipAmount: 0, paid: 60000 };
+    const payload = { ...data, branchId: "branch", invoiceCode: "DEMO", tableName: "Bàn 5", tipAmount: 0, paid: 60000 };
     await printFnbBillWithTemplate({ ...payload, billPhase: "prebill" });
     await printFnbBillWithTemplate({ ...payload, paymentMethod: "cash" });
     const pre = mock.render.mock.calls[0][0], paid = mock.render.mock.calls[1][0];

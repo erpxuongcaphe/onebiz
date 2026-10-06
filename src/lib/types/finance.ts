@@ -11,6 +11,8 @@ export interface CashBookEntry {
   note?: string;
   createdBy: string;
   createdByName?: string;
+  performedBy?: string;
+  performedByName?: string;
   /** Phương thức thanh toán (cash/transfer/card/ewallet). */
   paymentMethod?: string;
   /** Chi nhánh ghi nhận phiếu (UUID + tên đã resolve để render). */

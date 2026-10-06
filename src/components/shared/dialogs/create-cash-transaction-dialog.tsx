@@ -20,7 +20,8 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select";
-import { useToast } from "@/lib/contexts";
+import { useToast, useAuth } from "@/lib/contexts";
+import { getCashPerformers } from "@/lib/services/supabase/cash-timing";
 import {
   createCashTransaction,
   getCustomers,
@@ -69,6 +70,10 @@ export function CreateCashTransactionDialog({
   defaultType = "receipt",
 }: CreateCashTransactionDialogProps) {
   const { toast } = useToast();
+  const { currentBranch } = useAuth();
+  const [performedBy, setPerformedBy] = useState("");
+  const [performers, setPerformers] = useState<Array<{id:string;name:string}>>([]);
+  const [performerError, setPerformerError] = useState<string | null>(null);
   const [type, setType] = useState<"receipt" | "payment">(defaultType);
   const [code, setCode] = useState("");
   const [amount, setAmount] = useState("");
@@ -90,6 +95,21 @@ export function CreateCashTransactionDialog({
   const [selectedRefId, setSelectedRefId] = useState<string>("");
   const [loadingParties, setLoadingParties] = useState(false);
   const [loadingRefs, setLoadingRefs] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled=false;
+    setPerformedBy("");
+    setPerformers([]);
+    setPerformerError(null);
+    if (!currentBranch?.id) return;
+    getCashPerformers(currentBranch.id).then((rows) => {
+      if (!cancelled) setPerformers(rows);
+    }).catch(() => {
+      if (!cancelled) setPerformerError("Không tải được nhân viên thực hiện. Vui lòng thử mở lại phiếu.");
+    });
+    return () => { cancelled=true; };
+  }, [open,currentBranch?.id]);
 
   useEffect(() => {
     if (open) {
@@ -123,6 +143,8 @@ export function CreateCashTransactionDialog({
       selectedPartyId,
       selectedRefId,
       cashTime,
+      performedBy,
+      branchId: currentBranch?.id,
     },
     hasContent: (draft) =>
       !!draft.amount.trim() ||
@@ -142,6 +164,7 @@ export function CreateCashTransactionDialog({
       setNote(draft.note);
       setSelectedPartyId(draft.selectedPartyId);
       setSelectedRefId(draft.selectedRefId);
+      if (draft.branchId === currentBranch?.id) setPerformedBy(draft.performedBy ?? "");
     },
   });
 
@@ -219,6 +242,8 @@ export function CreateCashTransactionDialog({
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
+    if (!currentBranch?.id) newErrors.branch = "Chọn một chi nhánh cụ thể trước khi lập phiếu.";
+    if (!performers.some((person) => person.id === performedBy)) newErrors.performer = "Chọn nhân viên thực hiện thu/chi.";
     if (!amount.trim() || isNaN(Number(amount)) || Number(amount) <= 0)
       newErrors.amount = "Số tiền không hợp lệ";
     if (category === "customer_payment" || category === "supplier_payment") {
@@ -245,6 +270,7 @@ export function CreateCashTransactionDialog({
         type === "receipt"
       ) {
         await recordInvoicePayment({
+          branchId: currentBranch!.id,
           referenceId: selectedRefId,
           amount: Number(amount),
           paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
@@ -252,6 +278,7 @@ export function CreateCashTransactionDialog({
           occurredAt: cashInputToIso(cashTime.occurredLocal),
           transactionDate: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
+          performedBy,
         });
       } else if (
         category === "supplier_payment" &&
@@ -259,6 +286,7 @@ export function CreateCashTransactionDialog({
         type === "payment"
       ) {
         await recordPurchasePayment({
+          branchId: currentBranch!.id,
           referenceId: selectedRefId,
           amount: Number(amount),
           paymentMethod: method as "cash" | "transfer" | "card" | "ewallet",
@@ -266,6 +294,7 @@ export function CreateCashTransactionDialog({
           occurredAt: cashInputToIso(cashTime.occurredLocal),
           transactionDate: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
+          performedBy,
         });
       } else {
         const created = await createCashTransaction({
@@ -279,6 +308,8 @@ export function CreateCashTransactionDialog({
           occurredAt: cashInputToIso(cashTime.occurredLocal),
           date: cashTime.transactionDate,
           timeReason: cashTime.timeReason,
+          performedBy,
+          branchId: currentBranch!.id,
         });
         setCode(created.code);
       }
@@ -314,6 +345,19 @@ export function CreateCashTransactionDialog({
         </DialogHeader>
 
         <div className="grid gap-4 py-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Chi nhánh <span className="text-destructive">*</span></label>
+            <Input value={currentBranch?.name ?? ""} readOnly aria-invalid={!!errors.branch} />
+            {errors.branch && <p role="alert" className="text-xs text-destructive">{errors.branch}</p>}
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Người thực hiện thu/chi <span className="text-destructive">*</span></label>
+            <Select value={performedBy} onValueChange={(value) => setPerformedBy(value ?? "")}>
+              <SelectTrigger className="w-full" aria-invalid={!!errors.performer}><SelectValue placeholder="Chọn nhân viên" /></SelectTrigger>
+              <SelectContent>{performers.map((person) => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}</SelectContent>
+            </Select>
+            {(performerError || errors.performer) && <p role="alert" className="text-xs text-destructive">{performerError || errors.performer}</p>}
+          </div>
           {/* Type toggle */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Loại phiếu</label>

@@ -240,6 +240,7 @@ export default function LuongTienPage() {
             { label: "Loại", key: "type", width: 14 },
             { label: "Chi nhánh", key: "branch", width: 26 },
             { label: "Người tạo phiếu", key: "createdBy", width: 24 },
+            { label: "Người thực hiện thu/chi", key: "performedBy", width: 26 },
             { label: "Thực thu/chi lúc", key: "occurredAt", width: 24 },
             { label: "Đối tượng", key: "counterparty", width: 28 },
             { label: "Danh mục", key: "category", width: 24 },
@@ -253,6 +254,7 @@ export default function LuongTienPage() {
             type: entry.type === "receipt" ? "Thu" : "Chi",
             branch: entry.branchName ?? "",
             createdBy: entry.createdByName ?? "",
+            performedBy: entry.performedByName ?? "Chưa ghi nhận",
             occurredAt: entry.occurredAt ?? "",
             counterparty: entry.counterparty,
             category: cashCategoryLabel(entry.category),
@@ -544,6 +546,7 @@ export default function LuongTienPage() {
                     <th className="px-3 py-2">Loại</th>
                     <th className="px-3 py-2">Chi nhánh</th>
                     <th className="px-3 py-2">Người tạo phiếu</th>
+                    <th className="px-3 py-2">Người thực hiện thu/chi</th>
                     <th className="px-3 py-2">Thực thu/chi lúc</th>
                     <th className="px-3 py-2">Đối tượng</th>
                     <th className="px-3 py-2">Danh mục</th>
@@ -560,6 +563,7 @@ export default function LuongTienPage() {
                       <td className="px-3 py-2">{entry.type === "receipt" ? "Thu" : "Chi"}</td>
                       <td className="px-3 py-2">{entry.branchName ?? "—"}</td>
                       <td className="px-3 py-2">{entry.createdByName || "—"}</td>
+                      <td className="px-3 py-2">{entry.performedByName || "Chưa ghi nhận"}</td>
                       <td className="whitespace-nowrap px-3 py-2">{entry.occurredAt ? new Date(entry.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận"}</td>
                       <td className="px-3 py-2">{entry.counterparty || "—"}</td>
                       <td className="px-3 py-2">{cashCategoryLabel(entry.category)}</td>
