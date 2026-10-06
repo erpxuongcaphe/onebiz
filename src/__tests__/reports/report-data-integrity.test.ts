@@ -104,6 +104,9 @@ describe("report data integrity", () => {
     expect(analytics).toContain('.order("id", { ascending: true }), "[getStockMovements]"');
     expect(inventoryPage).toContain("date: m.date, code: m.code, name: m.name, unit: m.unit");
     expect(inventoryPage).toContain("data={movementChartRows}");
+    expect(inventoryPage).toContain("formatStockQuantity(movement.nhap)");
+    expect(inventoryPage).toContain("formatStockQuantity(movement.xuat)");
+    expect(inventoryPage).toContain("formatStockQuantity(p.value)");
   });
   it("paginates finance, executive, channel, and stock aggregates", () => {
     expect(analytics).toContain("fetchAllPostgrestRows");
