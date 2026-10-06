@@ -5,7 +5,7 @@
 import type { ExcelSchema } from "../types";
 
 export interface CustomerImportRow {
-  code: string;
+  code?: string;
   name: string;
   phone?: string;
   email?: string;
@@ -34,17 +34,16 @@ export const customerExcelSchema: ExcelSchema<CustomerImportRow> = {
   name: "Khách hàng",
   fileName: "Khach-hang",
   description:
-    "Danh sách khách hàng. Mã KH phải duy nhất. Có thể để trống SĐT cho khách lẻ không đăng ký.",
+    "Khách mới: để trống mã, chọn nhóm. Cập nhật khách: nhập mã hiện có. Mã mới được hệ thống tự cấp.",
   columns: [
     {
       key: "code",
       header: "Mã KH",
       type: "string",
-      required: true,
       unique: true,
       maxLength: 50,
-      example: "KH0001",
-      description: "Mã khách hàng duy nhất trong hệ thống",
+      example: "",
+      description: "Để trống khi tạo mới; chỉ nhập mã hiện có để cập nhật khách",
       width: 14,
     },
     {
@@ -176,7 +175,7 @@ export const customerExcelSchema: ExcelSchema<CustomerImportRow> = {
       type: "string",
       maxLength: 50,
       description:
-        "Mã nhóm khách hàng (VD: VIP, B2B). Phải tồn tại trong Nhóm KH. Bỏ trống nếu chưa phân nhóm.",
+        "Mã hoặc tên nhóm đã tạo (VD: KLE, KSI). Bắt buộc cho khách mới; bỏ trống khi cập nhật để giữ nhóm cũ.",
       width: 14,
     },
     {

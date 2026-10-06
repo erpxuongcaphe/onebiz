@@ -266,33 +266,43 @@ export async function bulkImportCustomers(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // customer_groups không có cột code — map theo name
-  const { data: groups } = await supabase
+  // Codes identify catalog groups; exact names remain compatible with older templates.
+  const { data: groups, error: groupsError } = await supabase
     .from("customer_groups")
-    .select("id, name")
+    .select("id, name, code")
     .eq("tenant_id", tenantId);
-  const groupMap = new Map<string, string>();
+  if (groupsError) throw new Error(groupsError.message);
+  const groupCodes = new Map<string, string>();
+  const groupNames = new Map<string, string | null>();
   for (const g of groups ?? []) {
-    groupMap.set(g.name, g.id);
+    groupNames.set(g.name, groupNames.has(g.name) ? null : g.id);
+    if (g.code) groupCodes.set(g.code, g.id);
   }
 
   // 05/08: giống hàng hóa — mã KH đã có thì CẬP NHẬT, không báo trùng.
-  const { data: existingCustomers } = await supabase
-    .from("customers")
-    .select("id, code")
-    .eq("tenant_id", tenantId);
   const custCodeToId = new Map<string, string>();
-  for (const c of existingCustomers ?? []) {
-    if (c.code) custCodeToId.set(String(c.code).trim(), c.id);
+  for (let offset = 0; ; offset += 1000) {
+    const { data: existingCustomers, error } = await supabase
+      .from("customers")
+      .select("id, code")
+      .eq("tenant_id", tenantId)
+      .order("id")
+      .range(offset, offset + 999);
+    if (error) throw new Error(error.message);
+    for (const c of existingCustomers ?? []) {
+      if (c.code) custCodeToId.set(String(c.code).trim(), c.id);
+    }
+    if (!existingCustomers || existingCustomers.length < 1000) break;
   }
 
   return runBulk(rows, async (row) => {
     let groupId: string | null = null;
     if (row.groupCode) {
       // Thử match cả name và code (một số hệ thống dùng code, một số dùng tên)
-      const found = groupMap.get(row.groupCode);
+      const groupKey = row.groupCode.trim();
+      const found = groupCodes.get(groupKey) ?? groupNames.get(groupKey);
       if (!found) {
-        throw new Error(`Nhóm KH "${row.groupCode}" chưa tồn tại (phải là TÊN nhóm đã tạo)`);
+        throw new Error(`Nhóm KH "${row.groupCode}" chưa tồn tại (chọn mã hoặc tên nhóm đã tạo)`);
       }
       groupId = found;
     }
@@ -334,12 +344,12 @@ export async function bulkImportCustomers(
       tax_code: row.taxCode ?? null,
       customer_type: row.customerType,
       gender: row.gender ?? null,
-      group_id: groupId,
+      ...(groupId ? { group_id: groupId } : {}),
       is_active: row.isActive ?? true,
     };
 
     // ⚠️ KHÔNG đụng công nợ (debt) — nợ chỉ đổi qua hóa đơn/phiếu thu.
-    const existingCustId = custCodeToId.get(row.code.trim());
+    const existingCustId = custCodeToId.get(row.code?.trim() ?? "");
     if (existingCustId) {
       const { error } = await (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -347,14 +357,16 @@ export async function bulkImportCustomers(
       )(custFields).eq("id", existingCustId).eq("tenant_id", tenantId);
       if (error) throw new Error(error.message);
     } else {
-      const { data: ins, error } = await (
+      if (row.code?.trim()) throw new Error("Mã khách chưa tồn tại. Để trống mã để hệ thống tự cấp khi tạo khách mới.");
+      if (!groupId) throw new Error("Khách mới phải chọn nhóm khách hàng");
+      const { error } = await (
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         supabase.from("customers").insert as any
-      )({ tenant_id: tenantId, code: row.code, ...custFields })
+      )({ tenant_id: tenantId, code: "", ...custFields })
         .select("id")
         .single();
       if (error) throw new Error(error.message);
-      if (ins?.id) custCodeToId.set(row.code.trim(), ins.id);
+      // Blank codes are separate new customers, never an import lookup key.
     }
   });
 }

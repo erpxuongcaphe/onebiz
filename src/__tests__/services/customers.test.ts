@@ -56,10 +56,11 @@ describe("createCustomer", () => {
       error: null,
     });
 
-    const result = await createCustomer({ name: "KH Test", phone: "0909876543", code: "KH001" });
+    const result = await createCustomer({ name: "KH Test", phone: "0909876543", groupId: "group-1", code: "ignored" });
 
     expect(mockFrom).toHaveBeenCalledWith("customers");
     expect(mockChain.insert).toHaveBeenCalled();
+    expect(mockChain.insert).toHaveBeenCalledWith(expect.objectContaining({ code: "", group_id: "group-1" }));
     expect(result.id).toBe("c-1");
     expect(result.name).toBe("KH Test");
   });
@@ -70,7 +71,11 @@ describe("createCustomer", () => {
       error: { message: "duplicate key" },
     });
 
-    await expect(createCustomer({ name: "Dup", code: "X" })).rejects.toThrow("duplicate key");
+    await expect(createCustomer({ name: "Dup", groupId: "group-1" })).rejects.toThrow("duplicate key");
+  });
+  it("rejects a missing group before making any request", async () => {
+    await expect(createCustomer({ name: "Missing group" })).rejects.toThrow("Vui lòng chọn nhóm khách hàng");
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 

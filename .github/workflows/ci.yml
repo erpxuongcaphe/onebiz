@@ -355,6 +355,24 @@ jobs:
           createdb cash_performer_test
           PGDATABASE=cash_performer_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00435_cash_performer_context.integration.sql
 
+      - name: Verify atomic customer group codes in an isolated database
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb customer_group_codes_test
+          export PGDATABASE=customer_group_codes_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00437_customer_group_code_allocation.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -c "select public.test_concurrent_customer('Concurrent A');" &
+          first=$!
+          psql -X -v ON_ERROR_STOP=1 -c "select public.test_concurrent_customer('Concurrent B');" &
+          second=$!
+          wait "$first"
+          wait "$second"
+          psql -X -v ON_ERROR_STOP=1 -c "do \$\$ begin if (select count(distinct code) from public.customers where name like 'Concurrent %')<>2 then raise exception 'concurrent codes collided'; end if; end; \$\$;"
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

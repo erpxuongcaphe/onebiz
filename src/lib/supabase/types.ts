@@ -419,6 +419,7 @@ export interface Database {
           id: string;
           tenant_id: string;
           name: string;
+          code: string | null;
           discount_percent: number;
           note: string | null;
           created_at: string;
@@ -427,11 +428,13 @@ export interface Database {
           id?: string;
           tenant_id: string;
           name: string;
+          code?: string | null;
           discount_percent?: number;
           note?: string | null;
         };
         Update: {
           name?: string;
+          code?: string | null;
           discount_percent?: number;
           note?: string | null;
         };

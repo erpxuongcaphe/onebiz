@@ -40,11 +40,6 @@ interface CreateCustomerDialogProps {
 // "retail/wholesale/vip/agent" như trước (sẽ làm `group_id` nhận chuỗi rác,
 // FK fail hoặc lưu sai).
 
-function generateCustomerCode() {
-  const num = Math.floor(Math.random() * 99999) + 1;
-  return `KH${String(num).padStart(6, "0")}`;
-}
-
 export function CreateCustomerDialog({
   open,
   onOpenChange,
@@ -77,7 +72,7 @@ export function CreateCustomerDialog({
   // Bảng giá B2B mặc định cho KH này — empty = giá niêm yết
   const [priceTierId, setPriceTierId] = useState("");
   const [tiers, setTiers] = useState<PriceTier[]>([]);
-  const [groups, setGroups] = useState<{ label: string; value: string }[]>([]);
+  const [groups, setGroups] = useState<{ label: string; value: string; code?: string }[]>([]);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
@@ -94,7 +89,7 @@ export function CreateCustomerDialog({
       });
     getCustomerGroupsAsync()
       .then((list) => {
-        if (!cancelled) setGroups(list.map((g) => ({ label: g.label, value: g.value })));
+        if (!cancelled) setGroups(list);
       })
       .catch(() => {
         if (!cancelled) setGroups([]);
@@ -127,7 +122,7 @@ export function CreateCustomerDialog({
         setTagInput("");
         setPriceTierId(initialData.priceTierId || "");
       } else {
-        setCode(generateCustomerCode());
+        setCode("");
         setName("");
         setPhone("");
         setEmail("");
@@ -155,6 +150,8 @@ export function CreateCustomerDialog({
     const newErrors: Record<string, string> = {};
     if (!name.trim()) newErrors.name = "Tên khách hàng là bắt buộc";
     if (!phone.trim()) newErrors.phone = "Số điện thoại là bắt buộc";
+    if (!isEditing && !group) newErrors.group = "Vui lòng chọn nhóm khách hàng";
+    if (!isEditing && group && !groups.find((entry) => entry.value === group)?.code) newErrors.group = "Nhóm khách chưa được thiết lập mã";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -191,8 +188,7 @@ export function CreateCustomerDialog({
           variant: "success",
         });
       } else {
-        await createCustomer({
-          code,
+        const created = await createCustomer({
           name,
           phone: phone || undefined,
           email: email || undefined,
@@ -213,7 +209,7 @@ export function CreateCustomerDialog({
         onOpenChange(false);
         toast({
           title: "Tạo khách hàng thành công",
-          description: `Đã thêm khách hàng ${name} (${code})`,
+          description: `Đã thêm khách hàng ${name} (${created.code})`,
           variant: "success",
         });
       }
@@ -242,7 +238,7 @@ export function CreateCustomerDialog({
         <div className="grid gap-4 py-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã khách hàng</label>
-            <Input value={code} onChange={(e) => setCode(e.target.value)} readOnly={isEditing} className={isEditing ? "bg-muted/50" : ""} />
+            <Input value={isEditing ? code : groups.find((entry) => entry.value === group)?.code ? `KHA-${groups.find((entry) => entry.value === group)?.code}-...` : ""} placeholder="Tự cấp khi lưu" readOnly className="bg-muted/50" />
           </div>
 
           <div className="space-y-2">
@@ -396,7 +392,7 @@ export function CreateCustomerDialog({
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Nhóm khách hàng</label>
+            <label className="text-sm font-medium">Nhóm khách hàng {!isEditing && <span className="text-destructive">*</span>}</label>
             <Select
               value={group || "__none__"}
               onValueChange={(v) => setGroup(v === "__none__" ? "" : (v ?? ""))}
@@ -425,6 +421,7 @@ export function CreateCustomerDialog({
                 ))}
               </SelectContent>
             </Select>
+            {errors.group && <p className="text-xs text-destructive">{errors.group}</p>}
             {groups.length === 0 && (
               <p className="text-xs text-muted-foreground">
                 Chưa có nhóm khách hàng nào. Tạo nhóm tại{" "}

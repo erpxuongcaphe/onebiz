@@ -339,6 +339,7 @@ function CustomerGroupDialog({
 }) {
   const { toast } = useToast();
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [discountPercent, setDiscountPercent] = useState(0);
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
@@ -346,11 +347,16 @@ function CustomerGroupDialog({
   useEffect(() => {
     if (!open) return;
     setName(editing?.name ?? "");
+    setCode(editing?.code ?? "");
     setDiscountPercent(editing?.discountPercent ?? 0);
     setNote(editing?.note ?? "");
   }, [open, editing]);
 
   async function handleSave() {
+    if (!/^[A-Z][A-Z0-9]{1,7}$/.test(code.trim().toUpperCase())) {
+      toast({ title: "Mã nhóm cần 2–8 ký tự chữ in hoa hoặc số, bắt đầu bằng chữ", variant: "error" });
+      return;
+    }
     if (!name.trim()) {
       toast({ title: "Vui lòng nhập tên nhóm", variant: "error" });
       return;
@@ -365,6 +371,7 @@ function CustomerGroupDialog({
       if (editing) {
         await updateCustomerGroup(editing.id, {
           name: name.trim(),
+          code: code.trim().toUpperCase(),
           discountPercent,
           note: note.trim(),
         });
@@ -372,6 +379,7 @@ function CustomerGroupDialog({
       } else {
         await createCustomerGroup({
           name: name.trim(),
+          code: code.trim().toUpperCase(),
           discountPercent,
           note: note.trim() || undefined,
         });
@@ -400,6 +408,10 @@ function CustomerGroupDialog({
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Mã nhóm *</label>
+            <Input value={code} onChange={(event) => setCode(event.target.value.toUpperCase())} maxLength={8} placeholder="VD: KLE, KSI" />
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Tên nhóm *</label>
             <Input
