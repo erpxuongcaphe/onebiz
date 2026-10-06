@@ -14,6 +14,7 @@ import { dayKeysForRange } from "@/lib/utils/report-date-keys";
 import { getBranchStockAggregates, getBranchStockRows } from "./branch-stock";
 import { summarizeChannelSales, type ChannelOnlineOrder } from "@/lib/utils/channel-report";
 import { aggregateProductSaleLines } from "@/lib/reports/product-sales-aggregation";
+import { aggregateStockMovementRows, type MovementReportRow, type MovementSourceRow } from "@/lib/reports/stock-movement-aggregation";
 
 // === Shared Types ===
 
@@ -168,11 +169,7 @@ export interface RecentOrder {
 
 // === Hàng hóa (Inventory) ===
 
-export interface StockMovementPoint {
-  day: string;
-  nhap: number;
-  xuat: number;
-}
+export type StockMovementPoint = MovementReportRow;
 
 export interface LowStockItem {
   name: string;
@@ -1528,39 +1525,19 @@ export async function getStockMovements(
 
   let query = supabase
     .from("stock_movements")
-    .select("created_at, type, quantity")
+    .select("id, created_at, product_id, type, quantity, products(name, code, unit)")
     .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
   if (branchId) query = query.eq("branch_id", branchId);
-  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }), "[getStockMovements]");
+  const data = await fetchAllPostgrestRows(() => query.order("created_at", { ascending: true }).order("id", { ascending: true }), "[getStockMovements]");
 
   const dayKeys = dayKeysForRange(customRange, days);
-  const inbound = new Map(dayKeys.map((key) => [key, 0]));
-  const outbound = new Map(dayKeys.map((key) => [key, 0]));
   const includeYear =
     customRange !== undefined &&
     customRange.from.slice(0, 4) !== customRange.to.slice(0, 4);
 
-  for (const movement of data ?? []) {
-    const date = new Date(movement.created_at);
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-    if (!inbound.has(key)) continue;
-    const signedQty = Number(movement.quantity ?? 0);
-    const quantity = Math.abs(signedQty);
-    const isInbound = movement.type === "in" || (movement.type === "adjust" && signedQty >= 0);
-    const target = isInbound ? inbound : outbound;
-    target.set(key, (target.get(key) ?? 0) + quantity);
-  }
-
-  return dayKeys.map((key) => {
-    const [year, month, day] = key.split("-");
-    return {
-      day: includeYear ? `${day}/${month}/${year}` : `${day}/${month}`,
-      nhap: inbound.get(key) ?? 0,
-      xuat: outbound.get(key) ?? 0,
-    };
-  });
+  return aggregateStockMovementRows(data as unknown as MovementSourceRow[], dayKeys, includeYear);
 }
 
 export async function getLowStockProducts(
