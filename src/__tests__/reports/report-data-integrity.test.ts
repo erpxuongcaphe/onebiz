@@ -173,6 +173,13 @@ describe("report data integrity", () => {
     expect(orderPage).toContain("subtitle={selectedPeriodLabel}");
   });
 
+  it("excludes unfinished invoices from branch customer debt and shares the snapshot with its KPI", () => {
+    const debtorSource = analytics.split("export async function getTopDebtors(")[1].split("export async function getSupplierKpis(")[0];
+    expect(debtorSource).toContain('.eq("status", "completed")');
+    expect(customerPage).toContain("const currentDebt = debtors.reduce((sum, row) => sum + row.debt, 0)");
+    expect(customerPage).toContain("totalDebt: currentDebt");
+  });
+
   it("uses an explicit month selector for the cohort snapshot report", () => {
     expect(cohortPage).toContain("hideDateRange");
     expect(cohortPage).toContain('aria-label="Số tháng theo dõi"');

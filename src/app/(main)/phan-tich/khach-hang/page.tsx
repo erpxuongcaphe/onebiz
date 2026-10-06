@@ -202,7 +202,8 @@ export default function KhachHangPage() {
         getTopDebtors(null, activeBranchId),
       ]);
       if (requestId !== requestIdRef.current) return;
-      setKpis(kpiData);
+      const currentDebt = debtors.reduce((sum, row) => sum + row.debt, 0);
+      setKpis({ ...kpiData, totalDebt: currentDebt, prevTotalDebt: currentDebt });
       setNewCustomersMonthly(monthly);
       setCustomerSegments(segments);
       setTopCustomers(customers);
