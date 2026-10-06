@@ -11,7 +11,14 @@ function isNonZero(value: number): boolean {
 export function filterXntRows(
   rows: XntRow[],
   filter: XntRowFilter,
+  dimensions?: { categoryName?: string; unit?: string },
 ): XntRow[] {
+  if (dimensions?.categoryName !== undefined || dimensions?.unit !== undefined) {
+    rows = rows.filter((row) =>
+      (dimensions.categoryName === undefined || (row.categoryName ?? "") === dimensions.categoryName)
+      && (dimensions.unit === undefined || row.unit === dimensions.unit),
+    );
+  }
   if (filter === "all") return rows;
   if (filter === "closing-stock") {
     return rows.filter((row) => isNonZero(row.closingQty));
@@ -20,6 +27,21 @@ export function filterXntRows(
   return rows.filter((row) =>
     [row.openingQty, row.totalIn, row.totalOut, row.closingQty].some(isNonZero),
   );
+}
+
+export const XNT_QUANTITY_KEYS = [
+  "openingQty", "totalIn", "totalOut", "closingQty",
+  "inSupplier", "inCheck", "inReturn", "inTransfer", "inProduction", "inOther",
+  "outSale", "outDisposal", "outSupplierReturn", "outCheck", "outTransfer",
+  "outProduction", "outInternal", "outOther",
+] as const;
+
+// Quantities with different units cannot form a meaningful aggregate.
+export function sumXntQuantities(rows: XntRow[]): Record<typeof XNT_QUANTITY_KEYS[number], number | null> {
+  const mixedUnits = new Set(rows.map((row) => row.unit)).size > 1;
+  return Object.fromEntries(XNT_QUANTITY_KEYS.map((key) => [
+    key, mixedUnits ? null : rows.reduce((sum, row) => sum + row[key], 0),
+  ])) as Record<typeof XNT_QUANTITY_KEYS[number], number | null>;
 }
 
 export function sumXntRows(rows: XntRow[]): XntReportResult["subtotal"] {
