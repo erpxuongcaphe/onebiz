@@ -30,6 +30,7 @@ export function OpeningStockDialog({open,onOpenChange,onFinished}: {
     setPrepared(null);setPreview([]);setZeroConfirmed(false);
     const date=new Date(sourceAt);
     if(!reason.trim()||!Number.isFinite(date.getTime())) throw new Error("Nhập lý do và ngày giờ chốt dữ liệu trước khi chọn file.");
+    if(date.getTime()>Date.now()+5*60*1000) throw new Error("Ngày giờ chốt dữ liệu không được ở tương lai. Kiểm tra lại giờ trên thiết bị hoặc chọn đúng thời điểm chốt nguồn.");
     if(purpose==="opening_cost" && rows.some(row=>row.quantity===0)) throw new Error("Bổ sung giá vốn dùng cho hàng đang có lượng dương. Hãy bỏ các dòng lượng 0 hoặc chọn mục đích khởi tạo tồn.");
     const next=await previewOpeningStock(rows);
     if(generation!==requestGeneration.current) throw new Error("Lượt xem trước đã đóng.");

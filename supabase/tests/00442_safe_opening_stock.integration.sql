@@ -24,7 +24,7 @@ create table audit_log(tenant_id uuid,user_id uuid,action text,entity_type text,
 create table product_lots(tenant_id uuid,branch_id uuid,product_id uuid,variant_id uuid,lot_number text,source_type text,received_date date,
  expiry_date date,initial_qty numeric,current_qty numeric,status text,note text);
 create function user_has_permission(uuid,text) returns boolean language sql stable as $$ select coalesce(current_setting('test.denied',true),'')<>'yes' $$;
-create function user_has_branch_access(uuid,uuid) returns boolean language sql stable as $$select exists(select 1 from branches b join profiles p on p.tenant_id=b.tenant_id where b.id=$2 and p.id=$1)$$;
+create function user_has_branch_access(uuid,uuid) returns boolean language sql stable as $$select coalesce(current_setting('test.denied_branch',true),'')<>'yes' and exists(select 1 from branches b join profiles p on p.tenant_id=b.tenant_id where b.id=$2 and p.id=$1)$$;
 create function get_tenant_setting(uuid,text,jsonb) returns jsonb language sql stable as $$select $3$$;
 -- The production wrapper is extracted verbatim; its delegated implementation
 -- is inert here so we can prove only opening resets are rejected by the guard.
@@ -32,6 +32,7 @@ create function _apply_manual_stock_movement_auth_impl_00246(uuid,uuid,uuid,json
 create function _reconcile_product_lots_to_branch_00284(uuid,uuid,uuid,text,uuid,uuid,text) returns void language plpgsql as $$begin return;end$$;
 \i /tmp/opening-stock-helpers.sql
 \ir ../migrations/00442_safe_opening_stock_batches.sql
+\ir ../migrations/00443_opening_stock_history_and_business_date.sql
 
 insert into tenants values('00000000-0000-0000-0000-000000000001'),('00000000-0000-0000-0000-000000000002');
 insert into profiles values('00000000-0000-0000-0000-000000000010','00000000-0000-0000-0000-000000000001',true);
@@ -50,13 +51,16 @@ insert into products(id,tenant_id,code,name,unit,cost_price,product_type,channel
 ('00000000-0000-0000-0000-000000000031','00000000-0000-0000-0000-000000000001','TRA','Trà','G',777,'sku','retail','stockable'),
 ('00000000-0000-0000-0000-000000000032','00000000-0000-0000-0000-000000000001','MENU','Món','Ly',888,'sku','fnb','fnb_menu_item');
 
+set timezone='Pacific/Kiritimati';
 do $$declare r jsonb; p jsonb; result jsonb; source_at timestamptz:=now(); begin
- r:='[{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25,"unit":"Chai"}]';
+ r:=jsonb_build_array(jsonb_build_object('productCode','SUA','branchCode','QUAN','quantity',10,'costPrice',25,'unit','Chai','expiryDate',(now() at time zone 'Asia/Ho_Chi_Minh')::date));
  p:=preview_inventory_opening_00442(r);
  result:=commit_inventory_opening_00442('00000000-0000-0000-0000-000000000050',r,p,'migration',source_at,'Chuyển phần mềm','ton.xlsx');
  if (select quantity from branch_stock where product_id='00000000-0000-0000-0000-000000000030')<>10 then raise exception 'QUANTITY_FAILED';end if;
  if (select total_cost from fnb_branch_product_cost_balances where product_id='00000000-0000-0000-0000-000000000030')<>250 then raise exception 'VALUE_FAILED';end if;
  if (select current_qty from product_lots where product_id='00000000-0000-0000-0000-000000000030')<>10 then raise exception 'LOT_FAILED';end if;
+ if not exists(select 1 from product_lots where product_id='00000000-0000-0000-0000-000000000030'
+  and received_date=(now() at time zone 'Asia/Ho_Chi_Minh')::date and status='active') then raise exception 'BUSINESS_DATE_FAILED';end if;
  if (select cost_price from products where code='SUA')<>999 then raise exception 'RETAIL_CHANGED';end if;
  result:=commit_inventory_opening_00442('00000000-0000-0000-0000-000000000050',r,p,'migration',source_at,'Chuyển phần mềm','ton.xlsx');
  if not (result->>'replayed')::boolean or (select count(*) from stock_movements)<>1 then raise exception 'REPLAY_DUPLICATED';end if;
@@ -107,4 +111,46 @@ do $$declare r jsonb; p jsonb; before_moves int;begin
  if (select count(*) from stock_movements)<>before_moves or (select stock from products where code='CAFE')<>5
  or (select total_cost from fnb_branch_product_cost_balances where product_id='00000000-0000-0000-0000-000000000033')<>15 then raise exception 'VALUE_ONLY_FAILED';end if;
 end $$;
-select '00442 opening stock: atomic, replay-safe, snapshot-safe, branch cost isolated' as result;
+
+-- Legacy records with no reference type still count as operational history.
+insert into products(id,tenant_id,code,name,unit,product_type,channel) values
+ ('00000000-0000-0000-0000-000000000034','00000000-0000-0000-0000-000000000001','OLD','Hàng cũ','G','sku','retail');
+insert into stock_movements(tenant_id,branch_id,product_id,type,quantity,reference_type) values
+ ('00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000034','out',1,null);
+do $$begin
+ begin perform preview_inventory_opening_00442('[{"productCode":"OLD","branchCode":"QUAN","quantity":1,"costPrice":2}]');raise exception 'UNKNOWN_HISTORY_MUST_REJECT';
+ exception when others then if sqlerrm not like '%OPENING_USE_STOCKTAKE%' then raise;end if;end;
+ perform set_config('test.denied_branch','yes',true);
+ begin perform preview_inventory_opening_00442('[{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25}]');raise exception 'BRANCH_MUST_REJECT';
+ exception when others then if sqlerrm not like '%OPENING_BRANCH_DENIED%' then raise;end if;end;
+ perform set_config('test.denied_branch','no',true);
+ begin perform preview_inventory_opening_00442('[{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25},{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25}]');raise exception 'DUPLICATE_MUST_REJECT';
+ exception when others then if sqlerrm not like '%OPENING_DUPLICATE_PRODUCT%' then raise;end if;end;
+end$$;
+
+-- Exercise the actual RLS policy as authenticated, not as the schema owner.
+insert into profiles values
+ ('00000000-0000-0000-0000-000000000011','00000000-0000-0000-0000-000000000002',true),
+ ('00000000-0000-0000-0000-000000000012','00000000-0000-0000-0000-000000000001',false);
+grant usage on schema auth to authenticated;
+grant select on profiles,branches to authenticated;
+set role authenticated;
+do $$begin
+ if (select count(*) from inventory_opening_batches)<>2 then raise exception 'OWN_HISTORY_NOT_VISIBLE';end if;
+ perform set_config('test.denied_branch','yes',true);
+ if exists(select 1 from inventory_opening_batches) then raise exception 'BRANCH_HISTORY_EXPOSED';end if;
+ perform set_config('test.denied_branch','no',true);
+ perform set_config('test.denied','yes',true);
+ if exists(select 1 from inventory_opening_batches) then raise exception 'UNAUTHORIZED_HISTORY_EXPOSED';end if;
+ perform set_config('test.denied','no',true);
+ perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000011',true);
+ if exists(select 1 from inventory_opening_batches) then raise exception 'OTHER_TENANT_HISTORY_EXPOSED';end if;
+ begin perform preview_inventory_opening_00442('[{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25}]');raise exception 'OTHER_TENANT_PREVIEW_ALLOWED';
+ exception when others then if sqlerrm not like '%OPENING_BRANCH_DENIED%' then raise;end if;end;
+ perform set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000012',true);
+ if exists(select 1 from inventory_opening_batches) then raise exception 'INACTIVE_HISTORY_EXPOSED';end if;
+ begin perform preview_inventory_opening_00442('[{"productCode":"SUA","branchCode":"QUAN","quantity":10,"costPrice":25}]');raise exception 'INACTIVE_PREVIEW_ALLOWED';
+ exception when others then if sqlerrm not like '%OPENING_PERMISSION_DENIED%' then raise;end if;end;
+end$$;
+reset role;
+select '00442/00443 opening stock: atomic, replay-safe, snapshot-safe, branch cost and history isolated, Vietnam lot date' as result;
