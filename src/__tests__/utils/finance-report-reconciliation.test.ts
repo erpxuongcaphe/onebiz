@@ -6,6 +6,15 @@ import {reconcileCashFlow,cashFlowMonths,summarizeRecognition} from '@/lib/utils
 const cash = (id:string,type:'receipt'|'payment',amount:number,category='Bán hàng'):CashBookEntry => ({id,code:id,date:'2026-10-05',type,typeName:type,amount,category,counterparty:'Test',createdBy:'user'});
 const link:FinanceCashLink = {cash_id:'expense',event_id:'event',event_code:'CP1',category_code:'CP-VH-DIEN',category_name:'Điện',kind:'expense',cash_flow_activity:'operating',business_date:'2026-09-30',event_status:'posted'};
 describe('finance report reconciliation',() => {
+  it('uses shared cash labels without changing source categories or classification',() => {
+    const entry=cash('supplier','payment',40,'supplier_payment');
+    const report=reconcileCashFlow([entry,cash('customer','receipt',50,'customer_payment')],[]);
+    expect(report.detail.map(row=>row.category)).toEqual(['Chi trả NCC','Thu tiền khách hàng']);
+    expect(entry.category).toBe('supplier_payment');
+    expect(report.totals[0]).toMatchObject({receipt:50,payment:40,count:2});
+    expect(reconcileCashFlow([cash('custom','receipt',1,'Khoản riêng')],[]).detail[0].category).toBe('Khoản riêng');
+    expect(reconcileCashFlow([cash('expense','payment',1,'supplier_payment')],[{...link,category_name:'Tên khoản riêng'}]).detail[0].category).toBe('Tên khoản riêng');
+  });
   it('counts one cash document once and never adds its recognized amount',() => {
     const report=reconcileCashFlow([cash('sale','receipt',200),cash('expense','payment',40,'management_expense')],[link]);
     expect(report.receipt).toBe(200);expect(report.payment).toBe(40);expect(report.totals[0].net).toBe(160);

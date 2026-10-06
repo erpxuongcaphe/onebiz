@@ -1,6 +1,7 @@
 import type {CashBookEntry} from '@/lib/types';
 import type {CashFlowDetailedRow} from '@/lib/services/supabase/analytics';
 import type {CashFlowActivity, FinanceCashLink, FinanceEvent, FinanceKind} from '@/lib/services/supabase/management-finance';
+import {cashCategoryLabel} from '@/lib/utils/cash-book-labels';
 
 export const CASH_FLOW_LABELS: Record<CashFlowActivity, string> = {
   operating: 'Hoạt động kinh doanh', investing: 'Hoạt động đầu tư',
@@ -18,7 +19,7 @@ export function cashFlowSource(entry: CashBookEntry, links: ReadonlyMap<string, 
   const activity: CashFlowActivity = link
     ? link.event_status === 'posted' ? link.cash_flow_activity : 'unclassified'
     : OPERATING_CATEGORIES.has(entry.category ?? '') ? 'operating' : 'unclassified';
-  return {activity, category: link?.category_name ?? entry.category ?? 'Chưa có danh mục',
+  return {activity, category: link?.category_name ?? (entry.category ? cashCategoryLabel(entry.category) : 'Chưa có danh mục'),
     categoryCode: link?.category_code ?? '', eventCode: link?.event_code ?? '', eventId: link?.event_id,
     basis: link ? 'Khoản ghi nhận liên kết' : 'Danh mục phiếu thu/chi'};
 }
