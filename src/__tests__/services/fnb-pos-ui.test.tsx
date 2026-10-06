@@ -33,6 +33,7 @@ describe("useFnbPosState", () => {
   it("clears hidden delivery charges when an unsent order changes to takeaway", () => {
     const { result } = renderHook(() => useFnbPosState());
     act(() => result.current.setActiveTabOrderType("delivery"));
+    expect(result.current.activeTab?.label).toBe("Giao hàng #1");
     act(() => {
       result.current.setDeliveryPlatform(result.current.activeTabId, "grab_food", 25);
       result.current.setDeliveryTier(result.current.activeTabId, "near", 5000);
@@ -40,6 +41,7 @@ describe("useFnbPosState", () => {
     });
     act(() => result.current.setActiveTabOrderType("takeaway"));
     expect(result.current.activeTab).toMatchObject({ orderType: "takeaway", deliveryFee: 0, platformCommissionPercent: 0 });
+    expect(result.current.activeTab?.label).toBe("Mang về #1");
     expect(result.current.activeTab?.deliveryPlatform).toBeUndefined();
     expect(result.current.activeTab?.deliveryDistanceTier).toBeUndefined();
     expect(result.current.activeTab?.deliveryStaffId).toBeUndefined();
