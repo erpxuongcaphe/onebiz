@@ -308,7 +308,7 @@ export async function createManualCashTransactionAtomic(
   input: CreateManualCashTransactionInput,
 ): Promise<CashBookEntry> {
   const supabase = getClient();
-  const { data, error } = input.occurredAt || input.transactionDate
+  const { data, error } = input.occurredAt || input.transactionDate || input.performedBy
     ? { data: await recordTimedCash("manual", { ...input }, { ...input, timeReason: input.timeReason || input.note }), error: null }
     : await (supabase.rpc as any)(
     "create_manual_cash_transaction_atomic",
@@ -332,7 +332,7 @@ export async function createManualCashTransactionAtomic(
 export async function createCashTransaction(tx: Partial<CashTransaction>): Promise<CashBookEntry> {
   const ctx = await getCurrentContext();
   return createManualCashTransactionAtomic({
-    branchId: ctx.branchId,
+    branchId: tx.branchId ?? ctx.branchId,
     code: tx.code,
     type: tx.type ?? "receipt",
     category: tx.category ?? "other",
@@ -343,6 +343,7 @@ export async function createCashTransaction(tx: Partial<CashTransaction>): Promi
     occurredAt: tx.occurredAt,
     transactionDate: tx.date,
     timeReason: tx.timeReason,
+    performedBy: tx.performedBy,
   });
 }
 
@@ -403,6 +404,8 @@ function mapCashEntry(row: any): CashBookEntry {
     note: row.note ?? undefined,
     createdBy: row.created_by,
     createdByName: profile?.full_name ?? "",
+    performedBy: row.performed_by ?? undefined,
+    performedByName: row.performed_by_name ?? undefined,
     paymentMethod: row.payment_method ?? undefined,
     branchId: row.branch_id ?? undefined,
     branchName: branch?.name ?? undefined,

@@ -27,7 +27,7 @@ export function formatCashTime(value?: string | null): string {
   if (!Number.isFinite(date.getTime())) return 'Chưa ghi nhận';
   return new Intl.DateTimeFormat('vi-VN',{timeZone:CASH_TIME_ZONE,day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit',hour12:false}).format(date);
 }
-export interface CashTimingInput { occurredAt?: string | null; transactionDate?: string | null; timeReason?: string | null; }
+export interface CashTimingInput { occurredAt?: string | null; transactionDate?: string | null; timeReason?: string | null; performedBy?: string | null; }
 export function validateCashTime(value: string, transactionDate: string, reason: string, now = new Date()): string | null {
   try {
     const at = cashInputToIso(value);
