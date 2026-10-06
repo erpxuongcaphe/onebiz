@@ -18,6 +18,7 @@ create table public.fnb_print_jobs (
   claim_id uuid, finished_at timestamptz, last_action_by uuid references public.profiles(id)
 );
 create index fnb_print_jobs_pending on public.fnb_print_jobs(point_id,created_at) where status='queued';
+create index fnb_print_jobs_inflight on public.fnb_print_jobs(point_id,claimed_at) where status='sending';
 create index fnb_print_jobs_branch on public.fnb_print_jobs(branch_id,created_at desc);
 alter table public.fnb_print_points enable row level security;
 alter table public.fnb_print_jobs enable row level security;
@@ -78,12 +79,12 @@ begin
     select * into v_job from public.fnb_print_jobs where id=(p_data->>'id')::uuid and branch_id=p_branch and tenant_id=v_tenant for update;
     if not found or v_job.status not in ('failed','unknown','queued') then raise exception 'Lệnh không còn ở trạng thái có thể xử lý.'; end if;
     if p_action='cancel' then
-      update public.fnb_print_jobs set status='cancelled',last_action_by=auth.uid(),finished_at=now(),message='Quản lý dừng lệnh.' where id=v_job.id;
+      update public.fnb_print_jobs set status='cancelled',bytes_base64='',last_action_by=auth.uid(),finished_at=now(),message='Quản lý dừng lệnh.' where id=v_job.id;
     else
       -- Reprinting is a new audited job. The original never loses its history.
       insert into public.fnb_print_jobs(id,tenant_id,branch_id,point_id,actor_id,actor_name,label,route_key,route_label,printer,paper,bytes_base64,message)
       values(gen_random_uuid(),v_tenant,p_branch,v_job.point_id,auth.uid(),(select full_name from public.profiles where id=auth.uid()),'IN LẠI · '||left(v_job.label,65),v_job.route_key,v_job.route_label,v_job.printer,v_job.paper,v_job.bytes_base64,'In lại có xác nhận từ lệnh '||v_job.id::text);
-      update public.fnb_print_jobs set status='cancelled',last_action_by=auth.uid(),finished_at=now(),message='Đã tạo lệnh in lại; xem lịch sử lệnh mới.' where id=v_job.id;
+      update public.fnb_print_jobs set status='cancelled',bytes_base64='',last_action_by=auth.uid(),finished_at=now(),message='Đã tạo lệnh in lại; xem lịch sử lệnh mới.' where id=v_job.id;
     end if;
     return jsonb_build_object('ok',true);
   end if;
@@ -95,7 +96,7 @@ returns jsonb language plpgsql stable security definer set search_path=public,ex
 declare v_tenant uuid; v_point jsonb; v_jobs jsonb;
 begin
   v_tenant:=public._fnb_print_access_v1(p_branch);
-  select to_jsonb(p)-'token_hash' into v_point from public.fnb_print_points p where branch_id=p_branch and tenant_id=v_tenant;
+  select (to_jsonb(p)-'token_hash')||jsonb_build_object('connected',p.enabled and coalesce(p.last_seen_at>now()-interval '45 seconds',false)) into v_point from public.fnb_print_points p where branch_id=p_branch and tenant_id=v_tenant;
   select coalesce(jsonb_agg(j order by j.created_at desc),'[]') into v_jobs from
     (select id,label,route_label,case when status='sending' and claimed_at<now()-interval '2 minutes' then 'unknown' else status end as status,created_at,actor_name,
       case when status='sending' and claimed_at<now()-interval '2 minutes' then 'Điểm in mất kết nối trong lúc xử lý. Kiểm tra giấy trước khi in lại.' else message end as message
@@ -139,7 +140,7 @@ begin
   if p_token is null or length(p_token)<>64 then raise exception 'PRINT_POINT_UNAUTHORIZED' using errcode='42501'; end if;
   select * into v_point from public.fnb_print_points where id=p_point and enabled and token_hash=digest(p_token,'sha256') for update;
   if not found then raise exception 'PRINT_POINT_UNAUTHORIZED' using errcode='42501'; end if;
-  update public.fnb_print_points set last_seen_at=now() where id=p_point;
+  update public.fnb_print_points set last_seen_at=now() where id=p_point and (last_seen_at is null or last_seen_at<now()-interval '15 seconds');
   -- Expired sends are ambiguous. Never reclaim automatically.
   update public.fnb_print_jobs set status='unknown',message='Điểm in mất kết nối trong lúc xử lý. Kiểm tra giấy trước khi in lại.',finished_at=now()
     where point_id=p_point and status='sending' and claimed_at<now()-interval '2 minutes';
@@ -153,7 +154,7 @@ begin
   elsif p_action='finish' then
     v_status:=p_data->>'status';
     if v_status not in ('handed_off','failed','unknown') or v_status is null then raise exception 'INVALID_PRINT_STATUS'; end if;
-    update public.fnb_print_jobs set status=v_status,message=left(p_data->>'message',300),finished_at=now()
+    update public.fnb_print_jobs set status=v_status,bytes_base64=case when v_status='handed_off' then '' else bytes_base64 end,message=left(p_data->>'message',300),finished_at=now()
      where id=(p_data->>'id')::uuid and point_id=p_point and claim_id=(p_data->>'claim_id')::uuid and status='sending';
     if not found then raise exception 'PRINT_CLAIM_EXPIRED'; end if;
     return jsonb_build_object('ok',true);
