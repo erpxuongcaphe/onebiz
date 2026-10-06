@@ -2360,6 +2360,7 @@ export async function getTopDebtors(
       .select("customer_id, customer_name, debt, customers(name)")
       .eq("tenant_id", tenantId)
       .eq("branch_id", branchId)
+      .eq("status", "completed")
       .gt("debt", 0)
       .order("debt", { ascending: false }),
     "[getTopDebtors]",
