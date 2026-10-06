@@ -567,7 +567,8 @@ export function FnbCart({
                     onChange={event => {
                       const code = event.target.value;
                       const tier = selfDeliveryTiers.find(item => item.code === code);
-                      onDeliveryTierChange(code, tier?.fee);
+                      if (code === "custom") onDeliveryTierChange("custom", undefined);
+                      else if (tier) onDeliveryTierChange(tier.code, tier.fee);
                     }}
                     className="w-full min-h-11 rounded-md border border-border bg-background px-2 text-sm focus-visible:outline-2 focus-visible:outline-primary"
                   >
