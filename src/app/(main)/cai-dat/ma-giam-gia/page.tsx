@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -178,11 +179,11 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="flex sm:max-w-xl max-h-[90dvh] flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? "Sửa coupon" : "Tạo coupon"}</DialogTitle>
         </DialogHeader>
-        <div className="grid gap-4 py-2">
+        <DialogBody className="grid gap-4 py-2">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">Mã coupon *</label>
@@ -317,8 +318,11 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
           <div className="rounded-lg border p-3">
             <button
               type="button"
+              role="switch"
+              aria-label="Kích hoạt"
+              aria-checked={isActive}
               onClick={() => setIsActive(!isActive)}
-              className="flex w-full items-center justify-between"
+              className="flex min-h-11 w-full items-center justify-between"
             >
               <div className="text-left">
                 <div className="text-sm font-medium">Kích hoạt</div>
@@ -341,7 +345,7 @@ function CouponDialog({ open, onOpenChange, initial, onSaved }: CouponDialogProp
               </span>
             </button>
           </div>
-        </div>
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
