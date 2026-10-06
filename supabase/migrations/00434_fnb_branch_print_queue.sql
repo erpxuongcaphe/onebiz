@@ -1,13 +1,15 @@
 begin;
 
-create table public.fnb_print_points (
+-- Previously applied through SQL Editor under working filename 00433.
+-- 00434 avoids the invoice migration version collision. Safe to apply again.
+create table if not exists public.fnb_print_points (
   id uuid primary key default gen_random_uuid(), tenant_id uuid not null references public.tenants(id),
   branch_id uuid not null references public.branches(id), name text not null,
   enabled boolean not null default false, routes jsonb not null default '[]', detected_printers jsonb not null default '[]',
   token_hash bytea, last_seen_at timestamptz, updated_at timestamptz not null default now(),
   unique(branch_id)
 );
-create table public.fnb_print_jobs (
+create table if not exists public.fnb_print_jobs (
   id uuid primary key, tenant_id uuid not null references public.tenants(id),
   branch_id uuid not null references public.branches(id), point_id uuid not null references public.fnb_print_points(id),
   actor_id uuid not null references public.profiles(id), actor_name text not null,
@@ -17,14 +19,14 @@ create table public.fnb_print_jobs (
   message text, created_at timestamptz not null default now(), claimed_at timestamptz,
   claim_id uuid, finished_at timestamptz, last_action_by uuid references public.profiles(id)
 );
-create index fnb_print_jobs_pending on public.fnb_print_jobs(point_id,created_at) where status='queued';
-create index fnb_print_jobs_inflight on public.fnb_print_jobs(point_id,claimed_at) where status='sending';
-create index fnb_print_jobs_branch on public.fnb_print_jobs(branch_id,created_at desc);
+create index if not exists fnb_print_jobs_pending on public.fnb_print_jobs(point_id,created_at) where status='queued';
+create index if not exists fnb_print_jobs_inflight on public.fnb_print_jobs(point_id,claimed_at) where status='sending';
+create index if not exists fnb_print_jobs_branch on public.fnb_print_jobs(branch_id,created_at desc);
 alter table public.fnb_print_points enable row level security;
 alter table public.fnb_print_jobs enable row level security;
 revoke all on public.fnb_print_points,public.fnb_print_jobs from anon,authenticated;
 
-create function public._fnb_print_access_v1(p_branch uuid,p_manage boolean default false)
+create or replace function public._fnb_print_access_v1(p_branch uuid,p_manage boolean default false)
 returns uuid language plpgsql stable security definer set search_path=public,extensions as $$
 declare v_tenant uuid;
 begin
@@ -46,7 +48,7 @@ begin
   return v_tenant;
 end $$;
 
-create function public.fnb_print_manage_v1(p_branch uuid,p_action text,p_data jsonb)
+create or replace function public.fnb_print_manage_v1(p_branch uuid,p_action text,p_data jsonb)
 returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare v_tenant uuid; v_point public.fnb_print_points; v_token text; v_route jsonb; v_routes jsonb; v_job public.fnb_print_jobs;
 begin
@@ -91,7 +93,7 @@ begin
   raise exception 'Thao tác không hợp lệ.';
 end $$;
 
-create function public.fnb_print_state_v1(p_branch uuid)
+create or replace function public.fnb_print_state_v1(p_branch uuid)
 returns jsonb language plpgsql stable security definer set search_path=public,extensions as $$
 declare v_tenant uuid; v_point jsonb; v_jobs jsonb;
 begin
@@ -104,7 +106,7 @@ begin
   return jsonb_build_object('point',v_point,'jobs',v_jobs);
 end $$;
 
-create function public.fnb_print_enqueue_v1(p_branch uuid,p_id uuid,p_route text,p_label text,p_paper text,p_bytes text)
+create or replace function public.fnb_print_enqueue_v1(p_branch uuid,p_id uuid,p_route text,p_label text,p_paper text,p_bytes text)
 returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare v_tenant uuid; v_point public.fnb_print_points; v_route jsonb; v_job public.fnb_print_jobs; v_bytes bytea;
 begin
@@ -133,7 +135,7 @@ begin
 end $$;
 
 -- Device credential grants only access to that point, never user/business tables.
-create function public.fnb_print_agent_v1(p_point uuid,p_token text,p_action text,p_data jsonb default '{}')
+create or replace function public.fnb_print_agent_v1(p_point uuid,p_token text,p_action text,p_data jsonb default '{}')
 returns jsonb language plpgsql security definer set search_path=public,extensions as $$
 declare v_point public.fnb_print_points; v_job public.fnb_print_jobs; v_claim uuid; v_status text;
 begin
