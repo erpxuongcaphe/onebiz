@@ -13,6 +13,7 @@ export interface OpeningPreviewRow {
   costPrice: number; costBefore: number | null; delta: number; value: number;
   latestMovement: string | null; latestCost: string | null; costTracked: boolean; fnb: boolean;
   lotNumber: string | null; expiryDate: string | null;
+  note?: string | null;
 }
 export interface OpeningBatch {
   id: string; branch_id: string; created_by: string; created_at: string; source_at: string;

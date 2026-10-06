@@ -29,12 +29,13 @@ export function OpeningStockHistoryDialog({open,onOpenChange,branchId,batchId}: 
         <p className="text-sm">{formatDate(row.created_at)} · {row.rows.length} mã · {row.reason}</p>
       </button>)}
       {detail&&<section className="border rounded-md p-3 space-y-2">
-        <div className="flex flex-wrap gap-2 justify-between"><h3 className="font-semibold text-primary">Chi tiết đợt {detail.id.slice(0,8)}</h3><Button variant="outline" onClick={()=>exportToExcelFromSchema(detail.rows.map(row=>({...row,lotNumber:row.lotNumber??undefined,expiryDate:row.expiryDate?new Date(`${row.expiryDate}T00:00:00+07:00`):undefined})),initialStockExcelSchema)}>Xuất Excel</Button></div>
+        <div className="flex flex-wrap gap-2 justify-between"><h3 className="font-semibold text-primary">Chi tiết đợt {detail.id.slice(0,8)}</h3><Button variant="outline" onClick={()=>exportToExcelFromSchema(detail.rows.map(row=>({...row,note:row.note??undefined,lotNumber:row.lotNumber??undefined,expiryDate:row.expiryDate?new Date(`${row.expiryDate}T00:00:00+07:00`):undefined})),initialStockExcelSchema)}>Xuất Excel</Button></div>
         <p className="text-sm">Chốt nguồn: {formatDate(detail.source_at)} · Ghi nhận: {formatDate(detail.created_at)}</p>
-        <p className="text-sm text-muted-foreground">File: {detail.file_name??"—"} · Người ghi: {detail.created_by}</p>
+        <p className="text-sm text-muted-foreground break-words">Nguồn nhập: {detail.file_name??"—"} · Người ghi: {detail.created_by}</p>
         <div className="overflow-auto"><table className="w-full min-w-[560px] text-sm"><thead className="bg-primary/5 text-primary"><tr>{["Mã hàng","ĐVT","Trước","Sau","Giá vốn","Giá trị"].map(label=><th key={label} className="p-2 text-left">{label}</th>)}</tr></thead><tbody>
           {detail.rows.map(row=><tr key={row.productId} className="border-t"><td className="p-2">{row.productCode}<p className="text-muted-foreground">{row.productName}</p></td><td className="p-2">{row.unit}</td><td className="p-2">{formatStockQuantity(row.quantityBefore)}</td><td className="p-2">{formatStockQuantity(row.quantity)}</td><td className="p-2">{unitCostFormat.format(row.costPrice)}</td><td className="p-2">{formatCurrency(row.value)}</td></tr>)}
         </tbody></table></div>
+        {detail.rows.filter(row=>row.lotNumber||row.expiryDate||row.note).map(row=><p key={row.productId} className="text-sm text-muted-foreground break-words"><b>{row.productCode}</b>{row.lotNumber&&` · Lô ${row.lotNumber}`}{row.expiryDate&&` · HSD ${row.expiryDate.split("-").reverse().join("/")}`}{row.note&&` · ${row.note}`}</p>)}
       </section>}
     </DialogBody>
   </DialogContent></Dialog>;

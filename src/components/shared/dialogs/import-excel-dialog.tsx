@@ -18,7 +18,7 @@
  *   - [x] Preview + confirm trước khi commit (step "preview" ≠ "importing")
  */
 
-import { useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,11 @@ interface ImportExcelDialogProps<TRow> {
   retryOnFailure?: boolean;
   entryContent?: (preview: (rows: TRow[]) => Promise<void>, busy: boolean) => ReactNode;
   title?: string;
+  entryFormId?: string;
+  entrySubmitDisabled?: boolean;
+  entrySummary?: ReactNode;
+  compactInstructions?: boolean;
+  showSteps?: boolean;
 }
 
 export function ImportExcelDialog<TRow>({
@@ -78,6 +83,7 @@ export function ImportExcelDialog<TRow>({
   onCommit,
   onFinished,
   preparePreview, uploadContent, previewContent, instructions, confirmDisabled, retryOnFailure, entryContent, title,
+  entryFormId,entrySubmitDisabled,entrySummary,compactInstructions,showSteps,
 }: ImportExcelDialogProps<TRow>) {
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -92,6 +98,8 @@ export function ImportExcelDialog<TRow>({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const generation = useRef(0);
   const [preparing, setPreparing] = useState(false);
+  const parseErrorRef=useRef<HTMLDivElement>(null);
+  useEffect(()=>{if(parseError)parseErrorRef.current?.focus();},[parseError]);
 
   function reset() {
     generation.current++;
@@ -227,9 +235,13 @@ export function ImportExcelDialog<TRow>({
             {step === "done" && "Kết quả đợt nhập."}
           </DialogDescription>
         </DialogHeader>
+        {showSteps&&<ol aria-label="Tiến trình nhập tồn" className="grid shrink-0 grid-cols-3 gap-1 border-b pb-3 text-xs sm:text-sm">{["Nhập số liệu","Đối chiếu","Kết quả"].map((label,index)=>{
+          const active=step==="upload"?0:step==="done"?2:1;
+          return <li key={label} aria-current={index===active?"step":undefined} className={cn("flex items-center gap-1.5 rounded px-2 py-1.5",index===active?"bg-primary/10 text-primary font-semibold":"text-muted-foreground")}><span className={cn("flex size-5 shrink-0 items-center justify-center rounded-full text-xs",index===active?"bg-primary text-primary-foreground":"bg-muted")}>{index+1}</span>{label}</li>;
+        })}</ol>}
 
         <DialogBody>
-        {entryContent && <div hidden={step !== "upload"} className="space-y-3"><fieldset disabled={preparing}>{uploadContent}</fieldset>{entryContent(handleManualPreview, preparing)}</div>}
+        {entryContent && <div hidden={step !== "upload"}>{entryContent(handleManualPreview, preparing)}</div>}
         {step === "upload" && (
           <div className="space-y-3">
             {!entryContent && uploadContent}
@@ -242,7 +254,7 @@ export function ImportExcelDialog<TRow>({
               onDragLeave={() => setDragOver(false)}
               onDrop={handleDrop}
               className={cn(
-                "rounded-lg border-2 border-dashed p-8 text-center transition-colors",
+                "rounded-lg border-2 border-dashed text-center transition-colors",compactInstructions?"p-5":"p-8",
                 dragOver
                   ? "border-primary bg-primary/5"
                   : "border-border bg-muted/30 hover:bg-muted/50"
@@ -250,7 +262,7 @@ export function ImportExcelDialog<TRow>({
             >
               <Icon
                 name="cloud_upload"
-                size={40}
+                size={compactInstructions?28:40}
                 className="mx-auto text-muted-foreground mb-2"
               />
               <p className="text-sm font-medium">Kéo thả file vào đây</p>
@@ -286,12 +298,12 @@ export function ImportExcelDialog<TRow>({
             </div>}
 
             {parseError && (
-              <div className="rounded-lg bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
+              <div ref={parseErrorRef} role="alert" tabIndex={-1} className="rounded-md bg-destructive/10 border border-destructive/25 p-3 text-sm text-destructive">
                 {parseError}
               </div>
             )}
 
-            <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
+            {compactInstructions ? <details className="group border-t pt-2 text-sm"><summary className="min-h-11 flex items-center justify-between cursor-pointer font-medium text-primary">Hướng dẫn và nguyên tắc nhập tồn<Icon name="expand_more" size={18} className="transition-transform group-open:rotate-180" /></summary><div className="pt-1 text-sm text-muted-foreground">{instructions}</div></details> : <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground mb-1">
                 Lưu ý khi nhập liệu:
               </p>
@@ -316,12 +328,12 @@ export function ImportExcelDialog<TRow>({
                   này; muốn đổi tồn thì dùng phiếu nhập hoặc tồn đầu kỳ.
                 </li>
               </ul>}
-            </div>
+            </div>}
           </div>
         )}
 
         {step === "preview" && parseResult && (
-          <div className="max-h-[65vh] overflow-y-auto space-y-3">
+          <div className={previewContent?"space-y-3":"max-h-[65vh] overflow-y-auto space-y-3"}>
           {canConfirm && previewContent ? previewContent : <PreviewSection
             schema={schema}
             result={parseResult}
@@ -353,16 +365,16 @@ export function ImportExcelDialog<TRow>({
 
         <DialogFooter>
           {step === "upload" && (
-            <Button variant="outline" onClick={() => handleClose(false)}>
-              Hủy
-            </Button>
+            <>{entryContent&&entrySummary&&<div className="mr-auto basis-full sm:basis-auto text-sm self-center">{entrySummary}</div>}<Button size={showSteps?"touch":undefined} className={entryFormId?"flex-1 sm:flex-none":undefined} variant="outline" onClick={() => handleClose(false)}>Hủy</Button>
+            {entryFormId&&<Button size="touch" className="flex-1 sm:flex-none" type="submit" form={entryFormId} disabled={preparing||entrySubmitDisabled}>{preparing?"Đang đối chiếu...":"Xem trước tồn"}</Button>}</>
           )}
           {step === "preview" && (
             <>
-              <Button variant="outline" onClick={reset}>
+              <Button size={showSteps?"touch":undefined} variant="outline" onClick={reset}>
                 {entryContent ? "Sửa dữ liệu" : "Chọn file khác"}
               </Button>
               <Button
+                size={showSteps?"touch":undefined}
                 disabled={!canConfirm || confirmDisabled}
                 onClick={handleConfirmImport}
               >
