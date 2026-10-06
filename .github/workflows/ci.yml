@@ -373,6 +373,18 @@ jobs:
           wait "$second"
           psql -X -v ON_ERROR_STOP=1 -c "do \$\$ begin if (select count(distinct code) from public.customers where name like 'Concurrent %')<>2 then raise exception 'concurrent codes collided'; end if; end; \$\$;"
 
+      - name: Verify management recognition and cash linkage in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb management_finance_test
+          PGDATABASE=management_finance_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00438_management_income_expense_ledger.integration.sql
+          createdb management_finance_pnl_test
+          PGDATABASE=management_finance_pnl_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00439_management_finance_pnl_recognition.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
