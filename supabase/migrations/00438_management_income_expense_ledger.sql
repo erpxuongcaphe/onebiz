@@ -206,11 +206,16 @@ declare v_tenant uuid:=public.management_finance_actor('finance.void_transaction
 end; $$;
 
 create function public.get_management_finance_workspace(p_date_from date,p_date_to date,p_branch_id uuid default null,
- p_kind text default null,p_category_id uuid default null,p_search text default null,p_page integer default 0,p_page_size integer default 50)
+ p_kind text default null,p_category_id uuid default null,p_search text default null,p_page integer default 0,p_page_size integer default 50,
+ p_status text default null,p_payment_state text default null,p_sort text default 'date_desc')
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare v_tenant uuid:=public.management_finance_actor('finance.view_cash_book'); v_result jsonb; begin
  if p_date_from is null or p_date_to is null or not isfinite(p_date_from) or not isfinite(p_date_to) or p_date_from>p_date_to
   or p_page<0 or p_page_size<1 or p_page_size>200 then raise exception 'FINANCE_REPORT_RANGE_INVALID' using errcode='22023'; end if;
+ if (p_kind is not null and p_kind not in ('income','expense','non_pnl'))
+  or (p_status is not null and p_status not in ('posted','cancelled'))
+  or (p_payment_state is not null and p_payment_state not in ('unpaid','partial','paid'))
+  or p_sort is null or p_sort not in ('date_desc','date_asc','amount_desc','amount_asc') then raise exception 'FINANCE_FILTER_INVALID' using errcode='22023'; end if;
  if p_branch_id is not null and (not public.user_has_branch_access(auth.uid(),p_branch_id)
   or not exists(select 1 from public.branches where id=p_branch_id and tenant_id=v_tenant)) then raise exception 'FINANCE_BRANCH_DENIED' using errcode='42501'; end if;
  with scoped as (
@@ -229,8 +234,16 @@ declare v_tenant uuid:=public.management_finance_actor('finance.view_cash_book')
    and (p_kind is null or e.kind=p_kind) and (p_category_id is null or e.category_id=p_category_id)
    and (nullif(btrim(p_search),'') is null or e.code ilike '%'||replace(replace(p_search,'%','\%'),'_','\_')||'%'
     or e.counterparty ilike '%'||replace(replace(p_search,'%','\%'),'_','\_')||'%')
- ), filtered as (select * from scoped where report_amount is not null),
- ranked as (select *,row_number() over(order by business_date desc,created_at desc,id) rn from filtered)
+ ), filtered as (select * from scoped where report_amount is not null
+  and (p_status is null or status=p_status)
+  and (p_payment_state is null or (status='posted' and case p_payment_state
+   when 'unpaid' then settled_amount=0 when 'partial' then settled_amount>0 and settled_amount<amount
+   when 'paid' then settled_amount>=amount else false end))),
+ ranked as (select *,row_number() over(order by
+  case when p_sort='amount_desc' then report_amount end desc,
+  case when p_sort='amount_asc' then report_amount end asc,
+  case when p_sort='date_asc' then business_date end asc,
+  business_date desc,created_at desc,id) rn from filtered)
  select jsonb_build_object('items',coalesce((select jsonb_agg(to_jsonb(r)-'request_payload'-'rn' order by rn) from ranked r
   where rn>p_page*p_page_size and rn<=(p_page+1)*p_page_size),'[]'::jsonb),
   'total',(select count(*) from filtered),'summary',jsonb_build_object(
@@ -244,10 +257,10 @@ end; $$;
 revoke all on function public.get_management_finance_categories(),public.save_management_finance_category(text,text,text,uuid),
  public.post_management_finance_event(uuid,jsonb),public.settle_management_finance_event(uuid,uuid,jsonb),
  public.save_management_finance_document(uuid,jsonb),
- public.cancel_management_finance_event(uuid,text),public.get_management_finance_workspace(date,date,uuid,text,uuid,text,integer,integer) from public,anon;
+ public.cancel_management_finance_event(uuid,text),public.get_management_finance_workspace(date,date,uuid,text,uuid,text,integer,integer,text,text,text) from public,anon;
 grant execute on function public.get_management_finance_categories(),public.save_management_finance_category(text,text,text,uuid),
  public.post_management_finance_event(uuid,jsonb),public.settle_management_finance_event(uuid,uuid,jsonb),
  public.save_management_finance_document(uuid,jsonb),
- public.cancel_management_finance_event(uuid,text),public.get_management_finance_workspace(date,date,uuid,text,uuid,text,integer,integer) to authenticated;
+ public.cancel_management_finance_event(uuid,text),public.get_management_finance_workspace(date,date,uuid,text,uuid,text,integer,integer,text,text,text) to authenticated;
 notify pgrst,'reload schema';
 commit;

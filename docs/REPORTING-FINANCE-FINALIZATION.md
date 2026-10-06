@@ -37,7 +37,7 @@ Changes in parallel chats must be reviewed before merging; do not stage the shar
 
 Customer allocation is released. Existing customer codes stay unchanged. New external customers require a configured group; internal branch customers and singleton walk-in customers retain their explicit protocols. Group names/codes resolve separately in imports, and lookup pages all customers. PostgreSQL rollback, concurrent allocation and tenant guards passed in CI.
 
-Expense recognition does not yet have an independent event/settlement ledger. Existing cash payments must not be silently reclassified as accrued expenses. Implement that source before calling the management P&L complete.
+Expense recognition now has a draft independent event/settlement ledger in PR520. Existing cash payments are not silently reclassified as accrued expenses. The feature is not yet released or accepted on production.
 
 ## Recognition implementation draft
 
@@ -50,6 +50,16 @@ Remaining gates in order:
 4. Connect P&L, cash flow and category-detail tables to that source; drilldown/export must match totals, retaining missing-cost warnings.
 5. Finish customer/day/invoice, purchase/XNT historical-cost and document drilldown acceptance; do not infer absent snapshots.
 6. Run isolated DB, UI desktop/mobile, full CI, exact merge/deploy and production read-only verification before reporting completion.
+
+## PR520 in progress (not deployed)
+
+- 00438: new leaf categories, branch/period allocations, guarded idempotent event posting, atomic immediate/partial payment through the existing cash context RPC, cancellation audit and complete paged workspace.
+- 00439: narrow guarded change to existing P&L definitions; excludes linked cash settlements from historic cash expenses and adds recognized expenses/other income. No sales, stock or historic cash rows updated.
+- New income/expense workspace and form; unpaid/immediate/partial payment, actor and cash timing, source allocation/settlement detail, server filters/sort, complete Excel source, category creation and guarded cancellation.
+- Pending-request payload persisted before dispatch. Confirmed SQL rejection permits correction; uncertain network result retains the same request key. UI tests cover unpaid posting, uncertain retry and remount recovery.
+- Initial isolated PostgreSQL tests passed in PR520 CI. Initial full CI exposed one missing pending-schema RPC declaration; fixed locally, rerun required on the final commit.
+- Production read-only preflight confirmed ledger absent and exact P&L patch fragments match (cash=1, expense=1, branch formula=2). No migration applied and no business data created.
+- Still required: final PostgreSQL/CI run, actual cash RPC connected-chain coverage, desktop/mobile UX verification, production backup/approval/apply/merge/deploy, plus the remaining cross-report acceptance gates above. This PR does not finish the entire reporting center.
 
 ## Verification record
 

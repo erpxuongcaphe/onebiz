@@ -8,7 +8,7 @@ create function auth.uid() returns uuid language sql stable as $$ select nullif(
 create table public.tenants(id uuid primary key);
 create table public.profiles(id uuid primary key,tenant_id uuid,is_active boolean,full_name text);
 create table public.branches(id uuid primary key,tenant_id uuid,is_active boolean,name text);
-create table public.cash_transactions(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,code text,type text,category text,amount numeric,
+create table public.cash_transactions(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,created_by uuid,code text,type text,category text,amount numeric,
  status text,transaction_date date,occurred_at timestamptz,performed_by_name text,payment_method text,created_at timestamptz default now());
 create table public.audit_log(id uuid default gen_random_uuid(),tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,new_data jsonb);
 create function public.user_has_permission(p_actor uuid,p_permission text) returns boolean language sql stable as $$
@@ -16,14 +16,14 @@ create function public.user_has_permission(p_actor uuid,p_permission text) retur
 create function public.user_has_branch_access(p_actor uuid,p_branch uuid) returns boolean language sql stable as $$
  select p_branch is not null and exists(select 1 from public.branches b join public.profiles p on p.tenant_id=b.tenant_id where p.id=p_actor and b.id=p_branch)
  and coalesce(current_setting('test.denied_branch',true),'')<>p_branch::text $$;
-create function public.record_cash_transaction_context(p_operation text,p_payload jsonb,p_performed_by uuid,p_occurred_at timestamptz,p_transaction_date date,p_time_reason text)
+create function public.record_cash_transaction_timed(p_operation text,p_payload jsonb,p_occurred_at timestamptz,p_transaction_date date,p_time_reason text)
 returns jsonb language plpgsql as $$ declare v_row public.cash_transactions; v_tenant uuid; begin
  select tenant_id into v_tenant from public.profiles where id=auth.uid();
- if not public.user_has_branch_access(auth.uid(),(p_payload->>'branchId')::uuid) or not exists(select 1 from public.profiles where id=p_performed_by and tenant_id=v_tenant) then raise exception 'CASH_BRANCH_DENIED' using errcode='42501'; end if;
+ if not public.user_has_branch_access(auth.uid(),(p_payload->>'branchId')::uuid) then raise exception 'CASH_BRANCH_DENIED' using errcode='42501'; end if;
  if p_operation<>'manual' or p_payload->>'type' not in ('receipt','payment') then raise exception 'CASH_TYPE_INVALID' using errcode='22023'; end if;
- insert into public.cash_transactions(tenant_id,branch_id,code,type,category,amount,status,transaction_date,occurred_at,performed_by_name,payment_method)
- values(v_tenant,(p_payload->>'branchId')::uuid,'PC-test',p_payload->>'type',p_payload->>'category',(p_payload->>'amount')::numeric,'completed',
- coalesce(p_transaction_date,(now() at time zone 'Asia/Ho_Chi_Minh')::date),p_occurred_at,'Test performer',p_payload->>'paymentMethod') returning * into v_row;
+ insert into public.cash_transactions(tenant_id,branch_id,created_by,code,type,category,amount,status,transaction_date,occurred_at,payment_method)
+ values(v_tenant,(p_payload->>'branchId')::uuid,auth.uid(),'PC-test',p_payload->>'type',p_payload->>'category',(p_payload->>'amount')::numeric,'completed',
+ coalesce(p_transaction_date,(now() at time zone 'Asia/Ho_Chi_Minh')::date),p_occurred_at,p_payload->>'paymentMethod') returning * into v_row;
  return to_jsonb(v_row);
 end; $$;
 insert into public.tenants values('10000000-0000-0000-0000-000000000001'),('10000000-0000-0000-0000-000000000002');
@@ -34,6 +34,7 @@ insert into public.branches values('30000000-0000-0000-0000-000000000001','10000
  ('30000000-0000-0000-0000-000000000003','10000000-0000-0000-0000-000000000002',true,'Foreign');
 insert into public.cash_transactions(tenant_id,branch_id,code,type,amount,status,transaction_date) values
  ('10000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000002','HISTORIC','receipt',17,'completed','2026-01-01');
+\ir ../migrations/00435_cash_performer_context.sql
 \ir ../migrations/00438_management_income_expense_ledger.sql
 select set_config('test.actor','00000000-0000-0000-0000-000000000001',false);
 do $$ declare v_category uuid; v_group uuid; v_payload jsonb; v_result jsonb; v_id uuid; v_cash jsonb; v_payment jsonb; v_report jsonb; v_count bigint; begin
@@ -54,6 +55,9 @@ do $$ declare v_category uuid; v_group uuid; v_payload jsonb; v_result jsonb; v_
  v_cash:=public.settle_management_finance_event(v_id,'50000000-0000-0000-0000-000000000001',v_payment);
  perform public.settle_management_finance_event(v_id,'50000000-0000-0000-0000-000000000001',v_payment);
  if (select count(*) from public.management_finance_settlements)<>1 then raise exception 'settlement replay duplicated'; end if;
+ if v_cash->>'performed_by_name'<>'Admin' or v_cash->>'created_by'<>'00000000-0000-0000-0000-000000000001' then raise exception 'actual cash context metadata missing'; end if;
+ begin perform public.settle_management_finance_event(v_id,gen_random_uuid(),v_payment||'{"performedBy":"00000000-0000-0000-0000-000000000002"}'); raise exception 'foreign performer accepted'; exception when sqlstate '22023' then null; end;
+ if (select count(*) from public.management_finance_settlements)<>1 then raise exception 'rejected performer left settlement'; end if;
  v_report:=public.get_management_finance_workspace('2026-09-01','2026-09-30');
  if (v_report#>>'{summary,expense}')::numeric<>1000 or (v_report#>>'{items,0,settled_amount}')::numeric<>0 then raise exception 'recognition/payment periods mixed'; end if;
  if (public.get_management_finance_workspace('2026-09-01','2026-09-30','30000000-0000-0000-0000-000000000001')#>>'{summary,expense}')::numeric<>600 then raise exception 'branch allocation wrong'; end if;

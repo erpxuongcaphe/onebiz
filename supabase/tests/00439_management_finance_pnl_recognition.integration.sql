@@ -26,6 +26,7 @@ do $$ declare v_result jsonb; begin
  if (v_result#>>'{current,other_income}')::numeric<>25 then raise exception 'other income missing'; end if;
  if (v_result#>>'{previous,operating_expense}')::numeric<>0 then raise exception 'linked payment counted twice'; end if;
  if (v_result#>>'{current,revenue}')::numeric<>120 then raise exception 'sales revenue changed'; end if;
+ if (public.get_branch_profit_and_loss_report_v2('2026-08-31T17:00:00Z','2026-09-30T17:00:00Z')#>>'{rows,0,other_income}')::numeric<>25 then raise exception 'branch other income missing'; end if;
  update public.management_finance_events set status='cancelled' where id='a0000000-0000-0000-0000-000000000001';
  v_result:=public.get_profit_and_loss_report_v2('2026-08-31T17:00:00Z','2026-09-30T17:00:00Z','2026-09-30T17:00:00Z','2026-10-31T17:00:00Z',null,false);
  if (v_result#>>'{current,operating_expense}')::numeric<>700 then raise exception 'voided event retained'; end if;

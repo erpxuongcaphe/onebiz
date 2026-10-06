@@ -30,6 +30,17 @@ declare v_source text; v_old text; v_new text; begin
  v_new:=E'coalesce(e.operating_expense, 0) as legacy_cash_expense,\n             coalesce(e.operating_expense, 0) + (public.management_finance_period_totals(v_tenant_id,p.date_from,p.date_to,p_branch_id)->>''expense'')::numeric as operating_expense,\n             (public.management_finance_period_totals(v_tenant_id,p.date_from,p.date_to,p_branch_id)->>''income'')::numeric as other_income,';
  v_source:=replace(v_source,v_old,v_new);
  execute v_source;
+
+ v_source:=pg_get_functiondef('public.get_branch_profit_and_loss_report_v2(timestamptz,timestamptz)'::regprocedure);
+ v_old:='v_goods_revenue - v_known_cogs - v_operating_expense';
+ if (length(v_source)-length(replace(v_source,v_old,'')))/length(v_old)<>2 then
+  raise exception 'BRANCH_PNL_RESULT_FRAGMENT_DRIFT'; end if;
+ v_source:=replace(v_source,v_old,'v_goods_revenue - v_known_cogs - v_operating_expense + coalesce((v_row->>''other_income'')::numeric,0)');
+ v_old:='''operating_expense'', v_operating_expense,';
+ if (length(v_source)-length(replace(v_source,v_old,'')))/length(v_old)<>1 then
+  raise exception 'BRANCH_PNL_INCOME_FRAGMENT_DRIFT'; end if;
+ v_source:=replace(v_source,v_old,v_old||E'\n      ''other_income'', coalesce((v_row->>''other_income'')::numeric,0),');
+ execute v_source;
 end; $$;
 
 notify pgrst,'reload schema';

@@ -30,6 +30,8 @@ export interface FinanceEvent {
 }
 export interface FinanceFilters {
   from: string; to: string; branchId?: string; kind?: FinanceKind; categoryId?: string; search?: string;
+  status?: 'posted' | 'cancelled'; paymentState?: 'unpaid' | 'partial' | 'paid';
+  sort?: 'date_desc' | 'date_asc' | 'amount_desc' | 'amount_asc';
 }
 export interface FinanceWorkspace {
   items: FinanceEvent[]; total: number;
@@ -38,9 +40,13 @@ export interface FinanceWorkspace {
 
 async function rpc<T>(name: string, params: Record<string, unknown> = {}): Promise<T> {
   const {data, error} = await getClient().rpc(name as never, params as never);
-  if (error) handleError(error, name);
+  if (error) throw new FinanceRpcError(error.message, error.code);
   if (data == null) throw new Error('Máy chủ chưa trả về dữ liệu thu nhập/chi phí');
   return data as T;
+}
+
+export class FinanceRpcError extends Error {
+  constructor(message: string, public readonly code?: string) { super(message); }
 }
 
 export function getFinanceCategories(): Promise<FinanceCategory[]> {
@@ -72,6 +78,7 @@ export async function getFinanceWorkspace(filters: FinanceFilters, page = 0, pag
     p_date_from: filters.from, p_date_to: filters.to, p_branch_id: filters.branchId || null,
     p_kind: filters.kind || null, p_category_id: filters.categoryId || null, p_search: filters.search?.trim() || null,
     p_page: page, p_page_size: pageSize,
+    p_status: filters.status || null, p_payment_state: filters.paymentState || null, p_sort: filters.sort || 'date_desc',
   });
   if (!Array.isArray(result.items) || !Number.isSafeInteger(result.total) || result.total < 0 || !result.summary) {
     throw new Error('Dữ liệu thu nhập/chi phí không hợp lệ');

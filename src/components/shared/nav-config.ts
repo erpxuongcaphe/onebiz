@@ -260,6 +260,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
         icon: "payments",
         items: [
           { label: "Sổ quỹ", href: "/so-quy", icon: "payments", permission: "finance.view_cash_book" },
+      { label: "Thu nhập và chi phí", href: "/tai-chinh/thu-nhap-chi-phi", icon: "receipt_long", permission: "finance.view_cash_book" },
           { label: "Công nợ", href: "/tai-chinh/cong-no", icon: "credit_card", permission: "customers.view_debt" },
         ],
       },
