@@ -93,7 +93,7 @@ export function ReportPageHeader({
             </p>
           )}
         </div>
-        <div className="-mx-1 flex min-w-0 items-center gap-2 overflow-x-auto px-1 pb-1 xl:mx-0 xl:justify-end xl:px-0 xl:pb-0 [&>*]:shrink-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 xl:justify-end [&>*]:shrink-0">
           {!hideBranchScope && <ReportScopeSelector />}
           {showSwitch && (
             <ChartTableSwitch
@@ -125,7 +125,7 @@ export function ReportPageHeader({
                 Xuất file
                 <Icon name="expand_more" size={14} />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" sideOffset={6} className="p-1 min-w-[220px]">
+              <DropdownMenuContent align="end" sideOffset={6} className="p-1 w-64 max-w-[calc(100vw-2rem)]">
                 {canExportView && onExportView && (
                   <button
                     onClick={onExportView}
