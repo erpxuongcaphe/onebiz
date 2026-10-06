@@ -36,4 +36,8 @@ describe("XNT dimension filters and meaningful totals", () => {
     expect(sumXntRows([row({ openingValue: null, valuationComplete: false })]).openingValue).toBeNull();
     expect(filterXntRows([row()], "activity", { unit: "G" })).toEqual([]);
   });
+
+  it("does not publish a quantity aggregate without a known unit", () => {
+    expect(sumXntQuantities([row({ unit: "", closingQty: 7 })]).closingQty).toBeNull();
+  });
 });

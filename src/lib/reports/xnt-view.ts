@@ -38,7 +38,8 @@ export const XNT_QUANTITY_KEYS = [
 
 // Quantities with different units cannot form a meaningful aggregate.
 export function sumXntQuantities(rows: XntRow[]): Record<typeof XNT_QUANTITY_KEYS[number], number | null> {
-  const mixedUnits = new Set(rows.map((row) => row.unit)).size > 1;
+  const mixedUnits = new Set(rows.map((row) => row.unit)).size > 1
+    || rows.some((row) => !row.unit.trim());
   return Object.fromEntries(XNT_QUANTITY_KEYS.map((key) => [
     key, mixedUnits ? null : rows.reduce((sum, row) => sum + row[key], 0),
   ])) as Record<typeof XNT_QUANTITY_KEYS[number], number | null>;
