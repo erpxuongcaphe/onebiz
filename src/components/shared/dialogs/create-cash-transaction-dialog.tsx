@@ -1,6 +1,7 @@
 "use client";
 import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
 import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
+import { cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 
 import { useState, useEffect } from "react";
 import {
@@ -353,7 +354,7 @@ export function CreateCashTransactionDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Người thực hiện thu/chi <span className="text-destructive">*</span></label>
             <Select value={performedBy} onValueChange={(value) => setPerformedBy(value ?? "")}>
-              <SelectTrigger className="w-full" aria-invalid={!!errors.performer}><SelectValue placeholder="Chọn nhân viên" /></SelectTrigger>
+              <SelectTrigger className="w-full" aria-invalid={!!errors.performer}><SelectValue placeholder="Chọn nhân viên">{performers.find((person) => person.id === performedBy)?.name}</SelectValue></SelectTrigger>
               <SelectContent>{performers.map((person) => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}</SelectContent>
             </Select>
             {(performerError || errors.performer) && <p role="alert" className="text-xs text-destructive">{performerError || errors.performer}</p>}
@@ -431,7 +432,7 @@ export function CreateCashTransactionDialog({
             <label className="text-sm font-medium">Phương thức</label>
             <Select value={method} onValueChange={(v) => setMethod(v ?? "cash")}>
               <SelectTrigger className="w-full">
-                <SelectValue />
+                <SelectValue>{cashPaymentMethodLabel(method)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="cash">Tiền mặt</SelectItem>
@@ -445,7 +446,7 @@ export function CreateCashTransactionDialog({
             <label className="text-sm font-medium">Danh mục</label>
             <Select value={category} onValueChange={(v) => setCategory(v ?? "")}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Chọn danh mục" />
+                <SelectValue placeholder="Chọn danh mục">{categories.find((item) => item.value === category)?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {categories.map((cat) => (
