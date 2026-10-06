@@ -8,7 +8,7 @@ import {OpeningStockDialog} from "@/components/shared/dialogs/opening-stock-dial
 const snapshot={productId:"p",productCode:"TRA",productName:"Trà",unit:"G",branchId:"b",branchCode:"QUAN",quantityBefore:0,quantity:2.0042,costPrice:250.000001,costBefore:null,delta:2.0042,value:501.05,latestMovement:null,latestCost:null,costTracked:false,fnb:true,lotNumber:null,expiryDate:null};
 beforeEach(()=>{vi.clearAllMocks();mocks.search.mockResolvedValue([{id:"p",code:"TRA",name:"Trà",unit:"G"}]);mocks.preview.mockResolvedValue([snapshot]);mocks.commit.mockResolvedValue({count:1});});
 afterEach(cleanup);
-async function add(){fireEvent.change(screen.getByLabelText("Thêm hàng"),{target:{value:"TRA"}});fireEvent.click(await screen.findByRole("button",{name:/TRA · Trà/}));}
+async function add(){fireEvent.change(screen.getByLabelText("Thêm hàng"),{target:{value:"TRA"}});fireEvent.click(await screen.findByRole("option",{name:/TRA.*Trà/}));}
 it("keeps blank costs distinct from zero, preserves edits on back, and commits only after server preview",async()=>{
  render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);
  await add();
@@ -35,4 +35,14 @@ it("shows a server rejection without committing or discarding entered quantities
  mocks.preview.mockRejectedValue(new Error("Đã có phát sinh. Dùng Kiểm kho."));
  fireEvent.click(screen.getByRole("button",{name:"Xem trước tồn"}));
  await screen.findByText("Đã có phát sinh. Dùng Kiểm kho.");expect(mocks.commit).not.toHaveBeenCalled();expect(screen.getByLabelText("Số lượng (G)")).toHaveValue("3");
+});
+it("supports keyboard selection and shows optional lot fields with visible labels",async()=>{
+ render(<OpeningStockDialog open mode="manual" onOpenChange={()=>{}} onFinished={()=>{}}/>);
+ const search=screen.getByLabelText("Thêm hàng");fireEvent.change(search,{target:{value:"TRA"}});
+ await screen.findByRole("option",{name:/TRA.*Trà/});fireEvent.keyDown(search,{key:"Enter"});
+ expect(screen.getByLabelText("Số lượng (G)")).toBeTruthy();
+ fireEvent.click(screen.getByText("Lô, hạn sử dụng, ghi chú (tùy chọn)"));
+ expect(screen.getByLabelText("Số lô")).toBeTruthy();expect(screen.getByLabelText("Hạn sử dụng")).toBeTruthy();expect(screen.getByLabelText("Ghi chú hàng")).toBeTruthy();
+ expect(screen.getByRole("button",{name:"Xem trước tồn"}).getAttribute("form")).toBe("opening-manual-form");
+ expect(mocks.preview).not.toHaveBeenCalled();
 });
