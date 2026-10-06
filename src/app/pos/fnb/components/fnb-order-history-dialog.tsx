@@ -168,6 +168,7 @@ export function FnbOrderHistoryDialog({
       });
       if (!printedViaTemplate)
       printFnbReceipt({
+        branchId,
         invoiceCode: detail.invoiceCode,
         orderNumber: detail.orderNumber,
         tableName: detail.tableName ?? detail.orderNumber,

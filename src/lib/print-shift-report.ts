@@ -11,6 +11,7 @@ import { sendPrintJob, getPrintSettings } from "@/lib/printer/print-job";
 import { formatCurrency, formatDate } from "@/lib/format";
 
 export interface ShiftReportData {
+  branchId?: string;
   /** X: báo cáo tạm thời giữa ca. Z: báo cáo cuối khi đóng ca. */
   type: "X" | "Z";
   storeName?: string;
@@ -115,5 +116,5 @@ ${data.note ? `<div class="line"></div><div>Ghi chu:</div><div>${data.note}</div
  * In báo cáo ca — dispatch qua printerService theo backend đã cấu hình.
  */
 export function printShiftReport(data: ShiftReportData) {
-  void sendPrintJob({ html: buildShiftReportHtml(data), paperSize: data.paperSize ?? "80mm", role: "cashier", openCashDrawer: data.type === "Z" && getPrintSettings().openCashDrawer });
+  void sendPrintJob({ html: buildShiftReportHtml(data), paperSize: data.paperSize ?? "80mm", role: "cashier",branchId:data.branchId,label:`Báo cáo ca ${data.type}`,buildHtml:paperSize=>buildShiftReportHtml({...data,paperSize}),openCashDrawer: data.type === "Z" && getPrintSettings().openCashDrawer });
 }

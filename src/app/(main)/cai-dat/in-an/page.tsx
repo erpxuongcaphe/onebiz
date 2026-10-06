@@ -23,6 +23,7 @@ import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { BranchPrintInfoCard } from "@/components/shared/branch-print-info-card";
 import { PrintSetupChecklist } from "@/components/shared/print-setup-checklist";
+import { BranchPrintSetup } from "@/components/shared/branch-print-setup";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import { BridgePrinterSetup } from "@/components/shared/bridge-printer-setup";
 import { PrinterTestPreview } from "@/components/shared/printer-test-preview";
@@ -147,6 +148,7 @@ const receiptStyles = [
 
 // ── Print backends ──
 const backends = [
+  { id: "branch-queue" as const, label: "Điểm in chi nhánh — điện thoại / tablet", desc: "Gửi phiếu F&B tới máy quầy đã cấu hình. Nhân viên dùng tài khoản riêng; điểm in cần chạy và có Internet. Hỗ trợ máy nhiệt ESC/POS 58/80 mm.", icon: "print" as const },
   {
     id: "qz-tray" as const,
     label: "Qua QZ Tray trên máy quầy",
@@ -499,6 +501,7 @@ function PrintSettingsPageContent() {
       )}
 
       {selected === "may-in" && (<>
+      <BranchPrintSetup />
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>

@@ -5,6 +5,7 @@ import { useAuth, useToast } from "@/lib/contexts";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
+import { FnbBranchPrintControl } from "@/components/shared/fnb-branch-print-control";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
 import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
@@ -2175,6 +2176,7 @@ function FnbPosPageInner() {
     const netTotal = grossTotal - commissionAmount;
 
     printPreBill({
+      branchId: branchId ?? undefined,
       orderNumber: tab.label,
       tableName: tab.label,
       orderType: tab.orderType,
@@ -2375,6 +2377,7 @@ function FnbPosPageInner() {
             });
             if (!printedViaTemplate)
             printFnbReceipt({
+              branchId: branchId ?? undefined,
               invoiceCode: payResult.invoiceCode,
               orderNumber: tab.label,
               tableName: tab.label,
@@ -2681,6 +2684,7 @@ function FnbPosPageInner() {
       // In báo cáo Z tự động sau khi đóng ca thành công
       try {
         printShiftReport({
+          branchId: branchId ?? undefined,
           type: "Z",
           storeName: settings.print.showStoreName ? settings.store.name : undefined,
           storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
@@ -3361,6 +3365,7 @@ function FnbPosPageInner() {
       />
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
+      <FnbBranchPrintControl key={branchId} branchId={branchId ?? undefined} />
       <FnbSidenavDrawer
         open={sidenavOpen}
         onClose={() => setSidenavOpen(false)}

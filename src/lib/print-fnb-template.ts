@@ -156,7 +156,7 @@ export async function printFnbBillWithTemplate(
     };
 
     const data = applyTemplateToDocData(base,resolved);
-    const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier", openCashDrawer:getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
+    const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier",branchId:p.branchId ?? undefined,label:`Bill ${p.invoiceCode}`.slice(0,80),buildHtml:paper=>generateDocumentHtml(data,paper),openCashDrawer:getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
     // A failed send is reported by the service; don't silently retry a different
     // bill/device after a bridge may already have queued the job.
     if (!result.success) console.warn("[printFnbBillWithTemplate]",result.warning);
