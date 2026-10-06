@@ -377,7 +377,7 @@ export async function getCustomerGroupsAsync() {
 
   const { data, error } = await supabase
     .from("customer_groups")
-    .select("id, name")
+    .select("id, name, code")
     .eq("tenant_id", tenantId)
     .order("name");
 
@@ -387,6 +387,7 @@ export async function getCustomerGroupsAsync() {
     label: g.name,
     value: g.id,
     count: 0,
+    code: g.code ?? undefined,
   }));
 }
 
@@ -399,6 +400,7 @@ export async function getCustomerGroupsAsync() {
 export interface CustomerGroupFull {
   id: string;
   name: string;
+  code?: string;
   /** Chiết khấu mặc định (%) áp khi bán cho khách thuộc nhóm này. */
   discountPercent: number;
   note?: string;
@@ -409,13 +411,14 @@ export async function getCustomerGroupsFull(): Promise<CustomerGroupFull[]> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("customer_groups")
-    .select("id, name, discount_percent, note")
+    .select("id, name, code, discount_percent, note")
     .eq("tenant_id", tenantId)
     .order("discount_percent", { ascending: false });
   if (error) handleError(error, "getCustomerGroupsFull");
   return (data ?? []).map((g) => ({
     id: g.id as string,
     name: g.name as string,
+    code: g.code ?? undefined,
     discountPercent: Number(
       (g as { discount_percent?: number }).discount_percent ?? 0,
     ),
@@ -425,6 +428,7 @@ export async function getCustomerGroupsFull(): Promise<CustomerGroupFull[]> {
 
 export async function createCustomerGroup(input: {
   name: string;
+  code: string;
   discountPercent: number;
   note?: string;
 }): Promise<void> {
@@ -433,6 +437,7 @@ export async function createCustomerGroup(input: {
   const { error } = await supabase.from("customer_groups").insert({
     tenant_id: tenantId,
     name: input.name,
+    code: input.code.trim().toUpperCase(),
     discount_percent: input.discountPercent,
     note: input.note || null,
   });
@@ -441,16 +446,18 @@ export async function createCustomerGroup(input: {
 
 export async function updateCustomerGroup(
   id: string,
-  input: { name?: string; discountPercent?: number; note?: string },
+  input: { name?: string; code?: string; discountPercent?: number; note?: string },
 ): Promise<void> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   const payload: {
     name?: string;
+    code?: string;
     discount_percent?: number;
     note?: string | null;
   } = {};
   if (input.name !== undefined) payload.name = input.name;
+  if (input.code !== undefined) payload.code = input.code.trim().toUpperCase();
   if (input.discountPercent !== undefined)
     payload.discount_percent = input.discountPercent;
   if (input.note !== undefined) payload.note = input.note || null;
@@ -502,6 +509,7 @@ export async function getCustomerById(id: string): Promise<Customer | null> {
 export async function createCustomer(
   customer: Partial<Customer>,
 ): Promise<Customer> {
+  if (!customer.groupId) throw new Error("Vui lòng chọn nhóm khách hàng");
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
@@ -521,7 +529,7 @@ export async function createCustomer(
     .from("customers")
     .insert({
       tenant_id: tenantId,
-      code: customer.code!,
+      code: "",
       name: customer.name!,
       phone: customer.phone || null,
       email: customer.email || null,
