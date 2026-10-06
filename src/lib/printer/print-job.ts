@@ -3,11 +3,11 @@ import type { PaperSize } from "@/lib/print-document";
 import type { StoredPrinter } from "./webusb-printer";
 import type { BridgeRole } from "./qz-bridge";
 
-export function getPrintSettings(): { backend: PrinterBackend; paperSize: PaperSize; openCashDrawer: boolean } {
+export function getPrintSettings(): { backend: PrinterBackend; paperSize: PaperSize; openCashDrawer: boolean; fnbBranchQueue: boolean } {
   try {
     const p = JSON.parse(localStorage.getItem("onebiz_settings") ?? "{}").print ?? {};
-    return { backend: p.backend === "escpos-usb" || p.backend === "qz-tray" ? p.backend : "browser", paperSize: ["58mm", "80mm", "A4", "A5"].includes(p.paperSize) ? p.paperSize : "80mm", openCashDrawer: p.openCashDrawer === true };
-  } catch { return { backend: "browser", paperSize: "80mm", openCashDrawer: false }; }
+    return { backend: p.backend === "escpos-usb" || p.backend === "qz-tray" ? p.backend : "browser", paperSize: ["58mm", "80mm", "A4", "A5"].includes(p.paperSize) ? p.paperSize : "80mm", openCashDrawer: p.openCashDrawer === true, fnbBranchQueue: p.fnbBranchQueue === true };
+  } catch { return { backend: "browser", paperSize: "80mm", openCashDrawer: false, fnbBranchQueue: false }; }
 }
 
 export function reportPrintResult(result: PrintResult): void {
@@ -17,8 +17,17 @@ export function reportPrintResult(result: PrintResult): void {
   }
 }
 
-export async function sendPrintJob(args: { html: string; bytes?: Uint8Array; paperSize: PaperSize; role?: BridgeRole; printer?: StoredPrinter; bridgePrinter?: string; openCashDrawer?: boolean }): Promise<PrintResult> {
-  const {backend} = getPrintSettings();
+export async function sendPrintJob(args: { html: string; bytes?: Uint8Array; paperSize: PaperSize; role?: BridgeRole; printer?: StoredPrinter; bridgePrinter?: string; openCashDrawer?: boolean; branchId?: string; stationId?: string; label?: string; jobId?: string; buildHtml?: (paper: "58mm" | "80mm") => string }): Promise<PrintResult> {
+  const {backend, fnbBranchQueue} = getPrintSettings();
+  if (fnbBranchQueue && args.branchId && args.role !== "documents") {
+    let result: PrintResult;
+    try {
+      const { enqueueBranchPrint } = await import("./branch-queue");
+      const job = await enqueueBranchPrint({ branchId: args.branchId, routeKey: args.stationId ?? args.role ?? "cashier", label: args.label ?? "Phiếu F&B", html: args.html, paper: args.paperSize, buildHtml: args.buildHtml, jobId: args.jobId ?? crypto.randomUUID() });
+      result = { success: true, backend: "branch-queue", queued: { id: job.id, routeLabel: job.route_label } };
+    } catch (error) { result = { success: false, backend: "branch-queue", warning: `${error instanceof Error ? error.message : "Chưa gửi được phiếu."} Nếu mạng ngắt trong lúc gửi, xem lịch sử lệnh trước khi gửi lại.` }; }
+    reportPrintResult(result); return result;
+  }
   let bytes = args.bytes;
   if (backend === "escpos-usb" && !bytes && (args.paperSize === "58mm" || args.paperSize === "80mm")) {
     try {

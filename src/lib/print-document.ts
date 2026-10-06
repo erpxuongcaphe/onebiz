@@ -320,7 +320,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .masthead .doc-line { font-size: ${ps.bodyFontSize}; color: #444; margin-top: 3px; }
   .logo { max-height: ${isThermal ? "32px" : "56px"}; margin-bottom: 6px; }
 
-  .meta { margin: ${isThermal ? "6px 0" : "12px 0"}; }
+  .meta { margin: ${isThermal ? "3px 0" : "12px 0"}; }
   .meta table { width: 100%; border-collapse: collapse; }
   .meta td { padding: 2px 0; }
   .meta td.label { width: ${isThermal ? "62px" : "150px"}; font-weight: 600; color: ${isThermal ? "#000" : "#555"}; }
@@ -350,13 +350,13 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .items td .unit { color: #888; font-weight: 400; }
 
   /* Thermal items — 2 dòng/món */
-  .t-items { margin: 8px 0; }
-  .t-item { margin-bottom: 5px; }
+  .t-items { margin: 3px 0; }
+  .t-item { margin-bottom: 3px; }
   .t-name { font-weight: 600; overflow-wrap: anywhere; }
   .t-note { font-style: italic; font-size: 0.92em; }
   .t-line { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 2px 8px; }
   .t-total { font-weight: 600; }
-  .sep { border: none; border-top: 1px dashed #000; margin: 6px 0; }${
+  .sep { border: none; border-top: 1px dashed #000; margin: 3px 0; }${
     // CHỈ phát CSS khi itemFontSize được set (sm/lg) — undefined/md → không phát gì
     // (giữ byte-identical). Thermal dùng .t-name/.t-line, không dùng bảng .items.
     isThermal && (d.itemFontSize === "sm" || d.itemFontSize === "lg")
@@ -369,20 +369,20 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
       : ""
   }
 
-  .summary { width: ${isThermal ? "100%" : "55%"}; margin-left: auto; margin-top: 10px; border-collapse: collapse; }
-  .summary td { padding: 4px ${isThermal ? "0" : "10px"}; font-size: ${ps.summaryFontSize}; }
+  .summary { width: ${isThermal ? "100%" : "55%"}; margin-left: auto; margin-top: ${isThermal ? "3px" : "10px"}; border-collapse: collapse; }
+  .summary td { padding: ${isThermal ? "1px 0" : "4px 10px"}; font-size: ${ps.summaryFontSize}; }
   .summary td.right { text-align: right; }
   .summary .bold td { font-weight: 700; ${isThermal ? "border-top: 1px dashed #000; font-size: 13px; padding-top: 5px;" : `border-top: 2px solid #222; background: #f5f5f5; font-size: ${isA5 ? "14px" : "16px"}; padding-top: 7px;`} }
   .summary .bold td.right { font-weight: 800; }
 
-  .note { margin-top: ${isThermal ? "8px" : "16px"}; font-size: ${isThermal ? "9px" : "12px"}; color: ${isThermal ? "#000" : "#555"}; }
+  .note { margin-top: ${isThermal ? "3px" : "16px"}; font-size: ${isThermal ? "9px" : "12px"}; color: ${isThermal ? "#000" : "#555"}; }
 
   .footer { margin-top: 32px; display: ${isThermal || d.showSignature === false ? "none" : "flex"}; justify-content: space-around; }
   .footer .col { text-align: center; flex: 1; padding: 0 6px; }
   .footer .col .title { font-weight: 700; }
   .footer .col .cap { font-size: 10px; font-style: italic; color: #888; margin-bottom: 50px; }
 
-  .bizfooter { margin-top: ${isThermal ? "10px" : "26px"}; text-align: center; font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#222" : "#555"}; border-top: ${isThermal ? "1px dashed #000" : "1px solid #ddd"}; padding-top: 8px; }
+  .bizfooter { margin-top: ${isThermal ? "3px" : "26px"}; text-align: center; font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#222" : "#555"}; border-top: ${isThermal ? "1px dashed #000" : "1px solid #ddd"}; padding-top: ${isThermal ? "3px" : "8px"}; }
 
   @media print {
     body { padding: ${isThermal ? ps.bodyPadding : "0"}; }

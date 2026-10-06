@@ -31,6 +31,7 @@ export interface FnbPrintItem {
 }
 
 export interface PreBillData {
+  branchId?: string;
   orderNumber: string;
   tableName?: string;
   orderType: "dine_in" | "takeaway" | "delivery";
@@ -88,6 +89,8 @@ export interface FnbReceiptData extends PreBillData {
 }
 
 export interface KitchenTicketDataV2 {
+  branchId?: string;
+  stationId?: string;
   title?: string;
   itemFontSize?: "sm" | "md" | "lg";
   footerText?: string;
@@ -163,11 +166,11 @@ body{font-family:'Courier New',monospace;font-size:13px;width:${width}px;margin:
 .center{text-align:center}
 .right{text-align:right}
 .bold{font-weight:bold}
-.line{border-top:2px dashed #000;margin:8px 0}
-.line-thin{border-top:1px dotted #999;margin:6px 0}
+.line{border-top:2px dashed #000;margin:3px 0}
+.line-thin{border-top:1px dotted #999;margin:3px 0}
 table{width:100%;border-collapse:collapse}
 td{padding:1px 0;font-size:12px;vertical-align:top}
-.footer-text{font-size:11px;color:#666;margin-top:8px;text-align:center}
+.footer-text{font-size:11px;color:#333;margin-top:3px;text-align:center}
 @media print{body{width:${width}px}@page{size:${pageSize} auto;margin:0}}`;
 }
 
@@ -284,7 +287,7 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 
 export function printPreBill(data: PreBillData): void {
   data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
-  void sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier"});
+  void sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Tạm tính ${data.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildPreBillHtml({...data,paperSize})});
 }
 
 // ============================================================
@@ -460,7 +463,7 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 export function printFnbReceipt(data: FnbReceiptData): void {
   data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
   const html = buildFnbReceiptHtml(data);
-  void sendPrintJob({html,paperSize:data.paperSize ?? "80mm",role:"cashier",openCashDrawer:getPrintSettings().openCashDrawer && data.paymentMethod === "cash"});
+  void sendPrintJob({html,paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Bill ${data.invoiceCode}`.slice(0,80),buildHtml:paperSize=>buildFnbReceiptHtml({...data,paperSize}),openCashDrawer:getPrintSettings().openCashDrawer && data.paymentMethod === "cash"});
 }
 
 // ============================================================
@@ -529,14 +532,14 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
 .order-number{font-size:${style === "compact" ? "12px" : "14px"};overflow-wrap:anywhere;margin:4px 0}
 .table-label{font-size:${style === "compact" ? "22px" : "26px"};font-weight:bold;margin:4px 0}
 .type-badge{display:inline-block;padding:2px 8px;border:2px solid #000;font-size:14px;font-weight:bold;margin:4px 0}
-.item{margin:${style === "compact" ? "4px" : "6px"} 0;padding-bottom:${style === "compact" ? "4px" : "6px"};border-bottom:1px dotted #ccc}
+.item{margin:${style === "compact" ? "2px" : "3px"} 0;padding-bottom:2px;border-bottom:1px dotted #ccc}
 .item:last-child{border-bottom:none}
 .item-name{font-size:${itemFontSize}px;font-weight:bold;overflow-wrap:anywhere}
 .qty{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin-right:4px}
 .variant{font-size:${style === "compact" ? "12px" : "14px"};font-weight:normal;color:#333}
-.toppings{font-size:14px;padding-left:24px;margin-top:2px}
-.modifier{font-size:14px;font-weight:bold;padding:3px 24px;margin-top:2px;background:#e3f2fd;border-left:4px solid #1976d2;color:#0d47a1}
-.note{font-size:16px;font-weight:bold;padding:4px 24px;margin-top:2px;background:#f0f0f0;border-left:4px solid #000}
+.toppings{font-size:14px;padding-left:8px;margin-top:1px}
+.modifier{font-size:14px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000;color:#000}
+.note{font-size:16px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000}
 .price{font-size:12px;color:#555;padding-left:24px;margin-top:2px}
 .time{font-size:16px;font-weight:bold}
 </style></head><body>
@@ -561,7 +564,7 @@ ${supplementBanner}
 
 ${
   data.orderNote
-    ? `<div style="margin:8px 0;padding:8px;background:#f3f4f6;border-left:4px solid #000;font-size:14px;font-weight:bold;line-height:1.4">📝 GHI CHÚ ĐƠN:<br/>${escapeKitchenText(data.orderNote)}</div>`
+    ? `<div style="margin:3px 0;padding:2px 6px;border-left:2px solid #000;font-size:14px;font-weight:bold;line-height:1.3">GHI CHÚ ĐƠN: ${escapeKitchenText(data.orderNote)}</div>`
     : ""
 }
 
@@ -587,7 +590,7 @@ export async function printKitchenTicketV2(data: KitchenTicketDataV2): Promise<v
   // backend + role="kitchen". Browser → window.open như cũ; ESC/POS USB →
   // dùng printer config slot "kitchen" (user trỏ chung 1 máy hoặc khác máy).
   const html = buildKitchenTicketHtml(data);
-  const result = await sendPrintJob({html, paperSize: data.paperSize ?? "80mm", role: "kitchen", printer: data.printer, bridgePrinter: data.bridgePrinter});
+  const result = await sendPrintJob({html, paperSize: data.paperSize ?? "80mm", role: "kitchen", branchId:data.branchId,stationId:data.stationId,label:`${data.isSupplement ? "Bổ sung" : "Bếp"} ${data.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildKitchenTicketHtml({...data,paperSize}),printer: data.printer, bridgePrinter: data.bridgePrinter});
   if (!result.success) throw new Error(result.warning ?? "Không in được phiếu bếp");
 }
 

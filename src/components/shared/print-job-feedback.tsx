@@ -11,6 +11,7 @@ export function PrintJobFeedback() {
     const handler = (event: Event) => {
       if (pathname.startsWith("/pos/fnb")) return; // POS already reports its print errors.
       const result = (event as CustomEvent<PrintResult>).detail;
+      if (result?.queued) toast({title:"Đã nhận lệnh in",description:`Nơi nhận: ${result.queued.routeLabel}. Có thể xem kết quả ở lịch sử lệnh.`,variant:"success"});
       if (result && (!result.success || result.warning)) toast({title:result.success ? "Lưu ý bản in" : "Không gửi được lệnh in",description:result.warning,variant:result.success ? "warning" : "error",duration:10000});
     };
     window.addEventListener("onebiz-print-result", handler);

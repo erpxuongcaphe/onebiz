@@ -34,7 +34,7 @@ import type { PaperSize } from "@/lib/print-document";
 
 // ─── Types ───
 
-export type PrinterBackend = "browser" | "escpos-usb" | "qz-tray";
+export type PrinterBackend = "browser" | "escpos-usb" | "qz-tray" | "branch-queue";
 
 export interface PrintReceiptPayload {
   // Header
@@ -82,6 +82,7 @@ export interface PrintReceiptPayload {
 }
 
 export interface PrintResult {
+  queued?: { id: string; routeLabel: string };
   success: boolean;
   backend: PrinterBackend;
   /** true = đã fallback sang browser vì USB fail */
@@ -361,6 +362,7 @@ export class PrinterService {
     options: PrinterServiceOptions = {}
   ): Promise<PrintResult> {
     const backend = options.backend ?? this.configuredBackend;
+    if (backend === "branch-queue") return { success: false, backend, warning: "Phiếu này chưa có nơi nhận chi nhánh. Dùng luồng in F&B hoặc chọn in thủ công." };
 
     if (backend === "qz-tray") return this.printRaw({rawHtml: options.rawHtml ?? buildReceiptHtml(payload), backend, role: options.role, paperSize: payload.paperSize});
 
@@ -442,6 +444,7 @@ export class PrinterService {
     bridgePrinter?: string;
   }): Promise<PrintResult> {
     const backend = args.backend ?? this.configuredBackend;
+    if (backend === "branch-queue") return { success: false, backend, warning: "Phiếu này chưa có nơi nhận chi nhánh. Dùng luồng in F&B hoặc chọn in thủ công." };
 
     if (backend === "qz-tray") {
       try {

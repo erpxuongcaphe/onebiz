@@ -23,6 +23,7 @@ import { HelpTip } from "@/components/shared/help-tip";
 import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { BranchPrintInfoCard } from "@/components/shared/branch-print-info-card";
 import { PrintSetupChecklist } from "@/components/shared/print-setup-checklist";
+import { BranchPrintSetup } from "@/components/shared/branch-print-setup";
 import { KitchenStationsCard } from "@/components/shared/kitchen-stations-card";
 import { BridgePrinterSetup } from "@/components/shared/bridge-printer-setup";
 import { PrinterTestPreview } from "@/components/shared/printer-test-preview";
@@ -499,6 +500,7 @@ function PrintSettingsPageContent() {
       )}
 
       {selected === "may-in" && (<>
+      <BranchPrintSetup />
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>

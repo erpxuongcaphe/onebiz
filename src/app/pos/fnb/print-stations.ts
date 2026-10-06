@@ -103,6 +103,8 @@ export async function printKitchenTicketsByStation(
 
     const ticket: KitchenTicketDataV2 = {
       ...baseData,
+      branchId,
+      stationId: stationKey === "no_station" ? undefined : stationKey,
       stationName,
       stationColor: station?.color,
       bridgePrinter: stationKey !== "no_station" ? loadBridgePrinter("kitchen", branchId, stationKey) ?? undefined : undefined,
