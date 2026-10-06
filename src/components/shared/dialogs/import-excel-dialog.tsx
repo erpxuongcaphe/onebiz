@@ -150,6 +150,9 @@ export function ImportExcelDialog<TRow>({
 
   function handleSelect(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
+    // Allow the same file to be chosen again after correcting metadata or errors.
+    // The captured File remains valid after clearing the native input.
+    e.target.value = "";
     if (f) void handleFileChosen(f);
   }
 
