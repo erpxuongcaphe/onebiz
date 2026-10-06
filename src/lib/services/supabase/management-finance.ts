@@ -1,9 +1,11 @@
 import { getClient, handleError } from './base';
 
 export type FinanceKind = 'income' | 'expense' | 'non_pnl';
+export type CashFlowActivity = 'operating' | 'investing' | 'financing' | 'unclassified';
 export interface FinanceCategory {
   id: string; code: string; name: string; kind: FinanceKind;
   parent_id: string | null; is_group: boolean;
+  cash_flow_activity?: CashFlowActivity;
 }
 export interface FinanceAllocation {
   branchId: string; recognitionDate: string; amount: number;
@@ -53,10 +55,36 @@ export function getFinanceCategories(): Promise<FinanceCategory[]> {
   return rpc('get_management_finance_categories');
 }
 
-export function saveFinanceCategory(input: {code: string; name: string; kind: FinanceKind; parentId: string}): Promise<FinanceCategory> {
-  return rpc('save_management_finance_category', {
+export function saveFinanceCategory(input: {code: string; name: string; kind: FinanceKind; parentId: string; cashFlowActivity: CashFlowActivity}): Promise<FinanceCategory> {
+  return rpc('save_management_finance_category_with_cash_flow', {
     p_code: input.code.trim().toUpperCase(), p_name: input.name.trim(), p_kind: input.kind, p_parent_id: input.parentId,
+    p_cash_flow_activity: input.cashFlowActivity,
   });
+}
+
+export interface FinanceCashLink {
+  cash_id: string; event_id: string; event_code: string; category_code: string; category_name: string;
+  kind: FinanceKind; cash_flow_activity: CashFlowActivity; business_date: string; event_status: 'posted' | 'cancelled';
+}
+
+export async function getFinanceCashLinks(from: string, to: string, branchId?: string): Promise<FinanceCashLink[]> {
+  const rows: FinanceCashLink[] = [];
+  const ids = new Set<string>();
+  let expected: number | undefined;
+  for (let page = 0; ; page++) {
+    const result = await rpc<{items: FinanceCashLink[]; total: number}>('get_management_finance_cash_links', {
+      p_date_from: from, p_date_to: to, p_branch_id: branchId || null, p_page: page, p_page_size: 200,
+    });
+    if (!Array.isArray(result.items) || !Number.isSafeInteger(result.total) || result.total < 0) throw new Error('Nguồn dòng tiền không hợp lệ');
+    expected ??= result.total;
+    if (result.total !== expected || (!result.items.length && rows.length < expected)) throw new Error('Nguồn dòng tiền thay đổi hoặc chưa tải đủ, vui lòng tải lại');
+    for (const row of result.items) {
+      if (!row.cash_id || ids.has(row.cash_id)) throw new Error('Nguồn dòng tiền bị trùng, vui lòng tải lại');
+      ids.add(row.cash_id); rows.push(row);
+    }
+    if (rows.length === expected) return rows;
+    if (rows.length > expected) throw new Error('Số nguồn dòng tiền không khớp');
+  }
 }
 
 // The caller retains this request ID and payload after a timeout; never generate a retry ID here.

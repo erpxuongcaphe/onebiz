@@ -12,9 +12,10 @@ import {ManagementFinanceDialog} from '@/components/shared/dialogs/management-fi
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
 import {cashDateTimeInput, formatCashBookDate, formatCashTime} from '@/lib/cash-time';
 import {formatCurrency} from '@/lib/format';
+import {CASH_FLOW_LABELS, summarizeRecognition} from '@/lib/utils/finance-report-reconciliation';
 import {exportToExcel} from '@/lib/utils/export';
 import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanceCategory, cancelFinanceDocument,
-  type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
+  type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
   const {activeBranchId, hasPermission, isLoading} = useAuth();
@@ -34,6 +35,10 @@ export default function ManagementFinancePage() {
   const [parentId, setParentId] = useState('');
   const [categoryCode, setCategoryCode] = useState('');
   const [categoryName, setCategoryName] = useState('');
+  const [cashFlowActivity, setCashFlowActivity] = useState<CashFlowActivity>('unclassified');
+  const [view, setView] = useState<'documents' | 'categories'>('documents');
+  const [categoryRows, setCategoryRows] = useState<FinanceEvent[]>([]);
+  const [categoryLoading, setCategoryLoading] = useState(false);
   const [cancelling, setCancelling] = useState<FinanceEvent>();
   const [reason, setReason] = useState('');
   const [actionSaving, setActionSaving] = useState(false);
@@ -60,12 +65,31 @@ export default function ManagementFinancePage() {
     return () => {active = false;};
   }, [isLoading, canRead]);
   useEffect(() => {setPage(0);}, [activeBranchId]);
+  useEffect(() => {
+    if (isLoading || !canRead || view !== 'categories') return;
+    let active = true;
+    setCategoryLoading(true); setCategoryRows([]); setError('');
+    getAllFinanceRows({...filters,branchId:activeBranchId})
+      .then(rows => {if (active) setCategoryRows(rows);})
+      .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không tải đủ khoản ghi nhận.');})
+      .finally(() => {if (active) setCategoryLoading(false);});
+    return () => {active = false;};
+  }, [isLoading,canRead,view,filters,activeBranchId,revision]);
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
 
   async function download() {
     setExporting(true); setError('');
     try {
       const rows = await getAllFinanceRows(scoped);
+      if (view === 'categories') {
+        await exportToExcel(summarizeRecognition(rows),[
+          {header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},
+          {header:'Số khoản',key:'count'},{header:'Ghi nhận trong bộ lọc',key:'amount'},
+          {header:'Tổng khoản gốc',key:'totalSource'},{header:'Đã thanh toán toàn khoản đến cuối kỳ',key:'settled'},
+          {header:'Còn phải thu / chi toàn khoản',key:'outstanding'},
+        ],`ghi-nhan-theo-khoan-muc-${filters.from}-${filters.to}`);
+        return;
+      }
       await exportToExcel(rows.map(r => ({code: r.code, date: r.business_date, category: `${r.category_code} · ${r.category_name}`,
         counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.settled_amount,
         status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',
@@ -86,7 +110,7 @@ export default function ManagementFinancePage() {
     try {
       const parent = categories.find(c => c.id === parentId && c.is_group);
       if (!parent) throw new Error('Chọn nhóm khoản mục.');
-      await saveFinanceCategory({code: categoryCode, name: categoryName, kind: parent.kind, parentId});
+      await saveFinanceCategory({code: categoryCode, name: categoryName, kind: parent.kind, parentId, cashFlowActivity});
       setCategories(await getFinanceCategories()); setCategoryOpen(false);
     } catch (e) {setActionError(e instanceof Error ? e.message : 'Chưa lưu được khoản mục.');}
     finally {setActionSaving(false);}
@@ -107,7 +131,7 @@ export default function ManagementFinancePage() {
     <PageHeader title="Thu nhập và chi phí"/>
     <div className="flex flex-wrap gap-2">
       {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}} disabled={!categories.length}><Icon name="add"/>Ghi nhận mới</Button>}
-      {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
+      {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
       <Button variant="outline" disabled={loading || exporting || !data} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
       <Button variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
@@ -129,7 +153,16 @@ export default function ManagementFinancePage() {
       <div><span className="text-sm text-muted-foreground">Chi phí ghi nhận</span><p className="font-semibold">{formatCurrency(data.summary.expense)}</p></div>
       <div><span className="text-sm text-muted-foreground">Ngoài kết quả kinh doanh</span><p className="font-semibold">{formatCurrency(data.summary.non_pnl)}</p></div>
     </div>}
-    <div className="overflow-x-auto border rounded-md">
+    <div role="tablist" aria-label="Góc nhìn thu nhập chi phí" className="flex border-b gap-4">
+      {([['documents','Theo chứng từ'],['categories','Theo khoản mục']] as const).map(([value,label]) => <button key={value} role="tab" aria-selected={view === value} className={`py-2 text-sm border-b-2 ${view === value ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`} onClick={() => setView(value)}>{label}</button>)}
+    </div>
+    {view === 'categories' && <section aria-label="Ghi nhận theo khoản mục" className="space-y-2">
+      <div className="overflow-x-auto border rounded-md"><table className="w-full min-w-[750px] text-sm"><thead className="bg-muted"><tr>{['Khoản mục','Số khoản','Ghi nhận trong bộ lọc','Tổng khoản gốc','Đã thanh toán toàn khoản','Còn phải thu / chi toàn khoản'].map(h => <th key={h} className="p-3 text-left">{h}</th>)}</tr></thead><tbody>{summarizeRecognition(categoryRows).map(r => <tr key={`${r.kind}:${r.code}`} className="border-t"><td className="p-3"><button className="text-primary text-left" onClick={() => {const cat = categories.find(c => c.code === r.code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}>{r.name}<span className="block text-xs text-muted-foreground">{r.code}</span></button></td>{[r.count,formatCurrency(r.amount),formatCurrency(r.totalSource),formatCurrency(r.settled),formatCurrency(r.outstanding)].map((value,i) => <td key={i} className="p-3 text-right tabular-nums">{value}</td>)}</tr>)}</tbody></table></div>
+      {categoryLoading && <p>Đang tải toàn bộ khoản ghi nhận…</p>}
+      {!categoryLoading && !categoryRows.length && !error && <p className="text-sm text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
+      <p className="text-xs text-muted-foreground">Đã hủy không cộng vào bảng. Thanh toán và số còn lại tính trên toàn khoản đến ngày cuối kỳ, không chia giả theo tỷ lệ chi nhánh.</p>
+    </section>}
+    {view === 'documents' && <><div className="overflow-x-auto border rounded-md">
       <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh','Khoản mục / đối tượng','Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
         <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
           canSettle={canCreate && r.status === 'posted'} onSettle={() => {setSettling(r); setOpen(true);}}
@@ -141,12 +174,13 @@ export default function ManagementFinancePage() {
     <div className="flex items-center justify-between gap-2 text-sm"><span>{data?.total ?? 0} khoản · trang {page + 1}</span><div className="flex gap-2">
       <Button variant="outline" size="icon" aria-label="Trang trước" title="Trang trước" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}><Icon name="chevron_left"/></Button>
       <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => setPage(p => p + 1)}><Icon name="chevron_right"/></Button>
-    </div></div>
+    </div></div></>}
     <ManagementFinanceDialog open={open} onOpenChange={setOpen} categories={categories} event={settling} onSuccess={() => setRevision(r => r + 1)}/>
     <Dialog open={categoryOpen} onOpenChange={value => {if (!actionSaving) setCategoryOpen(value);}}><DialogContent><DialogHeader><DialogTitle>Thêm khoản mục chi tiết</DialogTitle></DialogHeader>
       <label className="grid gap-1 text-sm">Nhóm khoản mục<SearchableSelect value={parentId} onValueChange={setParentId} options={categories.filter(c => c.is_group).map(c => ({value: c.id, label: c.name, meta: c.code}))} placeholder="Chọn nhóm"/></label>
       <label className="grid gap-1 text-sm">Mã khoản mục<Input value={categoryCode} maxLength={32} onChange={e => setCategoryCode(e.target.value.toUpperCase())}/></label>
       <label className="grid gap-1 text-sm">Tên khoản mục<Input value={categoryName} onChange={e => setCategoryName(e.target.value)}/></label>
+      <label className="grid gap-1 text-sm">Hoạt động dòng tiền<select value={cashFlowActivity} className="h-10 rounded-md border bg-background px-3" onChange={e => setCashFlowActivity(e.target.value as CashFlowActivity)}>{Object.entries(CASH_FLOW_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       {actionError && <p role="alert" className="text-sm text-destructive">{actionError}</p>}
       <DialogFooter><Button variant="outline" disabled={actionSaving} onClick={() => setCategoryOpen(false)}>Đóng</Button><Button disabled={actionSaving} onClick={saveCategory}><Icon name="save"/>{actionSaving ? 'Đang lưu…' : 'Lưu'}</Button></DialogFooter>
     </DialogContent></Dialog>

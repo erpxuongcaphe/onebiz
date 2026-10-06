@@ -52,6 +52,8 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["settle_management_finance_event", "00438"],
   ["cancel_management_finance_event", "00438"],
   ["get_management_finance_workspace", "00438"],
+  ["get_management_finance_cash_links", "00440"],
+  ["save_management_finance_category_with_cash_flow", "00440"],
   ["get_cash_performers", "00435"],
   ["record_cash_transaction_context", "00435"],
   ["record_cash_transaction_timed", "00428"],

@@ -550,7 +550,7 @@ export default function BaoCaoTaiChinhPage() {
           "Đây là báo cáo quản trị, không phải lợi nhuận sau thuế theo chuẩn kế toán. " +
           costBasisNote,
         guide: [
-          "Kết quả vận hành = doanh thu hàng hóa - giá vốn - chi phí vận hành.",
+          "Kết quả vận hành = doanh thu hàng hóa - giá vốn - chi phí vận hành + thu nhập khác ghi nhận.",
           "Phí giao hàng thu hộ được trình bày riêng và không đưa vào lãi gộp.",
           costBasisNote,
         ],
@@ -759,6 +759,12 @@ export default function BaoCaoTaiChinhPage() {
               )}
             </section>
           )}
+
+        {(cur?.legacyCashExpense ?? 0) > 0 && <div className="border-l-2 border-status-warning bg-status-warning/5 p-3 text-sm">
+          Chi phí từ phiếu chi cũ chưa có khoản ghi nhận riêng: <strong>{formatCurrency(cur?.legacyCashExpense ?? 0)}</strong>.
+          {' '}Phần này giữ cách tính cũ theo ngày tạo phiếu, chưa được coi là đã đối soát theo kỳ phát sinh.
+          {' '}<a className="text-primary underline" href="/so-quy">Xem sổ quỹ</a>
+        </div>}
 
         {/* So sánh P&L các chi nhánh — chỉ hiển thị ở view "Tất cả" */}
         {branchId === "all" && branchPnL.length > 0 && (

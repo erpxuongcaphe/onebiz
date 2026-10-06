@@ -20,6 +20,9 @@ import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
 import { getAllCashBookEntries, getCashBookListWorkspace } from "@/lib/services/supabase/cash-book";
 import type { CashBookEntry } from "@/lib/types";
+import {getFinanceCashLinks} from '@/lib/services/supabase/management-finance';
+import {CASH_FLOW_LABELS,cashFlowMonths,reconcileCashFlow} from '@/lib/utils/finance-report-reconciliation';
+import {CashFlowReconciliationTable,type CashFlowReconciliation} from '@/components/shared/report/cash-flow-reconciliation';
 import { PERMISSIONS } from "@/lib/permissions/constants";
 import { Button } from "@/components/ui/button";
 import { cashCategoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
@@ -82,6 +85,7 @@ export default function LuongTienPage() {
   const [ledgerLoading, setLedgerLoading] = useState(false);
   const [ledgerError, setLedgerError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [reconciliation,setReconciliation] = useState<CashFlowReconciliation | null>(null);
   const requestIdRef = useRef(0);
   const ledgerRequestIdRef = useRef(0);
 
@@ -223,8 +227,14 @@ export default function LuongTienPage() {
           dateFrom: range.from,
           dateToExclusive,
           statuses: ["completed"],
-          types: ledgerType === "all" ? undefined : [ledgerType],
         });
+        const sources = await getFinanceCashLinks(range.from,range.to,activeBranchId);
+        const checked = reconcileCashFlow(entries,sources);
+        if (Math.abs(checked.receipt-data.reduce((s,r) => s+r.totalReceipt,0))>0.005 || Math.abs(checked.payment-data.reduce((s,r) => s+r.totalPayment,0))>0.005) {
+          throw new Error('Số liệu đã thay đổi, tải lại báo cáo trước khi xuất');
+        }
+        sheets.push({name:'Hoạt động dòng tiền',columns:[{label:'Hoạt động',key:'activity',width:28},{label:'Số phiếu',key:'count',width:14},{label:'Thu',key:'receipt',format:'currency',width:22},{label:'Chi',key:'payment',format:'currency',width:22},{label:'Ròng',key:'net',format:'currency',width:22}],rows:checked.totals.map(r => ({...r,activity:CASH_FLOW_LABELS[r.activity]}))});
+        sheets.push({name:'Nguồn dòng tiền',columns:[{label:'Phiếu',key:'code',width:18},{label:'Ngày hạch toán',key:'date',width:18},{label:'Hoạt động',key:'activity',width:28},{label:'Khoản mục',key:'category',width:30},{label:'Mã khoản mục',key:'categoryCode',width:22},{label:'Khoản ghi nhận',key:'eventCode',width:22},{label:'Chi nhánh',key:'branchName',width:30},{label:'Người thực hiện',key:'performedByName',width:26},{label:'Đối tượng',key:'counterparty',width:30},{label:'Thu',key:'receipt',format:'currency',width:22},{label:'Chi',key:'payment',format:'currency',width:22}],rows:checked.detail.map(r => ({...r,activity:CASH_FLOW_LABELS[r.activity],receipt:r.type === 'receipt' ? r.amount : 0,payment:r.type === 'payment' ? r.amount : 0}))});
         sheets.push({
           name: "Chứng từ thu chi",
           titleRows: buildReportTitleRows({
@@ -248,7 +258,7 @@ export default function LuongTienPage() {
             { label: "Chứng từ gốc", key: "reference", width: 20 },
             { label: "Số tiền", key: "amount", width: 20, format: "currency" },
           ],
-          rows: entries.map((entry) => ({
+          rows: entries.filter(entry => ledgerType === 'all' || entry.type === ledgerType).map((entry) => ({
             date: entry.date,
             code: entry.code,
             type: entry.type === "receipt" ? "Thu" : "Chi",
@@ -286,16 +296,27 @@ export default function LuongTienPage() {
     } finally {
       setExporting(false);
     }
-  }, [buildSheets, canViewCashBook, activeBranchId, range, dateToExclusive, ledgerType, branchLabel, tenantName, toast]);
+  }, [buildSheets, canViewCashBook, activeBranchId, range, dateToExclusive, ledgerType, branchLabel, tenantName, toast, data]);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
     setLoadError(null);
+    setReconciliation(null);
     try {
-      const result = await getCashFlowDetailed(6, activeBranchId, range);
-      if (requestId === requestIdRef.current) setData(result);
+      if (canViewCashBook) {
+        const [entries,sources] = await Promise.all([
+          getAllCashBookEntries({branchId:activeBranchId,dateFrom:range.from,dateToExclusive,statuses:['completed']}),
+          getFinanceCashLinks(range.from,range.to,activeBranchId),
+        ]);
+        const checked = reconcileCashFlow(entries,sources);
+        const months = cashFlowMonths(entries,range.from,range.to);
+        if (requestId === requestIdRef.current) {setData(months);setReconciliation(checked);}
+      } else {
+        const result = await getCashFlowDetailed(6, activeBranchId, range);
+        if (requestId === requestIdRef.current) setData(result);
+      }
     } catch (error) {
       if (requestId === requestIdRef.current) {
         setData([]);
@@ -304,7 +325,7 @@ export default function LuongTienPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, isReady, range]);
+  }, [activeBranchId, isReady, range,canViewCashBook,dateToExclusive]);
 
   useEffect(() => {
     fetchData();
@@ -420,6 +441,8 @@ export default function LuongTienPage() {
           positive={net >= 0}
         />
       </div>
+
+      {reconciliation && <CashFlowReconciliationTable key={`${activeBranchId}:${range.from}:${range.to}`} report={reconciliation}/>}
 
       {viewMode === "chart" && (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

@@ -382,6 +382,7 @@ jobs:
         run: |
           createdb management_finance_test
           PGDATABASE=management_finance_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00438_management_income_expense_ledger.integration.sql
+          PGDATABASE=management_finance_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00440_management_finance_cash_flow_sources.integration.sql
           createdb management_finance_pnl_test
           PGDATABASE=management_finance_pnl_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00439_management_finance_pnl_recognition.integration.sql
 
