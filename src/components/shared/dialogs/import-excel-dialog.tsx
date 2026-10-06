@@ -22,6 +22,7 @@ import { useRef, useState, type ChangeEvent, type DragEvent, type ReactNode } fr
 import {
   Dialog,
   DialogContent,
+  DialogBody,
   DialogDescription,
   DialogFooter,
   DialogHeader,
@@ -188,8 +189,8 @@ export function ImportExcelDialog<TRow>({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
+        <DialogHeader className="shrink-0">
           <DialogTitle>
             <span className="inline-flex items-center gap-2">
               <Icon name="upload" size={16} />
@@ -206,6 +207,7 @@ export function ImportExcelDialog<TRow>({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         {step === "upload" && (
           <div className="space-y-3">
             {uploadContent}
@@ -325,6 +327,7 @@ export function ImportExcelDialog<TRow>({
         {step === "done" && importResult && (
           <DoneSection result={importResult} total={validCount} />
         )}
+        </DialogBody>
 
         <DialogFooter>
           {step === "upload" && (
