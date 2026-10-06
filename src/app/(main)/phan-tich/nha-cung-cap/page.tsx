@@ -235,7 +235,9 @@ export default function NhaCungCapPage() {
   }, [canViewDetail, fetchVouchers, isReady, tableMode, viewMode]);
 
 
-  const handleExportView = useCallback(() => {
+  const handleExportView = useCallback(async () => {
+    if (exporting) return;
+    setExporting(true);
     try {
       const title = buildReportTitleRows({
         title: "BÁO CÁO NHÀ CUNG CẤP",
@@ -282,12 +284,14 @@ export default function NhaCungCapPage() {
           orderCount: supplierTable.reduce((sum, s) => sum + s.orders, 0),
         },
       };
-      exportReportToExcel({ kind: "nha-cung-cap", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
-      toast({ title: "Đã xuất Excel (view)", variant: "success" });
+      await exportReportToExcel({ kind: "nha-cung-cap", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      toast({ title: "Đã xuất Excel theo bảng đang xem", variant: "success" });
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    } finally {
+      setExporting(false);
     }
-  }, [supplierTable, vouchers, range, branchLabel, branches, toast, viewMode, tableMode, canViewDetail]);
+  }, [supplierTable, vouchers, range, branchLabel, branches, exporting, toast, viewMode, tableMode, canViewDetail]);
 
   const handleExportFull = useCallback(async () => {
     if (exporting) return;
