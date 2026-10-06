@@ -90,14 +90,15 @@ describe("report data integrity", () => {
 
   it("paginates product sales and builds movement dates from the selected range", () => {
     expect(analytics).toContain(".range(offset, offset + pageSize - 1)");
-    expect(analytics).toContain("products!invoice_items_product_id_fkey(code)");
-    expect(analytics).toContain("const key = productId ? `${productId}:${name}` : name");
+    expect(analytics).toContain("products!invoice_items_product_id_fkey(code, categories(name))");
+    expect(analytics).toContain("return aggregateProductSaleLines(rows.map(");
     expect(inventoryPage).toContain("getTopProductsByRevenue(0, activeBranchId, range)");
     expect(inventoryPage).toContain('viewMode === "chart"');
     expect(inventoryPage).toContain("exportProducts.map((p, i)");
     expect(inventoryPage).toContain("getSalesReturnReport({");
     expect(inventoryPage).toContain("pagedProducts.map((product) =>");
-    expect(inventoryPage).toContain("key={`${product.productId}-${product.name}`}");
+    expect(inventoryPage).toContain("key={`${product.productId}-${product.name}-${product.unit ?? \"\"}`}");
+    expect(inventoryPage).toContain("canSumQuantity");
     expect(analytics).toContain("dayKeysForRange(customRange, days)");
     expect(analytics).toContain("if (!inbound.has(key)) continue");
   });

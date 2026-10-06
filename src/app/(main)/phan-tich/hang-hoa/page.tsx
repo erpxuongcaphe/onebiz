@@ -165,8 +165,9 @@ export default function HangHoaPage() {
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
   const { toast } = useToast();
   const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
-    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "chart" });
+    useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [kpis, setKpis] = useState<InventoryKpis | null>(null);
   const [topProducts, setTopProducts] = useState<TopProductRevenue[]>([]);
   const [salesReturns, setSalesReturns] = useState<SalesReturnRow[]>([]);
@@ -176,6 +177,8 @@ export default function HangHoaPage() {
   const [movements, setMovements] = useState<StockMovementPoint[]>([]);
   const [lowStock, setLowStock] = useState<LowStockItem[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [productCategory, setProductCategory] = useState("");
+  const [productActivity, setProductActivity] = useState<"all" | "sold" | "returned">("all");
   const [productSort, setProductSort] = useState<"netRevenue" | "revenue" | "quantity" | "returnedValue" | "name">("netRevenue");
   const [productPage, setProductPage] = useState(1);
   const requestIdRef = useRef(0);
@@ -187,7 +190,9 @@ export default function HangHoaPage() {
   const visibleProducts = useMemo(() => {
     const needle = productSearch.trim().toLocaleLowerCase("vi");
     const filtered = reconciledProducts.filter((product) =>
-      `${product.name} ${product.code ?? ""}`.toLocaleLowerCase("vi").includes(needle),
+      `${product.name} ${product.code ?? ""}`.toLocaleLowerCase("vi").includes(needle)
+      && (!productCategory || (product.category ?? "Chưa phân loại") === productCategory)
+      && (productActivity === "all" || (productActivity === "sold" ? product.qty > 0 : product.returnedQty > 0)),
     );
     return [...filtered].sort((a, b) => {
       if (productSort === "name") return a.name.localeCompare(b.name, "vi");
@@ -195,14 +200,18 @@ export default function HangHoaPage() {
       if (productSort === "returnedValue") return b.returnedValue - a.returnedValue;
       return productSort === "revenue" ? b.revenue - a.revenue : b.netRevenue - a.netRevenue;
     });
-  }, [reconciledProducts, productSearch, productSort]);
+  }, [reconciledProducts, productSearch, productSort, productCategory, productActivity]);
+  const productCategories = [...new Set(reconciledProducts.map((product) => product.category ?? "Chưa phân loại"))].sort((a, b) => a.localeCompare(b, "vi"));
+  const canSumQuantity = new Set(visibleProducts.map((product) => product.unit ?? "")).size === 1 && visibleProducts.every((product) => Boolean(product.unit));
   const visibleProductTotals = useMemo(
     () => visibleProducts.reduce((totals, product) => ({
       qty: totals.qty + product.qty,
+      returnedQty: totals.returnedQty + product.returnedQty,
+      netQty: totals.netQty + product.netQty,
       revenue: totals.revenue + product.revenue,
       returnedValue: totals.returnedValue + product.returnedValue,
       netRevenue: totals.netRevenue + product.netRevenue,
-    }), { qty: 0, revenue: 0, returnedValue: 0, netRevenue: 0 }),
+    }), { qty: 0, returnedQty: 0, netQty: 0, revenue: 0, returnedValue: 0, netRevenue: 0 }),
     [visibleProducts],
   );
   const productsPerPage = 50;
@@ -212,8 +221,8 @@ export default function HangHoaPage() {
     (currentProductPage - 1) * productsPerPage,
     currentProductPage * productsPerPage,
   );
-  const exportIncludesReturns = viewMode === "table" && returnReportStatus === "ready";
-  const exportProducts = viewMode === "chart" ? topProducts.slice(0, 10) : visibleProducts;
+  const exportIncludesReturns = returnReportStatus === "ready";
+  const exportProducts = visibleProducts;
 
 
   const handleExportView = useCallback(() => {
@@ -233,10 +242,13 @@ export default function HangHoaPage() {
           { label: "STT", key: "rank", width: 6 },
           { label: "Mã hàng", key: "code", width: 18 },
           { label: "Sản phẩm", key: "name", width: 32 },
+          { label: "ĐVT", key: "unit", width: 12 },
           { label: "SL bán", key: "qty", width: 12, format: "number" },
-          { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
+          { label: "SL trả", key: "returnedQty", width: 12, format: "number" },
+          { label: "SL ròng", key: "netQty", width: 12, format: "number" },
+          { label: "Doanh thu sau giảm giá (VND)", key: "revenue", width: 25, format: "currency" },
           ...(exportIncludesReturns ? [
-            { label: "Tiền trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
+            { label: "Giá trị trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
             { label: "Doanh thu thuần (VND)", key: "netRevenue", width: 20, format: "currency" as const },
           ] : []),
         ],
@@ -244,7 +256,10 @@ export default function HangHoaPage() {
           rank: i + 1,
           code: p.code ?? "",
           name: p.name,
+          unit: p.unit ?? "",
           qty: p.qty,
+          returnedQty: p.returnedQty,
+          netQty: p.netQty,
           revenue: p.revenue,
           returnedValue: "returnedValue" in p ? p.returnedValue : undefined,
           netRevenue: "netRevenue" in p ? p.netRevenue : undefined,
@@ -252,7 +267,9 @@ export default function HangHoaPage() {
         footer: {
           rank: "",
           name: "TỔNG",
-          qty: exportProducts.reduce((s, p) => s + p.qty, 0),
+          qty: canSumQuantity ? visibleProductTotals.qty : undefined,
+          returnedQty: canSumQuantity ? visibleProductTotals.returnedQty : undefined,
+          netQty: canSumQuantity ? visibleProductTotals.netQty : undefined,
           revenue: exportProducts.reduce((s, p) => s + p.revenue, 0),
           returnedValue: exportIncludesReturns ? visibleProductTotals.returnedValue : undefined,
           netRevenue: exportIncludesReturns ? visibleProductTotals.netRevenue : undefined,
@@ -269,7 +286,7 @@ export default function HangHoaPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [exportProducts, exportIncludesReturns, visibleProductTotals, range, branchLabel, toast]);
+  }, [exportProducts, exportIncludesReturns, visibleProductTotals, canSumQuantity, range, branchLabel, toast]);
 
   const handleExportFull = useCallback(() => {
     try {
@@ -279,7 +296,7 @@ export default function HangHoaPage() {
         branchName: branchLabel,
         generatedAt: new Date(),
       });
-      const fullSalesRows = exportIncludesReturns ? reconciledProducts : topProducts;
+      const fullSalesRows = visibleProducts;
       const sheets: ExcelSheet[] = [
         {
           name: "KPI",
@@ -306,10 +323,13 @@ export default function HangHoaPage() {
             { label: "STT", key: "rank", width: 6 },
             { label: "Mã hàng", key: "code", width: 18 },
             { label: "Sản phẩm", key: "name", width: 32 },
+            { label: "ĐVT", key: "unit", width: 12 },
             { label: "SL bán", key: "qty", width: 12, format: "number" },
-            { label: "Doanh số gộp (VND)", key: "revenue", width: 18, format: "currency" },
+            { label: "Doanh thu sau giảm giá (VND)", key: "revenue", width: 24, format: "currency" },
             ...(exportIncludesReturns ? [
-              { label: "Tiền trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
+              { label: "SL trả", key: "returnedQty", width: 12, format: "number" as const },
+              { label: "SL ròng", key: "netQty", width: 12, format: "number" as const },
+              { label: "Giá trị trả (VND)", key: "returnedValue", width: 18, format: "currency" as const },
               { label: "Doanh thu thuần (VND)", key: "netRevenue", width: 20, format: "currency" as const },
             ] : []),
           ],
@@ -317,8 +337,11 @@ export default function HangHoaPage() {
             rank: i + 1,
             code: p.code ?? "",
             name: p.name,
+            unit: p.unit ?? "",
             qty: p.qty,
             revenue: p.revenue,
+            returnedQty: p.returnedQty,
+            netQty: p.netQty,
             returnedValue: "returnedValue" in p ? p.returnedValue : undefined,
             netRevenue: "netRevenue" in p ? p.netRevenue : undefined,
           })),
@@ -368,11 +391,12 @@ export default function HangHoaPage() {
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     }
-  }, [kpis, topProducts, reconciledProducts, exportIncludesReturns, categories, movements, lowStock, range, branchLabel, toast]);
+  }, [kpis, visibleProducts, exportIncludesReturns, categories, movements, lowStock, range, branchLabel, toast]);
 
   const fetchData = useCallback(async () => {
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const [kpiData, topData, catData, moveData, lowData] = await Promise.all([
         getInventoryKpis(activeBranchId, range),
@@ -390,6 +414,7 @@ export default function HangHoaPage() {
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       console.error("Failed to fetch inventory analytics:", err);
+      setLoadError(err instanceof Error ? err.message : "Không tải được dữ liệu báo cáo");
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
@@ -401,7 +426,7 @@ export default function HangHoaPage() {
   }, [fetchData, isReady]);
 
   useEffect(() => {
-    if (!isReady || viewMode !== "table") {
+    if (!isReady) {
       setReturnReportStatus("idle");
       return;
     }
@@ -428,7 +453,7 @@ export default function HangHoaPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeBranchId, isReady, range.from, range.to, returnRetryToken, viewMode]);
+  }, [activeBranchId, isReady, range.from, range.to, returnRetryToken]);
 
   if (loading) {
     return (
@@ -454,10 +479,11 @@ export default function HangHoaPage() {
         onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading || (viewMode === "table" && returnReportStatus !== "ready")}
+        exportDisabled={loading || Boolean(loadError) || returnReportStatus !== "ready"}
       />
 
       <div className="flex-1 p-4 lg:p-6 space-y-4">
+        {loadError && <div role="alert" className="border border-status-error p-3 text-sm text-status-error"><p>Không tải được báo cáo. Không sử dụng số liệu đang hiển thị.</p><button type="button" className="mt-2 underline" onClick={fetchData}>Thử lại</button></div>}
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
@@ -502,19 +528,24 @@ export default function HangHoaPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Top 10 Products by Revenue - Horizontal Bar */}
           <ChartCard
-            title="Top 10 mặt hàng theo doanh số gộp"
-            subtitle={`${selectedPeriodLabel} · Trước trả hàng · ${topProducts.length} mặt hàng`}
+            title="Top 10 mặt hàng theo doanh thu thuần"
+            subtitle={`${selectedPeriodLabel} · Sau trả hàng · ${visibleProducts.length} mặt hàng`}
           >
             <div className="h-72 md:h-96">
-              {topProducts.length === 0 ? (
+              {returnReportStatus !== "ready" ? (
+                <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+                  {returnReportStatus === "error" ? "Chưa đối soát được trả hàng" : "Đang đối soát trả hàng…"}
+                </div>
+              ) : visibleProducts.length === 0 ? (
                 <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
                   Chưa có dữ liệu doanh thu sản phẩm
                 </div>
               ) : (
                 <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart
-                    data={topProducts.slice(0, 10).map((product) => ({
+                    data={[...visibleProducts].sort((a, b) => b.netRevenue - a.netRevenue).slice(0, 10).map((product) => ({
                       ...product,
+                      revenue: product.netRevenue,
                       name: product.code ? `${product.name} · ${product.code}` : product.name,
                     })).reverse()}
                     layout="vertical"
@@ -541,7 +572,7 @@ export default function HangHoaPage() {
                       dataKey="revenue"
                       fill="#004AC6"
                       radius={[0, 6, 6, 0]}
-                    name="Doanh số gộp"
+                    name="Doanh thu thuần"
                     />
                   </BarChart>
                 </ResponsiveContainer>
@@ -669,13 +700,22 @@ export default function HangHoaPage() {
                 onChange={(event) => { setProductSearch(event.target.value); setProductPage(1); }}
               />
               <select
+                aria-label="Nhóm mặt hàng"
+                className="h-9 rounded border border-input bg-background px-3 text-sm"
+                value={productCategory}
+                onChange={(event) => { setProductCategory(event.target.value); setProductPage(1); }}
+              ><option value="">Tất cả nhóm hàng</option>{productCategories.map((category) => <option key={category} value={category}>{category}</option>)}</select>
+              <select aria-label="Phát sinh mặt hàng" className="h-9 rounded border border-input bg-background px-3 text-sm" value={productActivity} onChange={(event) => { setProductActivity(event.target.value as typeof productActivity); setProductPage(1); }}>
+                <option value="all">Bán và trả</option><option value="sold">Có bán</option><option value="returned">Có trả</option>
+              </select>
+              <select
                 aria-label="Sắp xếp mặt hàng"
                 className="h-9 rounded border border-input bg-background px-3 text-sm"
                 value={productSort}
                 onChange={(event) => { setProductSort(event.target.value as typeof productSort); setProductPage(1); }}
               >
                 <option value="netRevenue">Doanh thu thuần cao nhất</option>
-                <option value="revenue">Doanh số gộp cao nhất</option>
+                <option value="revenue">Doanh thu sau giảm giá cao nhất</option>
                 <option value="quantity">Số lượng bán nhiều nhất</option>
                 <option value="returnedValue">Tiền trả cao nhất</option>
                 <option value="name">Tên A–Z</option>
@@ -683,7 +723,7 @@ export default function HangHoaPage() {
             </div>
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground" aria-live="polite">
               {returnReportStatus === "ready" ? (
-                <p>Đối chiếu tiền theo mã hàng và biến thể. Tiền trả tính theo ngày lập phiếu; doanh thu thuần = doanh số gộp trừ tiền trả.</p>
+                <p>Doanh thu sau giảm giá; giá trị trả theo ngày phiếu trả, không phải tiền hoàn thực chi.</p>
               ) : returnReportStatus === "error" ? (
                 <div className="flex flex-wrap items-center gap-2 text-status-error">
                   <p>Chưa tải được phiếu trả hàng; số thuần đang để trống.</p>
@@ -704,18 +744,24 @@ export default function HangHoaPage() {
                       <tr className="border-b text-muted-foreground">
                         <th className="py-2 text-left font-medium">Mã hàng</th>
                         <th className="py-2 text-left font-medium">Mặt hàng</th>
+                        <th className="py-2 text-left font-medium">ĐVT</th>
                         <th className="py-2 text-right font-medium">SL bán</th>
-                        <th className="py-2 text-right font-medium">Doanh số gộp</th>
-                        <th className="py-2 text-right font-medium">Tiền trả</th>
+                        <th className="py-2 text-right font-medium">SL trả</th>
+                        <th className="py-2 text-right font-medium">SL ròng</th>
+                        <th className="py-2 text-right font-medium">Doanh thu sau giảm giá</th>
+                        <th className="py-2 text-right font-medium">Giá trị trả</th>
                         <th className="py-2 text-right font-medium">Doanh thu thuần</th>
                       </tr>
                     </thead>
                     <tbody>
                       {pagedProducts.map((product) => (
-                        <tr key={`${product.productId}-${product.name}`} className="border-b last:border-0">
+                        <tr key={`${product.productId}-${product.name}-${product.unit ?? ""}`} className="border-b last:border-0">
                           <td className="py-2 pr-4 text-muted-foreground">{product.code ?? "—"}</td>
                           <td className="py-2 pr-4 font-medium">{product.name}</td>
+                          <td className="py-2 pr-4">{product.unit ?? "—"}</td>
                           <td className="py-2 text-right tabular-nums">{formatNumber(product.qty)}</td>
+                          <td className="py-2 text-right tabular-nums">{returnReportStatus === "ready" ? formatNumber(product.returnedQty) : "—"}</td>
+                          <td className="py-2 text-right tabular-nums">{returnReportStatus === "ready" ? formatNumber(product.netQty) : "—"}</td>
                           <td className="py-2 text-right tabular-nums">{formatCurrency(product.revenue)}đ</td>
                           <td className="py-2 text-right tabular-nums">{returnReportStatus === "ready" ? `${formatCurrency(product.returnedValue)}đ` : "—"}</td>
                           <td className="py-2 text-right font-medium tabular-nums">{returnReportStatus === "ready" ? `${formatCurrency(product.netRevenue)}đ` : "—"}</td>
@@ -724,8 +770,10 @@ export default function HangHoaPage() {
                     </tbody>
                     {returnReportStatus === "ready" && <tfoot>
                       <tr className="border-t-2 bg-muted/40 font-semibold">
-                        <td className="py-2 pr-4" colSpan={2}>Tổng kết quả lọc</td>
-                        <td className="py-2 text-right tabular-nums">{formatNumber(visibleProductTotals.qty)}</td>
+                        <td className="py-2 pr-4" colSpan={3}>Tổng kết quả lọc</td>
+                        <td className="py-2 text-right tabular-nums">{canSumQuantity ? formatNumber(visibleProductTotals.qty) : "—"}</td>
+                        <td className="py-2 text-right tabular-nums">{canSumQuantity ? formatNumber(visibleProductTotals.returnedQty) : "—"}</td>
+                        <td className="py-2 text-right tabular-nums">{canSumQuantity ? formatNumber(visibleProductTotals.netQty) : "—"}</td>
                         <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.revenue)}đ</td>
                         <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.returnedValue)}đ</td>
                         <td className="py-2 text-right tabular-nums">{formatCurrency(visibleProductTotals.netRevenue)}đ</td>

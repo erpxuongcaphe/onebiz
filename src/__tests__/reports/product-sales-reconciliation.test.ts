@@ -12,6 +12,13 @@ const sale = (overrides: Partial<TopProductRevenue> = {}): TopProductRevenue => 
 });
 
 describe("product sales and return reconciliation", () => {
+  it("reconciles returned quantities in the matching unit", () => {
+    const rows = reconcileProductSales([sale({ unit: "Box" }), sale({ unit: "Case" })], [
+      { productId: "product-1", productName: "Trà sữa (Size M)", unit: "Box", quantity: 2, returnValue: 60_000 },
+    ]);
+    expect(rows.find((row) => row.unit === "Box")).toMatchObject({ returnedQty: 2, netQty: 2 });
+    expect(rows.find((row) => row.unit === "Case")).toMatchObject({ returnedQty: 0, netQty: 4 });
+  });
   it("matches returns by product and variant label, not SKU alone", () => {
     const rows = reconcileProductSales(
       [
