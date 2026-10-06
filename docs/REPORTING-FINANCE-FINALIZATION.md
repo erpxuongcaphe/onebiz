@@ -37,7 +37,7 @@ Changes in parallel chats must be reviewed before merging; do not stage the shar
 
 Customer allocation is released. Existing customer codes stay unchanged. New external customers require a configured group; internal branch customers and singleton walk-in customers retain their explicit protocols. Group names/codes resolve separately in imports, and lookup pages all customers. PostgreSQL rollback, concurrent allocation and tenant guards passed in CI.
 
-Expense recognition now has a draft independent event/settlement ledger in PR520. Existing cash payments are not silently reclassified as accrued expenses. The feature is not yet released or accepted on production.
+Expense recognition has an independent event/settlement ledger in merged PR520. Existing cash payments are not silently reclassified as accrued expenses. Production migrations are applied; browser acceptance and remaining cross-report gates are recorded below.
 
 ## Recognition implementation draft
 
@@ -51,17 +51,32 @@ Remaining gates in order:
 5. Finish customer/day/invoice, purchase/XNT historical-cost and document drilldown acceptance; do not infer absent snapshots.
 6. Run isolated DB, UI desktop/mobile, full CI, exact merge/deploy and production read-only verification before reporting completion.
 
-## PR520 in progress (not deployed)
+## PR520 release record
 
 - 00438: new leaf categories, branch/period allocations, guarded idempotent event posting, atomic immediate/partial payment through the existing cash context RPC, cancellation audit and complete paged workspace.
 - 00439: narrow guarded change to existing P&L definitions; excludes linked cash settlements from historic cash expenses and adds recognized expenses/other income. No sales, stock or historic cash rows updated.
 - New income/expense workspace and form; unpaid/immediate/partial payment, actor and cash timing, source allocation/settlement detail, server filters/sort, complete Excel source, category creation and guarded cancellation.
 - Pending-request payload persisted before dispatch. Confirmed SQL rejection permits correction; uncertain network result retains the same request key. UI tests cover unpaid posting, uncertain retry and remount recovery.
-- Initial isolated PostgreSQL tests passed in PR520 CI. Initial full CI exposed one missing pending-schema RPC declaration; fixed locally, rerun required on the final commit.
-- Production read-only preflight confirmed ledger absent and exact P&L patch fragments match (cash=1, expense=1, branch formula=2). No migration applied and no business data created.
-- Still required: final PostgreSQL/CI run, actual cash RPC connected-chain coverage, desktop/mobile UX verification, production backup/approval/apply/merge/deploy, plus the remaining cross-report acceptance gates above. This PR does not finish the entire reporting center.
+- Final CI on 75a6bef4bf02dc728befe45ca6605f3c64dfdcc4 passed: 478 test files, 5,342 tests, production build, schema/database checks, isolated PostgreSQL and Vercel preview.
+- Isolated ledger integration loads the real 00435 cash-context wrapper; its underlying timed money RPC is a test stub. Do not describe this as full live payment acceptance.
+- User approved production 00438/00439 after CI success. Both migrations returned success on 2026-10-06. Before applying, two existing P&L definitions were saved in docs/evidence/finance-report-functions-before-00439.json.
+- Production verification: ledger exists; linked-cash exclusion and recognition helper are present in P&L; branch report includes other income. Configuration categories total 280 across tenants; event count 0 and settlement count 0. No business documents were created for this verification.
+- PR520 merged at 5c6cbe08c49302f88a0da46499ead09d2a3094dc. Vercel production Bu5Cm2LgaPNjWzrWL5DcCmYvhe6G is Ready/Current for onebiz.com.vn, with that exact source commit; browser deployment overview verified.
+- Production browser: workspace loaded with empty ledger, category search/selection and new-document form verified. Immediate-payment mode exposes separate cash branch, performer, method, actual time and accounting date. No form submission occurred. P&L loaded including recognized other-income row; captured console error lists were empty for the workspace and P&L.
+- Desktop screenshot saved in docs/evidence/finance-workspace-production-20261006.jpg; migration and deployment screenshots are in the same folder.
+- Mobile acceptance is NOT passed: viewport.set requested 390x844 but DOM measurements remained 1280x720, including a fresh tab. Override reset; temporary tabs closed. Need a genuine mobile viewport before declaring responsive acceptance.
+- Still required: genuine mobile browser verification, plus the remaining cross-report acceptance gates above. Cash-flow activity classification, explicit legacy-unclassified reconciliation and full detail/export acceptance are not declared complete. This PR does not finish the entire reporting center.
 
 ## Verification record
+
+## Cash-flow and category reconciliation follow-up (not released)
+
+- 00440 adds activity classification to the new management catalog only; known seed items receive an explicit policy (interest paid financing, deposit interest investing); other/custom or ambiguous historic sources remain unclassified. No historical cash, event, invoice, stock or debt rows are updated.
+- Read-only cash-source RPC uses the actual paying branch and cash accounting date, independently of recognition allocations/date. Existing finance permission and complete-source branch guards apply; cancelled cash is excluded. New category creation writes its chosen activity and audit atomically.
+- Cash-flow activity summary and source detail use the same complete cash document list as monthly totals. Each cash document counts once; recognized expense amounts are never added to cash totals. Unknown sources remain visible.
+- Category view sums posted recognition amounts within the current filters, but labels whole-source settlement/outstanding separately rather than manufacturing branch-proportional payments. Excel follows the selected category/document view.
+- P&L visibly identifies the retained legacy cash-expense subtotal and its old created-date basis. This is disclosure, not historical accounting reclassification or approval.
+- Pending gates: isolated PostgreSQL/CI, exact production migration/release, downloaded workbook validation and real mobile viewport verification. No live test business documents are planned for this release.
 
 - Local report/schema suite: 30 tests passed.
 - PR516/517: full CI/build/PostgreSQL and production deployment passed; inventory table browser verified. Excel showed a success toast, but downloaded workbook contents were not independently read.
