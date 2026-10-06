@@ -303,7 +303,7 @@ export function ImportExcelDialog<TRow>({
               </div>
             )}
 
-            {compactInstructions ? <details className="border-t pt-2 text-sm"><summary className="min-h-11 flex items-center cursor-pointer font-medium text-primary">Hướng dẫn và nguyên tắc nhập tồn</summary><div className="pt-1 text-sm text-muted-foreground">{instructions}</div></details> : <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
+            {compactInstructions ? <details className="group border-t pt-2 text-sm"><summary className="min-h-11 flex items-center justify-between cursor-pointer font-medium text-primary">Hướng dẫn và nguyên tắc nhập tồn<Icon name="expand_more" size={18} className="transition-transform group-open:rotate-180" /></summary><div className="pt-1 text-sm text-muted-foreground">{instructions}</div></details> : <div className="rounded-lg bg-primary/5 border border-primary/20 p-3 text-xs text-muted-foreground">
               <p className="font-medium text-foreground mb-1">
                 Lưu ý khi nhập liệu:
               </p>
