@@ -68,6 +68,7 @@ export default function XuatNhapTonPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const requestIdRef = useRef(0);
 
   useEffect(() => {
@@ -121,8 +122,11 @@ export default function XuatNhapTonPage() {
   // ========================================================
   // Excel export — view mode (mirror current view)
   // ========================================================
-  const handleExportView = useCallback(() => {
+  const handleExportView = useCallback(async () => {
+    if (exporting) return;
     if (!data) return;
+    setExporting(true);
+    try {
 
     const titleRows = buildReportTitleRows({
       title:
@@ -136,7 +140,7 @@ export default function XuatNhapTonPage() {
     titleRows.push(HISTORICAL_VALUE_NOTE);
 
     if (subMode === "summary") {
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "xuat-nhap-ton",
         mode: "view",
         range,
@@ -188,7 +192,7 @@ export default function XuatNhapTonPage() {
       });
     } else {
       // Detail mode keeps every movement bucket visible, including internal issues.
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "xuat-nhap-ton",
         mode: "view",
         range,
@@ -255,13 +259,22 @@ export default function XuatNhapTonPage() {
         ],
       });
     }
-  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal]);
+      toast({ title: "Đã xuất Excel theo bộ lọc", variant: "success" });
+    } catch (error) {
+      toast({ title: "Không thể xuất Excel", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      setExporting(false);
+    }
+  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, exporting, toast]);
 
   // ========================================================
   // Excel export — full mode (multi-sheet kế toán pivot)
   // ========================================================
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
+    if (exporting) return;
     if (!data) return;
+    setExporting(true);
+    try {
 
     const titleRows = buildReportTitleRows({
       title: "Báo cáo xuất nhập tồn — Đầy đủ",
@@ -271,7 +284,7 @@ export default function XuatNhapTonPage() {
     });
     titleRows.push(HISTORICAL_VALUE_NOTE);
 
-    exportReportToExcel({
+    await exportReportToExcel({
       kind: "xuat-nhap-ton",
       mode: "full",
       range,
@@ -401,7 +414,13 @@ export default function XuatNhapTonPage() {
         },
       ],
     });
-  }, [data, range, branchName, visibleRows, visibleSubtotal, debouncedSearch, rowFilter, sortState]);
+      toast({ title: "Đã xuất Excel đầy đủ theo bộ lọc", variant: "success" });
+    } catch (error) {
+      toast({ title: "Không thể xuất Excel", description: error instanceof Error ? error.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      setExporting(false);
+    }
+  }, [data, range, branchName, visibleRows, visibleSubtotal, debouncedSearch, rowFilter, sortState, exporting, toast]);
 
   // ========================================================
   // Render: column definitions
@@ -571,7 +590,7 @@ export default function XuatNhapTonPage() {
         onCustomRangeChange={setCustomRange}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading || !data}
+        exportDisabled={loading || exporting || !data}
       />
 
       <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
