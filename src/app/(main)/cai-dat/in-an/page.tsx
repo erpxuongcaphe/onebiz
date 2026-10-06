@@ -148,7 +148,6 @@ const receiptStyles = [
 
 // ── Print backends ──
 const backends = [
-  { id: "branch-queue" as const, label: "Điểm in chi nhánh — điện thoại / tablet", desc: "Gửi phiếu F&B tới máy quầy đã cấu hình. Nhân viên dùng tài khoản riêng; điểm in cần chạy và có Internet. Hỗ trợ máy nhiệt ESC/POS 58/80 mm.", icon: "print" as const },
   {
     id: "qz-tray" as const,
     label: "Qua QZ Tray trên máy quầy",

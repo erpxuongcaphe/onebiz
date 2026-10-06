@@ -78,7 +78,8 @@ export interface AppSettings {
      *                    (silent, tức thì, hỗ trợ cắt giấy + mở ngăn kéo).
      *                    Tự fallback "browser" nếu WebUSB lỗi.
      */
-    backend: "browser" | "escpos-usb" | "qz-tray" | "branch-queue";
+    backend: "browser" | "escpos-usb" | "qz-tray";
+    fnbBranchQueue?: boolean;
     /** Mở ngăn kéo tiền mặt khi thanh toán cash (chỉ ESC/POS) */
     openCashDrawer: boolean;
     // Printer connection (legacy — giữ backward compat)
@@ -198,6 +199,7 @@ const defaultSettings: AppSettings = {
     showQr: false,
     copies: 1,
     backend: "browser",
+    fnbBranchQueue: false,
     openCashDrawer: false,
     connectionType: "usb",
     printerName: "",
