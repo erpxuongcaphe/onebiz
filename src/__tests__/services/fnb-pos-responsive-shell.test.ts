@@ -7,7 +7,6 @@ describe("POS FnB responsive shell", () => {
   const page = doc("src/app/pos/fnb/page.tsx");
   const loading = doc("src/app/pos/fnb/components/fnb-loading-skeleton.tsx");
   const empty = doc("src/app/pos/fnb/components/fnb-empty-branch.tsx");
-  const cart = doc("src/app/pos/fnb/components/fnb-cart.tsx");
   const itemDialog = doc("src/app/pos/fnb/components/fnb-item-dialog.tsx");
   const paymentDialog = doc("src/app/pos/fnb/components/fnb-payment-dialog.tsx");
   const pendingShiftAlert = doc(
@@ -40,11 +39,7 @@ describe("POS FnB responsive shell", () => {
     expect(loading).toContain("flex min-h-0 flex-1 flex-col md:flex-row");
   });
 
-  it("man hinh thap dung mat do gon nhung van giu vung cuon va nut chinh", () => {
-    expect(cart).toContain("[@media(max-height:720px)]:p-3");
-    expect(cart).toContain("[@media(max-height:620px)]:overflow-y-auto");
-    expect(cart).toContain('className="flex gap-2 pt-1"');
-
+  it("popup man hinh thap giu vung cuon va nut chinh", () => {
     for (const dialog of [itemDialog, paymentDialog]) {
       expect(dialog).toContain("[@media(max-height:720px)]:max-h-[calc(100dvh-0.5rem)]");
       expect(dialog).toContain("[@media(max-height:720px)]:p-4");

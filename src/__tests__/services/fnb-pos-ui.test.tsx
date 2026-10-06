@@ -808,8 +808,30 @@ describe("FnbCart — component", () => {
     );
 
     expect(screen.queryByRole("button", { name: "Shopee Food" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Grab Food" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Tự giao" })).toBeDefined();
+    expect(screen.queryByRole("option", { name: "Shopee Food" })).toBeNull();
+    expect(screen.getByRole("option", { name: "Grab Food" })).toBeEnabled();
+    expect(screen.getByRole("option", { name: "Tự giao" })).toBeEnabled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Sàn giao hàng" }), { target: { value: "grab_food" } });
+    expect(onDeliveryPlatformChange).toHaveBeenCalledWith("grab_food");
+  });
+
+  it("chọn khoảng cách tự áp phí, tự nhập không áp lại phí và nhân viên có thể gán sau", () => {
+    const tier = vi.fn(), staff = vi.fn();
+    render(<FnbCart {...baseProps}
+      activeTab={{ ...baseTab, orderType: "delivery", deliveryPlatform: "direct" }}
+      selfDeliveryTiers={[{ code: "near", label: "Dưới 500m", fee: 5000 }]}
+      onDeliveryTierChange={tier}
+      staffOptions={[{ id: "staff-1", name: "Nhân viên A" }]}
+      onDeliveryStaffChange={staff}
+    />);
+    fireEvent.change(screen.getByRole("combobox", { name: "Khoảng cách giao" }), { target: { value: "near" } });
+    expect(tier).toHaveBeenLastCalledWith("near", 5000);
+    fireEvent.change(screen.getByRole("combobox", { name: "Khoảng cách giao" }), { target: { value: "custom" } });
+    expect(tier).toHaveBeenLastCalledWith("custom", undefined);
+    fireEvent.change(screen.getByRole("combobox", { name: "Nhân viên giao" }), { target: { value: "staff-1" } });
+    expect(staff).toHaveBeenLastCalledWith("staff-1");
+    fireEvent.change(screen.getByRole("combobox", { name: "Nhân viên giao" }), { target: { value: "" } });
+    expect(staff).toHaveBeenLastCalledWith(undefined);
   });
 
   it("lỗi tải cấu hình sàn: không cho chọn sàn và có nút thử lại", () => {

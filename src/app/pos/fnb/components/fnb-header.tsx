@@ -16,6 +16,7 @@
  * KHÔNG đổi token `pos-chrome-*` global vì KDS + tests vẫn dùng.
  */
 
+import type { ReactNode } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { Icon } from "@/components/ui/icon";
 
 interface FnbHeaderProps {
+  orderActions?: ReactNode;
   tabs: FnbTabSnapshot[];
   activeTabId: string;
   switchTab: (tabId: string) => void;
@@ -48,6 +50,7 @@ interface FnbHeaderProps {
 }
 
 export function FnbHeader({
+  orderActions,
   tabs,
   activeTabId,
   switchTab,
@@ -69,7 +72,7 @@ export function FnbHeader({
         iPad landscape (1024px) trước đây bị wrap 2 hàng vì branch chip + search +
         view-toggle quá rộng. Giờ chỉ no-wrap ở lg+ (1024+) cho desktop thật, tablet
         landscape vẫn flex-wrap (chấp nhận 1-2 hàng) nhưng có space breathing room. */}
-    <header className="min-h-14 bg-white dark:bg-card text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-2 lg:h-16 lg:py-0 shrink-0 border-b border-outline-variant/30">
+    <header className="min-h-14 bg-white dark:bg-card text-foreground flex flex-wrap lg:flex-nowrap items-center px-2 sm:px-3 gap-2 py-1 lg:h-14 lg:py-0 shrink-0 border-b border-outline-variant/30">
       {/* ☰ Sidenav trigger */}
       {onMenuClick && (
         <button
@@ -131,7 +134,7 @@ export function FnbHeader({
       <div className="order-10 basis-full md:hidden" aria-hidden />
 
       {/* View mode toggle: Sprint UI-3 — wording chuẩn "Bán hàng / Sơ đồ bàn" */}
-      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-lg p-1 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
+      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-md shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
         <button
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
@@ -152,7 +155,7 @@ export function FnbHeader({
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
           aria-pressed={viewMode === "floorplan"}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors md:flex-none",
+            "flex flex-1 items-center justify-center gap-1.5 min-h-11 px-2 sm:px-3 text-xs font-semibold rounded-lg transition-colors md:flex-none",
             viewMode === "floorplan"
               ? "bg-surface text-primary ambient-shadow"
               : "text-on-surface-variant hover:text-foreground",
@@ -228,7 +231,8 @@ export function FnbHeader({
     {/* Sprint UI-2: Order tabs row riêng dưới header (40px).
         Mockup v3: tabs có space riêng, không chen với toolbar — staff dễ
         scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
-    <div className="h-14 bg-white dark:bg-card border-b border-outline-variant/20 flex items-center px-2 sm:px-3 gap-1.5 shrink-0 overflow-x-auto scrollbar-none">
+    <div className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-white dark:bg-card px-2 sm:px-3">
+    <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
       {tabs.map((tab) => {
         const isActive = tab.id === activeTabId;
         // Color dot theo orderType (đồng bộ với cart pill row)
@@ -242,7 +246,7 @@ export function FnbHeader({
           <div
             key={tab.id}
             className={cn(
-              "flex min-h-11 items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap transition-colors shrink-0",
+              "flex min-h-11 items-center gap-1.5 px-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors shrink-0",
               isActive
                 ? "bg-surface text-primary ambient-shadow border border-primary/20"
                 : "bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-foreground",
@@ -333,6 +337,8 @@ export function FnbHeader({
           Chưa có đơn — bấm “Đơn mới” để bắt đầu
         </span>
       )}
+    </div>
+    {orderActions}
     </div>
     </>
   );
