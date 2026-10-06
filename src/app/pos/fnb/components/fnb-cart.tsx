@@ -19,6 +19,7 @@ import type {
 import type { DeliveryPlatformSettings } from "@/lib/services/supabase/fnb-platform-settings";
 import { Icon } from "@/components/ui/icon";
 import { HelpTip } from "@/components/shared/help-tip";
+import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 
 // Sprint POS-FNB-EXT-1 (CEO 08/05): Delivery platform metadata
 const DELIVERY_PLATFORMS: {
@@ -251,7 +252,7 @@ export function FnbCart({
         : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
-      <div className="shrink-0 max-h-[50%] overflow-y-auto">
+      <div className="shrink-0 max-h-[55%] overflow-y-auto">
       <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
@@ -682,7 +683,7 @@ export function FnbCart({
       )}
 
       {/* ── Footer: totals + discount + actions — secondary tools collapse ── */}
-      <div className="border-t border-outline-variant/20 bg-white dark:bg-card p-2.5 shrink-0 max-h-[50%] overflow-y-auto space-y-1.5">
+      <div className="border-t border-outline-variant/20 bg-white dark:bg-card p-2.5 shrink-0 max-h-[45%] overflow-y-auto space-y-1.5">
         {/* Thao tác ít dùng không được chiếm chiều cao danh sách món. Tổng tiền
             và hai nút chính luôn nằm ngoài vùng thu gọn. */}
         {!isEmpty && (
@@ -831,6 +832,12 @@ export function FnbCart({
         )}
         </div>
 
+        {(activeTab?.deliveryFee ?? 0) > 0 && (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Phí giao hàng</span>
+            <span className="tabular-nums text-foreground">+{formatCurrency(activeTab!.deliveryFee!)}đ</span>
+          </div>
+        )}
         {(() => {
           // CEO 13/05 (Migration 00070): tách 2 số rõ ràng cho đơn online sàn.
           // - Khách trả qua app = total gross (chỉ cashier audit, không phải tiền quán nhận)
@@ -842,10 +849,9 @@ export function FnbCart({
             !!activeTab.deliveryPlatform &&
             activeTab.deliveryPlatform !== "direct" &&
             commissionPercent > 0;
-          const commissionAmount = isPlatformOrder
-            ? Math.round((total * commissionPercent) / 100)
-            : 0;
-          const netReceived = total - commissionAmount;
+          const settlement = previewFnbSettlement(total, 0, isPlatformOrder ? commissionPercent : 0);
+          const commissionAmount = settlement.commission;
+          const netReceived = settlement.net;
 
           if (!isPlatformOrder) {
             // Đơn tại quán / takeaway / direct: hiển thị như cũ

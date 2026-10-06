@@ -355,7 +355,12 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     setTabs((prev) =>
       prev.map((t) =>
         t.id === activeTabId && !t.kitchenOrderId
-          ? { ...t, orderType: next }
+          ? { ...t, orderType: next,
+              label: t.label.replace(/^(Mang về|Giao hàng|Tại quán)( #\d+)$/, `${next === "delivery" ? "Giao hàng" : next === "dine_in" ? "Tại quán" : "Mang về"}$2`),
+              ...(next !== "delivery" ? {
+              deliveryPlatform: undefined, deliveryFee: 0, platformCommissionPercent: 0,
+              deliveryDistanceTier: undefined, deliveryStaffId: undefined,
+            } : {}) }
           : t,
       ),
     );

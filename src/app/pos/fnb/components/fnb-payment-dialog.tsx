@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 
 // ── Types ──
 
@@ -33,8 +34,10 @@ interface FnbPaymentDialogProps {
   persistedOrderDiscountAmount?: number;
   promotionDiscountAmount?: number;
   couponDiscountAmount?: number;
-  /** Total KHÔNG bao gồm tip. Tip sẽ cộng thêm trong dialog. */
+  /** Gross after discounts and delivery, before tip and platform commission. */
   total: number;
+  deliveryFee?: number;
+  commissionPercent?: number;
   lineCount: number;
   orderNumber?: string;
   /** Tên khách đã được chọn ở giỏ trước khi mở thanh toán. */
@@ -73,6 +76,7 @@ export function FnbPaymentDialog({
   open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
   persistedOrderDiscountAmount = 0, promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber,
   initialCustomerName, customerLocked = false, customerConfirmationRequired = false, onCustomerConfirmed, onConfirm,
+  deliveryFee = 0, commissionPercent = 0,
 }: FnbPaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [cashInput, setCashInput] = useState("");
@@ -109,8 +113,8 @@ export function FnbPaymentDialog({
   const cardAmount = parseAmount(cardInput);
   const tipAmount = parseAmount(tipInput);
 
-  // Total hiện tại = base (đã bao gồm subtotal - discount + delivery + tax) + tip
-  const total = baseTotal + tipAmount;
+  const settlement = previewFnbSettlement(baseTotal, tipAmount, commissionPercent);
+  const total = settlement.net;
 
   const totalPaid = useMemo(() => {
     if (method === "cash") return cashAmount;
@@ -227,14 +231,26 @@ export function FnbPaymentDialog({
                 <span className="tabular-nums">-{formatCurrency(unclassifiedDiscountAmount)}</span>
               </div>
             )}
+            {deliveryFee > 0 && (
+              <div className="flex justify-between">
+                <span>Phí giao hàng</span>
+                <span className="tabular-nums">+{formatCurrency(deliveryFee)}</span>
+              </div>
+            )}
             {tipAmount > 0 && (
               <div className="flex justify-between text-status-success">
                 <span>Tiền tip</span>
                 <span className="tabular-nums">+{formatCurrency(tipAmount)}</span>
               </div>
             )}
+            {settlement.commission > 0 && (
+              <div className="flex justify-between text-status-warning">
+                <span>Phí sàn ({commissionPercent}%)</span>
+                <span className="tabular-nums">-{formatCurrency(settlement.commission)}</span>
+              </div>
+            )}
             <div className="flex justify-between font-bold border-t pt-1">
-              <span>Tổng cộng</span>
+              <span>{commissionPercent > 0 ? "Quán thực thu" : "Tổng cộng"}</span>
               <span className="text-primary tabular-nums">{formatCurrency(total)}</span>
             </div>
           </div>

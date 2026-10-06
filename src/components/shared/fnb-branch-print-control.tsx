@@ -33,7 +33,7 @@ export function FnbBranchPrintControl({ branchId, compact = false }: { branchId?
   }, [open, branchId]);
   return <><div className={compact ? "shrink-0" : "flex shrink-0 items-center justify-between gap-2 border-b bg-background px-3 py-1 text-sm"}>
     {!compact && <span className="truncate">{active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"}</span>}
-    <Button aria-label="Nơi nhận & lệnh in" title={active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"} className="min-h-11 shrink-0 text-primary" variant="ghost" size="sm" onClick={() => setOpen(true)}>{compact ? <><span className="sm:hidden">In F&B</span><span className="hidden sm:inline">{active ? "In: chi nhánh" : "In: thiết bị này"}</span></> : "Nơi nhận & lệnh in"}</Button>
+    <Button aria-label="Nơi nhận & lệnh in" title={active ? "In F&B: tại chi nhánh" : "In F&B: từ thiết bị này"} className="min-h-11 shrink-0 text-primary" variant="ghost" size="sm" onClick={() => setOpen(true)}>{compact ? <><span className="sm:hidden">{active ? "In: quán" : "In: máy"}</span><span className="hidden sm:inline">{active ? "In: chi nhánh" : "In: thiết bị này"}</span></> : "Nơi nhận & lệnh in"}</Button>
   </div><Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-xl max-h-[85dvh] overflow-y-auto"><DialogHeader><DialogTitle className="text-primary">In phiếu tại chi nhánh</DialogTitle></DialogHeader>
     <p className="text-sm">Nơi nhận do quản lý gán theo chi nhánh. Chọn chế độ một lần trên trình duyệt này; các lần in sau tự dùng đúng nơi nhận, không cần chọn máy lại.</p>
     <div className="divide-y rounded border text-sm">
