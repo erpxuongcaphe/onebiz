@@ -10,6 +10,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
@@ -2817,7 +2818,7 @@ export function CreateProductDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-x-hidden overflow-y-auto">
+      <DialogContent className="sm:max-w-5xl max-h-[min(92dvh,calc(100dvh-2rem))] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{isEdit ? `Sửa hàng hóa ${initialData?.code ?? ""}` : "Thêm hàng hóa mới"}</DialogTitle>
           <DialogDescription>
@@ -2827,6 +2828,7 @@ export function CreateProductDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <DialogBody>
         <Tabs
           value={scope}
           onValueChange={(v) => {
@@ -2903,6 +2905,7 @@ export function CreateProductDialog({
                   Tên hàng <span className="text-destructive">*</span>
                 </label>
                 <Input
+                  aria-label="Tên hàng"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={
@@ -2968,6 +2971,7 @@ export function CreateProductDialog({
             <div className="space-y-2">
               <label className="text-sm font-medium">Mã vạch</label>
               <Input
+                aria-label="Mã vạch"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
                 placeholder="Nhập hoặc quét mã vạch"
@@ -2980,6 +2984,7 @@ export function CreateProductDialog({
             <div className="space-y-2">
               <label className="text-sm font-medium">Thương hiệu</label>
               <Input
+                aria-label="Thương hiệu"
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
                 placeholder="VD: Monin, Trung Nguyên, Highlands…"
@@ -5132,6 +5137,7 @@ export function CreateProductDialog({
         />
         </div>
 
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy

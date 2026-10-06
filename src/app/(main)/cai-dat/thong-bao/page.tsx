@@ -1,53 +1,15 @@
 "use client";
 
+import { SettingsToggle as Toggle } from "@/components/shared/settings-toggle";
+
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 
-function Toggle({
-  checked,
-  onCheckedChange,
-  label,
-  description,
-}: {
-  checked: boolean;
-  onCheckedChange: (val: boolean) => void;
-  label: string;
-  description?: string;
-}) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <div className="space-y-0.5">
-        <div className="text-sm font-medium">{label}</div>
-        {description && (
-          <div className="text-xs text-muted-foreground">{description}</div>
-        )}
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onCheckedChange(!checked)}
-        className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-          checked ? "bg-primary" : "bg-muted"
-        )}
-      >
-        <span
-          className={cn(
-            "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
-            checked ? "translate-x-4" : "translate-x-0"
-          )}
-        />
-      </button>
-    </div>
-  );
-}
 
 export default function NotificationSettingsPage() {
   const { settings, updateSettings } = useSettings();

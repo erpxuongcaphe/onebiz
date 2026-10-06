@@ -11,6 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -335,7 +336,7 @@ export function CreateCashTransactionDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[min(90dvh,calc(100dvh-2rem))] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {type === "receipt" ? "Tạo phiếu thu" : "Tạo phiếu chi"}
@@ -345,16 +346,17 @@ export function CreateCashTransactionDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <DialogBody>
+        <div className="grid gap-3 py-2">
           <div className="space-y-2">
             <label className="text-sm font-medium">Chi nhánh <span className="text-destructive">*</span></label>
-            <Input value={currentBranch?.name ?? ""} readOnly aria-invalid={!!errors.branch} />
+            <Input aria-label="Chi nhánh" value={currentBranch?.name ?? ""} readOnly aria-invalid={!!errors.branch} />
             {errors.branch && <p role="alert" className="text-xs text-destructive">{errors.branch}</p>}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Người thực hiện thu/chi <span className="text-destructive">*</span></label>
             <Select value={performedBy} onValueChange={(value) => setPerformedBy(value ?? "")}>
-              <SelectTrigger className="w-full" aria-invalid={!!errors.performer}><SelectValue placeholder="Chọn nhân viên">{performers.find((person) => person.id === performedBy)?.name}</SelectValue></SelectTrigger>
+              <SelectTrigger aria-label="Người thực hiện thu/chi" className="w-full" aria-invalid={!!errors.performer}><SelectValue placeholder="Chọn nhân viên">{performers.find((person) => person.id === performedBy)?.name}</SelectValue></SelectTrigger>
               <SelectContent>{performers.map((person) => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}</SelectContent>
             </Select>
             {(performerError || errors.performer) && <p role="alert" className="text-xs text-destructive">{performerError || errors.performer}</p>}
@@ -391,6 +393,7 @@ export function CreateCashTransactionDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Mã phiếu</label>
             <Input
+              aria-label="Mã phiếu"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder={`Tự động (${type === "receipt" ? "PT" : "PC"}…) — để trống`}
@@ -402,6 +405,7 @@ export function CreateCashTransactionDialog({
               Số tiền <span className="text-destructive">*</span>
             </label>
             <Input
+              aria-label="Số tiền"
               type="number"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
@@ -418,6 +422,7 @@ export function CreateCashTransactionDialog({
               {type === "receipt" ? "Người nộp" : "Người nhận"}
             </label>
             <Input
+              aria-label={type === "receipt" ? "Người nộp" : "Người nhận"}
               value={counterparty}
               onChange={(e) => setCounterparty(e.target.value)}
               placeholder={
@@ -431,7 +436,7 @@ export function CreateCashTransactionDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Phương thức</label>
             <Select value={method} onValueChange={(v) => setMethod(v ?? "cash")}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Phương thức" className="w-full">
                 <SelectValue>{cashPaymentMethodLabel(method)}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -445,7 +450,7 @@ export function CreateCashTransactionDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Danh mục</label>
             <Select value={category} onValueChange={(v) => setCategory(v ?? "")}>
-              <SelectTrigger className="w-full">
+              <SelectTrigger aria-label="Danh mục" className="w-full">
                 <SelectValue placeholder="Chọn danh mục">{categories.find((item) => item.value === category)?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -471,7 +476,7 @@ export function CreateCashTransactionDialog({
                   value={selectedPartyId}
                   onValueChange={(v) => setSelectedPartyId(v ?? "")}
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger aria-label={category === "customer_payment" ? "Khách hàng" : "Nhà cung cấp"} className="w-full">
                     <SelectValue
                       placeholder={
                         loadingParties
@@ -504,7 +509,7 @@ export function CreateCashTransactionDialog({
                     value={selectedRefId}
                     onValueChange={(v) => setSelectedRefId(v ?? "")}
                   >
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger aria-label={category === "customer_payment" ? "Hóa đơn" : "Phiếu nhập"} className="w-full">
                       <SelectValue
                         placeholder={
                           loadingRefs
@@ -540,6 +545,7 @@ export function CreateCashTransactionDialog({
           <div className="space-y-2">
             <label className="text-sm font-medium">Ghi chú</label>
             <textarea
+              aria-label="Ghi chú"
               className="flex min-h-[60px] w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -550,6 +556,7 @@ export function CreateCashTransactionDialog({
         </div>
 
         <CashTimeFields value={cashTime} onChange={setCashTime} error={errors.time} />
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useId } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
   requestPrinter,
@@ -92,13 +92,14 @@ function Toggle({
   /** Sprint FIX-1: optional HelpTip content (string or JSX) — bấm icon i để xem hướng dẫn. */
   helpTip?: React.ReactNode;
 }) {
+  const id = useId();
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex items-center justify-between gap-2 py-1">
       <div>
-        <span className="text-sm font-medium">
+        <label htmlFor={id} className="cursor-pointer text-sm font-medium">
           {label}
-          {helpTip && <HelpTip>{helpTip}</HelpTip>}
-        </span>
+        </label>
+        {helpTip && <HelpTip>{helpTip}</HelpTip>}
         {description && (
           <p className="text-xs text-muted-foreground">{description}</p>
         )}
@@ -106,19 +107,20 @@ function Toggle({
       <button
         type="button"
         role="switch"
+        id={id}
+        aria-label={label}
         aria-checked={checked}
         onClick={() => onCheckedChange(!checked)}
-        className={cn(
-          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
-          checked ? "bg-primary" : "bg-muted"
-        )}
+        className="inline-flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
       >
+        <span aria-hidden="true" className={cn("relative inline-flex h-5 w-9 rounded-full border-2 border-transparent transition-colors", checked ? "bg-primary" : "bg-muted")}>
         <span
           className={cn(
             "pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-none transition-transform",
             checked ? "translate-x-4" : "translate-x-0"
           )}
         />
+        </span>
       </button>
     </div>
   );
@@ -467,14 +469,17 @@ function PrintSettingsPageContent() {
         </p>
       </div>
 
-      <div className="grid gap-2 sm:grid-cols-3 text-sm" aria-label="Phạm vi cấu hình in">
+      <details className="rounded-md border bg-background px-3 py-2">
+        <summary className="cursor-pointer text-sm font-medium text-primary">Phạm vi: máy này · chi nhánh · mẫu dùng chung</summary>
+      <div className="mt-2 grid gap-2 sm:grid-cols-3 text-sm" aria-label="Phạm vi cấu hình in">
         <div className="border-l-4 border-primary bg-primary/5 px-3 py-2"><strong className="text-primary">Máy / trình duyệt này</strong><p>Phương thức in, kết nối USB, khổ giấy và tự in ở mục Máy in &amp; vận hành. Các lựa chọn này lưu ngay trên trình duyệt hiện tại.</p></div>
         <div className="border-l-4 border-status-success bg-status-success/5 px-3 py-2"><strong className="text-status-success">Chi nhánh được chọn</strong><p>Thông tin chi nhánh và trạm Bar/Bếp. Kiểm tra tên chi nhánh trong từng mục trước khi lưu.</p></div>
         <div className="border-l-4 border-status-warning bg-status-warning/5 px-3 py-2"><strong className="text-status-warning">Mẫu và thương hiệu dùng chung</strong><p>Thông tin doanh nghiệp dùng chung. Mẫu in có phạm vi riêng theo chi nhánh hoặc dùng chung; xem phạm vi tại danh sách mẫu.</p></div>
       </div>
+      </details>
 
       {/* ── Master–detail (CEO 30/06): nav trái + khung sửa/xem trước phải ── */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start">
         {/* CỘT TRÁI — nav danh sách (sticky desktop, accordion mobile) */}
         <PrintSettingsNav
           selected={selected}
@@ -1188,7 +1193,7 @@ function PrintSettingsNav({
   return (
     <>
       {/* Mobile: nút mở accordion hiện mục đang chọn */}
-      <div className="lg:hidden">
+      <div className="2xl:hidden">
         <button
           type="button"
           onClick={onToggleNav}
@@ -1209,7 +1214,7 @@ function PrintSettingsNav({
       </div>
 
       {/* Desktop: cột sticky cố định */}
-      <aside className="hidden lg:block lg:w-[210px] lg:shrink-0 lg:self-start lg:sticky lg:top-4 lg:border-r lg:pr-3">
+      <aside className="hidden 2xl:block 2xl:w-[190px] 2xl:shrink-0 2xl:self-start 2xl:sticky 2xl:top-0 2xl:border-r 2xl:pr-3">
         {list}
       </aside>
     </>
