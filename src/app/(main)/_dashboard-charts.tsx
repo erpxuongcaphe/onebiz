@@ -170,9 +170,10 @@ export default function DashboardCharts({
                 <button
                   key={v.value}
                   type="button"
+                  aria-pressed={chartView === v.value}
                   onClick={() => setChartView(v.value)}
                   className={cn(
-                    "px-2 py-0.5 rounded text-xs font-medium transition-colors",
+                    "min-h-8 min-w-8 px-2 py-1 rounded text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary pointer-coarse:min-h-11 pointer-coarse:min-w-11",
                     chartView === v.value
                       ? "bg-primary text-primary-foreground"
                       : "bg-surface-container-low hover:bg-surface-container",

@@ -12,7 +12,7 @@ interface ListStripProps {
 
 /**
  * Dải gọn nằm ngay trên bảng: chỉ số ở trái, công cụ ở phải.
- * Nội dung tự cuộn ngang trên màn hẹp để không đẩy bảng xuống thêm hàng.
+ * Mobile: chỉ số hai cột, công cụ riêng. Desktop: cuộn chỉ số khi thiếu chỗ.
  */
 export function ListStrip({
   metrics,
