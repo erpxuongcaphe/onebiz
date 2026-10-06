@@ -34,6 +34,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes postgresql-client
 
+      - name: Verify atomic opening stock and isolated branch value
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb opening_stock_test
+          node scripts/fnb-db-test/extract-opening-stock.mjs /tmp/opening-stock-helpers.sql
+          PGDATABASE=opening_stock_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00442_safe_opening_stock.integration.sql
+
       - name: Verify branch print permissions, idempotency and device claims
         env:
           PGHOST: localhost

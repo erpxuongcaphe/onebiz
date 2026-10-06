@@ -54,11 +54,11 @@ import type { StockMovement, UOMConversion } from "@/lib/types";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { StockDocumentLink } from "@/components/shared/stock-document-link";
 import { Icon } from "@/components/ui/icon";
-import { ImportExcelDialog } from "@/components/shared/dialogs/import-excel-dialog";
+import { OpeningStockDialog } from "@/components/shared/dialogs/opening-stock-dialog";
+import { OpeningStockHistoryDialog } from "@/components/shared/dialogs/opening-stock-history-dialog";
 import { downloadTemplate } from "@/lib/excel";
 import { initialStockExcelSchema, type InitialStockImportRow } from "@/lib/excel/schemas";
 import { exportToExcelFromSchema } from "@/lib/excel";
-import { bulkImportInitialStock } from "@/lib/services/supabase/excel-import";
 
 type ProductTypeFilter = "all" | "nvl" | "sku";
 
@@ -785,6 +785,7 @@ export default function TonKhoPage() {
   const [filterOpen, setFilterOpen] = useState(false);
 
   const [importOpen, setImportOpen] = useState(false);
+  const [openingHistoryOpen, setOpeningHistoryOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
 
   // CEO 28/05/2026: khóa cập nhật tồn kho đầu kỳ.
@@ -1108,6 +1109,7 @@ export default function TonKhoPage() {
             onClick: () => setImportOpen(true),
             disabled: inventoryLocked,
           },
+          {label:"Lịch sử tồn ban đầu",icon:<Icon name="history" size={16}/>,variant:"ghost",onClick:()=>setOpeningHistoryOpen(true)},
           // CEO 28/05/2026: nút Chốt & khóa / Mở khóa — chỉ ai có quyền inventory.lock.
           ...(canLock
             ? [
@@ -1293,11 +1295,10 @@ export default function TonKhoPage() {
         </FilterGroup>
       </FilterPanel>
 
-      <ImportExcelDialog
+      <OpeningStockHistoryDialog open={openingHistoryOpen} onOpenChange={setOpeningHistoryOpen} branchId={branchFilter!=="all"?branchFilter:undefined}/>
+      <OpeningStockDialog
         open={importOpen}
         onOpenChange={setImportOpen}
-        schema={initialStockExcelSchema}
-        onCommit={bulkImportInitialStock}
         onFinished={() => {
           setPage(0);
           fetchData();

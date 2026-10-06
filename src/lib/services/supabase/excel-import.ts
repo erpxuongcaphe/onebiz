@@ -26,8 +26,6 @@ import type {
 } from "@/lib/excel/schemas";
 import type { ImportBatchResult } from "@/lib/excel";
 import { getClient, getCurrentContext, getCurrentTenantId } from "./base";
-import { applyManualStockMovement } from "./stock-adjustments";
-import { isInventoryLocked } from "./tenant-settings";
 import { createInternalSale } from "./internal-sales";
 import { savePurchaseOrderAtomic } from "./purchase-orders";
 import { createManualCashTransactionAtomic } from "./cash-book";
@@ -547,141 +545,14 @@ export async function bulkImportDebtOpening(
 }
 
 // ---------------------------------------------------------------------------
-// Initial stock
-//
-// Dùng applyManualStockMovement với type='in' để cộng thêm tồn kho.
-// Caveat: nếu product đã có stock sẵn, import sẽ CỘNG DỒN (không reset).
+// Initial stock — all writes now require a server preview and one atomic batch.
+// Keep the old export so stale callers receive an actionable error.
 // ---------------------------------------------------------------------------
 
 export async function bulkImportInitialStock(
-  rows: InitialStockImportRow[]
+  _rows: InitialStockImportRow[]
 ): Promise<ImportBatchResult> {
-  // CEO 28/05/2026: chặn nếu tồn kho đang khóa (defense-in-depth).
-  if (await isInventoryLocked()) {
-    throw new Error(
-      "Tồn kho đang khóa — cần mở khóa trước khi nhập tồn kho đầu kỳ.",
-    );
-  }
-  const supabase = getClient();
-  const ctx = await getCurrentContext();
-
-  const [prodRes, branchRes] = await Promise.all([
-    supabase
-      .from("products")
-      .select("id, code, product_type, channel, has_bom")
-      .eq("tenant_id", ctx.tenantId),
-    supabase
-      .from("branches")
-      .select("id, code, cascade_mode")
-      .eq("tenant_id", ctx.tenantId),
-  ]);
-  type ProdInfo = {
-    id: string;
-    productType?: string | null;
-    channel?: string | null;
-    hasBom?: boolean | null;
-  };
-  const prodMap = new Map<string, ProdInfo>();
-  for (const p of prodRes.data ?? []) {
-    const row = p as {
-      id: string;
-      code: string;
-      product_type?: string | null;
-      channel?: string | null;
-      has_bom?: boolean | null;
-    };
-    prodMap.set(row.code, {
-      id: row.id,
-      productType: row.product_type,
-      channel: row.channel,
-      hasBom: row.has_bom,
-    });
-  }
-  const branchMap = new Map<string, { id: string; cascadeMode?: string | null }>();
-  for (const b of branchRes.data ?? []) {
-    // cascade_mode (00123) chưa có trong generated types — cast qua unknown.
-    const row = b as unknown as { id: string; code?: string | null; cascade_mode?: string | null };
-    if (row.code) branchMap.set(row.code, { id: row.id, cascadeMode: row.cascade_mode });
-  }
-
-  // CEO 28/05/2026: GHI ĐÈ thay vì cộng dồn (idempotent).
-  // Trước đây type:'in' → mỗi lần import CỘNG THÊM vào tồn cũ → nhập lại =
-  // nhân đôi. Và KHÔNG cập nhật giá vốn (lệch với ý đồ schema "giá vốn TB
-  // ban đầu"). Giờ: SET tồn = số trong file (tính delta so với hiện tại) +
-  // cập nhật giá vốn. Nhập lại bao nhiêu lần cũng cho ra đúng giá trị file
-  // → đúng nghĩa "tồn đầu kỳ" + cho phép "làm lại từ đầu".
-  const stockRes = await supabase
-    .from("branch_stock")
-    .select("product_id, branch_id, quantity")
-    .eq("tenant_id", ctx.tenantId)
-    // Audit 06/07: chỉ đọc dòng BASE (variant_id NULL) — applyManualStockMovement
-    // chỉ ghi dòng base, nên "current" phải so với base thôi. Nếu SP có dòng
-    // variant, cộng gộp cả variant vào current → delta sai → drift dòng base
-    // (chưa xảy ra vì hiện 0 dòng variant, nhưng chặn trước khi có SKU biến thể).
-    .is("variant_id", null);
-  const curStock = new Map<string, number>();
-  for (const s of stockRes.data ?? []) {
-    const key = `${s.product_id}:${s.branch_id}`;
-    curStock.set(key, (curStock.get(key) ?? 0) + Number(s.quantity ?? 0));
-  }
-
-  return runBulk(rows, async (row) => {
-    const prod = prodMap.get(row.productCode);
-    if (!prod) throw new Error(`Mã SP "${row.productCode}" chưa tồn tại`);
-    const productId = prod.id;
-
-    const branch = branchMap.get(row.branchCode);
-    if (!branch)
-      throw new Error(`Mã chi nhánh "${row.branchCode}" chưa tồn tại`);
-    const branchId = branch.id;
-
-    // CEO 07/07/2026 — luật mô hình mã hàng (Cách B):
-    // (a) MÓN MENU F&B (MỌI sku + channel=fnb — khớp inventory_role='fnb_menu_item',
-    //     KHÔNG suy từ has_bom) KHÔNG giữ tồn ở bất kỳ đâu → chặn nhập tồn.
-    // (b) SKU 2-mã (has_bom) tại chi nhánh SẢN XUẤT (Kho/Xưởng, cascade_mode=
-    //     'production'): tồn thật nằm ở mã NVL thành phần — nhập vào mã NVL.
-    //     Tại QUÁN (outlet) thì SKU thành phần GIỮ TỒN THẬT → cho nhập bình thường.
-    if (prod.productType === "sku" && prod.channel === "fnb") {
-      throw new Error(
-        `"${row.productCode}" là MÓN MENU F&B (bán theo công thức, không giữ tồn) — không nhập tồn đầu kỳ cho món. Nhập tồn vào các mã THÀNH PHẦN của công thức.`,
-      );
-    }
-    if (prod.hasBom === true && branch.cascadeMode === "production") {
-      throw new Error(
-        `"${row.productCode}" là SKU 2-mã (có công thức) — tại Kho/Xưởng tồn thật nằm ở mã NVL thành phần. Nhập tồn vào mã NVL tương ứng thay vì mã SKU.`,
-      );
-    }
-
-    // GHI ĐÈ: set tồn = số trong file qua delta = file − hiện tại.
-    const current = curStock.get(`${productId}:${branchId}`) ?? 0;
-    const delta = row.quantity - current;
-    if (Math.abs(delta) > 1e-9) {
-      await applyManualStockMovement(
-        [
-          {
-            productId,
-            quantity: Math.abs(delta),
-            type: delta > 0 ? "in" : "out",
-            referenceType: "initial_stock_reset",
-            note:
-              row.note ??
-              `Nhập lại tồn đầu kỳ (ghi đè) — giá vốn ${row.costPrice}`,
-          },
-        ],
-        { tenantId: ctx.tenantId, branchId, createdBy: ctx.userId }
-      );
-    }
-
-    // Cập nhật giá vốn (giá vốn trung bình ban đầu) theo file.
-    if (typeof row.costPrice === "number" && row.costPrice >= 0) {
-      const { error: costErr } = await supabase
-        .from("products")
-        .update({ cost_price: row.costPrice })
-        .eq("id", productId)
-        .eq("tenant_id", ctx.tenantId);
-      if (costErr) throw costErr;
-    }
-  });
+  throw new Error("Vui lòng mở Nhập tồn kho đầu kỳ tại trang Tồn kho để xem trước và xác nhận đợt nhập an toàn.");
 }
 
 // ---------------------------------------------------------------------------

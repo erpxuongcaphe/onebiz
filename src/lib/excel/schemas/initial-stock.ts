@@ -15,13 +15,16 @@ export interface InitialStockImportRow {
   quantity: number;
   costPrice: number;
   note?: string;
+  unit?: string;
+  lotNumber?: string;
+  expiryDate?: Date;
 }
 
 export const initialStockExcelSchema: ExcelSchema<InitialStockImportRow> = {
   name: "Tồn kho ban đầu",
   fileName: "Ton-kho-ban-dau",
   description:
-    "Nhập/làm lại tồn kho đầu kỳ. GHI ĐÈ: tồn + giá vốn sẽ được set ĐÚNG BẰNG giá trị trong file (không cộng dồn) — nhập lại bao nhiêu lần cũng ra đúng số file. SP phải đã tồn tại. Dùng khi khởi tạo / migrate / làm lại từ đầu.",
+    "Khởi tạo tồn hoặc bổ sung giá vốn ban đầu. Mỗi file một chi nhánh. Mã phải có sẵn; lượng và giá vốn theo đơn vị tồn Onebiz. Xem trước rồi xác nhận cả đợt. Mã đã phát sinh vận hành cần kiểm kê nếu muốn thay đổi lượng; không nhập lại số dư mỗi tháng.",
   columns: [
     {
       key: "productCode",
@@ -78,6 +81,12 @@ export const initialStockExcelSchema: ExcelSchema<InitialStockImportRow> = {
       example: "Kiểm kê đầu kỳ 01/01/2026",
       width: 40,
     },
+    {
+      key: "unit", header: "ĐVT", type: "string", width: 12,
+      description: "Đơn vị tồn Onebiz. Nếu có nhập phải khớp danh mục; tự quy đổi lượng và đơn giá trước khi nhập.",
+    },
+    {key:"lotNumber",header:"Số lô",type:"string",maxLength:100,width:18,description:"Tùy chọn cho tồn mới; mỗi mã một lô trong đợt nhập."},
+    {key:"expiryDate",header:"Hạn sử dụng",type:"date",width:16,description:"Tùy chọn, DD/MM/YYYY. Để trống nếu chưa xác định, hệ thống không tự đoán."},
   ],
   validateRow: (row, _index, allRows) => {
     // 1 product × 1 branch chỉ có 1 dòng

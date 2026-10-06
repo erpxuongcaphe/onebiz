@@ -934,6 +934,7 @@ async function buildMovementPartnerResolver(
     if (t === "stock_transfer" || t === "transfer")
       return { partner: "Chuyển kho", partnerType: "branch", referenceCode: codeOnlyMap.get(rid) };
     if (t === "initial_stock_import") return { partner: "Tồn đầu kỳ (import)", partnerType: "system" };
+    if (t === "initial_stock_opening") return { partner: "Tồn ban đầu", partnerType: "system" };
     if (t === "initial_stock_reset") return { partner: "Tồn đầu kỳ (ghi đè)", partnerType: "system" };
     return {};
   };

@@ -13,6 +13,7 @@ import {
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { OpeningStockHistoryDialog } from "@/components/shared/dialogs/opening-stock-history-dialog";
 import {
   getStockDocumentDetail,
   type StockDocumentDetail,
@@ -42,6 +43,12 @@ export function StockDocumentLink({
   const [error, setError] = useState<string | null>(null);
   const canOpen = canOpenStockDocument(referenceType, referenceId);
   const displayCode = code && code !== "—" ? code : "—";
+  if(referenceType==="initial_stock_opening"&&referenceId) return <>
+    <Button type="button" variant="link" size="sm" className={cn("h-auto p-0 text-xs",className)} onClick={event=>{event.stopPropagation();setOpen(true);}}>
+      TDK-{referenceId.slice(0,8)}
+    </Button>
+    <OpeningStockHistoryDialog open={open} onOpenChange={setOpen} batchId={referenceId}/>
+  </>;
 
   const openDocument = () => {
     setOpen(true);
