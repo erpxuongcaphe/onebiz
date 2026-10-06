@@ -137,6 +137,11 @@ describe("getCashBookListWorkspace", () => {
       expect.objectContaining({ p_page: 1, p_page_size: 200 }),
     );
   });
+  it("stops if export paging returns no rows before advertised total", async () => {
+    rpc.mockResolvedValueOnce({ data: { items: [], total: 2 }, error: null });
+    await expect(getAllCashBookEntries({})).rejects.toThrow("Chưa tải đủ sổ quỹ");
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("cash-book workspace contract", () => {

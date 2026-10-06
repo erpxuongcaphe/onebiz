@@ -111,6 +111,9 @@ export async function getAllCashBookEntries(
   let total = 0;
   do {
     const result = await getCashBookListWorkspace({ ...params, page, pageSize: 200 });
+    if (result.data.length === 0 && rows.length < result.total) {
+      throw new Error("Chưa tải đủ sổ quỹ. Vui lòng tải lại trước khi xuất báo cáo.");
+    }
     rows.push(...result.data);
     total = result.total;
     page += 1;
@@ -232,59 +235,32 @@ export async function getCashBookSummaryAsync(params?: {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  let query = supabase
-    .from("cash_transactions")
-    .select("type, amount")
-    .eq("tenant_id", tenantId);
-
-  if (params?.branchId) query = query.eq("branch_id", params.branchId);
-  query = applyCashDateRange(query, params);
-  // CEO 11/06/2026 (P0-3 audit): filter status — KHÔNG cộng phiếu cancelled.
-  if (params?.statuses && params.statuses.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).in("status", params.statuses);
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query = (query as any).neq("status", "cancelled");
-  }
-
-  const { data, error } = await query;
-  if (error) handleError(error, "getCashBookSummaryAsync");
-
-  const totalReceipt = (data ?? [])
-    .filter((e) => e.type === "receipt")
-    .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-
-  const totalPayment = (data ?? [])
-    .filter((e) => e.type === "payment")
-    .reduce((sum, e) => sum + Number(e.amount ?? 0), 0);
-
-  // Quỹ đầu kỳ = tổng (receipt - payment) TRƯỚC dateFrom (cho cùng branch).
-  // Nếu không có dateFrom → openingBalance = 0 (period là all-time).
-  let openingBalance = 0;
-  if (params?.dateFrom) {
-    let openingQ = supabase
-      .from("cash_transactions")
-      .select("type, amount")
-      .eq("tenant_id", tenantId)
-      .lt("transaction_date", cashBookDate(params.dateFrom));
-    if (params?.branchId) openingQ = openingQ.eq("branch_id", params.branchId);
-    // P0-3: cũng phải loại cancelled cho opening balance
-    if (params?.statuses && params.statuses.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      openingQ = (openingQ as any).in("status", params.statuses);
-    } else {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      openingQ = (openingQ as any).neq("status", "cancelled");
+  // Rebuild each page so PostgREST's response cap cannot truncate either balance.
+  async function aggregate(beforePeriod: boolean) {
+    let totalReceipt = 0;
+    let totalPayment = 0;
+    for (let offset = 0; ; offset += 1000) {
+      let query = supabase.from("cash_transactions").select("id, type, amount")
+        .eq("tenant_id", tenantId);
+      if (params?.branchId) query = query.eq("branch_id", params.branchId);
+      if (beforePeriod) query = query.lt("transaction_date", cashBookDate(params!.dateFrom!));
+      else query = applyCashDateRange(query, params);
+      if (params?.statuses?.length) query = query.in("status", params.statuses);
+      else query = query.neq("status", "cancelled");
+      const { data, error } = await query.order("id").range(offset, offset + 999);
+      if (error) handleError(error, "getCashBookSummaryAsync");
+      for (const entry of data ?? []) {
+        const amount = Number(entry.amount ?? 0);
+        if (entry.type === "receipt") totalReceipt += amount;
+        else if (entry.type === "payment") totalPayment += amount;
+      }
+      if (!data || data.length < 1000) break;
     }
-    const { data: openingData } = await openingQ;
-    openingBalance = (openingData ?? []).reduce((sum, e) => {
-      const amt = Number(e.amount ?? 0);
-      return sum + (e.type === "receipt" ? amt : -amt);
-    }, 0);
+    return { totalReceipt, totalPayment };
   }
-
-  return { totalReceipt, totalPayment, openingBalance };
+  const period = await aggregate(false);
+  const opening = params?.dateFrom ? await aggregate(true) : null;
+  return { ...period, openingBalance: opening ? opening.totalReceipt - opening.totalPayment : 0 };
 }
 
 // --- Write Operations ---
