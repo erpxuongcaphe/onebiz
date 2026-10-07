@@ -3698,6 +3698,11 @@ function FnbPosPageInner() {
                 }
                 orderTimestamps={orderTimestamps}
                 tableTotals={tableTotals}
+                openOrders={openOrders.orders}
+                onOpenOrder={handleOpenSharedOrder}
+                ordersLoading={openOrders.loading}
+                ordersError={openOrders.error}
+                onRefreshOrders={() => { void openOrders.refresh(); }}
               />
             </Suspense>
           ) : (

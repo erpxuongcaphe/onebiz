@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/lib/contexts/auth-context";
+import { useSettings } from "@/lib/contexts/settings-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -32,6 +33,8 @@ export function BranchPrintSetup() {
 }
 function BranchPrintSetupForBranch() {
   const { currentBranch, hasPermission } = useAuth();
+  const { settings, updateSettings } = useSettings();
+  const [step, setStep] = useState<"routes" | "install" | "test">("routes");
   const branchId = currentBranch?.id;
   const [point, setPoint] = useState<PrintPoint | null>(null);
   const [routes, setRoutes] = useState<PrintRoute[]>([]);
@@ -110,26 +113,32 @@ function BranchPrintSetupForBranch() {
     } catch (e) { setMessage(e instanceof Error ? e.message : "Không kiểm tra được kết nối."); }
     finally { setBusy(false); }
   };
-  return <Card><CardHeader><CardTitle className="text-primary">Điểm in dùng chung cho nhân viên</CardTitle></CardHeader><CardContent className="space-y-3">
-    <p className="text-sm"><strong>Chi nhánh: {currentBranch?.name ?? "Hãy chọn một chi nhánh"}</strong>. Nhân viên dùng web trên điện thoại cá nhân; máy quầy nhận và phân phiếu tới máy in.</p>
-    <p className="text-sm text-muted-foreground">Máy nhiệt ESC/POS 58/80 mm: LAN/Wi-Fi bằng IP và cổng, hoặc USB qua driver Windows. Mỗi chi nhánh có điểm in riêng; cần máy quầy chạy điểm in và có Internet. Bluetooth dùng qua máy đã cài trong Windows nếu driver hỗ trợ.</p>
-    <p className="border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm">Cài đặt thuộc chi nhánh đang chọn. Một máy có thể nhận cả bill và bếp. LAN cần bộ điểm in phiên bản mới: tải lại bộ cài trước khi bật nhận phiếu; cấu hình kết nối đã có vẫn dùng được.</p>
+  return <Card><CardHeader className="pb-3"><CardTitle className="text-primary">Máy in tại chi nhánh</CardTitle><p className="text-sm font-semibold">{currentBranch?.name ?? "Chọn một chi nhánh ở thanh đầu trang"}</p><p className="text-sm text-muted-foreground">Cài một lần tại quầy. Nhân viên dùng điện thoại hoặc máy tính gửi tới cùng nơi nhận.</p></CardHeader><CardContent className="space-y-4">
     {branchId && <>
-      <p role="status" className="text-sm font-semibold text-primary">{point?.last_seen_at ? `Kết nối gần nhất: ${new Date(point.last_seen_at).toLocaleString("vi-VN")}` : "Điểm in chưa báo kết nối"} · {point?.enabled ? "Đã bật" : "Chưa bật"}</p>
-      {canManage && <fieldset disabled={busy} className="space-y-3">
-        <label className="block text-sm font-medium">Tên điểm in<Input className="mt-1 min-h-11" value={name} maxLength={80} onChange={e => setName(e.target.value)} /></label>
-        <Button className="min-h-11" variant="outline" disabled={!routes.find(r => r.key === "cashier")?.printer} onClick={() => setRoutes(old => { const cashier = old.find(r => r.key === "cashier"); return cashier ? old.map(r => r.key !== "cashier" && !r.printer.trim() ? { ...r, printer: cashier.printer, paper: cashier.paper } : r) : old; })}>Dùng máy quầy cho nơi nhận bếp còn trống</Button>
-        <div className="divide-y border-y">{routes.map((route, index) => <div key={route.key} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start">
-          <div className="space-y-2"><strong className="block text-sm text-primary">{route.label}</strong><div className="flex flex-wrap gap-2"><Button className="min-h-11" size="sm" variant="outline" disabled={!point?.enabled || !point.routes.some(r => r.key === route.key)} onClick={() => checkConnection(route)}>Kiểm tra kết nối</Button><Button className="min-h-11" size="sm" variant="outline" disabled={!point?.enabled || !point.routes.some(r => r.key === route.key)} onClick={() => sendTest(route)}>In thử cấu hình đã lưu</Button></div></div>
-          <PrintRouteEditor route={route} printers={point?.detected_printers ?? []} onChange={next => setRoutes(old => old.map((r,i) => i === index ? next : r))} />
-        </div>)}</div>
-        <label className="flex min-h-11 items-center gap-3 text-sm font-medium"><input type="checkbox" className="size-5 accent-primary" checked={enabled} onChange={e => setEnabled(e.target.checked)} />Bật nhận phiếu cho chi nhánh</label>
-        <div className="flex flex-wrap gap-2"><Button className="min-h-11" onClick={save}>Lưu điểm in</Button><Button className="min-h-11" variant="outline" disabled={!point} onClick={downloadConfig}>Tải cấu hình kết nối</Button></div>
-        <details className="border bg-muted/30 px-3 py-2 text-sm"><summary className="cursor-pointer font-semibold text-primary">Cài một lần tại máy quầy Windows</summary><ol className="list-decimal pl-5 space-y-2 mt-2"><li>Cài driver và in thử từ Windows. Lưu tên điểm in, bật nhận phiếu và tải cấu hình kết nối.</li><li>Cài Node.js LTS; tải <a className="underline text-primary" href="/print-point/onebiz-print-point.zip" download>bộ điểm in</a>, giải nén vào thư mục riêng và đặt tệp cấu hình vào cùng thư mục.</li><li>Chạy <code>setup.ps1</code> để đăng ký chạy nền khi đăng nhập Windows, hoặc <code>node agent.mjs</code> để thử thủ công. Xem <a className="underline text-primary" href="/print-point/README.txt" download>hướng dẫn</a>.</li><li>Bấm Cập nhật để lấy danh sách máy, chọn nơi nhận và khổ giấy, lưu rồi gửi phiếu thử. Kiểm tra dấu, QR, lề và cắt giấy trước khi vận hành.</li></ol></details>
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/20 p-3"><p role="status" className="text-sm"><strong className={point?.connected ? "text-status-success" : "text-primary"}>{point?.connected ? "Máy quầy đã kết nối" : "Chưa có kết nối gần đây"}</strong><span className="block text-muted-foreground">{point?.enabled ? "Đã bật nhận phiếu" : "Chưa bật nhận phiếu"}{point?.last_seen_at ? ` · Lần cuối ${new Date(point.last_seen_at).toLocaleString("vi-VN")}` : ""}</span></p><Button className="min-h-11" variant="outline" disabled={busy} onClick={load}>Cập nhật</Button></div>
+      <div role="group" aria-label="Các bước kết nối máy in" className="flex flex-wrap gap-2">{([{id:"routes",label:"1. Chọn máy & nơi nhận"},{id:"install",label:"2. Kết nối máy quầy"},{id:"test",label:"3. In thử & sử dụng"}] as const).map(item => <Button key={item.id} className="min-h-11" variant={step===item.id ? "default" : "outline"} aria-pressed={step===item.id} onClick={() => { setStep(item.id); setMessage(""); }}>{item.label}</Button>)}</div>
+      {canManage && <fieldset disabled={busy} className="space-y-4">
+        {step === "routes" && <>
+          <p className="text-sm text-muted-foreground">LAN / Wi-Fi: điền IP và cổng 9100. USB: chọn tên máy đã cài driver trong Windows. Cùng một máy có thể nhận bill và bếp.</p>
+          <div className="space-y-3">{routes.map((route,index) => <details key={route.key} open={route.key === "cashier" || route.key === "kitchen"} className="rounded-lg border bg-background"><summary className="flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-primary"><span>{route.label}</span><span className="max-w-[50%] truncate text-xs font-normal text-muted-foreground">{route.printer.trim() ? "Đã chọn máy" : "Chưa gán"}</span></summary><div className="border-t p-3"><PrintRouteEditor route={route} printers={point?.detected_printers ?? []} onChange={next => setRoutes(old => old.map((r,i) => i===index ? next : r))} /></div></details>)}</div>
+          <Button className="min-h-11" variant="outline" disabled={!routes.find(r => r.key === "cashier")?.printer.trim()} onClick={() => setRoutes(old => { const cashier=old.find(r => r.key === "cashier"); return cashier ? old.map(r => r.key!=="cashier" && !r.printer.trim() ? {...r,printer:cashier.printer,paper:cashier.paper} : r) : old; })}>Dùng chung máy hóa đơn cho bếp chưa gán</Button>
+          <label className="flex min-h-11 items-center gap-3 text-sm font-medium"><input type="checkbox" className="size-5 accent-primary" checked={enabled} onChange={e => setEnabled(e.target.checked)} />Bật nhận phiếu cho chi nhánh</label>
+          <Button className="min-h-11" onClick={save}>Lưu máy & nơi nhận</Button>
+        </>}
+        {step === "install" && <>
+          <label className="block text-sm font-medium">Tên máy quầy<Input className="mt-1 min-h-11" value={name} maxLength={80} onChange={e => setName(e.target.value)} /></label>
+          <ol className="list-decimal space-y-3 pl-5 text-sm"><li><strong>Chuẩn bị máy tính quầy.</strong> LAN: máy tính cùng mạng với máy in, không cần driver cho ESC/POS. USB: cài driver đúng model, in được từ Windows.</li><li><strong>Tải bộ kết nối.</strong> Cài Node.js LTS từ <a href="https://nodejs.org/" target="_blank" rel="noreferrer" className="text-primary underline">nodejs.org</a>, tải <a className="text-primary underline" href="/print-point/onebiz-print-point.zip" download>bộ điểm in Onebiz</a> và giải nén vào thư mục riêng.</li><li><strong>Ghép với chi nhánh này.</strong> Tải tệp cấu hình bên dưới, đặt cạnh <code>agent.mjs</code>. Chạy <code>setup.ps1</code> để máy quầy nhận lệnh nền mỗi lần đăng nhập Windows.</li><li><strong>Kiểm tra.</strong> Bấm Cập nhật. Khi máy quầy đã kết nối, sang bước 3 để in thử.</li></ol>
+          <div className="flex flex-wrap gap-2"><Button className="min-h-11" onClick={save}>Lưu tên máy quầy</Button><Button className="min-h-11" variant="outline" disabled={!point} onClick={downloadConfig}>Tải cấu hình chi nhánh</Button></div>
+          <details className="rounded-lg border p-3 text-sm"><summary className="cursor-pointer font-semibold text-primary">Hướng dẫn chi tiết / đổi máy quầy</summary><p className="mt-2">Máy quầy cần bật và có Internet khi nhận lệnh. Bluetooth chỉ dùng nếu driver Windows hỗ trợ. Tệp cấu hình chứa mã riêng; tải mã mới sẽ ngắt kết nối cũ.</p><a href="/print-point/README.txt" download className="text-primary underline">Tải hướng dẫn kỹ thuật</a></details>
+        </>}
+        {step === "test" && <>
+          <p className="text-sm text-muted-foreground">Lưu cấu hình ở bước 1, giữ máy quầy đang chạy rồi kiểm tra từng nơi nhận. Phiếu thử không tạo doanh thu.</p>
+          <div className="space-y-2">{point?.routes.map(route => <div key={route.key} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"><div><strong className="text-sm text-primary">{route.label}</strong><p className="text-xs text-muted-foreground">{route.paper === "80mm" ? "80" : "58"} mm</p></div><div className="flex flex-wrap gap-2"><Button className="min-h-11" size="sm" variant="outline" disabled={!point.enabled} onClick={() => checkConnection(routes.find(current => current.key === route.key) ?? route)}>Kiểm tra kết nối</Button><Button className="min-h-11" size="sm" variant="outline" disabled={!point.enabled} onClick={() => sendTest(routes.find(current => current.key === route.key) ?? route)}>In thử</Button></div></div>)}</div>
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2"><p className="text-sm">Sau khi giấy in đúng, chọn dùng điểm in chi nhánh trên trình duyệt này. Gửi bếp, tạm tính và thanh toán sẽ tới máy đã gán, không mở hộp thoại chọn máy.</p><Button className="min-h-11" disabled={!point?.enabled || !point.routes.some(route => route.key === "cashier") || !point.routes.some(route => route.key === "kitchen")} onClick={() => { updateSettings("print",{fnbBranchQueue:true}); setMessage("Đã chọn điểm in chi nhánh trên trình duyệt này. Nhân viên ở thiết bị khác chọn In: chi nhánh một lần trong POS."); }}>{settings.print.fnbBranchQueue ? "Đang dùng điểm in chi nhánh" : "Dùng điểm in chi nhánh"}</Button></div>
+        </>}
       </fieldset>}
-      {message && <p role="status" className="border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm break-words">{message}</p>}
-      <div className="flex items-center justify-between gap-2"><strong className="text-sm text-primary">50 lệnh gần nhất</strong><Button className="min-h-11" variant="outline" disabled={busy} onClick={load}>Cập nhật</Button></div>
-      <PrintJobList jobs={jobs} onAction={canManage && !busy ? action : undefined} />
+      {message && <p role="status" className="rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm break-words">{message}</p>}
+      {step === "test" && <details className="rounded-lg border p-3"><summary className="min-h-11 cursor-pointer text-sm font-semibold text-primary">Lịch sử lệnh in · {jobs.length} lệnh gần nhất</summary><PrintJobList jobs={jobs} onAction={canManage && !busy ? action : undefined} /></details>}
     </>}
   </CardContent></Card>;
 }

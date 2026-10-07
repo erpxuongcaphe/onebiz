@@ -254,7 +254,8 @@ function PrintSettingsPageContent() {
   const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
   const [logoSaving, setLogoSaving] = useState(false);
   // Cài đặt In V3 (CEO 30/06): master–detail — `selected` = id mục nav đang chọn.
-  const [selected, setSelected] = useState<string>("doanh-nghiep");
+  const [selected, setSelected] = useState<string>("may-in");
+  const [printerSection, setPrinterSection] = useState<"branch" | "slips" | "device">("branch");
   // Mobile: nav trái thu lại thành accordion → cờ mở/đóng.
   const [navOpen, setNavOpen] = useState(false);
   const selectedItem = NAV_ITEM_BY_ID[selected] ?? PRINT_NAV[0].items[0];
@@ -505,13 +506,16 @@ function PrintSettingsPageContent() {
       )}
 
       {selected === "may-in" && (<>
-      <BranchPrintSetup />
+      <div className="space-y-2"><p className="text-sm text-muted-foreground">Bắt đầu với kết nối chi nhánh để điện thoại và máy quầy cùng gửi phiếu, không chọn máy mỗi lần.</p><div role="group" aria-label="Nhóm cài đặt máy in" className="flex flex-wrap gap-2">{([{id:"branch",label:"1. Kết nối chi nhánh"},{id:"slips",label:"2. Phiếu & tự động in"},{id:"device",label:"Nâng cao: in từ máy này"}] as const).map(item => <Button key={item.id} className="min-h-11" variant={printerSection===item.id ? "default" : "outline"} aria-pressed={printerSection===item.id} onClick={() => setPrinterSection(item.id)}>{item.label}</Button>)}</div></div>
+      {printerSection === "branch" && <BranchPrintSetup />}
+      </>)}
+      {selected === "may-in" && printerSection === "device" && (<>
       {/* ── 0. Print Backend (MỚI) ── */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Icon name="tune" />
-            Phương thức in
+            In riêng từ máy / trình duyệt này
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -881,8 +885,9 @@ function PrintSettingsPageContent() {
       <BranchPrintInfoCard />
       )}
 
-      {selected === "may-in" && (<>
+      {selected === "may-in" && printerSection === "slips" && (<>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
+      <details className="rounded-lg border bg-card p-3"><summary className="min-h-11 cursor-pointer text-sm font-semibold text-primary">Nâng cao: chia trạm Bar / Bếp theo món</summary><div className="mt-3">
       <KitchenStationsCard printTargetLabel={print.backend === "escpos-usb"
         ? storedKitchen
           ? storedKitchen.name || "Máy USB đã gán cho bếp"
@@ -890,7 +895,7 @@ function PrintSettingsPageContent() {
             ? `Chưa gán máy bếp riêng; dùng máy thu ngân dự phòng (${storedCashier.name || "USB"}).`
             : "Chưa gán máy USB; nếu không có thiết bị đã lưu, sẽ mở hộp thoại in trình duyệt."
         : print.backend === "qz-tray" ? "Máy QZ Tray đã chọn ở ô Bếp / Bar; mỗi trạm có thể gán máy riêng bên dưới." : "Chọn thiết bị trong hộp thoại in của trình duyệt này."} />
-      </>)}
+      </div></details></>)}
 
       {selected === "doanh-nghiep" && (<>
       {/* ── 3. Receipt Content ── */}
@@ -956,7 +961,7 @@ function PrintSettingsPageContent() {
       </Card>
       </>)}
 
-      {selected === "may-in" && (<>
+      {selected === "may-in" && printerSection === "slips" && (<>
       {/* ── 4. FnB Print Styles ── */}
       <Card>
         <CardHeader>
@@ -1079,7 +1084,7 @@ function PrintSettingsPageContent() {
       </Card>
       </>)}
 
-      {selected === "may-in" && (<>
+      {selected === "may-in" && printerSection === "slips" && (<>
       {/* ── 5. Preview live (CEO 13/05) ── */}
       <Card>
         <CardHeader>

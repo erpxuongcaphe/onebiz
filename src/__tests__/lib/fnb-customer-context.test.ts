@@ -8,9 +8,9 @@ describe("shared order customer context", () => {
   it("restores the same customer ID and snapshot name", () => {
     expect(customerContextFromOrder({customerSelected:true,customerId:"customer-1",customerName:"Lan"} as KitchenOrder)).toEqual({customerId:"customer-1",customerName:"Lan",customerConfirmationRequired:false});
   });
-  it("does not turn a legacy unknown guest into a confirmed walk-in", () => {
-    expect(customerContextFromOrder({} as KitchenOrder).customerConfirmationRequired).toBe(true);
-    expect(needsCustomerSelection({customerName:"Khách lẻ"} as FnbTabSnapshot)).toBe(true);
+  it("defaults legacy orders to walk-in without a checkout step", () => {
+    expect(customerContextFromOrder({} as KitchenOrder)).toEqual({customerId:undefined,customerName:"Khách lẻ",customerConfirmationRequired:false});
+    expect(needsCustomerSelection({customerName:"Khách lẻ",customerConfirmationRequired:true} as FnbTabSnapshot)).toBe(false);
     expect(needsCustomerSelection({customerConfirmationRequired:false} as FnbTabSnapshot)).toBe(false);
   });
 });
