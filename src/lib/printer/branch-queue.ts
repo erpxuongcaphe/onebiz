@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { PaperWidth } from "./escpos";
+import { CONNECTION_PROBE } from "../../../public/print-point/destination.mjs";
 
 export interface PrintRoute { key: string; label: string; printer: string; paper: PaperWidth }
 export interface PrintPoint { id: string; name: string; enabled: boolean; connected?: boolean; detected_printers?: string[]; routes: PrintRoute[]; last_seen_at: string | null }
@@ -21,6 +22,10 @@ export function bytesToBase64(bytes: Uint8Array): string {
   let encoded = "";
   for (let start = 0; start < bytes.length; start += 16384) encoded += String.fromCharCode(...bytes.subarray(start, start + 16384));
   return btoa(encoded);
+}
+
+export async function checkBranchPrinter(branchId: string, route: PrintRoute) {
+  return rpc("fnb_print_enqueue_v1", { p_branch: branchId, p_id: crypto.randomUUID(), p_route: route.key, p_label: `KIỂM TRA KẾT NỐI ${route.label}`.slice(0,80), p_paper: route.paper, p_bytes: bytesToBase64(new Uint8Array(CONNECTION_PROBE)) });
 }
 
 export async function enqueueBranchPrint(args: { branchId: string; routeKey: string; label: string; html: string; paper: string; buildHtml?: (paper: PaperWidth) => string; jobId: string }): Promise<{ id: string; route_label: string }> {

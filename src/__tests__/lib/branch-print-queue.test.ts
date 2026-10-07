@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase/client", () => ({ createClient: () => ({ rpc: mocks.rpc 
 vi.mock("@/lib/printer/raster-print", async importOriginal => ({ ...await importOriginal<object>(), rasterPrintBytes: mocks.raster }));
 import { enqueueBranchPrint } from "@/lib/printer/branch-queue";
 // Standalone agent is also distributed as browser-downloadable JS.
-import { validateRaster } from "../../../public/print-point/agent.mjs";
+import { validateRaster, applyCutSetting } from "../../../public/print-point/agent.mjs";
 beforeEach(() => { vi.clearAllMocks(); });
 describe("branch print dispatch", () => {
   it("renders using the physical route paper and retains one request ID", async () => {
@@ -27,6 +27,12 @@ describe("branch print dispatch", () => {
   });
 });
 describe("print point raster safety", () => {
+  it("disables only the trailing cutter command and retains feed and raster", () => {
+    const bytes = encodeRaster(576,1,new Uint8ClampedArray(576*4).fill(255));
+    expect(applyCutSetting(bytes)).toBe(bytes);
+    expect(applyCutSetting(bytes, false)).toEqual(bytes.subarray(0, bytes.length - 3));
+    expect(() => applyCutSetting(new Uint8Array([1,2,3]),false)).toThrow();
+  });
   it.each([384,576])("accepts renderer output with %i dots", width => {
     const rgba = new Uint8ClampedArray(width * 300 * 4).fill(255);
     expect(() => validateRaster(encodeRaster(width,300,rgba), width === 384 ? "58mm" : "80mm")).not.toThrow();

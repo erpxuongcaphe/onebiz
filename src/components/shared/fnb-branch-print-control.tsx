@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getBranchPrintState, type PrintPoint, type BranchPrintJob } from "@/lib/printer/branch-queue";
 import { PrintJobList } from "./branch-print-setup";
+import { describeDestination } from "../../../public/print-point/destination.mjs";
 import { useToast } from "@/lib/contexts/toast-context";
 import type { PrintResult } from "@/lib/printer/printer-service";
 
@@ -43,8 +44,8 @@ export function FnbBranchPrintControl({ branchId, compact = false }: { branchId?
     {error && <p role="alert" className="text-sm text-status-error">{error}</p>}
     <p className="text-sm font-semibold">{point?.enabled ? `${point.name} · ${point.connected ? "Vừa kết nối" : "Chưa có kết nối gần đây; phiếu sẽ chờ"}` : "Chi nhánh chưa bật điểm in; nhờ quản lý thiết lập."}</p>
     <div className="flex flex-wrap gap-2"><Button className="min-h-11" disabled={!point?.enabled || !!error || !branchId} onClick={() => { updateSettings("print", { fnbBranchQueue: true }); setOpen(false); }}>Dùng điểm in chi nhánh</Button><Button className="min-h-11" variant="outline" onClick={() => { updateSettings("print", { fnbBranchQueue: false, backend: "browser" }); setOpen(false); }}>In thủ công trên thiết bị</Button></div>
-    {point?.routes.map(route => <p key={route.key} className="border-b py-1 text-sm"><strong>{route.label}</strong> → {route.printer} · {route.paper === "58mm" ? "58" : "80"} mm</p>)}
-    <p className="text-sm text-muted-foreground">“Windows đã nhận” chưa xác nhận giấy đã ra. Phiếu cần kiểm tra giấy phải báo quản lý, tránh gửi lại nhiều lần.</p>
+    {point?.routes.map(route => <p key={route.key} className="border-b py-1 text-sm break-words"><strong>{route.label}</strong> → {describeDestination(route.printer)} · {route.paper === "58mm" ? "58" : "80"} mm</p>)}
+    <p className="text-sm text-muted-foreground">“Đã chuyển dữ liệu in” chưa xác nhận giấy đã ra, kể cả LAN hay USB. Phiếu cần kiểm tra giấy phải báo quản lý, tránh gửi lại nhiều lần.</p>
     <PrintJobList jobs={jobs} />
   </DialogContent></Dialog></>;
 }

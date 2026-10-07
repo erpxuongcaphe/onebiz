@@ -4,11 +4,13 @@ import { useAuth } from "@/lib/contexts/auth-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { getBranchPrintState, savePrintPoint, rotatePrintPointToken, resolvePrintJob, enqueueBranchPrint, type PrintPoint, type PrintRoute, type BranchPrintJob } from "@/lib/printer/branch-queue";
+import { getBranchPrintState, savePrintPoint, rotatePrintPointToken, resolvePrintJob, enqueueBranchPrint, checkBranchPrinter, type PrintPoint, type PrintRoute, type BranchPrintJob } from "@/lib/printer/branch-queue";
 import { generateDocumentHtml } from "@/lib/print-document";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
+import { PrintRouteEditor } from "./print-route-editor";
+import { parseDestination } from "../../../public/print-point/destination.mjs";
 
-export const PRINT_STATUS = { queued: "Chờ điểm in", sending: "Đang chuyển", handed_off: "Windows đã nhận", failed: "Chưa gửi được", unknown: "Cần kiểm tra giấy", cancelled: "Đã dừng" };
+export const PRINT_STATUS = { queued: "Chờ điểm in", sending: "Đang chuyển", handed_off: "Đã chuyển dữ liệu in", failed: "Chưa gửi được", unknown: "Cần kiểm tra giấy", cancelled: "Đã dừng" };
 export function PrintJobList({ jobs, onAction }: { jobs: BranchPrintJob[]; onAction?: (id: string, action: "retry" | "cancel") => void }) {
   return <div className="divide-y border-y" aria-label="Lịch sử gửi phiếu">
     {!jobs.length && <p className="py-3 text-sm text-muted-foreground">Chưa có lệnh in.</p>}
@@ -55,7 +57,13 @@ function BranchPrintSetupForBranch() {
   const save = async () => {
     if (!branchId) return;
     setBusy(true);
-    try { const p = await savePrintPoint(branchId, name, routes.filter(r => r.printer.trim()), enabled); setPoint(p); setMessage("Đã lưu cho chi nhánh. Nhân viên có thể dùng tuyến in này bằng tài khoản của mình."); }
+    try {
+      const configured = routes.filter(r => r.printer.trim());
+      for (const route of configured) {
+        try { parseDestination(route.printer); } catch (e) { throw new Error(`${route.label}: ${e instanceof Error ? e.message : "Kết nối không hợp lệ."}`); }
+      }
+      const p = await savePrintPoint(branchId, name, configured, enabled); setPoint(p); setMessage("Đã lưu cho chi nhánh. Nhân viên có thể dùng tuyến in này bằng tài khoản của mình.");
+    }
     catch (e) { setMessage(e instanceof Error ? e.message : "Không lưu được."); }
     finally { setBusy(false); }
   };
@@ -81,6 +89,8 @@ function BranchPrintSetupForBranch() {
     if (!branchId || busy) return;
     setBusy(true);
     try {
+      const saved = point?.routes.find(r => r.key === route.key);
+      if (!saved || saved.printer !== route.printer || saved.paper !== route.paper) throw new Error("Lưu thay đổi trước khi in thử. Phiếu thử dùng cấu hình đã lưu của chi nhánh.");
       const buildHtml = (paper: "58mm" | "80mm") => generateDocumentHtml({ documentType: "DỮ LIỆU IN THỬ", documentCode: "TEST-ONEBIZ", date: new Date().toISOString(), headerFields: [{ label: "Nơi nhận", value: route.label }], items: [{ name: "Cà phê sữa đá", quantity: 2, total: 70000, note: "Đường 70% • ít đá • thêm trân châu" }], showSignature: false, note: "Kiểm tra tiếng Việt, lề và dao cắt. Phiếu thử không ghi nhận doanh thu." }, paper);
       const job = await enqueueBranchPrint({ branchId, routeKey: route.key, label: `IN THỬ ${route.label}`.slice(0,80), html: buildHtml(route.paper), paper: route.paper, buildHtml, jobId: crypto.randomUUID() });
       setMessage(`Đã nhận phiếu thử tới ${job.route_label}. Kiểm tra giấy tại máy; xem kết quả ở lịch sử.`);
@@ -88,18 +98,30 @@ function BranchPrintSetupForBranch() {
     } catch (e) { setMessage(`${e instanceof Error ? e.message : "Không gửi được phiếu thử."} Nếu mạng ngắt, xem lịch sử trước khi gửi lại.`); }
     finally { setBusy(false); }
   };
+  const checkConnection = async (route: PrintRoute) => {
+    if (!branchId || busy) return;
+    setBusy(true);
+    try {
+      const saved = point?.routes.find(r => r.key === route.key);
+      if (!saved || saved.printer !== route.printer || saved.paper !== route.paper) throw new Error("Lưu thay đổi trước khi kiểm tra kết nối.");
+      await checkBranchPrinter(branchId, saved);
+      setMessage("Đã gửi yêu cầu kiểm tra kết nối, không in giấy. Bấm Cập nhật để xem kết quả trong lịch sử; điểm in cần đang chạy bản mới.");
+      setJobs((await getBranchPrintState(branchId)).jobs);
+    } catch (e) { setMessage(e instanceof Error ? e.message : "Không kiểm tra được kết nối."); }
+    finally { setBusy(false); }
+  };
   return <Card><CardHeader><CardTitle className="text-primary">Điểm in dùng chung cho nhân viên</CardTitle></CardHeader><CardContent className="space-y-3">
     <p className="text-sm"><strong>Chi nhánh: {currentBranch?.name ?? "Hãy chọn một chi nhánh"}</strong>. Nhân viên dùng web trên điện thoại cá nhân; máy quầy nhận và phân phiếu tới máy in.</p>
-    <p className="text-sm text-muted-foreground">Hỗ trợ máy nhiệt ESC/POS 58/80 mm đã cài trong Windows. Cần điểm in chạy và Internet. Bluetooth phụ thuộc driver/model; chưa xác nhận mọi máy.</p>
+    <p className="text-sm text-muted-foreground">Máy nhiệt ESC/POS 58/80 mm: LAN/Wi-Fi bằng IP và cổng, hoặc USB qua driver Windows. Mỗi chi nhánh có điểm in riêng; cần máy quầy chạy điểm in và có Internet. Bluetooth dùng qua máy đã cài trong Windows nếu driver hỗ trợ.</p>
+    <p className="border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm">Cài đặt thuộc chi nhánh đang chọn. Một máy có thể nhận cả bill và bếp. LAN cần bộ điểm in phiên bản mới: tải lại bộ cài trước khi bật nhận phiếu; cấu hình kết nối đã có vẫn dùng được.</p>
     {branchId && <>
       <p role="status" className="text-sm font-semibold text-primary">{point?.last_seen_at ? `Kết nối gần nhất: ${new Date(point.last_seen_at).toLocaleString("vi-VN")}` : "Điểm in chưa báo kết nối"} · {point?.enabled ? "Đã bật" : "Chưa bật"}</p>
       {canManage && <fieldset disabled={busy} className="space-y-3">
-        <datalist id="branch-point-printers">{point?.detected_printers?.map(printer => <option key={printer} value={printer} />)}</datalist>
         <label className="block text-sm font-medium">Tên điểm in<Input className="mt-1 min-h-11" value={name} maxLength={80} onChange={e => setName(e.target.value)} /></label>
-        <div className="divide-y border-y">{routes.map((route, index) => <div key={route.key} className="grid gap-2 py-3 sm:grid-cols-[1fr_2fr_100px] items-center">
-          <div className="space-y-1"><label htmlFor={`route-${route.key}`} className="block text-sm font-semibold">{route.label}</label><Button className="min-h-11" size="sm" variant="outline" disabled={!point?.enabled || !point.routes.some(r => r.key === route.key)} onClick={() => sendTest(route)}>In thử cấu hình đã lưu</Button></div>
-          <Input id={`route-${route.key}`} list="branch-point-printers" className="min-h-11" placeholder={point?.detected_printers?.length ? "Chọn máy đã tìm thấy" : "Tên máy đúng trong Windows"} value={route.printer} maxLength={200} onChange={e => setRoutes(old => old.map((r,i) => i === index ? { ...r, printer: e.target.value } : r))} />
-          <select aria-label={`Khổ giấy ${route.label}`} className="min-h-11 rounded border bg-background px-2 text-sm" value={route.paper} onChange={e => setRoutes(old => old.map((r,i) => i === index ? { ...r, paper: e.target.value as "58mm" | "80mm" } : r))}><option value="58mm">58 mm</option><option value="80mm">80 mm</option></select>
+        <Button className="min-h-11" variant="outline" disabled={!routes.find(r => r.key === "cashier")?.printer} onClick={() => setRoutes(old => { const cashier = old.find(r => r.key === "cashier"); return cashier ? old.map(r => r.key !== "cashier" && !r.printer.trim() ? { ...r, printer: cashier.printer, paper: cashier.paper } : r) : old; })}>Dùng máy quầy cho nơi nhận bếp còn trống</Button>
+        <div className="divide-y border-y">{routes.map((route, index) => <div key={route.key} className="grid gap-3 py-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] items-start">
+          <div className="space-y-2"><strong className="block text-sm text-primary">{route.label}</strong><div className="flex flex-wrap gap-2"><Button className="min-h-11" size="sm" variant="outline" disabled={!point?.enabled || !point.routes.some(r => r.key === route.key)} onClick={() => checkConnection(route)}>Kiểm tra kết nối</Button><Button className="min-h-11" size="sm" variant="outline" disabled={!point?.enabled || !point.routes.some(r => r.key === route.key)} onClick={() => sendTest(route)}>In thử cấu hình đã lưu</Button></div></div>
+          <PrintRouteEditor route={route} printers={point?.detected_printers ?? []} onChange={next => setRoutes(old => old.map((r,i) => i === index ? next : r))} />
         </div>)}</div>
         <label className="flex min-h-11 items-center gap-3 text-sm font-medium"><input type="checkbox" className="size-5 accent-primary" checked={enabled} onChange={e => setEnabled(e.target.checked)} />Bật nhận phiếu cho chi nhánh</label>
         <div className="flex flex-wrap gap-2"><Button className="min-h-11" onClick={save}>Lưu điểm in</Button><Button className="min-h-11" variant="outline" disabled={!point} onClick={downloadConfig}>Tải cấu hình kết nối</Button></div>
