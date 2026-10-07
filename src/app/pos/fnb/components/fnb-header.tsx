@@ -37,6 +37,7 @@ interface FnbHeaderProps {
   createTab: () => void;
   onToggleFloorPlan: () => void;
   onSearch: () => void;
+  hideSearch?: boolean;
   shift?: Shift | null;
   onShiftClick?: () => void;
   viewMode?: "menu" | "floorplan";
@@ -58,6 +59,7 @@ export function FnbHeader({
   createTab,
   onToggleFloorPlan,
   onSearch,
+  hideSearch = false,
   shift,
   onShiftClick,
   viewMode = "menu",
@@ -168,7 +170,7 @@ export function FnbHeader({
       </div>
 
       {/* Search bar — click open F3 modal */}
-      <button
+      {!hideSearch && <button
         type="button"
         onClick={onSearch}
         className="order-21 flex min-h-11 min-w-0 items-center justify-center gap-2 rounded-lg border border-border bg-muted/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-muted md:order-none md:flex-1 md:justify-start"
@@ -176,7 +178,7 @@ export function FnbHeader({
       >
         <Icon name="search" size={16} />
         <span>Tìm món</span><kbd className="ml-auto hidden rounded border border-border px-1.5 py-0.5 text-xs md:inline">F3</kbd>
-      </button>
+      </button>}
 
       {/* Day 21/05/2026 (CEO): Badge số đơn delivery hôm nay — cashier biết
           khối lượng giao trong ngày luôn, không cần mở báo cáo. */}

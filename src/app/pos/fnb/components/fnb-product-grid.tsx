@@ -9,6 +9,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export interface FnbProduct {
   id: string;
+  inventory_role?: string;
+  is_fnb_stock_item?: boolean;
   name: string;
   code: string;
   sell_price: number;
