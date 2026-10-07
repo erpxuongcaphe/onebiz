@@ -1628,19 +1628,20 @@ function KdsItemRow({
               className={cn(
                 "font-heading font-bold leading-tight",
                 "text-sm",
-                "line-through text-muted-foreground"
+                "text-foreground"
               )}
             >
               {item.productName}
             </span>
           </div>
+          <span className="mt-0.5 block text-xs font-medium text-status-success">Đã làm xong</span>
           {item.variantLabel && (
-            <span className="mt-0.5 block text-xs text-muted-foreground line-through">
+            <span className="mt-0.5 block text-xs text-muted-foreground">
               {item.variantLabel}
             </span>
           )}
           {item.toppings.length > 0 && (
-            <div className="mt-0.5 text-xs text-muted-foreground line-through">
+            <div className="mt-0.5 text-xs text-muted-foreground">
               {item.toppings.map((t, i) => (
                 <span key={i}>
                   {i > 0 && ", "}+{t.name}
@@ -1648,10 +1649,10 @@ function KdsItemRow({
               ))}
             </div>
           )}
-          {/* Sprint 2.4b: modifier choices (completed view — line-through) */}
+          {/* Completed preparation retains legible modifiers for serving. */}
           {item.modifierSelections && item.modifierSelections.length > 0 &&
             (preferences.modifierLayout === "inline" ? (
-              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground line-through">
+              <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">
                 {item.modifierSelections
                   .map(
                     (selection) =>
@@ -1662,7 +1663,7 @@ function KdsItemRow({
                   .join(" · ")}
               </p>
             ) : (
-              <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground line-through">
+              <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
                 {item.modifierSelections.map((selection) => (
                   <span key={selection.groupId} className="block">
                     {compactModifierGroupName(selection.groupName)}:{" "}
@@ -1672,7 +1673,7 @@ function KdsItemRow({
               </div>
             ))}
           {preferences.showItemNotes && item.note && (
-            <p className="mt-1 flex items-start gap-1 text-xs italic text-status-warning line-through">
+            <p className="mt-1 flex items-start gap-1 text-xs italic text-status-warning">
               <Icon name="sticky_note_2" size={14} className="mt-0.5 shrink-0" />
               {item.note}
             </p>
