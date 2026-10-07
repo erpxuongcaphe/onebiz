@@ -9,6 +9,12 @@ function Harness({ initial = "" }: { initial?: string }) {
   return <><PrintRouteEditor route={route} printers={["Xprinter USB"]} onChange={setRoute} /><output>{route.printer}</output></>;
 }
 describe("printer route setup", () => {
+  it("retains the selected address when disabling paper cut", () => {
+    render(<Harness initial="tcp://192.168.10.222:9100" />);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Cắt giấy sau phiếu — Quầy" }));
+    expect(screen.getByRole("status")).toHaveTextContent("?cut=0");
+    expect(screen.getByLabelText("IP máy in")).toHaveValue("192.168.10.222");
+  });
   it("switches to LAN with editable IP and default port", () => {
     render(<Harness />); fireEvent.change(screen.getByLabelText("Kết nối — Quầy"), { target: { value: "tcp" } });
     fireEvent.change(screen.getByLabelText("IP máy in"), { target: { value: "192.168.10.222" } });

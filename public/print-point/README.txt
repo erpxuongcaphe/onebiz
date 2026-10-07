@@ -27,6 +27,11 @@ LAN/Wi-Fi (IP/cổng) hoặc USB/Windows cho từng nơi nhận; gán máy/
 khổ giấy cho từng nơi nhận và lưu. Danh sách máy được quét lại mỗi 5 phút.
 Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh.
 6. Gửi phiếu thử và kiểm tra giấy. Windows đã nhận không bảo đảm giấy đã ra.
+LAN có Kiểm tra kết nối chỉ mở socket IP/cổng, không gửi dữ liệu in.
+USB có Kiểm tra kết nối kiểm tra tên máy trong Windows, chưa xác nhận dây
+đang cắm hoặc giấy sẵn sàng. Xem kết quả ở lịch sử rồi dùng In thử.
+Cắt giấy sau phiếu bật mặc định; tắt nếu máy không có dao cắt. Tắt lệnh
+cắt không thay nội dung ảnh/phiếu. Lưu cấu hình trước khi kiểm tra/in thử.
 
 KHỞI ĐỘNG CÙNG WINDOWS
 setup.ps1 tạo task cho tài khoản Windows hiện tại, chạy với quyền thường,

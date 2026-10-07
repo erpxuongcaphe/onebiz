@@ -21,6 +21,12 @@ export function validateRaster(bytes, paper) {
   if(!rows || bytes.length-offset!==6 || ![0x1b,0x64,3,0x1d,0x56,1].every((n,i)=>bytes[offset+i]===n)) throw new Error('INVALID_RASTER');
 }
 
+export function applyCutSetting(bytes, cut = true) {
+  if (cut) return bytes;
+  if (![29,86,1].every((n,i) => bytes[bytes.length - 3 + i] === n)) throw new Error('INVALID_CUT_COMMAND');
+  return bytes.subarray(0, bytes.length - 3);
+}
+
 export async function runAgent(configPath) {
   if(process.platform!=='win32') throw new Error('Điểm in này hiện hỗ trợ Windows.');
   const config=JSON.parse(await readFile(configPath,'utf8')), url=new URL(config.url);
@@ -53,7 +59,8 @@ export async function runAgent(configPath) {
         const probe = isConnectionProbe(bytes);
         if (!probe) validateRaster(bytes,job.paper);
         const destination = parseDestination(job.printer);
-        const payload=job.label.startsWith('IN LẠI')?Buffer.concat([Buffer.from('\x1b@IN LAI - KIEM TRA TRUNG MON\n','ascii'),bytes]):bytes;
+        const printBytes = probe ? bytes : applyCutSetting(bytes, destination.cut !== false);
+        const payload=job.label.startsWith('IN LẠI')?Buffer.concat([Buffer.from('\x1b@IN LAI - KIEM TRA TRUNG MON\n','ascii'),printBytes]):printBytes;
         if (destination.type === 'tcp') {
           const result = await sendNetworkPrint(job.printer, probe ? null : payload);
           status = result.status; message = result.message;
@@ -65,7 +72,7 @@ export async function runAgent(configPath) {
         tempPath=join(tmpdir(),`onebiz-print-${randomUUID()}.bin`);
         await writeFile(tempPath,payload,{flag:'wx'}); attempted=true;
         const output=await new Promise((done,reject)=>{
-          const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-File',join(dirname(fileURLToPath(import.meta.url)),'spool.ps1')],{windowsHide:true,env:{...process.env,ONEBIZ_PRINT_FILE:tempPath,ONEBIZ_PRINT_PRINTER:job.printer},stdio:['ignore','pipe','pipe']});
+          const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-File',join(dirname(fileURLToPath(import.meta.url)),'spool.ps1')],{windowsHide:true,env:{...process.env,ONEBIZ_PRINT_FILE:tempPath,ONEBIZ_PRINT_PRINTER:destination.printer},stdio:['ignore','pipe','pipe']});
           let out=''; child.stdout.on('data',b=>{out+=b.toString();}); child.stderr.on('data',()=>{});
           const timer=setTimeout(()=>{child.kill();reject(new Error('Điểm in quá thời gian; kiểm tra giấy trước khi in lại.'));},45000);
           child.on('error',e=>{clearTimeout(timer);reject(e);});

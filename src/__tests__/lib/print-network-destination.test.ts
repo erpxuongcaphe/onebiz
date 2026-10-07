@@ -2,10 +2,21 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { EventEmitter } from "node:events";
 const net = vi.hoisted(() => ({ connect: vi.fn() }));
 vi.mock("node:net", () => ({ createConnection: net.connect, default: { createConnection: net.connect } }));
-import { parseDestination, networkDestination } from "../../../public/print-point/destination.mjs";
+import { parseDestination, networkDestination, withPrinterCut, CONNECTION_PROBE, isConnectionProbe } from "../../../public/print-point/destination.mjs";
 import { sendNetworkPrint } from "../../../public/print-point/network.mjs";
 
 describe("printer destination", () => {
+  it("round trips cut preference on network and installed printers", () => {
+    const usb = withPrinterCut("Xprinter Quầy / USB", false);
+    expect(parseDestination(usb)).toEqual({ type: "windows", printer: "Xprinter Quầy / USB", cut: false });
+    expect(withPrinterCut(usb,true)).toBe("Xprinter Quầy / USB");
+    expect(withPrinterCut("tcp://192.168.10.222:9100",false)).toBe("tcp://192.168.10.222:9100?cut=0");
+    expect(parseDestination("tcp://192.168.10.222:9100?cut=0")).toMatchObject({ type: "tcp", cut: false });
+  });
+  it("recognizes only the exact non-printing probe payload", () => {
+    expect(isConnectionProbe(new Uint8Array(CONNECTION_PROBE))).toBe(true);
+    expect(isConnectionProbe(new Uint8Array([...CONNECTION_PROBE, 27,112]))).toBe(false);
+  });
   it("retains installed USB printer names", () => expect(parseDestination(" Xprinter USB ")).toEqual({ type: "windows", printer: "Xprinter USB" }));
   it("uses the supplied LAN port and defaults only when omitted", () => {
     expect(networkDestination("192.168.10.222")).toBe("tcp://192.168.10.222:9100");
