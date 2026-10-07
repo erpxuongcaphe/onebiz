@@ -2249,10 +2249,11 @@ function FnbPosPageInner() {
   const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
     if (openingSharedOrderLock.current) return;
     openingSharedOrderLock.current = true;
+    const selection = ++orderSelectionGeneration.current;
     setOpeningSharedOrder(true);
     try {
       const order = await getKitchenOrderById(summary.id);
-      if (liveBranchRef.current !== branchId) return;
+      if (liveBranchRef.current !== branchId || selection !== orderSelectionGeneration.current) return;
       if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
         toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
         void openOrders.refresh(); return;
@@ -2628,6 +2629,7 @@ function FnbPosPageInner() {
   const handleTableSelect = useCallback(
     (table: RestaurantTable) => {
       if (table.status === "available") {
+        orderSelectionGeneration.current += 1;
         pos.createTab(`Bàn ${table.tableNumber}`, "dine_in", table.id);
         setShowFloorPlan(false);
       } else if (table.status === "occupied" && table.currentOrderId) {
@@ -3334,7 +3336,11 @@ function FnbPosPageInner() {
       // Dialogs own their keyboard flow. Do not switch the underlying bill or
       // send/pay it while the cashier is editing an item or another popup.
       const inDialog = (e.target as HTMLElement)?.closest?.('[role="dialog"], [role="alertdialog"]');
-      if (inDialog && (e.ctrlKey || e.key === "F9" || e.key === "F10")) return;
+      if (inDialog && ((e.ctrlKey && ["Tab", "t", "w"].includes(e.key)) || e.key === "F9" || e.key === "F10")) {
+        e.preventDefault();
+        return;
+      }
+      if (inDialog && e.key === "Escape") return;
 
       // Tab management
       if (e.key === "Tab" && e.ctrlKey) {
