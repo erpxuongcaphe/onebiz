@@ -142,3 +142,11 @@ https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/retail-lam-quen-voi-kiotviet/
 - Disposal and transfer workflows still require a separate end-to-end
   unit-entry audit. Their schemas/posting were not changed in this release.
 - The other chat owns opening-stock work; no opening-stock edit was made.
+
+Owner clarified this request concerns F&B. The new count-unit selector is
+limited to outlet branches (`branchType = store`, the existing outlet
+classification), not warehouse/factory/office branches. Warehouse packaging
+entry and four-decimal input remain unchanged. There is no separate F&B vs
+Retail store discriminator in the current Branch type; this does not
+hard-code XTB or reclassify branches. A UI regression test verifies warehouse
+entry still posts 24.5 canonical units without a new selector.

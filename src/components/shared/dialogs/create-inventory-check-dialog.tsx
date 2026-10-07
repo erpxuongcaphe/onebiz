@@ -83,6 +83,7 @@ export function CreateInventoryCheckDialog({
 }: CreateInventoryCheckDialogProps) {
   const { toast } = useToast();
   const { currentBranch, branches, activeBranchId } = useAuth();
+  const allowFlexibleCountUnits = (branches.find((branch) => branch.id === activeBranchId) ?? currentBranch)?.branchType === "store";
   const [code, setCode] = useState("");
   const [notes, setNotes] = useState("");
   const [productSearch, setProductSearch] = useState("");
@@ -226,7 +227,7 @@ export function CreateInventoryCheckDialog({
         costPrice: Number(product.cost_price ?? 0),
         systemStock,
         actualStock: systemStock,
-        countUnit: convFactor ? null : product.unit,
+        countUnit: allowFlexibleCountUnits && !convFactor ? product.unit : null,
         conversions,
         convFactor,
         convBigUnit,
@@ -556,7 +557,7 @@ export function CreateInventoryCheckDialog({
                           <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
                             Thực tế (nhập)
                           </span>
-                          <Select
+                          {allowFlexibleCountUnits && <Select
                             value={item.countUnit ?? "__packaging__"}
                             onValueChange={(value) => { if (value) updateCountUnit(item.productId, value === "__packaging__" ? null : value); }}
                             disabled={saving}
@@ -570,7 +571,7 @@ export function CreateInventoryCheckDialog({
                                 .filter((unit) => getDirectConversionFactor(item.unit, unit, item.conversions) != null)
                                 .map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
                             </SelectContent>
-                          </Select>
+                          </Select>}
                           {item.countUnit === null && item.convFactor ? (
                             <div className="space-y-1.5">
                               <div className="grid grid-cols-2 gap-2">
@@ -614,14 +615,14 @@ export function CreateInventoryCheckDialog({
                               value={item.actualStock}
                               onChange={(value) => updateActualStock(item.productId, value ?? 0)}
                               min={0}
-                              decimals={8}
+                              decimals={allowFlexibleCountUnits ? 8 : 4}
                               className="h-9 text-right"
                               aria-label={`Tồn thực tế ${item.productName}`}
                               disabled={saving}
                             />
-                            <div className="text-right text-xs text-muted-foreground">
+                            {allowFlexibleCountUnits && <div className="text-right text-xs text-muted-foreground">
                               = <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b> {item.unit}
-                            </div></div>
+                            </div>}</div>
                           )}
                         </div>
 
