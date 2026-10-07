@@ -11,15 +11,17 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth, useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
-import { pickBestConversion, getConversionText } from "@/lib/format-uom";
+import { pickBestConversion, getConversionText, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
+import { inventoryCountFromStock, inventoryCountToStock } from "@/lib/inventory-count-uom";
 import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { isRpcUnavailable } from "@/lib/services/supabase/rpc-utils";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency } from "@/lib/format";
+import { formatNumber, formatCurrency, formatStockQuantity } from "@/lib/format";
 import { buildInventoryCheckProductFilter } from "@/lib/inventory-check-search";
 
 type ProductRow = Pick<
@@ -37,6 +39,8 @@ interface InventoryCheckLine {
   systemStock: number;
   /** Tồn thực tế theo ĐƠN VỊ CƠ BẢN — dùng khi SP KHÔNG có quy cách. */
   actualStock: number;
+  /** null keeps the existing packaging-plus-remainder entry mode. */
+  countUnit: string | null;
   // CEO 28/05/2026: quy cách (UOM). Nếu có → nhập theo thùng + lẻ.
   conversions: UOMConversion[];
   /** Số đơn vị nhỏ trong 1 đơn vị lớn (vd 1 Thùng = 12 Hộp → 12). null = không quy cách. */
@@ -54,6 +58,9 @@ interface InventoryCheckLine {
  * Làm tròn 4 chữ số để khử sai số dấu phẩy động khi quy đổi qua lại
  * (vd 224.58 ÷ 12 × 12 = 224.5799… → tránh lệch "-0" giả). */
 function lineActual(item: InventoryCheckLine): number {
+  if (item.countUnit !== null) {
+    return inventoryCountToStock(item.actualStock, item.unit, item.countUnit, item.conversions) ?? NaN;
+  }
   if (item.convFactor && item.convFactor > 0) {
     const raw = item.actualBig * item.convFactor + item.actualSmall;
     return Math.round(raw * 10000) / 10000;
@@ -199,7 +206,8 @@ export function CreateInventoryCheckDialog({
     try {
       conversions = await getUOMConversions(product.id);
     } catch {
-      conversions = [];
+      toast({ title: "Không tải được đơn vị quy đổi", description: "Thử thêm lại mặt hàng. Chưa thay đổi tồn kho.", variant: "error" });
+      return;
     }
     const best = pickBestConversion(product.unit, conversions);
     const convFactor = best && best.factor > 0 ? best.factor : null;
@@ -218,6 +226,7 @@ export function CreateInventoryCheckDialog({
         costPrice: Number(product.cost_price ?? 0),
         systemStock,
         actualStock: systemStock,
+        countUnit: convFactor ? null : product.unit,
         conversions,
         convFactor,
         convBigUnit,
@@ -239,6 +248,21 @@ export function CreateInventoryCheckDialog({
           : item,
       ),
     );
+  }
+
+  function updateCountUnit(productId: string, countUnit: string | null) {
+    setCheckItems((items) => items.map((item) => {
+      if (item.productId !== productId) return item;
+      const stock = lineActual(item);
+      if (!Number.isFinite(stock)) return item;
+      if (countUnit === null && item.convFactor) {
+        const actualBig = Math.floor(stock / item.convFactor);
+        return { ...item, countUnit, actualBig, actualSmall: stock - actualBig * item.convFactor };
+      }
+      if (countUnit === null) return item;
+      const actualStock = inventoryCountFromStock(stock, item.unit, countUnit, item.conversions);
+      return actualStock == null ? item : { ...item, countUnit, actualStock };
+    }));
   }
 
   // CEO 29/05/2026: cập nhật số đơn vị lớn (thùng).
@@ -520,7 +544,7 @@ export function CreateInventoryCheckDialog({
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
                           <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
                           <div className="text-right">
-                            <div className="text-sm font-medium tabular-nums">{formatNumber(item.systemStock)}</div>
+                            <div className="text-sm font-medium tabular-nums">{formatStockQuantity(item.systemStock)}</div>
                             {sysConvText && (
                               <div className="text-xs tabular-nums text-muted-foreground">{sysConvText}</div>
                             )}
@@ -532,7 +556,22 @@ export function CreateInventoryCheckDialog({
                           <span className="mb-1 block text-xs font-medium uppercase text-muted-foreground md:hidden">
                             Thực tế (nhập)
                           </span>
-                          {item.convFactor ? (
+                          <Select
+                            value={item.countUnit ?? "__packaging__"}
+                            onValueChange={(value) => { if (value) updateCountUnit(item.productId, value === "__packaging__" ? null : value); }}
+                            disabled={saving}
+                          >
+                            <SelectTrigger className="mb-2 h-8 w-full text-xs" aria-label={`Đơn vị kiểm ${item.productName}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {item.convFactor && <SelectItem value="__packaging__">{item.convBigUnit} + {item.unit} lẻ</SelectItem>}
+                              {getDirectConvertibleUnits(item.unit, item.conversions)
+                                .filter((unit) => getDirectConversionFactor(item.unit, unit, item.conversions) != null)
+                                .map((unit) => <SelectItem key={unit} value={unit}>{unit}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                          {item.countUnit === null && item.convFactor ? (
                             <div className="space-y-1.5">
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
@@ -543,6 +582,7 @@ export function CreateInventoryCheckDialog({
                                     decimals={0}
                                     className="h-9 text-right"
                                     aria-label={`Số ${item.convBigUnit} ${item.productName}`}
+                                    disabled={saving}
                                   />
                                   <div className="mt-1 text-center text-xs font-medium text-muted-foreground">
                                     {item.convBigUnit}
@@ -556,6 +596,7 @@ export function CreateInventoryCheckDialog({
                                     decimals={4}
                                     className="h-9 text-right"
                                     aria-label={`Số lẻ ${item.productName}`}
+                                    disabled={saving}
                                   />
                                   <div className="mt-1 text-center text-xs font-medium text-muted-foreground">
                                     {item.unit} lẻ
@@ -564,19 +605,23 @@ export function CreateInventoryCheckDialog({
                               </div>
                               <div className="text-right text-xs text-muted-foreground">
                                 ={" "}
-                                <b className="tabular-nums text-foreground">{formatNumber(lineActual(item))}</b>{" "}
+                                <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b>{" "}
                                 {item.unit}
                               </div>
                             </div>
                           ) : (
-                            <NumericInput
+                            <div className="space-y-1.5"><NumericInput
                               value={item.actualStock}
                               onChange={(value) => updateActualStock(item.productId, value ?? 0)}
                               min={0}
-                              decimals={4}
+                              decimals={8}
                               className="h-9 text-right"
                               aria-label={`Tồn thực tế ${item.productName}`}
+                              disabled={saving}
                             />
+                            <div className="text-right text-xs text-muted-foreground">
+                              = <b className="tabular-nums text-foreground">{formatStockQuantity(lineActual(item))}</b> {item.unit}
+                            </div></div>
                           )}
                         </div>
 
@@ -586,7 +631,7 @@ export function CreateInventoryCheckDialog({
                           <div className="text-right">
                             <span className={`text-sm font-bold tabular-nums ${diffColor}`}>
                               {diff > 0 ? "+" : ""}
-                              {formatNumber(diff)}
+                              {formatStockQuantity(diff)}
                             </span>
                             <span className="ml-1 text-xs text-muted-foreground">{item.unit}</span>
                           </div>
