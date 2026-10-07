@@ -518,7 +518,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Top Menu Items */}
-          <ChartCard title="Top 15 món bếp hoàn thành" subtitle={`${selectedPeriodLabel} · Giá món trước giảm giá; không phải doanh thu hóa đơn`}>
+          <ChartCard title="Top 15 món đã bán" subtitle={`${selectedPeriodLabel} · Giá món trước giảm giá; không phải doanh thu hóa đơn`}>
             <div className="h-64">
               <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={menuItems.slice(0, 10)} layout="vertical">
@@ -659,7 +659,7 @@ export default function FnbAnalyticsPage() {
           </ChartCard>
 
           {/* Top món */}
-          <ChartCard title="Top 15 món bếp hoàn thành" subtitle={`${selectedPeriodLabel} · Giá món trước giảm giá; không phải doanh thu hóa đơn`}>
+          <ChartCard title="Top 15 món đã bán" subtitle={`${selectedPeriodLabel} · Giá món trước giảm giá; không phải doanh thu hóa đơn`}>
             {menuItems.length === 0 ? (
               <p className="text-sm text-muted-foreground py-8 text-center">Chưa có dữ liệu</p>
             ) : (
