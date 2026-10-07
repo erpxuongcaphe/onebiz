@@ -2247,6 +2247,11 @@ function FnbPosPageInner() {
     setMobileCartOpen(false);
   }, [pos]);
 
+  const handleCloseOrderTab = useCallback((tabId: string) => {
+    orderSelectionGeneration.current += 1;
+    pos.closeTab(tabId);
+  }, [pos]);
+
   const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
     if (openingSharedOrderLock.current) return;
     openingSharedOrderLock.current = true;
@@ -3364,7 +3369,7 @@ function FnbPosPageInner() {
       }
       if (e.key === "w" && e.ctrlKey && pos.tabs.length > 1) {
         e.preventDefault();
-        pos.closeTab(pos.activeTabId);
+        handleCloseOrderTab(pos.activeTabId);
         return;
       }
 
@@ -3415,7 +3420,7 @@ function FnbPosPageInner() {
   }, [
     pos, searchModalOpen, customerPickerOpen, paymentOpen,
     splitBillOpen, showFloorPlan, mobileCartOpen, keyboardHelpOpen,
-    handleSendToKitchen, requestPayment, handleSwitchOrderTab, handleCreateOrderTab,
+    handleSendToKitchen, requestPayment, handleSwitchOrderTab, handleCreateOrderTab, handleCloseOrderTab,
   ]);
 
   // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
@@ -3514,7 +3519,7 @@ function FnbPosPageInner() {
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
         switchTab={handleSwitchOrderTab}
-        closeTab={pos.closeTab}
+        closeTab={handleCloseOrderTab}
         createTab={handleCreateOrderTab}
         onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
         onSearch={() => setSearchModalOpen(true)}
