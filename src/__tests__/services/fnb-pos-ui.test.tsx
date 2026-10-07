@@ -90,8 +90,8 @@ describe("useFnbPosState", () => {
     expect(result.current.activeTab).toBeDefined();
     expect(result.current.activeTab!.label).toBe("Mang về #1");
     expect(result.current.activeTab!.orderType).toBe("takeaway");
-    expect(result.current.activeTab!.customerName).toBe("Chọn khách");
-    expect(result.current.activeTab!.customerConfirmationRequired).toBe(true);
+    expect(result.current.activeTab!.customerName).toBe("Khách lẻ");
+    expect(result.current.activeTab!.customerConfirmationRequired).toBe(false);
   });
 
   it("tạo tab mới và tự switch sang", () => {

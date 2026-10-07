@@ -181,8 +181,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       id: nextTabId(),
       label: "Mang về #1",
       orderType: "takeaway",
-      customerName: "Chọn khách",
-        customerConfirmationRequired: true,
+      customerName: "Khách lẻ",
+        customerConfirmationRequired: false,
       lines: [],
     };
     return [initialTab];
@@ -229,7 +229,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       ) {
         return;
       }
-      setTabs(restored.tabs);
+      setTabs(restored.tabs.map(tab => ({ ...tab, customerName: tab.customerId ? tab.customerName : "Khách lẻ", customerConfirmationRequired: false })));
       setActiveTabId(restored.activeTabId);
     });
     return () => {
@@ -262,8 +262,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
         label,
         orderType,
         tableId,
-        customerName: "Chọn khách",
-        customerConfirmationRequired: true,
+        customerName: "Khách lẻ",
+        customerConfirmationRequired: false,
         lines: [],
       };
       tabsMutationVersionRef.current += 1;
@@ -290,8 +290,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
             id: nextTabId(),
             label: "Mang về #1",
             orderType: "takeaway",
-            customerName: "Chọn khách",
-        customerConfirmationRequired: true,
+            customerName: "Khách lẻ",
+        customerConfirmationRequired: false,
             lines: [],
           };
           next.push(fallback);
@@ -313,8 +313,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       id: nextTabId(),
       label: "Mang về #1",
       orderType: "takeaway",
-      customerName: "Chọn khách",
-        customerConfirmationRequired: true,
+      customerName: "Khách lẻ",
+        customerConfirmationRequired: false,
       lines: [],
     };
     setTabs([fresh]);

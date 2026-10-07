@@ -36,6 +36,7 @@ vi.mock("@/components/shared/floor-plan/table-action-sheet", () => ({
 }));
 
 import { TableFloorPlan } from "@/app/pos/fnb/components/table-floor-plan";
+import type { FnbOpenOrder } from "@/lib/fnb-open-orders";
 
 const tables = [
   { id: "inside-1", tableNumber: 1, name: "Ban 1", zone: "Trong Nha", status: "available", capacity: 2 },
@@ -47,6 +48,20 @@ function layout(id: string) {
 }
 
 describe("POS floor plan keeps table actions in the selected zone", () => {
+  it("opens unpaid takeaway and delivery bills directly in their own area", async () => {
+    mocks.tables.mockResolvedValue(layout("inside-1"));
+    const openOrder = vi.fn();
+    const orders = [{id:"takeaway",orderNumber:"KB1",orderType:"takeaway",status:"pending",provisionalTotal:30000,itemCount:1,createdAt:"2026-10-07T08:00:00Z"},{id:"delivery",orderNumber:"KB2",orderType:"delivery",status:"ready",provisionalTotal:50000,itemCount:2,createdAt:"2026-10-07T08:00:00Z"},{id:"paid",orderNumber:"KB3",orderType:"takeaway",status:"served",invoiceId:"paid-invoice",provisionalTotal:50000,itemCount:1,createdAt:"2026-10-07T08:00:00Z"}] as FnbOpenOrder[];
+    render(<TableFloorPlan tables={tables} onSelectTable={vi.fn()} openOrders={orders} onOpenOrder={openOrder} />);
+    await screen.findByRole("button",{name:"Ban 1"});
+    fireEvent.click(screen.getByRole("button",{name:"Mang về / Giao hàng (2)"}));
+    expect(screen.queryByRole("button",{name:"Ban 1"})).not.toBeInTheDocument();
+    expect(screen.queryByText(/KB3/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button",{name:/Mang về · KB1/}));
+    expect(openOrder).toHaveBeenCalledWith(orders[0]);
+    fireEvent.click(screen.getByRole("button",{name:/Giao hàng · KB2/}));
+    expect(openOrder).toHaveBeenLastCalledWith(orders[1]);
+  });
   afterEach(() => vi.unstubAllGlobals());
   beforeEach(() => {
     localStorage.clear();
