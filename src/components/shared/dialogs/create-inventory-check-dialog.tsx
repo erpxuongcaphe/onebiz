@@ -553,7 +553,7 @@ export function CreateInventoryCheckDialog({
                                     value={item.actualSmall}
                                     onChange={(value) => updateActualSmall(item.productId, value ?? 0)}
                                     min={0}
-                                    decimals={2}
+                                    decimals={4}
                                     className="h-9 text-right"
                                     aria-label={`Số lẻ ${item.productName}`}
                                   />
@@ -573,7 +573,7 @@ export function CreateInventoryCheckDialog({
                               value={item.actualStock}
                               onChange={(value) => updateActualStock(item.productId, value ?? 0)}
                               min={0}
-                              decimals={2}
+                              decimals={4}
                               className="h-9 text-right"
                               aria-label={`Tồn thực tế ${item.productName}`}
                             />
