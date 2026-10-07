@@ -1,5 +1,7 @@
 "use client";
 
+import { changeDraftOrderType } from "../order-type-selection";
+
 import { useState, useCallback, useEffect, useRef } from "react";
 import type {
   FnbOrderLine,
@@ -110,7 +112,7 @@ export interface UseFnbPosStateReturn {
   ) => void;
   /** Sprint POS-FNB-4: switch order type instant từ cart pill row.
    *  Guard: bị ignore nếu tab đã gửi bếp (kitchenOrderId tồn tại). */
-  setActiveTabOrderType: (next: OrderType) => void;
+  setActiveTabOrderType: (next: OrderType, table?: { id: string; tableNumber: string | number }) => void;
 
   // Cart lines
   addLine: (line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
@@ -350,20 +352,9 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // KHÔNG cho đổi sau khi đã gửi bếp (kitchenOrderId tồn tại) — bếp đã pha
   // theo "Tại quán" thì khách không thể đổi qua "Mang về" giữa chừng (sai
   // luồng phục vụ). UI guard ở fnb-cart.tsx, hook này guard backup.
-  const setActiveTabOrderType = useCallback((next: OrderType) => {
+  const setActiveTabOrderType = useCallback((next: OrderType, table?: { id: string; tableNumber: string | number }) => {
     tabsMutationVersionRef.current += 1;
-    setTabs((prev) =>
-      prev.map((t) =>
-        t.id === activeTabId && !t.kitchenOrderId
-          ? { ...t, orderType: next,
-              label: t.label.replace(/^(Mang về|Giao hàng|Tại quán)( #\d+)$/, `${next === "delivery" ? "Giao hàng" : next === "dine_in" ? "Tại quán" : "Mang về"}$2`),
-              ...(next !== "delivery" ? {
-              deliveryPlatform: undefined, deliveryFee: 0, platformCommissionPercent: 0,
-              deliveryDistanceTier: undefined, deliveryStaffId: undefined,
-            } : {}) }
-          : t,
-      ),
-    );
+    setTabs((prev) => prev.map((tab) => tab.id === activeTabId ? changeDraftOrderType(tab, next, table) : tab));
   }, [activeTabId]);
 
   // ── Cart lines (scoped to active tab) ──
