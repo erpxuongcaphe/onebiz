@@ -12,7 +12,7 @@ insert into products(id,tenant_id,code,name,unit,product_type,channel,inventory_
 do $$declare rows jsonb; preview jsonb; begin
  rows:='[{"productCode":"ZERO-QUOTE","branchCode":"QUAN","quantity":0,"costPrice":123.456}]';
  preview:=preview_inventory_opening_00442(rows);
- perform commit_inventory_opening_00442(gen_random_uuid(),rows,preview,'migration',now(),'Confirmed opening quote','zero.xlsx');
+ perform commit_inventory_opening_00442(gen_random_uuid(),rows,preview,'opening_cost',now(),'Confirmed opening quote','zero.xlsx');
  if not exists(select 1 from fnb_branch_product_cost_balances where product_id='00000000-0000-0000-0000-000000000070'
   and costed_quantity=0 and total_cost=0 and unit_cost=123.456 and opening_cost_confirmed) then raise exception 'ZERO_QUOTE_MISSING';end if;
  if exists(select 1 from stock_movements where product_id='00000000-0000-0000-0000-000000000070')

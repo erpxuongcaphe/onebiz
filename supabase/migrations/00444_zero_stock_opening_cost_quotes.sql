@@ -35,6 +35,10 @@ begin
       end if;
       if not (v_row->>'costTracked')::boolean and (v_row->>'quantity')::numeric>0 then$new$;
   if strpos(definition,old_text)=0 then raise exception 'OPENING_FUNCTION_PATCH_MISMATCH'; end if;
+  definition:=replace(definition,old_text,new_text);
+  old_text:=$old$or (r->>'quantity')::numeric<=0) then raise exception 'OPENING_CONTEXT_REQUIRED'; end if;$old$;
+  new_text:=$new$or (r->>'quantity')::numeric<0) then raise exception 'OPENING_CONTEXT_REQUIRED'; end if;$new$;
+  if strpos(definition,old_text)=0 then raise exception 'OPENING_COST_CONTEXT_PATCH_MISMATCH'; end if;
   execute replace(definition,old_text,new_text);
 
   definition:=pg_get_functiondef('public._capture_fnb_inventory_cost_event_00400()'::regprocedure);
