@@ -22,6 +22,7 @@ import {
   updateTableLayout as updateTableLayoutRemote,
   createTable as createTableRemote,
   updateTable as updateTableRemote,
+  deleteTable as deleteTableRemote,
   type FloorPlanZone,
   type TableLayout,
 } from "@/lib/services";
@@ -70,6 +71,9 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
   const [deletingDecoration, setDeletingDecoration] = useState(false);
   const decorationDeletePending = useRef(false);
+  const tableDeletePending = useRef(false);
+  const [deletingTable, setDeletingTable] = useState(false);
+  const [tableSearch, setTableSearch] = useState("");
 
   const { saveStatus, trackSave } = useSaveStatus();
   const { createFloorPlanZone, updateFloorPlanZone, deleteFloorPlanZone, updateTableLayout, createDecoration, updateDecoration, deleteDecoration, uploadFloorPlanBackground, removeFloorPlanBackground, createTableSvc } = useMemo(() => ({
@@ -90,10 +94,22 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const undoStack = useUndoStack<Snapshot>(
     { tables, decorations },
     (snap) => {
-      setTables(snap.tables);
-      setDecorations(snap.decorations);
-      // Đồng bộ lên server best-effort
-      snap.tables.forEach((t) =>
+      // Undo layout only: never restore removed objects or stale table identity/status.
+      const geometry = (item: CanvasTable | FloorPlanDecoration) => ({
+        positionX: item.positionX, positionY: item.positionY,
+        width: item.width, height: item.height, rotation: item.rotation,
+      });
+      const restoredTables = tables.map(table => {
+        const saved = snap.tables.find(item => item.id === table.id);
+        return saved ? { ...table, ...geometry(saved) } : table;
+      });
+      const restoredDecorations = decorations.map(decoration => {
+        const saved = snap.decorations.find(item => item.id === decoration.id);
+        return saved ? { ...decoration, ...geometry(saved) } : decoration;
+      });
+      setTables(restoredTables);
+      setDecorations(restoredDecorations);
+      restoredTables.forEach((t) =>
         updateTableLayout(t.id, {
           positionX: t.positionX,
           positionY: t.positionY,
@@ -102,7 +118,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           rotation: t.rotation,
         }).catch(() => undefined),
       );
-      snap.decorations.forEach((d) =>
+      restoredDecorations.forEach((d) =>
         updateDecoration(d.id, {
           positionX: d.positionX,
           positionY: d.positionY,
@@ -130,6 +146,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     if (!branchId) return;
     let cancelled = false;
     setLoading(true);
+    setZones([]);
+    setActiveZoneId(null);
+    setTables([]);
+    setDecorations([]);
     getFloorPlanZones(branchId)
       .then(async (zs) => {
         if (cancelled) return;
@@ -211,6 +231,34 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     [decorations, selectedDecorationId],
   );
 
+  const resetUndo = undoStack.reset;
+  useEffect(() => {
+    resetUndo();
+    setSelectedTableId(null);
+    setSelectedDecorationId(null);
+    setTableSearch("");
+  }, [activeZoneId, resetUndo]);
+
+  const handleDeleteSelectedTable = async () => {
+    if (!selectedTable || tableDeletePending.current || !hasPermission("system.manage_branches")) return;
+    const target = selectedTable;
+    if (!confirm(`Xoá bàn ${target.tableNumber} (${target.name}) khỏi danh sách sử dụng? Lịch sử bán hàng được giữ nguyên. Bàn còn đơn hoặc đang phục vụ sẽ không được xoá.`)) return;
+    tableDeletePending.current = true;
+    setDeletingTable(true);
+    try {
+      await trackSave(() => deleteTableRemote(branchId, target.id));
+      resetUndo();
+      setTables(current => current.filter(table => table.id !== target.id));
+      setSelectedTableId(current => current === target.id ? null : current);
+      toast({ title: `Đã xoá bàn ${target.tableNumber} khỏi danh sách sử dụng`, variant: "success" });
+    } catch (err) {
+      toast({ title: "Không xoá được bàn", description: err instanceof Error ? err.message : "Vui lòng thử lại.", variant: "error" });
+    } finally {
+      tableDeletePending.current = false;
+      setDeletingTable(false);
+    }
+  };
+
   // ─── Thêm bàn mới từ palette ───
   const handleAddShape = async (preset: ShapePreset) => {
     if (!activeZone || !tenant?.id) return;
@@ -242,6 +290,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
       const fresh = await getTablesByZone(activeZone.id);
       setTables(fresh as CanvasTable[]);
       setSelectedTableId(next.id);
+      setSelectedDecorationId(null);
       toast({ title: `Đã thêm ${preset.label}`, variant: "success" });
     } catch (err) {
       toast({
@@ -332,6 +381,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
       });
       setDecorations((prev) => [...prev, d]);
       setSelectedDecorationId(d.id);
+      setSelectedTableId(null);
     } catch (err) {
       toast({
         title: "Không thêm được",
@@ -364,6 +414,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     setDeletingDecoration(true);
     try {
       await deleteDecoration(target.id);
+      resetUndo();
       setDecorations((prev) => prev.filter((d) => d.id !== target.id));
       setSelectedDecorationId((current) => current === target.id ? null : current);
       toast({ title: `Đã xoá ${target.label || "vật trang trí"}`, variant: "success" });
@@ -633,7 +684,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         <aside
           id="floor-plan-tools"
           className={cn(
-            "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-2 lg:block lg:w-52 lg:border-r",
+            "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-3 lg:block lg:w-64 lg:border-r",
             mobileToolsOpen ? "block max-h-64 border-b" : "hidden",
           )}
         >
@@ -649,6 +700,39 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               }}
             />
           )}
+          {selectedTable && (
+            <div className="space-y-2 border-b pb-3">
+              <Button size="sm" variant="outline" className="w-full" onClick={() =>
+                handleTableLayoutChange(selectedTable.id, { locked: !selectedTable.locked })}>
+                <Icon name={selectedTable.locked ? "lock" : "lock_open"} size={16} />
+                {selectedTable.locked ? "Mở khoá vị trí" : "Khoá vị trí"}
+              </Button>
+              {hasPermission("system.manage_branches") && (
+                <Button size="sm" variant="outline" className="w-full text-status-error" disabled={deletingTable}
+                  onClick={handleDeleteSelectedTable}>
+                  <Icon name="delete" size={16} />{deletingTable ? "Đang xoá bàn..." : "Xoá bàn đang chọn"}
+                </Button>
+              )}
+            </div>
+          )}
+          <div className="space-y-2 border-b pb-3">
+            <Label htmlFor="floor-table-search">Bàn trong khu vực ({tables.length})</Label>
+            <Input id="floor-table-search" value={tableSearch} onChange={event => setTableSearch(event.target.value)}
+              placeholder="Tìm số hoặc tên bàn" className="h-9" />
+            <div className="max-h-36 overflow-y-auto space-y-1" aria-label="Danh sách bàn trong khu vực">
+              {[...tables].sort((a, b) => (a.tableNumber ?? 0) - (b.tableNumber ?? 0))
+                .filter(table => `${table.tableNumber} ${table.name ?? ""}`.toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi")))
+                .map(table => (
+                  <button key={table.id} type="button" aria-pressed={selectedTableId === table.id}
+                    onClick={() => { setSelectedTableId(table.id); setSelectedDecorationId(null); }}
+                    className={cn("flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm", selectedTableId === table.id ? "bg-primary/10 text-primary" : "hover:bg-muted")}>
+                    <span className="w-8 shrink-0 font-semibold tabular-nums">{table.tableNumber}</span>
+                    <span className="min-w-0 break-words">{table.name}</span>
+                  </button>
+                ))}
+              {tables.length === 0 && <p className="py-2 text-sm text-muted-foreground">Chưa có bàn trong khu vực.</p>}
+            </div>
+          </div>
           {/* Bàn */}
           <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
             Mẫu bàn
@@ -783,32 +867,6 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             )}
           </div>
 
-          {/* Thuộc tính bàn đang chọn */}
-          {selectedTable && (
-            <div className="mt-4 border-t pt-3 space-y-2">
-              <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
-                Vị trí bàn
-              </p>
-              <div className="space-y-1.5 text-xs">
-                <button
-                  onClick={() =>
-                    handleTableLayoutChange(selectedTable.id, {
-                      locked: !selectedTable.locked,
-                    })
-                  }
-                  className={cn(
-                    "w-full px-2 py-1.5 rounded text-xs flex items-center justify-center gap-1 border",
-                    selectedTable.locked
-                      ? "bg-status-warning/10 border-status-warning/30 text-status-warning"
-                      : "border-border hover:bg-muted",
-                  )}
-                >
-                  <Icon name={selectedTable.locked ? "lock" : "lock_open"} size={12} />
-                  {selectedTable.locked ? "Đã khoá" : "Khoá vị trí"}
-                </button>
-              </div>
-            </div>
-          )}
         </aside>
 
         {/* Canvas */}
@@ -830,7 +888,10 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 if (id) setSelectedDecorationId(null);
               }}
               selectedDecorationId={selectedDecorationId}
-              onSelectedDecorationIdChange={setSelectedDecorationId}
+              onSelectedDecorationIdChange={(id) => {
+                setSelectedDecorationId(id);
+                if (id) setSelectedTableId(null);
+              }}
               onTableLayoutChange={handleTableLayoutChange}
               onDecorationChange={handleDecorChange}
               containerWidth={Math.max(0, containerWidth - (isMobilePhone ? 16 : 32))}

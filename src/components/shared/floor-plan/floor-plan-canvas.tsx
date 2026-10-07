@@ -491,13 +491,13 @@ function TableNode({
   onTransformEnd: (e: Konva.KonvaEventObject<Event>) => void;
 }) {
   const draggable = mode === "edit" && !table.locked;
-  // Normalize status: "cleaning" hoặc undefined → "available" (CEO chốt 3 trạng thái).
+  // Unknown statuses fall back without changing the stored business state.
   const rawStatus = table.status ?? "available";
   const statusKey = (STATUS_FILL[rawStatus] !== undefined
     ? rawStatus
-    : "available") as "available" | "occupied" | "reserved";
+    : "available") as "available" | "occupied" | "reserved" | "cleaning";
 
-  const fill = table.color ?? STATUS_FILL[statusKey];
+  const fill = mode === "view" ? STATUS_FILL[statusKey] : table.color ?? STATUS_FILL[statusKey];
   const stroke = isSelected ? "#1f2937" : STATUS_STROKE[statusKey];
   const textColor = STATUS_TEXT[statusKey];
   const dash = STATUS_DASH[statusKey];
@@ -558,8 +558,12 @@ function TableNode({
         <Text
           text={table.name!}
           fontSize={Math.max(9, minSide / 9)}
-          fill={statusKey === "occupied" ? "rgba(255,255,255,0.85)" : "#6b7280"}
-          width={table.width}
+          fill={textColor}
+          width={Math.max(0, table.width - 12)}
+          x={6}
+          height={Math.max(0, table.height / 2 - numberFontSize / 2 - 4)}
+          wrap="none"
+          ellipsis
           y={table.height / 2 + numberFontSize / 2}
           align="center"
           listening={false}

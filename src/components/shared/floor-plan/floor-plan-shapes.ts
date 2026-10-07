@@ -64,26 +64,28 @@ export function getShapeDefaults(shape: TableShape): {
  * - occupied:  fill cam, viền cam đậm   — nổi bật nhất, cần chú ý
  * - reserved:  fill xanh dương nhạt, viền xanh dương nét đứt — cảnh báo "sắp tới"
  *
- * "cleaning" giữ trong type để khỏi vỡ data có sẵn, nhưng UI render fallback
- * sang "available" — cashier dọn xong tự đặt lại "Trống" là đủ.
+ * cleaning: nền xám, phân biệt bàn đang dọn với bàn trống.
  */
 export const STATUS_FILL: Record<string, string> = {
   available: "#ffffff",
   occupied: "#f59e0b",
   reserved: "#dbeafe",
+  cleaning: "#e5e7eb",
 };
 
 export const STATUS_STROKE: Record<string, string> = {
   available: "#10b981",
   occupied: "#d97706",
   reserved: "#3b82f6",
+  cleaning: "#6b7280",
 };
 
 /** Màu chữ số bàn — chọn theo độ tương phản với fill. */
 export const STATUS_TEXT: Record<string, string> = {
   available: "#1f2937",
-  occupied: "#ffffff",
+  occupied: "#422006",
   reserved: "#1e40af",
+  cleaning: "#374151",
 };
 
 /** Viền nét đứt cho trạng thái "đặt trước". */
@@ -91,6 +93,7 @@ export const STATUS_DASH: Record<string, number[] | undefined> = {
   available: undefined,
   occupied: undefined,
   reserved: [6, 4],
+  cleaning: undefined,
 };
 
 /**

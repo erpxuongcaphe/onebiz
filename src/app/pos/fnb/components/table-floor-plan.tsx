@@ -41,8 +41,8 @@ interface TableFloorPlanProps {
 
 const STATUS_CONFIG: Record<TableStatus, { label: string; dot: string }> = {
   available: { label: "Trống", dot: "bg-status-success" },
-  occupied: { label: "Đang phục vụ", dot: "bg-primary" },
-  reserved: { label: "Đặt trước", dot: "bg-status-warning" },
+  occupied: { label: "Đang phục vụ", dot: "bg-amber-500" },
+  reserved: { label: "Đặt trước", dot: "bg-blue-500" },
   cleaning: { label: "Đang dọn", dot: "bg-status-neutral" },
 };
 
@@ -61,6 +61,7 @@ export function TableFloorPlan({
   const { toast } = useToast();
   const [tableView, setTableView] = useState<"plan" | "list">("plan");
   const [tableSearch, setTableSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<TableStatus | "all">("all");
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [zoneTables, setZoneTables] = useState<CanvasTable[]>([]);
@@ -92,11 +93,16 @@ export function TableFloorPlan({
   useEffect(() => {
     if (!currentBranch?.id) return;
     let cancelled = false;
+    setActiveZoneId(null);
+    setZones([]);
+    setActionTable(null);
+    setTableSearch("");
+    setStatusFilter("all");
     getFloorPlanZones(currentBranch.id)
       .then((zs) => {
         if (cancelled) return;
         setZones(zs);
-        if (zs.length > 0 && !activeZoneId) setActiveZoneId(zs[0].id);
+        setActiveZoneId(zs[0]?.id ?? null);
       })
       .catch((err: unknown) => {
         if (cancelled) return;
@@ -207,20 +213,24 @@ export function TableFloorPlan({
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-white dark:bg-card px-4 py-2">
         <div><h2 className="text-base font-semibold">Chọn bàn phục vụ</h2><p className="text-xs text-muted-foreground">Chọn bàn để mở đơn; chuyển và gộp bàn trong chi tiết.</p></div>
         <div className="flex gap-1" role="group" aria-label="Cách xem bàn">
-          <button type="button" aria-pressed={tableView === "plan"} onClick={() => setTableView("plan")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
+          <button type="button" aria-pressed={tableView === "plan"} onClick={() => { setTableView("plan"); setStatusFilter("all"); setTableSearch(""); }} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
           <button type="button" aria-pressed={tableView === "list"} onClick={() => setTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
         </div>
       </div>
-      {tableView === "list" && <div className="shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm số bàn, tên hoặc khu vực..." value={tableSearch} onChange={(event) => setTableSearch(event.target.value)} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /></div>}
+      <div className="shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm số bàn, tên hoặc khu vực..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /></div>
       {/* Legend */}
       <div className="flex items-center gap-4 px-4 py-2 border-b bg-card shrink-0 flex-wrap">
+        <button type="button" aria-pressed={statusFilter === "all"} onClick={() => { setStatusFilter("all"); setTableView("list"); }}
+          className={cn("min-h-10 rounded px-2 text-sm", statusFilter === "all" && "bg-primary/10 text-primary")}>Tất cả ({tables.length})</button>
         {(["available", "occupied", "reserved", "cleaning"] as TableStatus[]).map((s) => (
-          <div key={s} className="flex items-center gap-2 text-xs text-foreground">
+          <button type="button" key={s} aria-pressed={statusFilter === s}
+            onClick={() => { setStatusFilter(s); setTableView("list"); }}
+            className={cn("flex min-h-10 items-center gap-2 rounded px-2 text-sm text-foreground", statusFilter === s && "bg-primary/10 ring-1 ring-primary/30")}>
             <span className={cn("h-2.5 w-2.5 rounded-full", STATUS_CONFIG[s].dot)} />
             <span>
               {STATUS_CONFIG[s].label} ({counts[s]})
             </span>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -265,7 +275,10 @@ export function TableFloorPlan({
           )
         ) : (
           <GridFallback
-            tables={tables.filter((table) => tableView === "plan" || (table.tableNumber + " " + table.name + " " + (table.zone ?? "")).toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi")))}
+            tables={tables.filter((table) => tableView === "plan" ||
+              ((statusFilter === "all" || table.status === statusFilter) &&
+              (table.tableNumber + " " + table.name + " " + (table.zone ?? "")).toLocaleLowerCase("vi").includes(tableSearch.trim().toLocaleLowerCase("vi"))))
+              .sort((a, b) => a.tableNumber - b.tableNumber)}
             onSelectTable={(t) => {
               // Convert RestaurantTable → CanvasTable shape tối thiểu
               setActionTable({
@@ -403,8 +416,8 @@ function GridFallback({
                     bgFor(t.status),
                   )}
                 >
-                  <span className="text-xl font-bold">{t.tableNumber}</span>
-                  <span className="text-xs text-muted-foreground mt-0.5 truncate max-w-full">
+                  <span className="text-2xl font-bold tabular-nums">{t.tableNumber}</span>
+                  <span className="text-sm mt-0.5 break-words max-w-full">
                     {t.name}
                   </span>
                   <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
@@ -431,9 +444,9 @@ function bgFor(s: TableStatus): string {
     case "available":
       return "bg-status-success/10 border-status-success/25";
     case "occupied":
-      return "bg-primary/10 border-primary/30";
+      return "bg-amber-50 border-amber-500 text-amber-950 dark:bg-amber-950 dark:text-amber-100";
     case "reserved":
-      return "bg-status-warning/10 border-status-warning/25";
+      return "bg-blue-50 border-blue-500 text-blue-950 dark:bg-blue-950 dark:text-blue-100";
     case "cleaning":
       return "bg-muted border-border";
   }
