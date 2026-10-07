@@ -108,6 +108,7 @@ import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 import { cn } from "@/lib/utils";
 import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { fnbOpenOrderLabel, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
 import { needsFnbTable } from "./order-type-selection";
@@ -414,7 +415,27 @@ function FnbPosPageInner() {
   const openOrders = useFnbOpenOrders(tenantId, branchId, Boolean(tenantId && branchId));
   const [openOrdersDialog, setOpenOrdersDialog] = useState(false);
   const [openingSharedOrder, setOpeningSharedOrder] = useState(false);
+  const openingSharedOrderLock = useRef(false);
   const sharedSnapshotVersions = useRef(new Map<string, number>());
+  const orderSelectionGeneration = useRef(0);
+  const tableRefreshGeneration = useRef(0);
+  const liveBranchRef = useRef(branchId);
+  liveBranchRef.current = branchId;
+  const refreshLiveTables = useCallback(async () => {
+    if (!branchId) return;
+    const request = ++tableRefreshGeneration.current;
+    try {
+      const nextTables = await getTablesByBranch(branchId);
+      if (liveBranchRef.current === branchId && request === tableRefreshGeneration.current) setTables(nextTables);
+    } catch (error) {
+      console.error("[FnB] live table refresh failed:", error);
+    }
+  }, [branchId]);
+  useLiveDataRefresh(refreshLiveTables, tenantId, branchId, ["restaurant_tables", "kitchen_orders"], Boolean(tenantId && branchId));
+  useEffect(() => {
+    void refreshLiveTables();
+    return () => { tableRefreshGeneration.current += 1; };
+  }, [refreshLiveTables]);
   const canCancelUnpaidOrder =
     hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -2153,6 +2174,14 @@ function FnbPosPageInner() {
     async (orderId: string, tabId: string, silent = false): Promise<boolean> => {
       try {
         const order = await getKitchenOrderById(orderId);
+        if (liveBranchRef.current !== branchId) return false;
+        if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
+          toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Mở danh sách Đơn mở để chọn lại.", variant: "warning" });
+          return false;
+        }
+        const version = new Date(order.updatedAt).getTime();
+        if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) > version) return true;
+        sharedSnapshotVersions.current.set(tabId, version);
         pos.loadSentLinesIntoTab(
           tabId,
           (order.items ?? []).map(kitchenItemToCartLine),
@@ -2169,6 +2198,7 @@ function FnbPosPageInner() {
         pos.updateTabMeta(tabId, {
           kitchenOrderId: order.id,
           tableId: order.tableId ?? undefined,
+          label: fnbOpenOrderLabel(order),
           orderType: order.orderType,
           orderNote: order.note ?? undefined,
           deliveryPlatform: order.deliveryPlatform ?? undefined,
@@ -2192,21 +2222,44 @@ function FnbPosPageInner() {
         return false;
       }
     },
-    [pos, toast],
+    [pos, toast, branchId],
   );
 
   const { switchTab: switchOrderTab } = pos;
-  const handleSwitchOrderTab = useCallback((tabId: string) => {
+  const handleSwitchOrderTab = useCallback(async (tabId: string) => {
+    const request = ++orderSelectionGeneration.current;
+    const tab = pos.tabs.find((entry) => entry.id === tabId);
+    // A local tab may belong to a bill paid/transferred on another device.
+    // Validate and reload the server snapshot before opening that saved bill.
+    if (tab?.kitchenOrderId && networkStatus.isOnline && !kitchenSubmitting) {
+      if (!await hydrateKitchenOrderIntoTab(tab.kitchenOrderId, tab.id)) return;
+      if (request !== orderSelectionGeneration.current || liveBranchRef.current !== branchId) return;
+    }
     switchOrderTab(tabId);
     setShowFloorPlan(false);
     setMobileCartOpen(true);
-  }, [switchOrderTab]);
+  }, [switchOrderTab, pos.tabs, networkStatus.isOnline, kitchenSubmitting, hydrateKitchenOrderIntoTab, branchId]);
+
+  const handleCreateOrderTab = useCallback(() => {
+    orderSelectionGeneration.current += 1;
+    pos.createTab("Mang về", "takeaway");
+    setShowFloorPlan(false);
+    setMobileCartOpen(false);
+  }, [pos]);
+
+  const handleCloseOrderTab = useCallback((tabId: string) => {
+    orderSelectionGeneration.current += 1;
+    pos.closeTab(tabId);
+  }, [pos]);
 
   const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
-    if (openingSharedOrder) return;
+    if (openingSharedOrderLock.current) return;
+    openingSharedOrderLock.current = true;
+    const selection = ++orderSelectionGeneration.current;
     setOpeningSharedOrder(true);
     try {
       const order = await getKitchenOrderById(summary.id);
+      if (liveBranchRef.current !== branchId || selection !== orderSelectionGeneration.current) return;
       if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
         toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
         void openOrders.refresh(); return;
@@ -2219,8 +2272,8 @@ function FnbPosPageInner() {
       pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, customerConfirmationRequired: existing?.customerConfirmationRequired ?? !existing?.customerId });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
     } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); }
-    finally { setOpeningSharedOrder(false); }
-  }, [openingSharedOrder, branchId, toast, openOrders, pos]);
+    finally { openingSharedOrderLock.current = false; setOpeningSharedOrder(false); }
+  }, [branchId, toast, openOrders, pos]);
 
   // Refresh only the read-only sent snapshot; never discard local unsent lines.
   const activeSharedTabId = pos.activeTab?.id;
@@ -2229,13 +2282,15 @@ function FnbPosPageInner() {
   useEffect(() => {
     const tabId = activeSharedTabId;
     const order = openOrders.orders.find((entry) => entry.id === activeSharedOrderId);
-    if (!tabId || !order) return;
+    // Wait until the local acknowledgement is applied before replacing sent
+    // lines. Otherwise a realtime response can race the send and double them.
+    if (!tabId || !order || kitchenSubmitting) return;
     const version = new Date(order.updatedAt).getTime();
     if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
     sharedSnapshotVersions.current.set(tabId, version);
     refreshSharedSentLines(tabId, (order.items ?? []).map(kitchenItemToCartLine));
-    refreshSharedTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, persistedOrderDiscountAmount: order.discountAmount, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
-  }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta]);
+    refreshSharedTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, persistedOrderDiscountAmount: order.discountAmount, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
+  }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta, kitchenSubmitting]);
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
@@ -2580,6 +2635,7 @@ function FnbPosPageInner() {
   const handleTableSelect = useCallback(
     (table: RestaurantTable) => {
       if (table.status === "available") {
+        orderSelectionGeneration.current += 1;
         pos.createTab(`Bàn ${table.tableNumber}`, "dine_in", table.id);
         setShowFloorPlan(false);
       } else if (table.status === "occupied" && table.currentOrderId) {
@@ -3038,8 +3094,8 @@ function FnbPosPageInner() {
       return;
     }
 
-    const sourceTab = pos.tabs.find((tab) => tab.tableId === source.id);
-    if (sourceTab && sourceTab.lines.length > 0) {
+    const sourceTabs = pos.tabs.filter((tab) => tab.kitchenOrderId === source.currentOrderId);
+    if (sourceTabs.some((tab) => tab.lines.length > 0)) {
       toast({
         title: "Bàn nguồn còn món chưa gửi bếp",
         description: "Hãy gửi bếp hoặc bỏ các món đang chờ trước khi gộp đơn.",
@@ -3052,15 +3108,15 @@ function FnbPosPageInner() {
     try {
       await mergeKitchenOrders(target.currentOrderId, [source.currentOrderId]);
 
-      const targetTab = pos.tabs.find((tab) => tab.tableId === target.id);
+      const targetTab = pos.tabs.find((tab) => tab.kitchenOrderId === target.currentOrderId);
       let targetTabId = targetTab?.id;
       if (!targetTabId) {
         targetTabId = pos.createTab(`Bàn ${target.tableNumber}`, "dine_in", target.id);
         pos.updateTabMeta(targetTabId, { kitchenOrderId: target.currentOrderId });
       }
       await hydrateKitchenOrderIntoTab(target.currentOrderId, targetTabId, true);
-      if (sourceTab) pos.closeTab(sourceTab.id);
-      pos.switchTab(targetTabId);
+      for (const sourceTab of sourceTabs) pos.closeTab(sourceTab.id);
+      handleSwitchOrderTab(targetTabId);
 
       setMergeSourceTable(null);
       setMergeTargetTableId("");
@@ -3098,6 +3154,7 @@ function FnbPosPageInner() {
     tables,
     toast,
     hydrateKitchenOrderIntoTab,
+    handleSwitchOrderTab,
   ]);
 
   // ── Customer selection ──
@@ -3282,28 +3339,37 @@ function FnbPosPageInner() {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       const inInput = tag === "INPUT" || tag === "TEXTAREA";
+      // Dialogs own their keyboard flow. Do not switch the underlying bill or
+      // send/pay it while the cashier is editing an item or another popup.
+      const inDialog = (e.target as HTMLElement)?.closest?.('[role="dialog"], [role="alertdialog"]');
+      if (inDialog && ((e.ctrlKey && ["Tab", "t", "w"].includes(e.key)) || e.key === "F9" || e.key === "F10")) {
+        e.preventDefault();
+        return;
+      }
+      if (inDialog && e.key === "Escape") return;
 
       // Tab management
       if (e.key === "Tab" && e.ctrlKey) {
         e.preventDefault();
+        if (pos.tabs.length === 0) return;
         const curIdx = pos.tabs.findIndex((t) => t.id === pos.activeTabId);
         if (e.shiftKey) {
           const prevIdx = (curIdx - 1 + pos.tabs.length) % pos.tabs.length;
-          pos.switchTab(pos.tabs[prevIdx].id);
+          handleSwitchOrderTab(pos.tabs[prevIdx].id);
         } else {
           const nextIdx = (curIdx + 1) % pos.tabs.length;
-          pos.switchTab(pos.tabs[nextIdx].id);
+          handleSwitchOrderTab(pos.tabs[nextIdx].id);
         }
         return;
       }
       if (e.key === "t" && e.ctrlKey) {
         e.preventDefault();
-        pos.createTab("Mang về", "takeaway");
+        handleCreateOrderTab();
         return;
       }
       if (e.key === "w" && e.ctrlKey && pos.tabs.length > 1) {
         e.preventDefault();
-        pos.closeTab(pos.activeTabId);
+        handleCloseOrderTab(pos.activeTabId);
         return;
       }
 
@@ -3354,7 +3420,7 @@ function FnbPosPageInner() {
   }, [
     pos, searchModalOpen, customerPickerOpen, paymentOpen,
     splitBillOpen, showFloorPlan, mobileCartOpen, keyboardHelpOpen,
-    handleSendToKitchen, requestPayment,
+    handleSendToKitchen, requestPayment, handleSwitchOrderTab, handleCreateOrderTab, handleCloseOrderTab,
   ]);
 
   // Sprint LOAD-1 (CEO 08/05): Phân biệt 3 state để loading UX đẹp hơn.
@@ -3453,8 +3519,8 @@ function FnbPosPageInner() {
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
         switchTab={handleSwitchOrderTab}
-        closeTab={pos.closeTab}
-        createTab={() => pos.createTab("Mang về", "takeaway")}
+        closeTab={handleCloseOrderTab}
+        createTab={handleCreateOrderTab}
         onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
         onSearch={() => setSearchModalOpen(true)}
         shift={currentShift}
