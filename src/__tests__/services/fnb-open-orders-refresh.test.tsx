@@ -31,5 +31,24 @@ describe("shared F&B order refresh", () => {
     await waitFor(() => expect(result.current.orders).toHaveLength(1));
     rerender({ enabled: false });
     expect(result.current.orders).toEqual([]);
+    expect(result.current.loading).toBe(false);
+  });
+  it("stops initial loading on failure and recovers on retry", async () => {
+    read.mockRejectedValueOnce(new Error("Mất mạng")).mockResolvedValueOnce([check("recovered")]);
+    const { result } = renderHook(() => useFnbOpenOrders("tenant", "branch"));
+    await waitFor(() => expect(result.current.error).toBe("Mất mạng"));
+    expect(result.current.loading).toBe(false);
+    expect(result.current.updatedAt).toBeNull();
+    await act(async () => { await result.current.refresh(); });
+    expect(result.current.orders[0].id).toBe("recovered");
+    expect(result.current.error).toBeNull();
+  });
+  it("does not overwrite newer orders with a slow earlier refresh", async () => {
+    let resolveOld!: (orders: FnbOpenOrder[]) => void;
+    read.mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; })).mockResolvedValueOnce([check("newer")]);
+    const { result } = renderHook(() => useFnbOpenOrders("tenant", "branch"));
+    await act(async () => { await result.current.refresh(); });
+    await act(async () => resolveOld([check("older")]));
+    expect(result.current.orders[0].id).toBe("newer");
   });
 });
