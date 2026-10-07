@@ -130,6 +130,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
     },
   );
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const toolsRef = useRef<HTMLElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
   // Mobile phone detect — chỉ check client-side để tránh hydration mismatch
   const [isMobilePhone, setIsMobilePhone] = useState(false);
@@ -682,6 +683,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         {/* Palette mẫu bàn + đồ trang trí + ảnh nền */}
         <aside
+          ref={toolsRef}
           id="floor-plan-tools"
           className={cn(
             "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-3 lg:block lg:w-64 lg:border-r",
@@ -885,12 +887,19 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
               selectedTableId={selectedTableId}
               onSelectedTableIdChange={(id) => {
                 setSelectedTableId(id);
-                if (id) setSelectedDecorationId(null);
+                if (id) {
+                  setSelectedDecorationId(null);
+                  setMobileToolsOpen(true);
+                  if (toolsRef.current) toolsRef.current.scrollTop = 0;
+                }
               }}
               selectedDecorationId={selectedDecorationId}
               onSelectedDecorationIdChange={(id) => {
                 setSelectedDecorationId(id);
-                if (id) setSelectedTableId(null);
+                if (id) {
+                  setSelectedTableId(null);
+                  setMobileToolsOpen(true);
+                }
               }}
               onTableLayoutChange={handleTableLayoutChange}
               onDecorationChange={handleDecorChange}
