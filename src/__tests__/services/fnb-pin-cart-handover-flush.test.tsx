@@ -80,7 +80,8 @@ describe("bàn giao PIN F&B giữ giỏ theo chi nhánh", () => {
       branchId,
       [
         expect.objectContaining({
-          customerName: "Khách lẻ",
+          customerName: "Chọn khách",
+          customerConfirmationRequired: true,
           lines: [expect.objectContaining({ productId: "americano", quantity: 1 })],
         }),
       ],
