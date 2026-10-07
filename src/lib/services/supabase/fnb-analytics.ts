@@ -326,22 +326,23 @@ export async function getRevenueByMenuItem(
   // P1-3B-R1 12/06/2026: thêm range — trước đây all-time mạo danh "kỳ này".
   const rangeWindow = toCreatedAtRangeWindow(range);
 
-  // Get completed kitchen order IDs
+  // Payment is an invoice fact, independent of preparation/serving status.
   let koQuery = supabase
     .from("kitchen_orders")
-    .select("id, invoice_id, invoices(status)")
+    .select("id, invoice_id, invoices!inner(status, source, ngay_chung_tu)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed");
+    .eq("invoices.source", "fnb")
+    .eq("invoices.status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
   if (rangeWindow) {
-    koQuery = koQuery.gte("created_at", rangeWindow.start).lt("created_at", rangeWindow.end);
+    koQuery = koQuery.gte("invoices.ngay_chung_tu", rangeWindow.start).lt("invoices.ngay_chung_tu", rangeWindow.end);
   }
 
   const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   const koIds = (koRows ?? [])
     .filter((order) => {
       const invoice = (order as Record<string, unknown>).invoices as { status: string } | null;
-      return Boolean(order.invoice_id && invoice && invoice.status !== "cancelled");
+      return Boolean(order.invoice_id && invoice?.status === "completed");
     })
     .map((order) => order.id);
   if (koIds.length === 0) return [];
@@ -396,9 +397,8 @@ export async function getRevenueByTable(
     .from("kitchen_orders")
     .select("table_id, restaurant_tables!kitchen_orders_table_id_fkey(name), invoice_id, invoices!inner(total, status, ngay_chung_tu)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed")
     .eq("invoices.source", "fnb")
-    .not("invoices.status", "eq", "cancelled")
+    .eq("invoices.status", "completed")
     .not("table_id", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
   if (rangeWindow) {
@@ -569,9 +569,10 @@ export async function getRevenueByOrderType(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("order_type, invoice_id, invoices(total)")
+    .select("order_type, invoice_id, invoices!inner(total, status, source)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed");
+    .eq("invoices.source", "fnb")
+    .eq("invoices.status", "completed");
   if (branchId) query = query.eq("branch_id", branchId);
 
   const rows = await fetchAllFnbRows(() => query.order("id", { ascending: true }), "[fnb.report]");
@@ -606,9 +607,10 @@ export async function getRevenueByPlatform(
 
   let query = supabase
     .from("kitchen_orders")
-    .select("delivery_platform, invoice_id, invoices(total)")
+    .select("delivery_platform, invoice_id, invoices!inner(total, status, source)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed")
+    .eq("invoices.source", "fnb")
+    .eq("invoices.status", "completed")
     .eq("order_type", "delivery")
     .not("delivery_platform", "is", null);
   if (branchId) query = query.eq("branch_id", branchId);
@@ -639,12 +641,13 @@ export async function getRevenueByCategory(
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
 
-  // Get completed kitchen order IDs
+  // Include paid orders even when kitchen work is still marked served.
   let koQuery = supabase
     .from("kitchen_orders")
-    .select("id")
+    .select("id, invoices!inner(status, source)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed");
+    .eq("invoices.source", "fnb")
+    .eq("invoices.status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
 
   const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
@@ -979,17 +982,18 @@ export async function getModifierStats(
   const tenantId = await getCurrentTenantId();
   const rangeWindow = toCreatedAtRangeWindow(range);
 
-  // 1. Lấy id đơn bếp đã completed (= đã thanh toán)
+  // 1. Select paid invoices, not kitchen preparation status.
   let koQuery = supabase
     .from("kitchen_orders")
-    .select("id")
+    .select("id, invoices!inner(status, source, ngay_chung_tu)")
     .eq("tenant_id", tenantId)
-    .eq("status", "completed");
+    .eq("invoices.source", "fnb")
+    .eq("invoices.status", "completed");
   if (branchId) koQuery = koQuery.eq("branch_id", branchId);
   if (rangeWindow) {
     koQuery = koQuery
-      .gte("created_at", rangeWindow.start)
-      .lt("created_at", rangeWindow.end);
+      .gte("invoices.ngay_chung_tu", rangeWindow.start)
+      .lt("invoices.ngay_chung_tu", rangeWindow.end);
   }
   const koRows = await fetchAllFnbRows(() => koQuery.order("id", { ascending: true }), "[fnb.kitchenOrders]");
   const koIds = (koRows ?? []).map((r) => r.id);

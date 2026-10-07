@@ -73,7 +73,8 @@ describe("F&B report invoice drill-down", () => {
 
     expect(queryCalls).toContainEqual(["select", [expect.stringContaining("invoices!inner(total, status, ngay_chung_tu)")]]);
     expect(queryCalls).toContainEqual(["eq", ["invoices.source", "fnb"]]);
-    expect(queryCalls).toContainEqual(["not", ["invoices.status", "eq", "cancelled"]]);
+    expect(queryCalls).toContainEqual(["eq", ["invoices.status", "completed"]]);
+    expect(queryCalls).not.toContainEqual(["eq", ["status", "completed"]]);
     expect(queryCalls).toContainEqual(["gte", ["invoices.ngay_chung_tu", "2026-09-21T17:00:00.000Z"]]);
     expect(queryCalls).toContainEqual(["lt", ["invoices.ngay_chung_tu", "2026-09-22T17:00:00.000Z"]]);
     expect(queryCalls).not.toContainEqual(["gte", ["created_at", expect.anything()]]);
