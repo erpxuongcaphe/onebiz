@@ -9,6 +9,21 @@ import type { BranchStock } from "@/lib/types";
 
 const supabase = getClient();
 
+// Hide inactive empty stock rows, while retaining any quantity or reservation.
+// Apply before pagination/count so the list, exports and totals agree.
+async function inactiveEmptyStockFilter(tenantId: string): Promise<string | undefined> {
+  const ids: string[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("products").select("id")
+      .eq("tenant_id", tenantId).eq("is_active", false)
+      .order("id").range(offset, offset + 999);
+    if (error) throw error;
+    ids.push(...(data ?? []).map((row) => row.id));
+    if ((data ?? []).length < 1000) break;
+  }
+  return ids.length ? `quantity.neq.0,reserved.neq.0,product_id.not.in.(${ids.join(",")})` : undefined;
+}
+
 export interface BranchStockRow {
   id: string;
   branchId: string;
@@ -196,6 +211,8 @@ export async function getBranchStockPage(params: {
   // A2 08/07 (Cách B): loại món menu F&B (không giữ tồn) khỏi danh sách tồn kho —
   // áp LUÔN nhờ inner join cố định ở trên (không còn phụ thuộc có filter hay không).
   query = query.neq("products.inventory_role", "fnb_menu_item");
+  const inactiveFilter = await inactiveEmptyStockFilter(tenantId);
+  if (inactiveFilter) query = query.or(inactiveFilter);
   if (params.search) {
     const esc = params.search.replace(/[%_]/g, "\\$&");
     query = query.or(
@@ -279,6 +296,7 @@ export async function getBranchStockAggregates(params: {
   const tenantId = await getCurrentTenantId();
   const pageSize = 1000;
   const rawRows: Array<Record<string, unknown>> = [];
+  const inactiveFilter = await inactiveEmptyStockFilter(tenantId);
   const productsRel =
     "products:product_id!inner ( product_type, code, name, cost_price, min_stock )";
 
@@ -291,6 +309,8 @@ export async function getBranchStockAggregates(params: {
       .order("branch_id", { ascending: true })
       .order("product_id", { ascending: true })
       .range(offset, offset + pageSize - 1);
+
+    if (inactiveFilter) query = query.or(inactiveFilter);
 
     if (params.branchId) query = query.eq("branch_id", params.branchId);
     if (params.productType) {
