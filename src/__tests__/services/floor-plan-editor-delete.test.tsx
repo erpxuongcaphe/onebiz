@@ -3,13 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   zones: vi.fn(), tables: vi.fn(), decorations: vi.fn(),
-  deleteDecoration: vi.fn(), deleteZone: vi.fn(), updateTable: vi.fn(), toast: vi.fn(), canManage: vi.fn(),
+  deleteDecoration: vi.fn(), deleteZone: vi.fn(), deleteTable: vi.fn(), updateTable: vi.fn(), toast: vi.fn(), canManage: vi.fn(),
 }));
 vi.mock("@/lib/services", () => ({
   getFloorPlanZones: mocks.zones, getTablesByZone: mocks.tables,
   getTablesByBranch: vi.fn(), createFloorPlanZone: vi.fn(),
   updateFloorPlanZone: vi.fn(), deleteFloorPlanZone: mocks.deleteZone,
-  updateTableLayout: vi.fn(), createTable: vi.fn(), updateTable: mocks.updateTable,
+  updateTableLayout: vi.fn(), createTable: vi.fn(), updateTable: mocks.updateTable, deleteTable: mocks.deleteTable,
 }));
 vi.mock("@/lib/services/supabase/floor-plan-decorations", () => ({
   getDecorationsByZone: mocks.decorations, deleteDecoration: mocks.deleteDecoration,
@@ -51,6 +51,7 @@ describe("floor plan deletion targets", () => {
     mocks.decorations.mockResolvedValue([{ id: "tree-1", label: "Cây cảnh", type: "plant",
       width: 50, height: 50, positionX: 0, positionY: 0, rotation: 0 }]);
     mocks.deleteDecoration.mockResolvedValue(undefined);
+    mocks.deleteTable.mockResolvedValue(undefined);
     vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} });
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
     vi.stubGlobal("confirm", vi.fn(() => false));
@@ -62,7 +63,7 @@ describe("floor plan deletion targets", () => {
     await waitFor(() => expect(screen.queryByRole("button", { name: "Chọn Cây cảnh" })).not.toBeInTheDocument());
     expect(mocks.deleteDecoration).toHaveBeenCalledExactlyOnceWith("tree-1");
     expect(mocks.deleteZone).not.toHaveBeenCalled();
-    for (let i = 1; i <= 9; i++) expect(screen.getByText(`Bàn ${i}`)).toBeInTheDocument();
+    for (let i = 1; i <= 9; i++) expect(screen.getAllByText(`Bàn ${i}`).length).toBeGreaterThan(0);
   });
 
   it("retains the tree and selection if saving fails", async () => {
@@ -101,7 +102,7 @@ describe("floor plan deletion targets", () => {
     fireEvent.change(screen.getByLabelText("Tên bàn"), { target: { value: "Bàn cửa sổ" } });
     expect(mocks.updateTable).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Lưu thông tin bàn" }));
-    await waitFor(() => expect(screen.getByText("Bàn cửa sổ")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("Bàn cửa sổ").length).toBeGreaterThan(0));
     expect(mocks.updateTable).toHaveBeenCalledExactlyOnceWith("xtb", "table-0", { tableNumber: 19, name: "Bàn cửa sổ" });
     expect(screen.getByLabelText("Số bàn")).toHaveValue(19);
     expect(mocks.deleteZone).not.toHaveBeenCalled();
@@ -116,7 +117,7 @@ describe("floor plan deletion targets", () => {
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: "Không lưu được thông tin bàn", description: "Số bàn 2 đã tồn tại trong chi nhánh.",
     })));
-    expect(screen.getByText("Bàn 1")).toBeInTheDocument();
+    expect(screen.getAllByText("Bàn 1").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "Lưu thông tin bàn" })).toBeEnabled();
   });
 
@@ -150,5 +151,53 @@ describe("floor plan deletion targets", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
     expect(screen.queryByLabelText("Số bàn")).not.toBeInTheDocument();
     expect(mocks.updateTable).not.toHaveBeenCalled();
+    expect(screen.queryByRole("button", { name: "Xoá bàn đang chọn" })).not.toBeInTheDocument();
+  });
+
+  it("soft-deletes only the confirmed table through the existing branch-scoped service", async () => {
+    vi.mocked(window.confirm).mockReturnValue(true);
+    render(<FloorPlanEditor branchId="xtb" scope="branch" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xoá bàn đang chọn" }));
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Chọn Bàn 1" })).not.toBeInTheDocument());
+    expect(mocks.deleteTable).toHaveBeenCalledExactlyOnceWith("xtb", "table-0");
+    expect(mocks.deleteZone).not.toHaveBeenCalled();
+    expect(mocks.deleteDecoration).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Chọn Bàn 2" })).toBeInTheDocument();
+  });
+
+  it("retains the table on cancellation or an active-order rejection", async () => {
+    render(<FloorPlanEditor branchId="xtb" scope="branch" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Xoá bàn đang chọn" }));
+    expect(mocks.deleteTable).not.toHaveBeenCalled();
+    vi.mocked(window.confirm).mockReturnValue(true);
+    mocks.deleteTable.mockRejectedValueOnce(new Error("Bàn còn đơn đang phục vụ"));
+    fireEvent.click(screen.getByRole("button", { name: "Xoá bàn đang chọn" }));
+    await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Không xoá được bàn" })));
+    expect(screen.getByRole("button", { name: "Chọn Bàn 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Xoá bàn đang chọn" })).toBeEnabled();
+  });
+
+  it("submits table deletion once while pending", async () => {
+    let resolve!: () => void;
+    mocks.deleteTable.mockImplementationOnce(() => new Promise<void>(done => { resolve = done; }));
+    vi.mocked(window.confirm).mockReturnValue(true);
+    render(<FloorPlanEditor branchId="xtb" scope="branch" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
+    const button = screen.getByRole("button", { name: "Xoá bàn đang chọn" });
+    fireEvent.click(button);
+    fireEvent.click(button);
+    expect(mocks.deleteTable).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    await act(async () => resolve());
+  });
+
+  it("clears table selection when a decoration is selected", async () => {
+    render(<FloorPlanEditor branchId="xtb" scope="branch" />);
+    fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chọn Cây cảnh" }));
+    expect(screen.queryByLabelText("Số bàn")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Xoá bàn đang chọn" })).not.toBeInTheDocument();
   });
 });

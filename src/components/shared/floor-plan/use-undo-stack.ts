@@ -20,6 +20,12 @@ export function useUndoStack<T>(
   const [cursor, setCursor] = useState(0);
   const ignoreNext = useRef(false);
 
+  const reset = useCallback(() => {
+    setStack([]);
+    setCursor(0);
+    ignoreNext.current = false;
+  }, []);
+
   const push = useCallback(
     (label: string) => {
       if (ignoreNext.current) {
@@ -78,6 +84,7 @@ export function useUndoStack<T>(
     push,
     undo,
     redo,
+    reset,
     canUndo: cursor > 0,
     canRedo: cursor < stack.length - 1,
   };

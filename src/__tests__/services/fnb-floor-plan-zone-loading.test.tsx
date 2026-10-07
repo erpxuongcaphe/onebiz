@@ -85,4 +85,31 @@ describe("POS floor plan keeps table actions in the selected zone", () => {
     fireEvent.click(screen.getByRole("button", { name: /10\s*Ban 10/ }));
     expect(screen.getByTestId("action-zone")).toHaveTextContent("Ngoai San");
   });
+
+  it("searches all zones from the plan and retains numeric table order", async () => {
+    mocks.tables.mockResolvedValue(layout("inside-1"));
+    render(<TableFloorPlan tables={[...tables].reverse()} onSelectTable={vi.fn()} />);
+    await screen.findByRole("button", { name: "Ban 1" });
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm bàn" }), { target: { value: "Ngoai" } });
+    expect(screen.getByRole("button", { name: /10\s*Ban 10/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^1\s*Ban 1Trống/ })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm bàn" }), { target: { value: "" } });
+    const buttons = screen.getAllByRole("button").filter(button => /^\d/.test(button.textContent ?? ""));
+    expect(buttons.map(button => button.textContent)).toEqual([
+      expect.stringContaining("1Ban 1"), expect.stringContaining("10Ban 10"),
+    ]);
+  });
+
+  it("filters serving tables without changing their status or opening orders", async () => {
+    mocks.tables.mockResolvedValue(layout("inside-1"));
+    const onSelect = vi.fn();
+    render(<TableFloorPlan tables={[tables[0], { ...tables[1], status: "occupied" }]} onSelectTable={onSelect} />);
+    await screen.findByRole("button", { name: "Ban 1" });
+    fireEvent.click(screen.getByRole("button", { name: "Đang phục vụ (1)" }));
+    expect(screen.getByRole("button", { name: /10\s*Ban 10/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^1\s*Ban 1Trống/ })).not.toBeInTheDocument();
+    expect(onSelect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Tất cả (2)" }));
+    expect(screen.getByRole("button", { name: /^1\s*Ban 1Trống/ })).toBeInTheDocument();
+  });
 });
