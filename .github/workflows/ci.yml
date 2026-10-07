@@ -44,6 +44,8 @@ jobs:
           createdb opening_stock_test
           node scripts/fnb-db-test/extract-opening-stock.mjs /tmp/opening-stock-helpers.sql
           PGDATABASE=opening_stock_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00442_safe_opening_stock.integration.sql
+          node scripts/fnb-db-test/extract-inventory-cost-trigger.mjs /tmp/fnb-inventory-cost-trigger.sql
+          PGDATABASE=opening_stock_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00444_zero_stock_opening_cost_quotes.integration.sql
 
       - name: Verify branch print permissions, idempotency and device claims
         env:
