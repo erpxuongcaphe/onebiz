@@ -100,13 +100,14 @@ import {
   type CatalogStatus,
 } from "./shift-catalog-guards";
 import { printShiftReport } from "@/lib/print-shift-report";
-import type { RestaurantTable, FnbOrderLine, KitchenOrderItem } from "@/lib/types/fnb";
+import type { RestaurantTable, FnbOrderLine, KitchenOrderItem, OrderType } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format";
 import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 import { cn } from "@/lib/utils";
+import { needsFnbTable } from "./order-type-selection";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
 import { FnbHeader } from "./components/fnb-header";
@@ -276,6 +277,7 @@ function FnbPosPageInner() {
     tableId?: string | null;
   } | null>(null);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
+  const [selectDineInTabId, setSelectDineInTabId] = useState<string | null>(null);
   const [mergeSourceTable, setMergeSourceTable] = useState<RestaurantTable | null>(null);
   const [mergeTargetTableId, setMergeTargetTableId] = useState("");
   const [mergeInProgress, setMergeInProgress] = useState(false);
@@ -1649,10 +1651,29 @@ function FnbPosPageInner() {
   // ── Send to kitchen (offline-aware) ──
   // - Nếu tab chưa có kitchenOrderId → tạo đơn bếp mới (sendToKitchen)
   // - Nếu tab đã có kitchenOrderId → gửi bổ sung (addItemsToExistingOrder)
+  const requireTable = useCallback(() => {
+    const tab = pos.activeTab;
+    if (!needsFnbTable(tab)) return false;
+    if (tab && !tab.kitchenOrderId) setSelectDineInTabId(tab.id);
+    toast({ title: "Đơn tại quán chưa có bàn", description: tab?.kitchenOrderId ? "Đơn đã gửi bếp đang thiếu bàn. Cần kiểm tra đơn trước khi tiếp tục." : "Chọn bàn trước khi gửi bếp hoặc thanh toán. Giỏ hàng vẫn được giữ nguyên.", variant: "warning" });
+    return true;
+  }, [pos.activeTab, toast]);
+
+  const handleOrderTypeChange = useCallback((next: OrderType) => {
+    const tab = pos.activeTab;
+    if (!tab || tab.kitchenOrderId) return;
+    if (next === "dine_in") {
+      setSelectDineInTabId(tab.id);
+    } else {
+      pos.setActiveTabOrderType(next);
+    }
+  }, [pos]);
+
   const fnbKitchenSubmitLockRef = useRef(false);
   const handleSendToKitchen = useCallback(async (): Promise<string | null> => {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return null;
+    if (requireTable()) return null;
     if (fnbKitchenSubmitLockRef.current) {
       toast({
         title: "Đang gửi bếp...",
@@ -1919,7 +1940,7 @@ function FnbPosPageInner() {
       fnbKitchenSubmitLockRef.current = false;
       setKitchenSubmitting(false);
     }
-  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline]);
+  }, [pos, tenantId, branchId, userId, toast, settings, user, networkStatus.isOnline, requireTable]);
 
   // ── Voucher / Coupon apply ──
   // Kết quả này là xem trước; máy chủ tính lại và ghi số tiền thật lúc thanh toán.
@@ -2240,6 +2261,7 @@ function FnbPosPageInner() {
   // ── Payment ──
   const handlePayment = useCallback(
     async (payload: FnbPaymentConfirmPayload) => {
+      if (requireTable()) return false;
       if (fnbSubmitLockRef.current) {
         toast({
           title: "Đang xử lý thanh toán...",
@@ -2500,7 +2522,7 @@ function FnbPosPageInner() {
         fnbSubmitLockRef.current = false;
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits, requireTable]
   );
 
   // ── Table select (from floor plan) ──
@@ -2592,6 +2614,7 @@ function FnbPosPageInner() {
    * vẫn KHÔNG bị chặn — bếp phải pha được kể cả khi chưa mở ca).
    */
   const requestPayment = useCallback((): boolean => {
+    if (requireTable()) return false;
     if (!canCheckout) {
       toast({
         title: "Chỉ thu ngân được thanh toán",
@@ -2666,7 +2689,7 @@ function FnbPosPageInner() {
       case "khong_lam_gi":
         return false;
     }
-  }, [canCheckout, pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab]);
+  }, [canCheckout, pos.activeTab, pos.lineCount, networkStatus.isOnline, shiftState.status, toast, hydrateKitchenOrderIntoTab, requireTable]);
 
   const handleOpenShift = useCallback(
     async (startingCash: number) => {
@@ -3628,7 +3651,7 @@ function FnbPosPageInner() {
           onPayment={requestPayment}
           canCheckout={canCheckout}
           onSplitBill={handleOpenSplitBill}
-          onChangeOrderType={pos.setActiveTabOrderType}
+          onChangeOrderType={handleOrderTypeChange}
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
@@ -3844,7 +3867,7 @@ function FnbPosPageInner() {
               onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
               canCheckout={canCheckout}
               onSplitBill={handleOpenSplitBill}
-              onChangeOrderType={pos.setActiveTabOrderType}
+              onChangeOrderType={handleOrderTypeChange}
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
@@ -4091,6 +4114,25 @@ function FnbPosPageInner() {
           });
         }}
       />
+
+      <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Chọn bàn · Tại quán</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">{currentBranch?.name} · Chọn bàn trống cho đơn này. Hủy chọn sẽ giữ nguyên loại đơn và các món.</p>
+          <div className="grid grid-cols-3 gap-2 max-h-[320px] overflow-y-auto sm:grid-cols-4">
+            {tables.filter((table) => table.status === "available" && !pos.tabs.some((tab) => tab.id !== selectDineInTabId && tab.tableId === table.id)).map((table) => (
+              <button key={table.id} type="button" className="h-14 rounded-md border border-status-success/40 bg-status-success/5 font-semibold text-status-success hover:bg-status-success/10" onClick={() => {
+                const draft = pos.tabs.find((tab) => tab.id === selectDineInTabId);
+                if (!draft || draft.kitchenOrderId || draft.id !== pos.activeTabId) { setSelectDineInTabId(null); return; }
+                pos.setActiveTabOrderType("dine_in", table);
+                setSelectDineInTabId(null);
+              }}>Bàn {table.tableNumber}</button>
+            ))}
+          </div>
+          {!tables.some((table) => table.status === "available" && !pos.tabs.some((tab) => tab.id !== selectDineInTabId && tab.tableId === table.id)) && <p className="text-sm text-muted-foreground">Không có bàn trống. Kiểm tra sơ đồ bàn hoặc chọn Mang về nếu khách không dùng tại quán.</p>}
+          <button type="button" className="h-11 rounded-md border border-border px-4 font-medium hover:bg-muted" onClick={() => setSelectDineInTabId(null)}>Hủy chọn bàn</button>
+        </DialogContent>
+      </Dialog>
 
       {/* Transfer table dialog */}
       <Dialog open={transferTableOpen} onOpenChange={setTransferTableOpen}>
