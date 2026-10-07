@@ -21,6 +21,7 @@ import {
   getTablesByBranch,
   updateTableLayout as updateTableLayoutRemote,
   createTable as createTableRemote,
+  updateTable as updateTableRemote,
   type FloorPlanZone,
   type TableLayout,
 } from "@/lib/services";
@@ -40,6 +41,7 @@ import {
   type FloorPlanDecoration,
 } from "@/lib/services/supabase/floor-plan-decorations";
 import { cn } from "@/lib/utils";
+import { TableIdentityEditor } from "./table-identity-editor";
 
 // Lazy load Konva canvas (tránh SSR + giảm bundle)
 const FloorPlanCanvas = dynamic(
@@ -56,7 +58,7 @@ interface FloorPlanEditorProps {
 
 export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditorProps) {
   const { toast } = useToast();
-  const { tenant } = useAuth();
+  const { tenant, hasPermission } = useAuth();
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
   const [activeZoneId, setActiveZoneId] = useState<string | null>(null);
   const [tables, setTables] = useState<CanvasTable[]>([]);
@@ -635,6 +637,18 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             mobileToolsOpen ? "block max-h-64 border-b" : "hidden",
           )}
         >
+          {selectedTable && hasPermission("system.manage_branches") && (
+            <TableIdentityEditor
+              key={selectedTable.id}
+              table={selectedTable}
+              onSave={async (input) => {
+                const updated = await trackSave(() => updateTableRemote(branchId, selectedTable.id, input));
+                setTables((current) => current.map((table) => table.id === selectedTable.id
+                  ? { ...table, tableNumber: updated.tableNumber, name: updated.name }
+                  : table));
+              }}
+            />
+          )}
           {/* Bàn */}
           <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
             Mẫu bàn
@@ -773,26 +787,9 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           {selectedTable && (
             <div className="mt-4 border-t pt-3 space-y-2">
               <p className="text-xs uppercase font-semibold text-muted-foreground tracking-wide">
-                Bàn đang chọn
+                Vị trí bàn
               </p>
               <div className="space-y-1.5 text-xs">
-                <div>
-                  <Label htmlFor="t-name" className="text-xs">Tên</Label>
-                  <Input
-                    id="t-name"
-                    value={selectedTable.name ?? ""}
-                    onChange={(e) =>
-                      setTables((prev) =>
-                        prev.map((t) =>
-                          t.id === selectedTable.id
-                            ? { ...t, name: e.target.value }
-                            : t,
-                        ),
-                      )
-                    }
-                    className="h-7 text-xs"
-                  />
-                </div>
                 <button
                   onClick={() =>
                     handleTableLayoutChange(selectedTable.id, {
