@@ -21,7 +21,7 @@ export function useFnbOpenOrders(tenantId: string | undefined, branchId?: string
     }
   }, [enabled, tenantId, branchId, scope]);
   useEffect(() => { void refresh(); return () => { generation.current += 1; }; }, [refresh]);
-  const connected = useLiveDataRefresh(refresh, tenantId, branchId, ["kitchen_orders", "invoices"], enabled);
+  const connected = useLiveDataRefresh(refresh, tenantId, branchId, ["kitchen_orders"], enabled);
   const visible = snapshot.scope === scope && enabled;
   return { orders: visible ? snapshot.orders : [], error: visible ? snapshot.error : null, updatedAt: visible ? snapshot.updatedAt : null, loading: !visible || !snapshot.updatedAt, connected, refresh };
 }

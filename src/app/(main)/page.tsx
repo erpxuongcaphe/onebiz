@@ -161,7 +161,7 @@ export default function TongQuanPage() {
   }, [fetchPhase1, fetchPhase2, isReady]);
 
   const refreshDashboard = useCallback(async () => { await Promise.all([fetchPhase1(), fetchPhase2()]); }, [fetchPhase1, fetchPhase2]);
-  const dashboardLive = useLiveDataRefresh(refreshDashboard, tenant?.id, activeBranchId, ["invoices", "cash_transactions", "kitchen_orders"], isReady);
+  const dashboardLive = useLiveDataRefresh(refreshDashboard, tenant?.id, activeBranchId, ["dashboard_live_signals", "kitchen_orders"], isReady);
 
   const [clientNow, setClientNow] = useState<Date | null>(null);
   useEffect(() => {
