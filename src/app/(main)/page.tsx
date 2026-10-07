@@ -97,6 +97,7 @@ export default function TongQuanPage() {
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
   // quay vòng. Giờ KPI xuất hiện <500ms, phần còn lại fill dần.
   const [kpiLoading, setKpiLoading] = useState(true);
+  const [dashboardUpdatedAt, setDashboardUpdatedAt] = useState<Date | null>(null);
 
   // Data state
   const [kpis, setKpis] = useState<DashboardKpis | null>(null);
@@ -119,6 +120,7 @@ export default function TongQuanPage() {
         getInventoryTurnover().catch(() => null as InventoryTurnoverResult | null),
       ]);
       setKpis(kpiRes);
+      setDashboardUpdatedAt(new Date());
       setTurnover(turnoverRes);
     } catch {
       // Silently fail — show empty state
@@ -243,6 +245,7 @@ export default function TongQuanPage() {
           <Icon name="schedule" size={14} className="text-muted-foreground" />
           <span className="min-h-5 capitalize">{formattedDate}</span>
           <span className={dashboardLive ? "text-status-success" : "text-muted-foreground"}>{dashboardLive ? "· Trực tiếp" : "· Tự cập nhật 30 giây"}</span>
+          {dashboardUpdatedAt && <span className="text-xs text-muted-foreground">· Cập nhật {dashboardUpdatedAt.toLocaleTimeString("vi-VN")}</span>}
         </div>
       </div>
 

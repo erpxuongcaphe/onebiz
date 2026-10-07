@@ -5,15 +5,16 @@ import { fnbOpenOrderLabel, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 import { formatCurrency } from "@/lib/format";
 const normalize = (value: string) => value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").toLowerCase();
-export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh }: {
+export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh, updatedAt }: {
   open: boolean; onOpenChange: (open: boolean) => void; orders: FnbOpenOrder[]; drafts: FnbTabSnapshot[];
   onOpenOrder: (order: FnbOpenOrder) => void; onOpenDraft: (id: string) => void;
-  loading: boolean; error: string | null; connected: boolean; busy: boolean; onRefresh: () => void;
+  updatedAt: Date | null; loading: boolean; error: string | null; connected: boolean; busy: boolean; onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
   const filtered = orders.filter((order) => normalize(`${fnbOpenOrderLabel(order)} ${order.orderNumber} ${order.createdByName ?? ""}`).includes(normalize(search.trim())));
   return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="sm:max-w-xl"><DialogHeader><DialogTitle>Đơn đang mở · {orders.length}</DialogTitle></DialogHeader>
     <div className="flex items-center justify-between gap-2 text-sm"><span className={connected && !error ? "text-status-success" : "text-muted-foreground"}>{error ? "Chưa cập nhật được" : connected ? "Trực tiếp · toàn chi nhánh" : "Tự cập nhật mỗi 30 giây"}</span><button type="button" className="min-h-11 px-3 font-medium text-primary" onClick={onRefresh}>Làm mới</button></div>
+    {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {updatedAt.toLocaleTimeString("vi-VN")}</p>}
     <input aria-label="Tìm đơn đang mở" placeholder="Tìm bàn, mã đơn hoặc nhân viên…" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-11 w-full rounded-md border bg-background px-3 text-sm" />
     {error && <p role="alert" className="text-sm text-status-warning">{error}. Dữ liệu trước đó có thể đã thay đổi.</p>}
     <div className="max-h-[55dvh] overflow-y-auto divide-y divide-border">

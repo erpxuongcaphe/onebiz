@@ -2216,16 +2216,19 @@ function FnbPosPageInner() {
   }, [openingSharedOrder, branchId, toast, openOrders, pos]);
 
   // Refresh only the read-only sent snapshot; never discard local unsent lines.
+  const activeSharedTabId = pos.activeTab?.id;
+  const activeSharedOrderId = pos.activeTab?.kitchenOrderId;
+  const { loadSentLinesIntoTab: refreshSharedSentLines, updateTabMeta: refreshSharedTabMeta } = pos;
   useEffect(() => {
-    const tabId = pos.activeTab?.id;
-    const order = openOrders.orders.find((entry) => entry.id === pos.activeTab?.kitchenOrderId);
+    const tabId = activeSharedTabId;
+    const order = openOrders.orders.find((entry) => entry.id === activeSharedOrderId);
     if (!tabId || !order) return;
     const version = new Date(order.updatedAt).getTime();
     if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
     sharedSnapshotVersions.current.set(tabId, version);
-    pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
-    pos.updateTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, persistedOrderDiscountAmount: order.discountAmount, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
-  }, [openOrders.orders, pos.activeTab?.id, pos.activeTab?.kitchenOrderId, pos.loadSentLinesIntoTab, pos.updateTabMeta]);
+    refreshSharedSentLines(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+    refreshSharedTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, persistedOrderDiscountAmount: order.discountAmount, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
+  }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta]);
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
@@ -4158,7 +4161,7 @@ function FnbPosPageInner() {
         }}
       />
 
-      <FnbOpenOrdersDialog open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
+      <FnbOpenOrdersDialog updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
