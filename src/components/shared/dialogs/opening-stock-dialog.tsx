@@ -34,7 +34,6 @@ export function OpeningStockDialog({open,onOpenChange,onFinished,mode="file"}: {
     const date=new Date(sourceAt);
     if(!reason.trim()||!Number.isFinite(date.getTime())) throw new Error("Nhập lý do và ngày giờ chốt dữ liệu trước khi xem trước.");
     if(date.getTime()>Date.now()+5*60*1000) throw new Error("Ngày giờ chốt dữ liệu không được ở tương lai. Kiểm tra lại giờ trên thiết bị hoặc chọn đúng thời điểm chốt nguồn.");
-    if(purpose==="opening_cost" && rows.some(row=>row.quantity===0)) throw new Error("Bổ sung giá vốn dùng cho hàng đang có lượng dương. Hãy bỏ các dòng lượng 0 hoặc chọn mục đích khởi tạo tồn.");
     const next=await previewOpeningStock(rows);
     if(generation!==requestGeneration.current) throw new Error("Lượt xem trước đã đóng.");
     if(purpose==="opening_cost"&&next.some(row=>row.delta!==0)) throw new Error("Bổ sung giá vốn giữ nguyên số lượng. Hãy điền lượng đúng bằng tồn đang có tại quán.");
