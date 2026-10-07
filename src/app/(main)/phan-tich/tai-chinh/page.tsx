@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -17,7 +17,9 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { ReportDataTable, ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { Button } from "@/components/ui/button";
+import { sortReportRows } from "@/lib/reports/table-sort";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
 import {
@@ -154,19 +156,31 @@ export default function TaiChinhPage() {
   const { tenant } = useAuth();
   const tenantName = tenant?.name;
   const { toast } = useToast();
-  const { preset, range, setPreset, setCustomRange } =
-    useReportState({ defaultPreset: "thisYear", defaultViewMode: "chart" });
+  const { preset, range, setPreset, setCustomRange, viewMode, setViewMode } =
+    useReportState({ defaultPreset: "thisYear", defaultViewMode: "table" });
   const selectedPeriodLabel = formatSelectedPeriodLabel(preset, range);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
   const requestIdRef = useRef(0);
   const [kpis, setKpis] = useState<FinanceKpis | null>(null);
   const [revenueVsExpenseData, setRevenueVsExpenseData] = useState<MultiSeriesPoint[]>([]);
   const [expenseBreakdownData, setExpenseBreakdownData] = useState<{ name: string; value: number }[]>([]);
   const [monthlyProfitData, setMonthlyProfitData] = useState<ChartPoint[]>([]);
   const [cashFlowData, setCashFlowData] = useState<CashFlowRow[]>([]);
+  const [trendSort, setTrendSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const [expenseSort, setExpenseSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const visibleTrend = useMemo(() => trendSort
+    ? sortReportRows(revenueVsExpenseData, row => row[trendSort.id], trendSort.direction)
+    : revenueVsExpenseData, [revenueVsExpenseData, trendSort]);
+  const visibleExpenses = useMemo(() => expenseSort
+    ? sortReportRows(expenseBreakdownData, row => expenseSort.id === "name" ? row.name : row.value, expenseSort.direction)
+    : expenseBreakdownData, [expenseBreakdownData, expenseSort]);
 
 
-  const handleExportView = useCallback(() => {
+  const handleExportView = useCallback(async () => {
+    if (exporting || loading || loadError || !kpis) return;
+    setExporting(true);
     try {
       const title = buildReportTitleRows({
         title: "BÁO CÁO TÀI CHÍNH",
@@ -189,14 +203,40 @@ export default function TaiChinhPage() {
           { metric: "Biên LN (%)", current: kpis?.profitMargin ?? 0, prev: kpis?.prevProfitMargin ?? 0 },
         ],
       };
-      exportReportToExcel({ kind: "tai-chinh", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
+      const trendSheet: ExcelSheet = {
+        name: "Kết quả theo kỳ",
+        titleRows: title,
+        columns: [
+          { label: "Kỳ", key: "label", width: 18 },
+          { label: "Doanh thu thuần", key: "revenue", width: 22, format: "currency" },
+          { label: "Giá vốn", key: "cogs", width: 22, format: "currency" },
+          { label: "Chi phí vận hành", key: "operatingExpense", width: 22, format: "currency" },
+          { label: "Tổng chi phí", key: "expense", width: 22, format: "currency" },
+          { label: "Lợi nhuận", key: "profit", width: 22, format: "currency" },
+        ],
+        rows: visibleTrend.map(row => ({ ...row })),
+      };
+      const expenseSheet: ExcelSheet = {
+        name: "Cơ cấu chi phí",
+        titleRows: title,
+        columns: [
+          { label: "Khoản chi phí", key: "name", width: 36 },
+          { label: "Số tiền", key: "value", width: 22, format: "currency" },
+        ],
+        rows: visibleExpenses.map(row => ({ ...row })),
+      };
+      await exportReportToExcel({ kind: "tai-chinh", mode: "view", range, branchName: branchLabel, sheets: [sheet, trendSheet, expenseSheet] });
       toast({ title: "Đã xuất Excel (view)", variant: "success" });
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
+    } finally {
+      setExporting(false);
     }
-  }, [kpis, range, branchLabel, toast]);
+  }, [kpis, visibleTrend, visibleExpenses, range, branchLabel, toast, exporting, loading, loadError]);
 
-  const handleExportFull = useCallback(() => {
+  const handleExportFull = useCallback(async () => {
+    if (exporting || loading || loadError || !kpis) return;
+    setExporting(true);
     try {
       // CEO 14/05 (research MISA): báo cáo Tài chính = P&L kế toán focused.
       // Bỏ Cash flow ra (đã có /luong-tien). Thêm disclaimer + signature
@@ -412,7 +452,7 @@ export default function TaiChinhPage() {
         },
       };
 
-      exportReportToExcel({
+      await exportReportToExcel({
         kind: "tai-chinh",
         mode: "full",
         range,
@@ -438,6 +478,8 @@ export default function TaiChinhPage() {
         description: err instanceof Error ? err.message : "",
         variant: "error",
       });
+    } finally {
+      setExporting(false);
     }
   }, [
     kpis,
@@ -449,12 +491,16 @@ export default function TaiChinhPage() {
     branchLabel,
     tenantName,
     toast,
+    exporting,
+    loading,
+    loadError,
   ]);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
     const requestId = ++requestIdRef.current;
     setLoading(true);
+    setLoadError(null);
     try {
       const [financeResult, cashResult] = await Promise.all([
         getFinanceDashboardReport(activeBranchId, range),
@@ -473,7 +519,12 @@ export default function TaiChinhPage() {
       setCashFlowData(cashResult);
     } catch (err) {
       if (requestId === requestIdRef.current) {
-        console.error("Failed to fetch finance data:", err);
+        setKpis(null);
+        setRevenueVsExpenseData([]);
+        setExpenseBreakdownData([]);
+        setMonthlyProfitData([]);
+        setCashFlowData([]);
+        setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo tài chính.");
       }
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
@@ -503,12 +554,21 @@ export default function TaiChinhPage() {
         range={range}
         onPresetChange={setPreset}
         onCustomRangeChange={setCustomRange}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
         onExportView={handleExportView}
         onExportFull={handleExportFull}
-        exportDisabled={loading}
+        exportDisabled={loading || exporting || Boolean(loadError) || !kpis}
       />
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
+        {loadError ? (
+          <div role="alert" className="border border-status-error/30 bg-status-error/5 p-4 space-y-3">
+            <p className="font-semibold">Không tải được báo cáo tài chính</p>
+            <p className="text-sm break-words">{loadError}</p>
+            <Button variant="outline" onClick={() => void fetchData()}><Icon name="refresh" size={16} />Thử lại</Button>
+          </div>
+        ) : <>
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
@@ -569,6 +629,47 @@ export default function TaiChinhPage() {
           />
         </div>
 
+        {viewMode === "table" ? (
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">Kết quả kinh doanh theo kỳ</h2>
+            <ReportDataTable
+              tablePreferenceKey="report.finance.period-results"
+              rows={visibleTrend}
+              getRowKey={(_, index) => index}
+              sortState={trendSort}
+              onSortChange={setTrendSort}
+              columns={[
+                { key: "label", label: "Kỳ", sticky: true, sortable: false },
+                ...[
+                  ["revenue", "Doanh thu thuần"], ["cogs", "Giá vốn"],
+                  ["operatingExpense", "Chi phí vận hành"], ["expense", "Tổng chi phí"],
+                  ["profit", "Lợi nhuận"],
+                ].map(([key, label]) => ({
+                  key, label, align: "right" as const,
+                  cell: (row: MultiSeriesPoint) => <span className="tabular-nums whitespace-nowrap">{formatCurrency(Number(row[key] ?? 0))}</span>,
+                  subtotalCell: formatCurrency(visibleTrend.reduce((sum, row) => sum + Number(row[key] ?? 0), 0)),
+                })),
+              ]}
+              subtotalLabel="Tổng trong kỳ"
+            />
+            <h2 className="text-base font-semibold pt-3">Cơ cấu chi phí</h2>
+            <ReportDataTable
+              tablePreferenceKey="report.finance.expense-breakdown"
+              rows={visibleExpenses}
+              getRowKey={(_, index) => index}
+              sortState={expenseSort}
+              onSortChange={setExpenseSort}
+              columns={[
+                { key: "name", label: "Khoản chi phí", sticky: true },
+                { key: "value", label: "Số tiền", align: "right",
+                  cell: row => <span className="tabular-nums whitespace-nowrap">{formatCurrency(row.value)}</span>,
+                  subtotalCell: formatCurrency(visibleExpenses.reduce((sum, row) => sum + row.value, 0)),
+                },
+              ]}
+              subtotalLabel="Tổng chi phí phân loại"
+            />
+          </section>
+        ) : <>
         {/* Revenue vs Expense line chart */}
         <ChartCard title="Doanh thu thuần và tổng chi phí" subtitle={selectedPeriodLabel}>
           {revenueVsExpenseData.length === 0 ? (
@@ -717,6 +818,7 @@ export default function TaiChinhPage() {
           </ChartCard>
         </div>
 
+        </>}
         {/* Cash flow summary table */}
         <ChartCard title="Tổng hợp dòng tiền" subtitle={selectedPeriodLabel}>
           {cashFlowData.length === 0 ? (
@@ -756,6 +858,7 @@ export default function TaiChinhPage() {
             </ReportTableFrame>
           )}
         </ChartCard>
+        </>}
       </div>
     </div>
   );

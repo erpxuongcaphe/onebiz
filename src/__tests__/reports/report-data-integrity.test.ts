@@ -5,7 +5,7 @@ describe("report data integrity", () => {
   it("does not show a view switch on reports without alternate views", () => {
     const fixedViews = [
       "abc-analysis", "kiem-ke", "khuyen-mai", "kenh-ban", "fnb-shipper",
-      "tai-chinh", "dat-hang", "customer-cohort", "lot-traceability",
+      "dat-hang", "customer-cohort", "lot-traceability",
       "xuat-nhap-ton",
     ];
     for (const route of fixedViews) {
@@ -13,6 +13,12 @@ describe("report data integrity", () => {
       expect(page, route).not.toContain("onViewModeChange={setViewMode}");
       if (route === "kenh-ban") expect(page).not.toContain("Historical trend placeholder");
     }
+  });
+  it("financial analysis has a real table alternate view", () => {
+    const page = readFileSync("src/app/(main)/phan-tich/tai-chinh/page.tsx", "utf8");
+    expect(page).toContain('viewMode === "table"');
+    expect(page).toContain("onViewModeChange={setViewMode}");
+    expect(page).toContain("rows={visibleTrend}");
   });
   it("customer report defaults to tables and only shows supplemental charts when requested", () => {
     const page = readFileSync("src/app/(main)/phan-tich/khach-hang/page.tsx", "utf8");
