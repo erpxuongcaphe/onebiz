@@ -480,7 +480,7 @@ function PrintSettingsPageContent() {
       </details>
 
       {/* ── Master–detail (CEO 30/06): nav trái + khung sửa/xem trước phải ── */}
-      <div className="flex flex-col gap-3 2xl:flex-row 2xl:items-start">
+      <div className="flex flex-col gap-3">
         {/* CỘT TRÁI — nav danh sách (sticky desktop, accordion mobile) */}
         <PrintSettingsNav
           selected={selected}
@@ -506,7 +506,7 @@ function PrintSettingsPageContent() {
       )}
 
       {selected === "may-in" && (<>
-      <div className="space-y-2"><p className="text-sm text-muted-foreground">Bắt đầu với kết nối chi nhánh để điện thoại và máy quầy cùng gửi phiếu, không chọn máy mỗi lần.</p><div role="group" aria-label="Nhóm cài đặt máy in" className="flex flex-wrap gap-2">{([{id:"branch",label:"1. Kết nối chi nhánh"},{id:"slips",label:"2. Phiếu & tự động in"},{id:"device",label:"Nâng cao: in từ máy này"}] as const).map(item => <Button key={item.id} className="min-h-11" variant={printerSection===item.id ? "default" : "outline"} aria-pressed={printerSection===item.id} onClick={() => setPrinterSection(item.id)}>{item.label}</Button>)}</div></div>
+      <div className="space-y-2"><p className="text-sm text-muted-foreground">Bắt đầu với kết nối chi nhánh để điện thoại và máy quầy cùng gửi phiếu, không chọn máy mỗi lần.</p><div role="group" aria-label="Nhóm cài đặt máy in" className="flex flex-wrap gap-2">{([{id:"branch",label:"Máy in chi nhánh"},{id:"slips",label:"Mẫu phiếu & tự động in"},{id:"device",label:"Nâng cao: in từ máy này"}] as const).map(item => <Button key={item.id} className="min-h-11" variant={printerSection===item.id ? "default" : "outline"} aria-pressed={printerSection===item.id} onClick={() => setPrinterSection(item.id)}>{item.label}</Button>)}</div></div>
       {printerSection === "branch" && <BranchPrintSetup />}
       </>)}
       {selected === "may-in" && printerSection === "device" && (<>
@@ -1138,92 +1138,12 @@ export default function PrintSettingsPage() {
 // CỘT TRÁI — nav danh sách kiểu KiotViet (master của master–detail)
 // Desktop: cột sticky ~210px, border phải. Mobile: accordion gọn phía trên.
 // ──────────────────────────────────────────────────────────────
-function PrintSettingsNav({
-  selected,
-  onSelect,
-  navOpen,
-  onToggleNav,
-  selectedItem,
-}: {
-  selected: string;
-  onSelect: (id: string) => void;
-  navOpen: boolean;
-  onToggleNav: () => void;
-  selectedItem: NavItem;
-}) {
-  const accentClass = (accent: NavGroup["accent"], active: boolean): string => {
-    if (active) return "text-primary";
-    if (accent === "info") return "text-status-info";
-    if (accent === "amber") return "text-status-warning";
-    return "text-muted-foreground";
-  };
-
-  const list = (
-    <nav className="space-y-4">
-      {PRINT_NAV.map((group) => (
-        <div key={group.label} className="space-y-1">
-          <p className="px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            {group.label}
-          </p>
-          <div className="space-y-0.5">
-            {group.items.map((item) => {
-              const active = selected === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => onSelect(item.id)}
-                  className={cn(
-                    "flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors",
-                    active
-                      ? "bg-primary/10 font-medium text-primary"
-                      : "text-foreground hover:bg-muted",
-                  )}
-                >
-                  <Icon
-                    name={item.icon}
-                    size={18}
-                    className={cn("shrink-0", accentClass(group.accent, active))}
-                  />
-                  <span className="min-w-0 truncate">{item.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ))}
-    </nav>
-  );
-
-  return (
-    <>
-      {/* Mobile: nút mở accordion hiện mục đang chọn */}
-      <div className="2xl:hidden">
-        <button
-          type="button"
-          onClick={onToggleNav}
-          className="flex w-full items-center justify-between rounded-lg border border-border bg-card px-3 py-2.5 text-left"
-          aria-expanded={navOpen}
-        >
-          <span className="flex items-center gap-2 min-w-0">
-            <Icon name={selectedItem.icon} size={18} className="shrink-0 text-primary" />
-            <span className="truncate text-sm font-medium">{selectedItem.label}</span>
-          </span>
-          <Icon name={navOpen ? "expand_less" : "expand_more"} size={20} className="shrink-0 text-muted-foreground" />
-        </button>
-        {navOpen && (
-          <div className="mt-2 rounded-lg border border-border bg-card p-2">
-            {list}
-          </div>
-        )}
-      </div>
-
-      {/* Desktop: cột sticky cố định */}
-      <aside className="hidden 2xl:block 2xl:w-[190px] 2xl:shrink-0 2xl:self-start 2xl:sticky 2xl:top-0 2xl:border-r 2xl:pr-3">
-        {list}
-      </aside>
-    </>
-  );
+function PrintSettingsNav({ selected, onSelect }: { selected: string; onSelect: (id: string) => void; navOpen: boolean; onToggleNav: () => void; selectedItem: NavItem }) {
+  return <label className="block min-w-0 text-sm font-semibold text-primary">Mục cài đặt
+    <select aria-label="Mục cài đặt in" value={selected} onChange={event => onSelect(event.target.value)} className="mt-1 min-h-11 w-full rounded-md border bg-background px-3 text-foreground">
+      {PRINT_NAV.map(group => <optgroup key={group.label} label={group.label}>{group.items.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}
+    </select>
+  </label>;
 }
 
 // ── PrinterSlotCard — CEO 04/06/2026 Sprint 5 multi-printer ──

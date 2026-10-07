@@ -1,6 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { useCallback, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
 import { useToast, type ToastVariant } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
@@ -44,30 +47,45 @@ const variantStyles: Record<
 export function ToastContainer() {
   const { toasts, dismiss } = useToast();
   const pathname = usePathname();
-  const isFnbPos = pathname.startsWith("/pos/fnb");
+  const { isFnb } = useFnbSubdomain();
+  const isFnbPos = pathname === "/pos/fnb" || (isFnb && pathname === "/");
+  const [expanded, setExpanded] = useState(false);
+  const subscribeRegion = useCallback((notify: () => void) => {
+    if (!isFnbPos) return () => {};
+    const observer = new MutationObserver(notify);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [isFnbPos]);
+  const readRegion = useCallback(() => {
+    if (!isFnbPos) return null;
+    const slots = Array.from(document.querySelectorAll("[data-pos-toast-region]"));
+    return slots.filter(slot => slot.getClientRects().length > 0).at(-1) ?? null;
+  }, [isFnbPos]);
+  const region = useSyncExternalStore(subscribeRegion, readRegion, () => null);
 
   if (toasts.length === 0) return null;
 
-  return (
+  const visibleToasts = isFnbPos && !expanded ? toasts.slice(-1) : toasts.slice(-3);
+  const content = (
     <div
       className={cn(
-        "fixed right-4 z-[100] flex w-full max-w-[420px] flex-col gap-2 pointer-events-none sm:right-6",
+        "flex flex-col gap-1 pointer-events-none",
         isFnbPos
-          ? "top-[calc(4.5rem+env(safe-area-inset-top))] bottom-auto"
-          : "bottom-4 sm:bottom-6",
+          ? "w-full max-h-40 overflow-y-auto px-2 py-1 shrink-0"
+          : "fixed right-3 top-[calc(4rem+env(safe-area-inset-top))] z-[100] w-[calc(100%-1.5rem)] max-w-[360px] sm:right-5",
       )}
     >
-      {toasts.map((t) => {
+      {visibleToasts.map((t) => {
         const style = variantStyles[t.variant];
         return (
           <div
             key={t.id}
             className={cn(
-              "pointer-events-auto flex items-start gap-3 rounded-lg border p-4 shadow-lg animate-in slide-in-from-bottom-5 fade-in-0 duration-200",
+              "pointer-events-auto flex items-start gap-2 rounded-md border bg-background px-3 py-2 shadow-sm animate-in fade-in-0 duration-200",
               style.bg,
               style.border
             )}
-            role="alert"
+            role={t.variant === "error" ? "alert" : "status"}
           >
             <Icon
               name={style.icon}
@@ -78,14 +96,14 @@ export function ToastContainer() {
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold">{t.title}</p>
               {t.description && (
-                <p className="text-sm text-muted-foreground mt-0.5">
+                <p className="text-xs leading-relaxed text-muted-foreground mt-0.5 break-words line-clamp-3">
                   {t.description}
                 </p>
               )}
             </div>
             <button
               onClick={() => dismiss(t.id)}
-              className="shrink-0 rounded-lg p-1 hover:bg-black/5 transition-colors"
+              className="shrink-0 flex h-11 w-11 -my-1 items-center justify-center rounded-md hover:bg-black/5 transition-colors"
               aria-label="Đóng"
             >
               <Icon name="close" size={16} className="text-muted-foreground" />
@@ -93,6 +111,8 @@ export function ToastContainer() {
           </div>
         );
       })}
+      {isFnbPos && toasts.length > 1 && <button type="button" onClick={() => setExpanded(value => !value)} className="pointer-events-auto self-end min-h-9 px-2 text-xs font-semibold text-primary">{expanded ? "Thu gọn" : `Xem ${toasts.length - 1} thông báo trước`}</button>}
     </div>
   );
+  return isFnbPos ? (region ? createPortal(content, region) : null) : content;
 }

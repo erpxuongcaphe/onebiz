@@ -1,10 +1,11 @@
 $ErrorActionPreference = 'Stop'
-$nodePath = (Get-Command node.exe -ErrorAction Stop).Source
+. (Join-Path $PSScriptRoot 'runtime.ps1')
 $configPath = Join-Path $PSScriptRoot 'onebiz-print-point.json'
 $pointConfig = Get-Content -LiteralPath $configPath -Raw | ConvertFrom-Json
 if ($pointConfig.pointId -notmatch '^[0-9a-f-]{36}$') { throw 'Invalid print-point configuration.' }
 $taskName = 'Onebiz Print Point ' + $pointConfig.pointId
 if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) { throw 'This point already has a task. Check it in Task Scheduler before installing again.' }
+$nodePath = Install-OnebizRuntime
 $currentAccount = [Security.Principal.WindowsIdentity]::GetCurrent().Name
 $launcherPath = Join-Path $PSScriptRoot 'run.ps1'
 $taskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -NonInteractive -WindowStyle Hidden -File "' + $launcherPath + '"') -WorkingDirectory $PSScriptRoot

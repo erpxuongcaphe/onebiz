@@ -1,4 +1,5 @@
 "use client";
+import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
 import { useAuth, useToast } from "@/lib/contexts";
@@ -100,7 +101,7 @@ import {
   type CatalogStatus,
 } from "./shift-catalog-guards";
 import { printShiftReport } from "@/lib/print-shift-report";
-import type { RestaurantTable, FnbOrderLine, KitchenOrderItem, OrderType } from "@/lib/types/fnb";
+import type { RestaurantTable, FnbOrderLine, KitchenOrderItem, KitchenOrder, OrderType } from "@/lib/types/fnb";
 import type { Shift } from "@/lib/types/shift";
 import type { Customer } from "@/lib/types";
 import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format";
@@ -241,6 +242,7 @@ function FnbPosPageInner() {
   const itemLoadRequestRef = useRef(0);
   const [toppingProducts, setToppingProducts] = useState<{ id: string; name: string; price: number }[]>([]);
   const [kitchenSubmitting, setKitchenSubmitting] = useState(false);
+  const [paymentSubmitting, setPaymentSubmitting] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
   const [splitBillOpen, setSplitBillOpen] = useState(false);
@@ -2281,6 +2283,26 @@ function FnbPosPageInner() {
   const activeSharedTabId = pos.activeTab?.id;
   const activeSharedOrderId = pos.activeTab?.kitchenOrderId;
   const { loadSentLinesIntoTab: refreshSharedSentLines, updateTabMeta: refreshSharedTabMeta } = pos;
+  const { closeTab: closeSettledTab } = pos;
+  const pendingLineCount = pos.activeTab?.lines.length ?? 0;
+  const handleClosedSharedTab = useCallback((order: KitchenOrder, tabId: string) => {
+    setPaymentOpen(false);
+    clearTabBenefits(tabId);
+    if (pendingLineCount) {
+      refreshSharedSentLines(tabId, []);
+      refreshSharedTabMeta(tabId, {
+        kitchenOrderId: undefined, tableId: undefined, persistedOrderDiscountAmount: 0, orderDiscount: undefined, discountAuditCtx: undefined,
+        label: order.orderType === "dine_in" ? "Tại quán · chọn bàn" : order.orderType === "delivery" ? "Giao hàng · đơn mới" : "Mang về · đơn mới",
+      });
+    } else closeSettledTab(tabId);
+    toast({ title: order.invoiceId ? "Đơn đã thanh toán" : "Đơn đã đóng hoặc gộp", description: pendingLineCount ? "Món chưa gửi được giữ trong đơn mới. Chọn lại bàn nếu phục vụ tại quán." : "Đã cập nhật tab từ máy chủ.", variant: "info" });
+  }, [pendingLineCount, refreshSharedSentLines, refreshSharedTabMeta, closeSettledTab, clearTabBenefits, toast]);
+  useFnbTabReconciliation({ tabId: activeSharedTabId, orderId: activeSharedOrderId, branchId,
+    orders: openOrders.orders, updatedAt: openOrders.updatedAt,
+    blocked: openOrders.loading || Boolean(openOrders.error) || kitchenSubmitting || paymentSubmitting || !networkStatus.isOnline,
+    onClosed: handleClosedSharedTab,
+  });
+
   useEffect(() => {
     const tabId = activeSharedTabId;
     const order = openOrders.orders.find((entry) => entry.id === activeSharedOrderId);
@@ -2378,6 +2400,7 @@ function FnbPosPageInner() {
         return false;
       }
       fnbSubmitLockRef.current = true;
+      setPaymentSubmitting(true);
       const tab = pos.activeTab;
       // Payment awaits the kitchen request. Preserve the exact tab context so
       // a later tab change cannot combine another guest's benefits or cart.
@@ -2628,6 +2651,7 @@ function FnbPosPageInner() {
       } finally {
         // P1-3D-P1: release lock dù success/fail để cashier có thể retry.
         fnbSubmitLockRef.current = false;
+        setPaymentSubmitting(false);
       }
     },
     [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits, requireTable]
@@ -3542,6 +3566,7 @@ function FnbPosPageInner() {
         orderActions={<FnbBranchPrintControl key={branchId} branchId={branchId ?? undefined} compact />}
         deliveryCountToday={deliveryCountToday}
       />
+      <div data-pos-toast-region className="shrink-0" />
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
       <FnbSidenavDrawer
@@ -3976,6 +4001,7 @@ function FnbPosPageInner() {
               <Icon name="close" size={16} />
             </button>
           </div>
+          <div data-pos-toast-region className="shrink-0" />
           <div className="flex-1 flex flex-col min-h-0">
             <FnbCart
               activeTab={pos.activeTab}

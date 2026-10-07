@@ -1,9 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 
 // Mock Supabase chain for dashboard queries
-const mockSelect = vi.fn();
-const mockGte = vi.fn();
-const mockLt = vi.fn();
 
 function createQueryChain(data: unknown[] | null, count?: number) {
   const chain: Record<string, unknown> = {};
@@ -31,7 +28,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
       }
       if (table === "cash_transactions") {
         return createQueryChain([
-          { type: "receipt", amount: 1500000 },
+          { type: "receipt", amount: 1200000, reference_type: "invoice" },
+          { type: "receipt", amount: 9000000, status: "cancelled" },
           { type: "payment", amount: 400000 },
           { type: "payment", amount: 100000 },
         ]);
@@ -48,15 +46,14 @@ vi.mock("@/lib/services/supabase/base", () => ({
 import { getDashboardKpis } from "@/lib/services/supabase/dashboard";
 
 describe("getDashboardKpis", () => {
-  it("calculates profit as revenue minus expenses (not 40% estimate)", async () => {
+  it("calculates cash balance from valid receipts and payments rather than invoice revenue", async () => {
     const kpis = await getDashboardKpis();
 
-    // Revenue: 1000000 + 500000 = 1500000
-    // Expenses (payment type): 400000 + 100000 = 500000
-    // Profit: 1500000 - 500000 = 1000000
+    // Invoice revenue differs from cash received; cancelled receipts are excluded.
 
     expect(kpis.todayRevenue).toBe(1500000);
-    expect(kpis.todayProfit).toBe(1000000);
+    expect(kpis.todayProfit).toBe(700000);
+    expect(kpis.todayCollected).toBe(1200000);
     // Verify it's NOT using 40% estimate (which would be 600000)
     expect(kpis.todayProfit).not.toBe(Math.round(1500000 * 0.4));
   });
