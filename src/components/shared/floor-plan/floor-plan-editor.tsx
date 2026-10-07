@@ -687,9 +687,25 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
           id="floor-plan-tools"
           className={cn(
             "shrink-0 space-y-3 overflow-y-auto bg-surface-container-lowest p-3 lg:block lg:w-64 lg:border-r",
-            mobileToolsOpen ? "block max-h-64 border-b" : "hidden",
+            mobileToolsOpen ? "block max-h-72 border-b lg:max-h-none lg:border-b-0" : "hidden",
           )}
         >
+          {selectedDecoration && (
+            <div className="space-y-2 border-b pb-3">
+              <p className="text-sm font-semibold">Vật đang chọn</p>
+              <Label htmlFor="decoration-label">Tên hiển thị</Label>
+              <Input id="decoration-label" value={selectedDecoration.label ?? ""}
+                onChange={event => setDecorations(previous => previous.map(decoration =>
+                  decoration.id === selectedDecoration.id ? { ...decoration, label: event.target.value } : decoration))}
+                onBlur={event => handleDecorChange(selectedDecoration.id, { label: event.target.value })}
+                className="h-9 text-sm" />
+              <Button type="button" variant="outline" size="sm" className="w-full"
+                onClick={() => handleDecorChange(selectedDecoration.id, { locked: !selectedDecoration.locked })}>
+                <Icon name={selectedDecoration.locked ? "lock" : "lock_open"} size={16} />
+                {selectedDecoration.locked ? "Đang khoá vị trí" : "Khoá vị trí"}
+              </Button>
+            </div>
+          )}
           {selectedTable && hasPermission("system.manage_branches") && (
             <TableIdentityEditor
               key={selectedTable.id}
@@ -771,50 +787,6 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 </button>
               ))}
             </div>
-              {selectedDecoration && (
-                <div className="mt-2 space-y-2 rounded-md border border-border bg-background p-2">
-                  <p className="text-xs uppercase font-semibold tracking-wide text-muted-foreground">
-                    Vật đang chọn
-                  </p>
-                  <div>
-                    <Label htmlFor="decoration-label" className="text-xs">Tên hiển thị</Label>
-                    <Input
-                      id="decoration-label"
-                      value={selectedDecoration.label ?? ""}
-                      onChange={(event) =>
-                        setDecorations((previous) =>
-                          previous.map((decoration) =>
-                            decoration.id === selectedDecoration.id
-                              ? { ...decoration, label: event.target.value }
-                              : decoration,
-                          ),
-                        )
-                      }
-                      onBlur={(event) =>
-                        handleDecorChange(selectedDecoration.id, { label: event.target.value })
-                      }
-                      className="h-7 text-xs"
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      handleDecorChange(selectedDecoration.id, {
-                        locked: !selectedDecoration.locked,
-                      })
-                    }
-                    className={cn(
-                      "w-full px-2 py-1.5 rounded text-xs flex items-center justify-center gap-1 border",
-                      selectedDecoration.locked
-                        ? "bg-status-warning/10 border-status-warning/30 text-status-warning"
-                        : "border-border hover:bg-muted",
-                    )}
-                  >
-                    <Icon name={selectedDecoration.locked ? "lock" : "lock_open"} size={12} />
-                    {selectedDecoration.locked ? "Đang khoá vị trí" : "Khoá vị trí"}
-                  </button>
-                </div>
-              )}
             </div>
 
           {/* Ảnh nền */}
@@ -899,6 +871,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 if (id) {
                   setSelectedTableId(null);
                   setMobileToolsOpen(true);
+                  if (toolsRef.current) toolsRef.current.scrollTop = 0;
                 }
               }}
               onTableLayoutChange={handleTableLayoutChange}

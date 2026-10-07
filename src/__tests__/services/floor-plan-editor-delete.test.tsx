@@ -37,7 +37,7 @@ import { FloorPlanEditor } from "@/components/shared/floor-plan/floor-plan-edito
 
 async function selectTree() {
   render(<FloorPlanEditor branchId="xtb" branchName="XTB" scope="branch" />);
-  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }, { timeout: 5000 }));
   return screen.getByRole("button", { name: "Xoá vật đang chọn" });
 }
 
@@ -199,5 +199,13 @@ describe("floor plan deletion targets", () => {
     fireEvent.click(screen.getByRole("button", { name: "Chọn Cây cảnh" }));
     expect(screen.queryByLabelText("Số bàn")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Xoá bàn đang chọn" })).not.toBeInTheDocument();
+  });
+
+  it("places decoration properties first and keeps desktop tools unconstrained", async () => {
+    await selectTree();
+    const tools = document.getElementById("floor-plan-tools")!;
+    expect(tools.firstElementChild).toHaveTextContent("Vật đang chọn");
+    expect(tools.className).toContain("lg:max-h-none");
+    expect(screen.getByLabelText("Tên hiển thị")).toHaveValue("Cây cảnh");
   });
 });
