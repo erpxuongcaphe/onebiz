@@ -329,7 +329,7 @@ describe("Scenario: Takeaway (mang về, không bàn)", () => {
 
 describe("Scenario: Đơn đã gửi bếp", () => {
   it("chỉ bổ sung món qua RPC; không sửa hoặc xóa dòng món trực tiếp", async () => {
-    mockFromHandler = () => createChain({ data: null, error: null });
+    mockFromHandler = () => createChain({ data: { branch_id: "b1" }, error: null });
     await addItemsToExistingOrder("ko-1", [
       { productId: "p3", productName: "Trà Đào", quantity: 1, unitPrice: 29000 },
     ]);
@@ -338,6 +338,7 @@ describe("Scenario: Đơn đã gửi bếp", () => {
     );
     expect(rpcCall).toBeDefined();
     expect(rpcCall?.args?.p_existing_order_id).toBe("ko-1");
+    expect(rpcCall?.args?.p_branch_id).toBe("b1");
     expect(rpcCall?.args?.p_items).toEqual([
       { productId: "p3", productName: "Trà Đào", quantity: 1, unitPrice: 29000 },
     ]);

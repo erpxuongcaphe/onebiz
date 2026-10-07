@@ -334,6 +334,20 @@ describe("getKitchenOrderById", () => {
 });
 
 describe("addItemsToOrder", () => {
+  it("reads the original order branch with tenant and order filters", async () => {
+    const chain = createChain({ data: { branch_id: "original-branch" }, error: null });
+    mockFromHandler = () => chain;
+    await addItemsToOrder("ko-cross-device", [], { batchId: "stable-branch" });
+    expect(chain.eq).toHaveBeenCalledWith("tenant_id", "t1");
+    expect(chain.eq).toHaveBeenCalledWith("id", "ko-cross-device");
+    expect(rpcCalls[0]).toMatchObject({ args: { p_branch_id: "original-branch", p_existing_order_id: "ko-cross-device", p_idempotency_key: "stable-branch" } });
+  });
+  it("does not submit when the canonical order cannot be found", async () => {
+    mockFromHandler = () => createChain({ data: null, error: null });
+    await expect(addItemsToOrder("missing", [])).rejects.toMatchObject({ kitchenRequestRejected: true });
+    expect(rpcCalls).toHaveLength(0);
+  });
+
   it.each(["P0001", "PT409", "42501", "22023"])("marks SQL rejection %s without losing its message", async (code) => {
     kitchenRpcError = { code, message: "PRICE_CHANGED" };
     await expect(addItemsToOrder("ko-1", [], { batchId: "stable" }))
@@ -363,6 +377,7 @@ describe("addItemsToOrder", () => {
     expect(rpcCall).toBeDefined();
     const params = rpcCall?.args as Record<string, unknown>;
     expect(params.p_existing_order_id).toBe("ko-1");
+    expect(params.p_branch_id).toBe(ORDER_ROW.branch_id);
     expect(params.p_items).toEqual([
       {
         productId: "p3",
