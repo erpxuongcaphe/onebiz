@@ -111,6 +111,8 @@ import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
 import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import { fnbOpenOrderLabel, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
+import { customerContextFromOrder, needsCustomerSelection } from "@/lib/fnb-customer-context";
+import { selectFnbOrderCustomer } from "@/lib/services/supabase/fnb-order-customer";
 import { needsFnbTable } from "./order-type-selection";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
@@ -413,6 +415,12 @@ function FnbPosPageInner() {
   } | null>(null);
   const userId = user?.id ?? "";
   const openOrders = useFnbOpenOrders(tenantId, branchId, Boolean(tenantId && branchId));
+  const tableTotals = useMemo(() => {
+    if (!openOrders.updatedAt) return undefined;
+    const totals: Record<string, number> = {};
+    for (const order of openOrders.orders) if (order.tableId) totals[order.tableId] = (totals[order.tableId] ?? 0) + order.provisionalTotal;
+    return totals;
+  }, [openOrders.orders, openOrders.updatedAt]);
   const [openOrdersDialog, setOpenOrdersDialog] = useState(false);
   const [openingSharedOrder, setOpeningSharedOrder] = useState(false);
   const openingSharedOrderLock = useRef(false);
@@ -1702,6 +1710,7 @@ function FnbPosPageInner() {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return null;
     if (requireTable()) return null;
+    if (needsCustomerSelection(tab)) { setCustomerPickerOpen(true); toast({title:"Chọn khách cho đơn",description:"Chọn Khách lẻ hoặc khách có tên trước khi gửi bếp.",variant:"info"}); return null; }
     if (fnbKitchenSubmitLockRef.current) {
       toast({
         title: "Đang gửi bếp...",
@@ -1826,6 +1835,8 @@ function FnbPosPageInner() {
       // Sprint POS-FNB-EXT-1: pass orderNote + delivery platform metadata.
       // Migration 00070: param đúng tên là `platformCommissionPercent` (%).
       const result = await offlineSendToKitchen({
+        customerId: tab.customerId,
+        customerSelected: true,
         idempotencyKey: `fnb-tab:${tab.id}`,
         tenantId,
         branchId: branchId!,
@@ -2186,15 +2197,6 @@ function FnbPosPageInner() {
           tabId,
           (order.items ?? []).map(kitchenItemToCartLine),
         );
-        // Các trường này là snapshot máy chủ của đơn đã gửi. Nạp lại cùng
-        // món để thu ngân nhận ca/in phiếu tạm không dùng metadata còn sót
-        // của máy cũ. Khách hàng không ghi vào kitchen_orders nên tuyệt đối
-        // không suy diễn. Nếu tab không giữ được ngữ cảnh cục bộ, dialog thanh
-        // toán sẽ buộc xác nhận Khách lẻ/chọn lại khách.
-        const previousTab = pos.tabs.find((tab) => tab.id === tabId);
-        const hasKnownCustomerContext = Boolean(
-          previousTab?.customerId || previousTab?.customerConfirmationRequired === false,
-        );
         pos.updateTabMeta(tabId, {
           kitchenOrderId: order.id,
           tableId: order.tableId ?? undefined,
@@ -2207,7 +2209,7 @@ function FnbPosPageInner() {
           deliveryStaffId: order.deliveryStaffId ?? undefined,
           deliveryDistanceTier: order.deliveryDistanceTier ?? undefined,
           persistedOrderDiscountAmount: order.discountAmount,
-          customerConfirmationRequired: !hasKnownCustomerContext,
+          ...customerContextFromOrder(order),
         });
         return true;
       } catch (err) {
@@ -2269,7 +2271,7 @@ function FnbPosPageInner() {
       pos.switchTab(tabId);
       sharedSnapshotVersions.current.set(tabId, new Date(order.updatedAt).getTime());
       pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
-      pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, customerConfirmationRequired: existing?.customerConfirmationRequired ?? !existing?.customerId });
+      pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, ...customerContextFromOrder(order) });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
     } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); }
     finally { openingSharedOrderLock.current = false; setOpeningSharedOrder(false); }
@@ -2289,7 +2291,7 @@ function FnbPosPageInner() {
     if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
     sharedSnapshotVersions.current.set(tabId, version);
     refreshSharedSentLines(tabId, (order.items ?? []).map(kitchenItemToCartLine));
-    refreshSharedTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, persistedOrderDiscountAmount: order.discountAmount, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
+    refreshSharedTabMeta(tabId, { ...customerContextFromOrder(order), tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, persistedOrderDiscountAmount: order.discountAmount, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
   }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta, kitchenSubmitting]);
 
   // ── Print pre-bill ──
@@ -2757,6 +2759,7 @@ function FnbPosPageInner() {
     });
     switch (quyetDinh) {
       case "mo_thanh_toan":
+        if (needsCustomerSelection(tab)) { setCustomerPickerOpen(true); toast({title:"Chọn khách trước khi thu tiền",description:"Đơn chưa lưu lựa chọn khách. Chọn Khách lẻ hoặc khách có tên, rồi mở lại thanh toán.",variant:"info"}); return false; }
         setPaymentOpen(true);
         return true;
       case "cho_kiem_tra_ca":
@@ -3158,17 +3161,25 @@ function FnbPosPageInner() {
   ]);
 
   // ── Customer selection ──
-  const handleCustomerSelect = useCallback(
-    (customer: Customer | null) => {
-      pos.updateTabMeta(pos.activeTabId, {
-        customerId: customer?.id,
-        customerName: customer?.name ?? "Khách lẻ",
-        customerConfirmationRequired: false,
-      });
+  const customerSelectionLock = useRef(false);
+  const handleCustomerSelect = useCallback(async (customer: Customer | null) => {
+    const tab = pos.activeTab;
+    if (!tab || customerSelectionLock.current) return;
+    const selectedBranch = branchId;
+    customerSelectionLock.current = true;
+    try {
+      if (tab.kitchenOrderId) {
+        if (!networkStatus.isOnline) throw new Error("Kết nối mạng để lưu khách cho đơn đã gửi bếp.");
+        await selectFnbOrderCustomer(tab.kitchenOrderId, customer?.id ?? null);
+      }
+      if (liveBranchRef.current !== selectedBranch) return;
+      pos.updateTabMeta(tab.id, { customerId: customer?.id, customerName: customer?.name ?? "Khách lẻ", customerConfirmationRequired: false });
       setCustomerPickerOpen(false);
-    },
-    [pos]
-  );
+      if (tab.kitchenOrderId) void openOrders.refresh();
+    } catch (error) {
+      toast({ title: "Chưa lưu được khách", description: error instanceof Error ? error.message : "Thử lại khi có mạng.", variant: "error" });
+    } finally { customerSelectionLock.current = false; }
+  }, [pos, branchId, networkStatus.isOnline, openOrders, toast]);
 
   // CEO 13/05: BẤT KỲ giảm giá MANUAL nào → OTP duyệt từ manager.
   // Xoá discount (undefined hoặc value=0) → skip OTP, apply trực tiếp.
@@ -3686,6 +3697,7 @@ function FnbPosPageInner() {
                     : undefined
                 }
                 orderTimestamps={orderTimestamps}
+                tableTotals={tableTotals}
               />
             </Suspense>
           ) : (
@@ -3857,12 +3869,8 @@ function FnbPosPageInner() {
             orderNumber={pos.activeTab?.kitchenOrderId ? pos.activeTab.label : undefined}
             initialCustomerName={pos.activeTab?.customerName}
             customerLocked={Boolean(pos.activeTab?.customerId)}
-            customerConfirmationRequired={Boolean(pos.activeTab?.customerConfirmationRequired)}
-            onCustomerConfirmed={() => pos.updateTabMeta(pos.activeTabId, {
-              customerId: undefined,
-              customerName: "Khách lẻ",
-              customerConfirmationRequired: false,
-            })}
+            customerConfirmationRequired={needsCustomerSelection(pos.activeTab)}
+            onSelectCustomer={() => { setPaymentOpen(false); setCustomerPickerOpen(true); }}
             onConfirm={handlePayment}
           />
         </Suspense>

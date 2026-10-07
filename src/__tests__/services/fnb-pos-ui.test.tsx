@@ -90,7 +90,8 @@ describe("useFnbPosState", () => {
     expect(result.current.activeTab).toBeDefined();
     expect(result.current.activeTab!.label).toBe("Mang về #1");
     expect(result.current.activeTab!.orderType).toBe("takeaway");
-    expect(result.current.activeTab!.customerName).toBe("Khách lẻ");
+    expect(result.current.activeTab!.customerName).toBe("Chọn khách");
+    expect(result.current.activeTab!.customerConfirmationRequired).toBe(true);
   });
 
   it("tạo tab mới và tự switch sang", () => {
@@ -1167,20 +1168,16 @@ describe("FnbPaymentDialog — component", () => {
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it("does not leave checkout locked when customer confirmation throws", async () => {
-    const onCustomerConfirmed = vi.fn().mockImplementationOnce(() => { throw new Error("customer context failed"); });
-    const onConfirm = vi.fn().mockResolvedValue(true);
-    render(<FnbPaymentDialog {...baseProps} customerConfirmationRequired onCustomerConfirmed={onCustomerConfirmed} onConfirm={onConfirm} />);
+  it("opens the customer picker instead of a walk-in checkbox", () => {
+    const onSelectCustomer = vi.fn();
+    const onConfirm = vi.fn();
+    render(<FnbPaymentDialog {...baseProps} customerConfirmationRequired onSelectCustomer={onSelectCustomer} onConfirm={onConfirm} />);
     fireEvent.click(screen.getByText("Đủ"));
-    fireEvent.click(screen.getByRole("checkbox", { name: "Tôi xác nhận đây là Khách lẻ" }));
-    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
-    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).toBeDisabled();
+    expect(screen.queryByRole("checkbox", {name:/Khách lẻ/})).toBeNull();
+    fireEvent.click(screen.getByRole("button", {name:"Chọn / đổi khách hàng"}));
+    expect(onSelectCustomer).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
-    expect(screen.getByRole("button", { name: /Hoàn tất thanh toán/ })).not.toBeDisabled();
-    expect(screen.getByLabelText("Tiền khách đưa")).toHaveValue("200000");
-    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
-    await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 
   it("confirm button hiện tổng tiền (total, không phải subtotal)", () => {
@@ -1234,30 +1231,13 @@ describe("FnbPaymentDialog — component", () => {
     expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customerName: "Công ty Minh An" }));
   });
 
-  it("đơn mở lại thiếu ngữ cảnh khách phải xác nhận Khách lẻ trước khi thanh toán", () => {
+  it("a saved walk-in guest does not require re-confirmation", () => {
     const onConfirm = vi.fn();
-    const onCustomerConfirmed = vi.fn();
-    render(
-      <FnbPaymentDialog
-        {...baseProps}
-        customerConfirmationRequired
-        onCustomerConfirmed={onCustomerConfirmed}
-        onConfirm={onConfirm}
-      />,
-    );
-
-    const customerInput = screen.getByPlaceholderText("Khách lẻ") as HTMLInputElement;
-    expect(customerInput.readOnly).toBe(true);
-    const confirmButton = screen.getByRole("button", { name: /Hoàn tất thanh toán/i });
+    render(<FnbPaymentDialog {...baseProps} initialCustomerName="Khách lẻ" customerConfirmationRequired={false} onConfirm={onConfirm} />);
     fireEvent.click(screen.getByText("Đủ"));
-    expect(confirmButton).toBeDisabled();
-
-    fireEvent.click(screen.getByRole("checkbox", { name: /Tôi xác nhận đây là Khách lẻ/i }));
-    expect(confirmButton).not.toBeDisabled();
-    fireEvent.click(confirmButton);
-
-    expect(onCustomerConfirmed).toHaveBeenCalledOnce();
-    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ customerName: "Khách lẻ" }));
+    expect(screen.queryByRole("checkbox", {name:/Khách lẻ/})).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /Hoàn tất thanh toán/ }));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({customerName:"Khách lẻ"}));
   });
 
   it("dialog ẩn khi open=false", () => {

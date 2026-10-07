@@ -402,6 +402,16 @@ jobs:
           createdb management_finance_pnl_test
           PGDATABASE=management_finance_pnl_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00439_management_finance_pnl_recognition.integration.sql
 
+      - name: Verify shared FnB customer selection in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_customer_context_test
+          PGDATABASE=fnb_customer_context_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00447_fnb_order_customer_context.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

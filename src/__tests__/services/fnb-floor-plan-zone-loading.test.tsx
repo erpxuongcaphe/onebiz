@@ -113,6 +113,19 @@ describe("POS floor plan keeps table actions in the selected zone", () => {
     fireEvent.click(screen.getByRole("button", { name: "Tất cả (2)" }));
     expect(screen.getByRole("button", { name: /^1\s*Ban 1Trống/ })).toBeInTheDocument();
   });
+  it("updates provisional totals on serving tables without opening an order", async () => {
+    mocks.zones.mockResolvedValue([]);
+    const serving = [{ ...tables[1], status: "occupied" as const }];
+    const onSelect = vi.fn();
+    const view = render(<TableFloorPlan tables={serving} tableTotals={{"outside-10":47000}} onSelectTable={onSelect} />);
+    const table = await screen.findByRole("button", {name:/10\s*Ban 10/});
+    expect(table).toHaveTextContent("Tạm tính");
+    expect(table.textContent).toContain("47");
+    view.rerender(<TableFloorPlan tables={serving} tableTotals={{"outside-10":72000}} onSelectTable={onSelect} />);
+    expect(table.textContent).toContain("72");
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it("restores the explicitly selected list after leaving and remounting the floor plan", async () => {
     mocks.tables.mockResolvedValue(layout("inside-1"));
     const first = render(<TableFloorPlan tables={tables} onSelectTable={vi.fn()} />);

@@ -88,8 +88,9 @@ export default function TongQuanPage() {
   // mà không lo activeBranchId đổi từ undefined → branch_id sau đó (gây
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
-  const { user, tenant, hasPermission } = useAuth();
-  const canViewFnbOrders = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS);
+  const { user, tenant, hasPermission, branches } = useAuth();
+  const selectedBranch = branches.find(branch => branch.id === activeBranchId);
+  const canViewFnbOrders = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS) && (!activeBranchId || selectedBranch?.branchType === "store");
   const openOrders = useFnbOpenOrders(tenant?.id, activeBranchId, isReady && canViewFnbOrders);
   const [openChecksExpanded, setOpenChecksExpanded] = useState(false);
   const [chartView, setChartView] = useState<ChartView>("day");

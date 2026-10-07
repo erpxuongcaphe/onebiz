@@ -31,6 +31,8 @@ export type DeliveryDistanceTier = "near" | "mid" | "far" | "custom";
 // ============================================================
 
 export interface SendToKitchenInput {
+  customerId?: string;
+  customerSelected?: boolean;
   tenantId: string;
   branchId: string;
   createdBy: string;
@@ -274,8 +276,16 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
   // cannot leave a partially configured kitchen order.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: atomicData, error: atomicError } = await (supabase.rpc as any)(
-    "fnb_send_to_kitchen_atomic_v2",
-    {
+    input.customerSelected === true ? "fnb_send_to_kitchen_with_customer_v1" : "fnb_send_to_kitchen_atomic_v2",
+    input.customerSelected === true ? { p_request: {
+      customer_selected: true, customer_id: input.customerId ?? null,
+      p_branch_id: input.branchId, p_table_id: input.tableId ?? null,
+      p_order_type: input.orderType, p_note: input.note ?? null,
+      p_idempotency_key: input.idempotencyKey ?? null, p_items: input.items,
+      p_delivery_platform: input.deliveryPlatform ?? null, p_delivery_fee: input.deliveryFee ?? 0,
+      p_platform_commission_percent: input.platformCommissionPercent ?? input.platformCommission ?? null,
+      p_delivery_staff_id: input.deliveryStaffId ?? null, p_delivery_distance_tier: input.deliveryDistanceTier ?? null,
+    } } : {
       p_branch_id: input.branchId,
       p_table_id: input.tableId ?? null,
       p_order_type: input.orderType,
@@ -308,7 +318,7 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
   if (atomicError) {
     if (isRpcUnavailable(atomicError)) {
       throw new Error(
-        "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
+        input.customerSelected === true ? "Chưa triển khai lưu khách trên đơn F&B. Cần áp migration 00447 trước khi gửi bếp." : "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
       );
     }
     try {

@@ -7,6 +7,7 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
+import { formatCurrency } from "@/lib/format";
 import useImage from "use-image";
 import type Konva from "konva";
 import type { TableLayout, FloorPlanZone, TableShape } from "@/lib/services/supabase/floor-plan";
@@ -22,6 +23,7 @@ export interface CanvasTable extends TableLayout {
   elapsedMinutes?: number;
   /** Số phiếu/đơn chưa thanh toán — hiển thị badge đỏ góc bàn (pattern KiotViet/Sapo). */
   unpaidOrders?: number;
+  provisionalTotal?: number;
 }
 
 interface FloorPlanCanvasProps {
@@ -517,7 +519,7 @@ function TableNode({
     table.name !== tableNumStr &&
     table.name !== `Bàn ${tableNumStr}` &&
     table.name !== `Ban ${tableNumStr}` &&
-    minSide >= 80;
+    minSide >= 80 && table.provisionalTotal === undefined;
 
   return (
     <Group
@@ -569,6 +571,7 @@ function TableNode({
           listening={false}
         />
       )}
+      {mode === "view" && table.status === "occupied" && table.provisionalTotal !== undefined && minSide >= 50 && <Text text={formatCurrency(table.provisionalTotal)} fontSize={Math.max(10, Math.min(14, minSide / 8))} fontStyle="bold" fill={textColor} x={2} y={table.height - 16} width={Math.max(0, table.width - 4)} align="center" listening={false} />}
       {/* Badge số phiếu chưa thanh toán — pattern KiotViet/Sapo */}
       {(table.unpaidOrders ?? 0) > 0 && (
         <UnpaidBadge
