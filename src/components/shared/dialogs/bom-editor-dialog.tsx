@@ -107,6 +107,7 @@ export function BOMEditorDialog({
   const [yieldUnit, setYieldUnit] = useState("kg");
   const [note, setNote] = useState("");
   const [items, setItems] = useState<MaterialLine[]>([]);
+  const [changedConversionMaterials, setChangedConversionMaterials] = useState<string[]>([]);
   const [modifierGroups, setModifierGroups] = useState<ModifierGroup[]>([]);
   const [effectiveModifierGroupIds, setEffectiveModifierGroupIds] = useState<string[]>([]);
   const [modifierOptionsByGroup, setModifierOptionsByGroup] = useState<Record<string, ModifierOption[]>>({});
@@ -166,6 +167,7 @@ export function BOMEditorDialog({
       setExactRecipeEnabled(false);
       setExactRecipeReady(false);
       setErrors({});
+      setChangedConversionMaterials([]);
       return;
     }
     (async () => {
@@ -192,6 +194,12 @@ export function BOMEditorDialog({
         }))
       );
       setItems(loadedItems);
+      setChangedConversionMaterials(loadedItems.filter((item, index) => {
+        const saved = bom.items?.[index];
+        if (saved?.inputQuantity == null) return false;
+        const current = getRecipeQuantityInStockUnit(Number(item.quantity), item.stockUnit, item.unit, item.conversions);
+        return current != null && Math.abs(current - saved.quantity) > 0.00005;
+      }).map((item) => item.materialName));
 
       try {
         // 00350 may not have been installed on an older environment yet. The
@@ -688,6 +696,11 @@ export function BOMEditorDialog({
             {items.length === 0 && (
               <div className="text-sm text-muted-foreground text-center py-6 border-2 border-dashed rounded-lg">
                 Chưa có thành phần — nhấn &quot;Thêm thành phần&quot; để bắt đầu
+              </div>
+            )}
+            {changedConversionMaterials.length > 0 && (
+              <div role="status" className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                Quy đổi đã thay đổi: {changedConversionMaterials.join(", ")}. Kiểm tra định lượng và lưu công thức để áp dụng cho lần bán tiếp theo. Chứng từ cũ được giữ nguyên.
               </div>
             )}
             {errors.items && <p className="text-xs text-destructive">{errors.items}</p>}

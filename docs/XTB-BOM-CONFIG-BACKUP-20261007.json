@@ -1,0 +1,142 @@
+[
+  {
+    "old": {
+      "id": "b33a11d9-0eb6-4b1f-8960-c4dcdb636ccc",
+      "bom_id": "2ee370fb-097b-4a8d-abf2-3b6f1f79daac",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.0357,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 2,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 50,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 50
+    },
+    "expected": 0.05
+  },
+  {
+    "old": {
+      "id": "4d7e68fb-a159-4e4a-bdd8-64227e430ba4",
+      "bom_id": "4c277799-0049-4f1d-8a64-101f9dfc03f1",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.0171,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 2,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 24,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 24
+    },
+    "expected": 0.024
+  },
+  {
+    "old": {
+      "id": "671aa5e9-a10d-4029-a6bc-de5410e0c590",
+      "bom_id": "b44cc39c-1ae4-47b5-9117-7a731474bbdd",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.03,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 1,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 42,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 42
+    },
+    "expected": 0.042
+  },
+  {
+    "old": {
+      "id": "0d9f9d8e-eab9-454c-b465-6cea45b8933f",
+      "bom_id": "2b6260af-3a41-4df9-96c4-0f7892be27ed",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.0429,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 1,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 60,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 60
+    },
+    "expected": 0.06
+  },
+  {
+    "old": {
+      "id": "f7e152eb-95ed-4727-854c-14e4b279e795",
+      "bom_id": "7b6048bc-f59a-484a-bc03-701e2c84c037",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.03,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 1,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 42,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 42
+    },
+    "expected": 0.042
+  },
+  {
+    "old": {
+      "id": "065fa830-dcc3-4cc7-a19c-ec71bad25a1d",
+      "bom_id": "7c1fb4bc-ac86-47e8-ad33-5c2307c07380",
+      "material_id": "f726a3af-ee3c-4b83-ac14-a60fdbb1cb80",
+      "quantity": 0.02,
+      "unit": "Lon",
+      "waste_percent": 0,
+      "sort_order": 1,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 28,
+      "input_unit": "G",
+      "conversion_factor": 0.00071429
+    },
+    "patch": {
+      "input_quantity": 28
+    },
+    "expected": 0.028
+  },
+  {
+    "old": {
+      "id": "1e5e5a49-80f6-4722-8985-11867242b5be",
+      "bom_id": "9443fdff-8368-46f3-8977-88dd3225c894",
+      "material_id": "5c6a7521-6fbd-4f5a-ba50-a494a38d0565",
+      "quantity": 0.006,
+      "unit": "Kg",
+      "waste_percent": 0,
+      "sort_order": 0,
+      "note": null,
+      "modifier_scale_target": null,
+      "input_quantity": 6,
+      "input_unit": "G",
+      "conversion_factor": 0.001
+    },
+    "patch": {
+      "modifier_scale_target": "f02a9897-a17f-46da-ab45-24114a73d645"
+    },
+    "expected": 0.006
+  }
+]
