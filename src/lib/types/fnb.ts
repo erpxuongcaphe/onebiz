@@ -117,6 +117,9 @@ export interface KitchenOrder {
   tenantId: string;
   branchId: string;
   invoiceId: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  customerSelected?: boolean;
   tableId: string | null;
   orderNumber: string;
   orderType: OrderType;
@@ -199,11 +202,7 @@ export interface FnbTabSnapshot {
   kitchenOrderId?: string; // set after sendToKitchen
   customerId?: string;
   customerName: string;
-  /**
-   * Đơn mở lại từ KDS không lưu snapshot khách hàng. Khi không có ngữ cảnh
-   * cục bộ đáng tin, buộc thu ngân xác nhận Khách lẻ hoặc chọn lại khách trước
-   * thanh toán thay vì âm thầm gán sai công nợ/điểm tích lũy.
-   */
+  /** True until staff chooses a customer or walk-in; shared orders use server context. */
   customerConfirmationRequired?: boolean;
   orderDiscount?: FnbDiscountInput;
   /**

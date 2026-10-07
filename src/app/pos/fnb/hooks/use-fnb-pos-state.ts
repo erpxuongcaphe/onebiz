@@ -181,7 +181,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       id: nextTabId(),
       label: "Mang về #1",
       orderType: "takeaway",
-      customerName: "Khách lẻ",
+      customerName: "Chọn khách",
+        customerConfirmationRequired: true,
       lines: [],
     };
     return [initialTab];
@@ -261,7 +262,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
         label,
         orderType,
         tableId,
-        customerName: "Khách lẻ",
+        customerName: "Chọn khách",
+        customerConfirmationRequired: true,
         lines: [],
       };
       tabsMutationVersionRef.current += 1;
@@ -288,7 +290,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
             id: nextTabId(),
             label: "Mang về #1",
             orderType: "takeaway",
-            customerName: "Khách lẻ",
+            customerName: "Chọn khách",
+        customerConfirmationRequired: true,
             lines: [],
           };
           next.push(fallback);
@@ -310,7 +313,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
       id: nextTabId(),
       label: "Mang về #1",
       orderType: "takeaway",
-      customerName: "Khách lẻ",
+      customerName: "Chọn khách",
+        customerConfirmationRequired: true,
       lines: [],
     };
     setTabs([fresh]);

@@ -10,6 +10,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
+import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts/toast-context";
 import {
@@ -37,6 +38,7 @@ interface TableFloorPlanProps {
   onTransferTable?: (table: RestaurantTable) => void;
   onMergeTable?: (table: RestaurantTable) => void;
   orderTimestamps?: Record<string, string>;
+  tableTotals?: Record<string, number>;
 }
 
 const STATUS_CONFIG: Record<TableStatus, { label: string; dot: string }> = {
@@ -56,6 +58,7 @@ export function TableFloorPlan({
   onTransferTable,
   onMergeTable,
   orderTimestamps,
+  tableTotals,
 }: TableFloorPlanProps) {
   const { currentBranch, user, tenant } = useAuth();
   const { toast } = useToast();
@@ -178,6 +181,7 @@ export function TableFloorPlan({
               // thanh toán → badge đỏ "1". Khi support split-bill nhiều đơn
               // cùng lúc, đổi sang count thật từ orders.
               unpaidOrders: meta.currentOrderId ? 1 : 0,
+              provisionalTotal: meta.status === "occupied" ? tableTotals?.[meta.id] : undefined,
             } as CanvasTable;
           })
           .filter(Boolean) as CanvasTable[];
@@ -203,7 +207,7 @@ export function TableFloorPlan({
     return () => {
       cancelled = true;
     };
-  }, [activeZoneId, tables, orderTimestamps, toast]);
+  }, [activeZoneId, tables, orderTimestamps, tableTotals, toast]);
 
   const activeZone = useMemo(
     () => zones.find((z) => z.id === activeZoneId) ?? null,
@@ -311,6 +315,7 @@ export function TableFloorPlan({
               });
             }}
             orderTimestamps={orderTimestamps}
+            tableTotals={tableTotals}
           />
         )}
       </div>
@@ -385,6 +390,7 @@ function GridFallback({
   tables,
   onSelectTable,
   orderTimestamps,
+  tableTotals,
 }: TableFloorPlanProps) {
   const zonesGroup = useMemo(() => {
     const map = new Map<string, RestaurantTable[]>();
@@ -432,6 +438,7 @@ function GridFallback({
                     {t.name}
                   </span>
                   <span className="mt-1 text-xs font-medium">{STATUS_CONFIG[t.status].label}</span>
+                  {t.status === "occupied" && <span className="mt-1 text-base font-bold tabular-nums text-primary"><span className="mr-1 text-xs font-medium">Tạm tính</span>{tableTotals?.[t.id] !== undefined ? formatCurrency(tableTotals[t.id]) : "—"}</span>}
                   {elapsed && (
                     <span className="text-xs text-status-error mt-1">
                       <Icon name="schedule" size={12} className="inline" /> {fmt(elapsed)}

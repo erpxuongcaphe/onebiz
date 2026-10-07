@@ -46,8 +46,8 @@ interface FnbPaymentDialogProps {
   customerLocked?: boolean;
   /** Đơn bếp vừa được mở ở máy/ca khác, chưa có snapshot khách đáng tin. */
   customerConfirmationRequired?: boolean;
-  /** Lưu xác nhận Khách lẻ cho tab hiện tại sau khi thu ngân xác nhận rõ. */
-  onCustomerConfirmed?: () => void;
+  /** Đổi khách qua picker; lựa chọn được lưu cùng đơn trước thanh toán. */
+  onSelectCustomer?: () => void;
   onConfirm: (payload: FnbPaymentConfirmPayload) => Promise<boolean>;
 }
 
@@ -75,7 +75,7 @@ function formatDenom(v: number): string {
 export function FnbPaymentDialog({
   open, onOpenChange, subtotal, discountAmount = 0, manualDiscountAmount = 0,
   persistedOrderDiscountAmount = 0, promotionDiscountAmount = 0, couponDiscountAmount = 0, total: baseTotal, lineCount, orderNumber,
-  initialCustomerName, customerLocked = false, customerConfirmationRequired = false, onCustomerConfirmed, onConfirm,
+  initialCustomerName, customerLocked = false, customerConfirmationRequired = false, onSelectCustomer, onConfirm,
   deliveryFee = 0, commissionPercent = 0,
 }: FnbPaymentDialogProps) {
   const [method, setMethod] = useState<PaymentMethod>("cash");
@@ -85,7 +85,7 @@ export function FnbPaymentDialog({
   const [customerName, setCustomerName] = useState("Khách lẻ");
   const [allowDebt, setAllowDebt] = useState(false);
   const [tipInput, setTipInput] = useState("");
-  const [walkInConfirmed, setWalkInConfirmed] = useState(false);
+
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const submittingRef = useRef(false);
@@ -99,7 +99,7 @@ export function FnbPaymentDialog({
       setAllowDebt(false);
       setSubmitError(false);
       setTipInput("");
-      setWalkInConfirmed(false);
+
     }
   }, [initialCustomerName, open]);
 
@@ -140,7 +140,7 @@ export function FnbPaymentDialog({
   // Allow confirm if: free order OR fully paid OR user explicitly ticked "Ghi nợ"
   const canConfirm =
     (isFreeOrder || (mixedHasAnyAmount && totalPaid > 0 && (isFullyPaid || allowDebt))) &&
-    (!customerConfirmationRequired || walkInConfirmed);
+    !customerConfirmationRequired;
 
   const handleConfirm = async () => {
     if (!canConfirm || submittingRef.current) return;
@@ -161,9 +161,6 @@ export function FnbPaymentDialog({
       payload.paymentBreakdown = { cash: cashAmount, transfer: transferAmount, card: cardAmount };
     }
     try {
-      if (customerConfirmationRequired && walkInConfirmed) {
-        onCustomerConfirmed?.();
-      }
       if (!(await onConfirm(payload))) setSubmitError(true);
     } catch {
       setSubmitError(true);
@@ -459,20 +456,9 @@ export function FnbPaymentDialog({
                 Đổi khách trước khi thanh toán để hóa đơn và điểm tích lũy khớp nhau.
               </p>
             )}
-            {customerConfirmationRequired && (
-              <div className="rounded-lg border border-status-warning/30 bg-status-warning/5 px-3 py-2 text-xs text-status-warning space-y-2">
-                <p>Đơn này được mở từ máy hoặc ca khác. Hãy chọn khách bằng F4, hoặc xác nhận đây là Khách lẻ trước khi thu tiền.</p>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={walkInConfirmed}
-                    onChange={(e) => setWalkInConfirmed(e.target.checked)}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <span>Tôi xác nhận đây là Khách lẻ</span>
-                </label>
-              </div>
-            )}
+            {onSelectCustomer && <Button type="button" variant="outline" className="mt-2 min-h-11 w-full" onClick={onSelectCustomer}>Chọn / đổi khách hàng</Button>}
+            {customerConfirmationRequired && <p className="mt-2 text-sm text-status-warning">Đơn chưa lưu khách. Chọn Khách lẻ hoặc khách có tên trước khi thu tiền.</p>}
+
           </div>
         </fieldset>
         </div>
