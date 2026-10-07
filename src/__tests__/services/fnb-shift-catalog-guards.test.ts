@@ -219,14 +219,14 @@ describe("PR-D · trang POS FnB dùng đúng nguồn chung", () => {
   });
 
   it("F9 gọi requestPayment chứ không mở thẳng màn thanh toán", () => {
-    const f9 = ma.slice(ma.indexOf('e.key === "F9"'));
+    const f9 = ma.slice(ma.indexOf('if (e.key === "F9") {'));
     const than = f9.slice(0, f9.indexOf("}"));
     expect(than).toContain("requestPayment()");
     expect(than).not.toContain("setPaymentOpen");
   });
 
   it("gửi bếp (F10) KHÔNG bị chặn bởi trạng thái ca", () => {
-    const f10 = ma.slice(ma.indexOf('e.key === "F10"'));
+    const f10 = ma.slice(ma.indexOf('if (e.key === "F10") {'));
     const than = f10.slice(0, f10.indexOf("}"));
     expect(than).toContain("handleSendToKitchen()");
     expect(than).not.toContain("requestPayment");
