@@ -140,20 +140,20 @@ export function FnbHeader({
       <div className="order-10 basis-full md:hidden" aria-hidden />
 
       {/* View mode toggle: Sprint UI-3 — wording chuẩn "Bán hàng / Sơ đồ bàn" */}
-      <div className="order-20 flex min-w-0 flex-1 items-center bg-surface-container rounded-md shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
+      <div aria-label="Chế độ POS" className="order-20 flex min-w-0 flex-1 items-center rounded-md border border-primary/25 bg-primary/5 p-0.5 shrink-0 md:order-none md:min-w-0 md:basis-auto md:flex-none">
         <button
           type="button"
           onClick={() => viewMode !== "menu" && onToggleFloorPlan()}
           aria-pressed={viewMode === "menu"}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 min-h-11 px-2 sm:px-3 text-xs font-semibold rounded-lg transition-colors md:flex-none",
+            "flex flex-1 items-center justify-center gap-2 min-h-11 px-3 text-sm font-bold rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:flex-none",
             viewMode === "menu"
-              ? "bg-surface text-primary ambient-shadow"
-              : "text-on-surface-variant hover:text-foreground",
+              ? "bg-primary text-primary-foreground"
+              : "text-primary hover:bg-primary/10",
           )}
           title="Xem thực đơn để bán hàng"
         >
-          <Icon name="restaurant" size={14} />
+          <Icon name="restaurant" size={18} />
           <span>Bán hàng</span>
         </button>
         <button
@@ -161,14 +161,14 @@ export function FnbHeader({
           onClick={() => viewMode !== "floorplan" && onToggleFloorPlan()}
           aria-pressed={viewMode === "floorplan"}
           className={cn(
-            "flex flex-1 items-center justify-center gap-1.5 min-h-11 px-2 sm:px-3 text-xs font-semibold rounded-lg transition-colors md:flex-none",
+            "flex flex-1 items-center justify-center gap-2 min-h-11 px-3 text-sm font-bold rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary md:flex-none",
             viewMode === "floorplan"
-              ? "bg-surface text-primary ambient-shadow"
-              : "text-on-surface-variant hover:text-foreground",
+              ? "bg-primary text-primary-foreground"
+              : "text-primary hover:bg-primary/10",
           )}
           title="Xem sơ đồ bàn"
         >
-          <Icon name="table_restaurant" size={14} />
+          <Icon name="table_restaurant" size={18} />
           <span>Sơ đồ bàn</span>
         </button>
       </div>

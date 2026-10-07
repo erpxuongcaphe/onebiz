@@ -2,19 +2,28 @@ ONEBIZ — ĐIỂM IN CHI NHÁNH (Windows, ESC/POS 58/80 mm)
 
 Điện thoại nhân viên chỉ dùng trình duyệt và tài khoản riêng.
 Máy quầy cần bật, có Internet và tiến trình điểm in đang chạy.
-USB/LAN/Wi-Fi dùng tên máy đã cài trong Windows. Máy cần hỗ trợ GS v 0
+Phiên bản 2 — LAN/Wi-Fi dùng IP và cổng TCP (thường 9100), không cần driver
+cho đường TCP trực tiếp. USB dùng tên máy đã cài driver trong Windows.
+Máy cần hỗ trợ GS v 0
 ESC/POS raster 203dpi, vùng in 384 dots (58mm) hoặc 576 dots (80mm).
 Không cam kết mọi máy nhiệt hoặc máy Bluetooth đều đáp ứng.
 
-1. Cài driver; in thử từ Windows. Chỉ dùng sau khi thử tiếng Việt, QR, lề, cắt.
+1. USB: cài driver đúng model, chọn USB và in thử từ Windows.
+LAN: máy in và máy quầy cùng mạng; giữ IP đang hoạt động, nhập đúng cổng.
+Ví dụ máy của Xưởng Tư Búa: 192.168.10.222, cổng 9100. Chi nhánh khác
+phải dùng địa chỉ máy tại chính chi nhánh đó. Không tự đổi IP đang dùng.
+Chỉ dùng sau khi thử tiếng Việt, QR, lề, cắt.
 2. Cài Node.js LTS từ nodejs.org. Tạo thư mục riêng tại máy quầy.
 3. Tải bộ ZIP và giải nén; đặt onebiz-print-point.json vào cùng thư mục
-có agent.mjs, spool.ps1, run.ps1 và setup.ps1.
+có agent.mjs, destination.mjs, network.mjs, spool.ps1, run.ps1 và setup.ps1.
+Nâng cấp: dừng task điểm in, thay toàn bộ các tệp chương trình từ ZIP mới,
+giữ onebiz-print-point.json hiện có và chạy lại task. Không cần cấp lại mã.
 JSON có mã riêng: giữ kín tại quầy, chỉ người quản lý máy được đọc.
 Không dùng service-role key hoặc mật khẩu tài khoản nhân viên.
 4. Lưu điểm in và bật nhận phiếu. Chạy setup.ps1 để đăng ký chạy nền
 khi đăng nhập Windows, hoặc chạy node agent.mjs để kiểm tra thủ công.
-5. Bấm Cập nhật trong Cài đặt → In ấn để lấy tên máy Windows; gán máy/
+5. Bấm Cập nhật trong Cài đặt → In ấn để lấy tên máy Windows; chọn kết nối
+LAN/Wi-Fi (IP/cổng) hoặc USB/Windows cho từng nơi nhận; gán máy/
 khổ giấy cho từng nơi nhận và lưu. Danh sách máy được quét lại mỗi 5 phút.
 Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh.
 6. Gửi phiếu thử và kiểm tra giấy. Windows đã nhận không bảo đảm giấy đã ra.
@@ -38,10 +47,12 @@ Không tắt bảo vệ của hệ điều hành để vượt chặn.
 
 XỬ LÝ LỖI
 - Chờ điểm in: kiểm tra Internet, máy quầy và tiến trình.
-- Chưa gửi được: kiểm tra tên máy và driver.
+- Chưa gửi được: USB kiểm tra tên máy, cổng USB và driver; LAN kiểm tra
+IP/cổng, nguồn, dây mạng và dải mạng máy quầy. Không chuyển kết nối tự động.
 - Cần kiểm tra giấy: kiểm tra tại máy trước; quản lý mới in lại có xác nhận.
 - Cấp lại mã sẽ ngắt cấu hình cũ; tải JSON mới và chạy lại điểm in.
-- Trạng thái hết giấy/offline không được bộ này tự xác nhận từ mọi driver.
+- "Đã chuyển dữ liệu in" không chứng minh giấy đã ra. Trạng thái hết giấy/
+offline không được bộ này tự xác nhận từ mọi model hoặc driver.
 - Không tự gửi lại khi kết quả không chắc chắn để tránh bếp làm trùng món.
 - Bộ này chưa cung cấp bán hàng hoặc hàng đợi cloud khi mất Internet.
 

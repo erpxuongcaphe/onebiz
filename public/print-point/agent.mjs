@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { parseDestination, isConnectionProbe } from './destination.mjs';
+import { sendNetworkPrint } from './network.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -47,10 +49,20 @@ export async function runAgent(configPath) {
       if(!job){await sleep(2500);continue;}
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;
       try {
-        const bytes=Buffer.from(job.bytes,'base64'); validateRaster(bytes,job.paper);
-        if(typeof job.printer!=='string' || !job.printer.trim() || job.printer.length>200) throw new Error('Tên máy không hợp lệ.');
-        tempPath=join(tmpdir(),`onebiz-print-${randomUUID()}.bin`);
+        const bytes=Buffer.from(job.bytes,'base64');
+        const probe = isConnectionProbe(bytes);
+        if (!probe) validateRaster(bytes,job.paper);
+        const destination = parseDestination(job.printer);
         const payload=job.label.startsWith('IN LẠI')?Buffer.concat([Buffer.from('\x1b@IN LAI - KIEM TRA TRUNG MON\n','ascii'),bytes]):bytes;
+        if (destination.type === 'tcp') {
+          const result = await sendNetworkPrint(job.printer, probe ? null : payload);
+          status = result.status; message = result.message;
+        } else if (probe) {
+          const names = await discover();
+          status = names.includes(destination.printer) ? 'handed_off' : 'failed';
+          message = status === 'handed_off' ? 'Windows có máy in này. Chưa xác nhận USB đang cắm hoặc giấy đã sẵn sàng; dùng In thử để kiểm tra.' : 'Không tìm thấy tên máy trong Windows. Cài driver, kiểm tra tên và bấm Cập nhật.';
+        } else {
+        tempPath=join(tmpdir(),`onebiz-print-${randomUUID()}.bin`);
         await writeFile(tempPath,payload,{flag:'wx'}); attempted=true;
         const output=await new Promise((done,reject)=>{
           const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-File',join(dirname(fileURLToPath(import.meta.url)),'spool.ps1')],{windowsHide:true,env:{...process.env,ONEBIZ_PRINT_FILE:tempPath,ONEBIZ_PRINT_PRINTER:job.printer},stdio:['ignore','pipe','pipe']});
@@ -62,6 +74,7 @@ export async function runAgent(configPath) {
         const result=JSON.parse(output); status=result.status;
         message=status==='handed_off'?'Windows đã nhận lệnh. Kiểm tra giấy tại máy; chưa xác nhận giấy đã ra.':status==='failed'?'Windows chưa nhận lệnh. Kiểm tra tên máy, driver và quyền dùng máy in.':'Chưa xác nhận đủ dữ liệu gửi. Kiểm tra giấy trước khi in lại.';
         if(!['handed_off','failed','unknown'].includes(status)) throw new Error('Kết quả điểm in không hợp lệ.');
+        }
       }catch(error){status=attempted?'unknown':'failed';message=error.message;}
       finally{if(tempPath)await unlink(tempPath).catch(()=>{});}
       // Retry acknowledgement only. Never repeat the physical send.
