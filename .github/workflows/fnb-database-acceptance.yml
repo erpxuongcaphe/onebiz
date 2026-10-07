@@ -38,3 +38,7 @@ jobs:
         env:
           FNB_EPHEMERAL_DB: onebiz_fnb_test
         run: node scripts/fnb-db-test/run-shifts.mjs
+      - name: Validate financial tenant boundary against live policy fixtures
+        env:
+          FNB_EPHEMERAL_DB: onebiz_fnb_test
+        run: node scripts/fnb-db-test/run-finance-rls.mjs
