@@ -318,7 +318,7 @@ export async function sendToKitchen(input: SendToKitchenInput): Promise<SendToKi
   if (atomicError) {
     if (isRpcUnavailable(atomicError)) {
       throw new Error(
-        "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
+        input.customerSelected === true ? "Chưa triển khai lưu khách trên đơn F&B. Cần áp migration 00447 trước khi gửi bếp." : "Chưa có RPC fnb_send_to_kitchen_atomic_v2. Vui lòng chạy migration POS/FnB atomic trước khi gửi bếp.",
       );
     }
     try {

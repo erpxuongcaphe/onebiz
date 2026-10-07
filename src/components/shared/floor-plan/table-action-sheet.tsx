@@ -10,6 +10,7 @@
  * Tách riêng để mockup + POS FnB thật dùng chung component. Không gọi DB.
  */
 
+import { formatCurrency } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
 import type { CanvasTable } from "./floor-plan-canvas";
@@ -79,6 +80,7 @@ export function TableActionSheet({
                   ? ` · ${table.unpaidOrders} phiếu chưa TT`
                   : ""}
               </p>
+              {table.provisionalTotal !== undefined && <p className="mt-1 text-base font-bold text-primary">Tạm tính {formatCurrency(table.provisionalTotal)}</p>}
             </div>
           </div>
           <button

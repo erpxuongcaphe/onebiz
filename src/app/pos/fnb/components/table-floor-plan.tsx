@@ -181,7 +181,6 @@ export function TableFloorPlan({
               // thanh toán → badge đỏ "1". Khi support split-bill nhiều đơn
               // cùng lúc, đổi sang count thật từ orders.
               unpaidOrders: meta.currentOrderId ? 1 : 0,
-              provisionalTotal: meta.status === "occupied" ? tableTotals?.[meta.id] : undefined,
             } as CanvasTable;
           })
           .filter(Boolean) as CanvasTable[];
@@ -207,7 +206,7 @@ export function TableFloorPlan({
     return () => {
       cancelled = true;
     };
-  }, [activeZoneId, tables, orderTimestamps, tableTotals, toast]);
+  }, [activeZoneId, tables, orderTimestamps, toast]);
 
   const activeZone = useMemo(
     () => zones.find((z) => z.id === activeZoneId) ?? null,
@@ -283,7 +282,7 @@ export function TableFloorPlan({
           ) : (
           <CanvasView
             zone={activeZone}
-            tables={zoneTables}
+            tables={zoneTables.map(table => ({ ...table, provisionalTotal: table.status === "occupied" ? tableTotals?.[table.id] : undefined }))}
             decorations={decorations}
             onSelect={(ct) => setActionTable(ct)}
           />
@@ -312,6 +311,7 @@ export function TableFloorPlan({
                 capacity: t.capacity,
                 status: t.status,
                 unpaidOrders: t.currentOrderId ? 1 : 0,
+                provisionalTotal: t.status === "occupied" ? tableTotals?.[t.id] : undefined,
               });
             }}
             orderTimestamps={orderTimestamps}
@@ -322,7 +322,7 @@ export function TableFloorPlan({
 
       {/* Action sheet khi tap bàn — Mở đơn / Chuyển bàn / Gộp bàn */}
       <TableActionSheet
-        table={actionTable}
+        table={actionTable ? { ...actionTable, provisionalTotal: tableTotals?.[actionTable.id] } : null}
         zoneName={
           actionTable
             ? tables.find((t) => t.id === actionTable.id)?.zone ?? activeZone?.name ?? undefined
