@@ -59,17 +59,17 @@ export function TableFloorPlan({
 }: TableFloorPlanProps) {
   const { currentBranch, user, tenant } = useAuth();
   const { toast } = useToast();
-  const viewKey = `onebiz:fnb-table-view:${tenant?.id}:${user?.id}:${currentBranch?.id}`;
+  const viewKey = tenant?.id && user?.id && currentBranch?.id ? `onebiz:fnb-table-view:${tenant.id}:${user.id}:${currentBranch.id}` : "";
   const [viewPreference, setViewPreference] = useState<{ key: string; view: "plan" | "list" }>({ key: "", view: "plan" });
   const tableView = viewPreference.key === viewKey ? viewPreference.view : "plan";
   useEffect(() => {
-    try { setViewPreference({ key: viewKey, view: localStorage.getItem(viewKey) === "list" ? "list" : "plan" }); }
+    try { setViewPreference({ key: viewKey, view: viewKey && localStorage.getItem(viewKey) === "list" ? "list" : "plan" }); }
     catch { setViewPreference({ key: viewKey, view: "plan" }); }
   }, [viewKey]);
   const setTableView = (view: "plan" | "list") => { setViewPreference({ key: viewKey, view }); };
   const chooseTableView = (view: "plan" | "list") => {
     setTableView(view);
-    try { localStorage.setItem(viewKey, view); } catch { /* preference remains usable in this visit */ }
+    try { if (viewKey) localStorage.setItem(viewKey, view); } catch { /* preference remains usable in this visit */ }
   };
   const [tableSearch, setTableSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TableStatus | "all">("all");

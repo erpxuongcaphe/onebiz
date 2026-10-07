@@ -41,7 +41,7 @@ describe("FnB order merge security contract", () => {
 
   it("removes the legacy browser-side merge sequence", () => {
     const start = service.indexOf("export async function mergeKitchenOrders");
-    const end = service.indexOf("// Giảm giá", start);
+    const end = service.indexOf("export async function setDeliveryPlatform", start);
     const implementation = service.slice(start, end);
     expect(implementation).toContain('"merge_kitchen_orders_atomic"');
     expect(implementation).not.toContain('.from("kitchen_order_items")');
