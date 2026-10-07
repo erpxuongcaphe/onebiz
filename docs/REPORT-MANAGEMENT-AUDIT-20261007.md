@@ -57,6 +57,12 @@ trong dot nay chua thuc hien duoc. Khong tu gan diem chat luong so lieu.
    quan tri backlog. Khong sua logic mot dat hang -> nhieu hoa don trong dot nay.
 5. Cac route co hop dong xuat/tai loi khac nhau. Can test hanh vi tung route,
    khong thay hang loat catch hay cap quyen de lam hien du lieu.
+6. P1: get_finance_dashboard_report (00258) goi P&L cu; 00439 chi noi so ghi
+   nhan quan tri vao get_profit_and_loss_report_v2 va bao cao chi nhanh V2.
+   analytics.ts cung tinh profit tu revenue - cogs - operating_expense, khong
+   co other_income. Can doc dinh nghia dang chay va doi soat hai man truoc khi
+   coi Phan tich tai chinh la KQKD day du. Ban sua UI nay khong khang dinh da
+   sua hop dong nay; khong tu doi cong thuc tren nguon chua xac minh.
 
 ## Ban sua dot nay
 
