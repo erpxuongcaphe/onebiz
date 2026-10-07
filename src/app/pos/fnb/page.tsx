@@ -3567,6 +3567,7 @@ function FnbPosPageInner() {
         deliveryCountToday={deliveryCountToday}
       />
       <div data-pos-toast-region className="shrink-0" />
+      <Suspense fallback={null}><PendingShiftAlertSection branchId={currentBranch?.id ?? null} inFlow /></Suspense>
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
       <FnbSidenavDrawer
@@ -3941,9 +3942,7 @@ function FnbPosPageInner() {
       )}
 
       {/* CEO 05/06/2026: cảnh báo ca pending (auto-mark khi quá cutoff) */}
-      <Suspense fallback={null}>
-        <PendingShiftAlertSection branchId={currentBranch?.id ?? null} />
-      </Suspense>
+
 
 
       {/* Search modal (F3) — lazy loaded */}
