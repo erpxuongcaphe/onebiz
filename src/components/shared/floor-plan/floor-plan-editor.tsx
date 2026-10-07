@@ -66,6 +66,8 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   const [loading, setLoading] = useState(true);
   const [uploadingBg, setUploadingBg] = useState(false);
   const [mobileToolsOpen, setMobileToolsOpen] = useState(false);
+  const [deletingDecoration, setDeletingDecoration] = useState(false);
+  const decorationDeletePending = useRef(false);
 
   const { saveStatus, trackSave } = useSaveStatus();
   const { createFloorPlanZone, updateFloorPlanZone, deleteFloorPlanZone, updateTableLayout, createDecoration, updateDecoration, deleteDecoration, uploadFloorPlanBackground, removeFloorPlanBackground, createTableSvc } = useMemo(() => ({
@@ -354,10 +356,25 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
   );
 
   const handleDeleteSelectedDecor = async () => {
-    if (!selectedDecorationId) return;
-    await deleteDecoration(selectedDecorationId);
-    setDecorations((prev) => prev.filter((d) => d.id !== selectedDecorationId));
-    setSelectedDecorationId(null);
+    if (!selectedDecoration || decorationDeletePending.current) return;
+    const target = selectedDecoration;
+    decorationDeletePending.current = true;
+    setDeletingDecoration(true);
+    try {
+      await deleteDecoration(target.id);
+      setDecorations((prev) => prev.filter((d) => d.id !== target.id));
+      setSelectedDecorationId((current) => current === target.id ? null : current);
+      toast({ title: `Đã xoá ${target.label || "vật trang trí"}`, variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Không xoá được vật trang trí",
+        description: err instanceof Error ? err.message : "Vui lòng thử lại.",
+        variant: "error",
+      });
+    } finally {
+      decorationDeletePending.current = false;
+      setDeletingDecoration(false);
+    }
   };
 
   // ─── Upload background image ───
@@ -582,13 +599,29 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
         >
           <Icon name="add" size={14} /> Khu vực
         </button>
-        {activeZone && (
+        {selectedDecoration && (
           <button
-            onClick={handleDeleteZone}
-            className="ml-auto px-2 py-1.5 rounded-lg text-xs text-status-error hover:bg-status-error/10 transition-colors flex items-center gap-1"
-            title="Xoá khu vực"
+            type="button"
+            onClick={handleDeleteSelectedDecor}
+            disabled={deletingDecoration}
+            aria-label="Xoá vật đang chọn"
+            title={`Xoá ${selectedDecoration.label || "vật trang trí"}`}
+            className="ml-auto flex max-w-full items-center gap-1 rounded px-2 py-1.5 text-xs text-status-error hover:bg-status-error/10 disabled:opacity-50"
           >
             <Icon name="delete" size={14} />
+            <span className="break-words">{deletingDecoration ? "Đang xoá..." : `Xoá ${selectedDecoration.label || "vật trang trí"}`}</span>
+          </button>
+        )}
+        {activeZone && (
+          <button
+            type="button"
+            onClick={handleDeleteZone}
+            className={cn(!selectedDecoration && "ml-auto", "px-2 py-1.5 rounded text-xs text-muted-foreground hover:bg-muted transition-colors flex items-center gap-1")}
+            title="Xoá khu vực"
+            aria-label={`Xoá khu vực ${activeZone.name}`}
+          >
+            <Icon name="delete" size={14} />
+            Xoá khu vực
           </button>
         )}
       </div>
@@ -638,15 +671,6 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                 </button>
               ))}
             </div>
-              {selectedDecorationId && (
-                <button
-                onClick={handleDeleteSelectedDecor}
-                className="w-full mt-2 px-2 py-1.5 rounded text-xs flex items-center justify-center gap-1 border border-status-error/30 text-status-error hover:bg-status-error/10"
-              >
-                <Icon name="delete" size={12} />
-                Xoá vật đang chọn
-                </button>
-              )}
               {selectedDecoration && (
                 <div className="mt-2 space-y-2 rounded-md border border-border bg-background p-2">
                   <p className="text-xs uppercase font-semibold tracking-wide text-muted-foreground">
