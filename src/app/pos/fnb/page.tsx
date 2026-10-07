@@ -2195,6 +2195,13 @@ function FnbPosPageInner() {
     [pos, toast],
   );
 
+  const { switchTab: switchOrderTab } = pos;
+  const handleSwitchOrderTab = useCallback((tabId: string) => {
+    switchOrderTab(tabId);
+    setShowFloorPlan(false);
+    setMobileCartOpen(true);
+  }, [switchOrderTab]);
+
   const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
     if (openingSharedOrder) return;
     setOpeningSharedOrder(true);
@@ -2577,10 +2584,9 @@ function FnbPosPageInner() {
         setShowFloorPlan(false);
       } else if (table.status === "occupied" && table.currentOrderId) {
         // Switch to existing tab for this table
-        const existingTab = pos.tabs.find((t) => t.tableId === table.id);
+        const existingTab = pos.tabs.find((t) => t.kitchenOrderId === table.currentOrderId);
         if (existingTab) {
-          pos.switchTab(existingTab.id);
-          setShowFloorPlan(false);
+          handleSwitchOrderTab(existingTab.id);
         } else {
           // POS-FIX-B3: bàn occupied nhưng không có tab local (vd reload, đổi
           // ca). Thay vì silent fail (click không gì xảy ra), tạo tab mới link
@@ -2597,9 +2603,10 @@ function FnbPosPageInner() {
           });
           void hydrateKitchenOrderIntoTab(table.currentOrderId, newTabId, true);
           setShowFloorPlan(false);
+          setMobileCartOpen(true);
           toast({
             title: `Bàn ${table.tableNumber} đang có đơn cũ`,
-            description: "Tab mới được link tới đơn hiện tại. Xem món đã gọi ở Màn bếp (KDS).",
+            description: "Đang nạp các món đã gọi vào giỏ hàng.",
             variant: "default",
             duration: 5000,
           });
@@ -2626,7 +2633,7 @@ function FnbPosPageInner() {
           });
       }
     },
-    [pos, branchId, canManageTables, toast, hydrateKitchenOrderIntoTab],
+    [pos, branchId, canManageTables, toast, hydrateKitchenOrderIntoTab, handleSwitchOrderTab],
   );
 
   // ── Shift handlers ──
@@ -3445,7 +3452,7 @@ function FnbPosPageInner() {
         onOpenOrders={() => setOpenOrdersDialog(true)}
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
-        switchTab={pos.switchTab}
+        switchTab={handleSwitchOrderTab}
         closeTab={pos.closeTab}
         createTab={() => pos.createTab("Mang về", "takeaway")}
         onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
