@@ -169,9 +169,13 @@ export default function TaiChinhPage() {
   const [monthlyProfitData, setMonthlyProfitData] = useState<ChartPoint[]>([]);
   const [cashFlowData, setCashFlowData] = useState<CashFlowRow[]>([]);
   const [trendSort, setTrendSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const [expenseSort, setExpenseSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const visibleTrend = useMemo(() => trendSort
     ? sortReportRows(revenueVsExpenseData, row => row[trendSort.id], trendSort.direction)
     : revenueVsExpenseData, [revenueVsExpenseData, trendSort]);
+  const visibleExpenses = useMemo(() => expenseSort
+    ? sortReportRows(expenseBreakdownData, row => expenseSort.id === "name" ? row.name : row.value, expenseSort.direction)
+    : expenseBreakdownData, [expenseBreakdownData, expenseSort]);
 
 
   const handleExportView = useCallback(async () => {
@@ -212,14 +216,23 @@ export default function TaiChinhPage() {
         ],
         rows: visibleTrend.map(row => ({ ...row })),
       };
-      await exportReportToExcel({ kind: "tai-chinh", mode: "view", range, branchName: branchLabel, sheets: [sheet, trendSheet] });
+      const expenseSheet: ExcelSheet = {
+        name: "Cơ cấu chi phí",
+        titleRows: title,
+        columns: [
+          { label: "Khoản chi phí", key: "name", width: 36 },
+          { label: "Số tiền", key: "value", width: 22, format: "currency" },
+        ],
+        rows: visibleExpenses.map(row => ({ ...row })),
+      };
+      await exportReportToExcel({ kind: "tai-chinh", mode: "view", range, branchName: branchLabel, sheets: [sheet, trendSheet, expenseSheet] });
       toast({ title: "Đã xuất Excel (view)", variant: "success" });
     } catch (err) {
       toast({ title: "Lỗi xuất Excel", description: err instanceof Error ? err.message : "", variant: "error" });
     } finally {
       setExporting(false);
     }
-  }, [kpis, visibleTrend, range, branchLabel, toast, exporting, loading, loadError]);
+  }, [kpis, visibleTrend, visibleExpenses, range, branchLabel, toast, exporting, loading, loadError]);
 
   const handleExportFull = useCallback(async () => {
     if (exporting || loading || loadError || !kpis) return;
@@ -638,6 +651,22 @@ export default function TaiChinhPage() {
                 })),
               ]}
               subtotalLabel="Tổng trong kỳ"
+            />
+            <h2 className="text-base font-semibold pt-3">Cơ cấu chi phí</h2>
+            <ReportDataTable
+              tablePreferenceKey="report.finance.expense-breakdown"
+              rows={visibleExpenses}
+              getRowKey={(_, index) => index}
+              sortState={expenseSort}
+              onSortChange={setExpenseSort}
+              columns={[
+                { key: "name", label: "Khoản chi phí", sticky: true },
+                { key: "value", label: "Số tiền", align: "right",
+                  cell: row => <span className="tabular-nums whitespace-nowrap">{formatCurrency(row.value)}</span>,
+                  subtotalCell: formatCurrency(visibleExpenses.reduce((sum, row) => sum + row.value, 0)),
+                },
+              ]}
+              subtotalLabel="Tổng chi phí phân loại"
             />
           </section>
         ) : <>
