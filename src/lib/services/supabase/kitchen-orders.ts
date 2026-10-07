@@ -734,3 +734,28 @@ export async function setDeliveryDistanceTier(
   );
   if (error) handleError(error, "setDeliveryDistanceTier:atomic_rpc");
 }
+
+/** Canonical unpaid checks across devices, including served checks awaiting payment. */
+export async function getUnpaidFnbOrders(branchId?: string) {
+  const client = getClient();
+  const tenantId = await getCurrentTenantId();
+  const orders: import("@/lib/fnb-open-orders").FnbOpenOrder[] = [];
+  const { isUnpaidFnbOrder, summarizeFnbOpenOrder } = await import("@/lib/fnb-open-orders");
+  for (let offset = 0; ; offset += 500) {
+    let query = client.from("kitchen_orders")
+      .select(`${KITCHEN_ORDER_SELECT}, kitchen_order_items(*)`)
+      .eq("tenant_id", tenantId).is("invoice_id", null).is("merged_into_id", null)
+      .in("status", ["pending", "preparing", "ready", "served"])
+      .order("created_at", { ascending: true }).order("id", { ascending: true })
+      .range(offset, offset + 499);
+    if (branchId) query = query.eq("branch_id", branchId);
+    const { data, error } = await query;
+    if (error) handleError(error, "getUnpaidFnbOrders");
+    for (const row of data ?? []) {
+      const order = { ...mapKitchenOrder(row), items: (row.kitchen_order_items ?? []).map(mapKitchenItem) };
+      if (isUnpaidFnbOrder(order)) orders.push(summarizeFnbOpenOrder(order));
+    }
+    if ((data?.length ?? 0) < 500) break;
+  }
+  return orders;
+}

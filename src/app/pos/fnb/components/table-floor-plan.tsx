@@ -57,9 +57,20 @@ export function TableFloorPlan({
   onMergeTable,
   orderTimestamps,
 }: TableFloorPlanProps) {
-  const { currentBranch } = useAuth();
+  const { currentBranch, user, tenant } = useAuth();
   const { toast } = useToast();
-  const [tableView, setTableView] = useState<"plan" | "list">("plan");
+  const viewKey = `onebiz:fnb-table-view:${tenant?.id}:${user?.id}:${currentBranch?.id}`;
+  const [viewPreference, setViewPreference] = useState<{ key: string; view: "plan" | "list" }>({ key: "", view: "plan" });
+  const tableView = viewPreference.key === viewKey ? viewPreference.view : "plan";
+  useEffect(() => {
+    try { setViewPreference({ key: viewKey, view: localStorage.getItem(viewKey) === "list" ? "list" : "plan" }); }
+    catch { setViewPreference({ key: viewKey, view: "plan" }); }
+  }, [viewKey]);
+  const setTableView = (view: "plan" | "list") => { setViewPreference({ key: viewKey, view }); };
+  const chooseTableView = (view: "plan" | "list") => {
+    setTableView(view);
+    try { localStorage.setItem(viewKey, view); } catch { /* preference remains usable in this visit */ }
+  };
   const [tableSearch, setTableSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<TableStatus | "all">("all");
   const [zones, setZones] = useState<FloorPlanZone[]>([]);
@@ -213,8 +224,8 @@ export function TableFloorPlan({
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-white dark:bg-card px-4 py-2">
         <div><h2 className="text-base font-semibold">Chọn bàn phục vụ</h2><p className="text-xs text-muted-foreground">Chọn bàn để mở đơn; chuyển và gộp bàn trong chi tiết.</p></div>
         <div className="flex gap-1" role="group" aria-label="Cách xem bàn">
-          <button type="button" aria-pressed={tableView === "plan"} onClick={() => { setTableView("plan"); setStatusFilter("all"); setTableSearch(""); }} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
-          <button type="button" aria-pressed={tableView === "list"} onClick={() => setTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
+          <button type="button" aria-pressed={tableView === "plan"} onClick={() => { chooseTableView("plan"); setStatusFilter("all"); setTableSearch(""); }} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "plan" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Sơ đồ</button>
+          <button type="button" aria-pressed={tableView === "list"} onClick={() => chooseTableView("list")} className={cn("min-h-11 rounded-lg px-3 text-sm font-medium", tableView === "list" ? "bg-primary/10 text-primary" : "hover:bg-muted")}>Danh sách</button>
         </div>
       </div>
       <div className="shrink-0 border-b border-border bg-white dark:bg-card px-4 py-2"><input aria-label="Tìm bàn" placeholder="Tìm số bàn, tên hoặc khu vực..." value={tableSearch} onChange={(event) => { setTableSearch(event.target.value); setTableView("list"); }} className="min-h-11 w-full rounded-lg border border-border bg-background px-3 text-sm sm:max-w-sm" /></div>

@@ -52,6 +52,10 @@ import type {
 import type { FinancialAlert } from "@/lib/services/supabase/reports";
 import { getInventoryTurnover } from "@/lib/services/supabase/reports";
 import type { InventoryTurnoverResult } from "@/lib/services/supabase/reports";
+import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
+import { fnbOpenOrderLabel } from "@/lib/fnb-open-orders";
+import { PERMISSIONS } from "@/lib/permissions";
 import { Icon } from "@/components/ui/icon";
 
 type ChartView = "day" | "hour" | "weekday";
@@ -84,7 +88,9 @@ export default function TongQuanPage() {
   // mà không lo activeBranchId đổi từ undefined → branch_id sau đó (gây
   // double-fire mỗi service).
   const { activeBranchId, isReady } = useBranchFilter();
-  const { user } = useAuth();
+  const { user, tenant, hasPermission } = useAuth();
+  const canViewFnbOrders = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS);
+  const openOrders = useFnbOpenOrders(tenant?.id, activeBranchId, isReady && canViewFnbOrders);
   const [chartView, setChartView] = useState<ChartView>("day");
   // Progressive loading: KPI skeleton trước, charts + secondary widgets sau.
   // Trước đây single `loading` flag block toàn bộ dashboard 2-4s → user thấy spinner
@@ -153,6 +159,9 @@ export default function TongQuanPage() {
     fetchPhase1();
     fetchPhase2();
   }, [fetchPhase1, fetchPhase2, isReady]);
+
+  const refreshDashboard = useCallback(async () => { await Promise.all([fetchPhase1(), fetchPhase2()]); }, [fetchPhase1, fetchPhase2]);
+  const dashboardLive = useLiveDataRefresh(refreshDashboard, tenant?.id, activeBranchId, ["invoices", "cash_transactions", "kitchen_orders"], isReady);
 
   const [clientNow, setClientNow] = useState<Date | null>(null);
   useEffect(() => {
@@ -232,8 +241,11 @@ export default function TongQuanPage() {
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Icon name="schedule" size={14} className="text-muted-foreground" />
           <span className="min-h-5 capitalize">{formattedDate}</span>
+          <span className={dashboardLive ? "text-status-success" : "text-muted-foreground"}>{dashboardLive ? "· Trực tiếp" : "· Tự cập nhật 30 giây"}</span>
         </div>
       </div>
+
+      {canViewFnbOrders && <details id="fnb-open-checks" className="rounded-md border bg-card p-3"><summary className="cursor-pointer text-sm font-semibold text-primary">Đơn F&B chờ thanh toán · {openOrders.orders.length}</summary><p className="mt-2 text-xs text-muted-foreground">{openOrders.error ? `Chưa cập nhật được: ${openOrders.error}` : openOrders.connected ? "Trực tiếp theo phạm vi chi nhánh đang chọn" : "Tự cập nhật mỗi 30 giây"}</p><div className="mt-2 max-h-80 overflow-y-auto divide-y">{openOrders.orders.map((order) => <div key={order.id} className="flex items-center justify-between gap-2 py-2 text-sm"><div><span className="font-semibold">{fnbOpenOrderLabel(order)}</span><span className="ml-2 text-xs text-muted-foreground">{order.orderNumber} · {order.itemCount} món</span></div><span className="font-semibold text-primary">{formatCurrency(order.provisionalTotal)}</span></div>)}</div><Link href="/pos/fnb" className="inline-flex min-h-11 items-center text-sm font-semibold text-primary">Mở POS để xem / thêm món</Link></details>}
 
       {/* KPI Cards + Inventory Turnover — Stitch spec: rounded-xl, padding rộng,
           icon bg-primary-fixed text-primary, uppercase label widest tracking,
@@ -263,6 +275,7 @@ export default function TongQuanPage() {
             </Card>
           ))}
         {kpiCards.map((kpi) => (
+          <div key={kpi.label} className="contents">
           <Card
             key={kpi.label}
             size="sm"
@@ -325,6 +338,8 @@ export default function TongQuanPage() {
               )}
             </CardContent>
           </Card>
+          {kpi.label === "Thực thu" && canViewFnbOrders && <Card size="sm" className="border border-status-warning/30 bg-status-warning/5"><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-status-warning">F&B · Chưa thanh toán</p><p className="mt-2 text-xl font-extrabold text-foreground">{openOrders.loading ? "—" : formatCurrency(openOrders.orders.reduce((sum, order) => sum + order.provisionalTotal, 0))}</p><p className="mt-1 text-sm text-muted-foreground">{openOrders.orders.length} đơn · {new Set(openOrders.orders.filter((order) => order.tableId).map((order) => order.tableId)).size} bàn</p><p className="mt-2 text-xs text-muted-foreground">Giá trị tạm tính, gồm đơn từ trước còn mở. Chưa cộng vào thực thu.</p><a href="#fnb-open-checks" className="mt-2 inline-flex min-h-11 items-center text-sm font-semibold text-primary">Xem các đơn chờ thu →</a></CardContent></Card>}
+          </div>
         ))}
 
         {/* Inventory Turnover — inline as 5th card */}

@@ -30,6 +30,8 @@ import { Icon } from "@/components/ui/icon";
 
 interface FnbHeaderProps {
   orderActions?: ReactNode;
+  openOrderCount?: number;
+  onOpenOrders?: () => void;
   tabs: FnbTabSnapshot[];
   activeTabId: string;
   switchTab: (tabId: string) => void;
@@ -52,6 +54,8 @@ interface FnbHeaderProps {
 
 export function FnbHeader({
   orderActions,
+  openOrderCount = 0,
+  onOpenOrders,
   tabs,
   activeTabId,
   switchTab,
@@ -235,7 +239,8 @@ export function FnbHeader({
         scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
     <div className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-white dark:bg-card px-2 sm:px-3">
     <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
-      {tabs.map((tab) => {
+      {onOpenOrders && <button type="button" onClick={onOpenOrders} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md bg-primary/10 px-2.5 text-sm font-semibold text-primary" aria-label={`Đơn đang mở (${openOrderCount})`}><Icon name="receipt_long" size={16} /><span className="hidden sm:inline">Đơn mở</span><span>{openOrderCount}</span></button>}
+      {(onOpenOrders ? tabs.filter((tab, index) => tab.id === activeTabId || index >= tabs.length - 2) : tabs).map((tab) => {
         const isActive = tab.id === activeTabId;
         // Color dot theo orderType (đồng bộ với cart pill row)
         const dotColor =

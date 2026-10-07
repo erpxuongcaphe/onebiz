@@ -107,6 +107,9 @@ import { formatCurrency, formatNumber, formatStockQuantity } from "@/lib/format"
 import { getFnbBenefitDisplay } from "@/lib/fnb-benefit-display";
 import { previewFnbSettlement } from "@/lib/fnb-settlement-preview";
 import { cn } from "@/lib/utils";
+import { useFnbOpenOrders } from "@/lib/hooks/use-fnb-open-orders";
+import { fnbOpenOrderLabel, isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
+import { FnbOpenOrdersDialog } from "./components/fnb-open-orders-dialog";
 import { needsFnbTable } from "./order-type-selection";
 import { useFnbPosState } from "./hooks/use-fnb-pos-state";
 import { useFnbTabBenefits } from "./hooks/use-fnb-tab-benefits";
@@ -408,6 +411,9 @@ function FnbPosPageInner() {
     rulesMap: Map<string, TierPriceRule[]>;
   } | null>(null);
   const userId = user?.id ?? "";
+  const openOrders = useFnbOpenOrders(tenantId, branchId, Boolean(tenantId && branchId));
+  const [openOrdersDialog, setOpenOrdersDialog] = useState(false);
+  const [openingSharedOrder, setOpeningSharedOrder] = useState(false);
   const canCancelUnpaidOrder =
     hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -1880,6 +1886,7 @@ function FnbPosPageInner() {
       } else {
         toast({ title: "Đã gửi bếp", description: `Đơn ${result.orderNumber ?? ""} đã gửi bếp thành công`, variant: "success" });
       }
+      window.dispatchEvent(new Event("fnb-open-orders-changed"));
       return result.kitchenOrderId ?? null;
     } catch (err) {
       hapticError();
@@ -2186,6 +2193,25 @@ function FnbPosPageInner() {
     },
     [pos, toast],
   );
+
+  const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
+    if (openingSharedOrder) return;
+    setOpeningSharedOrder(true);
+    try {
+      const order = await getKitchenOrderById(summary.id);
+      if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
+        toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
+        void openOrders.refresh(); return;
+      }
+      const existing = pos.tabs.find((tab) => tab.kitchenOrderId === order.id);
+      const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
+      pos.switchTab(tabId);
+      pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+      pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, customerConfirmationRequired: existing?.customerConfirmationRequired ?? !existing?.customerId });
+      setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
+    } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); }
+    finally { setOpeningSharedOrder(false); }
+  }, [openingSharedOrder, branchId, toast, openOrders, pos]);
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {
@@ -2494,6 +2520,7 @@ function FnbPosPageInner() {
 
         // Giảm giá, khuyến mãi, coupon và điểm được ghi atomically cùng hóa đơn.
 
+        window.dispatchEvent(new Event("fnb-open-orders-changed"));
         setPaymentOpen(false);
         pos.closeTab(tab.id);
         clearTabBenefits(tab.id);
@@ -3397,6 +3424,8 @@ function FnbPosPageInner() {
         onClick={() => setSyncDrawerOpen(true)}
       />
       <FnbHeader
+        openOrderCount={openOrders.orders.length}
+        onOpenOrders={() => setOpenOrdersDialog(true)}
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
         switchTab={pos.switchTab}
@@ -4114,6 +4143,8 @@ function FnbPosPageInner() {
           });
         }}
       />
+
+      <FnbOpenOrdersDialog open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
