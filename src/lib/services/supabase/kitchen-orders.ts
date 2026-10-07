@@ -216,6 +216,17 @@ export async function addItemsToOrder(
   },
 ): Promise<void> {
   const supabase = getClient();
+  // Branch menu guards run before the RPC resolves p_existing_order_id.
+  // Read the canonical order branch under the actor's tenant/RLS; never use
+  // the device's selected branch or null for a supplement.
+  const tenantId = await getCurrentTenantId();
+  const { data: existingOrder, error: orderError } = await supabase
+    .from("kitchen_orders").select("branch_id")
+    .eq("tenant_id", tenantId).eq("id", orderId).single();
+  if (orderError) handleError(orderError, "addItemsToOrder:branch");
+  if (!existingOrder?.branch_id) {
+    throw Object.assign(new Error("Không tìm thấy chi nhánh của đơn cần gửi thêm. Mở lại đơn rồi thử lại."), { kitchenRequestRejected: true });
+  }
   const batchId = options?.batchId ??
     (typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -228,7 +239,7 @@ export async function addItemsToOrder(
   const { error } = await (supabase.rpc as any)(
     "fnb_send_to_kitchen_atomic_v2",
     {
-      p_branch_id: null,
+      p_branch_id: existingOrder.branch_id,
       p_table_id: null,
       p_order_type: "takeaway",
       p_note: null,
