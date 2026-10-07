@@ -2198,6 +2198,7 @@ function FnbPosPageInner() {
         pos.updateTabMeta(tabId, {
           kitchenOrderId: order.id,
           tableId: order.tableId ?? undefined,
+          label: fnbOpenOrderLabel(order),
           orderType: order.orderType,
           orderNote: order.note ?? undefined,
           deliveryPlatform: order.deliveryPlatform ?? undefined,
