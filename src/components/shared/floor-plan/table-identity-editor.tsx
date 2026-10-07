@@ -49,18 +49,20 @@ export function TableIdentityEditor({ table, onSave }: TableIdentityEditorProps)
   };
 
   return <div className="space-y-2 border-b pb-3">
-    <p className="text-xs font-semibold uppercase text-muted-foreground">Bàn đang chọn</p>
+    <p className="text-sm font-semibold">Bàn đang chọn</p>
+    <div className="grid grid-cols-[5rem_minmax(0,1fr)] gap-2">
     <div className="space-y-1">
-      <Label htmlFor="t-number" className="text-xs">Số bàn</Label>
+      <Label htmlFor="t-number" className="text-sm">Số bàn</Label>
       <Input id="t-number" type="number" min={1} max={9999} step={1}
-        value={number} disabled={saving} onChange={event => setNumber(event.target.value)} className="h-8 text-xs" />
+        value={number} disabled={saving} onChange={event => setNumber(event.target.value)} className="h-9 text-sm tabular-nums" />
     </div>
     <div className="space-y-1">
-      <Label htmlFor="t-name" className="text-xs">Tên bàn</Label>
+      <Label htmlFor="t-name" className="text-sm">Tên bàn</Label>
       <Input id="t-name" value={name} disabled={saving}
-        onChange={event => setName(event.target.value)} className="h-8 text-xs" />
+        onChange={event => setName(event.target.value)} className="h-9 text-sm" />
     </div>
-    <Button type="button" size="sm" className="w-full gap-1 text-xs" onClick={save}
+    </div>
+    <Button type="button" size="sm" className="w-full gap-1 text-sm" onClick={save}
       disabled={saving || (number === String(table.tableNumber ?? "") && name === (table.name ?? ""))}>
       <Icon name="save" size={14} />{saving ? "Đang lưu..." : "Lưu thông tin bàn"}
     </Button>
