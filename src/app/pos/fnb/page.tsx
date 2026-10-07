@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/lib/permissions";
 import { useSettings } from "@/lib/contexts/settings-context";
 import { FnbBranchPrintControl } from "@/components/shared/fnb-branch-print-control";
 import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
+import { isFnbMenuSaleItem, matchesFnbMenuSearch } from "@/lib/fnb-menu-search";
 import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
 import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
@@ -250,6 +251,7 @@ function FnbPosPageInner() {
   const [openShiftDialogOpen, setOpenShiftDialogOpen] = useState(false);
   const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false);
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [menuSearch, setMenuSearch] = useState("");
   const [customerPickerOpen, setCustomerPickerOpen] = useState(false);
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const [productDisplayMode, setProductDisplayMode] = useState<"compact" | "photos">("compact");
@@ -313,6 +315,7 @@ function FnbPosPageInner() {
   const [couponApplying, setCouponApplying] = useState(false);
 
   const branchId = currentBranch?.id;
+  useEffect(() => setMenuSearch(""), [branchId]);
   const tenantId = tenant?.id ?? "";
   const isBlockingLoad = authLoading || (!!branchId && loading);
 
@@ -430,7 +433,7 @@ function FnbPosPageInner() {
           const cached = await getMenuFromCache(tenantId, branchId);
           const cachedProducts = cached.products.filter(
             (product) =>
-              Number.isFinite(product.sell_price) &&
+              isFnbMenuSaleItem(product) && Number.isFinite(product.sell_price) &&
               (product.sell_price > 0 || product.allow_free_sale === true),
           );
           mustRefreshCatalog = cachedProducts.length !== cached.products.length || cachedProducts.some(product => product.sort_order === undefined) || cached.categories.some(category => category.sort_order === undefined);
@@ -492,12 +495,13 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
+                  .eq("inventory_role", "fnb_menu_item")
                   .order("sort_order")
                   .order("name")
                   .order("id")
@@ -572,7 +576,7 @@ function FnbPosPageInner() {
               menuScopes,
               branchId,
             ).filter(
-              (product) => product.sell_price > 0 || product.allow_free_sale === true,
+              (product) => isFnbMenuSaleItem(product) && (product.sell_price > 0 || product.allow_free_sale === true),
             );
             const categoryIds = new Set(
               prods
@@ -600,6 +604,7 @@ function FnbPosPageInner() {
                 category_id: p.category_id,
                 brand: ((p as Record<string, unknown>).brand as string | null) ?? null,
                 allow_free_sale: (p as Record<string, unknown>).allow_free_sale === true,
+                inventory_role: p.inventory_role,
               }))
             );
 
@@ -984,18 +989,19 @@ function FnbPosPageInner() {
   }
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
-  const productsInCategory = useMemo(() => {
+  const orderedMenuProducts = useMemo(() => {
     const categoryRank = new Map(categories.map((category, index) => [category.id, index]));
     const sorted = [...productsWithTier].sort((a, b) =>
       (categoryRank.get(a.category_id ?? "") ?? categories.length) - (categoryRank.get(b.category_id ?? "") ?? categories.length) ||
       (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "vi") || a.id.localeCompare(b.id));
-    return activeCategoryId ? sorted.filter(p => p.category_id === activeCategoryId) : sorted;
-  }, [productsWithTier, activeCategoryId, categories]);
+    return sorted;
+  }, [productsWithTier, categories]);
+  const productsInCategory = useMemo(() => activeCategoryId ? orderedMenuProducts.filter(p => p.category_id === activeCategoryId) : orderedMenuProducts, [orderedMenuProducts, activeCategoryId]);
 
   const filteredProducts = useMemo(() => {
-    if (!activeSubFilter) return productsInCategory;
-    return productsInCategory.filter((p) => p.brand === activeSubFilter);
-  }, [productsInCategory, activeSubFilter]);
+    if (menuSearch.trim()) return orderedMenuProducts.filter(p => matchesFnbMenuSearch(p, menuSearch));
+    return productsInCategory.filter(p => !activeSubFilter || p.brand === activeSubFilter);
+  }, [orderedMenuProducts, productsInCategory, activeSubFilter, menuSearch]);
 
   // Map productId → tổng qty đang trong giỏ của tab hiện tại. Pass xuống
   // FnbProductGrid để render badge số lượng trên ô món (Phase 1A — additive,
@@ -3379,6 +3385,7 @@ function FnbPosPageInner() {
         onShiftClick={canCheckout ? handleShiftClick : undefined}
         viewMode={showFloorPlan ? "floorplan" : "menu"}
         onMenuClick={() => setSidenavOpen(true)}
+        hideSearch={!showFloorPlan}
         orderActions={<FnbBranchPrintControl key={branchId} branchId={branchId ?? undefined} compact />}
         deliveryCountToday={deliveryCountToday}
       />
@@ -3565,8 +3572,14 @@ function FnbPosPageInner() {
               {/* flex-1 min-h-0 cần thiết để cho FnbProductGrid (virtualized,
                    có scroll riêng) tự quản scroll thay vì wrapper — tránh
                    double scroll container. */}
-              <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border bg-blue-50/70 dark:bg-card px-2 py-1">
-                <span className="min-w-0 truncate text-base font-semibold">{activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-sm font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
+              <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-blue-50/70 dark:bg-card px-2 py-1">
+                <span className="min-w-0 truncate text-base font-semibold">{menuSearch.trim() ? "Kết quả tìm" : activeCategoryName ?? "Thực đơn"} <span className="ml-1 text-sm font-normal text-muted-foreground">{filteredProducts.length} món</span></span>
+                <div className="order-last flex h-11 min-w-0 basis-full items-center gap-2 rounded-md border border-border bg-background px-2 sm:order-none sm:basis-0 sm:flex-1 sm:max-w-md">
+                  <Icon name="search" size={18} className="shrink-0 text-primary" />
+                  <input type="search" aria-label="Tìm món trong thực đơn" placeholder="Tìm món…" value={menuSearch} onChange={event => setMenuSearch(event.target.value)} className="min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground" />
+                  {menuSearch && <button type="button" aria-label="Xóa tìm món" onClick={() => setMenuSearch("")} className="flex h-10 w-10 shrink-0 items-center justify-center text-muted-foreground hover:text-primary"><Icon name="close" size={18} /></button>}
+                  <button type="button" aria-label="Tìm món nhanh (F3)" onClick={() => setSearchModalOpen(true)} className="hidden h-10 shrink-0 px-1 text-xs text-primary sm:block">F3</button>
+                </div>
                 <div className="flex shrink-0 items-center gap-1" role="group" aria-label="Cách hiển thị món">
                   {hasPermission(PERMISSIONS.PRODUCTS_EDIT) && <button type="button" disabled={!networkStatus.isOnline} onClick={() => setMenuOrderOpen(true)} aria-label="Sắp xếp thực đơn" title="Sắp xếp thực đơn" className="flex h-11 w-11 items-center justify-center rounded-lg text-primary hover:bg-primary/10 disabled:opacity-40"><Icon name="swap_vert" size={22} /></button>}
                   <button type="button" aria-pressed={productDisplayMode === "compact"} onClick={() => setProductDisplayMode("compact")} className={cn("min-h-11 rounded-lg px-2 text-sm font-semibold", productDisplayMode === "compact" ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted")}>Gọn</button>
@@ -3758,7 +3771,7 @@ function FnbPosPageInner() {
         <Suspense fallback={null}>
           <FnbSearchModal
             open={searchModalOpen}
-            products={productsWithTier}
+            products={orderedMenuProducts}
             onSelect={(product) => {
               handleSelectProduct(product);
               setSearchModalOpen(false);

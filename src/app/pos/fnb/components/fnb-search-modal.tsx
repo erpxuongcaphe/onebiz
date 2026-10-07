@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { matchesFnbMenuSearch } from "@/lib/fnb-menu-search";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { useDebounce } from "@/lib/utils/use-debounce";
@@ -45,12 +46,11 @@ export function FnbSearchModal({
 
   const filtered = (() => {
     if (!debouncedQuery.trim()) return products.slice(0, 20);
-    const q = debouncedQuery.toLowerCase().trim();
+    const q = debouncedQuery;
     return products
       .filter(
         (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.code.toLowerCase().includes(q)
+          matchesFnbMenuSearch(p, q)
       )
       .slice(0, 20);
   })();

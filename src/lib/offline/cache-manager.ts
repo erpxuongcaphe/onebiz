@@ -7,6 +7,7 @@
  *   3. If data changed → update cache + notify via callback
  */
 
+import { isFnbMenuSaleItem } from "@/lib/fnb-menu-search";
 import { getDb, getMeta, setMeta } from "./db";
 import { withQuotaRecovery } from "./quota-manager";
 import { getClient } from "@/lib/services/supabase/base";
@@ -87,12 +88,13 @@ export async function prefetchMenuData(
   // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
     .from("products")
-    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order")
+    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order, inventory_role")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .eq("allow_sale", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
+    .eq("inventory_role", "fnb_menu_item")
     .order("sort_order")
     .order("name")
     .order("id");
@@ -113,7 +115,7 @@ export async function prefetchMenuData(
     scopes,
     branchId,
   ).filter(
-    (product) => product.sell_price > 0 || product.allow_free_sale === true,
+    (product) => isFnbMenuSaleItem(product) && (product.sell_price > 0 || product.allow_free_sale === true),
   );
   const visibleCategoryIds = new Set(
     visibleProducts
@@ -166,6 +168,7 @@ export async function prefetchMenuData(
           code: p.code,
           sell_price: p.sell_price,
           allow_free_sale: p.allow_free_sale,
+          inventory_role: p.inventory_role,
           image_url: (p as Record<string, unknown>).image_url,
           stock: p.stock,
           category_id: p.category_id,
