@@ -14,6 +14,8 @@ function createChain(resolvedValue: unknown = { data: null, error: null }) {
   chain.in = vi.fn(self);
   chain.order = vi.fn(self);
   chain.limit = vi.fn(self);
+  chain.is = vi.fn(self);
+  chain.range = vi.fn(self);
   chain.single = vi.fn(() => resolvedValue);
   chain.maybeSingle = vi.fn(() => resolvedValue);
   chain.then = (resolve: (v: unknown) => void) => resolve(resolvedValue);
@@ -48,6 +50,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
 
 import {
   getKitchenOrders,
+  getUnpaidFnbOrders,
   getKitchenOrdersWithItems,
   getKitchenOrderById,
   addItemsToOrder,
@@ -405,5 +408,27 @@ describe("updateKitchenItemStatus", () => {
   it("cycles: preparing → ready", async () => {
     await updateKitchenItemStatus("koi-1", "ready");
     // No throw = success
+  });
+});
+
+describe("getUnpaidFnbOrders", () => {
+  it("reads shared served/unpaid orders with tenant and branch scope and scoped items", async () => {
+    const orderChain = createChain({ data: [{ ...ORDER_ROW, invoice_id: null, merged_into_id: null, status: "served" }], error: null });
+    const itemChain = createChain({ data: ITEM_ROWS, error: null });
+    mockFromHandler = (table) => table === "kitchen_orders" ? orderChain : itemChain;
+    const result = await getUnpaidFnbOrders("b1");
+    expect(orderChain.eq).toHaveBeenCalledWith("tenant_id", "t1");
+    expect(orderChain.eq).toHaveBeenCalledWith("branch_id", "b1");
+    expect(orderChain.is).toHaveBeenCalledWith("invoice_id", null);
+    expect(orderChain.is).toHaveBeenCalledWith("merged_into_id", null);
+    expect(orderChain.in).toHaveBeenCalledWith("status", ["pending", "preparing", "ready", "served"]);
+    expect(itemChain.in).toHaveBeenCalledWith("kitchen_order_id", [ORDER_ROW.id]);
+    expect(result).toHaveLength(1);
+    expect(result[0].itemCount).toBe(3);
+    expect(result[0].provisionalTotal).toBeGreaterThan(0);
+  });
+  it("returns no orders on a truly empty branch", async () => {
+    mockFromHandler = () => createChain({ data: [], error: null });
+    expect(await getUnpaidFnbOrders("empty")).toEqual([]);
   });
 });

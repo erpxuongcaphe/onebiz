@@ -414,6 +414,7 @@ function FnbPosPageInner() {
   const openOrders = useFnbOpenOrders(tenantId, branchId, Boolean(tenantId && branchId));
   const [openOrdersDialog, setOpenOrdersDialog] = useState(false);
   const [openingSharedOrder, setOpeningSharedOrder] = useState(false);
+  const sharedSnapshotVersions = useRef(new Map<string, number>());
   const canCancelUnpaidOrder =
     hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -2206,12 +2207,25 @@ function FnbPosPageInner() {
       const existing = pos.tabs.find((tab) => tab.kitchenOrderId === order.id);
       const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
       pos.switchTab(tabId);
+      sharedSnapshotVersions.current.set(tabId, new Date(order.updatedAt).getTime());
       pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
       pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, customerConfirmationRequired: existing?.customerConfirmationRequired ?? !existing?.customerId });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
     } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); }
     finally { setOpeningSharedOrder(false); }
   }, [openingSharedOrder, branchId, toast, openOrders, pos]);
+
+  // Refresh only the read-only sent snapshot; never discard local unsent lines.
+  useEffect(() => {
+    const tabId = pos.activeTab?.id;
+    const order = openOrders.orders.find((entry) => entry.id === pos.activeTab?.kitchenOrderId);
+    if (!tabId || !order) return;
+    const version = new Date(order.updatedAt).getTime();
+    if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
+    sharedSnapshotVersions.current.set(tabId, version);
+    pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+    pos.updateTabMeta(tabId, { tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, persistedOrderDiscountAmount: order.discountAmount, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
+  }, [openOrders.orders, pos.activeTab?.id, pos.activeTab?.kitchenOrderId, pos.loadSentLinesIntoTab, pos.updateTabMeta]);
 
   // ── Print pre-bill ──
   const handlePrintPreBill = useCallback(() => {

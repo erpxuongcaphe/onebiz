@@ -754,7 +754,7 @@ export async function getUnpaidFnbOrders(branchId?: string) {
   const { isUnpaidFnbOrder, summarizeFnbOpenOrder } = await import("@/lib/fnb-open-orders");
   for (let offset = 0; ; offset += 500) {
     let query = client.from("kitchen_orders")
-      .select(`${KITCHEN_ORDER_SELECT}, kitchen_order_items(*)`)
+      .select(KITCHEN_ORDER_SELECT)
       .eq("tenant_id", tenantId).is("invoice_id", null).is("merged_into_id", null)
       .in("status", ["pending", "preparing", "ready", "served"])
       .order("created_at", { ascending: true }).order("id", { ascending: true })
@@ -762,8 +762,23 @@ export async function getUnpaidFnbOrders(branchId?: string) {
     if (branchId) query = query.eq("branch_id", branchId);
     const { data, error } = await query;
     if (error) handleError(error, "getUnpaidFnbOrders");
+    const ids = (data ?? []).map((row) => row.id);
+    const itemsByOrder = new Map<string, KitchenOrderItem[]>();
+    if (ids.length) {
+      for (let itemOffset = 0; ; itemOffset += 500) {
+        // IDs came from a tenant/branch-scoped order query; item RLS also applies.
+        const { data: rows, error: itemError } = await client.from("kitchen_order_items")
+          .select("*").in("kitchen_order_id", ids).order("id", { ascending: true }).range(itemOffset, itemOffset + 499);
+        if (itemError) handleError(itemError, "getUnpaidFnbOrders:items");
+        for (const row of rows ?? []) {
+          const items = itemsByOrder.get(row.kitchen_order_id) ?? [];
+          items.push(mapKitchenItem(row)); itemsByOrder.set(row.kitchen_order_id, items);
+        }
+        if ((rows?.length ?? 0) < 500) break;
+      }
+    }
     for (const row of data ?? []) {
-      const order = { ...mapKitchenOrder(row), items: (row.kitchen_order_items ?? []).map(mapKitchenItem) };
+      const order = { ...mapKitchenOrder(row), items: itemsByOrder.get(row.id) ?? [] };
       if (isUnpaidFnbOrder(order)) orders.push(summarizeFnbOpenOrder(order));
     }
     if ((data?.length ?? 0) < 500) break;
