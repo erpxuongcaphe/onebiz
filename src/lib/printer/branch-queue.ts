@@ -4,7 +4,8 @@ import type { PaperWidth } from "./escpos";
 import { CONNECTION_PROBE } from "../../../public/print-point/destination.mjs";
 
 export interface PrintRoute { key: string; label: string; printer: string; paper: PaperWidth }
-export interface PrintPoint { id: string; name: string; enabled: boolean; connected?: boolean; detected_printers?: string[]; routes: PrintRoute[]; last_seen_at: string | null }
+export interface BranchPrintPolicy { autoPrintKitchen?: boolean; autoPrintReceipt?: boolean; receiptStyle?: "minimal" | "standard" | "full"; kitchenTicketStyle?: "compact" | "standard" | "detailed" }
+export interface PrintPoint { id: string; name: string; enabled: boolean; connected?: boolean; detected_printers?: string[]; routes: PrintRoute[]; policy?: BranchPrintPolicy; last_seen_at: string | null }
 export interface BranchPrintJob { id: string; label: string; route_label: string; status: "queued" | "sending" | "handed_off" | "failed" | "unknown" | "cancelled"; created_at: string; actor_name: string; message: string | null }
 
 // New RPCs are typed here until the generated production schema is refreshed.
@@ -14,7 +15,7 @@ async function rpc<T>(name: string, args: Record<string, unknown>): Promise<T> {
   return data as T;
 }
 export const getBranchPrintState = (branchId: string) => rpc<{ point: PrintPoint | null; jobs: BranchPrintJob[] }>("fnb_print_state_v1", { p_branch: branchId });
-export const savePrintPoint = (branchId: string, name: string, routes: PrintRoute[], enabled: boolean) => rpc<PrintPoint>("fnb_print_manage_v1", { p_branch: branchId, p_action: "save", p_data: { name, routes, enabled } });
+export const savePrintPoint = (branchId: string, name: string, routes: PrintRoute[], enabled: boolean, policy?: BranchPrintPolicy) => rpc<PrintPoint>(policy ? "fnb_print_manage_v2" : "fnb_print_manage_v1", { p_branch: branchId, p_action: "save", p_data: { name, routes, enabled, ...(policy ? { policy } : {}) } });
 export const rotatePrintPointToken = (branchId: string) => rpc<{ id: string; token: string }>("fnb_print_manage_v1", { p_branch: branchId, p_action: "rotate", p_data: {} });
 export const resolvePrintJob = (branchId: string, id: string, action: "retry" | "cancel") => rpc("fnb_print_manage_v1", { p_branch: branchId, p_action: action, p_data: { id } });
 

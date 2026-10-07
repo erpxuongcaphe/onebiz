@@ -17,7 +17,7 @@ describe("branch scoped printer setup", () => {
     expect(mock.update).not.toHaveBeenCalled();
     cleanup();
     mock.state.mockResolvedValue({ point: { ...point, routes: [...point.routes,{...point.routes[0],key:"kitchen",label:"Bếp"}] }, jobs: [] });
-    render(<BranchPrintSetup />); await waitFor(() => expect(screen.getAllByDisplayValue("192.168.10.222")).toHaveLength(2));
+    render(<BranchPrintSetup />); await waitFor(() => expect(screen.getAllByDisplayValue("192.168.10.222")).toHaveLength(1));
     fireEvent.click(screen.getByRole("button", { name: "3. In thử & sử dụng" }));
     fireEvent.click(screen.getByRole("button", { name: "Dùng điểm in chi nhánh" }));
     expect(mock.update).toHaveBeenCalledWith("print", { fnbBranchQueue: true });
@@ -26,7 +26,7 @@ describe("branch scoped printer setup", () => {
     render(<BranchPrintSetup />); await screen.findByDisplayValue("192.168.10.222");
     fireEvent.click(screen.getByRole("button", { name: "Dùng chung máy hóa đơn cho bếp chưa gán" }));
     fireEvent.click(screen.getByRole("button", { name: "Lưu máy & nơi nhận" }));
-    await waitFor(() => expect(mock.save).toHaveBeenCalledWith("branch-xtb", "Quầy", expect.arrayContaining([expect.objectContaining({ key: "cashier", printer: "tcp://192.168.10.222:9100" }), expect.objectContaining({ key: "bar", printer: "tcp://192.168.10.222:9100" })]), true));
+    await waitFor(() => expect(mock.save).toHaveBeenCalledWith("branch-xtb", "Quầy", expect.arrayContaining([expect.objectContaining({ key: "cashier", printer: "tcp://192.168.10.222:9100" }), expect.objectContaining({ key: "bar", printer: "tcp://192.168.10.222:9100" })]), true, expect.objectContaining({autoPrintKitchen:true,autoPrintReceipt:true})));
   });
   it("prevents saving an invalid IP before any mutation", async () => {
     render(<BranchPrintSetup />); await screen.findByDisplayValue("192.168.10.222");

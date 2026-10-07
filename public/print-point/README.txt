@@ -1,3 +1,11 @@
+CAI NHANH: Luu diem in tren web -> Tai bo ket noi chi nhanh (co san cau hinh)
+-> Giai nen vao thu muc rieng -> Mo Cai-diem-in.cmd -> Cap nhat va in thu.
+Bo cai tai Node 24 LTS tu nodejs.org neu chua co Node >=22, kiem SHA256,
+chi dat runtime trong thu muc nay; khong doi execution policy, khong doi firewall.
+Neu Windows chan tep/script, dung lai va lien he nguoi quan ly may;
+khong tu tat bao ve. Chua co bo cai EXE ky so trong phien ban nay.
+ZIP co ma ghep rieng: giu tai may quay, khong chia se ra ngoai.
+
 ONEBIZ — ĐIỂM IN CHI NHÁNH (Windows, ESC/POS 58/80 mm)
 
 Điện thoại nhân viên chỉ dùng trình duyệt và tài khoản riêng.

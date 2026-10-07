@@ -751,7 +751,6 @@ export default function TonKhoPage() {
   const { activeBranchId } = useBranchFilter();
   const [rows, setRows] = useState<BranchStockRow[]>([]);
   const [totalRows, setTotalRows] = useState(0);
-  const [totalQty, setTotalQty] = useState(0);
   const [totalValue, setTotalValue] = useState(0);
   const [lowStockCount, setLowStockCount] = useState(0);
   const [branches, setBranches] = useState<BranchDetail[]>([]);
@@ -855,7 +854,6 @@ export default function TonKhoPage() {
       if (reqId !== reqIdRef.current) return;
       setRows(pageResult.rows);
       setTotalRows(pageResult.total);
-      setTotalQty(aggregates.totalQty);
       setTotalValue(aggregates.totalValue);
       setLowStockCount(aggregates.lowStockCount);
     } catch (err) {
@@ -1235,9 +1233,7 @@ export default function TonKhoPage() {
         // ẩn mặc định, user bật qua "Hiển thị cột" khi cần.
         defaultColumnVisibility={{ reserved: false, minStock: false }}
         summaryRow={{
-          // CEO 28/05/2026: format số tổng — phân ngàn + tối đa 2 thập phân
-          // (trước đây `${totalQty}` ra "26193.490000000005" do float JS).
-          quantity: formatNumber(totalQty),
+          quantity: "Nhiều đơn vị · xem từng hàng",
           stockValue: formatCurrency(totalValue),
         }}
         getRowId={(r) => r.id}

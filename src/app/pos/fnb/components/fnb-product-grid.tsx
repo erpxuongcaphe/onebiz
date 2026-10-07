@@ -97,7 +97,8 @@ export function FnbProductGrid({
     [products.length, cols],
   );
 
-  const cardHeight = displayMode === "photos" ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT;
+  const hasPhotos = products.some(product => Boolean(product.image_url));
+  const cardHeight = displayMode === "photos" && hasPhotos ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT;
   const rowVirtualizer = useVirtualizer({
     count: rows,
     getScrollElement: () => parentRef.current,
@@ -158,7 +159,7 @@ export function FnbProductGrid({
                 <ProductCard
                   key={product.id}
                   product={product}
-                  compact={displayMode === "compact"}
+                  compact={displayMode === "compact" || !hasPhotos}
                   onClick={() => onSelectProduct(product)}
                   enforceStock={enforceStock}
                   cartQty={cartQtyByProductId?.[product.id] ?? 0}

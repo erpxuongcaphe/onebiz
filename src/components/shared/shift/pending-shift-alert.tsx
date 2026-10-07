@@ -50,8 +50,10 @@ import { formatPaymentMethod } from "@/lib/constants/payment-methods";
  */
 export function PendingShiftAlertSection({
   branchId,
+  inFlow = false,
 }: {
   branchId: string | null;
+  inFlow?: boolean;
 }) {
   const { hasPermission } = usePermissions();
   // Chỉ user có quyền reconcile mới load + thấy cảnh báo
@@ -75,7 +77,7 @@ export function PendingShiftAlertSection({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 z-40 flex items-center gap-2 rounded-full border border-status-warning/40 bg-status-warning/15 px-4 py-2 text-sm font-semibold text-status-warning shadow-lg backdrop-blur transition-colors hover:bg-status-warning/25 press-scale-sm md:bottom-4"
+        className={cn("flex min-h-11 items-center gap-2 rounded-md border border-status-warning/40 bg-status-warning/15 px-3 py-2 text-sm font-semibold text-status-warning transition-colors hover:bg-status-warning/25", inFlow ? "mx-2 my-1 self-start shrink-0" : "fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] left-4 z-40 shadow-lg backdrop-blur md:bottom-4")}
         title="Có ca chưa đối chiếu — bấm để chốt số liệu"
       >
         <Icon name="warning" size={18} />

@@ -9,6 +9,7 @@
 // Generated types chưa khai báo cột này → cast `InvoiceDocRow` tại chỗ đọc.
 
 import { getClient, handleError, getCurrentTenantId } from "./base";
+import { cashBookDate } from "@/lib/cash-time";
 
 type InvoiceDocRow = { ngay_chung_tu: string; total: number | null; status: string };
 
@@ -73,28 +74,24 @@ export interface RecentActivity {
 // === Helper: date ranges ===
 
 function todayRange(): { start: string; end: string } {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const start = new Date(`${cashBookDate(new Date().toISOString())}T00:00:00+07:00`);
   const end = new Date(start);
-  end.setDate(end.getDate() + 1);
+  end.setTime(end.getTime() + 86400000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
 function yesterdayRange(): { start: string; end: string } {
-  const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const start = new Date(end);
-  start.setDate(start.getDate() - 1);
+  const end = new Date(todayRange().start);
+  const start = new Date(end.getTime() - 86400000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-function last7DaysRange(): { start: string; end: string } {
-  const now = new Date();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-  const start = new Date(end);
-  start.setDate(start.getDate() - 7);
+function last7DaysRange(days = 7): { start: string; end: string } {
+  const end = new Date(todayRange().end);
+  const start = new Date(end.getTime() - days * 86400000);
   return { start: start.toISOString(), end: end.toISOString() };
 }
+function businessClock(value: string | Date): Date { return new Date(new Date(value).getTime() + 7 * 3600000); }
 
 // === KPIs ===
 
@@ -141,15 +138,15 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
       .from("cash_transactions")
       .select("type, amount, payment_method, reference_type, status")
       .eq("tenant_id", tenantId)
-      .gte("created_at", today.start)
-      .lt("created_at", today.end)),
+      .gte("transaction_date", cashBookDate(today.start))
+      .lt("transaction_date", cashBookDate(today.end))),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     bq((supabase as any)
       .from("cash_transactions")
       .select("type, amount, payment_method, reference_type, status")
       .eq("tenant_id", tenantId)
-      .gte("created_at", yesterday.start)
-      .lt("created_at", yesterday.end)),
+      .gte("transaction_date", cashBookDate(yesterday.start))
+      .lt("transaction_date", cashBookDate(yesterday.end))),
   ]);
 
   const calcRevenue = (data: { total: number; status: string }[] | null) =>
@@ -172,10 +169,10 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
   const calcOrders = (data: { status: string }[] | null) =>
     (data ?? []).filter((inv) => inv.status === "completed").length;
 
-  const calcExpenses = (data: { type: string; amount: number }[] | null) =>
+  const calcCashBalance = (data: { type: string; amount: number; status?: string | null }[] | null) =>
     (data ?? [])
-      .filter((c) => c.type === "payment")
-      .reduce((sum, c) => sum + (c.amount ?? 0), 0);
+      .filter((c) => c.status !== "cancelled")
+      .reduce((sum, c) => sum + (c.type === "receipt" ? Number(c.amount ?? 0) : c.type === "payment" ? -Number(c.amount ?? 0) : 0), 0);
 
   type CashRow = {
     type: string;
@@ -221,12 +218,10 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     return totals;
   };
 
-  // Profit = Revenue - Expenses (real calculation from cash_transactions)
+  // Cash movement is not accounting profit: it excludes neither inventory nor COGS.
   const todayRev = calcRevenue(todayInvoices.data);
   const yesterdayRev = calcRevenue(yesterdayInvoices.data);
   const todayDeliveryFee = calcDeliveryFee(todayInvoices.data);
-  const todayExp = calcExpenses(todayCash.data);
-  const yesterdayExp = calcExpenses(yesterdayCash.data);
   const todayCollection = calcSalesCollection(todayCash.data);
   const yesterdayCollection = calcSalesCollection(yesterdayCash.data);
 
@@ -242,12 +237,12 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
     todayDiscounts: calcDiscounts(todayInvoices.data),
     todayOrders: calcOrders(todayInvoices.data),
     newCustomers: todayCustomers.count ?? 0,
-    todayProfit: Math.round(todayRev - todayExp),
+    todayProfit: Math.round(calcCashBalance(todayCash.data)),
     yesterdayRevenue: yesterdayRev,
     yesterdayCollected: yesterdayCollection.net,
     yesterdayOrders: calcOrders(yesterdayInvoices.data),
     yesterdayNewCustomers: yesterdayCustomers.count ?? 0,
-    yesterdayProfit: Math.round(yesterdayRev - yesterdayExp),
+    yesterdayProfit: Math.round(calcCashBalance(yesterdayCash.data)),
   };
 }
 
@@ -256,7 +251,7 @@ export async function getDashboardKpis(branchId?: string): Promise<DashboardKpis
 export async function getRevenueByDay(days: number = 7, branchId?: string): Promise<ChartPoint[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const range = last7DaysRange();
+  const range = last7DaysRange(days);
 
   let query = supabase
     .from("invoices")
@@ -274,17 +269,17 @@ export async function getRevenueByDay(days: number = 7, branchId?: string): Prom
 
   // Group by date
   const grouped = new Map<string, number>();
-  const now = new Date();
+  const now = businessClock(new Date());
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now);
-    d.setDate(d.getDate() - i);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, 0);
   }
 
   ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
-    const d = new Date(inv.ngay_chung_tu);
-    const key = `${String(d.getDate()).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const d = businessClock(inv.ngay_chung_tu);
+    const key = `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
     grouped.set(key, (grouped.get(key) ?? 0) + (inv.total ?? 0));
   });
 
@@ -314,7 +309,7 @@ export async function getRevenueByHour(branchId?: string): Promise<ChartPoint[]>
   // Giờ lấy đúng khoảng giờ CÓ phát sinh doanh thu trong ngày.
   const byHour = new Array<number>(24).fill(0);
   for (const inv of (data ?? []) as unknown as InvoiceDocRow[]) {
-    const h = new Date(inv.ngay_chung_tu).getHours();
+    const h = businessClock(inv.ngay_chung_tu).getUTCHours();
     if (h >= 0 && h <= 23) byHour[h] += inv.total ?? 0;
   }
 
@@ -357,7 +352,7 @@ export async function getRevenueByWeekday(branchId?: string): Promise<ChartPoint
   for (let i = 0; i < 7; i++) grouped.set(i, 0);
 
   ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
-    const day = new Date(inv.ngay_chung_tu).getDay();
+    const day = businessClock(inv.ngay_chung_tu).getUTCDay();
     grouped.set(day, (grouped.get(day) ?? 0) + (inv.total ?? 0));
   });
 
@@ -393,7 +388,7 @@ export async function getOrdersByWeekday(branchId?: string): Promise<OrderChartP
   for (let i = 0; i < 7; i++) { completed.set(i, 0); cancelled.set(i, 0); }
 
   ((data ?? []) as unknown as InvoiceDocRow[]).forEach((inv) => {
-    const day = new Date(inv.ngay_chung_tu).getDay();
+    const day = businessClock(inv.ngay_chung_tu).getUTCDay();
     if (inv.status === "completed") completed.set(day, (completed.get(day) ?? 0) + 1);
     else if (inv.status === "cancelled") cancelled.set(day, (cancelled.get(day) ?? 0) + 1);
   });
@@ -443,9 +438,19 @@ export async function getTopProducts(limit: number = 10, branchId?: string): Pro
 
 // === Low stock products ===
 
-export async function getLowStockProducts(limit: number = 5): Promise<LowStockProduct[]> {
+export async function getLowStockProducts(limit: number = 5, branchId?: string): Promise<LowStockProduct[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
+  if (branchId) {
+    const { data, error } = await supabase.from("branch_stock")
+      .select("quantity, products!inner(name, min_stock, is_active)")
+      .eq("tenant_id", tenantId).eq("branch_id", branchId)
+      .eq("products.is_active", true).gt("products.min_stock", 0);
+    if (error) handleError(error, "getLowStockProducts");
+    const rows = (data ?? []) as unknown as { quantity: number; products: { name: string; min_stock: number } }[];
+    return rows.map(row => ({ name: row.products.name, stock: Number(row.quantity), minStock: Number(row.products.min_stock) }))
+      .filter(row => row.stock <= row.minStock).sort((a,b) => a.stock - b.stock).slice(0,limit);
+  }
 
   const { data, error } = await supabase
     .from("products")

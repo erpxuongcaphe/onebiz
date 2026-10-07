@@ -53,11 +53,10 @@ describe("POS FnB responsive shell", () => {
   });
 
   it("toast FnB khong che cac nut gui bep va thanh toan o day gio hang", () => {
-    expect(toast).toContain('pathname.startsWith("/pos/fnb")');
-    expect(toast).toContain(
-      '"top-[calc(4.5rem+env(safe-area-inset-top))] bottom-auto"',
-    );
-    expect(toast).toContain(': "bottom-4 sm:bottom-6"');
+    expect(page).toContain("data-pos-toast-region");
+    expect(paymentDialog).toContain("data-pos-toast-region");
+    expect(toast).toContain("createPortal(content, region)");
+    expect(toast).not.toContain("bottom-4 sm:bottom-6");
   });
 
   it("canh bao ca cho doi chieu khong de len thanh gio hang mobile", () => {

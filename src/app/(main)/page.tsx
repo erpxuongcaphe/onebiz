@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import dynamic from "next/dynamic";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -113,25 +113,32 @@ export default function TongQuanPage() {
   const [turnover, setTurnover] = useState<InventoryTurnoverResult | null>(null);
 
   // Phase 1 — KPI + turnover (critical path, hiển thị đầu tiên ~300-500ms)
+  const dashboardScopeRef = useRef(activeBranchId);
+  dashboardScopeRef.current = activeBranchId;
+  const phase1Request = useRef(0);
+  const phase2Request = useRef(0);
   const fetchPhase1 = useCallback(async () => {
+    const request = ++phase1Request.current;
     setKpiLoading(true);
     try {
       const [kpiRes, turnoverRes] = await Promise.all([
         getDashboardKpis(activeBranchId),
-        getInventoryTurnover().catch(() => null as InventoryTurnoverResult | null),
+        getInventoryTurnover(activeBranchId).catch(() => null as InventoryTurnoverResult | null),
       ]);
+      if (request !== phase1Request.current || dashboardScopeRef.current !== activeBranchId) return;
       setKpis(kpiRes);
       setDashboardUpdatedAt(new Date());
       setTurnover(turnoverRes);
     } catch {
       // Silently fail — show empty state
     } finally {
-      setKpiLoading(false);
+      if (request === phase1Request.current && dashboardScopeRef.current === activeBranchId) setKpiLoading(false);
     }
   }, [activeBranchId]);
 
   // Phase 2 — charts + secondary widgets (không block KPI hiển thị)
   const fetchPhase2 = useCallback(async () => {
+    const request = ++phase2Request.current;
     try {
       const [dayRes, hourRes, weekdayRes, ordersRes, topRes, lowRes, actRes, alertRes] =
         await Promise.all([
@@ -140,10 +147,11 @@ export default function TongQuanPage() {
           getRevenueByWeekday(activeBranchId),
           getOrdersByWeekday(activeBranchId),
           getTopProducts(10, activeBranchId),
-          getLowStockProducts(5),
+          getLowStockProducts(5, activeBranchId),
           getRecentActivities(8),
-          getFinancialAlerts().catch(() => [] as FinancialAlert[]),
+          getFinancialAlerts(activeBranchId).catch(() => [] as FinancialAlert[]),
         ]);
+      if (request !== phase2Request.current || dashboardScopeRef.current !== activeBranchId) return;
       setRevenueDay(dayRes);
       setRevenueHour(hourRes);
       setRevenueWeekday(weekdayRes);
@@ -203,7 +211,7 @@ export default function TongQuanPage() {
           isCurrency: false,
         },
         {
-          label: "Khách hàng mới",
+          label: "Khách mới · toàn hệ thống",
           value: kpis.newCustomers,
           icon: "group",
           ...calcDiff(kpis.newCustomers, kpis.yesterdayNewCustomers),
@@ -211,7 +219,7 @@ export default function TongQuanPage() {
           isCurrency: false,
         },
         {
-          label: "Lợi nhuận",
+          label: "Chênh lệch thu − chi",
           value: kpis.todayProfit,
           icon: "attach_money",
           ...calcChange(kpis.todayProfit, kpis.yesterdayProfit),
@@ -312,6 +320,7 @@ export default function TongQuanPage() {
                 </span>
                 <span className="text-xs text-muted-foreground">{kpi.changeLabel}</span>
               </div>
+              {kpi.label === "Chênh lệch thu − chi" && <p className="mt-2 text-xs text-muted-foreground">Theo ngày ghi sổ, gồm các phiếu thu/chi còn hiệu lực. Chưa phải lợi nhuận sau giá vốn.</p>}
               {"isCollection" in kpi && kpi.isCollection && kpis && (
                 <div className="mt-2 space-y-1.5 border-t border-border/60 pt-2">
                   <div className="grid grid-cols-2 gap-1 text-xs leading-tight">

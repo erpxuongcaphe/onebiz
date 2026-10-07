@@ -24,7 +24,7 @@ describe("C2 — bộ cuộn ảo và chiều cao thẻ đổi CÙNG NHAU", () =
   it("hai chế độ dùng chiều cao nhất quán cho bộ cuộn ảo", () => {
     expect(GRID).toContain("const COMPACT_CARD_HEIGHT = 104;");
     expect(GRID).toContain("const PHOTO_CARD_HEIGHT = 200;");
-    expect(GRID).toContain('displayMode === "photos" ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT');
+    expect(GRID).toContain('displayMode === "photos" && hasPhotos ? PHOTO_CARD_HEIGHT : COMPACT_CARD_HEIGHT');
   });
 
   it("virtualizer + chiều cao hàng đều đọc từ CARD_HEIGHT, không hardcode", () => {

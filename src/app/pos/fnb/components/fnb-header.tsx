@@ -314,7 +314,7 @@ export function FnbHeader({
                 }
               }}
               className={cn(
-                "ml-0.5 flex h-8 w-8 items-center justify-center rounded-lg transition-colors",
+                "ml-0.5 flex h-11 w-11 items-center justify-center rounded-lg transition-colors",
                 isActive
                   ? "text-primary hover:bg-primary/15"
                   : "text-on-surface-variant hover:bg-surface-container-highest",
@@ -326,7 +326,8 @@ export function FnbHeader({
         );
       })}
 
-      {/* Add tab button — luôn ở cuối list */}
+    </div>
+      {/* Keep the new-order action outside the horizontally scrolling tabs. */}
       <button
         type="button"
         onClick={createTab}
@@ -344,7 +345,6 @@ export function FnbHeader({
           Chưa có đơn — bấm “Đơn mới” để bắt đầu
         </span>
       )}
-    </div>
     {orderActions}
     </div>
     </>

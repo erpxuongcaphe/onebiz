@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, waitFor, cleanup } from "@testing-library/react";
 const mock = vi.hoisted(() => ({ state: vi.fn(), update: vi.fn(), toast: vi.fn() }));
+vi.mock("@/lib/contexts/auth-context", () => ({ useAuth: () => ({ tenant: { id: "tenant" } }) }));
 vi.mock("@/lib/contexts/settings-context", () => ({ useSettings: () => ({ settings: { print: { backend: "qz-tray", fnbBranchQueue: false, autoPrintKitchen: true, autoPrintReceipt: false } }, updateSettings: mock.update }) }));
 vi.mock("@/lib/contexts/toast-context", () => ({ useToast: () => ({ toast: mock.toast }) }));
 vi.mock("@/lib/printer/branch-queue", () => ({ getBranchPrintState: mock.state }));
@@ -11,6 +12,7 @@ describe("personal-phone branch print selection", () => {
     mock.state.mockResolvedValue({ point: null, jobs: [] });
     render(<FnbBranchPrintControl branchId="branch" />);
     fireEvent.click(screen.getByRole("button", { name: "Nơi nhận & lệnh in" }));
+    fireEvent.click(screen.getByText("Ngoại lệ trên thiết bị này"));
     const kitchen = screen.getByRole("checkbox", { name: /In bếp khi bấm Gửi bếp/ });
     const receipt = screen.getByRole("checkbox", { name: /In bill sau thanh toán thành công/ });
     expect(kitchen).toBeChecked();

@@ -7,11 +7,13 @@ import { ToastContainer } from "@/components/shared/toast";
 import { PwaInstallPrompt } from "@/components/shared/pwa-install-prompt";
 import { AuthSessionToast } from "@/components/shared/auth-session-toast";
 import { PrintJobFeedback } from "@/components/shared/print-job-feedback";
+import { BranchPrintDefaults } from "@/components/shared/branch-print-defaults";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
       <SettingsProvider>
+        <BranchPrintDefaults />
         <ToastProvider>
           <TooltipProvider>
             {children}

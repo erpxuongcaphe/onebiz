@@ -349,14 +349,14 @@ function OverviewScreen({ data }: { data: ManagerData }) {
             icon="shopping_cart"
           />
           <KpiTile
-            label="Lợi nhuận"
+            label="Chênh lệch thu − chi"
             value={formatCurrency(kpis?.todayProfit ?? 0)}
             delta={profitChange.text}
             positive={profitChange.positive}
             icon="payments"
           />
           <KpiTile
-            label="Khách mới"
+            label="Khách mới · toàn hệ thống"
             value={formatNumber(kpis?.newCustomers ?? 0)}
             delta="Hôm nay"
             positive
