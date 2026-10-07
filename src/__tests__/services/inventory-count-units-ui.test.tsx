@@ -31,6 +31,7 @@ import { CreateInventoryCheckDialog } from "@/components/shared/dialogs/create-i
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.auth.currentBranch.branchType = "store";
   mocks.conversions.mockResolvedValue([
     { fromUnit: "Thùng", toUnit: "Lon", factor: 12, isActive: true },
     { fromUnit: "Lon", toUnit: "G", factor: 1000, isActive: true },
@@ -38,6 +39,20 @@ beforeEach(() => {
   mocks.rpc.mockResolvedValue({ data: { check_id: "check", code: "KK1", status: "balanced" }, error: null });
 });
 afterEach(cleanup);
+
+it("keeps warehouse packaging entry without the outlet unit picker", async () => {
+  mocks.auth.currentBranch.branchType = "warehouse";
+  render(<CreateInventoryCheckDialog open onOpenChange={() => {}} />);
+  fireEvent.change(screen.getByPlaceholderText("Tìm theo mã, tên hoặc barcode"), { target: { value: "SUA" } });
+  fireEvent.click(await screen.findByRole("button", { name: /Sữa.*SUA.*Thêm/ }));
+  await screen.findByLabelText("Số Thùng Sữa");
+  expect(screen.queryByRole("combobox", { name: "Đơn vị kiểm Sữa" })).toBeNull();
+  expect(screen.getByLabelText("Số Thùng Sữa")).toHaveValue("2");
+  expect(screen.getByLabelText("Số lẻ Sữa")).toHaveValue("0.5");
+  fireEvent.click(screen.getByRole("button", { name: "Hoàn thành kiểm kho" }));
+  await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
+  expect(mocks.rpc.mock.calls[0][1].p_items).toEqual([{ product_id: "milk", actual_stock: 24.5 }]);
+}, 15_000);
 
 async function addMilk() {
   render(<CreateInventoryCheckDialog open onOpenChange={() => {}} />);
