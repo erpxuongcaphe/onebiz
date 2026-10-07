@@ -88,14 +88,13 @@ export async function prefetchMenuData(
   // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
     .from("products")
-    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order, inventory_role, is_fnb_stock_item")
+    .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order, inventory_role")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .eq("allow_sale", true)
     .eq("product_type", "sku")
     .eq("channel", "fnb")
     .eq("inventory_role", "fnb_menu_item")
-    .eq("is_fnb_stock_item", false)
     .order("sort_order")
     .order("name")
     .order("id");
@@ -170,7 +169,6 @@ export async function prefetchMenuData(
           sell_price: p.sell_price,
           allow_free_sale: p.allow_free_sale,
           inventory_role: p.inventory_role,
-          is_fnb_stock_item: p.is_fnb_stock_item,
           image_url: (p as Record<string, unknown>).image_url,
           stock: p.stock,
           category_id: p.category_id,

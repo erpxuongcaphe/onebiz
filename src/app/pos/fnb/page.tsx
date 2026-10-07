@@ -495,14 +495,13 @@ function FnbPosPageInner() {
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
                   .from("products")
-                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role, is_fnb_stock_item")
+                  .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
                   .eq("allow_sale", true)
                   .eq("product_type", "sku")
                   .eq("channel", "fnb")
                   .eq("inventory_role", "fnb_menu_item")
-                  .eq("is_fnb_stock_item", false)
                   .order("sort_order")
                   .order("name")
                   .order("id")
@@ -606,7 +605,6 @@ function FnbPosPageInner() {
                 brand: ((p as Record<string, unknown>).brand as string | null) ?? null,
                 allow_free_sale: (p as Record<string, unknown>).allow_free_sale === true,
                 inventory_role: p.inventory_role,
-                is_fnb_stock_item: p.is_fnb_stock_item,
               }))
             );
 
