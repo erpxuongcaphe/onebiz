@@ -10,7 +10,8 @@
 //   - Có quyền → mở confirm dialog yêu cầu nhập lý do (>= 5 ký tự)
 //   - Sau khi RPC fnb_void_invoice_atomic chạy xong → reload list
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useLiveDataRefresh } from "@/lib/hooks/use-live-data-refresh";
 import {
   Dialog,
   DialogContent,
@@ -93,14 +94,18 @@ export function FnbOrderHistoryDialog({
   const [voiding, setVoiding] = useState(false);
   const [otpTarget, setOtpTarget] = useState<FnbRecentInvoice | null>(null);
 
-  const refreshList = (silent = false) => {
-    if (!branchId) return;
+  const requestGeneration = useRef(0);
+  const refreshList = useCallback((silent = false) => {
+    if (!open || !branchId) return;
+    const generation = ++requestGeneration.current;
     if (!silent) setLoading(true);
-    getFnbRecentInvoices({ branchId, limit: 50, search: search || undefined })
-      .then(setInvoices)
+    return getFnbRecentInvoices({ branchId, limit: 50, search: search || undefined })
+      .then((next) => {
+        if (generation === requestGeneration.current) setInvoices(next);
+      })
       .catch((err: unknown) => {
+        if (generation !== requestGeneration.current) return;
         console.error("[FnbOrderHistory] load invoices failed:", err);
-        setInvoices([]);
         if (!silent) {
           toast({
             title: "Không tải được lịch sử đơn",
@@ -113,15 +118,19 @@ export function FnbOrderHistoryDialog({
         }
       })
       .finally(() => {
-        if (!silent) setLoading(false);
+        if (generation === requestGeneration.current) setLoading(false);
       });
-  };
+  }, [open, branchId, search, toast]);
+
+  const refreshLiveHistory = useCallback(() => refreshList(true), [refreshList]);
+  useLiveDataRefresh(refreshLiveHistory, tenantId, branchId, ["kitchen_orders", "invoices"], open && Boolean(branchId));
 
   useEffect(() => {
     if (!open || !branchId) return;
-    refreshList();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, branchId, search]);
+    setInvoices([]);
+    void refreshList();
+    return () => { requestGeneration.current += 1; };
+  }, [open, branchId, refreshList]);
 
   const handleReprint = async (id: string) => {
     setReprinting(id);

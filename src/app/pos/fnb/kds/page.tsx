@@ -525,9 +525,13 @@ function KdsPageInner() {
       if (document.visibilityState === "visible") fetchOrders();
     };
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", tick);
+    window.addEventListener("online", tick);
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", tick);
+      window.removeEventListener("online", tick);
     };
   }, [fetchOrders]);
 
@@ -547,12 +551,14 @@ function KdsPageInner() {
     if (!branchId || !isStoreBranch) return;
     const client = getClient();
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    let disposed = false;
     const scheduleRealtimeRefresh = () => {
+      if (disposed) return;
       // Coalesce nearby order changes before refetching the canonical state.
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => {
         refreshTimer = null;
-        void fetchOrders();
+        if (!disposed && !document.hidden) void fetchOrders();
       }, REALTIME_REFRESH_DEBOUNCE);
     };
 
@@ -569,10 +575,13 @@ function KdsPageInner() {
         scheduleRealtimeRefresh
       )
       .subscribe((status) => {
+        if (disposed) return;
         setRealtimeConnected(status === "SUBSCRIBED");
+        if (status === "SUBSCRIBED") scheduleRealtimeRefresh();
       });
 
     return () => {
+      disposed = true;
       if (refreshTimer !== null) clearTimeout(refreshTimer);
       client.removeChannel(channel);
       setRealtimeConnected(false);
