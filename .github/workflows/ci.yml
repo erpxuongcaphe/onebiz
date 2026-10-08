@@ -107,6 +107,19 @@ jobs:
           wait "$cancel_pid"
           psql -X -v ON_ERROR_STOP=1 -c "SELECT test_assert((SELECT status='available' AND current_order_id IS NULL FROM restaurant_tables WHERE id=test_id(9)), 'Concurrent final table'); SELECT test_assert((SELECT count(*)=2 FROM pos_exception_events), 'Concurrent single event per bill');"
 
+      - name: Verify unified operation history authorization and filters
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb operation_history_test
+          export PGDATABASE=operation_history_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00452_fnb_cancel.setup.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00453_operation_history.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/00453_unified_operation_history.sql
+
       - name: Apply migration and verify F&B return-cost behavior
         env:
           PGHOST: localhost

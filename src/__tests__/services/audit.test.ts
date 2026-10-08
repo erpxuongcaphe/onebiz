@@ -145,14 +145,12 @@ describe("getAuditLogs", () => {
     expect(result.data[1].entityTypeLabel).toBe("Sản phẩm");
   });
 
-  it("returns empty when audit_log has error (graceful fallback)", async () => {
+  it("reports a query failure instead of pretending the history is empty", async () => {
     tableDataMap = {
       audit_log: { data: null, error: { message: "relation not found" }, count: 0 },
     };
 
-    const result = await getAuditLogs({ page: 0, pageSize: 25 });
-    expect(result.data).toHaveLength(0);
-    expect(result.total).toBe(0);
+    await expect(getAuditLogs({ page: 0, pageSize: 25 })).rejects.toThrow("relation not found");
   });
 });
 
