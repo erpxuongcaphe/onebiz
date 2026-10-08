@@ -90,6 +90,10 @@ export interface KitchenOrderItem {
   variantId: string | null;
   variantLabel: string | null;
   quantity: number;
+  /** Original sent quantity retained for cancellation history. */
+  originalQuantity?: number;
+  /** Cancelled before payment; quantity represents the remaining amount. */
+  cancelledQuantity?: number;
   unitPrice: number;
   note: string | null;
   toppings: ToppingAttachment[];

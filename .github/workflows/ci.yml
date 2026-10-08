@@ -457,6 +457,19 @@ jobs:
           createdb fnb_sequential_codes_test
           PGDATABASE=fnb_sequential_codes_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00451_fnb_sequential_codes.integration.sql
 
+      - name: Verify remaining FNB quantities across checkout and split in PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/fnb-db-test/extract-payment-posting-chain.mjs /tmp/fnb-payment-posting-chain.sql
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          node scripts/fnb-db-test/extract-effective-quantity-chain.mjs /tmp/fnb-effective-quantity-chain.sql
+          createdb fnb_effective_qty_test
+          PGDATABASE=fnb_effective_qty_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00454_fnb_effective_unpaid_quantities.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

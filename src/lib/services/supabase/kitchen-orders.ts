@@ -60,6 +60,12 @@ function mapKitchenOrder(row: any): KitchenOrder {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKitchenItem(row: any): KitchenOrderItem {
+  const sentQuantity = Number(row.quantity ?? 0);
+  const cancelledQuantity = Number(row.cancelled_qty ?? 0);
+  if (!Number.isFinite(sentQuantity) || !Number.isFinite(cancelledQuantity)
+    || sentQuantity < 0 || cancelledQuantity < 0 || cancelledQuantity > sentQuantity) {
+    throw new Error("Số lượng món trên đơn không hợp lệ. Tải lại đơn hoặc nhờ quản lý kiểm tra.");
+  }
   const modifierSelections: ModifierSelectionPayload[] | undefined = Array.isArray(
     row.modifier_selections,
   )
@@ -77,7 +83,9 @@ function mapKitchenItem(row: any): KitchenOrderItem {
     productName: row.product_name,
     variantId: row.variant_id,
     variantLabel: row.variant_label,
-    quantity: row.quantity,
+    quantity: Math.max(0, sentQuantity - cancelledQuantity),
+    originalQuantity: sentQuantity,
+    cancelledQuantity,
     unitPrice: Number(row.unit_price ?? 0),
     note: getFnbFreeTextNote(row.note, modifierLabels) ?? null,
     toppings: (row.toppings ?? []) as ToppingAttachment[],
