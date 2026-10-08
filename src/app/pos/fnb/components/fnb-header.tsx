@@ -255,12 +255,12 @@ export function FnbHeader({
             className={cn(
               "flex min-h-11 items-center gap-1.5 px-2 rounded-md text-sm font-semibold whitespace-nowrap transition-colors shrink-0",
               isActive
-                ? "bg-surface text-primary ambient-shadow border border-primary/20"
+                ? "bg-primary text-primary-foreground border border-primary"
                 : "bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-foreground",
             )}
           >
             <button type="button" onClick={() => switchTab(tab.id)} aria-pressed={isActive} className="flex min-h-11 items-center gap-1.5 text-left">
-              <span className={cn("h-2 w-2 rounded-full shrink-0", dotColor)} />
+              <span className={cn("h-2 w-2 rounded-full shrink-0", isActive ? "bg-primary-foreground" : dotColor)} />
               <span className="max-w-[104px] truncate sm:max-w-[140px]">{tab.label}</span>
             </button>
             <button
@@ -316,7 +316,7 @@ export function FnbHeader({
               className={cn(
                 "ml-0.5 flex h-11 w-11 items-center justify-center rounded-lg transition-colors",
                 isActive
-                  ? "text-primary hover:bg-primary/15"
+                  ? "text-primary-foreground hover:bg-primary-foreground/15"
                   : "text-on-surface-variant hover:bg-surface-container-highest",
               )}
             >

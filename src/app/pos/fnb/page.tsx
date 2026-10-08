@@ -4277,7 +4277,7 @@ function FnbPosPageInner() {
         }}
       />
 
-      <FnbOpenOrdersDialog updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
+      <FnbOpenOrdersDialog activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">
