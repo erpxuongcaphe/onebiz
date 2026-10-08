@@ -128,7 +128,39 @@ beforeEach(() => {
   };
 });
 
+describe("effective sent quantities", () => {
+  it("uses remaining quantity for POS and KDS while preserving original source and note", async () => {
+    const rows = [
+      { ...ITEM_ROWS[0], quantity: 3, cancelled_qty: 1 },
+      { ...ITEM_ROWS[1], quantity: 2, cancelled_qty: 2 },
+    ];
+    mockFromHandler = (table: string) => createChain({
+      data: table === "kitchen_orders" ? ORDER_ROW : rows, error: null,
+    });
+    const order = await getKitchenOrderById("ko-1");
+    expect(order.items.map(item => item.quantity)).toEqual([2, 0]);
+    expect(order.items[0]).toMatchObject({ id: "koi-1", originalQuantity: 3,
+      cancelledQuantity: 1, note: "ít đá" });
+    expect(rows[0].quantity).toBe(3);
+  });
+  it("keeps legacy lines unchanged when no cancellation exists", async () => {
+    const order = await getKitchenOrderById("ko-1");
+    expect(order.items.map(item => item.quantity)).toEqual([1, 2]);
+  });
+  it("reports invalid quantities instead of silently showing a smaller bill", async () => {
+    mockFromHandler = (table: string) => createChain({
+      data: table === "kitchen_orders" ? ORDER_ROW : [{ ...ITEM_ROWS[0], cancelled_qty: 2 }],
+      error: null,
+    });
+    await expect(getKitchenOrderById("ko-1")).rejects.toThrow("Số lượng món trên đơn không hợp lệ");
+  });
+});
+
 describe("cancelUnpaidKitchenOrder", () => {
+  it("explains that an unbound OTP needs to be issued for the exact bill", () => {
+    expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_OTP_SCOPE_REQUIRED" }))
+      .toContain("đúng bill và chi nhánh");
+  });
   it("diễn giải lỗi chi nhánh để thu ngân không nhầm với lỗi mạng", () => {
     expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_BRANCH_ACCESS_DENIED" }))
       .toBe("Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.");

@@ -60,6 +60,12 @@ function mapKitchenOrder(row: any): KitchenOrder {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapKitchenItem(row: any): KitchenOrderItem {
+  const sentQuantity = Number(row.quantity ?? 0);
+  const cancelledQuantity = Number(row.cancelled_qty ?? 0);
+  if (!Number.isFinite(sentQuantity) || !Number.isFinite(cancelledQuantity)
+    || sentQuantity < 0 || cancelledQuantity < 0 || cancelledQuantity > sentQuantity) {
+    throw new Error("Số lượng món trên đơn không hợp lệ. Tải lại đơn hoặc nhờ quản lý kiểm tra.");
+  }
   const modifierSelections: ModifierSelectionPayload[] | undefined = Array.isArray(
     row.modifier_selections,
   )
@@ -77,7 +83,9 @@ function mapKitchenItem(row: any): KitchenOrderItem {
     productName: row.product_name,
     variantId: row.variant_id,
     variantLabel: row.variant_label,
-    quantity: row.quantity,
+    quantity: Math.max(0, sentQuantity - cancelledQuantity),
+    originalQuantity: sentQuantity,
+    cancelledQuantity,
     unitPrice: Number(row.unit_price ?? 0),
     note: getFnbFreeTextNote(row.note, modifierLabels) ?? null,
     toppings: (row.toppings ?? []) as ToppingAttachment[],
@@ -341,8 +349,20 @@ const FNB_CANCEL_ERROR_MESSAGES: ReadonlyArray<{
   message: string;
 }> = [
   {
+    codes: ["FNB_CANCEL_OTP_SCOPE_REQUIRED"],
+    message: "Mã duyệt phải được cấp cho đúng bill và chi nhánh này. Nhờ quản lý cấp lại mã cho bill đang mở.",
+  },
+  {
     codes: ["FNB_CANCEL_BRANCH_ACCESS_DENIED"],
     message: "Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.",
+  },
+  {
+    codes: ["FNB_CANCEL_APPROVER_SCOPE_DENIED"],
+    message: "Người duyệt không còn quyền tại chi nhánh này. Vui lòng nhờ quản lý đang phụ trách cấp mã mới.",
+  },
+  {
+    codes: ["FNB_CANCEL_TABLE_SCOPE_DENIED", "FNB_CANCEL_ORDER_MERGED"],
+    message: "Bàn hoặc bill vừa thay đổi. Vui lòng tải lại đúng bill trước khi hủy.",
   },
   {
     codes: ["FNB_CANCEL_SHIFT_NOT_OPEN_FOR_USER_BRANCH", "SHIFT_NOT_OPEN_FOR_ORDER_BRANCH"],

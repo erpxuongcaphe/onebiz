@@ -408,7 +408,17 @@ export async function resolveAppliedPromotion(
     getPromotionSettings(),
   ]);
 
-  const applicable = filterApplicablePromotions(promotions, ctx);
+  let candidatePromotions = promotions;
+  if (promotions.some(p => (p.beneficiaryKind ?? "all") !== "all")) {
+    // Server checks the actual buyer/group/active employee at the branch.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const {data,error}=await (getClient().rpc as any)("promotion_eligible_ids_00458",{p_ids:promotions.map(p=>p.id),p_customer_id:ctx.customerId ?? null,p_branch_id:ctx.branchId});
+    if(error) handleError(error,"promotionBuyerEligibility");
+    if(!Array.isArray(data)) throw new Error("Không kiểm tra được người hưởng ưu đãi.");
+    const allowed=new Set(data as string[]);
+    candidatePromotions=promotions.filter(p=>allowed.has(p.id));
+  }
+  const applicable = filterApplicablePromotions(candidatePromotions, ctx);
   const best = selectBestPromotion(applicable, ctx, settings.autoApplyBest);
 
   return { best, applicable, settings };

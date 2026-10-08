@@ -31,6 +31,8 @@ function mapPromotion(row: Record<string, unknown>): Promotion {
     getQuantity: (row.get_quantity as number) ?? null,
     appliesTo: row.applies_to as "all" | "category" | "product",
     appliesToIds: (row.applies_to_ids as string[]) ?? [],
+    beneficiaryKind: (row.beneficiary_kind as Promotion["beneficiaryKind"]) ?? "all",
+    beneficiaryIds: (row.beneficiary_ids as string[]) ?? [],
     startDate: row.start_date as string,
     endDate: row.end_date as string,
     isActive: row.is_active as boolean,
@@ -146,6 +148,8 @@ export async function createPromotion(promo: Partial<Promotion>): Promise<Promot
     get_quantity: promo.getQuantity,
     applies_to: promo.appliesTo ?? "all",
     applies_to_ids: promo.appliesToIds ?? [],
+    beneficiary_kind: promo.beneficiaryKind ?? "all",
+    beneficiary_ids: promo.beneficiaryIds ?? [],
     start_date: promo.startDate!,
     end_date: promo.endDate!,
     is_active: promo.isActive ?? true,
@@ -218,6 +222,8 @@ export async function updatePromotion(id: string, updates: Partial<Promotion>): 
   if (updates.getQuantity !== undefined) payload.get_quantity = updates.getQuantity;
   if (updates.appliesTo !== undefined) payload.applies_to = updates.appliesTo;
   if (updates.appliesToIds !== undefined) payload.applies_to_ids = updates.appliesToIds;
+  if (updates.beneficiaryKind !== undefined) payload.beneficiary_kind = updates.beneficiaryKind;
+  if (updates.beneficiaryIds !== undefined) payload.beneficiary_ids = updates.beneficiaryIds;
   if (updates.startDate !== undefined) payload.start_date = updates.startDate;
   if (updates.endDate !== undefined) payload.end_date = updates.endDate;
   if (updates.isActive !== undefined) payload.is_active = updates.isActive;

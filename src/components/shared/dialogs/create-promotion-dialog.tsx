@@ -21,11 +21,13 @@ import {
 } from "@/components/ui/select";
 import { useToast, useAuth } from "@/lib/contexts";
 import { createPromotion, updatePromotion } from "@/lib/services";
+import { getCategoriesByScope } from "@/lib/services/supabase/categories";
 import { getProducts } from "@/lib/services/supabase/products";
 import type { Promotion, PromotionChannel, Product } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { PromotionBeneficiaryFields } from "../promotion-beneficiary-fields";
 
 interface CreatePromotionDialogProps {
   open: boolean;
@@ -91,6 +93,14 @@ export function CreatePromotionDialog({
   const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
   // KM-3: gift product IDs (chỉ dùng khi type='gift')
   const [giftProductIds, setGiftProductIds] = useState<string[]>([]);
+  const [beneficiaryKind,setBeneficiaryKind] = useState<NonNullable<Promotion["beneficiaryKind"]>>("all");
+  const [beneficiaryIds,setBeneficiaryIds] = useState<string[]>([]);
+  const [appliesTo, setAppliesTo] = useState<Promotion["appliesTo"]>("all");
+  const [appliesToIds, setAppliesToIds] = useState<string[]>([]);
+  const [scopeOptions, setScopeOptions] = useState<{id:string;name:string}[]>([]);
+  const [scopeSearch, setScopeSearch] = useState("");
+  const [scopeError, setScopeError] = useState("");
+  const [scopeLoading, setScopeLoading] = useState(false);
   const [productsCache, setProductsCache] = useState<Product[]>([]);
   const [productSearch, setProductSearch] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -98,6 +108,10 @@ export function CreatePromotionDialog({
 
   useEffect(() => {
     if (!open) return;
+    setBeneficiaryKind(initialData?.beneficiaryKind ?? "all"); setBeneficiaryIds(initialData?.beneficiaryIds ?? []);
+    setAppliesTo(initialData?.appliesTo ?? "all");
+    setAppliesToIds(initialData?.appliesToIds ?? []);
+    setScopeSearch(""); setScopeOptions([]); setScopeError("");
     if (initialData) {
       setName(initialData.name);
       setDescription(initialData.description ?? "");
@@ -154,8 +168,25 @@ export function CreatePromotionDialog({
       .catch(() => {});
   }, [open, type, productsCache.length]);
 
+  useEffect(() => {
+    if (!open || appliesTo === "all") return;
+    let alive = true;
+    const timer = setTimeout(() => {
+      setScopeLoading(true); setScopeError("");
+      const load = appliesTo === "product"
+        ? getProducts({ page:0, pageSize:100, search:scopeSearch }).then(r => r.data)
+        : getCategoriesByScope("sku").then(rows => rows.filter(r => r.name.toLowerCase().includes(scopeSearch.toLowerCase())));
+      load.then(rows => { if (alive) setScopeOptions(rows); })
+        .catch(e => { if (alive) setScopeError(e instanceof Error ? e.message : "Không tải được danh mục/món."); })
+        .finally(() => { if (alive) setScopeLoading(false); });
+    }, 250);
+    return () => { alive = false; clearTimeout(timer); };
+  }, [open, appliesTo, scopeSearch]);
+
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
+    if (appliesTo !== "all" && !appliesToIds.length) newErrors.scope = "Chọn ít nhất một món hoặc danh mục.";
+    if ((beneficiaryKind === "customer" || beneficiaryKind === "customer_group") && !beneficiaryIds.length) newErrors.beneficiary = "Chọn khách hoặc nhóm được hưởng.";
     if (!name.trim()) newErrors.name = "Vui lòng nhập tên chương trình";
     if (type === "discount_percent" || type === "discount_fixed") {
       if (!value.trim() || isNaN(Number(value)) || Number(value) <= 0)
@@ -205,8 +236,9 @@ export function CreatePromotionDialog({
         minOrderAmount: Number(minOrderAmount) || 0,
         buyQuantity: buyQuantity ? Number(buyQuantity) : null,
         getQuantity: getQuantity ? Number(getQuantity) : null,
-        appliesTo: "all",
-        appliesToIds: [],
+        beneficiaryKind, beneficiaryIds: beneficiaryKind === "all" ? [] : beneficiaryIds,
+        appliesTo,
+        appliesToIds: appliesTo === "all" ? [] : appliesToIds,
         startDate: toIsoDate(startDate),
         endDate: toIsoDate(endDate),
         isActive,
@@ -307,6 +339,24 @@ export function CreatePromotionDialog({
             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
+          <section className="space-y-2 rounded-md border p-3">
+            <label className="text-sm font-semibold text-primary">Phạm vi giảm giá
+              <select aria-label="Phạm vi giảm giá" className="mt-1 h-11 w-full rounded-md border bg-background px-3" value={appliesTo} onChange={e => { setAppliesTo(e.target.value as Promotion["appliesTo"]); setAppliesToIds([]); }}>
+                <option value="all">Toàn bill / tất cả món</option><option value="category">Theo danh mục</option><option value="product">Theo món</option>
+              </select>
+            </label>
+            {appliesTo !== "all" && <>
+              <Input aria-label="Tìm món hoặc danh mục áp dụng" placeholder="Tìm tên để chọn…" value={scopeSearch} onChange={e => setScopeSearch(e.target.value)} />
+              <p className="text-xs text-muted-foreground">Đã chọn {appliesToIds.length}. Danh sách tìm món hiển thị tối đa 100 kết quả; nhập tên để tìm tiếp.</p>
+              <div className="max-h-40 overflow-y-auto border-t">{scopeOptions.map(o => <label key={o.id} className="flex min-h-10 items-center gap-2 border-b text-sm"><input type="checkbox" checked={appliesToIds.includes(o.id)} onChange={e => setAppliesToIds(ids => e.target.checked ? [...ids,o.id] : ids.filter(id => id !== o.id))} />{o.name}</label>)}</div>
+              {scopeLoading && <p className="text-xs">Đang tải…</p>}
+              {scopeError && <p role="alert" className="text-sm text-status-error">{scopeError}</p>}
+            </>}
+            {errors.scope && <p role="alert" className="text-sm text-status-error">{errors.scope}</p>}
+          </section>
+
+          <PromotionBeneficiaryFields kind={beneficiaryKind} ids={beneficiaryIds} onChange={(kind,ids) => {setBeneficiaryKind(kind);setBeneficiaryIds(ids);}} />
+          {errors.beneficiary && <p role="alert" className="text-sm text-status-error">{errors.beneficiary}</p>}
           {/* Description */}
           <div className="space-y-2">
             <label className="text-sm font-medium">Mô tả</label>

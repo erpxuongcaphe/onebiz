@@ -454,7 +454,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
 
   const { data: items, error: itemsErr } = await supabase
     .from("invoice_items")
-    .select("product_name, quantity, unit_price, total")
+    .select("*")
     // invoice_items KHÔNG có created_at → .order("created_at") lỗi 42703.
     // Dòng trả về theo thứ tự ghi, đúng thứ tự trên bill gốc.
     .eq("invoice_id", invoiceId);
@@ -485,7 +485,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     items: (items ?? []).map((it) => ({
       name: it.product_name,
       quantity: Number(it.quantity),
-      unitPrice: Number(it.unit_price),
+      unitPrice: Number((it as unknown as Record<string, unknown>).fnb_gross_amount ?? Number(it.unit_price) * Number(it.quantity)) / Math.max(1, Number(it.quantity)),
       total: Number(it.total),
     })),
   };

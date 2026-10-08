@@ -8,7 +8,7 @@
  */
 
 import type { QueryParams, QueryResult } from "@/lib/types";
-import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
+import { applyCreatedAtRangeFilter, normalizeCreatedAtRange } from "@/lib/utils/list-date-preset-range";
 import {
   getClient,
   getPaginationRange,
@@ -35,6 +35,12 @@ export interface AuditLogEntry {
   newData: Record<string, unknown> | null;
   ipAddress: string | null;
   createdAt: string;
+  source?: "fnb" | "retail" | "other";
+  recordKind?: "audit" | "exception" | "approval";
+  branchId?: string | null;
+  branchName?: string;
+  approverId?: string | null;
+  approverName?: string | null;
 }
 
 export interface AuditFilters {
@@ -42,6 +48,10 @@ export interface AuditFilters {
   entityType?: string;
   dateFrom?: string;
   dateTo?: string;
+  source?: "fnb" | "retail" | "other";
+  branchId?: string;
+  actorId?: string;
+  approverId?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -105,6 +115,9 @@ const ACTION_LABELS: Record<string, string> = {
   cost_price_update: "Cập nhật giá vốn",
   cost_price_revert: "Hoàn tác giá vốn",
   fnb_send_to_kitchen: "Gửi bếp",
+  cancel_unpaid_order: "Hủy bill chưa thanh toán",
+  cancel_unpaid_items: "Hủy món đã gửi bếp",
+  otp_issued: "Cấp mã duyệt",
   fnb_add_kitchen_items: "Bổ sung món gửi bếp",
   fnb_complete_payment_atomic: "Hoàn tất thanh toán FnB",
   fnb_split_bill: "Tách hóa đơn FnB",
@@ -169,6 +182,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
+  approval: "Duyệt thao tác",
   invoice: "Hóa đơn",
   product: "Sản phẩm",
   customer: "Khách hàng",
@@ -500,6 +514,49 @@ export function getEntityTypeOptions() {
 /*  Query                                                              */
 /* ------------------------------------------------------------------ */
 
+/** Unified audit/exception/approval records. Counts are records, not sales or
+ * cancellation totals: an OTP being issued is not a completed transaction. */
+export async function getOperationHistory(
+  params: Omit<QueryParams, "filters"> & { filters?: AuditFilters },
+): Promise<QueryResult<AuditLogEntry>> {
+  const filters = params.filters;
+  const range = normalizeCreatedAtRange(filters);
+  const { data, error } = await getClient().rpc("get_operation_history_00453" as never, {
+    p_branch_id: filters?.branchId ?? null,
+    p_source: filters?.source ?? null,
+    p_action: filters?.action && filters.action !== "all" ? filters.action : null,
+    p_entity_type: filters?.entityType && filters.entityType !== "all" ? filters.entityType : null,
+    p_from: range.from ?? null, p_to: range.toExclusive ?? null,
+    p_actor_id: filters?.actorId ?? null, p_approver_id: filters?.approverId ?? null,
+    p_search: params.search?.trim() || null,
+    p_page: params.page ?? 0, p_page_size: params.pageSize ?? 25,
+  } as never);
+  if (error) handleError(error, "getOperationHistory");
+  const result = data as unknown as { total: number; data: Record<string, unknown>[] };
+  if (!result || !Array.isArray(result.data) || !Number.isFinite(result.total)) {
+    throw new Error("Không tải được nhật ký đầy đủ. Vui lòng thử lại.");
+  }
+  return {
+    total: result.total,
+    data: result.data.map(row => {
+      const action = String(row.action);
+      const entityType = String(row.entity_type);
+      const oldData = row.old_data as Record<string, unknown> | null;
+      const newData = row.new_data as Record<string, unknown> | null;
+      return {
+        id: String(row.id), userId: String(row.actor_id ?? ""), userName: String(row.actor_name),
+        action, actionLabel: getAuditActionLabel(action), entityType,
+        entityTypeLabel: getAuditEntityTypeLabel(entityType), entityId: String(row.entity_id ?? ""),
+        entityName: String(row.entity_name || getEntityName(String(row.entity_id ?? ""), oldData, newData)),
+        oldData, newData, ipAddress: row.ip_address as string | null, createdAt: String(row.created_at),
+        source: row.source as AuditLogEntry["source"], recordKind: row.record_kind as AuditLogEntry["recordKind"],
+        branchId: row.branch_id as string | null, branchName: String(row.branch_name),
+        approverId: row.approver_id as string | null, approverName: row.approver_name as string | null,
+      };
+    }),
+  };
+}
+
 export async function getAuditLogs(
   params: QueryParams & { filters?: AuditFilters },
 ): Promise<QueryResult<AuditLogEntry>> {
@@ -540,9 +597,7 @@ export async function getAuditLogs(
 
   const { data, count, error } = await query;
   if (error) {
-    // audit_log might not have FK — graceful fallback
-    console.warn("getAuditLogs error:", error.message);
-    return { data: [], total: 0 };
+    handleError(error, "getAuditLogs");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

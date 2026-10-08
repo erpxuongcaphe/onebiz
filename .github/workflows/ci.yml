@@ -85,6 +85,41 @@ jobs:
           createdb cash_time_test
           PGDATABASE=cash_time_test psql -v ON_ERROR_STOP=1 -f supabase/tests/00432_cash_transaction_time.integration.sql
 
+      - name: Verify unpaid FNB cancellation preserves sibling bills
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb fnb_unpaid_cancel_test
+          node scripts/fnb-db-test/extract-unpaid-cancel.mjs /tmp/fnb-unpaid-cancel-original.sql
+          export PGDATABASE=fnb_unpaid_cancel_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00452_fnb_cancel.setup.sql
+          psql -X -v ON_ERROR_STOP=1 -f /tmp/fnb-unpaid-cancel-original.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/00452_fnb_cancel_preserve_sibling_bills.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00452_fnb_cancel.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/00452_fnb_cancel_preserve_sibling_bills.sql
+          psql -X -v ON_ERROR_STOP=1 -c 'SELECT test_fixture();'
+          psql -X -v ON_ERROR_STOP=1 -c "BEGIN; SELECT set_config('test.actor',test_id(1)::text,true); SELECT fnb_cancel_unpaid_order_atomic(test_id(10),'Khách đổi ý'); SELECT pg_sleep(2); COMMIT;" > /tmp/cancel-main.txt &
+          cancel_pid=$!
+          psql -X -v ON_ERROR_STOP=1 -c "BEGIN; SELECT set_config('test.actor',test_id(1)::text,true); SELECT fnb_cancel_unpaid_order_atomic(test_id(11),'Khách đổi ý'); COMMIT;" > /tmp/cancel-child.txt
+          wait "$cancel_pid"
+          psql -X -v ON_ERROR_STOP=1 -c "SELECT test_assert((SELECT status='available' AND current_order_id IS NULL FROM restaurant_tables WHERE id=test_id(9)), 'Concurrent final table'); SELECT test_assert((SELECT count(*)=2 FROM pos_exception_events), 'Concurrent single event per bill');"
+
+      - name: Verify unified operation history authorization and filters
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb operation_history_test
+          export PGDATABASE=operation_history_test
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00452_fnb_cancel.setup.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00453_operation_history.integration.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/00453_unified_operation_history.sql
+
       - name: Apply migration and verify F&B return-cost behavior
         env:
           PGHOST: localhost
@@ -421,6 +456,33 @@ jobs:
         run: |
           createdb fnb_sequential_codes_test
           PGDATABASE=fnb_sequential_codes_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00451_fnb_sequential_codes.integration.sql
+
+      - name: Verify remaining FNB quantities across checkout and split in PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/fnb-db-test/extract-payment-posting-chain.mjs /tmp/fnb-payment-posting-chain.sql
+          node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
+          node scripts/fnb-db-test/extract-effective-quantity-chain.mjs /tmp/fnb-effective-quantity-chain.sql
+          createdb fnb_effective_qty_test
+          PGDATABASE=fnb_effective_qty_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00458_promotion_beneficiaries.integration.sql
+
+      - name: Verify exact FNB item cancellation approvals
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/fnb-db-test/extract-unpaid-cancel.mjs /tmp/fnb-unpaid-cancel-chain.sql
+          createdb fnb_cancel_request_test
+          PGDATABASE=fnb_cancel_request_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00455_fnb_cancel_requests.integration.sql
+          node scripts/fnb-db-test/extract-void-core.mjs /tmp/fnb-void-core.sql
+          createdb fnb_void_method_test
+          PGDATABASE=fnb_void_method_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00456_fnb_void_methods.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest

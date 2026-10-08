@@ -150,6 +150,7 @@ import {
 const FnbItemDialog = lazy(() => import("./components/fnb-item-dialog").then(m => ({ default: m.FnbItemDialog })));
 const FnbPaymentDialog = lazy(() => import("./components/fnb-payment-dialog").then(m => ({ default: m.FnbPaymentDialog })));
 const TableFloorPlan = lazy(() => import("./components/table-floor-plan").then(m => ({ default: m.TableFloorPlan })));
+const CancelSentItemsDialog = lazy(() => import("./components/cancel-sent-items-dialog").then(m => ({ default: m.CancelSentItemsDialog })));
 const SplitBillDialog = lazy(() => import("./components/split-bill-dialog").then(m => ({ default: m.SplitBillDialog })));
 const OpenShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.OpenShiftDialog })));
 const CloseShiftDialog = lazy(() => import("./components/shift-dialog").then(m => ({ default: m.CloseShiftDialog })));
@@ -268,7 +269,12 @@ function FnbPosPageInner() {
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
+  const [cancelSentMode, setCancelSentMode] = useState<"whole" | "items" | null>(null);
+  const [promotionLoadError, setPromotionLoadError] = useState(false);
+  const [promotionLoadRevision, setPromotionLoadRevision] = useState(0);
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const voidLock = useRef(false);
   // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
   const [voidReason, setVoidReason] = useState("");
   // Khi chọn "Khác" → bắt nhập chi tiết tự do để audit log có ngữ cảnh.
@@ -456,6 +462,8 @@ function FnbPosPageInner() {
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
+  const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
+  const canViewOrderHistory = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS) || canCheckout;
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -980,6 +988,7 @@ function FnbPosPageInner() {
     })
       .then(({ best }) => {
         if (cancelled) return;
+        setPromotionLoadError(false);
         if (!best || best.discountAmount <= 0) {
           if (appliedPromotion) {
             setPromotionForTab(promotionTabId, null);
@@ -998,6 +1007,8 @@ function FnbPosPageInner() {
         }
       })
       .catch(() => {
+        if (cancelled) return;
+        setPromotionLoadError(true);
         if (appliedPromotion) {
           setPromotionForTab(promotionTabId, null);
         }
@@ -1014,6 +1025,7 @@ function FnbPosPageInner() {
     activeTabCustomerId,
     branchId,
     promotionCleared,
+    promotionLoadRevision,
   ]);
 
   function clearAppliedPromotion() {
@@ -2190,7 +2202,7 @@ function FnbPosPageInner() {
         sharedSnapshotVersions.current.set(tabId, version);
         pos.loadSentLinesIntoTab(
           tabId,
-          (order.items ?? []).map(kitchenItemToCartLine),
+          (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine),
         );
         pos.updateTabMeta(tabId, {
           kitchenOrderId: order.id,
@@ -2265,7 +2277,7 @@ function FnbPosPageInner() {
       const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
       pos.switchTab(tabId);
       sharedSnapshotVersions.current.set(tabId, new Date(order.updatedAt).getTime());
-      pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+      pos.loadSentLinesIntoTab(tabId, (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine));
       pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, ...customerContextFromOrder(order) });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
       return true;
@@ -2308,7 +2320,7 @@ function FnbPosPageInner() {
     const version = new Date(order.updatedAt).getTime();
     if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
     sharedSnapshotVersions.current.set(tabId, version);
-    refreshSharedSentLines(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+    refreshSharedSentLines(tabId, (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine));
     refreshSharedTabMeta(tabId, { ...customerContextFromOrder(order), tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, persistedOrderDiscountAmount: order.discountAmount, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
   }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta, kitchenSubmitting]);
 
@@ -2926,6 +2938,9 @@ function FnbPosPageInner() {
       tableId?: string | null;
       otpId?: string;
     }) => {
+      if (voidLock.current) return;
+      voidLock.current = true;
+      setVoidSubmitting(true);
       try {
         await cancelUnpaidKitchenOrder({
           orderId: args.orderId,
@@ -2944,16 +2959,8 @@ function FnbPosPageInner() {
         });
         setVoidReason("");
         setVoidReasonOther("");
-        // Optimistic: release table trên UI ngay
-        if (args.tableId) {
-          setTables((prev) =>
-            prev.map((t) =>
-              t.id === args.tableId
-                ? { ...t, status: "available" as const, currentOrderId: null }
-                : t,
-            ),
-          );
-        }
+        // Read the server state: split bills can still be serving this table.
+        void openOrders.refresh();
         // Đóng tab hiện tại nếu trùng order vừa huỷ
         if (pos.activeTab?.kitchenOrderId === args.orderId) {
           pos.closeTab(pos.activeTabId);
@@ -2970,9 +2977,15 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+        // An OTP being accepted is not proof that the cancellation committed.
+        // Keep the approval dialog open on a failed business transaction.
+        if (args.otpId) throw err;
+      } finally {
+        voidLock.current = false;
+        setVoidSubmitting(false);
       }
     },
-    [pos, branchId, currentShift?.id, toast],
+    [pos, branchId, currentShift?.id, toast, openOrders],
   );
 
   const handleVoidKitchenOrder = useCallback(async () => {
@@ -2990,7 +3003,7 @@ function FnbPosPageInner() {
     if (!voidReason.trim()) {
       toast({
         title: "Vui lòng nhập lý do huỷ",
-        description: "Lý do bắt buộc để theo dõi loss prevention.",
+        description: "Chọn lý do để quản lý theo dõi các bill đã hủy.",
         variant: "warning",
       });
       return;
@@ -2998,7 +3011,7 @@ function FnbPosPageInner() {
     if (voidReason === "Khác" && !voidReasonOther.trim()) {
       toast({
         title: "Vui lòng ghi rõ lý do",
-        description: 'Bạn đã chọn "Khác" — hãy nhập chi tiết để lưu vào audit log.',
+        description: 'Bạn đã chọn "Khác" — hãy ghi rõ lý do hủy.',
         variant: "warning",
       });
       return;
@@ -3229,17 +3242,20 @@ function FnbPosPageInner() {
 
   // ── Open split bill dialog ──
   const handleOpenSplitBill = useCallback(async () => {
+    if (!canSplitBill || !networkStatus.isOnline) return;
     const tab = pos.activeTab;
     if (!tab?.kitchenOrderId) return;
     try {
       const order = await getKitchenOrderById(tab.kitchenOrderId);
-      if (!order?.items || order.items.length < 2) return;
+      const activeItems = (order?.items ?? []).filter(item => item.quantity > 0);
+      if (activeItems.length < 2) return;
       setSplitItems(
-        order.items.map((item) => ({
+        activeItems.map((item) => ({
           id: item.id,
           name: item.productName + (item.variantLabel ? ` (${item.variantLabel})` : ""),
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPrice: item.unitPrice + (item.toppings ?? []).reduce((sum,topping) => sum + topping.quantity * topping.price,0),
+          detail: [item.modifierSelections?.map(selection => `${selection.groupName}: ${selection.options.map(option => option.label).join("/")}`).join(" · "),item.note].filter(Boolean).join(" · "),
         }))
       );
       setSplitBillOpen(true);
@@ -3251,7 +3267,7 @@ function FnbPosPageInner() {
         variant: "error",
       });
     }
-  }, [pos, toast]);
+  }, [pos, toast, canSplitBill, networkStatus.isOnline]);
 
   // Nạp món của đơn con vào snapshot ĐÃ GỬI BẾP. Nếu đưa vào `lines`, lần
   // thanh toán sau sẽ hiểu nhầm là món mới và gửi bếp trùng lần nữa.
@@ -3553,13 +3569,13 @@ function FnbPosPageInner() {
       />
       <FnbHeader
         openOrderCount={openOrders.orders.length}
-        onOpenOrders={() => setOpenOrdersDialog(true)}
+        onOpenOrders={() => { setMobileCartOpen(false); setOpenOrdersDialog(true); }}
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
-        switchTab={handleSwitchOrderTab}
+        switchTab={(id) => { setOpenOrdersDialog(false); handleSwitchOrderTab(id); }}
         closeTab={handleCloseOrderTab}
-        createTab={handleCreateOrderTab}
-        onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
+        createTab={() => { setOpenOrdersDialog(false); handleCreateOrderTab(); }}
+        onToggleFloorPlan={() => { setOpenOrdersDialog(false); setShowFloorPlan(!showFloorPlan); }}
         onSearch={() => setSearchModalOpen(true)}
         shift={currentShift}
         onShiftClick={canCheckout ? handleShiftClick : undefined}
@@ -3625,6 +3641,7 @@ function FnbPosPageInner() {
           Trước: tier banner (40px) + promotion banner (40px) = 80px khi đồng
           thời hiển thị → ăn space menu, dồn nén.
           Sau: 1 strip 32px chia 2 segment, dùng divider giữa 2 thông tin. */}
+      {promotionLoadError && <div role="alert" className="flex items-center gap-2 border-b px-3 py-1 text-sm text-status-warning">Chưa kiểm tra được ưu đãi cho bill này.<button type="button" className="font-semibold text-primary underline" onClick={() => setPromotionLoadRevision(v => v + 1)}>Thử lại</button></div>}
       {(appliedTier || (appliedPromotion && appliedPromotion.discountAmount > 0)) && (
         <div className="bg-surface-container border-b border-outline-variant/20 px-3 py-1.5 flex items-center gap-3 text-xs flex-wrap">
           {appliedTier && (
@@ -3673,7 +3690,7 @@ function FnbPosPageInner() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className={cn("flex flex-1 min-h-0 overflow-hidden", openOrdersDialog && "hidden")}>
         {/* Sprint A: Categories sidebar cột trái (chỉ hiện khi không floor plan).
             FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
@@ -3815,15 +3832,17 @@ function FnbPosPageInner() {
           kitchenSubmitting={kitchenSubmitting}
           onPayment={requestPayment}
           canCheckout={canCheckout}
-          onSplitBill={handleOpenSplitBill}
+          onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
           onChangeOrderType={handleOrderTypeChange}
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
-          onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+          onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}
+          onCancelSentItems={networkStatus.isOnline ? () => setCancelSentMode("items") : undefined}
+          voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
-          onOrderHistory={() => setOrderHistoryOpen(true)}
+          onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           onApplyCoupon={handleApplyCoupon}
           onRemoveCoupon={handleRemoveCoupon}
           appliedCouponCode={couponApplied?.code}
@@ -4027,15 +4046,17 @@ function FnbPosPageInner() {
               kitchenSubmitting={kitchenSubmitting}
               onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
               canCheckout={canCheckout}
-              onSplitBill={handleOpenSplitBill}
+              onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
               onChangeOrderType={handleOrderTypeChange}
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
-              onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+              onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}
+          onCancelSentItems={networkStatus.isOnline ? () => setCancelSentMode("items") : undefined}
+          voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
-              onOrderHistory={() => setOrderHistoryOpen(true)}
+              onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
               onApplyCoupon={handleApplyCoupon}
               onRemoveCoupon={handleRemoveCoupon}
               appliedCouponCode={couponApplied?.code}
@@ -4114,7 +4135,7 @@ function FnbPosPageInner() {
       )}
 
       {/* Order history (reprint) */}
-      {orderHistoryOpen && branchId && (
+      {orderHistoryOpen && canViewOrderHistory && branchId && (
         <Suspense fallback={null}>
           <FnbOrderHistoryDialog
             open={orderHistoryOpen}
@@ -4136,16 +4157,34 @@ function FnbPosPageInner() {
       )}
 
       {/* Void confirm dialog */}
-      <Dialog open={voidConfirmOpen} onOpenChange={setVoidConfirmOpen}>
+      {cancelSentMode && <Suspense fallback={null}><CancelSentItemsDialog open onOpenChange={o => { if (!o) setCancelSentMode(null); }} orderId={pos.activeTab?.kitchenOrderId} label={pos.activeTab?.label ?? ""} wholeBill={cancelSentMode === "whole"} canCancel={canCancelUnpaidOrder} shiftId={currentShift?.id} onCompleted={async (whole, orderId) => {
+        const cancelledTab = pos.tabs.find(t => t.kitchenOrderId === orderId);
+        if (whole && cancelledTab) {
+          clearTabBenefits(cancelledTab.id);
+          if (cancelledTab.lines.length > 0) {
+            pos.loadSentLinesIntoTab(cancelledTab.id, []);
+            pos.updateTabMeta(cancelledTab.id, { kitchenOrderId: undefined, tableId: undefined, persistedOrderDiscountAmount: 0, orderDiscount: undefined, discountAuditCtx: undefined, label: "Đơn mới · món chưa gửi" });
+          } else pos.closeTab(cancelledTab.id);
+        }
+        toast({ title: whole ? "Đã hủy bill" : "Đã hủy món", description: "Số lượng còn lại và nhật ký đã được cập nhật. Báo bếp dừng món đã hủy.", variant: "success" });
+        try {
+          await openOrders.refresh();
+          if (branchId) setTables(await getTablesByBranch(branchId));
+        } catch {
+          toast({ title: "Đã hủy, cần tải lại danh sách", description: "Thao tác đã lưu. Kết nối chưa tải được trạng thái mới; đừng hủy lại.", variant: "warning" });
+        }
+      }} /></Suspense>}
+
+      <Dialog open={voidConfirmOpen} onOpenChange={(open) => { if (!voidSubmitting) setVoidConfirmOpen(open); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-status-error">
-              <Icon name="cancel" size={16} /> Huỷ đơn bếp?
+              <Icon name="cancel" size={16} /> Hủy bill chưa thanh toán?
             </DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
             <p className="text-sm text-foreground">
-              Đơn <b>{pos.activeTab?.label}</b> sẽ bị huỷ và bàn sẽ được giải phóng.
+              Chỉ hủy bill <b>{openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label}</b> · {pos.activeTab?.label}. Bill khác cùng bàn vẫn được giữ. Trạng thái bàn sẽ cập nhật theo dữ liệu máy chủ.
             </p>
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
@@ -4153,6 +4192,7 @@ function FnbPosPageInner() {
               </label>
               <select
                 value={voidReason}
+                disabled={voidSubmitting}
                 onChange={(e) => setVoidReason(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
               >
@@ -4168,6 +4208,7 @@ function FnbPosPageInner() {
                 <input
                   type="text"
                   value={voidReasonOther}
+                  disabled={voidSubmitting}
                   onChange={(e) => setVoidReasonOther(e.target.value)}
                   autoFocus
                   maxLength={120}
@@ -4177,19 +4218,20 @@ function FnbPosPageInner() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
-              cho bếp trước. Lý do sẽ ghi vào audit log.
+              Chỉ hủy bill chưa thanh toán. Nếu bếp đã nhận đơn, hãy báo bếp dừng
+              làm món. Lý do và người hủy được lưu trong nhật ký thao tác.
             </p>
             {!canCancelUnpaidOrder && (
               <div className="rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
                 <Icon name="pin" size={14} className="inline-block mr-1 text-status-warning" />
-                Bạn không có quyền huỷ. Sau khi xác nhận sẽ mở dialog xin OTP từ quản lý.
+                Bạn cần quản lý duyệt hủy bill bằng OTP.
               </div>
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
+              disabled={voidSubmitting}
               onClick={() => {
                 setVoidConfirmOpen(false);
                 setVoidReason("");
@@ -4202,10 +4244,10 @@ function FnbPosPageInner() {
             <button
               type="button"
               onClick={handleVoidKitchenOrder}
-              disabled={!voidReason.trim()}
+              disabled={voidSubmitting || !voidReason.trim() || (voidReason === "Khác" && !voidReasonOther.trim())}
               className="px-4 py-2 rounded-lg text-sm bg-status-error text-white hover:bg-status-error/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {canCancelUnpaidOrder ? "Huỷ đơn" : "Xin OTP duyệt"}
+              {voidSubmitting ? "Đang hủy…" : canCancelUnpaidOrder ? "Hủy bill" : "Xin OTP duyệt"}
             </button>
           </div>
         </DialogContent>
@@ -4277,7 +4319,7 @@ function FnbPosPageInner() {
         }}
       />
 
-      <FnbOpenOrdersDialog updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
+      <FnbOpenOrdersDialog activeOrderId={pos.activeTab?.kitchenOrderId} updatedAt={openOrders.updatedAt} open={openOrdersDialog} onOpenChange={setOpenOrdersDialog} orders={openOrders.orders} drafts={pos.tabs.filter((tab) => !tab.kitchenOrderId)} onOpenOrder={handleOpenSharedOrder} onOpenDraft={(id) => { pos.switchTab(id); setOpenOrdersDialog(false); setMobileCartOpen(true); setShowFloorPlan(false); }} loading={openOrders.loading} error={openOrders.error} connected={openOrders.connected} busy={openingSharedOrder} onRefresh={() => { void openOrders.refresh(); }} />
 
       <Dialog open={Boolean(selectDineInTabId)} onOpenChange={(open) => { if (!open) setSelectDineInTabId(null); }}>
         <DialogContent className="sm:max-w-md">

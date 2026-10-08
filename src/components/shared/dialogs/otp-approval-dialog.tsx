@@ -12,7 +12,7 @@
  *
  * Khác `SupervisorPinDialog` (PIN cố định 1 mã chung):
  *   - OTP dùng 1 lần, TTL 2 phút, gắn user cấp → audit chính xác
- *   - Sai 10 lần → thông báo admin (không khoá — CEO yêu cầu)
+ *   - Phân biệt mã sai với thao tác thất bại sau khi xác thực.
  *   - Có thể tích hợp Zalo OA / SMS cho iOS user về sau
  */
 
@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -60,6 +61,7 @@ export function OtpApprovalDialog({
   const [error, setError] = useState<string | null>(null);
   const [attempts, setAttempts] = useState(0);
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const verifyLock = useRef(false);
 
   // Reset state khi mở
   useEffect(() => {
@@ -68,7 +70,8 @@ export function OtpApprovalDialog({
       setReason("");
       setError(null);
       setAttempts(0);
-      setTimeout(() => inputRefs.current[0]?.focus(), 80);
+      const timer = setTimeout(() => inputRefs.current[0]?.focus(), 80);
+      return () => clearTimeout(timer);
     }
   }, [open]);
 
@@ -77,9 +80,11 @@ export function OtpApprovalDialog({
   const reasonValid = !requireReason || reason.trim().length >= 5;
 
   const handleVerify = useCallback(async () => {
-    if (!codeReady || !reasonValid || verifying) return;
+    if (!codeReady || !reasonValid || verifyLock.current) return;
+    verifyLock.current = true;
     setVerifying(true);
     setError(null);
+    let otpVerified = false;
     try {
       const verified = await verifyAndUseManagerOtp({
         code,
@@ -89,25 +94,27 @@ export function OtpApprovalDialog({
           reason: reason.trim() || undefined,
         },
       });
+      otpVerified = true;
       await onApproved(verified, reason.trim());
       onOpenChange(false);
     } catch (err) {
-      const next = attempts + 1;
-      setAttempts(next);
       const message = err instanceof Error ? err.message : "Mã OTP không hợp lệ.";
-      setError(message);
+      const next = otpVerified ? attempts : attempts + 1;
+      if (!otpVerified) setAttempts(next);
+      setError(otpVerified
+        ? `OTP đã xác nhận nhưng thao tác chưa hoàn tất. Kiểm tra lại bill trước khi thử lại. ${message}`
+        : message);
       // Reset digits cho retry — UX KiotViet/Sapo: clear PIN sau khi sai
       setDigits(["", "", "", "", "", ""]);
       inputRefs.current[0]?.focus();
 
-      // CEO 12/05: sau 10 lần sai → thông báo admin (TODO: gửi notification),
-      // KHÔNG khoá để không chặn ca quá tay. Hiện tại chỉ hiển thị warning.
-      if (next >= 10) {
+      if (!otpVerified && next >= 10) {
         setError(
-          "Đã nhập sai 10 lần. Hệ thống đã ghi nhận và sẽ thông báo cho quản trị viên.",
+          "Đã thử mã nhiều lần. Kiểm tra đúng mã, bill và loại thao tác với quản lý; mã có hiệu lực 2 phút.",
         );
       }
     } finally {
+      verifyLock.current = false;
       setVerifying(false);
     }
   }, [
@@ -166,22 +173,22 @@ export function OtpApprovalDialog({
     OTP_ACTION_LABELS[actionCode as OtpActionCode] ?? actionCode;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+    <Dialog open={open} onOpenChange={(next) => { if (!verifyLock.current) onOpenChange(next); }}>
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="pin" size={18} className="text-status-warning" />
             Cần OTP duyệt từ xa
           </DialogTitle>
           <DialogDescription className="space-y-1.5 pt-1">
-            <div className="text-sm font-medium text-foreground">{actionLabel}</div>
+            <span className="block text-sm font-medium text-foreground">{actionLabel}</span>
             {contextLabel && (
-              <div className="text-xs text-muted-foreground">{contextLabel}</div>
+              <span className="block text-xs text-muted-foreground">{contextLabel}</span>
             )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <DialogBody className="space-y-3 py-2">
           {/* Hướng dẫn */}
           <div className="bg-status-warning/5 border border-status-warning/20 rounded-lg p-3 text-xs text-muted-foreground">
             <div className="flex items-start gap-2">
@@ -201,7 +208,7 @@ export function OtpApprovalDialog({
           </div>
 
           {/* 6 ô digit */}
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-1.5 sm:gap-2">
             {digits.map((d, i) => (
               <input
                 key={i}
@@ -212,13 +219,14 @@ export function OtpApprovalDialog({
                 inputMode="numeric"
                 autoComplete="off"
                 maxLength={1}
+                aria-label={`Chữ số OTP ${i + 1}`}
                 value={d}
                 disabled={verifying}
                 onChange={(e) => handleDigitChange(i, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(i, e)}
-                onPaste={i === 0 ? handlePaste : undefined}
+                onPaste={handlePaste}
                 className={cn(
-                  "h-14 w-12 rounded-lg border-2 text-center text-2xl font-bold transition-colors",
+                  "h-12 w-10 rounded-md border-2 text-center text-2xl font-bold transition-colors sm:h-14 sm:w-12",
                   "focus:outline-none focus:ring-2 focus:ring-primary/40",
                   d
                     ? "border-primary bg-primary/5 text-primary"
@@ -253,7 +261,7 @@ export function OtpApprovalDialog({
 
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-2 text-xs text-status-error bg-status-error/5 border border-status-error/20 rounded-md px-3 py-2">
+            <div role="alert" className="flex items-start gap-2 text-xs text-status-error bg-status-error/5 border border-status-error/20 rounded-md px-3 py-2">
               <Icon name="error" size={14} className="shrink-0 mt-0.5" />
               <div className="flex-1">
                 <div>{error}</div>
@@ -265,7 +273,7 @@ export function OtpApprovalDialog({
               </div>
             </div>
           )}
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button

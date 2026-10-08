@@ -50,7 +50,7 @@ describe("F&B split result", () => {
 
   it("rejects fractional and out-of-range equal splits", () => {
     const { equally } = setup();
-    fireEvent.click(screen.getByRole("button", { name: "Chia đều" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chia nhiều bill" }));
     for (const value of ["1", "2.5", "11"]) {
       fireEvent.change(screen.getByRole("spinbutton"), { target: { value } });
       expect(screen.getByRole("button", { name: `Chia ${value} phần` })).toBeDisabled();
@@ -60,7 +60,7 @@ describe("F&B split result", () => {
 
   it("closes only after a successful equal split", async () => {
     const { equally, onOpenChange } = setup();
-    fireEvent.click(screen.getByRole("button", { name: "Chia đều" }));
+    fireEvent.click(screen.getByRole("button", { name: "Chia nhiều bill" }));
     fireEvent.click(screen.getByRole("button", { name: "Chia 2 phần" }));
     await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
     expect(equally).toHaveBeenCalledWith(2);

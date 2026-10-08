@@ -108,6 +108,8 @@ interface FnbCartProps {
   onEditLine?: (line: FnbOrderLine) => void;
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
+  onCancelSentItems?: () => void;
+  voidKitchenOrderLabel?: string;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
   onTransferTable?: () => void;
   onMergeTable?: () => void;
@@ -184,6 +186,8 @@ export function FnbCart({
   onPrintPreBill,
   onEditLine,
   onVoidKitchenOrder,
+  onCancelSentItems,
+  voidKitchenOrderLabel = "Hủy đơn chưa thanh toán",
   onTransferTable,
   onMergeTable,
   onOrderHistory,
@@ -252,11 +256,11 @@ export function FnbCart({
         ? "w-full"
         // Keep tablets on the drawer so menu cards retain usable width.
         // Desktop cart width stays bounded even on larger screens.
-        : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
+        : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-primary/15"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
       <div className="shrink-0 max-h-[55%] overflow-y-auto">
-      <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card">
+      <div className="px-2.5 py-1.5 border-b border-primary/10 bg-primary/[0.025] dark:bg-card">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">
@@ -290,7 +294,8 @@ export function FnbCart({
               {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
               {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
-              {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> Huỷ đơn bếp</DropdownMenuItem></>}
+              {activeTab?.kitchenOrderId && onCancelSentItems && <DropdownMenuItem onClick={onCancelSentItems} className="text-status-error"><Icon name="remove_shopping_cart" size={18} /> Hủy một / nhiều món</DropdownMenuItem>}
+              {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> {voidKitchenOrderLabel}</DropdownMenuItem></>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -301,8 +306,8 @@ export function FnbCart({
           onClick={onCustomerClick}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
         >
-          <Icon name="person" size={16} className="text-muted-foreground shrink-0" />
-          <span className="truncate flex-1 text-left">
+          <Icon name="person" size={16} className="text-primary shrink-0" />
+          <span className="truncate flex-1 text-left font-semibold text-primary">
             {activeTab?.customerName ?? "Khách lẻ"}
           </span>
           <kbd className="text-xs text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-2 py-0.5">
