@@ -7,16 +7,20 @@ const mocks = vi.hoisted(() => ({
   events: [] as Array<() => void>,
   status: undefined as ((status: string) => void) | undefined,
   on: vi.fn(), removeChannel: vi.fn(),
+  channels: new Map<string, { subscribed: boolean }>(),
 }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({
-  channel: () => {
+  channel: (topic: string) => {
+    const state = mocks.channels.get(topic) ?? { subscribed: false };
+    mocks.channels.set(topic, state);
     const channel = {
       on: (...args: unknown[]) => {
+        if (state.subscribed) throw new Error("cannot add callbacks after subscribe");
         mocks.on(...args);
         mocks.events.push(args[2] as () => void);
         return channel;
       },
-      subscribe: (callback: (status: string) => void) => { mocks.status = callback; return channel; },
+      subscribe: (callback: (status: string) => void) => { state.subscribed = true; mocks.status = callback; return channel; },
     };
     return channel;
   },
@@ -25,12 +29,24 @@ vi.mock("@/lib/services/supabase/base", () => ({ getClient: () => ({
 
 beforeEach(() => {
   vi.useFakeTimers(); mocks.events = []; mocks.status = undefined;
+  mocks.channels.clear();
   mocks.on.mockClear(); mocks.removeChannel.mockClear();
   Object.defineProperty(document, "hidden", { configurable: true, value: false });
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("F&B live refresh recovery", () => {
+  it("isolates identical subscriptions and recreation before asynchronous cleanup completes", () => {
+    const first = vi.fn();
+    const { rerender } = renderHook(({ refresh }) => {
+      useLiveDataRefresh(refresh, "tenant", "branch", ["kitchen_orders"]);
+      useLiveDataRefresh(first, "tenant", "branch", ["kitchen_orders"]);
+    }, { initialProps: { refresh: first } });
+    expect(mocks.channels.size).toBe(2);
+    rerender({ refresh: vi.fn() });
+    expect(mocks.channels.size).toBe(3);
+    expect(mocks.removeChannel).toHaveBeenCalledTimes(1);
+  });
   it("coalesces branch-filtered changes and refreshes on subscription/reconnection", () => {
     const refresh = vi.fn();
     const { result } = renderHook(() => useLiveDataRefresh(refresh, "tenant", "branch", ["kitchen_orders", "invoices"]));
@@ -88,6 +104,7 @@ describe("F&B live data wiring", () => {
     expect(kds).toContain('if (status === "SUBSCRIBED") scheduleRealtimeRefresh()');
     expect(kds).toContain('window.addEventListener("online", tick)');
     expect(kds).toContain('window.removeEventListener("focus", tick)');
+    expect(kds).toContain("${realtimeInstanceId}-${++realtimeSubscriptionGeneration.current}");
     const pos = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
     expect(pos).toContain('useLiveDataRefresh(refreshDeliveryCount, tenantId, branchId, ["kitchen_orders"]');
     expect(pos).toContain("generation === deliveryRefreshGeneration.current");

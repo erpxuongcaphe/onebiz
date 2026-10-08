@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { getClient } from "@/lib/services/supabase/base";
 /** Realtime invalidation plus visible-page polling/reconnect recovery. Queries remain tenant/branch scoped. */
 export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId: string | undefined, branchId: string | undefined, tables: string[], enabled = true) {
   const tableKey = tables.join(",");
+  const instanceId = useId();
+  const subscriptionGeneration = useRef(0);
   const scope = `${tenantId}:${branchId}:${tableKey}`;
   const [connection, setConnection] = useState({ scope: "", connected: false });
   useEffect(() => {
@@ -13,7 +15,8 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
     let disposed = false;
     const run = () => { if (!disposed && !document.hidden) void refresh(); };
     const schedule = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
-    const channel = client.channel(`live-${tenantId}-${branchId ?? "all"}-${tableKey}`);
+    // Supabase reuses channels by topic; every effect needs its own channel.
+    const channel = client.channel(`live-${tenantId}-${branchId ?? "all"}-${tableKey}-${instanceId}-${++subscriptionGeneration.current}`);
     for (const table of tableKey.split(",")) {
       const filter = table === "kitchen_order_items" ? undefined : branchId ? `branch_id=eq.${branchId}` : `tenant_id=eq.${tenantId}`;
       channel.on("postgres_changes", { event: "*", schema: "public", table, ...(filter ? { filter } : {}) }, schedule);
@@ -30,6 +33,6 @@ export function useLiveDataRefresh(refresh: () => void | Promise<void>, tenantId
       window.removeEventListener("fnb-open-orders-changed", schedule); document.removeEventListener("visibilitychange", schedule);
       void client.removeChannel(channel);
     };
-  }, [refresh, tenantId, branchId, tableKey, enabled, scope]);
+  }, [refresh, tenantId, branchId, tableKey, enabled, scope, instanceId]);
   return connection.scope === scope && connection.connected && enabled;
 }
