@@ -161,6 +161,7 @@ export async function printFnbBillWithTemplate(
     };
 
     const data = applyTemplateToDocData(base,resolved);
+    data.fnbThermalReadable = true;
     if (p.billPhase === "prebill") data.documentType = "PHIẾU TẠM TÍNH";
     const result = await sendPrintJob({html:generateDocumentHtml(data,resolved.paperSize), paperSize:resolved.paperSize, role:"cashier",branchId:p.branchId ?? undefined,label:`${p.billPhase === "prebill" ? "Tạm tính" : "Bill"} ${p.invoiceCode}`.slice(0,80),buildHtml:paper=>generateDocumentHtml(data,paper),openCashDrawer:p.billPhase !== "prebill" && getPrintSettings().openCashDrawer && p.paymentMethod === "cash"});
     // A failed send is reported by the service; don't silently retry a different

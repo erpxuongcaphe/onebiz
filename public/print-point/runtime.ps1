@@ -4,7 +4,8 @@ function Get-OnebizNode {
   if (Test-Path -LiteralPath $bundledNode) { return $bundledNode }
   $existingNode = Get-Command node.exe -ErrorAction SilentlyContinue
   if ($existingNode) {
-    $nodeMajor = & $existingNode.Source -p 'process.versions.node.split(".")[0]'
+    $nodeVersion = & $existingNode.Source --version
+    $nodeMajor = if ($LASTEXITCODE -eq 0 -and $nodeVersion -match '^v(\d+)\.') { [int]$Matches[1] } else { 0 }
     if ([int]$nodeMajor -ge 22) { return $existingNode.Source }
   }
   throw 'Node.js chua san sang. Chay Cai-diem-in.cmd de chuan bi.'
