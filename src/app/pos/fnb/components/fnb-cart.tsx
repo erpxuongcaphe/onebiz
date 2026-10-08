@@ -252,11 +252,11 @@ export function FnbCart({
         ? "w-full"
         // Keep tablets on the drawer so menu cards retain usable width.
         // Desktop cart width stays bounded even on larger screens.
-        : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-border"
+        : "w-[360px] 2xl:w-[400px] shrink-0 hidden xl:flex border-l border-primary/15"
     )}>
       {/* Header giữ ngắn để ưu tiên danh sách món cho ca đông đơn. */}
       <div className="shrink-0 max-h-[55%] overflow-y-auto">
-      <div className="px-2.5 py-1.5 border-b border-outline-variant/20 bg-white dark:bg-card">
+      <div className="px-2.5 py-1.5 border-b border-primary/10 bg-primary/[0.025] dark:bg-card">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2 min-w-0 flex-wrap">
             <h2 className="font-heading text-base font-bold text-foreground truncate">

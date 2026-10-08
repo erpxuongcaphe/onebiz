@@ -218,8 +218,8 @@ const PRINT_NAV: NavGroup[] = [
     label: "In quán F&B (bill nhiệt 80/58)",
     accent: "amber",
     items: [
-      { id: "fnb-sale_invoice", label: "Bill thanh toán", icon: "receipt", channel: "fnb", docType: "sale_invoice" },
-      { id: "fnb-kitchen_ticket", label: "Phiếu chế biến", icon: "receipt", channel: "fnb", docType: "kitchen_ticket" },
+      { id: "fnb-sale_invoice", label: "Mẫu phiếu thanh toán / tạm tính", icon: "receipt", channel: "fnb", docType: "sale_invoice" },
+      { id: "fnb-kitchen_ticket", label: "Mẫu phiếu Bar / Bếp", icon: "receipt", channel: "fnb", docType: "kitchen_ticket" },
     ],
   },
   {
@@ -886,6 +886,14 @@ function PrintSettingsPageContent() {
       )}
 
       {selected === "may-in" && printerSection === "slips" && (<>
+      <div className="space-y-2 rounded-md border border-primary/15 p-3">
+        <h2 className="text-sm font-semibold text-primary">Thiết kế mẫu phiếu F&B</h2>
+        <p className="text-sm text-muted-foreground">Mẫu thanh toán và tạm tính dùng chung bố cục. Kiểm tra phạm vi chi nhánh trong danh sách mẫu trước khi chỉnh.</p>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" className="min-h-11" onClick={() => setSelected("fnb-sale_invoice")}>Phiếu thanh toán / tạm tính</Button>
+          <Button variant="outline" className="min-h-11" onClick={() => setSelected("fnb-kitchen_ticket")}>Phiếu Bar / Bếp</Button>
+        </div>
+      </div>
       {/* ── Sprint KITCHEN-1: Trạm chế biến (CEO 07/05) ── */}
       <details className="rounded-lg border bg-card p-3"><summary className="min-h-11 cursor-pointer text-sm font-semibold text-primary">Nâng cao: chia trạm Bar / Bếp theo món</summary><div className="mt-3">
       <KitchenStationsCard printTargetLabel={print.backend === "escpos-usb"

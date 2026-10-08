@@ -238,8 +238,8 @@ export function FnbHeader({
         Mockup v3: tabs có space riêng, không chen với toolbar — staff dễ
         scan đơn hiện tại. Color dot xanh/cam/xanh lá theo orderType. */}
     <div className="flex min-h-12 shrink-0 items-center gap-2 border-b border-border bg-white dark:bg-card px-2 sm:px-3">
+      {onOpenOrders && <button type="button" onClick={onOpenOrders} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md border border-primary/20 bg-primary/10 px-2.5 text-sm font-semibold text-primary hover:bg-primary/15" aria-label={`Đơn chờ thanh toán (${openOrderCount})`}><Icon name="receipt_long" size={16} /><span>Chờ thanh toán</span><span className="rounded bg-primary px-1.5 text-primary-foreground">{openOrderCount}</span></button>}
     <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto scrollbar-none">
-      {onOpenOrders && <button type="button" onClick={onOpenOrders} className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-md bg-primary/10 px-2.5 text-sm font-semibold text-primary" aria-label={`Đơn đang mở (${openOrderCount})`}><Icon name="receipt_long" size={16} /><span className="hidden sm:inline">Đơn mở</span><span>{openOrderCount}</span></button>}
       {(onOpenOrders ? tabs.filter((tab, index) => tab.id === activeTabId || index >= tabs.length - 2) : tabs).map((tab) => {
         const isActive = tab.id === activeTabId;
         // Color dot theo orderType (đồng bộ với cart pill row)
@@ -278,14 +278,14 @@ export function FnbHeader({
                 const sentToKitchen = !!tab.kitchenOrderId;
                 if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
                   if (!window.confirm(
-                    `"${tab.label}" đã gửi bếp + bàn vẫn occupied. Đóng tab sẽ giữ đơn ở KDS — để mở lại, click bàn từ Sơ đồ bàn. Tiếp tục?`
+                    `"${tab.label}" đã gửi bếp. Đóng tab không hủy bill và bàn vẫn đang phục vụ. Anh có thể mở lại trong Chờ thanh toán. Đóng tab?`
                   )) return;
                   closeTab(tab.id);
                   return;
                 }
                 if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
                   const msg = sentToKitchen
-                    ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`
+                    ? `"${tab.label}" đã gửi bếp. Đóng tab không hủy bill. Anh có thể mở lại trong Chờ thanh toán. Đóng tab?`
                     : `"${tab.label}" có ${tab.lines.length} món chưa gửi bếp. Đóng tab sẽ mất sạch. Tiếp tục?`;
                   if (!window.confirm(msg)) return;
                 }
@@ -299,14 +299,14 @@ export function FnbHeader({
                   const sentToKitchen = !!tab.kitchenOrderId;
                   if (sentToKitchen && tab.orderType === "dine_in" && typeof window !== "undefined") {
                     if (!window.confirm(
-                      `"${tab.label}" đã gửi bếp + bàn vẫn occupied. Đóng tab sẽ giữ đơn ở KDS — để mở lại, click bàn từ Sơ đồ bàn. Tiếp tục?`
+                      `"${tab.label}" đã gửi bếp. Đóng tab không hủy bill và bàn vẫn đang phục vụ. Anh có thể mở lại trong Chờ thanh toán. Đóng tab?`
                     )) return;
                     closeTab(tab.id);
                     return;
                   }
                   if ((hasItems || sentToKitchen) && typeof window !== "undefined") {
                     const msg = sentToKitchen
-                      ? `"${tab.label}" đã gửi bếp. Đóng tab sẽ mất link local — đơn vẫn ở KDS. Tiếp tục?`
+                      ? `"${tab.label}" đã gửi bếp. Đóng tab không hủy bill. Anh có thể mở lại trong Chờ thanh toán. Đóng tab?`
                       : `"${tab.label}" có ${tab.lines.length} món chưa gửi bếp. Đóng tab sẽ mất sạch. Tiếp tục?`;
                     if (!window.confirm(msg)) return;
                   }
