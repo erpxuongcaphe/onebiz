@@ -343,16 +343,18 @@ export const sidebarNavGroups: SidebarGroup[] = [
     ],
   },
   // ============================================================
-  // 10. HỆ THỐNG — pinned bottom
+  // 10. CÀI ĐẶT — pinned bottom
   // ============================================================
   {
-    label: "Hệ thống",
+    label: "Cài đặt",
     icon: "settings",
     pinBottom: true,
     items: [
+      { label: "Tất cả cài đặt", href: "/cai-dat", icon: "settings", exact: true },
+      { label: "Vai trò & phân quyền", href: "/cai-dat/phan-quyen", icon: "shield", permission: "system.manage_roles" },
       // Day 7 16/05/2026: gắn permission cho các route nhạy cảm Hệ thống
       { label: "Cấp OTP duyệt từ xa", href: "/cap-otp", icon: "vpn_key", permission: "system.issue_otp" },
-      { label: "Người dùng & phân quyền", href: "/he-thong/users", icon: "manage_accounts", permission: "system.manage_users" },
+      { label: "Người dùng", href: "/he-thong/users", icon: "manage_accounts", permission: "system.manage_users" },
       { label: "Chi nhánh", href: "/he-thong/chi-nhanh", icon: "apartment", permission: "system.manage_branches" },
       { label: "Bàn & Khu vực F&B", href: "/he-thong/quan-ly-ban", icon: "chair", permission: "system.manage_branches" },
       { label: "Sơ đồ bàn", href: "/he-thong/so-do-ban", icon: "map", permission: "floor_plan.view" },

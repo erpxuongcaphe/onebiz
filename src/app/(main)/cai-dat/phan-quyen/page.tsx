@@ -7,7 +7,7 @@
  * and see member counts for each role.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -80,6 +80,43 @@ function PermissionSettingsPage() {
   // Delete confirmation — tránh xoá nhầm vai trò đang có member
   const [deletingRole, setDeletingRole] = useState<DbRole | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [renamingRole, setRenamingRole] = useState<DbRole | null>(null);
+  const [renameName, setRenameName] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const renameLock = useRef(false);
+
+  const handleRename = async () => {
+    if (!renamingRole || renamingRole.isSystem || renameLock.current) return;
+    const name = renameName.trim();
+    if (!name || name.length > 120) {
+      setRenameError("Tên vai trò cần có từ 1 đến 120 ký tự.");
+      return;
+    }
+    if (roles.some((role) => role.id !== renamingRole.id && role.name.trim().toLocaleLowerCase("vi") === name.toLocaleLowerCase("vi"))) {
+      setRenameError("Tên vai trò đã tồn tại. Anh chọn tên khác nhé.");
+      return;
+    }
+    if (name === renamingRole.name) {
+      setRenamingRole(null);
+      return;
+    }
+    renameLock.current = true;
+    setRenameBusy(true);
+    setRenameError("");
+    try {
+      await updateRole(renamingRole.id, { name });
+      setRoles((current) => current.map((role) => role.id === renamingRole.id ? { ...role, name } : role));
+      setRoleDetail((current) => current?.id === renamingRole.id ? { ...current, name } : current);
+      setRenamingRole(null);
+      toast({ title: "Đã đổi tên vai trò", description: name, variant: "success" });
+    } catch {
+      setRenameError("Chưa đổi được tên vai trò. Vui lòng thử lại.");
+    } finally {
+      renameLock.current = false;
+      setRenameBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!tenantId) return;
@@ -225,9 +262,9 @@ function PermissionSettingsPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Phân quyền</h1>
+          <h1 className="text-2xl font-bold">Vai trò & phân quyền</h1>
           <p className="text-muted-foreground text-sm mt-1">
             Quản lý vai trò và quyền truy cập — {roles.length} vai trò
           </p>
@@ -262,14 +299,15 @@ function PermissionSettingsPage() {
           const isExpanded = expandedRole === role.id;
           return (
             <Card key={role.id}>
+              <div className="flex items-center">
               <button
                 type="button"
-                className="w-full text-left"
+                className="min-w-0 flex-1 text-left"
                 onClick={() => handleExpand(role.id)}
               >
                 <CardHeader className="py-3">
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
                       <div
                         className={cn(
                           "h-8 w-8 rounded-lg flex items-center justify-center text-white",
@@ -278,14 +316,14 @@ function PermissionSettingsPage() {
                       >
                         <Icon name="shield" size={16} />
                       </div>
-                      <div>
-                        <CardTitle className="text-sm">{role.name}</CardTitle>
+                      <div className="min-w-0">
+                        <CardTitle className="break-words text-sm">{role.name}</CardTitle>
                         <CardDescription className="text-xs">
                           {role.description ?? "Vai trò tùy chỉnh"}
                         </CardDescription>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="ml-2 flex shrink-0 items-center gap-2">
                       {role.isSystem && (
                         <Badge variant="outline" className="text-xs">
                           Hệ thống
@@ -304,6 +342,16 @@ function PermissionSettingsPage() {
                   </div>
                 </CardHeader>
               </button>
+              {!role.isSystem && (
+                <Button variant="ghost" size="sm" className="mr-3 shrink-0"
+                  aria-label={`Đổi tên vai trò ${role.name}`}
+                  title="Đổi tên vai trò"
+                  onClick={() => { setRenamingRole(role); setRenameName(role.name); setRenameError(""); }}>
+                  <Icon name="edit" size={16} className="mr-1" />
+                  Đổi tên
+                </Button>
+              )}
+              </div>
 
               {isExpanded && roleDetail && (
                 <CardContent>
@@ -399,6 +447,28 @@ function PermissionSettingsPage() {
           );
         })}
       </div>
+
+      <Dialog open={renamingRole !== null} onOpenChange={(open) => { if (!open && !renameLock.current) setRenamingRole(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Đổi tên vai trò</DialogTitle></DialogHeader>
+          <form onSubmit={(event) => { event.preventDefault(); void handleRename(); }} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rename-role-name">Tên vai trò</Label>
+              <Input id="rename-role-name" value={renameName} maxLength={120} disabled={renameBusy}
+                aria-invalid={!!renameError} aria-describedby={renameError ? "rename-role-error" : undefined}
+                onChange={(event) => { setRenameName(event.target.value); setRenameError(""); }} autoFocus />
+              {renameError && <p id="rename-role-error" role="alert" className="text-sm text-status-error">{renameError}</p>}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={renameBusy} onClick={() => setRenamingRole(null)}>Hủy</Button>
+              <Button type="submit" disabled={renameBusy}>
+                <Icon name={renameBusy ? "progress_activity" : "save"} size={16} className={cn("mr-1", renameBusy && "animate-spin")} />
+                {renameBusy ? "Đang lưu" : "Lưu tên"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Role Dialog */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

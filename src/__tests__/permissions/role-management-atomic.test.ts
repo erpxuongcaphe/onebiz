@@ -16,6 +16,7 @@ import {
   createRole,
   deleteRole,
   setRolePermissions,
+  updateRole,
 } from "@/lib/services/supabase/roles";
 
 const migration = readFileSync(
@@ -45,6 +46,21 @@ beforeEach(() => {
 });
 
 describe("atomic role management", () => {
+  it("renames the existing role without replacing permissions or assignments", async () => {
+    await updateRole("role-1", { name: "Trưởng ca" });
+    expect(rpc).toHaveBeenCalledExactlyOnceWith("save_role_atomic", {
+      p_role_id: "role-1",
+      p_payload: { name: "Trưởng ca" },
+      p_permission_codes: null,
+    });
+  });
+
+  it("keeps backend metadata guards and propagates rename failures", async () => {
+    rpc.mockResolvedValueOnce({ error: { message: "SYSTEM_ROLE_METADATA_LOCKED" } });
+    await expect(updateRole("role-1", { name: "New" })).rejects.toThrow("SYSTEM_ROLE_METADATA_LOCKED");
+    expect(migration).toContain("SYSTEM_ROLE_METADATA_LOCKED");
+  });
+
   it("creates a role and initial permissions in one RPC", async () => {
     const role = await createRole({
       tenantId: "tenant-1",
