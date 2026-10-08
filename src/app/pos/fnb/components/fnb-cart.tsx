@@ -108,6 +108,7 @@ interface FnbCartProps {
   onEditLine?: (line: FnbOrderLine) => void;
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
+  onCancelSentItems?: () => void;
   voidKitchenOrderLabel?: string;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
   onTransferTable?: () => void;
@@ -185,6 +186,7 @@ export function FnbCart({
   onPrintPreBill,
   onEditLine,
   onVoidKitchenOrder,
+  onCancelSentItems,
   voidKitchenOrderLabel = "Hủy đơn chưa thanh toán",
   onTransferTable,
   onMergeTable,
@@ -292,6 +294,7 @@ export function FnbCart({
               {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
               {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
+              {activeTab?.kitchenOrderId && onCancelSentItems && <DropdownMenuItem onClick={onCancelSentItems} className="text-status-error"><Icon name="remove_shopping_cart" size={18} /> Hủy một / nhiều món</DropdownMenuItem>}
               {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> {voidKitchenOrderLabel}</DropdownMenuItem></>}
             </DropdownMenuContent>
           </DropdownMenu>

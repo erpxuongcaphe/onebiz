@@ -39,6 +39,7 @@ import {
   DialogBody,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { FnbCancelApprovalInbox } from "./fnb-cancel-approval-inbox";
 
 interface ActionCard {
   code: OtpActionCode;
@@ -242,6 +243,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
   return (
     <>
       <div className={cn("mx-auto space-y-4", maxWidth)}>
+        {hasPermission(PERMISSIONS.POS_FNB_CANCEL_UNPAID_ORDER) && <FnbCancelApprovalInbox onIssued={setIssuedOtp} />}
         {/* Hero — 1 nút cấp OTP duy nhất */}
         <section className="bg-surface border border-border rounded-lg p-5 sm:p-6 shadow-none">
           <div className="flex items-center gap-3 mb-4">

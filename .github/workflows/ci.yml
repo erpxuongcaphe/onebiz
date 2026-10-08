@@ -468,7 +468,21 @@ jobs:
           node scripts/fnb-db-test/extract-payment-replay-chain.mjs /tmp/fnb-payment-replay-chain.sql
           node scripts/fnb-db-test/extract-effective-quantity-chain.mjs /tmp/fnb-effective-quantity-chain.sql
           createdb fnb_effective_qty_test
-          PGDATABASE=fnb_effective_qty_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00454_fnb_effective_unpaid_quantities.integration.sql
+          PGDATABASE=fnb_effective_qty_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00458_promotion_beneficiaries.integration.sql
+
+      - name: Verify exact FNB item cancellation approvals
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          node scripts/fnb-db-test/extract-unpaid-cancel.mjs /tmp/fnb-unpaid-cancel-chain.sql
+          createdb fnb_cancel_request_test
+          PGDATABASE=fnb_cancel_request_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00455_fnb_cancel_requests.integration.sql
+          node scripts/fnb-db-test/extract-void-core.mjs /tmp/fnb-void-core.sql
+          createdb fnb_void_method_test
+          PGDATABASE=fnb_void_method_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00456_fnb_void_methods.integration.sql
 
   test-and-build:
     runs-on: ubuntu-latest

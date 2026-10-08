@@ -167,7 +167,7 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
     message: "Vui lòng nhập lý do giảm giá thủ công.",
   },
   {
-    codes: ["FNB_PROMOTION_NOT_FOUND", "FNB_PROMOTION_NOT_AVAILABLE", "FNB_PROMOTION_TIME_CONFIG_INVALID", "FNB_PROMOTION_TIME_NOT_AVAILABLE", "FNB_PROMOTION_DAY_NOT_AVAILABLE", "FNB_PROMOTION_NOT_APPLICABLE", "FNB_PROMOTION_VALUE_INVALID", "FNB_PROMOTION_TYPE_NOT_SUPPORTED"],
+    codes: ["FNB_PROMOTION_NOT_FOUND", "FNB_PROMOTION_NOT_AVAILABLE", "FNB_PROMOTION_TIME_CONFIG_INVALID", "FNB_PROMOTION_TIME_NOT_AVAILABLE", "FNB_PROMOTION_DAY_NOT_AVAILABLE", "FNB_PROMOTION_NOT_APPLICABLE", "FNB_PROMOTION_VALUE_INVALID", "FNB_PROMOTION_TYPE_NOT_SUPPORTED", "FNB_PROMOTION_CUSTOMER_NOT_ELIGIBLE"],
     message: "Khuyến mãi không còn áp dụng cho đơn này. Vui lòng kiểm tra lại.",
   },
   {
@@ -175,7 +175,7 @@ const FNB_PAYMENT_ERROR_MESSAGES: ReadonlyArray<{
     message: "Mã giảm giá không còn áp dụng cho đơn này. Vui lòng kiểm tra lại.",
   },
   {
-    codes: ["FNB_ORDER_TOTAL_INVALID", "FNB_TOTAL_DISCOUNT_EXCEEDS_ORDER"],
+    codes: ["FNB_ORDER_TOTAL_INVALID", "FNB_TOTAL_DISCOUNT_EXCEEDS_ORDER", "FNB_DISCOUNT_SCOPES_OVERLAP"],
     message: "Tổng giảm giá không hợp lệ. Vui lòng kiểm tra lại đơn hàng.",
   },
   {
@@ -231,6 +231,14 @@ const FNB_VOID_ERROR_MESSAGES: ReadonlyArray<{
   codes: readonly string[];
   message: string;
 }> = [
+  {
+    codes: ["FNB_VOID_HAS_RETURNS"],
+    message: "Bill đã hoàn một phần. Hãy hoàn các món còn lại trong luồng trả hàng để tránh hoàn trùng.",
+  },
+  {
+    codes: ["FNB_VOID_RECEIPTS_MISMATCH"],
+    message: "Phiếu thu chưa khớp số tiền đã thanh toán. Cần đối chiếu sổ quỹ trước khi hoàn bill.",
+  },
   {
     codes: ["FNB_VOID_ACTOR_MISMATCH", "FNB_VOID_BRANCH_ACCESS_DENIED", "FNB_VOID_BRANCH_MISMATCH"],
     message: "Anh/chị không có quyền huỷ hoá đơn này tại chi nhánh hiện tại.",

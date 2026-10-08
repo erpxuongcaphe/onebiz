@@ -27,14 +27,14 @@ function expand(file) {
     (_match,name)=>`create role ${name} nologin;`
   );
 }
-let sql=expand(path.resolve('supabase/tests/00454_fnb_effective_unpaid_quantities.integration.sql'));
+let sql=expand(path.resolve(process.argv[3] ?? 'supabase/tests/00454_fnb_effective_unpaid_quantities.integration.sql'));
 // PGlite's fixed database name differs; only replace this disposable fixture guard.
 sql=sql.replace("current_database() not in ('fnb_payment_concurrency_test', 'fnb_payment_cost_test', 'fnb_payment_return_cost_test', 'fnb_full_refund_test', 'fnb_effective_qty_test')", 'false');
 const db=new PGlite();
 try {
   await db.exec(sql);
   console.log('PASS: effective quantities, real checkout/BOM, exact source, paid-return, split and private ACL');
-} finally {
+} catch(e) { console.error(e.message,e.where ?? ''); process.exitCode=1; } finally {
   await db.close();
   fs.rmSync(temporary,{recursive:true,force:true});
 }
