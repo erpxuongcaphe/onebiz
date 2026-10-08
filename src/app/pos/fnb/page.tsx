@@ -2194,7 +2194,7 @@ function FnbPosPageInner() {
         sharedSnapshotVersions.current.set(tabId, version);
         pos.loadSentLinesIntoTab(
           tabId,
-          (order.items ?? []).map(kitchenItemToCartLine),
+          (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine),
         );
         pos.updateTabMeta(tabId, {
           kitchenOrderId: order.id,
@@ -2269,7 +2269,7 @@ function FnbPosPageInner() {
       const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
       pos.switchTab(tabId);
       sharedSnapshotVersions.current.set(tabId, new Date(order.updatedAt).getTime());
-      pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+      pos.loadSentLinesIntoTab(tabId, (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine));
       pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, ...customerContextFromOrder(order) });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
       return true;
@@ -2312,7 +2312,7 @@ function FnbPosPageInner() {
     const version = new Date(order.updatedAt).getTime();
     if ((sharedSnapshotVersions.current.get(tabId) ?? -Infinity) >= version) return;
     sharedSnapshotVersions.current.set(tabId, version);
-    refreshSharedSentLines(tabId, (order.items ?? []).map(kitchenItemToCartLine));
+    refreshSharedSentLines(tabId, (order.items ?? []).filter(item => item.quantity > 0).map(kitchenItemToCartLine));
     refreshSharedTabMeta(tabId, { ...customerContextFromOrder(order), tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, persistedOrderDiscountAmount: order.discountAmount, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent });
   }, [openOrders.orders, activeSharedTabId, activeSharedOrderId, refreshSharedSentLines, refreshSharedTabMeta, kitchenSubmitting]);
 
@@ -3239,13 +3239,15 @@ function FnbPosPageInner() {
     if (!tab?.kitchenOrderId) return;
     try {
       const order = await getKitchenOrderById(tab.kitchenOrderId);
-      if (!order?.items || order.items.length < 2) return;
+      const activeItems = (order?.items ?? []).filter(item => item.quantity > 0);
+      if (activeItems.length < 2) return;
       setSplitItems(
-        order.items.map((item) => ({
+        activeItems.map((item) => ({
           id: item.id,
           name: item.productName + (item.variantLabel ? ` (${item.variantLabel})` : ""),
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
+          unitPrice: item.unitPrice + (item.toppings ?? []).reduce((sum,topping) => sum + topping.quantity * topping.price,0),
+          detail: [item.modifierSelections?.map(selection => `${selection.groupName}: ${selection.options.map(option => option.label).join("/")}`).join(" · "),item.note].filter(Boolean).join(" · "),
         }))
       );
       setSplitBillOpen(true);

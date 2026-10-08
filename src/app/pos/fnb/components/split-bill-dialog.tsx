@@ -6,7 +6,7 @@
  *  2. "Chia đều" — Input N → split equally
  */
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { formatCurrency, formatNumber } from "@/lib/format";
@@ -26,6 +28,7 @@ export interface SplitItem {
   name: string;
   quantity: number;
   unitPrice: number;
+  detail?: string;
 }
 
 interface SplitBillDialogProps {
@@ -50,7 +53,18 @@ export function SplitBillDialog({
   const [numberOfWays, setNumberOfWays] = useState(2);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState(false);
-  const validNumberOfWays = Number.isInteger(numberOfWays) && numberOfWays >= 2 && numberOfWays <= 10;
+  const submitLock = useRef(false);
+  const itemIdentity = items.map(item => item.id).join("|");
+  useEffect(() => {
+    if (open && !submitLock.current) {
+      setSelectedIds(new Set());
+      setSubmitError(false);
+      setNumberOfWays(2);
+      setActiveTab("items");
+    }
+  }, [open, itemIdentity]);
+  const validNumberOfWays = Number.isInteger(numberOfWays) && numberOfWays >= 2
+    && numberOfWays <= Math.min(10, items.length);
 
   const toggleItem = (id: string) => {
     setSelectedIds((prev) => {
@@ -62,7 +76,8 @@ export function SplitBillDialog({
   };
 
   const handleSplitItems = async () => {
-    if (selectedIds.size === 0 || loading) return;
+    if (selectedIds.size === 0 || selectedIds.size >= items.length || submitLock.current) return;
+    submitLock.current = true;
     setLoading(true);
     setSubmitError(false);
     try {
@@ -75,12 +90,14 @@ export function SplitBillDialog({
     } catch {
       setSubmitError(true);
     } finally {
+      submitLock.current = false;
       setLoading(false);
     }
   };
 
   const handleSplitEqual = async () => {
-    if (!validNumberOfWays || loading) return;
+    if (!validNumberOfWays || submitLock.current) return;
+    submitLock.current = true;
     setLoading(true);
     setSubmitError(false);
     try {
@@ -92,6 +109,7 @@ export function SplitBillDialog({
     } catch {
       setSubmitError(true);
     } finally {
+      submitLock.current = false;
       setLoading(false);
     }
   };
@@ -101,20 +119,24 @@ export function SplitBillDialog({
     .reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
 
   const totalAll = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
-  const perPerson = numberOfWays > 0 ? Math.ceil(totalAll / numberOfWays) : 0;
+  const previewBills = validNumberOfWays ? Array.from({ length: numberOfWays }, (_,index) =>
+    items.reduce((sum,item,row) => sum + (row % numberOfWays === index ? item.quantity * item.unitPrice : 0),0)
+  ) : [];
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => {
       if (!loading) onOpenChange(nextOpen);
     }}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="content_cut" className="text-primary" />
             Tách bill
           </DialogTitle>
+          <DialogDescription>Giữ món trên bill đang mở và chuyển món đã chọn sang bill mới.</DialogDescription>
         </DialogHeader>
 
+        <DialogBody className="space-y-3">
         {/* Tabs */}
         <div className="flex gap-1 bg-muted/50 p-1 rounded-lg">
           <button
@@ -139,7 +161,7 @@ export function SplitBillDialog({
             )}
           >
             <Icon name="group" size={14} className="inline mr-1" />
-            Chia đều
+            Chia nhiều bill
           </button>
         </div>
 
@@ -150,7 +172,7 @@ export function SplitBillDialog({
               <p className="text-xs text-muted-foreground">
                 Chọn các món muốn tách sang bill mới:
               </p>
-              <div className="max-h-64 overflow-y-auto space-y-1">
+              <div className="space-y-1">
                 {items.map((item) => (
                   <label
                     key={item.id}
@@ -167,7 +189,7 @@ export function SplitBillDialog({
                       className="rounded"
                     />
                     {/* 06/08: tên món cắt được — TIỀN thì không (shrink-0 + tabular-nums). */}
-                    <span className="flex-1 min-w-0 truncate text-sm font-medium">{formatNumber(item.quantity)}x {item.name}</span>
+                    <span className="flex-1 min-w-0 text-sm font-medium"><span className="block break-words">{formatNumber(item.quantity)}x {item.name}</span>{item.detail && <span className="block text-xs font-normal text-muted-foreground">{item.detail}</span>}</span>
                     <span className="shrink-0 text-sm text-muted-foreground tabular-nums">
                       {formatCurrency(item.unitPrice * item.quantity)}
                     </span>
@@ -176,7 +198,7 @@ export function SplitBillDialog({
               </div>
               {selectedIds.size > 0 && (
                 <div className="text-sm font-medium text-right">
-                  Bill mới: {formatCurrency(selectedTotal)}
+                  Giá trị món chọn: {formatCurrency(selectedTotal)}đ · trước giảm giá
                 </div>
               )}
             </div>
@@ -185,14 +207,15 @@ export function SplitBillDialog({
           {activeTab === "equal" && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Chia bill đều cho N người — mỗi người thanh toán riêng:
+                Phân các dòng món lần lượt sang nhiều bill. Mỗi dòng giữ nguyên số lượng; tiền các bill có thể khác nhau.
               </p>
               <div>
-                <Label>Số người</Label>
+                <Label htmlFor="split-number-of-bills">Số bill</Label>
                 <Input
                   type="number"
+                  id="split-number-of-bills"
                   min={2}
-                  max={10}
+                  max={Math.min(10, items.length)}
                   step={1}
                   disabled={loading}
                   value={numberOfWays}
@@ -205,22 +228,21 @@ export function SplitBillDialog({
                   <span className="text-muted-foreground">Tổng:</span>
                   <span className="font-medium">{formatCurrency(totalAll)}</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Mỗi người:</span>
-                  <span className="font-bold text-lg">{formatCurrency(perPerson)}</span>
-                </div>
+                {previewBills.map((value,index) => <div key={index} className="flex justify-between gap-3"><span className="text-muted-foreground">Bill {index+1}{index===0 ? " (đang mở)" : " (mới)"}:</span><span className="font-semibold text-primary tabular-nums">{formatCurrency(value)}đ</span></div>)}
+                <p className="text-xs text-muted-foreground">Giá trị món trước giảm giá. Giảm giá của bill sẽ được phân bổ theo giá trị món.</p>
               </div>
             </div>
           )}
         </div>
 
         {submitError && <p role="alert" className="text-sm text-destructive">Chưa xác nhận được kết quả tách bill. Kiểm tra danh sách đơn trước khi thử lại.</p>}
+        </DialogBody>
         <DialogFooter>
           <Button variant="outline" disabled={loading} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
           {activeTab === "items" ? (
-            <Button onClick={handleSplitItems} disabled={selectedIds.size === 0 || loading}>
+            <Button onClick={handleSplitItems} disabled={selectedIds.size === 0 || selectedIds.size >= items.length || loading}>
               {loading && <Icon name="progress_activity" size={16} className="mr-1 animate-spin" />}
               Tách {selectedIds.size} món
             </Button>
