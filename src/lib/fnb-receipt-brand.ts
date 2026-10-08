@@ -1,7 +1,7 @@
 import type { PreBillData } from "./print-fnb";
 
 /** Default bills must use the same branch print information as custom templates. */
-export async function withFnbReceiptBrand<T extends PreBillData>(data: T): Promise<T> {
+export async function withFnbReceiptBrand<T extends PreBillData & { isOffline?: boolean }>(data: T): Promise<T> {
   if (!data.branchId || data.isOffline) return data;
   try {
     const { getResolvedBrand } = await import("./services");
