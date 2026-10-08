@@ -2,7 +2,7 @@
 
 /** FnbCart — Right sidebar cart panel for F&B POS */
 
-import { useId, useState } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +46,7 @@ interface FnbCartProps {
   manualDiscountAmount?: number;
   /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
   promotionDiscountAmount?: number;
+  promotionPicker?: ReactNode;
   /** Chỉ là bản xem trước; số chốt do RPC máy chủ tính lại. */
   couponDiscountAmount?: number;
   lineCount: number;
@@ -171,6 +172,7 @@ export function FnbCart({
   persistedOrderDiscountAmount = 0,
   manualDiscountAmount = 0,
   promotionDiscountAmount = 0,
+  promotionPicker,
   couponDiscountAmount = 0,
   lineCount,
   unsentLineCount = lineCount,
@@ -736,6 +738,7 @@ export function FnbCart({
         </div>
 
         {/* Discount controls + Preset dropdown (Sprint POS-FNB-EXT-1) */}
+        {!isEmpty && promotionPicker}
         {!isEmpty && onDiscountChange && (
           discountPresetsError ? (
             <div
