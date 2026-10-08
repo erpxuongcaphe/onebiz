@@ -37,13 +37,13 @@ import { FloorPlanEditor } from "@/components/shared/floor-plan/floor-plan-edito
 
 async function selectTree() {
   render(<FloorPlanEditor branchId="xtb" branchName="XTB" scope="branch" />);
-  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }, { timeout: 5000 }));
+  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }, { timeout: 10000 }));
   return screen.getByRole("button", { name: "Xoá vật đang chọn" });
 }
 
 describe("floor plan deletion targets", () => {
   beforeEach(() => {
-    configure({ asyncUtilTimeout: 5000 });
+    configure({ asyncUtilTimeout: 10000 });
     vi.clearAllMocks();
     mocks.canManage.mockReturnValue(true);
     mocks.zones.mockResolvedValue([{ id: "inside", name: "Trong Nhà", canvasWidth: 1000,

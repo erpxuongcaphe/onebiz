@@ -17,19 +17,22 @@ interface TableIdentityEditorProps {
 export function TableIdentityEditor({ table, zoneName = "", onSave }: TableIdentityEditorProps) {
   const { toast } = useToast();
   const [number, setNumber] = useState(String(table.tableNumber ?? ""));
-  const [name, setName] = useState(table.name ?? "");
   const existingCode = table.name?.match(/^([A-Z][A-Z0-9_-]{0,7})\s+(\d+)$/i);
+  const suggestedName = table.name === `Bàn ${table.tableNumber}`
+    ? composeTableCode(suggestZonePrefix(zoneName), String(table.tableNumber ?? "")) || table.name
+    : table.name ?? "";
+  const [name, setName] = useState(suggestedName);
   const [prefix, setPrefix] = useState(existingCode?.[1] ?? suggestZonePrefix(zoneName));
   const [ordinal, setOrdinal] = useState(existingCode?.[2] ?? String(table.tableNumber ?? ""));
   const [saving, setSaving] = useState(false);
   const pending = useRef(false);
   useEffect(() => {
     setNumber(String(table.tableNumber ?? ""));
-    setName(table.name ?? "");
+    setName(suggestedName);
     const code = table.name?.match(/^([A-Z][A-Z0-9_-]{0,7})\s+(\d+)$/i);
     setPrefix(code?.[1] ?? suggestZonePrefix(zoneName));
     setOrdinal(code?.[2] ?? String(table.tableNumber ?? ""));
-  }, [table.tableNumber, table.name, zoneName]);
+  }, [table.tableNumber, table.name, zoneName, suggestedName]);
 
   const save = async () => {
     if (pending.current) return;
@@ -60,12 +63,12 @@ export function TableIdentityEditor({ table, zoneName = "", onSave }: TableIdent
     <p className="text-sm font-semibold">Bàn đang chọn</p>
     <div className="grid grid-cols-2 gap-2">
       <div className="space-y-1">
-        <Label htmlFor="t-prefix" className="text-sm">Ký hiệu khu vực</Label>
+        <Label htmlFor="t-prefix" className="flex min-h-10 items-end text-sm">Ký hiệu khu vực</Label>
         <Input id="t-prefix" value={prefix} maxLength={8} disabled={saving} placeholder="TN, NS"
           onChange={event => { const value = event.target.value.toUpperCase(); setPrefix(value); setName(composeTableCode(value, ordinal)); }} className="h-9 text-sm uppercase" />
       </div>
       <div className="space-y-1">
-        <Label htmlFor="t-ordinal" className="text-sm">Số bàn trong khu</Label>
+        <Label htmlFor="t-ordinal" className="flex min-h-10 items-end text-sm">Số bàn trong khu</Label>
         <Input id="t-ordinal" value={ordinal} disabled={saving} inputMode="numeric" maxLength={4}
           onChange={event => { setOrdinal(event.target.value); setName(composeTableCode(prefix, event.target.value)); }} className="h-9 text-sm tabular-nums" />
       </div>

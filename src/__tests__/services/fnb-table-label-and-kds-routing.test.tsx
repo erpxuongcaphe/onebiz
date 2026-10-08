@@ -24,11 +24,11 @@ describe("area-prefixed table identity", () => {
   it.each(["", "0", "1.5", "10000", "-1", "1e2"])("rejects invalid local ordinal %s", ordinal => {
     expect(composeTableCode("TN", ordinal)).toBe("");
   });
-  it("keeps a saved label untouched until edited and saves NS 01 using the original key", async () => {
+  it("suggests an area code without writing and saves NS 01 using the original key", async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(<TableIdentityEditor table={{ tableNumber: 10, name: "Bàn 10" }} zoneName="Ngoài Sân" onSave={save} />);
     expect(screen.getByLabelText("Ký hiệu khu vực")).toHaveValue("NS");
-    expect(screen.getByRole("button", { name: "Lưu thông tin bàn" })).toBeDisabled();
+    expect(save).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("Số bàn trong khu"), { target: { value: "1" } });
     expect(screen.getByText("NS 01")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Lưu thông tin bàn" }));
