@@ -26,6 +26,7 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import type { RestaurantTable } from "@/lib/types/fnb";
 import { Icon } from "@/components/ui/icon";
 import { cn } from "@/lib/utils";
+import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import { updateTable } from "@/lib/services/supabase/fnb-tables";
 import { useToast } from "@/lib/contexts";
 
@@ -311,7 +312,7 @@ function DraggableTable({
       }}
       title={`Bàn ${table.name} (${table.capacity} chỗ) — kéo để di chuyển`}
     >
-      <div className="font-black text-base leading-none">{table.tableNumber}</div>
+      <div className="max-w-full break-words text-center font-black text-sm leading-tight">{getCompactTableLabel(table)}</div>
       <div className="text-xs mt-0.5 max-w-full truncate px-1">{table.name}</div>
       <div className="text-xs mt-0.5 flex items-center gap-0.5 opacity-80">
         <Icon name="group" size={10} />

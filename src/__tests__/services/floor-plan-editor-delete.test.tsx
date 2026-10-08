@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, configure, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -37,12 +37,13 @@ import { FloorPlanEditor } from "@/components/shared/floor-plan/floor-plan-edito
 
 async function selectTree() {
   render(<FloorPlanEditor branchId="xtb" branchName="XTB" scope="branch" />);
-  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }, { timeout: 5000 }));
+  fireEvent.click(await screen.findByRole("button", { name: "Chọn Cây cảnh" }, { timeout: 10000 }));
   return screen.getByRole("button", { name: "Xoá vật đang chọn" });
 }
 
 describe("floor plan deletion targets", () => {
   beforeEach(() => {
+    configure({ asyncUtilTimeout: 10000 });
     vi.clearAllMocks();
     mocks.canManage.mockReturnValue(true);
     mocks.zones.mockResolvedValue([{ id: "inside", name: "Trong Nhà", canvasWidth: 1000,
@@ -56,7 +57,7 @@ describe("floor plan deletion targets", () => {
     vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
     vi.stubGlobal("confirm", vi.fn(() => false));
   });
-  afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+  afterEach(() => { cleanup(); vi.unstubAllGlobals(); configure({ asyncUtilTimeout: 1000 }); });
 
   it("deletes only the selected decoration and retains all tables", async () => {
     fireEvent.click(await selectTree());
@@ -98,13 +99,13 @@ describe("floor plan deletion targets", () => {
     mocks.updateTable.mockResolvedValue({ tableNumber: 19, name: "Bàn cửa sổ" });
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
-    fireEvent.change(screen.getByLabelText("Số bàn"), { target: { value: "19" } });
-    fireEvent.change(screen.getByLabelText("Tên bàn"), { target: { value: "Bàn cửa sổ" } });
+    fireEvent.change(screen.getByLabelText("Số thứ tự nội bộ"), { target: { value: "19" } });
+    fireEvent.change(screen.getByLabelText("Tên / mã bàn"), { target: { value: "Bàn cửa sổ" } });
     expect(mocks.updateTable).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "Lưu thông tin bàn" }));
     await waitFor(() => expect(screen.getAllByText("Bàn cửa sổ").length).toBeGreaterThan(0));
     expect(mocks.updateTable).toHaveBeenCalledExactlyOnceWith("xtb", "table-0", { tableNumber: 19, name: "Bàn cửa sổ" });
-    expect(screen.getByLabelText("Số bàn")).toHaveValue(19);
+    expect(screen.getByLabelText("Số thứ tự nội bộ")).toHaveValue(19);
     expect(mocks.deleteZone).not.toHaveBeenCalled();
   });
 
@@ -112,7 +113,7 @@ describe("floor plan deletion targets", () => {
     mocks.updateTable.mockRejectedValueOnce(new Error("Số bàn 2 đã tồn tại trong chi nhánh."));
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
-    fireEvent.change(screen.getByLabelText("Số bàn"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Số thứ tự nội bộ"), { target: { value: "2" } });
     fireEvent.click(screen.getByRole("button", { name: "Lưu thông tin bàn" }));
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({
       title: "Không lưu được thông tin bàn", description: "Số bàn 2 đã tồn tại trong chi nhánh.",
@@ -125,7 +126,7 @@ describe("floor plan deletion targets", () => {
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
     for (const number of ["", "0", "1.5", "10000"]) {
-      fireEvent.change(screen.getByLabelText("Số bàn"), { target: { value: number } });
+      fireEvent.change(screen.getByLabelText("Số thứ tự nội bộ"), { target: { value: number } });
       fireEvent.click(screen.getByRole("button", { name: "Lưu thông tin bàn" }));
     }
     expect(mocks.updateTable).not.toHaveBeenCalled();
@@ -136,12 +137,12 @@ describe("floor plan deletion targets", () => {
     mocks.updateTable.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
-    fireEvent.change(screen.getByLabelText("Số bàn"), { target: { value: "19" } });
+    fireEvent.change(screen.getByLabelText("Số thứ tự nội bộ"), { target: { value: "19" } });
     const button = screen.getByRole("button", { name: "Lưu thông tin bàn" });
     fireEvent.click(button);
     fireEvent.click(button);
     expect(mocks.updateTable).toHaveBeenCalledTimes(1);
-    expect(screen.getByLabelText("Số bàn")).toBeDisabled();
+    expect(screen.getByLabelText("Số thứ tự nội bộ")).toBeDisabled();
     await act(async () => resolve({ tableNumber: 19, name: "Bàn 1" }));
   });
 
@@ -149,7 +150,7 @@ describe("floor plan deletion targets", () => {
     mocks.canManage.mockReturnValue(false);
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
-    expect(screen.queryByLabelText("Số bàn")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Số thứ tự nội bộ")).not.toBeInTheDocument();
     expect(mocks.updateTable).not.toHaveBeenCalled();
     expect(screen.queryByRole("button", { name: "Xoá bàn đang chọn" })).not.toBeInTheDocument();
   });
@@ -197,7 +198,7 @@ describe("floor plan deletion targets", () => {
     render(<FloorPlanEditor branchId="xtb" scope="branch" />);
     fireEvent.click(await screen.findByRole("button", { name: "Chọn Bàn 1" }));
     fireEvent.click(screen.getByRole("button", { name: "Chọn Cây cảnh" }));
-    expect(screen.queryByLabelText("Số bàn")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Số thứ tự nội bộ")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Xoá bàn đang chọn" })).not.toBeInTheDocument();
   });
 

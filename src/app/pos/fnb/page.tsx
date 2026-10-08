@@ -25,6 +25,7 @@ import {
   resolveAppliedPromotion,
 } from "@/lib/services/supabase/promotion-engine";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
+import { getTableLabel, getCompactTableLabel } from "@/lib/fnb/table-label";
 import {
   useNetworkStatus,
   offlineSendToKitchen,
@@ -2657,7 +2658,7 @@ function FnbPosPageInner() {
     (table: RestaurantTable) => {
       if (table.status === "available") {
         orderSelectionGeneration.current += 1;
-        pos.createTab(`Bàn ${table.tableNumber}`, "dine_in", table.id);
+        pos.createTab(getTableLabel(table), "dine_in", table.id);
         setShowFloorPlan(false);
       } else if (table.status === "occupied" && table.currentOrderId) {
         // Switch to existing tab for this table
@@ -2669,7 +2670,7 @@ function FnbPosPageInner() {
           // ca). Thay vì silent fail (click không gì xảy ra), tạo tab mới link
           // tới table + thông báo barista xem đơn cũ ở KDS.
           const newTabId = pos.createTab(
-            `Bàn ${table.tableNumber}`,
+            getTableLabel(table),
             "dine_in",
             table.id,
           );
@@ -2682,7 +2683,7 @@ function FnbPosPageInner() {
           setShowFloorPlan(false);
           setMobileCartOpen(true);
           toast({
-            title: `Bàn ${table.tableNumber} đang có đơn cũ`,
+            title: `${getTableLabel(table)} đang có đơn cũ`,
             description: "Đang nạp các món đã gọi vào giỏ hàng.",
             variant: "default",
             duration: 5000,
@@ -3065,12 +3066,12 @@ function FnbPosPageInner() {
         const newTable = tables.find((t) => t.id === toTableId);
         pos.updateTabMeta(tab.id, {
           tableId: toTableId,
-          label: newTable ? `Bàn ${newTable.tableNumber}` : tab.label,
+          label: newTable ? getTableLabel(newTable) : tab.label,
         });
         hapticSuccess();
         toast({
           title: "Đã chuyển bàn",
-          description: newTable ? `Đơn đã chuyển sang Bàn ${newTable.tableNumber}` : "Đơn đã được chuyển",
+          description: newTable ? `Đơn đã chuyển sang ${getTableLabel(newTable)}` : "Đơn đã được chuyển",
           variant: "success",
         });
         setTransferTableOpen(false);
@@ -3140,7 +3141,7 @@ function FnbPosPageInner() {
       const targetTab = pos.tabs.find((tab) => tab.kitchenOrderId === target.currentOrderId);
       let targetTabId = targetTab?.id;
       if (!targetTabId) {
-        targetTabId = pos.createTab(`Bàn ${target.tableNumber}`, "dine_in", target.id);
+        targetTabId = pos.createTab(getTableLabel(target), "dine_in", target.id);
         pos.updateTabMeta(targetTabId, { kitchenOrderId: target.currentOrderId });
       }
       await hydrateKitchenOrderIntoTab(target.currentOrderId, targetTabId, true);
@@ -3153,7 +3154,7 @@ function FnbPosPageInner() {
       hapticSuccess();
       toast({
         title: "Đã gộp đơn",
-        description: `Đơn Bàn ${source.tableNumber} đã gộp vào Bàn ${target.tableNumber}.`,
+        description: `Đơn ${getTableLabel(source)} đã gộp vào ${getTableLabel(target)}.`,
         variant: "success",
       });
 
@@ -4289,7 +4290,7 @@ function FnbPosPageInner() {
                 if (!draft || draft.kitchenOrderId || draft.id !== pos.activeTabId) { setSelectDineInTabId(null); return; }
                 pos.setActiveTabOrderType("dine_in", table);
                 setSelectDineInTabId(null);
-              }}>Bàn {table.tableNumber}</button>
+              }}>{getTableLabel(table)}</button>
             ))}
           </div>
           {!tables.some((table) => table.status === "available" && !pos.tabs.some((tab) => tab.id !== selectDineInTabId && tab.tableId === table.id)) && <p className="text-sm text-muted-foreground">Không có bàn trống. Kiểm tra sơ đồ bàn hoặc chọn Mang về nếu khách không dùng tại quán.</p>}
@@ -4321,7 +4322,7 @@ function FnbPosPageInner() {
                     className="h-14 rounded-lg border border-status-success/40 bg-status-success/5 text-status-success font-semibold hover:bg-status-success/10 press-scale-sm transition-colors flex flex-col items-center justify-center"
                   >
                     <div className="text-xs opacity-70">Bàn</div>
-                    <div className="text-lg">{t.tableNumber}</div>
+                    <div className="break-words text-lg">{getCompactTableLabel(t)}</div>
                   </button>
                 ))}
             </div>
@@ -4353,7 +4354,7 @@ function FnbPosPageInner() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-xs text-muted-foreground">
-              Chọn bàn đích. Món của bill <b>{openOrders.orders.find(order => order.id === mergeSourceTable?.currentOrderId)?.orderNumber}</b> tại <b>Bàn {mergeSourceTable?.tableNumber}</b>{" "}
+Chọn bàn đích. Món của bill <b>{openOrders.orders.find(order => order.id === mergeSourceTable?.currentOrderId)?.orderNumber}</b> tại <b>{mergeSourceTable ? getTableLabel(mergeSourceTable) : "Bàn"}</b>{" "}
               sẽ gộp vào bill chính của bàn đích.
             </p>
             <div className="grid max-h-[320px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
@@ -4380,7 +4381,7 @@ function FnbPosPageInner() {
                       )}
                     >
                       <span className="text-xs opacity-70">Bàn đích</span>
-                      <span className="text-lg">{table.tableNumber}</span>
+                      <span className="break-words text-lg">{getCompactTableLabel(table)}</span>
                     </button>
                   );
                 })}

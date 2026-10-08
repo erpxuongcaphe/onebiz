@@ -43,6 +43,7 @@ import {
 } from "@/lib/services/supabase/floor-plan-decorations";
 import { cn } from "@/lib/utils";
 import { TableIdentityEditor } from "./table-identity-editor";
+import { getTableLabel } from "@/lib/fnb/table-label";
 
 // Lazy load Konva canvas (tránh SSR + giảm bundle)
 const FloorPlanCanvas = dynamic(
@@ -710,6 +711,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
             <TableIdentityEditor
               key={selectedTable.id}
               table={selectedTable}
+              zoneName={activeZone?.name}
               onSave={async (input) => {
                 const updated = await trackSave(() => updateTableRemote(branchId, selectedTable.id, input));
                 setTables((current) => current.map((table) => table.id === selectedTable.id
@@ -744,8 +746,7 @@ export function FloorPlanEditor({ branchId, branchName, scope }: FloorPlanEditor
                   <button key={table.id} type="button" aria-pressed={selectedTableId === table.id}
                     onClick={() => { setSelectedTableId(table.id); setSelectedDecorationId(null); }}
                     className={cn("flex w-full items-center gap-2 rounded px-2 py-2 text-left text-sm", selectedTableId === table.id ? "bg-primary/10 text-primary" : "hover:bg-muted")}>
-                    <span className="w-8 shrink-0 font-semibold tabular-nums">{table.tableNumber}</span>
-                    <span className="min-w-0 break-words">{table.name}</span>
+                    <span className="min-w-0 break-words font-semibold tabular-nums">{getTableLabel(table)}</span>
                   </button>
                 ))}
               {tables.length === 0 && <p className="py-2 text-sm text-muted-foreground">Chưa có bàn trong khu vực.</p>}
