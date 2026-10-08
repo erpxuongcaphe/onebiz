@@ -817,10 +817,9 @@ function FnbPosPageInner() {
     void (async () => {
       try {
         const services = await import("@/lib/services");
-        const [pinUsers, tiers, count] = await Promise.all([
+        const [pinUsers, tiers] = await Promise.all([
           services.listPosPinUsers(branchId),
           services.getDeliveryFeeTiersForBranch(branchId),
-          services.getDeliveryCountToday(branchId),
         ]);
         if (cancelled) return;
         setShipperOptions(
@@ -837,7 +836,6 @@ function FnbPosPageInner() {
               fee: t.fee,
             })),
         );
-        setDeliveryCountToday(count);
       } catch (err) {
         console.warn("[FnbPOS] load shipper/tiers/count failed", err);
       }
@@ -858,6 +856,11 @@ function FnbPosPageInner() {
     } catch { /* Keep the last confirmed count on a failed read. */ }
   }, [branchId]);
   useLiveDataRefresh(refreshDeliveryCount, tenantId, branchId, ["kitchen_orders"], Boolean(branchId && tenantId));
+  useEffect(() => {
+    setDeliveryCountToday(0);
+    void refreshDeliveryCount();
+    return () => { deliveryRefreshGeneration.current += 1; };
+  }, [refreshDeliveryCount]);
 
   // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
   // → toast lỗi để user biết không in được. Toggle qua settings.print.notifyPrintFailure.

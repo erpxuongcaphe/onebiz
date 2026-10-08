@@ -91,6 +91,8 @@ describe("F&B live data wiring", () => {
     const pos = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
     expect(pos).toContain('useLiveDataRefresh(refreshDeliveryCount, tenantId, branchId, ["kitchen_orders"]');
     expect(pos).toContain("generation === deliveryRefreshGeneration.current");
+    expect(pos).not.toContain("const [pinUsers, tiers, count]");
+    expect(pos).toContain("deliveryRefreshGeneration.current += 1");
     expect(pos).toContain('useLiveDataRefresh(refreshLiveShift, tenantId, branchId, ["shifts", "kitchen_orders", "invoices"]');
     expect(pos).toContain("scope === liveShiftScopeRef.current");
     expect(pos).toContain("openOrders.orders.map((order) => [order.id, order.createdAt])");
