@@ -2969,6 +2969,9 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+        // An OTP being accepted is not proof that the cancellation committed.
+        // Keep the approval dialog open on a failed business transaction.
+        if (args.otpId) throw err;
       } finally {
         voidLock.current = false;
         setVoidSubmitting(false);

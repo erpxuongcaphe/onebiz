@@ -540,9 +540,7 @@ export async function getAuditLogs(
 
   const { data, count, error } = await query;
   if (error) {
-    // audit_log might not have FK — graceful fallback
-    console.warn("getAuditLogs error:", error.message);
-    return { data: [], total: 0 };
+    handleError(error, "getAuditLogs");
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

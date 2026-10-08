@@ -345,6 +345,14 @@ const FNB_CANCEL_ERROR_MESSAGES: ReadonlyArray<{
     message: "Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.",
   },
   {
+    codes: ["FNB_CANCEL_APPROVER_SCOPE_DENIED"],
+    message: "Người duyệt không còn quyền tại chi nhánh này. Vui lòng nhờ quản lý đang phụ trách cấp mã mới.",
+  },
+  {
+    codes: ["FNB_CANCEL_TABLE_SCOPE_DENIED", "FNB_CANCEL_ORDER_MERGED"],
+    message: "Bàn hoặc bill vừa thay đổi. Vui lòng tải lại đúng bill trước khi hủy.",
+  },
+  {
     codes: ["FNB_CANCEL_SHIFT_NOT_OPEN_FOR_USER_BRANCH", "SHIFT_NOT_OPEN_FOR_ORDER_BRANCH"],
     message: "Ca đang chọn không còn mở hoặc không thuộc anh/chị. Vui lòng mở/chọn lại ca.",
   },
