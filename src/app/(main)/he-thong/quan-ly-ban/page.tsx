@@ -841,11 +841,6 @@ function QuanLyBanPage() {
                       {getCompactTableLabel(table)}
                     </span>
 
-                    {/* Name */}
-                    <span className="text-xs text-muted-foreground truncate max-w-full">
-                      {table.name}
-                    </span>
-
                     {/* Capacity */}
                     <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                       <Icon name="group" className="size-2.5" />
