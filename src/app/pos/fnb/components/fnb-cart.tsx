@@ -108,6 +108,7 @@ interface FnbCartProps {
   onEditLine?: (line: FnbOrderLine) => void;
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
+  voidKitchenOrderLabel?: string;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
   onTransferTable?: () => void;
   onMergeTable?: () => void;
@@ -184,6 +185,7 @@ export function FnbCart({
   onPrintPreBill,
   onEditLine,
   onVoidKitchenOrder,
+  voidKitchenOrderLabel = "Hủy đơn chưa thanh toán",
   onTransferTable,
   onMergeTable,
   onOrderHistory,
@@ -290,7 +292,7 @@ export function FnbCart({
               {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
               {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
-              {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> Huỷ đơn bếp</DropdownMenuItem></>}
+              {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> {voidKitchenOrderLabel}</DropdownMenuItem></>}
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -301,8 +303,8 @@ export function FnbCart({
           onClick={onCustomerClick}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-foreground hover:bg-surface-container transition-colors press-scale-sm"
         >
-          <Icon name="person" size={16} className="text-muted-foreground shrink-0" />
-          <span className="truncate flex-1 text-left">
+          <Icon name="person" size={16} className="text-primary shrink-0" />
+          <span className="truncate flex-1 text-left font-semibold text-primary">
             {activeTab?.customerName ?? "Khách lẻ"}
           </span>
           <kbd className="text-xs text-muted-foreground font-mono bg-surface-container-lowest border border-outline-variant/30 rounded px-2 py-0.5">

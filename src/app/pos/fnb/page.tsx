@@ -456,6 +456,8 @@ function FnbPosPageInner() {
   const canManageTables = hasPermission(PERMISSIONS.POS_FNB_MANAGE_TABLES);
   const canTransferTables = hasPermission(PERMISSIONS.POS_FNB_TRANSFER_TABLE);
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
+  const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
+  const canViewOrderHistory = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS) || canCheckout;
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -3229,6 +3231,7 @@ function FnbPosPageInner() {
 
   // ── Open split bill dialog ──
   const handleOpenSplitBill = useCallback(async () => {
+    if (!canSplitBill || !networkStatus.isOnline) return;
     const tab = pos.activeTab;
     if (!tab?.kitchenOrderId) return;
     try {
@@ -3251,7 +3254,7 @@ function FnbPosPageInner() {
         variant: "error",
       });
     }
-  }, [pos, toast]);
+  }, [pos, toast, canSplitBill, networkStatus.isOnline]);
 
   // Nạp món của đơn con vào snapshot ĐÃ GỬI BẾP. Nếu đưa vào `lines`, lần
   // thanh toán sau sẽ hiểu nhầm là món mới và gửi bếp trùng lần nữa.
@@ -3815,15 +3818,16 @@ function FnbPosPageInner() {
           kitchenSubmitting={kitchenSubmitting}
           onPayment={requestPayment}
           canCheckout={canCheckout}
-          onSplitBill={handleOpenSplitBill}
+          onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
           onChangeOrderType={handleOrderTypeChange}
           onCustomerClick={() => setCustomerPickerOpen(true)}
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
-          onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+          onVoidKitchenOrder={networkStatus.isOnline ? () => setVoidConfirmOpen(true) : undefined}
+          voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
-          onOrderHistory={() => setOrderHistoryOpen(true)}
+          onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           onApplyCoupon={handleApplyCoupon}
           onRemoveCoupon={handleRemoveCoupon}
           appliedCouponCode={couponApplied?.code}
@@ -4027,15 +4031,16 @@ function FnbPosPageInner() {
               kitchenSubmitting={kitchenSubmitting}
               onPayment={() => { if (requestPayment()) setMobileCartOpen(false); }}
               canCheckout={canCheckout}
-              onSplitBill={handleOpenSplitBill}
+              onSplitBill={canSplitBill && networkStatus.isOnline ? handleOpenSplitBill : undefined}
               onChangeOrderType={handleOrderTypeChange}
               onCustomerClick={() => setCustomerPickerOpen(true)}
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
-              onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
+              onVoidKitchenOrder={networkStatus.isOnline ? () => setVoidConfirmOpen(true) : undefined}
+          voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
-              onOrderHistory={() => setOrderHistoryOpen(true)}
+              onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
               onApplyCoupon={handleApplyCoupon}
               onRemoveCoupon={handleRemoveCoupon}
               appliedCouponCode={couponApplied?.code}
@@ -4114,7 +4119,7 @@ function FnbPosPageInner() {
       )}
 
       {/* Order history (reprint) */}
-      {orderHistoryOpen && branchId && (
+      {orderHistoryOpen && canViewOrderHistory && branchId && (
         <Suspense fallback={null}>
           <FnbOrderHistoryDialog
             open={orderHistoryOpen}

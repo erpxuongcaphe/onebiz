@@ -450,7 +450,7 @@ export function FnbPaymentDialog({
               placeholder="Khách lẻ"
               readOnly={customerNameReadOnly}
               aria-readonly={customerNameReadOnly || undefined}
-              className={customerNameReadOnly ? "bg-muted text-muted-foreground" : undefined}
+              className={customerNameReadOnly ? "bg-muted font-semibold text-primary" : "font-semibold text-primary"}
             />
             {customerLocked && (
               <p className="text-xs text-muted-foreground">

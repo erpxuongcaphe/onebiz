@@ -56,6 +56,27 @@ function renderGio(lines: FnbOrderLine[], them: Record<string, unknown> = {}) {
 }
 
 describe("FnbCart table transfer eligibility", () => {
+  it("hides split and history when their permitted callbacks are absent", () => {
+    renderGio([], {
+      activeTab: { id: "sent", label: "Bàn 1", orderType: "dine_in", kitchenOrderId: "order", lines: [], sentLines: [taoDong(1), taoDong(2)] },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác đơn" }));
+    expect(screen.queryByRole("menuitem", { name: "Tách bill" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /Lịch sử đơn/ })).not.toBeInTheDocument();
+  });
+
+  it("describes the delegated cancellation and invokes its approval flow", async () => {
+    const requestApproval = vi.fn();
+    renderGio([], {
+      activeTab: { id: "sent", label: "Bàn 1", orderType: "dine_in", kitchenOrderId: "order", lines: [], sentLines: [taoDong(1)] },
+      onVoidKitchenOrder: requestApproval,
+      voidKitchenOrderLabel: "Xin duyệt hủy đơn",
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác đơn" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: "Xin duyệt hủy đơn" }));
+    expect(requestApproval).toHaveBeenCalledOnce();
+  });
+
   it("does not offer transfer for a split dine-in bill without a table", () => {
     renderGio([], {
       activeTab: { id: "split", label: "Ban 2-B", orderType: "dine_in", kitchenOrderId: "order-child", lines: [] },
