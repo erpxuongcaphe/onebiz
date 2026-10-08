@@ -130,7 +130,7 @@ export async function printFnbBillWithTemplate(
         const change = p.paid - p.total;
         if (change > 0)
           summaryRows.push({ label: "Tiền thối lại", value: money(change) });
-        else
+        else if (change < 0)
           summaryRows.push({
             label: "Khách còn phải trả",
             value: money(Math.max(-change, 0)),
@@ -149,7 +149,7 @@ export async function printFnbBillWithTemplate(
           label: p.orderType === "delivery" ? "Đơn" : "Bàn",
           value: p.tableName,
         },
-        ...(p.customerName
+        ...(p.customerName && p.customerName !== "Khách lẻ"
           ? [{ label: "Khách hàng", value: p.customerName }]
           : []),
       ],
@@ -158,6 +158,7 @@ export async function printFnbBillWithTemplate(
       summaryRows,
       note: p.note,
       createdBy: p.cashierName,
+      showSignature: false,
     };
 
     const data = applyTemplateToDocData(base,resolved);

@@ -2,7 +2,7 @@ import type { KitchenTicketDataV2 } from "./print-fnb";
 import type { PrintTemplateConfig, ResolvedPrint } from "./services/supabase/print-templates-engine";
 
 export function applyKitchenTemplate(data: KitchenTicketDataV2, config: PrintTemplateConfig, paperSize: string): KitchenTicketDataV2 {
-  return {...data, title:config.title?.trim() || undefined, itemFontSize:config.items?.fontSize,
+  return {...data, thermalLayout:config.thermal, title:config.title?.trim() || undefined, itemFontSize:config.items?.fontSize,
     footerText:config.footer?.customText?.trim() || undefined,
     style:config.kitchen?.style ?? "standard",
     paperSize:paperSize === "58mm" ? "58mm" : "80mm"};

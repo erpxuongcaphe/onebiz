@@ -6,6 +6,7 @@
 import { formatCurrency, formatDate, formatNumber, formatShortDate } from "@/lib/format";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { sendPrintJob } from "./printer/print-job";
+import { resolveThermalLayout, type ThermalLayoutConfig } from "./thermal-layout";
 
 export interface DocumentLineItem {
   name: string;
@@ -20,6 +21,7 @@ export interface DocumentLineItem {
 }
 
 export interface DocumentPrintData {
+  thermalLayout?: ThermalLayoutConfig;
   /** Readable F&B thermal defaults; leaves A4/A5 and other document flows intact. */
   fnbThermalReadable?: boolean;
   documentType: string;      // e.g. "PHIẾU KIỂM KHO", "HOÁ ĐƠN BÁN HÀNG"
@@ -161,6 +163,7 @@ function getPageStyles(paperSize: PaperSize): {
 export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize): string {
   const ps = getPageStyles(paperSize);
   const isThermal = paperSize === "80mm" || paperSize === "58mm";
+  const fnbLayout = isThermal && d.fnbThermalReadable ? resolveThermalLayout(d.thermalLayout, false, d.itemFontSize) : null;
   const isA5 = paperSize === "A5";
   // CEO 20/08: khổ giấy A4/A5 BỎ ký hiệu "đ" ở từng ô cho đỡ chật, thay bằng
   // dòng "Đơn vị tính: Đồng" phía trên bảng — chuẩn trình bày chứng từ kế toán.
@@ -197,6 +200,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 
   // Bảng tổng — value đã format sẵn (kèm " đ") ở builder.
   const summaryHtml = (d.summaryRows ?? [])
+    .filter(r => !fnbLayout?.compact || r.label !== "Tạm tính" || !(d.summaryRows ?? []).some(total => total.bold && total.value === r.value && /tổng/i.test(total.label)))
     .map((r) => {
       // tone: đỏ khi còn phải trả > 0, xanh khi đã đủ. In đen-trắng vẫn đọc rõ
       // nhờ nhãn + số; chỉ preview/máy in màu mới thấy màu.
@@ -238,7 +242,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
       // 00208: bill nhiệt hẹp không chia cột — note in dòng nghiêng dưới tên.
       const rows = d.items
         .map(
-          (it) => `<div class="t-item">
+          (it) => fnbLayout?.compact ? `<div class="t-item compact-item"><div class="compact-row"><span class="compact-name">${hasCode && it.code ? `${esc(it.code)} · ` : ""}${esc(it.name)}</span><span class="compact-qty">×${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""}</span><span class="t-total tnum">${money(it.total)}</span></div>${hasPriceCol && it.quantity !== 1 ? `<div class="t-note">Đơn giá ${money(it.unitPrice ?? 0)}</div>` : ""}${it.note && fnbLayout.showItemNotes ? `<div class="t-note">${esc(it.note)}</div>` : ""}${hasDiscountCol && it.discount ? `<div class="t-note">Giảm giá: ${money(it.discount)}</div>` : ""}</div>` : `<div class="t-item">
         <div class="t-name">${hasCode && it.code ? `${esc(it.code)} · ` : ""}${esc(it.name)}</div>${it.note ? `
         <div class="t-note">↳ ${esc(it.note)}</div>` : ""}
         <div class="t-line"><span>${formatNumber(it.quantity)}${it.unit ? ` ${esc(it.unit)}` : ""}${hasPriceCol ? ` × ${money(it.unitPrice ?? 0)}` : ""}</span><span class="t-total tnum">${money(it.total)}</span></div>${hasDiscountCol && it.discount ? `<div class="t-note">Giảm giá: ${money(it.discount)}</div>` : ""}
@@ -387,13 +391,22 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .bizfooter { margin-top: ${isThermal ? "3px" : "26px"}; text-align: center; font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#222" : "#555"}; border-top: ${isThermal ? "1px dashed #000" : "1px solid #ddd"}; padding-top: ${isThermal ? "3px" : "8px"}; }
 
   ${isThermal && d.fnbThermalReadable ? `
-  body { font-size: 14px; color: #000; }
+  body { font-size: 14px; color: #000; font-family: ${fnbLayout!.font}; line-height:${fnbLayout!.compact ? 1.2 : 1.4}; }
   .head-c .store { font-size: 16px; }
   .head-c .line, .head-c .doc-code, .note, .bizfooter { font-size: 12px; color: #000; }
   .meta td, .summary td { font-size: 14px; }
-  .summary .bold td { font-size: 17px; padding-top: 3px; }
-  .t-name, .t-line { font-size: ${d.itemFontSize === "sm" ? "12px" : "14px"}; }
-  .t-note { font-size: 12px; color: #000; }
+  .head-c .doc-type { font-size:${fnbLayout!.titleSize}px; margin-top:2px; }
+  .head-c { border:${fnbLayout!.headerFrame ? "1px solid #000" : "0"}; padding:${fnbLayout!.headerFrame ? "2px" : "0"}; }
+  .summary .bold td { font-size: ${fnbLayout!.totalSize}px; padding-top: 2px; }
+  .t-name, .t-line, .compact-row { font-size: ${fnbLayout!.itemSize}px; }
+  .t-name, .compact-name { font-weight:${fnbLayout!.boldItems ? 700 : 400}; }
+  .t-note { font-size: ${fnbLayout!.detailSize}px; color: #000; font-style:${fnbLayout!.italicDetails ? "italic" : "normal"}; }
+  .compact-row { display:flex; align-items:baseline; gap:5px; }
+  .compact-name { flex:1; min-width:0; overflow-wrap:anywhere; }
+  .compact-qty, .compact-row .t-total { flex:none; white-space:nowrap; }
+  .t-item { padding:1px 0; margin:0; }
+  .sep { border-top:${fnbLayout!.separator === "none" ? "0" : `1px ${fnbLayout!.separator} #000`}; margin:2px 0; }
+  .summary .bold td, .bizfooter { border-top-style:${fnbLayout!.separator}; }
   ` : ""}
   @media print {
     body { padding: ${isThermal ? ps.bodyPadding : "0"}; }
@@ -434,6 +447,7 @@ ${itemsBlock}
 ${isThermal && summaryHtml ? `<hr class="sep" />` : ""}
 ${summaryHtml ? `<table class="summary">${summaryHtml}</table>` : ""}
 ${d.note ? `<div class="note"><strong>Ghi chú:</strong> ${esc(d.note)}</div>` : ""}${qrBlock}
+${fnbLayout?.showStaff && d.createdBy ? `<div class="note">Nhân viên: ${esc(d.createdBy)}</div>` : ""}
 
 ${
   d.showSignature === false

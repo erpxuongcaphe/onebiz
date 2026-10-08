@@ -66,6 +66,7 @@ export function applyTemplateToDocData(
 
   const brand = resolved.brand ?? {};
   const config = resolved.config ?? {};
+  if (config.thermal) data.thermalLayout = config.thermal;
 
   // Ngữ cảnh token: ưu tiên brand đã resolve, fallback giá trị base.
   const ctx: TokenContext = {

@@ -35,6 +35,7 @@ export type PrintDocType =
 export type PrintPaperSize = "58mm" | "80mm" | "A5" | "A4";
 
 export interface PrintTemplateConfig {
+  thermal?: import("@/lib/thermal-layout").ThermalLayoutConfig;
   /** Override tiêu đề (cho phép token) */
   title?: string;
   header?: {
