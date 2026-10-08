@@ -3,6 +3,7 @@
 import { SettingsSwitch } from "@/components/shared/settings-toggle";
 import { generateDocumentHtml, type DocumentPrintData } from "@/lib/print-document";
 import { applyTemplateToDocData } from "@/lib/print-apply-template";
+import { ThermalLayoutEditor } from "./thermal-layout-editor";
 
 import { useCallback, useEffect, useMemo, useState, useId } from "react";
 import {
@@ -823,7 +824,7 @@ function TemplateEditorDialog({
           ? { fontSize: "md", columns: columnOptions.map((c) => c.key) }
           : undefined,
         payment: { showQr: true, showDiscount: true, showDebt: false },
-        footer: { signature: true, thankYou: true, customText: "" },
+        footer: { signature: channel !== "fnb", thankYou: true, customText: "" },
         signatures: [{ label: "Người lập phiếu" }, { label: "Người duyệt" }],
       });
     }
@@ -1009,6 +1010,7 @@ function TemplateEditorDialog({
               />
             </div>
 
+            {channel === "fnb" && <ThermalLayoutEditor value={config.thermal} legacySize={config.items?.fontSize} kitchen={docType === "kitchen_ticket"} onChange={thermal => setConfig(previous => ({...previous, thermal}))} />}
             {/* Đầu trang */}
             {docType === "kitchen_ticket" ? <>
               <ToggleGroupBox title="Bố cục phiếu bếp">
@@ -1018,10 +1020,10 @@ function TemplateEditorDialog({
                     variant={(config.kitchen?.style ?? "standard") === option.value ? "default" : "outline"}
                     onClick={() => setConfig(c => ({...c,kitchen:{...c.kitchen,style:option.value}}))}>{option.label}</Button>)}
                 </div>
-                <p className="text-sm font-medium mt-3 mb-2">Cỡ chữ tên món</p>
+                {channel !== "fnb" && <><p className="text-sm font-medium mt-3 mb-2">Cỡ chữ tên món</p>
                 <div className="flex gap-2">{FONT_SIZE_OPTIONS.map(option => <Button key={option.value} type="button"
                   variant={(config.items?.fontSize ?? "md") === option.value ? "default" : "outline"}
-                  onClick={() => setFontSize(option.value)}>{option.label}</Button>)}</div>
+                  onClick={() => setFontSize(option.value)}>{option.label}</Button>)}</div></>}
               </ToggleGroupBox>
               <ToggleGroupBox title="Chân phiếu bếp">
                 <label className="text-sm font-medium" htmlFor="kitchen-template-footer">Ghi chú cố định</label>
@@ -1062,7 +1064,7 @@ function TemplateEditorDialog({
             {showItems && (
               <ToggleGroupBox title="Mặt hàng">
                 <div className="space-y-3">
-                  <div>
+                  {channel !== "fnb" && <div>
                     <p className="mb-1.5 text-sm font-medium">Cỡ chữ</p>
                     <div className="inline-flex rounded-lg border p-0.5">
                       {FONT_SIZE_OPTIONS.map((fs) => {
@@ -1084,7 +1086,7 @@ function TemplateEditorDialog({
                         );
                       })}
                     </div>
-                  </div>
+                  </div>}
                   <div>
                     <p className="mb-1.5 text-sm font-medium">Cột hiển thị</p>
                     <div className="grid gap-2 sm:grid-cols-2">
@@ -1223,6 +1225,7 @@ function TemplateEditorDialog({
               title={title.trim() || DOC_TYPE_LABELS[docType]}
               config={config}
               showCustomer={showCustomer}
+              channel={channel}
               columnOptions={columnOptions}
               selectedColumns={selectedColumns}
               brand={brand}
@@ -1278,6 +1281,7 @@ function ToggleGroupBox({
 // Preview bill 80mm đơn giản — phản ánh toggle
 // ──────────────────────────────────────────────────────────────
 function BillPreview({
+  channel,
   docType,
   title,
   config,
@@ -1288,6 +1292,7 @@ function BillPreview({
   brandLoading,
   paperSize = "80mm",
 }: {
+  channel: PrintChannel;
   docType: PrintDocType;
   title: string;
   config: PrintTemplateConfig;
@@ -1309,6 +1314,7 @@ function BillPreview({
       style: config.kitchen?.style ?? "standard",
       title,
       itemFontSize: config.items?.fontSize,
+      thermalLayout: config.thermal,
       footerText: config.footer?.customText,
       items: [
         { name: "Cà phê sữa đá", variant: "Size L", quantity: 2, unitPrice: 35000,
@@ -1324,9 +1330,10 @@ function BillPreview({
     </div>;
   }
   const base: DocumentPrintData = {
+    fnbThermalReadable: channel === "fnb",
     documentType: title, documentCode: docType === "cash_voucher" ? "PT-DEMO-001" : "HD-DEMO-001", date: "2026-10-06T10:30:00+07:00",
     businessName: brand?.businessName || "(Chưa đặt tên doanh nghiệp)", businessAddress: brand?.address, businessPhone: brand?.phone,
-    createdBy: "Nhân viên minh họa", showSignature: true, branchName: "Chi nhánh minh họa",
+    createdBy: "Nhân viên minh họa", showSignature: channel !== "fnb", branchName: "Chi nhánh minh họa",
     headerFields: docType === "cash_voucher" ? [{label:"Người nộp / nhận",value:"Nguyễn Văn An"},{label:"Nội dung",value:"Thu tiền thanh toán hóa đơn"},{label:"Phương thức",value:"Tiền mặt"}] : [...(showCustomer ? [{label:"Khách hàng",value:"Nguyễn Văn An"},{label:"Mã KH",value:"KH-DEMO"},{label:"Điện thoại",value:"0900000000"},{label:"Địa chỉ",value:"Địa chỉ minh họa"}] : [])],
     items: columnOptions.length ? [{code:"CF001",name:"Cà phê sữa đá",quantity:2,unitPrice:35000,total:70000,note:"Size L • Đường: 70% • Đá: ít"},{code:"CF002",name:"Bạc xỉu",quantity:1,unitPrice:39000,total:39000,note:"Pha nhạt"}] : undefined,
     itemColumns: ["Mã hàng","Tên hàng","SL","Đơn giá","Thành tiền","Ghi chú"],
