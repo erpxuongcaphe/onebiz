@@ -11,6 +11,7 @@ import { getProductCategoriesAsync } from "@/lib/services/supabase/products";
 import { isFnbMenuSaleItem, matchesFnbMenuSearch } from "@/lib/fnb-menu-search";
 import { FnbMenuOrderDialog } from "./components/fnb-menu-order-dialog";
 import { readFnbMenuOrderRevision } from "@/lib/services/supabase/fnb-menu-order";
+import { selectFnbPromotionChoice } from "@/lib/fnb-promotion-choice";
 import { getVariantsByProduct, getVariantsByProductIds } from "@/lib/services/supabase/variants";
 import {
   resolveAppliedTier,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/services/supabase/platform-prices";
 import {
   resolveAppliedPromotion,
+  calculateDiscount,
 } from "@/lib/services/supabase/promotion-engine";
 import { getTablesByBranch, markTableAvailable } from "@/lib/services/supabase/fnb-tables";
 import { getTableLabel, getCompactTableLabel } from "@/lib/fnb/table-label";
@@ -272,6 +274,9 @@ function FnbPosPageInner() {
   const [cancelSentMode, setCancelSentMode] = useState<"whole" | "items" | null>(null);
   const [promotionLoadError, setPromotionLoadError] = useState(false);
   const [promotionLoadRevision, setPromotionLoadRevision] = useState(0);
+  const [promotionChoices, setPromotionChoices] = useState<{tabId: string; branchId: string; choices: ReturnType<typeof calculateDiscount>[]} | null>(null);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [manualPromotionIds, setManualPromotionIds] = useState<Record<string, string | null>>({});
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
   const [voidSubmitting, setVoidSubmitting] = useState(false);
   const voidLock = useRef(false);
@@ -956,14 +961,16 @@ function FnbPosPageInner() {
     pos.activeTab.deliveryPlatform && pos.activeTab.deliveryPlatform !== "direct"
     ? pos.activeTab.platformCommissionPercent ?? 0 : 0;
   const activeGrossBeforeTip = fnbBenefitDisplay.total + activeDeliveryFee;
+  const manualPromotionId = manualPromotionIds[pos.activeTabId];
+  const activePromotionItemsKey = activeTabLines.map(l => `${l.productId}:${l.quantity}:${l.unitPrice}`).join("|");
   const activeSettlement = previewFnbSettlement(activeGrossBeforeTip, 0, activeCommissionPercent);
 
   useEffect(() => {
     const promotionTabId = pos.activeTabId;
     if (!branchId || !promotionTabId) return;
-    if (promotionCleared) return;
 
     if (activeTabLines.length === 0) {
+      setPromotionChoices(null); setPromotionLoading(false);
       if (appliedPromotion) {
         setPromotionForTab(promotionTabId, null);
       }
@@ -971,6 +978,8 @@ function FnbPosPageInner() {
     }
 
     let cancelled = false;
+    setPromotionLoading(true);
+    setPromotionChoices(null);
     // Build cart items với categoryId từ products lookup (cho KM theo nhóm)
     const productCategoryMap = new Map(products.map((p) => [p.id, p.category_id ?? null]));
     const items = activeTabLines.map((l) => ({
@@ -986,9 +995,12 @@ function FnbPosPageInner() {
       customerId: activeTabCustomerId ?? null,
       items,
     })
-      .then(({ best }) => {
+      .then(({ best: automaticBest, applicable }) => {
         if (cancelled) return;
         setPromotionLoadError(false);
+        const choices = applicable.map(p => calculateDiscount(p, { channel: "fnb", branchId, customerId: activeTabCustomerId ?? null, items })).filter(c => c.discountAmount > 0);
+        setPromotionChoices({ tabId: promotionTabId, branchId, choices });
+        const best = selectFnbPromotionChoice(choices, automaticBest, manualPromotionId, promotionCleared);
         if (!best || best.discountAmount <= 0) {
           if (appliedPromotion) {
             setPromotionForTab(promotionTabId, null);
@@ -1012,7 +1024,7 @@ function FnbPosPageInner() {
         if (appliedPromotion) {
           setPromotionForTab(promotionTabId, null);
         }
-      });
+      }).finally(() => { if (!cancelled) setPromotionLoading(false); });
 
     return () => {
       cancelled = true;
@@ -1026,12 +1038,32 @@ function FnbPosPageInner() {
     branchId,
     promotionCleared,
     promotionLoadRevision,
+    manualPromotionId,
+    activePromotionItemsKey,
+    products,
   ]);
 
   function clearAppliedPromotion() {
     if (!pos.activeTabId) return;
+    setManualPromotionIds(v => ({ ...v, [pos.activeTabId]: null }));
     setPromotionClearedForTab(pos.activeTabId, true);
   }
+
+  const promotionPicker = <label className="block space-y-1 text-xs font-medium text-primary">Chương trình ưu đãi
+    <select aria-label="Chương trình ưu đãi" className="min-h-11 w-full rounded-md border bg-background px-2 text-sm text-foreground" disabled={promotionLoading || promotionLoadError || !promotionChoices || promotionChoices.tabId !== pos.activeTabId || promotionChoices.branchId !== branchId}
+      value={manualPromotionId === undefined ? (promotionCleared ? "none" : "auto") : manualPromotionId === null ? "none" : promotionChoices?.choices.some(c => c.promotion.id === manualPromotionId) ? manualPromotionId : "none"}
+      onChange={e => {
+        const value = e.target.value;
+        setManualPromotionIds(v => { const next = { ...v }; if (value === "auto") delete next[pos.activeTabId]; else next[pos.activeTabId] = value === "none" ? null : value; return next; });
+        setPromotionClearedForTab(pos.activeTabId, value === "none");
+        const selected = promotionChoices?.choices.find(c => c.promotion.id === value);
+        setPromotionForTab(pos.activeTabId, selected ?? null);
+      }}>
+      <option value="auto">Theo cài đặt tự áp dụng</option><option value="none">Không áp dụng</option>
+      {promotionChoices?.tabId === pos.activeTabId && promotionChoices.branchId === branchId && promotionChoices.choices.map(c => <option key={c.promotion.id} value={c.promotion.id}>{c.promotion.name} · −{formatCurrency(c.discountAmount)}đ</option>)}
+    </select>
+    <span className="block font-normal text-muted-foreground">{promotionLoading ? "Đang kiểm tra điều kiện…" : promotionLoadError ? "Chưa tải được chương trình. Bấm Thử lại ở thông báo." : "Chỉ hiện chương trình đúng món, khách, thời gian và chi nhánh. Cấu hình tại ERP."}</span>
+  </label>;
 
   // ── Filtered products (Sprint UI-4: thêm sub-filter brand) ──
   const orderedMenuProducts = useMemo(() => {
@@ -3822,6 +3854,7 @@ function FnbPosPageInner() {
           persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
           manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
           promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
+          promotionPicker={promotionPicker}
           couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
           lineCount={pos.lineCount}
           unsentLineCount={pos.unsentLineCount}
@@ -4033,6 +4066,7 @@ function FnbPosPageInner() {
               persistedOrderDiscountAmount={fnbBenefitDisplay.persistedOrderDiscountAmount}
               manualDiscountAmount={fnbBenefitDisplay.manualDiscountAmount}
               promotionDiscountAmount={fnbBenefitDisplay.promotionDiscountAmount}
+              promotionPicker={promotionPicker}
               couponDiscountAmount={fnbBenefitDisplay.couponDiscountAmount}
               lineCount={pos.lineCount}
               unsentLineCount={pos.unsentLineCount}
