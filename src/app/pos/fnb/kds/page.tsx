@@ -14,7 +14,7 @@
  * - Item rows stay touch-friendly for tablet/kitchen monitors.
  */
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
@@ -547,6 +547,8 @@ function KdsPageInner() {
   }, [fetchError, fetchOrders]);
 
   // ── Supabase Realtime subscription ──
+  const realtimeInstanceId = useId();
+  const realtimeSubscriptionGeneration = useRef(0);
   useEffect(() => {
     if (!branchId || !isStoreBranch) return;
     const client = getClient();
@@ -563,7 +565,7 @@ function KdsPageInner() {
     };
 
     const channel = client
-      .channel(`kds-${branchId}`)
+      .channel(`kds-${branchId}-${realtimeInstanceId}-${++realtimeSubscriptionGeneration.current}`)
       .on(
         "postgres_changes",
         {
@@ -586,7 +588,7 @@ function KdsPageInner() {
       client.removeChannel(channel);
       setRealtimeConnected(false);
     };
-  }, [branchId, isStoreBranch, fetchOrders]);
+  }, [branchId, isStoreBranch, fetchOrders, realtimeInstanceId]);
 
   // Timer tick every second + wall clock update
   useEffect(() => {

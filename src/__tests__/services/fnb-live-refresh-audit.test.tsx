@@ -104,6 +104,7 @@ describe("F&B live data wiring", () => {
     expect(kds).toContain('if (status === "SUBSCRIBED") scheduleRealtimeRefresh()');
     expect(kds).toContain('window.addEventListener("online", tick)');
     expect(kds).toContain('window.removeEventListener("focus", tick)');
+    expect(kds).toContain("${realtimeInstanceId}-${++realtimeSubscriptionGeneration.current}");
     const pos = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
     expect(pos).toContain('useLiveDataRefresh(refreshDeliveryCount, tenantId, branchId, ["kitchen_orders"]');
     expect(pos).toContain("generation === deliveryRefreshGeneration.current");
