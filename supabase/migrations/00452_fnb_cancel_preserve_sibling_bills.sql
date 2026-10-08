@@ -2,6 +2,13 @@
 -- Definition-only migration; no existing business rows are rewritten.
 begin;
 set local lock_timeout = '3s';
+do $$ begin
+  if to_regprocedure('public._fnb_cancel_unpaid_order_impl_00066(uuid,text,text,uuid,uuid)') is null
+      or to_regprocedure('public.verify_otp_authorization(uuid,text,uuid,uuid)') is null
+      or to_regprocedure('public.user_has_branch_access(uuid,uuid)') is null then
+    raise exception 'FNB_CANCEL_PREREQUISITES_MISSING: verify the current cancellation/OTP definitions before applying';
+  end if;
+end $$;
 
 create or replace function public.fnb_cancel_unpaid_order_atomic(
   p_order_id uuid,
@@ -98,6 +105,7 @@ end;
 $$;
 revoke all on function public.fnb_cancel_unpaid_order_atomic(uuid,text,text,uuid,uuid) from public, anon;
 grant execute on function public.fnb_cancel_unpaid_order_atomic(uuid,text,text,uuid,uuid) to authenticated;
+notify pgrst, 'reload schema';
 comment on function public.fnb_cancel_unpaid_order_atomic(uuid,text,text,uuid,uuid) is
   'Cancel one unpaid FNB bill atomically, preserving sibling bills and checking the actor/approver branch. No invoice, cash or inventory mutation.';
 commit;

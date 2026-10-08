@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -85,6 +86,7 @@ export function FnbOrderHistoryDialog({
   const { toast } = useToast();
   const [invoices, setInvoices] = useState<FnbRecentInvoice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [reprinting, setReprinting] = useState<string | null>(null);
 
@@ -92,6 +94,7 @@ export function FnbOrderHistoryDialog({
   const [voidTarget, setVoidTarget] = useState<FnbRecentInvoice | null>(null);
   const [voidReason, setVoidReason] = useState("");
   const [voiding, setVoiding] = useState(false);
+  const voidLock = useRef(false);
   const [otpTarget, setOtpTarget] = useState<FnbRecentInvoice | null>(null);
 
   const requestGeneration = useRef(0);
@@ -101,10 +104,11 @@ export function FnbOrderHistoryDialog({
     if (!silent) setLoading(true);
     return getFnbRecentInvoices({ branchId, limit: 50, search: search || undefined })
       .then((next) => {
-        if (generation === requestGeneration.current) setInvoices(next);
+        if (generation === requestGeneration.current) { setInvoices(next); setLoadError(null); }
       })
       .catch((err: unknown) => {
         if (generation !== requestGeneration.current) return;
+        setLoadError(err instanceof Error ? err.message : "Vui lòng tải lại.");
         console.error("[FnbOrderHistory] load invoices failed:", err);
         if (!silent) {
           toast({
@@ -225,7 +229,7 @@ export function FnbOrderHistoryDialog({
     if (!inv.kitchenOrderId) {
       toast({
         title: "Không tìm thấy đơn bếp tương ứng",
-        description: "Hoá đơn này không gắn với kitchen_order — không thể huỷ atomic.",
+        description: "Phiếu này chưa gắn với đơn bếp. Vui lòng kiểm tra lại lịch sử đơn.",
         variant: "error",
       });
       return;
@@ -264,7 +268,7 @@ export function FnbOrderHistoryDialog({
   };
 
   const handleConfirmVoid = async () => {
-    if (!voidTarget || voiding) return;
+    if (!voidTarget || voidLock.current) return;
     if (voidReason.trim().length < 5) {
       toast({
         title: "Lý do huỷ tối thiểu 5 ký tự",
@@ -281,6 +285,7 @@ export function FnbOrderHistoryDialog({
       });
       return;
     }
+    voidLock.current = true;
     setVoiding(true);
     try {
       await executeVoid(voidTarget, voidReason.trim(), userId);
@@ -299,6 +304,7 @@ export function FnbOrderHistoryDialog({
         variant: "error",
       });
     } finally {
+      voidLock.current = false;
       setVoiding(false);
     }
   };
@@ -308,35 +314,36 @@ export function FnbOrderHistoryDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={open} onOpenChange={(next) => { if (!voidLock.current) onOpenChange(next); }}>
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Icon name="receipt_long" size={16} />
               Lịch sử đơn F&B (24h gần nhất)
             </DialogTitle>
             <DialogDescription>
-              In lại hoá đơn, tra cứu doanh thu / tiền tip, hoặc huỷ bill đã thanh toán (cần quyền).
+              Tối đa 50 phiếu gần nhất trong 24 giờ. Xem hoặc in lại phiếu; hủy phiếu đã thu cần quyền hoặc OTP.
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-3">
+          <DialogBody className="space-y-3">
+            {loadError && <div role="alert" className="rounded-md border border-status-warning/30 bg-status-warning/5 p-2 text-sm"><p>Chưa cập nhật được lịch sử: {loadError}</p><Button size="sm" variant="outline" className="mt-1" onClick={() => void refreshList()}>Tải lại</Button></div>}
             {/* Summary */}
             <div className="grid grid-cols-3 gap-2">
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-xs text-muted-foreground">Tổng đơn</div>
-                <div className="text-lg font-bold tabular-nums">{invoices.length}</div>
+                <div className="text-xs text-muted-foreground">Đang hiển thị</div>
+                <div className="text-lg font-bold tabular-nums">{invoices.length === 0 && (loading || loadError) ? "—" : invoices.length}</div>
               </div>
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
-                <div className="text-xs text-muted-foreground">Doanh thu</div>
+                <div className="text-xs text-muted-foreground">Giá trị các phiếu</div>
                 <div className="text-lg font-bold tabular-nums text-primary">
-                  {formatCurrency(totalRevenue)}
+                  {invoices.length === 0 && (loading || loadError) ? "—" : formatCurrency(totalRevenue)}
                 </div>
               </div>
               <div className="rounded-lg bg-surface-container-low px-3 py-2">
                 <div className="text-xs text-muted-foreground">Tiền tip</div>
                 <div className="text-lg font-bold tabular-nums text-status-success">
-                  {formatCurrency(totalTip)}
+                  {invoices.length === 0 && (loading || loadError) ? "—" : formatCurrency(totalTip)}
                 </div>
               </div>
             </div>
@@ -361,7 +368,7 @@ export function FnbOrderHistoryDialog({
               ) : invoices.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
                   <Icon name="inbox" size={40} className="mb-2 opacity-60" />
-                  <p className="text-sm">Không có hoá đơn trong 24h qua</p>
+                  <p className="text-sm">{loadError ? "Chưa tải được dữ liệu — bấm Tải lại" : "Không có phiếu trong 24h qua"}</p>
                 </div>
               ) : (
                 <div className="space-y-2 pr-2">
@@ -385,7 +392,7 @@ export function FnbOrderHistoryDialog({
                           )}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5 flex items-center gap-2 flex-wrap">
-                          <span>{inv.customerName}</span>
+                          <span className="font-medium text-primary">{inv.customerName}</span>
                           <span>•</span>
                           <span>{formatTime(inv.createdAt)}</span>
                           <span>•</span>
@@ -427,24 +434,24 @@ export function FnbOrderHistoryDialog({
                         variant="outline"
                         onClick={() => handleVoidClick(inv)}
                         className="shrink-0 text-status-error border-status-error/30 hover:bg-status-error/10"
-                        disabled={!inv.kitchenOrderId}
+                        disabled={!inv.kitchenOrderId || voiding}
                         title={
                           !inv.kitchenOrderId
-                            ? "Không có kitchen_order — không thể huỷ atomic"
+                            ? "Chưa có đơn bếp tương ứng"
                             : canVoidPaidBill
                               ? "Huỷ hoá đơn — hoàn kho + tạo phiếu chi hoàn tiền"
                               : "Cần manager duyệt OTP"
                         }
                       >
                         <Icon name="money_off" size={14} />
-                        <span className="ml-1 text-xs">Huỷ</span>
+                        <span className="ml-1 text-xs">{canVoidPaidBill ? "Hủy" : "Xin duyệt"}</span>
                       </Button>
                     </div>
                   ))}
                 </div>
               )}
             </ScrollArea>
-          </div>
+          </DialogBody>
         </DialogContent>
       </Dialog>
 
@@ -452,26 +459,27 @@ export function FnbOrderHistoryDialog({
       <Dialog
         open={!!voidTarget}
         onOpenChange={(o) => {
+          if (voidLock.current) return;
           if (!o) {
             setVoidTarget(null);
             setVoidReason("");
           }
         }}
       >
-        <DialogContent className="max-w-md">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-status-error">
               <Icon name="money_off" size={16} />
               Huỷ hoá đơn đã thanh toán
             </DialogTitle>
             <DialogDescription>
-              Thao tác sẽ huỷ hoá đơn, hoàn kho 3 lớp, tạo phiếu chi hoàn tiền, và huỷ đơn bếp tương
-              ứng. Không thể hoàn tác.
+              Thao tác hủy phiếu, hoàn kho, tạo phiếu chi hoàn tiền và hủy đơn bếp tương ứng.
+              Kiểm tra đúng phiếu trước khi xác nhận.
             </DialogDescription>
           </DialogHeader>
 
           {voidTarget && (
-            <div className="space-y-3">
+            <DialogBody className="space-y-3">
               <div className="rounded-lg bg-surface-container-low p-3 text-sm">
                 <div className="font-semibold">{voidTarget.code}</div>
                 <div className="text-muted-foreground text-xs mt-1">
@@ -493,12 +501,13 @@ export function FnbOrderHistoryDialog({
                   placeholder="VD: Thu nhầm bill, ghi nhận trùng giao dịch…"
                   rows={3}
                   className="resize-none"
+                  disabled={voiding}
                 />
                 <div className="text-xs text-muted-foreground mt-1">
                   Tối thiểu 5 ký tự. Lý do sẽ ghi vào audit log không sửa được.
                 </div>
               </div>
-            </div>
+            </DialogBody>
           )}
 
           <DialogFooter>
@@ -558,6 +567,9 @@ export function FnbOrderHistoryDialog({
         requireReason
         onApproved={async (verified, reason) => {
           if (!otpTarget) return;
+          if (voidLock.current) throw new Error("Đang xử lý hủy phiếu. Vui lòng chờ kết quả.");
+          voidLock.current = true;
+          setVoiding(true);
           try {
             // Người thực hiện là thu ngân đang thao tác; người duyệt được
             // server lấy từ OTP và ghi riêng vào approved_by.
@@ -573,14 +585,18 @@ export function FnbOrderHistoryDialog({
               variant: "success",
             });
             refreshList(true);
+            setOtpTarget(null);
           } catch (err) {
             toast({
               title: "Huỷ hoá đơn thất bại",
               description: err instanceof Error ? err.message : "Lỗi không xác định",
               variant: "error",
             });
+            // Keep the approval open: an accepted code is not a committed void.
+            throw err;
           } finally {
-            setOtpTarget(null);
+            voidLock.current = false;
+            setVoiding(false);
           }
         }}
       />

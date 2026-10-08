@@ -1,6 +1,22 @@
 -- Read-only history projection. Existing events and business rows are untouched.
 begin;
 set local lock_timeout = '3s';
+do $$ begin
+  if to_regprocedure('public.user_has_permission(uuid,text)') is null
+      or to_regprocedure('public.user_has_branch_access(uuid,uuid)') is null then
+    raise exception 'AUDIT_PREREQUISITES_MISSING';
+  end if;
+  -- Resolve the existing schema now, so a drifted database rejects this
+  -- migration before publishing a function that would fail at first use.
+  perform id, tenant_id, full_name, role, is_active from public.profiles limit 0;
+  perform id, tenant_id, name from public.branches limit 0;
+  perform id, tenant_id, user_id, action, entity_type, entity_id, old_data, new_data, ip_address, created_at from public.audit_log limit 0;
+  perform id, tenant_id, branch_id, invoice_id, order_number from public.kitchen_orders limit 0;
+  perform id, tenant_id, branch_id, code from public.invoices limit 0;
+  perform id, tenant_id, branch_id, source, event_type, target_type, target_id, requested_by, approved_by,
+    invoice_id, kitchen_order_id, amount, reason_code, reason_note, items_snapshot, metadata, shift_id, created_at from public.pos_exception_events limit 0;
+  perform id, tenant_id, branch_id, issued_by, used_at, action_code, target_meta, expires_at, created_at from public.manager_otp_codes limit 0;
+end $$;
 
 create or replace function public._audit_uuid_00453(p_value text)
 returns uuid language sql immutable set search_path = public as $$

@@ -181,9 +181,9 @@ export function OtpApprovalDialog({
             Cần OTP duyệt từ xa
           </DialogTitle>
           <DialogDescription className="space-y-1.5 pt-1">
-            <div className="text-sm font-medium text-foreground">{actionLabel}</div>
+            <span className="block text-sm font-medium text-foreground">{actionLabel}</span>
             {contextLabel && (
-              <div className="text-xs text-muted-foreground">{contextLabel}</div>
+              <span className="block text-xs text-muted-foreground">{contextLabel}</span>
             )}
           </DialogDescription>
         </DialogHeader>

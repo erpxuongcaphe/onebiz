@@ -59,8 +59,8 @@ describe("Vietnamese audit log", () => {
 
   it("keeps permission and data reads while standardizing the list layout", () => {
     expect(page).toContain("PERMISSIONS.SYSTEM_VIEW_AUDIT");
-    expect(page).toContain("getAuditLogs");
-    expect(page).toContain("getAuditStats");
+    expect(page).toContain("getOperationHistory");
+    expect(page).toContain("branchId: scopedBranch");
     expect(page).toContain("<ListPageLayout sidebar={null}>");
     expect(page).toContain('density="compact"');
     expect(page).toContain('title="Bộ lọc lịch sử thao tác"');
