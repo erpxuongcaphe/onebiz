@@ -269,6 +269,8 @@ function FnbPosPageInner() {
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
   const [voidConfirmOpen, setVoidConfirmOpen] = useState(false);
+  const [voidSubmitting, setVoidSubmitting] = useState(false);
+  const voidLock = useRef(false);
   // R5: Lý do huỷ — bắt buộc để audit & loss prevention.
   const [voidReason, setVoidReason] = useState("");
   // Khi chọn "Khác" → bắt nhập chi tiết tự do để audit log có ngữ cảnh.
@@ -2928,6 +2930,9 @@ function FnbPosPageInner() {
       tableId?: string | null;
       otpId?: string;
     }) => {
+      if (voidLock.current) return;
+      voidLock.current = true;
+      setVoidSubmitting(true);
       try {
         await cancelUnpaidKitchenOrder({
           orderId: args.orderId,
@@ -2946,16 +2951,8 @@ function FnbPosPageInner() {
         });
         setVoidReason("");
         setVoidReasonOther("");
-        // Optimistic: release table trên UI ngay
-        if (args.tableId) {
-          setTables((prev) =>
-            prev.map((t) =>
-              t.id === args.tableId
-                ? { ...t, status: "available" as const, currentOrderId: null }
-                : t,
-            ),
-          );
-        }
+        // Read the server state: split bills can still be serving this table.
+        void openOrders.refresh();
         // Đóng tab hiện tại nếu trùng order vừa huỷ
         if (pos.activeTab?.kitchenOrderId === args.orderId) {
           pos.closeTab(pos.activeTabId);
@@ -2972,9 +2969,12 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+      } finally {
+        voidLock.current = false;
+        setVoidSubmitting(false);
       }
     },
-    [pos, branchId, currentShift?.id, toast],
+    [pos, branchId, currentShift?.id, toast, openOrders],
   );
 
   const handleVoidKitchenOrder = useCallback(async () => {
@@ -2992,7 +2992,7 @@ function FnbPosPageInner() {
     if (!voidReason.trim()) {
       toast({
         title: "Vui lòng nhập lý do huỷ",
-        description: "Lý do bắt buộc để theo dõi loss prevention.",
+        description: "Chọn lý do để quản lý theo dõi các bill đã hủy.",
         variant: "warning",
       });
       return;
@@ -3000,7 +3000,7 @@ function FnbPosPageInner() {
     if (voidReason === "Khác" && !voidReasonOther.trim()) {
       toast({
         title: "Vui lòng ghi rõ lý do",
-        description: 'Bạn đã chọn "Khác" — hãy nhập chi tiết để lưu vào audit log.',
+        description: 'Bạn đã chọn "Khác" — hãy ghi rõ lý do hủy.',
         variant: "warning",
       });
       return;
@@ -3556,13 +3556,13 @@ function FnbPosPageInner() {
       />
       <FnbHeader
         openOrderCount={openOrders.orders.length}
-        onOpenOrders={() => setOpenOrdersDialog(true)}
+        onOpenOrders={() => { setMobileCartOpen(false); setOpenOrdersDialog(true); }}
         tabs={pos.tabs}
         activeTabId={pos.activeTabId}
-        switchTab={handleSwitchOrderTab}
+        switchTab={(id) => { setOpenOrdersDialog(false); handleSwitchOrderTab(id); }}
         closeTab={handleCloseOrderTab}
-        createTab={handleCreateOrderTab}
-        onToggleFloorPlan={() => setShowFloorPlan(!showFloorPlan)}
+        createTab={() => { setOpenOrdersDialog(false); handleCreateOrderTab(); }}
+        onToggleFloorPlan={() => { setOpenOrdersDialog(false); setShowFloorPlan(!showFloorPlan); }}
         onSearch={() => setSearchModalOpen(true)}
         shift={currentShift}
         onShiftClick={canCheckout ? handleShiftClick : undefined}
@@ -3676,7 +3676,7 @@ function FnbPosPageInner() {
         </div>
       )}
 
-      <div className="flex flex-1 min-h-0 overflow-hidden">
+      <div className={cn("flex flex-1 min-h-0 overflow-hidden", openOrdersDialog && "hidden")}>
         {/* Sprint A: Categories sidebar cột trái (chỉ hiện khi không floor plan).
             FIX (CEO 07/05): KHÔNG guard length > 0 — luôn render trên md+ kể
             cả khi tenant chưa có SP để CEO thấy layout shell. Component đã
@@ -4141,16 +4141,16 @@ function FnbPosPageInner() {
       )}
 
       {/* Void confirm dialog */}
-      <Dialog open={voidConfirmOpen} onOpenChange={setVoidConfirmOpen}>
+      <Dialog open={voidConfirmOpen} onOpenChange={(open) => { if (!voidSubmitting) setVoidConfirmOpen(open); }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-status-error">
-              <Icon name="cancel" size={16} /> Huỷ đơn bếp?
+              <Icon name="cancel" size={16} /> Hủy bill chưa thanh toán?
             </DialogTitle>
           </DialogHeader>
           <div className="py-2 space-y-3">
             <p className="text-sm text-foreground">
-              Đơn <b>{pos.activeTab?.label}</b> sẽ bị huỷ và bàn sẽ được giải phóng.
+              Chỉ hủy bill <b>{openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label}</b> · {pos.activeTab?.label}. Bill khác cùng bàn vẫn được giữ. Trạng thái bàn sẽ cập nhật theo dữ liệu máy chủ.
             </p>
             <div className="space-y-2">
               <label className="text-xs font-medium text-foreground">
@@ -4158,6 +4158,7 @@ function FnbPosPageInner() {
               </label>
               <select
                 value={voidReason}
+                disabled={voidSubmitting}
                 onChange={(e) => setVoidReason(e.target.value)}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-border bg-background"
               >
@@ -4173,6 +4174,7 @@ function FnbPosPageInner() {
                 <input
                   type="text"
                   value={voidReasonOther}
+                  disabled={voidSubmitting}
                   onChange={(e) => setVoidReasonOther(e.target.value)}
                   autoFocus
                   maxLength={120}
@@ -4182,19 +4184,20 @@ function FnbPosPageInner() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              Tip: Chỉ huỷ được đơn chưa thanh toán. Nếu đã in ticket, hãy thông báo
-              cho bếp trước. Lý do sẽ ghi vào audit log.
+              Chỉ hủy bill chưa thanh toán. Nếu bếp đã nhận đơn, hãy báo bếp dừng
+              làm món. Lý do và người hủy được lưu trong nhật ký thao tác.
             </p>
             {!canCancelUnpaidOrder && (
               <div className="rounded-md bg-status-warning/10 border border-status-warning/30 p-2.5 text-xs text-foreground">
                 <Icon name="pin" size={14} className="inline-block mr-1 text-status-warning" />
-                Bạn không có quyền huỷ. Sau khi xác nhận sẽ mở dialog xin OTP từ quản lý.
+                Bạn cần quản lý duyệt hủy bill bằng OTP.
               </div>
             )}
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
+              disabled={voidSubmitting}
               onClick={() => {
                 setVoidConfirmOpen(false);
                 setVoidReason("");
@@ -4207,10 +4210,10 @@ function FnbPosPageInner() {
             <button
               type="button"
               onClick={handleVoidKitchenOrder}
-              disabled={!voidReason.trim()}
+              disabled={voidSubmitting || !voidReason.trim() || (voidReason === "Khác" && !voidReasonOther.trim())}
               className="px-4 py-2 rounded-lg text-sm bg-status-error text-white hover:bg-status-error/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {canCancelUnpaidOrder ? "Huỷ đơn" : "Xin OTP duyệt"}
+              {voidSubmitting ? "Đang hủy…" : canCancelUnpaidOrder ? "Hủy bill" : "Xin OTP duyệt"}
             </button>
           </div>
         </DialogContent>

@@ -490,7 +490,7 @@ export function FnbOrderHistoryDialog({
                 <Textarea
                   value={voidReason}
                   onChange={(e) => setVoidReason(e.target.value)}
-                  placeholder="VD: Khách đổi món sau khi đã thanh toán, máy in lỗi, nhập sai..."
+                  placeholder="VD: Thu nhầm bill, ghi nhận trùng giao dịch…"
                   rows={3}
                   className="resize-none"
                 />
