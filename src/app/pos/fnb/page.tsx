@@ -4123,7 +4123,7 @@ function FnbPosPageInner() {
           mới biết bill bao nhiêu. Layout 2 dòng compact:
             [icon+count] [label tab]
                         [tổng tiền]                              */}
-      {!mobileCartOpen && pos.lineCount > 0 && (
+      {!mobileCartOpen && !openOrdersDialog && pos.lineCount > 0 && (
         <button
           type="button"
           onClick={() => setMobileCartOpen(true)}
