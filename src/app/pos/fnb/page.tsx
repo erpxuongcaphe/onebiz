@@ -1007,7 +1007,7 @@ function FnbPosPageInner() {
           }
           return;
         }
-        if (appliedPromotion?.promotion.id !== best.promotion.id) {
+        if (!appliedPromotion || appliedPromotion.promotion.id !== best.promotion.id) {
           setPromotionForTab(promotionTabId, best);
           toast({
             title: `Áp dụng khuyến mãi: ${best.promotion.name}`,

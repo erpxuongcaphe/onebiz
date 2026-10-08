@@ -1,6 +1,6 @@
 import { describe,it,expect } from 'vitest';
 import { selectFnbPromotionChoice } from '@/lib/fnb-promotion-choice';
-import type { AppliedPromotion } from '@/lib/types/promotions';
+import type { AppliedPromotion } from '@/lib/services/supabase/promotion-engine';
 const auto={promotion:{id:'auto'},discountAmount:5000} as AppliedPromotion;
 const employee={promotion:{id:'employee'},discountAmount:10000} as AppliedPromotion;
 describe('FNB cashier program selection',()=>{

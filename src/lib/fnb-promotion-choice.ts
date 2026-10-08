@@ -1,4 +1,4 @@
-import type { AppliedPromotion } from '@/lib/types/promotions';
+import type { AppliedPromotion } from '@/lib/services/supabase/promotion-engine';
 
 /** A manual choice must stay eligible; never silently replace it with another program. */
 export function selectFnbPromotionChoice(eligible: AppliedPromotion[], automatic: AppliedPromotion | null,
