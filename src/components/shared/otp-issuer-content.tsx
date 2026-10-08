@@ -12,7 +12,7 @@
  * Manager portal (mobile UI) thay vì trang chủ admin.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
@@ -146,14 +147,17 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
   const [issuing, setIssuing] = useState(false);
   const [recent, setRecent] = useState<RecentManagerOtp[]>([]);
   const [loadingRecent, setLoadingRecent] = useState(true);
+  const [recentError, setRecentError] = useState<string | null>(null);
+  const issueLock = useRef(false);
 
   const loadRecent = useCallback(async () => {
     setLoadingRecent(true);
+    setRecentError(null);
     try {
       const data = await getRecentManagerOtps(10);
       setRecent(data);
     } catch (err) {
-      console.warn("Không tải được lịch sử OTP:", err);
+      setRecentError(err instanceof Error ? err.message : "Không tải được lịch sử mã duyệt.");
     } finally {
       setLoadingRecent(false);
     }
@@ -184,6 +188,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
   };
 
   const handleIssue = async () => {
+    if (issueLock.current) return;
     if (!canIssueSelected) {
       toast({
         variant: "warning",
@@ -208,6 +213,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
       });
       return;
     }
+    issueLock.current = true;
     setIssuing(true);
     try {
       const otp = await issueManagerOtp({
@@ -228,6 +234,7 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
         description: err instanceof Error ? err.message : "Vui lòng thử lại.",
       });
     } finally {
+      issueLock.current = false;
       setIssuing(false);
     }
   };
@@ -405,6 +412,10 @@ export function OtpIssuerContent({ maxWidth = "max-w-2xl" }: OtpIssuerContentPro
                 />
                 <div className="mt-2">Đang tải...</div>
               </div>
+            ) : recentError ? (
+              <div role="alert" className="p-4 text-sm text-status-error">
+                Không tải được lịch sử mã duyệt. {recentError} Bấm Làm mới để thử lại.
+              </div>
             ) : recent.length === 0 ? (
               <div className="p-8 text-center text-sm text-muted-foreground">
                 Chưa có OTP nào được cấp gần đây.
@@ -440,7 +451,7 @@ function RecentOtpRow({ otp }: { otp: RecentManagerOtp }) {
       ? "bg-muted text-muted-foreground border-border"
       : "bg-primary/10 text-primary border-primary/30";
   const statusLabel = otp.isUsed
-    ? `Đã dùng${otp.usedByName ? ` · ${otp.usedByName}` : ""}`
+    ? `Đã xác thực${otp.usedByName ? ` · ${otp.usedByName}` : ""}`
     : otp.isExpired
       ? "Hết hạn"
       : "Đang hiệu lực";
@@ -468,7 +479,7 @@ function RecentOtpRow({ otp }: { otp: RecentManagerOtp }) {
   );
 }
 
-function IssuedOtpDialog({
+export function IssuedOtpDialog({
   otp,
   onClose,
 }: {
@@ -477,31 +488,38 @@ function IssuedOtpDialog({
 }) {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState(false);
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!otp) return;
-    setSecondsLeft(otp.expiresInSeconds);
+    const updateRemaining = () => {
+      const expiry = Date.parse(otp.expiresAt);
+      setSecondsLeft(Number.isFinite(expiry)
+        ? Math.max(0, Math.ceil((expiry - Date.now()) / 1000)) : 0);
+    };
+    updateRemaining();
     setCopied(false);
-    const interval = setInterval(() => {
-      setSecondsLeft((s) => {
-        if (s <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
+    setCopyError(false);
+    const interval = setInterval(updateRemaining, 1000);
+    document.addEventListener("visibilitychange", updateRemaining);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", updateRemaining);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+    };
   }, [otp]);
 
   const handleCopy = async () => {
-    if (!otp) return;
+    if (!otp || Date.parse(otp.expiresAt) <= Date.now() || !Number.isFinite(Date.parse(otp.expiresAt))) return;
     try {
       await navigator.clipboard.writeText(otp.code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopyError(false);
+      if (copyTimer.current) clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
-      // ignore
+      setCopyError(true);
     }
   };
 
@@ -510,11 +528,11 @@ function IssuedOtpDialog({
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
   const expired = secondsLeft <= 0;
-  const progress = (secondsLeft / otp.expiresInSeconds) * 100;
+  const progress = Math.min(100, (secondsLeft / Math.max(1, otp.expiresInSeconds)) * 100);
 
   return (
     <Dialog open={!!otp} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Icon name="pin" size={18} className="text-status-warning" />
@@ -525,22 +543,22 @@ function IssuedOtpDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-2">
+        <DialogBody className="space-y-3 py-2">
           {/* OTP code display */}
           <div
             className={cn(
-              "rounded-xl p-6 text-center transition-colors",
+              "rounded-lg p-3 sm:p-4 text-center transition-colors",
               expired
                 ? "bg-muted border border-border"
                 : "bg-status-warning/5 border border-status-warning/30",
             )}
           >
-            <div className="flex justify-center gap-2 mb-3">
+            <div className="flex justify-center gap-1.5 sm:gap-2 mb-3">
               {otp.code.split("").map((d, i) => (
                 <div
                   key={i}
                   className={cn(
-                    "h-14 w-12 rounded-lg flex items-center justify-center text-3xl font-bold font-mono",
+                    "h-12 w-9 sm:h-14 sm:w-12 rounded-md flex items-center justify-center text-2xl sm:text-3xl font-bold font-mono",
                     expired
                       ? "bg-surface text-muted-foreground border border-border"
                       : "bg-surface text-status-warning border border-status-warning/30",
@@ -602,7 +620,8 @@ function IssuedOtpDialog({
               </div>
             </div>
           </div>
-        </div>
+          {copyError && <p role="alert" className="text-sm text-status-error">Không sao chép được. Anh/chị đọc mã đang hiển thị cho người xin duyệt.</p>}
+        </DialogBody>
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCopy} disabled={expired}>

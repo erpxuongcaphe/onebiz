@@ -239,10 +239,7 @@ export async function getRecentManagerOtps(
 
   if (error) {
     if (isRpcUnavailable(error)) {
-      // Manager page có thể tải trước khi migration apply → không throw
-      // làm crash UI, chỉ trả mảng rỗng + log.
-      console.warn("[getRecentManagerOtps] RPC chưa tồn tại, trả mảng rỗng.");
-      return [];
+      throw new Error("Lịch sử mã duyệt chưa sẵn sàng. Vui lòng nhờ quản trị kiểm tra cấu hình hệ thống.");
     }
     handleError(error, "getRecentManagerOtps");
   }
