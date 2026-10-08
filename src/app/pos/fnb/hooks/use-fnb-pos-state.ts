@@ -298,13 +298,13 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
           };
           next.push(fallback);
         }
-        if (activeTabId === tabId) {
-          setActiveTabId(next[next.length - 1].id);
-        }
+        setActiveTabId((current) =>
+          next.some((tab) => tab.id === current) ? current : next[next.length - 1].id,
+        );
         return next;
       });
     },
-    [activeTabId]
+    []
   );
 
   // POS-FIX-B2: Reset all tabs khi đổi branch — tránh gửi đơn từ cart cũ

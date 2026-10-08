@@ -30,6 +30,23 @@ function makeLine(overrides: Partial<{
 // ============================================================
 
 describe("useFnbPosState", () => {
+  it("keeps a valid active tab when multiple settled tabs close in one update", () => {
+    const { result } = renderHook(() => useFnbPosState());
+    const first = result.current.activeTabId;
+    act(() => {
+      result.current.createTab("Second", "takeaway");
+      result.current.createTab("Third", "takeaway");
+    });
+    act(() => result.current.switchTab(first));
+    const closedIds = result.current.tabs.map((tab) => tab.id);
+    const close = result.current.closeTab;
+    act(() => closedIds.forEach(close));
+    expect(result.current.tabs).toHaveLength(1);
+    expect(result.current.activeTab).toBeDefined();
+    expect(result.current.tabs[0].id).toBe(result.current.activeTabId);
+    expect(closedIds).not.toContain(result.current.activeTabId);
+  });
+
   it("clears hidden delivery charges when an unsent order changes to takeaway", () => {
     const { result } = renderHook(() => useFnbPosState());
     act(() => result.current.setActiveTabOrderType("delivery"));
