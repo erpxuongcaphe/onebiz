@@ -66,9 +66,9 @@ describe("Tiền không được giấu", () => {
     for (const c of classes) expect(c).not.toContain("truncate");
   });
 
-  it("split-bill: tên món truncate được, cột tiền shrink-0 + tabular-nums", () => {
+  it("split-bill: tên món xuống dòng, cột tiền shrink-0 + tabular-nums", () => {
     const src = readFileSync("src/app/pos/fnb/components/split-bill-dialog.tsx", "utf8");
-    expect(src).toMatch(/min-w-0 truncate[^"]*">\{formatNumber\(item\.quantity\)\}x \{item\.name\}/);
+    expect(src).toMatch(/block break-words">\{formatNumber\(item\.quantity\)\}x \{item\.name\}/);
     expect(src).toMatch(/shrink-0[^"]*tabular-nums/);
   });
 
