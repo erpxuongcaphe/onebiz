@@ -104,6 +104,7 @@ async function requireTenantRecord(
 
 export async function getKitchenStationsByBranch(
   branchId: string,
+  options?: { throwOnError?: boolean },
 ): Promise<KitchenStation[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -118,6 +119,7 @@ export async function getKitchenStationsByBranch(
     .order("sort_order", { ascending: true });
 
   if (error) {
+    if (options?.throwOnError) handleError(error, "getKitchenStationsByBranch");
     // Migration 00054 chưa apply → bảng không tồn tại. Fallback empty
     // để UI render OK, không crash.
     console.warn("[getKitchenStationsByBranch]", error.message);

@@ -397,6 +397,11 @@ function StationRow({
               KDS
             </span>
           )}
+          {settings.show_on_kds === false && (
+            <span className="inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold">
+              <Icon name="print" size={12} />Chỉ phiếu bếp
+            </span>
+          )}
         </div>
         {appSettings.print.backend === "escpos-usb" && <>
         <p className="text-sm mt-2 text-primary font-medium">USB đã chọn: {printer ? `${printer.manufacturer} ${printer.name}${printer.serialNumber ? ` · ${printer.serialNumber}` : ""}` : "Dùng máy in bếp chung"}</p>
@@ -488,7 +493,7 @@ function StationDialog({
         toast({
           variant: "success",
           title: "Đã tạo trạm",
-          description: `${name} sẽ xuất hiện trên POS + KDS từ giờ.`,
+          description: showOnKds ? `${name} sử dụng màn bếp KDS.` : `${name} không sử dụng màn bếp KDS.`,
         });
       } else if (station) {
         await updateKitchenStation(station.id, {

@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import { useAuth, useBranchFilter, useToast } from "@/lib/contexts";
 import { ConfirmDialog } from "@/components/shared/dialogs/confirm-dialog";
 import { PosBranchSelector } from "@/components/shared/pos-branch-selector";
@@ -837,7 +838,7 @@ function QuanLyBanPage() {
 
                     {/* Table number */}
                     <span className="text-lg font-bold text-foreground">
-                      {table.tableNumber}
+                      {getCompactTableLabel(table)}
                     </span>
 
                     {/* Name */}
@@ -937,7 +938,7 @@ function QuanLyBanPage() {
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label>Số bàn</Label>
+                <Label>Số thứ tự nội bộ</Label>
                 <Input
                   type="number"
                   min={1}
@@ -957,9 +958,10 @@ function QuanLyBanPage() {
               </div>
             </div>
             <div>
-              <Label>Tên bàn</Label>
+              <Label>Tên / mã bàn</Label>
               <Input
-                placeholder={`Bàn ${tableForm.tableNumber}`}
+                placeholder="TN 01, NS 01"
+                maxLength={50}
                 value={tableForm.name}
                 onChange={(e) => setTableForm((f) => ({ ...f, name: e.target.value }))}
               />
