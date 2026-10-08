@@ -114,7 +114,7 @@ export interface UseFnbPosStateReturn {
   ) => void;
   /** Sprint POS-FNB-4: switch order type instant từ cart pill row.
    *  Guard: bị ignore nếu tab đã gửi bếp (kitchenOrderId tồn tại). */
-  setActiveTabOrderType: (next: OrderType, table?: { id: string; tableNumber: string | number }) => void;
+  setActiveTabOrderType: (next: OrderType, table?: { id: string; tableNumber: string | number; name?: string }) => void;
 
   // Cart lines
   addLine: (line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
@@ -360,7 +360,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
   // KHÔNG cho đổi sau khi đã gửi bếp (kitchenOrderId tồn tại) — bếp đã pha
   // theo "Tại quán" thì khách không thể đổi qua "Mang về" giữa chừng (sai
   // luồng phục vụ). UI guard ở fnb-cart.tsx, hook này guard backup.
-  const setActiveTabOrderType = useCallback((next: OrderType, table?: { id: string; tableNumber: string | number }) => {
+  const setActiveTabOrderType = useCallback((next: OrderType, table?: { id: string; tableNumber: string | number; name?: string }) => {
     tabsMutationVersionRef.current += 1;
     setTabs((prev) => prev.map((tab) => tab.id === activeTabId ? changeDraftOrderType(tab, next, table) : tab));
   }, [activeTabId]);

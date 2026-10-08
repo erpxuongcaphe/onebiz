@@ -8,6 +8,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 import { Stage, Layer, Group, Rect, Circle, Text, Line, Image as KonvaImage, Transformer, Shape } from "react-konva";
 import { formatCurrency } from "@/lib/format";
+import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import useImage from "use-image";
 import type Konva from "konva";
 import type { TableLayout, FloorPlanZone, TableShape } from "@/lib/services/supabase/floor-plan";
@@ -508,13 +509,14 @@ function TableNode({
 
   // Font số bàn: scale theo cạnh nhỏ — không nhồi chữ ngoài shape
   const minSide = Math.min(table.width, table.height);
-  const numberFontSize = Math.max(14, Math.min(minSide / 2.5, 36));
+  const tableLabel = getCompactTableLabel(table);
+  const numberFontSize = Math.max(10, Math.min(minSide / 2.5, 36, (table.width - 12) / Math.max(1, tableLabel.length * 0.65)));
   // Nhãn phụ (tên bàn ngắn) chỉ hiện khi:
   //  1. Có tên
   //  2. Tên KHÁC số bàn ("VIP", "Bàn họp" — không phải "Bàn 1" / "1")
   //  3. Đủ chỗ (cạnh nhỏ ≥ 80px)
   const tableNumStr = String(table.tableNumber ?? "");
-  const showName =
+  const showName = tableLabel === tableNumStr &&
     !!table.name &&
     table.name !== tableNumStr &&
     table.name !== `Bàn ${tableNumStr}` &&
@@ -544,7 +546,7 @@ function TableNode({
       />
       {/* Số bàn — to, đậm, giữa. Màu chữ đối lập với fill. */}
       <Text
-        text={String(table.tableNumber ?? "")}
+        text={tableLabel}
         fontSize={numberFontSize}
         fontStyle="bold"
         fontFamily="Inter, system-ui, sans-serif"
@@ -554,6 +556,7 @@ function TableNode({
         align="center"
         verticalAlign="middle"
         listening={false}
+        wrap="word"
       />
       {/* Tên ngắn dưới số bàn — chỉ khi đủ chỗ */}
       {showName && (

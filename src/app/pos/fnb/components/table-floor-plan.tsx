@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import type { RestaurantTable, TableStatus } from "@/lib/types/fnb";
 import { formatCurrency } from "@/lib/format";
+import { getCompactTableLabel } from "@/lib/fnb/table-label";
 import { isUnpaidFnbOrder, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import { Icon } from "@/components/ui/icon";
 import { useToast } from "@/lib/contexts/toast-context";
@@ -449,7 +450,7 @@ function GridFallback({
                     bgFor(t.status),
                   )}
                 >
-                  <span className="text-2xl font-bold tabular-nums">{t.tableNumber}</span>
+                  <span className="max-w-full break-words text-lg font-bold tabular-nums">{getCompactTableLabel(t)}</span>
                   <span className="text-sm mt-0.5 break-words max-w-full">
                     {t.name}
                   </span>

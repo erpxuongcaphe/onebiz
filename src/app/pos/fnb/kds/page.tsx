@@ -14,7 +14,7 @@
  * - Item rows stay touch-friendly for tablet/kitchen monitors.
  */
 
-import { useState, useEffect, useCallback, useRef, useId } from "react";
+import { useState, useEffect, useCallback, useRef, useId, useMemo } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuth, useToast } from "@/lib/contexts";
@@ -39,7 +39,8 @@ import { getClient } from "@/lib/services/supabase/base";
 import { getKitchenReturnSummaries, getKitchenReturnLines, type KitchenReturnSummary, type KitchenReturnLine } from "@/lib/services/supabase/kitchen-return-summary";
 import { KdsReturnNotice } from "./kds-return-notice";
 import { getKitchenActionItems, projectKitchenReturnItems } from "./kds-return-quantities";
-import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
+import { getKitchenStationsByBranch, type KitchenStation } from "@/lib/services/supabase/kitchen-stations";
+import { getKdsStationItems } from "./kds-station-visibility";
 import {
   getBranchSettings,
   updateBranchSettings,
@@ -249,6 +250,7 @@ function KdsPageInner() {
   const [stations, setStations] = useState<
     { id: string; name: string; color: string; icon: string }[]
   >([]);
+  const [stationConfig, setStationConfig] = useState<KitchenStation[]>([]);
   const [soundOn, setSoundOn] = useState(true);
   const [now, setNow] = useState(Date.now());
   const [realtimeConnected, setRealtimeConnected] = useState(false);
@@ -390,29 +392,12 @@ function KdsPageInner() {
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   });
 
-  // Sprint KITCHEN-1: Load stations cho dropdown filter.
+  // Clear the previous branch's routing before any new orders are rendered.
   useEffect(() => {
-    if (!branchId || !isStoreBranch) {
-      setStations([]);
-      setStationFilter(null);
-      return;
-    }
-    let cancelled = false;
-    getKitchenStationsByBranch(branchId)
-      .then((list) => {
-        if (cancelled) return;
-        // Chỉ hiện stations có show_on_kds !== false
-        const visible = list
-          .filter((s) => s.settings.show_on_kds !== false)
-          .map((s) => ({ id: s.id, name: s.name, color: s.color, icon: s.icon }));
-        setStations(visible);
-      })
-      .catch(() => {
-        if (!cancelled) setStations([]);
-      });
-    return () => {
-      cancelled = true;
-    };
+    setStations([]);
+    setStationConfig([]);
+    setStationFilter(null);
+    setOrders([]);
   }, [branchId, isStoreBranch]);
 
   // ── Poll orders ──
@@ -427,7 +412,10 @@ function KdsPageInner() {
       return;
     }
     try {
-      const enriched = await getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES);
+      const [enriched, stationList] = await Promise.all([
+        getKitchenOrdersWithItems(branchId, ACTIVE_STATUSES),
+        getKitchenStationsByBranch(branchId, { throwOnError: true }),
+      ]);
       // One branch-scoped read for paid orders, not an invoice query per ticket.
       let returns: Map<string, KitchenReturnSummary> | null = null;
       let returnLines: Map<string, KitchenReturnLine> | null = null;
@@ -444,7 +432,11 @@ function KdsPageInner() {
         activeBranchIdRef.current !== requestedBranchId
       ) return;
 
-      const newIds = new Set(enriched.map((o) => o.id));
+      setStationConfig(stationList);
+      const visibleStations = stationList.filter(station => station.settings.show_on_kds !== false);
+      setStations(visibleStations.map(({ id, name, color, icon }) => ({ id, name, color, icon })));
+      setStationFilter(previous => previous && visibleStations.some(station => station.id === previous) ? previous : null);
+      const newIds = new Set(enriched.filter(order => getKdsStationItems(order.items, stationList).length > 0).map((o) => o.id));
       if (prevOrderIdsRef.current.size > 0 && soundOn) {
         for (const id of newIds) {
           if (!prevOrderIdsRef.current.has(id)) {
@@ -510,6 +502,10 @@ function KdsPageInner() {
       ) setLoading(false);
     }
   }, [branchId, isStoreBranch, soundOn, toast]);
+
+  const kdsOrders = useMemo(() => orders
+    .map(order => ({ ...order, items: getKdsStationItems(order.items, stationConfig, stationFilter) }))
+    .filter(order => order.items.length > 0), [orders, stationConfig, stationFilter]);
 
   // 04/08: bỏ nhịp gọi khi màn bếp bị che (khoá máy, chuyển tab). Trước đây
   // cứ 30 giây là gọi máy chủ dù không ai nhìn — nhiều màn bếp cộng lại thành
@@ -607,7 +603,7 @@ function KdsPageInner() {
   // (chưa served/cancelled) và chưa sẵn sàng hết (bếp chưa xong).
   useEffect(() => {
     if (!soundOn) return;
-    for (const order of orders) {
+    for (const order of kdsOrders) {
       if (order.status === "served" || order.status === "cancelled") continue;
       if (order.items.length === 0) continue;
       const allReady = getKitchenActionItems(order.items, order.returnLines).every((i) => i.status === "ready");
@@ -618,11 +614,11 @@ function KdsPageInner() {
       playOverdueBeep();
     }
     // Garbage-collect: đơn không còn trong active list → bỏ khỏi set
-    const activeIds = new Set(orders.map((o) => o.id));
+    const activeIds = new Set(kdsOrders.map((o) => o.id));
     for (const id of overdueAlertedRef.current) {
       if (!activeIds.has(id)) overdueAlertedRef.current.delete(id);
     }
-  }, [orders, soundOn, now]);
+  }, [kdsOrders, soundOn, now]);
 
   // ── Item status toggle ──
   const handleItemToggle = useCallback(
@@ -712,7 +708,7 @@ function KdsPageInner() {
   const handleMarkAllReady = useCallback(
     async (orderId: string) => {
       if (pendingOrderIdsRef.current.has(orderId)) return;
-      const order = orders.find((o) => o.id === orderId);
+      const order = kdsOrders.find((o) => o.id === orderId);
       if (!order) return;
 
       const toMark = getKitchenActionItems(order.items, order.returnLines).filter((i) => i.status !== "ready");
@@ -764,7 +760,7 @@ function KdsPageInner() {
         setOrderPending(orderId, false);
       }
     },
-    [orders, fetchOrders, setItemsPending, setOrderPending, toast]
+    [kdsOrders, fetchOrders, setItemsPending, setOrderPending, toast]
   );
 
   // ── Recall item: ready → preparing (lỡ tay đánh dấu xong) ──
@@ -847,13 +843,7 @@ function KdsPageInner() {
   // ── Filtered orders ──
   // Sprint KITCHEN-1: thêm filter theo station — bar staff chỉ thấy món
   // drink, kitchen staff chỉ thấy món bếp. Khi filter = null = "Tất cả trạm".
-  const filtered = orders
-    .map((o) => {
-      // Filter items theo station nếu có chọn
-      if (!stationFilter) return o;
-      const items = o.items.filter((it) => it.kitchenStationId === stationFilter);
-      return { ...o, items };
-    })
+  const filtered = kdsOrders
     .filter((o) => {
       // Hide order nếu không còn item nào (sau khi filter station)
       if (stationFilter && o.items.length === 0) return false;
@@ -864,6 +854,7 @@ function KdsPageInner() {
     filtered.filter((order) => getOrderStage(order) === status);
   const selectedLane =
     filter === "all" ? null : KDS_LANES.find((lane) => lane.key === filter);
+  const printOnlyBranch = stationConfig.length > 0 && stationConfig.every(station => station.settings.show_on_kds === false);
 
   // ── Render ──
 
@@ -1239,10 +1230,11 @@ function KdsPageInner() {
               <Icon name="restaurant" size={44} />
             </div>
             <p className="mt-4 text-xl font-semibold text-foreground">
-              {filter === "all" ? "Bếp đang rảnh" : "Không có đơn ở luồng này"}
+              {printOnlyBranch ? "Chi nhánh không sử dụng KDS" : filter === "all" ? "Bếp đang rảnh" : "Không có đơn ở luồng này"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {filter === "all"
+              {printOnlyBranch ? "Các trạm đã tắt hiển thị trên màn bếp."
+                : filter === "all"
                 ? "Chưa có đơn nào — đơn mới sẽ tự hiện ở đây."
                 : "Thử chọn luồng khác hoặc xem Tất cả."}
             </p>
