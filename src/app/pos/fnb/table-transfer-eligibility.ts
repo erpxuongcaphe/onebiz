@@ -5,7 +5,8 @@ export function canTransferFnbTab(
   tables: Pick<RestaurantTable, "id" | "status" | "currentOrderId">[],
 ): boolean {
   if (tab?.orderType !== "dine_in" || !tab.tableId || !tab.kitchenOrderId) return false;
-  // Split bills share the table reference, but only its current order owns it.
+  // currentOrderId is only the table's representative bill. A split bill can
+  // move independently; the RPC validates its actual table and unpaid status.
   return tables.some((table) => table.id === tab.tableId
-    && table.status === "occupied" && table.currentOrderId === tab.kitchenOrderId);
+    && table.status === "occupied");
 }

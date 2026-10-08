@@ -618,6 +618,18 @@ describe("FnbCart — component", () => {
     onPayment: noop,
   };
 
+  it.each([false, true])("exposes selected-bill transfer in the cart action menu (mobile=%s)", async (mobile) => {
+    const transfer = vi.fn();
+    const cancel = vi.fn();
+    render(<FnbCart {...baseProps} mobile={mobile}
+      activeTab={{ ...baseTab, orderType: "dine_in", tableId: "table-9", kitchenOrderId: "split-bill" }}
+      onTransferTable={transfer} onVoidKitchenOrder={cancel} />);
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác đơn" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Chuyển bill sang bàn khác/ }));
+    expect(transfer).toHaveBeenCalledTimes(1);
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
   it("hiện empty hint khi cart trống", () => {
     // Day 21/05/2026 (CEO): empty state compact mới — text rút gọn.
     render(<FnbCart {...baseProps} />);
