@@ -1222,7 +1222,7 @@ function TemplateEditorDialog({
             </div>
             <BillPreview
               docType={docType}
-              title={title.trim() || DOC_TYPE_LABELS[docType]}
+              title={title.trim() || (channel === "fnb" && docType === "sale_invoice" ? "PHIẾU THANH TOÁN" : DOC_TYPE_LABELS[docType])}
               config={config}
               showCustomer={showCustomer}
               channel={channel}
