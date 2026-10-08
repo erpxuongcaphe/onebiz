@@ -1,6 +1,6 @@
 -- Disposable database: run after 00452_fnb_cancel.setup.sql, not production.
 alter table profiles add column full_name text;
-alter table manager_otp_codes add column branch_id uuid, add column expires_at timestamptz, add column created_at timestamptz default now();
+alter table manager_otp_codes add column expires_at timestamptz, add column created_at timestamptz default now();
 alter table pos_exception_events add column invoice_id uuid, add column created_at timestamptz default now();
 create table branches(id uuid primary key, tenant_id uuid, name text);
 create table invoices(id uuid primary key, tenant_id uuid, branch_id uuid, code text);

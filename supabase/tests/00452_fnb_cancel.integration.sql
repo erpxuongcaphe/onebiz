@@ -57,4 +57,14 @@ select test_reject('select fnb_cancel_unpaid_order_atomic(test_id(10),''Khách �
 select test_fixture();
 select set_config('test.actor','',false);
 select test_reject('select fnb_cancel_unpaid_order_atomic(test_id(10),''Khách đổi ý'')','AUTH_REQUIRED');
+select test_fixture();
+select set_config('test.actor',test_id(4)::text,false);
+update manager_otp_codes set target_meta='{}'::jsonb;
+select test_reject('select fnb_cancel_unpaid_order_atomic(test_id(10),''Khách đổi ý'',null,null,test_id(40))','FNB_CANCEL_OTP_SCOPE_REQUIRED');
+select test_assert((select count(*)=0 from pos_exception_events),'Unbound OTP leaves no event');
+select test_fixture();
+select set_config('test.actor',test_id(4)::text,false);
+update manager_otp_codes set branch_id=test_id(99);
+select test_reject('select fnb_cancel_unpaid_order_atomic(test_id(10),''Khách đổi ý'',null,null,test_id(40))','FNB_CANCEL_OTP_SCOPE_REQUIRED');
+select test_assert((select status='ready' from kitchen_orders where id=test_id(10)),'Wrong branch OTP leaves bill untouched');
 select 'PASS: unpaid cancellation scope, split table, OTP, retry and history' as result;

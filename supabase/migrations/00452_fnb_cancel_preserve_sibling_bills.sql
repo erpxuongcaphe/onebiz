@@ -64,6 +64,16 @@ begin
   -- permission. Check the approver's current tenant/branch as well.
   v_approver := case when p_otp_id is null then v_actor else
     public.verify_otp_authorization(p_otp_id, 'fnb.cancel_unpaid_bill', v_actor, p_order_id) end;
+  -- The old verifier accepts legacy unbound codes. Sent bill cancellation
+  -- requires a code explicitly issued for this bill and this branch.
+  if p_otp_id is not null and not exists (
+    select 1 from public.manager_otp_codes o where o.id=p_otp_id
+      and o.tenant_id=v_tenant_id and o.branch_id=v_order.branch_id
+      and coalesce(nullif(o.target_meta->>'entity_id',''), nullif(o.target_meta->>'target_id',''),
+        nullif(o.target_meta->>'bill_id',''), nullif(o.target_meta->>'kitchen_order_id',''))=p_order_id::text
+  ) then
+    raise exception using errcode='42501', message='FNB_CANCEL_OTP_SCOPE_REQUIRED';
+  end if;
   if not exists (select 1 from public.profiles p where p.id = v_approver
       and p.tenant_id = v_tenant_id and coalesce(p.is_active, true))
      or not coalesce(public.user_has_branch_access(v_approver, v_order.branch_id), false) then

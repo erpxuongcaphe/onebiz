@@ -349,6 +349,10 @@ const FNB_CANCEL_ERROR_MESSAGES: ReadonlyArray<{
   message: string;
 }> = [
   {
+    codes: ["FNB_CANCEL_OTP_SCOPE_REQUIRED"],
+    message: "Mã duyệt phải được cấp cho đúng bill và chi nhánh này. Nhờ quản lý cấp lại mã cho bill đang mở.",
+  },
+  {
     codes: ["FNB_CANCEL_BRANCH_ACCESS_DENIED"],
     message: "Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.",
   },

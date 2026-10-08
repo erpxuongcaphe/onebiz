@@ -24,7 +24,7 @@ create table kitchen_orders(id uuid primary key, tenant_id uuid, branch_id uuid,
 create table kitchen_order_items(id uuid primary key, kitchen_order_id uuid, product_id uuid,
  product_name text, variant_id uuid, variant_label text, quantity integer, unit_price numeric,
  note text, toppings jsonb, status text);
-create table manager_otp_codes(id uuid primary key, tenant_id uuid, action_code text,
+create table manager_otp_codes(id uuid primary key, tenant_id uuid, branch_id uuid, action_code text,
  target_meta jsonb, issued_by uuid, used_at timestamptz, used_by uuid);
 create table pos_exception_events(id uuid primary key default gen_random_uuid(), tenant_id uuid,
  branch_id uuid, shift_id uuid, source text, event_type text, target_type text, target_id uuid,
@@ -45,7 +45,7 @@ create function test_fixture() returns void language plpgsql as $$ begin
  insert into kitchen_order_items(id,kitchen_order_id,quantity,unit_price,status) values
   (test_id(20),test_id(10),2,10000,'ready'),(test_id(21),test_id(11),1,30000,'pending');
  insert into shifts values(test_id(30),test_id(2),test_id(3),test_id(1),'open');
- insert into manager_otp_codes values(test_id(40),test_id(2),'fnb.cancel_unpaid_bill',
+ insert into manager_otp_codes values(test_id(40),test_id(2),test_id(3),'fnb.cancel_unpaid_bill',
   jsonb_build_object('entity_id',test_id(10)),test_id(1),now(),test_id(4));
  perform set_config('test.actor',test_id(1)::text,false);
 end $$;

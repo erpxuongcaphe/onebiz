@@ -157,6 +157,10 @@ describe("effective sent quantities", () => {
 });
 
 describe("cancelUnpaidKitchenOrder", () => {
+  it("explains that an unbound OTP needs to be issued for the exact bill", () => {
+    expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_OTP_SCOPE_REQUIRED" }))
+      .toContain("đúng bill và chi nhánh");
+  });
   it("diễn giải lỗi chi nhánh để thu ngân không nhầm với lỗi mạng", () => {
     expect(getFnbCancelErrorMessage({ message: "FNB_CANCEL_BRANCH_ACCESS_DENIED" }))
       .toBe("Anh/chị không có quyền huỷ đơn này tại chi nhánh hiện tại.");
