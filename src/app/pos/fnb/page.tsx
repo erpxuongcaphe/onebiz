@@ -2284,9 +2284,11 @@ function FnbPosPageInner() {
   const activeSharedOrderId = pos.activeTab?.kitchenOrderId;
   const { loadSentLinesIntoTab: refreshSharedSentLines, updateTabMeta: refreshSharedTabMeta } = pos;
   const { closeTab: closeSettledTab } = pos;
-  const pendingLineCount = pos.activeTab?.lines.length ?? 0;
   const handleClosedSharedTab = useCallback((order: KitchenOrder, tabId: string) => {
-    setPaymentOpen(false);
+    const tab = pos.tabs.find((entry) => entry.id === tabId && entry.kitchenOrderId === order.id);
+    if (!tab) return;
+    const pendingLineCount = tab.lines.length;
+    if (tabId === pos.activeTabId) setPaymentOpen(false);
     clearTabBenefits(tabId);
     if (pendingLineCount) {
       refreshSharedSentLines(tabId, []);
@@ -2296,8 +2298,8 @@ function FnbPosPageInner() {
       });
     } else closeSettledTab(tabId);
     toast({ title: order.invoiceId ? "Đơn đã thanh toán" : "Đơn đã đóng hoặc gộp", description: pendingLineCount ? "Món chưa gửi được giữ trong đơn mới. Chọn lại bàn nếu phục vụ tại quán." : "Đã cập nhật tab từ máy chủ.", variant: "info" });
-  }, [pendingLineCount, refreshSharedSentLines, refreshSharedTabMeta, closeSettledTab, clearTabBenefits, toast]);
-  useFnbTabReconciliation({ tabId: activeSharedTabId, orderId: activeSharedOrderId, branchId,
+  }, [pos.tabs, pos.activeTabId, refreshSharedSentLines, refreshSharedTabMeta, closeSettledTab, clearTabBenefits, toast]);
+  useFnbTabReconciliation({ tabs: pos.tabs, branchId,
     orders: openOrders.orders, updatedAt: openOrders.updatedAt,
     blocked: openOrders.loading || Boolean(openOrders.error) || kitchenSubmitting || paymentSubmitting || !networkStatus.isOnline,
     onClosed: handleClosedSharedTab,
