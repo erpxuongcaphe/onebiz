@@ -48,7 +48,6 @@ import { splitByItems, splitEqually } from "@/lib/services/supabase/split-bill";
 import { validateCoupon } from "@/lib/services/supabase/coupons";
 import {
   getKitchenOrderById,
-  getKitchenOrders,
   cancelUnpaidKitchenOrder,
   transferTable as transferTableService,
   mergeKitchenOrders,
@@ -700,6 +699,9 @@ function FnbPosPageInner() {
   //     khác giữa chừng thì kết quả của lần trước KHÔNG đè lên lần sau.
   //  4. BỎ `.catch(() => null)` — lỗi mạng là `error`, KHÔNG phải "chưa mở
   //     ca". Đây chính là lỗi đang tồn tại hôm nay.
+  const shiftRefreshGeneration = useRef(0);
+  const liveShiftScopeRef = useRef("");
+  liveShiftScopeRef.current = `${branchId}:${userId}`;
   useEffect(() => {
     // Giữ lại ca ĐÃ BIẾT của đúng chi nhánh + đúng người trong lúc kiểm tra
     // lại. Nếu xoá về loading/error thì `currentShift` thành null giữa
@@ -733,8 +735,10 @@ function FnbPosPageInner() {
           console.warn("[FnB] mark overdue shifts failed:", err);
           return 0;
         });
-        const shift = await getOpenShift(branchId, userId);
         if (cancelled) return;
+        const generation = ++shiftRefreshGeneration.current;
+        const shift = await getOpenShift(branchId, userId);
+        if (cancelled || generation !== shiftRefreshGeneration.current) return;
         // Máy chủ trả lời DỨT KHOÁT → ghi đè, kể cả xoá ca đang giữ (đúng:
         // ca đã bị đóng ở máy khác).
         setShiftState(shift ? { status: "open", shift } : { status: "none" });
@@ -748,6 +752,19 @@ function FnbPosPageInner() {
       cancelled = true;
     };
   }, [branchId, userId, networkStatus.isOnline, shiftReloadToken]);
+
+  const refreshLiveShift = useCallback(async () => {
+    if (!branchId || !userId || !networkStatus.isOnline) return;
+    const scope = `${branchId}:${userId}`;
+    const generation = ++shiftRefreshGeneration.current;
+    try {
+      const shift = await getOpenShift(branchId, userId);
+      if (scope === liveShiftScopeRef.current && generation === shiftRefreshGeneration.current) {
+        setShiftState(shift ? { status: "open", shift } : { status: "none" });
+      }
+    } catch { /* A failed read must not erase the last confirmed shift. */ }
+  }, [branchId, userId, networkStatus.isOnline]);
+  useLiveDataRefresh(refreshLiveShift, tenantId, branchId, ["shifts", "kitchen_orders", "invoices"], Boolean(branchId && userId && networkStatus.isOnline));
 
   // Settings fail independently: a delivery platform must never silently use
   // a 0% fallback, while manual discounts and self-delivery remain usable.
@@ -830,22 +847,17 @@ function FnbPosPageInner() {
     };
   }, [branchId]);
 
-  // Refresh count delivery hôm nay mỗi 60s — không real-time critical
-  useEffect(() => {
+  const deliveryRefreshGeneration = useRef(0);
+  const refreshDeliveryCount = useCallback(async () => {
     if (!branchId) return;
-    const iv = setInterval(() => {
-      void (async () => {
-        try {
-          const services = await import("@/lib/services");
-          const count = await services.getDeliveryCountToday(branchId);
-          setDeliveryCountToday(count);
-        } catch {
-          /* silent */
-        }
-      })();
-    }, 60000);
-    return () => clearInterval(iv);
+    const generation = ++deliveryRefreshGeneration.current;
+    try {
+      const services = await import("@/lib/services");
+      const count = await services.getDeliveryCountToday(branchId);
+      if (liveBranchRef.current === branchId && generation === deliveryRefreshGeneration.current) setDeliveryCountToday(count);
+    } catch { /* Keep the last confirmed count on a failed read. */ }
   }, [branchId]);
+  useLiveDataRefresh(refreshDeliveryCount, tenantId, branchId, ["kitchen_orders"], Boolean(branchId && tenantId));
 
   // Sprint FIX-1 (CEO 07/05): Listen "fnb-print-failed" event từ print-fnb.ts
   // → toast lỗi để user biết không in được. Toggle qua settings.print.notifyPrintFailure.
@@ -865,36 +877,11 @@ function FnbPosPageInner() {
     return () => window.removeEventListener("fnb-print-failed", handler);
   }, [settings.print.notifyPrintFailure, toast]);
 
-  // POS-FIX-C2: Fetch order timestamps cho floor plan timer khi mở floor plan.
-  // Refresh mỗi 60s để timer cập nhật mượt khi user xem lâu.
+  // Floor-plan timers follow the same confirmed open-order snapshot as totals.
   useEffect(() => {
-    if (!showFloorPlan || !branchId) return;
-    let cancelled = false;
-    const fetchTimestamps = async () => {
-      try {
-        const orders = await getKitchenOrders(branchId, [
-          "pending",
-          "preparing",
-          "ready",
-          "served",
-        ]);
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        for (const o of orders) {
-          map[o.id] = o.createdAt;
-        }
-        setOrderTimestamps(map);
-      } catch (err) {
-        console.error("[FnB] fetch orderTimestamps failed:", err);
-      }
-    };
-    fetchTimestamps();
-    const interval = setInterval(fetchTimestamps, 60_000);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [showFloorPlan, branchId]);
+    if (!openOrders.updatedAt) return;
+    setOrderTimestamps(Object.fromEntries(openOrders.orders.map((order) => [order.id, order.createdAt])));
+  }, [openOrders.orders, openOrders.updatedAt]);
 
   // POS-FIX-B2: Reset cart khi đổi branch (bỏ qua mount đầu tiên).
   // Tránh gửi cart từ quán A sang quán B — productId có thể không tồn tại
