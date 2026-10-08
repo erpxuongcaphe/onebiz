@@ -285,7 +285,7 @@ export function FnbCart({
               Thao tác <Icon name="expand_more" size={16} className="inline-block" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-48">
-              {onTransferTable && <DropdownMenuItem onClick={onTransferTable}><Icon name="swap_horiz" size={18} /> Chuyển bill sang bàn khác</DropdownMenuItem>}
+              {onTransferTable && activeTab?.orderType === "dine_in" && activeTab.tableId && activeTab.kitchenOrderId && <DropdownMenuItem onClick={onTransferTable}><Icon name="swap_horiz" size={18} /> Chuyển bill sang bàn khác</DropdownMenuItem>}
               {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp bill vào bàn khác</DropdownMenuItem>}
               {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}

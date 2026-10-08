@@ -61,16 +61,18 @@ describe("FnbCart table transfer eligibility", () => {
       activeTab: { id: "split", label: "Ban 2-B", orderType: "dine_in", kitchenOrderId: "order-child", lines: [] },
       onTransferTable: vi.fn(),
     });
-    expect(screen.queryByRole("button", { name: "Chuyển bàn" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác đơn" }));
+    expect(screen.queryByRole("menuitem", { name: /Chuyển bill sang bàn khác/ })).not.toBeInTheDocument();
   });
 
-  it("offers transfer for a sent dine-in order attached to a table", () => {
+  it("offers transfer for a sent dine-in order attached to a table", async () => {
     const onTransferTable = vi.fn();
     renderGio([], {
       activeTab: { id: "parent", label: "Ban 2", orderType: "dine_in", kitchenOrderId: "order-parent", tableId: "table-2", lines: [] },
       onTransferTable,
     });
-    fireEvent.click(screen.getByRole("button", { name: "Chuyển bàn" }));
+    fireEvent.click(screen.getByRole("button", { name: "Thao tác đơn" }));
+    fireEvent.click(await screen.findByRole("menuitem", { name: /Chuyển bill sang bàn khác/ }));
     expect(onTransferTable).toHaveBeenCalledTimes(1);
   });
 });
