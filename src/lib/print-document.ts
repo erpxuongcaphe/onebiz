@@ -20,6 +20,8 @@ export interface DocumentLineItem {
 }
 
 export interface DocumentPrintData {
+  /** Readable F&B thermal defaults; leaves A4/A5 and other document flows intact. */
+  fnbThermalReadable?: boolean;
   documentType: string;      // e.g. "PHIẾU KIỂM KHO", "HOÁ ĐƠN BÁN HÀNG"
   documentCode: string;
   date: string;
@@ -384,6 +386,15 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
 
   .bizfooter { margin-top: ${isThermal ? "3px" : "26px"}; text-align: center; font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#222" : "#555"}; border-top: ${isThermal ? "1px dashed #000" : "1px solid #ddd"}; padding-top: ${isThermal ? "3px" : "8px"}; }
 
+  ${isThermal && d.fnbThermalReadable ? `
+  body { font-size: 14px; color: #000; }
+  .head-c .store { font-size: 16px; }
+  .head-c .line, .head-c .doc-code, .note, .bizfooter { font-size: 12px; color: #000; }
+  .meta td, .summary td { font-size: 14px; }
+  .summary .bold td { font-size: 17px; padding-top: 3px; }
+  .t-name, .t-line { font-size: ${d.itemFontSize === "sm" ? "12px" : "14px"}; }
+  .t-note { font-size: 12px; color: #000; }
+  ` : ""}
   @media print {
     body { padding: ${isThermal ? ps.bodyPadding : "0"}; }
     thead { display: table-header-group; }

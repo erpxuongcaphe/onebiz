@@ -169,14 +169,14 @@ function formatDate(iso: string): string {
 function baseStyles(width: number, pageSize: string): string {
   return `
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Courier New',monospace;font-size:13px;width:${width}px;margin:0 auto;padding:8px;color:#000}
+body{font-family:'Courier New',monospace;font-size:14px;line-height:1.25;width:${width}px;margin:0 auto;padding:8px;color:#000}
 .center{text-align:center}
 .right{text-align:right}
 .bold{font-weight:bold}
 .line{border-top:2px dashed #000;margin:3px 0}
 .line-thin{border-top:1px dotted #999;margin:3px 0}
 table{width:100%;border-collapse:collapse}
-td{padding:1px 0;font-size:12px;vertical-align:top}
+td{padding:1px 0;font-size:14px;vertical-align:top}
 .footer-text{font-size:11px;color:#333;margin-top:3px;text-align:center}
 @media print{body{width:${width}px}@page{size:${pageSize} auto;margin:0}}`;
 }
@@ -403,7 +403,7 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
   const tableLabel = data.tableName ?? typeLabel;
   const time = formatTime(data.createdAt);
   const date = formatDate(data.createdAt);
-  const itemFontSize = data.itemFontSize === "lg" ? 22 : data.itemFontSize === "sm" ? 14 : data.itemFontSize === "md" ? 18 : style === "compact" ? 14 : 18;
+  const itemFontSize = data.itemFontSize === "lg" ? 22 : data.itemFontSize === "sm" ? 14 : 18;
   const stationColor = /^#[0-9a-f]{6}$/i.test(data.stationColor ?? "") ? data.stationColor : undefined;
 
   const itemsHtml = data.items.map((item) => {
@@ -458,9 +458,9 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
 .item:last-child{border-bottom:none}
 .item-name{font-size:${itemFontSize}px;font-weight:bold;overflow-wrap:anywhere}
 .qty{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin-right:4px}
-.variant{font-size:${style === "compact" ? "12px" : "14px"};font-weight:normal;color:#333}
+.variant{font-size:14px;font-weight:normal;color:#000}
 .toppings{font-size:14px;padding-left:8px;margin-top:1px}
-.modifier{font-size:14px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000;color:#000}
+.modifier{font-size:16px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000;color:#000}
 .note{font-size:16px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000}
 .price{font-size:12px;color:#555;padding-left:24px;margin-top:2px}
 .time{font-size:16px;font-weight:bold}
