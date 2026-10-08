@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 const mock = vi.hoisted(() => ({ resolve: vi.fn(), send: vi.fn(), render: vi.fn() }));
-vi.mock("@/lib/services", () => ({ resolvePrintTemplate: mock.resolve }));
+vi.mock("@/lib/services", () => ({ resolvePrintTemplate: mock.resolve, getResolvedBrand: async () => ({}) }));
 vi.mock("@/lib/print-apply-template", () => ({ applyTemplateToDocData: (data: object) => ({ ...data, documentType: "MẪU CHUNG" }) }));
 vi.mock("@/lib/print-document", () => ({ generateDocumentHtml: mock.render }));
 vi.mock("@/lib/printer/print-job", () => ({ getPrintSettings: () => ({ paperSize: "80mm", openCashDrawer: true }), sendPrintJob: mock.send }));
@@ -9,6 +9,13 @@ import { printFnbBillWithTemplate } from "@/lib/print-fnb-template";
 const data: PreBillData = { branchId: "branch", orderNumber: "DEMO", tableName: "Bàn 5", orderType: "dine_in", createdAt: "2026-10-06T03:00:00Z", storeName: "Quán", customerName: "Khách thử", items: [{ name: "Cà phê", quantity: 2, unitPrice: 25000, toppings: [{ name: "Thạch", quantity: 1, price: 5000 }], modifierLabels: ["Đường: 50%"], note: "Đá riêng" }], subtotal: 60000, discountAmount: 5000, deliveryFee: 0, total: 55000, footer: "Cảm ơn" };
 beforeEach(() => { vi.clearAllMocks(); mock.send.mockResolvedValue({ success: true }); mock.resolve.mockResolvedValue(null); mock.render.mockReturnValue("HTML"); });
 describe("same F&B bill layout before and after payment", () => {
+  it("uses payment and provisional slip titles on the default F&B print windows", () => {
+    expect(buildPreBillHtml(data)).toContain("<div class=\"title\">PHIẾU TẠM TÍNH</div>");
+    const receipt = buildFnbReceiptHtml({ ...data, invoiceCode: "HD1", paymentMethod: "cash", paid: 55000, change: 0 });
+    expect(receipt).toContain("<title>PHIẾU THANH TOÁN HD1</title>");
+    expect(receipt).toContain("<div class=\"title\">PHIẾU THANH TOÁN</div>");
+    expect(receipt).not.toMatch(/HO[ÁA] ĐƠN THANH TOÁN/);
+  });
   for (const paperSize of ["58mm", "80mm"] as const) for (const receiptStyle of ["minimal", "standard", "full"] as const) {
     it(`shares content and CSS at ${paperSize}/${receiptStyle}`, () => {
       const common = { ...data, paperSize, receiptStyle };

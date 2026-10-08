@@ -140,7 +140,7 @@ export async function printFnbBillWithTemplate(
     }
 
     const base: DocumentPrintData = {
-      documentType: "HÓA ĐƠN THANH TOÁN", // mẫu in sẽ đè tiêu đề
+      documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
       documentCode: p.invoiceCode,
       date: p.createdAt ?? new Date().toISOString(),
       branchName: p.branchName,

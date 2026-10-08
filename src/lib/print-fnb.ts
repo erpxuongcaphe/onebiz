@@ -11,6 +11,7 @@ import { EscPosBuilder } from "@/lib/printer/escpos";
 import { getPrintSettings, sendPrintJob } from "@/lib/printer/print-job";
 import type { StoredPrinter } from "@/lib/printer/webusb-printer";
 import { resolveThermalLayout, type ThermalLayoutConfig } from "./thermal-layout";
+import { withFnbReceiptBrand } from "./fnb-receipt-brand";
 
 // ============================================================
 // Types
@@ -207,7 +208,10 @@ export function printPreBill(data: PreBillData): void {
       tableName: data.tableName ?? data.orderNumber, tipAmount: data.tipAmount ?? 0,
       paid: 0, billPhase: "prebill",
     });
-    if (!printed) await sendPrintJob({html:buildPreBillHtml(data),paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Tạm tính ${data.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildPreBillHtml({...data,paperSize})});
+    if (!printed) {
+      const receipt = await withFnbReceiptBrand(data);
+      await sendPrintJob({html:buildPreBillHtml(receipt),paperSize:receipt.paperSize ?? "80mm",role:"cashier",branchId:receipt.branchId,label:`Tạm tính ${receipt.orderNumber}`.slice(0,80),buildHtml:paperSize=>buildPreBillHtml({...receipt,paperSize})});
+    }
   })();
 }
 
@@ -229,7 +233,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
   const tableLabel = data.tableName ?? typeLabel;
   const style = data.receiptStyle ?? "standard";
   const isPreBill = data.billPhase === "prebill";
-  const billTitle = isPreBill ? "PHIẾU TẠM TÍNH" : "HOÁ ĐƠN THANH TOÁN";
+  const billTitle = isPreBill ? "PHIẾU TẠM TÍNH" : "PHIẾU THANH TOÁN";
   const paymentLabel = PAYMENT_METHOD_VN[data.paymentMethod] ?? data.paymentMethod;
 
   // Migration 00070: platform order → tách "Khách trả app" vs "Quán thực thu"
@@ -389,8 +393,10 @@ ${data.footer ? `<div class="footer-text">${data.footer}</div>` : ""}
 
 export function printFnbReceipt(data: FnbReceiptData): void {
   data = {...data, paperSize: data.paperSize ?? (getPrintSettings().paperSize === "58mm" ? "58mm" : "80mm")};
-  const html = buildFnbReceiptHtml(data);
-  void sendPrintJob({html,paperSize:data.paperSize ?? "80mm",role:"cashier",branchId:data.branchId,label:`Bill ${data.invoiceCode}`.slice(0,80),buildHtml:paperSize=>buildFnbReceiptHtml({...data,paperSize}),openCashDrawer:getPrintSettings().openCashDrawer && data.paymentMethod === "cash"});
+  void (async () => {
+    const receipt = await withFnbReceiptBrand(data);
+    await sendPrintJob({html:buildFnbReceiptHtml(receipt),paperSize:receipt.paperSize ?? "80mm",role:"cashier",branchId:receipt.branchId,label:`Bill ${receipt.invoiceCode}`.slice(0,80),buildHtml:paperSize=>buildFnbReceiptHtml({...receipt,paperSize}),openCashDrawer:getPrintSettings().openCashDrawer && receipt.paymentMethod === "cash"});
+  })();
 }
 
 // ============================================================

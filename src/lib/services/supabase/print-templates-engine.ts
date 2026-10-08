@@ -74,6 +74,8 @@ export interface PrintTemplate {
 
 /** Thương hiệu chung đã resolve (tenant ← branch override). */
 export interface ResolvedBrand {
+  /** Display name for the branch's thermal receipt header. */
+  branchName?: string;
   logoUrl?: string;
   businessName?: string;
   taxCode?: string;
@@ -363,6 +365,7 @@ export async function getResolvedBrand(branchId?: string | null): Promise<Resolv
   const rec = await getBranchRecord(branchId);
   if (!rec) return base;
   const merged: ResolvedBrand = { ...base };
+  merged.branchName = rec.override?.businessName || rec.name;
   // Tầng chi nhánh: ĐỊA CHỈ + SĐT + MST thật của chi nhánh đè lên của công ty
   // (in ra đúng địa chỉ + MST đơn vị phụ thuộc của chi nhánh đang in — CEO 25/06).
   if (rec.address) merged.address = rec.address;
