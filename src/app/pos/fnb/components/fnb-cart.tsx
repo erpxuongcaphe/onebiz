@@ -4,6 +4,7 @@
 
 import { useId, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
@@ -109,6 +110,7 @@ interface FnbCartProps {
   onVoidKitchenOrder?: () => void;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
   onTransferTable?: () => void;
+  onMergeTable?: () => void;
   /** Lịch sử đơn — mở modal danh sách hoá đơn hôm nay + reprint. */
   onOrderHistory?: () => void;
   /**
@@ -183,6 +185,7 @@ export function FnbCart({
   onEditLine,
   onVoidKitchenOrder,
   onTransferTable,
+  onMergeTable,
   onOrderHistory,
   onChangeOrderType,
   onApplyCoupon,
@@ -277,44 +280,19 @@ export function FnbCart({
               </span>
             )}
           </div>
-          {/* Kebab actions — chỉ hiện khi đơn đã gửi bếp */}
-          {activeTab?.kitchenOrderId && (
-            <div className="flex items-center gap-1 shrink-0">
-              {activeTab?.orderType === "dine_in" && activeTab.tableId && onTransferTable && (
-                <button
-                  type="button"
-                  onClick={onTransferTable}
-                  className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm"
-                  title="Chuyển bàn"
-                  aria-label="Chuyển bàn"
-                >
-                  <Icon name="swap_horiz" size={16} />
-                </button>
-              )}
-              {onVoidKitchenOrder && (
-                <button
-                  type="button"
-                  onClick={onVoidKitchenOrder}
-                  className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-status-error/10 hover:text-status-error active:bg-status-error/20 transition-colors press-scale-sm"
-                  title="Huỷ đơn bếp"
-                  aria-label="Huỷ đơn bếp"
-                >
-                  <Icon name="cancel" size={16} />
-                </button>
-              )}
-            </div>
-          )}
-          {!activeTab?.kitchenOrderId && onOrderHistory && (
-            <button
-              type="button"
-              onClick={onOrderHistory}
-              className="h-11 w-11 md:h-9 md:w-9 rounded-full flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high active:bg-surface-container transition-colors press-scale-sm shrink-0"
-              title="Lịch sử đơn — in lại hoá đơn"
-              aria-label="Lịch sử đơn"
-            >
-              <Icon name="receipt_long" size={16} />
-            </button>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger className="min-h-11 rounded-md border border-primary/25 px-2 text-sm font-semibold text-primary hover:bg-primary/5 shrink-0" aria-label="Thao tác đơn">
+              Thao tác <Icon name="expand_more" size={16} className="inline-block" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-48">
+              {onTransferTable && activeTab?.orderType === "dine_in" && activeTab.tableId && activeTab.kitchenOrderId && <DropdownMenuItem onClick={onTransferTable}><Icon name="swap_horiz" size={18} /> Chuyển bill sang bàn khác</DropdownMenuItem>}
+              {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp bill vào bàn khác</DropdownMenuItem>}
+              {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
+              {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
+              {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
+              {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> Huỷ đơn bếp</DropdownMenuItem></>}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Customer bar — Stitch style */}
@@ -904,31 +882,6 @@ export function FnbCart({
             </div>
           );
         })()}
-
-        {!isEmpty && (
-          <div className={cn("flex gap-2", !moPhanPhu && "hidden")}>
-            {onPrintPreBill && (
-              <Button
-                variant="outline"
-                onClick={onPrintPreBill}
-                className="flex-1 min-h-11 xl:min-h-8 xl:h-8 text-xs rounded-lg border-outline-variant/40"
-              >
-                <Icon name="description" size={14} className="mr-1" />
-                Tạm tính
-              </Button>
-            )}
-            {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && (
-              <Button
-                variant="outline"
-                onClick={onSplitBill}
-                className="flex-1 min-h-11 xl:min-h-8 xl:h-8 text-xs rounded-lg border-outline-variant/40"
-              >
-                <Icon name="content_cut" size={14} className="mr-1" />
-                Tách bill
-              </Button>
-            )}
-          </div>
-        )}
 
         {/* Primary actions row — Stitch spec: 40/60 split */}
         <div className="sticky bottom-0 flex gap-2 bg-white dark:bg-card pt-1">

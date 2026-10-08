@@ -285,6 +285,8 @@ function FnbPosPageInner() {
     tableId?: string | null;
   } | null>(null);
   const [transferTableOpen, setTransferTableOpen] = useState(false);
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const transferLock = useRef(false);
   const [selectDineInTabId, setSelectDineInTabId] = useState<string | null>(null);
   const [mergeSourceTable, setMergeSourceTable] = useState<RestaurantTable | null>(null);
   const [mergeTargetTableId, setMergeTargetTableId] = useState("");
@@ -2248,16 +2250,16 @@ function FnbPosPageInner() {
   }, [pos]);
 
   const handleOpenSharedOrder = useCallback(async (summary: FnbOpenOrder) => {
-    if (openingSharedOrderLock.current) return;
+    if (openingSharedOrderLock.current) return false;
     openingSharedOrderLock.current = true;
     const selection = ++orderSelectionGeneration.current;
     setOpeningSharedOrder(true);
     try {
       const order = await getKitchenOrderById(summary.id);
-      if (liveBranchRef.current !== branchId || selection !== orderSelectionGeneration.current) return;
+      if (liveBranchRef.current !== branchId || selection !== orderSelectionGeneration.current) return false;
       if (order.branchId !== branchId || !isUnpaidFnbOrder(order)) {
         toast({ title: "Đơn đã thay đổi", description: "Đơn đã thanh toán, gộp hoặc không thuộc chi nhánh này. Danh sách đang được cập nhật.", variant: "warning" });
-        void openOrders.refresh(); return;
+        void openOrders.refresh(); return false;
       }
       const existing = pos.tabs.find((tab) => tab.kitchenOrderId === order.id);
       const tabId = existing?.id ?? pos.createTab(fnbOpenOrderLabel(order), order.orderType, order.tableId ?? undefined);
@@ -2266,7 +2268,8 @@ function FnbPosPageInner() {
       pos.loadSentLinesIntoTab(tabId, (order.items ?? []).map(kitchenItemToCartLine));
       pos.updateTabMeta(tabId, { kitchenOrderId: order.id, tableId: order.tableId ?? undefined, label: fnbOpenOrderLabel(order), orderType: order.orderType, orderNote: order.note ?? undefined, deliveryPlatform: order.deliveryPlatform ?? undefined, deliveryFee: order.deliveryFee, platformCommissionPercent: order.platformCommissionPercent, deliveryStaffId: order.deliveryStaffId ?? undefined, deliveryDistanceTier: order.deliveryDistanceTier ?? undefined, persistedOrderDiscountAmount: order.discountAmount, ...customerContextFromOrder(order) });
       setShowFloorPlan(false); setMobileCartOpen(true); setOpenOrdersDialog(false);
-    } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); }
+      return true;
+    } catch (error) { toast({ title: "Chưa mở được đơn", description: error instanceof Error ? error.message : "Kiểm tra kết nối rồi thử lại.", variant: "error" }); return false; }
     finally { openingSharedOrderLock.current = false; setOpeningSharedOrder(false); }
   }, [branchId, toast, openOrders, pos]);
 
@@ -3037,9 +3040,10 @@ function FnbPosPageInner() {
   // ── Transfer table (chuyển bàn) ──
   const handleTransferTable = useCallback(
     async (toTableId: string) => {
+      if (transferLock.current) return;
       const tab = pos.activeTab;
-      if (!tab?.kitchenOrderId || !tab.tableId || !canTransferFnbTab(tab, tables)) {
-        toast({ title: "Không thể chuyển riêng bill này", description: "Bàn phải đang thuộc đơn được chọn. Vui lòng chọn đơn chính tại sơ đồ bàn.", variant: "warning" });
+      if (!canTransferTables || !tab?.kitchenOrderId || !tab.tableId || !canTransferFnbTab(tab, tables)) {
+        toast({ title: "Không thể chuyển riêng bill này", description: "Tải lại đơn và kiểm tra quyền chuyển bàn.", variant: "warning" });
         return;
       }
       if (tab.tableId === toTableId) {
@@ -3055,6 +3059,8 @@ function FnbPosPageInner() {
         });
         return;
       }
+      transferLock.current = true;
+      setTransferSubmitting(true);
       try {
         await transferTableService(tab.kitchenOrderId, tab.tableId, toTableId);
         const newTable = tables.find((t) => t.id === toTableId);
@@ -3069,6 +3075,7 @@ function FnbPosPageInner() {
           variant: "success",
         });
         setTransferTableOpen(false);
+        void openOrders.refresh();
         if (branchId) getTablesByBranch(branchId).then(setTables).catch((err) => console.error("[FnB] refresh tables failed:", err));
       } catch (err) {
         hapticError();
@@ -3077,9 +3084,12 @@ function FnbPosPageInner() {
           description: err instanceof Error ? err.message : "Lỗi không xác định",
           variant: "error",
         });
+      } finally {
+        transferLock.current = false;
+        setTransferSubmitting(false);
       }
     },
-    [pos, tables, branchId, networkStatus.isOnline, toast]
+    [pos, tables, branchId, networkStatus.isOnline, toast, canTransferTables, openOrders]
   );
 
   // ── Merge orders (gộp đơn) ──
@@ -3105,7 +3115,7 @@ function FnbPosPageInner() {
 
     const source = tables.find((table) => table.id === mergeSourceTable?.id);
     const target = tables.find((table) => table.id === mergeTargetTableId);
-    if (!source?.currentOrderId || !target?.currentOrderId || source.id === target.id) {
+    if (!source?.currentOrderId || source.currentOrderId !== mergeSourceTable?.currentOrderId || !target?.currentOrderId || source.id === target.id) {
       toast({
         title: "Bàn hoặc đơn vừa thay đổi",
         description: "Vui lòng tải lại sơ đồ bàn rồi chọn lại.",
@@ -3702,8 +3712,8 @@ function FnbPosPageInner() {
                 onTransferTable={
                   canTransferTables
                     ? (table) => {
-                        handleTableSelect(table);
-                        setTransferTableOpen(true);
+                        const order = openOrders.orders.find(entry => entry.id === table.currentOrderId);
+                        if (order) void handleOpenSharedOrder(order).then(opened => { if (opened) setTransferTableOpen(true); });
                       }
                     : undefined
                 }
@@ -3811,7 +3821,8 @@ function FnbPosPageInner() {
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
           onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
-          onTransferTable={canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
+          onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
+          onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
           onOrderHistory={() => setOrderHistoryOpen(true)}
           onApplyCoupon={handleApplyCoupon}
           onRemoveCoupon={handleRemoveCoupon}
@@ -4022,7 +4033,8 @@ function FnbPosPageInner() {
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
               onVoidKitchenOrder={() => setVoidConfirmOpen(true)}
-              onTransferTable={canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
+              onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
+          onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
               onOrderHistory={() => setOrderHistoryOpen(true)}
               onApplyCoupon={handleApplyCoupon}
               onRemoveCoupon={handleRemoveCoupon}
@@ -4287,7 +4299,7 @@ function FnbPosPageInner() {
       </Dialog>
 
       {/* Transfer table dialog */}
-      <Dialog open={transferTableOpen} onOpenChange={setTransferTableOpen}>
+      <Dialog open={transferTableOpen} onOpenChange={open => { if (!transferSubmitting) setTransferTableOpen(open); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -4296,7 +4308,7 @@ function FnbPosPageInner() {
           </DialogHeader>
           <div className="py-2">
             <p className="text-xs text-muted-foreground mb-3">
-              Chọn bàn trống để chuyển đơn <b>{pos.activeTab?.label}</b> sang.
+              Chuyển riêng bill <b>{openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label}</b> từ <b>{pos.activeTab?.label}</b> sang bàn trống. Bill khác vẫn giữ nguyên bàn.
             </p>
             <div className="grid grid-cols-4 gap-2 max-h-[320px] overflow-y-auto">
               {tables
@@ -4305,6 +4317,7 @@ function FnbPosPageInner() {
                   <button
                     key={t.id}
                     type="button"
+                    disabled={transferSubmitting}
                     onClick={() => handleTransferTable(t.id)}
                     className="h-14 rounded-lg border border-status-success/40 bg-status-success/5 text-status-success font-semibold hover:bg-status-success/10 press-scale-sm transition-colors flex flex-col items-center justify-center"
                   >
@@ -4341,8 +4354,8 @@ function FnbPosPageInner() {
           </DialogHeader>
           <div className="space-y-3 py-2">
             <p className="text-xs text-muted-foreground">
-              Chọn bàn đích. Toàn bộ món của <b>{mergeSourceTable ? getTableLabel(mergeSourceTable) : "Bàn"}</b>{" "}
-              sẽ chuyển vào đơn của bàn đích.
+Chọn bàn đích. Món của bill <b>{openOrders.orders.find(order => order.id === mergeSourceTable?.currentOrderId)?.orderNumber}</b> tại <b>{mergeSourceTable ? getTableLabel(mergeSourceTable) : "Bàn"}</b>{" "}
+              sẽ gộp vào bill chính của bàn đích.
             </p>
             <div className="grid max-h-[320px] grid-cols-3 gap-2 overflow-y-auto sm:grid-cols-4">
               {tables
