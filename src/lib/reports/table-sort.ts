@@ -3,6 +3,12 @@ const vietnameseCollator = new Intl.Collator("vi", {
   sensitivity: "base",
 });
 
+export function sortedReportView<T>(
+  rows: T[], sort: { id: string; direction: "asc" | "desc" } | null,
+): T[] {
+  return sort ? sortReportRows(rows, row => row[sort.id as keyof T], sort.direction) : rows;
+}
+
 function compareValues(left: unknown, right: unknown): number {
   const leftEmpty = left === null || left === undefined || left === "";
   const rightEmpty = right === null || right === undefined || right === "";

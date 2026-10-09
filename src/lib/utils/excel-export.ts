@@ -164,7 +164,7 @@ export interface ExcelSheet {
    * Khi true: tạo 3 cột "Người lập / Kế toán trưởng / Giám đốc" cuối sheet.
    */
   withSignature?: boolean;
-  /** Filter only the rectangular data range, excluding titles and totals. */
+  /** Default on for rectangular data; excludes titles and totals. Set false for fixed layouts. */
   autoFilter?: boolean;
 }
 
@@ -292,7 +292,7 @@ function buildWorksheet(
   }
 
   // ───── Footer total ─────
-  if (sheet.autoFilter && sheet.rows.length > 0 && !Object.keys(sheet.sections ?? {}).length) {
+  if (sheet.autoFilter !== false && sheet.rows.length > 0 && !Object.keys(sheet.sections ?? {}).length) {
     ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: columnHeaderRow, c: 0 }, e: { r: row - 1, c: totalCols - 1 } }) };
   }
   if (sheet.footer) {
@@ -680,6 +680,7 @@ export function buildInfoSheet(opts: InfoSheetOptions): ExcelSheet {
 
   return {
     name: "Thông tin",
+    autoFilter: false,
     titleRows: [opts.title],
     columns: [
       { label: "Thông tin", key: "label", width: 22 },
@@ -713,6 +714,7 @@ export function buildMetricSummarySheet(
 ): ExcelSheet {
   return {
     name: options.name ?? "Tóm tắt",
+    autoFilter: false,
     titleRows:
       options.titleRows ?? [options.title ?? "TÓM TẮT CHỈ TIÊU"],
     columns: [

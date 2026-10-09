@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sortReportRows } from "@/lib/reports/table-sort";
+import { sortReportRows, sortedReportView } from "@/lib/reports/table-sort";
 
 describe("report table ordering", () => {
   const rows = [
@@ -18,5 +18,13 @@ describe("report table ordering", () => {
   it("orders Vietnamese labels naturally and stably", () => {
     expect(sortReportRows(rows, (row) => row.name, "asc").map((row) => row.name))
       .toEqual(["Chưa rõ", "Món 1", "Món 2", "Món 10"]);
+  });
+
+  it("keeps the filtered current-view export in the controlled table order", () => {
+    const filtered = rows.filter(row => row.amount !== null);
+    expect(sortedReportView(filtered, { id: "amount", direction: "asc" }).map(row => row.name))
+      .toEqual(["Món 2", "Món 10", "Món 1"]);
+    expect(sortedReportView(filtered, null)).toBe(filtered);
+    expect(filtered[0]).toBe(rows[0]);
   });
 });

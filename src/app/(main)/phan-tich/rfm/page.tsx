@@ -24,6 +24,7 @@ import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { sortedReportView } from "@/lib/reports/table-sort";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -161,10 +162,10 @@ export default function RfmReportPage() {
   const atRiskCount = segments.find((s) => s.segment === "At-risk")?.count ?? 0;
   const lostCount = segments.find((s) => s.segment === "Lost")?.count ?? 0;
 
-  const filteredRows = useMemo(() => {
-    if (segmentFilter === "all") return rows;
-    return rows.filter((r) => r.segment === segmentFilter);
-  }, [rows, segmentFilter]);
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const filteredRows = useMemo(() => sortedReportView(
+    segmentFilter === "all" ? rows : rows.filter((r) => r.segment === segmentFilter), sort,
+  ), [rows, segmentFilter, sort]);
 
   const columns: DataTableColumn<RfmRow>[] = [
     { label: "Khách hàng", key: "name", width: "200px" },
@@ -234,8 +235,9 @@ export default function RfmReportPage() {
     },
   ];
 
-  const handleExport = useCallback(() => {
-    if (rows.length === 0) {
+  const handleExport = useCallback((mode: "view" | "full") => {
+    const exportRows = mode === "view" ? filteredRows : rows;
+    if (exportRows.length === 0) {
       toast({ title: "Không có dữ liệu để xuất", variant: "warning" });
       return;
     }
@@ -288,7 +290,7 @@ export default function RfmReportPage() {
           { label: "Cách (ngày)", key: "days", width: 12, format: "number" },
           { label: "Phân khúc", key: "segment", width: 14 },
         ],
-        rows: rows.map((r) => ({
+        rows: exportRows.map((r) => ({
           code: r.code,
           name: r.name,
           phone: r.phone ?? "",
@@ -303,13 +305,13 @@ export default function RfmReportPage() {
         })),
         footer: {
           code: "",
-          name: `${rows.length} khách hàng`,
+          name: `${exportRows.length} khách hàng`,
           phone: "",
           r: "",
           f: "",
           m: "",
-          freq: rows.reduce((s, r) => s + r.frequency, 0),
-          money: totalMonetary,
+          freq: exportRows.reduce((s, r) => s + r.frequency, 0),
+          money: exportRows.reduce((s, r) => s + r.monetary, 0),
           last: "",
           days: "",
           segment: "",
@@ -319,15 +321,15 @@ export default function RfmReportPage() {
 
       exportReportToExcel({
         kind: "rfm",
-        mode: "full",
+        mode,
         range,
         tenantName: "OneBiz",
-        sheets: [infoSheet, segmentSheet, detailSheet],
+        sheets: mode === "view" ? [infoSheet, detailSheet] : [infoSheet, segmentSheet, detailSheet],
       });
 
       toast({
         title: "Đã xuất báo cáo phân khúc khách hàng",
-        description: `3 trang tính: Thông tin + Phân khúc + Chi tiết (${rows.length})`,
+        description: `${exportRows.length} khách hàng`,
         variant: "success",
       });
     } catch (err) {
@@ -337,7 +339,7 @@ export default function RfmReportPage() {
         variant: "error",
       });
     }
-  }, [branchLabel, rows, segments, totalMonetary, range, toast]);
+  }, [branchLabel, rows, filteredRows, segments, totalMonetary, range, toast]);
 
   return (
     <div className="p-3 md:p-5 space-y-4">
@@ -350,7 +352,8 @@ export default function RfmReportPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExportFull={handleExport}
+        onExportView={() => handleExport("view")}
+        onExportFull={() => handleExport("full")}
         exportDisabled={loading || rows.length === 0}
       />
 
@@ -477,6 +480,8 @@ export default function RfmReportPage() {
         tablePreferenceKey="report.rfm.customers"
         columns={columns}
         rows={filteredRows}
+        sortState={sort}
+        onSortChange={setSort}
         getRowKey={(r) => r.customerId}
         subtotalLabel={
           loading

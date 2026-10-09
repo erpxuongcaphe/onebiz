@@ -30,6 +30,7 @@ import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber, formatCurrency, formatDate, formatDateInputValue } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { sortedReportView } from "@/lib/reports/table-sort";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -132,11 +133,11 @@ export default function AgingReportPage() {
   }, [rows]);
 
   // ── Filter rows theo bucket ──
-  const filteredRows = useMemo(() => {
-    if (bucketFilter === "all") return rows;
-    if (bucketFilter === "dead") return rows.filter((r) => r.isDeadStock);
-    return rows.filter((r) => r.agingBucket === bucketFilter);
-  }, [rows, bucketFilter]);
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const filteredRows = useMemo(() => sortedReportView(
+    bucketFilter === "all" ? rows : bucketFilter === "dead"
+      ? rows.filter((r) => r.isDeadStock) : rows.filter((r) => r.agingBucket === bucketFilter), sort,
+  ), [rows, bucketFilter, sort]);
 
   // ── Columns table ──
   const columns: DataTableColumn<InventoryAgingRow>[] = [
@@ -219,8 +220,9 @@ export default function AgingReportPage() {
   ];
 
   // ── Excel export ──
-  const handleExport = useCallback(() => {
-    if (rows.length === 0) {
+  const handleExport = useCallback((mode: "view" | "full") => {
+    const exportRows = mode === "view" ? filteredRows : rows;
+    if (exportRows.length === 0) {
       toast({ title: "Không có dữ liệu để xuất", variant: "warning" });
       return;
     }
@@ -278,7 +280,7 @@ export default function AgingReportPage() {
           { label: "Nhóm thời gian", key: "bucket", width: 16 },
           { label: "Hàng chậm bán", key: "dead", width: 12 },
         ],
-        rows: rows.map((r) => ({
+        rows: exportRows.map((r) => ({
           code: r.code,
           name: r.name,
           qty: r.currentQty,
@@ -292,10 +294,10 @@ export default function AgingReportPage() {
         })),
         footer: {
           code: "",
-          name: `${rows.length} SP — TỔNG GIÁ TRỊ`,
-          qty: rows.reduce((s, r) => s + r.currentQty, 0),
+          name: `${exportRows.length} SP — TỔNG GIÁ TRỊ`,
+          qty: "",
           cost: "",
-          value: kpis.totalValue,
+          value: exportRows.reduce((s, r) => s + r.stockValue, 0),
           lastIn: "",
           days: "",
           lastSale: "",
@@ -345,16 +347,16 @@ export default function AgingReportPage() {
 
       exportReportToExcel({
         kind: "aging",
-        mode: "full",
+        mode,
         range: dateRange,
         branchName: branchLabel,
         tenantName: "OneBiz",
-        sheets: [infoSheet, overviewSheet, detailSheet, deadSheet],
+        sheets: mode === "view" ? [infoSheet, detailSheet] : [infoSheet, overviewSheet, detailSheet, deadSheet],
       });
 
       toast({
         title: "Đã xuất báo cáo tuổi tồn kho",
-        description: `4 trang tính: Thông tin + Tổng quan + Chi tiết (${rows.length}) + Hàng chậm bán (${deadRows.length})`,
+        description: `${exportRows.length} mặt hàng`,
         variant: "success",
       });
     } catch (err) {
@@ -364,7 +366,7 @@ export default function AgingReportPage() {
         variant: "error",
       });
     }
-  }, [rows, bucketAgg, kpis, branchLabel, toast]);
+  }, [rows, filteredRows, bucketAgg, kpis, branchLabel, toast]);
 
   // ── Render ──
   return (
@@ -378,7 +380,8 @@ export default function AgingReportPage() {
         onCustomRangeChange={setCustomRange}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
-        onExportFull={handleExport}
+        onExportView={() => handleExport("view")}
+        onExportFull={() => handleExport("full")}
         exportDisabled={loading || rows.length === 0}
         hideDateRange
       />
@@ -504,6 +507,8 @@ export default function AgingReportPage() {
         tablePreferenceKey="report.aging.products"
         columns={columns}
         rows={filteredRows}
+        sortState={sort}
+        onSortChange={setSort}
         getRowKey={(r) => r.productId}
         subtotalLabel={
           loading
