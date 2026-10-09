@@ -1646,7 +1646,7 @@ export default function HangHoaPage() {
       : []),
     {
       accessorKey: "stock",
-      header: "Tồn kho",
+      header: isFnbOutletView ? "Có thể pha" : "Tồn kho",
       size: 150,
       cell: ({ row }) => {
         // Phương án B: SKU có BOM ở chế độ CN → "≈ khả dụng" từ tồn nguyên liệu.
@@ -1657,7 +1657,9 @@ export default function HangHoaPage() {
               <span
                 className={avail.available === 0 ? "text-destructive" : "text-primary"}
                 title={
-                  "Khả dụng tính từ tồn nguyên liệu tại chi nhánh" +
+                  (isFnbOutletView
+                    ? "Ước tính từ tồn nguyên liệu theo BOM"
+                    : "Khả dụng tính từ tồn nguyên liệu tại chi nhánh") +
                   (avail.bottleneck ? ` — giới hạn bởi: ${avail.bottleneck}` : "")
                 }
               >
