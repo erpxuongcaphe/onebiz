@@ -38,6 +38,7 @@ import { getAllProductLots } from "@/lib/services";
 import { useBranchFilter } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
+import { lotDaysToExpiry } from "@/lib/reports/lot-expiry";
 
 interface LotRow {
   id: string;
@@ -84,11 +85,7 @@ type ProductLotRow = Awaited<ReturnType<typeof getAllProductLots>>[number];
 
 function toLotRow(lot: ProductLotRow, now: number): LotRow {
   const expiryDate = lot.expiryDate ?? null;
-  const daysToExpiry = expiryDate
-    ? Math.floor(
-        (new Date(expiryDate).getTime() - now) / (1000 * 60 * 60 * 24),
-      )
-    : null;
+  const daysToExpiry = lotDaysToExpiry(expiryDate, now);
 
   return {
     id: lot.id,
