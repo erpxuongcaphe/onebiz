@@ -3555,7 +3555,7 @@ function FnbPosPageInner() {
           onSearch={() => setSearchModalOpen(true)}
           onMenuClick={() => setSidenavOpen(true)}
         />
-        <FnbSidenavDrawer onManagePin={() => setMyPinOpen(true)}
+        <FnbSidenavDrawer
           open={sidenavOpen}
           onClose={() => setSidenavOpen(false)}
         />
@@ -3624,6 +3624,7 @@ function FnbPosPageInner() {
 
       {/* Sprint A: Sidenav drawer (☰ → slide-in). */}
       <FnbSidenavDrawer
+        onManagePin={() => setMyPinOpen(true)}
         open={sidenavOpen}
         onClose={() => setSidenavOpen(false)}
         onCloseShift={
