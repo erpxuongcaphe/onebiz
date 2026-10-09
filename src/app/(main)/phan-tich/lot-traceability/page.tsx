@@ -39,6 +39,7 @@ import { useBranchFilter } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
 import { lotDaysToExpiry } from "@/lib/reports/lot-expiry";
+import { sortReportRows } from "@/lib/reports/table-sort";
 
 interface LotRow {
   id: string;
@@ -125,6 +126,7 @@ export default function LotTraceabilityPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [allLots, setLots] = useState<LotRow[]>([]);
   const [loadError, setLoadError] = useState(false);
   const requestId = useRef(0);
@@ -163,13 +165,14 @@ export default function LotTraceabilityPage() {
 
   const lots = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("vi");
-    return allLots.filter((lot) =>
+    const filtered = allLots.filter((lot) =>
       (statusFilter === "all" || lot.status === statusFilter) &&
       (!term || [lot.lotCode, lot.productCode, lot.productName].some(
         (value) => value.toLocaleLowerCase("vi").includes(term),
       )),
     );
-  }, [allLots, search, statusFilter]);
+    return sort ? sortReportRows(filtered, (lot) => lot[sort.id as keyof LotRow], sort.direction) : filtered;
+  }, [allLots, search, statusFilter, sort]);
   const { totalLots, activeLots, expiringLots: expiringCount, productCount } = summarizeLots(lots);
 
   const handleExport = useCallback(async (mode: "view" | "full") => {
@@ -232,6 +235,7 @@ export default function LotTraceabilityPage() {
         {
           name: "Chi tiết lô",
           titleRows,
+          autoFilter: true,
           tablePreferenceKey: "report.lot-traceability.lots",
           columns: [
             { label: "Mã lô", key: "lotCode", width: 14 },
@@ -460,6 +464,8 @@ export default function LotTraceabilityPage() {
               columns={columns}
               tablePreferenceKey="report.lot-traceability.lots"
               rows={lots}
+              sortState={sort}
+              onSortChange={setSort}
               getRowKey={(r) => r.id}
               subtotalLabel={`SL lô: ${lots.length}`}
               emptyState="Không có lô phù hợp"
