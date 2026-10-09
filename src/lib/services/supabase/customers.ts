@@ -156,7 +156,10 @@ export async function getCustomers(
     .eq("tenant_id", tenantId);
 
   // Ẩn khách hàng nội bộ (is_internal=true) khỏi list thường.
-  if (!params.filters?.includeInternal) {
+  if (params.filters?.internalOnly) {
+    query = query.eq("is_internal", true);
+    if (typeof params.filters.excludeBranch === "string") query = query.neq("branch_id", params.filters.excludeBranch);
+  } else if (!params.filters?.includeInternal) {
     query = query.or("is_internal.is.null,is_internal.eq.false");
   }
 
@@ -889,6 +892,8 @@ function mapCustomer(row: any, returnsTotal = 0): Customer {
     id: row.id,
     code: row.code,
     name: row.name,
+    isInternal: row.is_internal === true,
+    branchId: row.branch_id ?? undefined,
     phone: row.phone ?? "",
     email: row.email ?? undefined,
     address: row.address ?? undefined,

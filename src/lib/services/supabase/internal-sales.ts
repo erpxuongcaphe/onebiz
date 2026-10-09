@@ -46,6 +46,28 @@ export interface InternalSaleResult {
   total: number;
 }
 
+/** POS checkout keeps source/destination documents and stock atomic. */
+export async function checkoutInternalPos(input: {
+  branchId: string; customerId: string; items: Array<{
+    productId: string; productCode: string; productName: string; unit: string;
+    quantity: number; unitPrice: number; vatRate: number; variantId?: string;
+  }>;
+  paymentMethod: "cash" | "transfer" | "debt"; expectedTotal: number;
+  sessionId: string; draftId: string | null; revision: number | null;
+  shiftId: string; note: string;
+}): Promise<{ invoiceId: string; code: string; total: number }> {
+  const { data, error } = await (getClient().rpc as any)("checkout_internal_pos_atomic", {
+    p_from_branch_id: input.branchId, p_customer_id: input.customerId,
+    p_items: input.items, p_payment_method: input.paymentMethod,
+    p_expected_total: input.expectedTotal, p_client_session_id: input.sessionId,
+    p_draft_id: input.draftId, p_expected_revision: input.revision,
+    p_shift_id: input.shiftId, p_note: input.note || null,
+  });
+  if (error) handleError(error, "checkoutInternalPos");
+  if (!data?.invoice_id) throw new Error("Máy chủ chưa xác nhận đơn nội bộ");
+  return { invoiceId: data.invoice_id, code: data.code, total: Number(data.total) };
+}
+
 export interface InternalSalesListParams {
   page?: number;
   pageSize?: number;

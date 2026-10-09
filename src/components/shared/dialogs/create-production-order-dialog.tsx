@@ -35,6 +35,7 @@ import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
+import { filterProductionOutputBoms } from "@/lib/production-output-scope";
 
 interface CreateProductionOrderDialogProps {
   open: boolean;
@@ -92,6 +93,7 @@ export function CreateProductionOrderDialog({
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const selectedBranchMode = branches.find((branch) => branch.id === branchId)?.cascadeMode;
 
   // Load options
   useEffect(() => {
@@ -147,10 +149,14 @@ export function CreateProductionOrderDialog({
       setBomId("");
       return;
     }
+    let cancelled = false;
+    setBomsOfProduct([]);
+    setBomId("");
     (async () => {
       try {
         const list = await getBOMsByProduct(productId);
-        const actives = list.filter((b) => b.isActive !== false);
+        if (cancelled) return;
+        const actives = filterProductionOutputBoms(list, branchId, selectedBranchMode);
         setBomsOfProduct(actives);
         if (actives.length === 1) {
           setBomId(actives[0].id);
@@ -167,17 +173,19 @@ export function CreateProductionOrderDialog({
           setBomId("");
         }
       } catch (err) {
+        if (cancelled) return;
         console.error("[CreateProductionOrder] load BOMs by product", err);
         setBomsOfProduct([]);
         setBomId("");
       }
     })();
-  }, [productId, toast]);
+    return () => { cancelled = true; };
+  }, [productId, branchId, selectedBranchMode, toast]);
 
   // Danh sách SP unique từ boms list (sản phẩm có ít nhất 1 BOM active).
   const productOptions = useMemo(() => {
     const map = new Map<string, { id: string; code: string; name: string }>();
-    for (const b of boms) {
+    for (const b of filterProductionOutputBoms(boms, branchId, selectedBranchMode)) {
       if (!b.productId) continue;
       if (b.isActive === false) continue;
       if (!map.has(b.productId)) {
@@ -191,7 +199,17 @@ export function CreateProductionOrderDialog({
     return Array.from(map.values()).sort((a, b) =>
       (a.code || "").localeCompare(b.code || ""),
     );
-  }, [boms]);
+  }, [boms, branchId, selectedBranchMode]);
+
+  useEffect(() => {
+    if (productId && !productOptions.some((product) => product.id === productId)) {
+      setProductId("");
+      setBomId("");
+      setSelectedBom(null);
+      setMaterials([]);
+      setCheckedMaterialKey("");
+    }
+  }, [productId, productOptions]);
 
   // Filter SP theo search query (CEO 25/05/2026): mã hoặc tên SP
   const filteredProductOptions = useMemo(() => {
@@ -324,6 +342,9 @@ export function CreateProductionOrderDialog({
   function validate(): boolean {
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn sản phẩm cần SX";
+    else if (!productOptions.some((product) => product.id === productId)) {
+      e.productId = "Mặt hàng không phù hợp với chi nhánh sản xuất";
+    }
     if (!bomId) e.bomId = "Sản phẩm chưa có BOM hợp lệ";
     if (!branchId || !branches.some((branch) => branch.id === branchId)) {
       e.branchId = "Chọn chi nhánh";

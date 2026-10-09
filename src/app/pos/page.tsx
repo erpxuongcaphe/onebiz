@@ -52,6 +52,7 @@ import {
 import { useAutoSaveDraft, loadLocalCart } from "./hooks/use-auto-save-draft";
 import { RecoveryDialog } from "./components/recovery-dialog";
 import { getClient } from "@/lib/services/supabase/base";
+import { checkoutInternalPos } from "@/lib/services/supabase/internal-sales";
 import { getPosStockSnapshot } from "@/lib/services/supabase/pos-stock";
 import { findPosStockShortages } from "./lib/stock-freshness";
 import { notifyPosStockChanged } from "./lib/stock-events";
@@ -312,6 +313,14 @@ function PosPageInner() {
     if (!isCartLoadCurrent(token)) return false;
     setClientSessionId(sessionId);
     state.loadDraft(detail);
+    if (detail.customerId) {
+      const customer = await getCustomerById(detail.customerId);
+      if (!isCartLoadCurrent(token)) return false;
+      if (customer) {
+        state.setCustomer(customer, "load-draft");
+        if (customer.isInternal) state.setSellingMode("internal");
+      }
+    }
     // 00335 — NGÀY BÁN LÀ HÔM NAY, KHÔNG KẾ THỪA NGÀY CỦA BẢN GHI ĐƯỢC NẠP.
     // Đây là cửa duy nhất nạp nháp / đơn bán con vào tab đang hoạt động (mở
     // nháp, ?draftId=, khôi phục sau sự cố, và "Xử lý đặt hàng" → đơn con).
@@ -835,6 +844,7 @@ function PosPageInner() {
           .then((fresh) => {
             if (cancelled || !fresh) return;
             state.setCustomer(fresh, "refetch-sau-f5");
+            if (fresh.isInternal) state.setSellingMode("internal");
             if ((fresh.currentDebt ?? 0) > 0) {
               toast({
                 title: `⚠️ ${fresh.name} đang nợ ${formatCurrency(fresh.currentDebt)} ₫`,
@@ -1323,6 +1333,7 @@ function PosPageInner() {
   // Auto-apply customer-group discount when customer is selected.
   // Safety: only overwrites orderDiscount if it's currently 0 (user hasn't set one).
   useEffect(() => {
+    if (state.sellingMode === "internal") return;
     const pct = state.customer?.groupDiscountPercent ?? 0;
     if (pct <= 0) return;
     if (state.orderDiscount.value > 0) return; // respect manual override
@@ -1336,7 +1347,7 @@ function PosPageInner() {
       description: `Áp dụng chiết khấu ${pct}% theo nhóm khách`,
       variant: "default",
     });
-  }, [state.customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [state.customer?.id, state.sellingMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ============================================================
   // Sprint 2: Apply price tier theo KH đang chọn
@@ -1513,7 +1524,7 @@ function PosPageInner() {
 
     // User clicked X to clear → respect, don't auto re-apply until cart changes
     // significantly (a new "session"). Heuristic: clearCart resets promotionCleared.
-    if (promotionCleared) return;
+    if (promotionCleared || state.sellingMode === "internal") return;
 
     // P4 GUARD 13/06/2026: KHÔNG đụng vào orderDiscount khi cashier đã đặt
     // thủ công (manual qua OTP) hoặc đã áp coupon. Trước đây effect re-run
@@ -1597,7 +1608,7 @@ function PosPageInner() {
     // có thể overwrite redeem stack (effect 1281 chỉ sync khi appliedRedeem
     // hoặc appliedPromotion đổi). discountSource chỉ ĐỌC trong guard, không
     // cần reactive.
-  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared]);
+  }, [state.lines.length, state.subtotal, state.customer?.id, currentBranch?.id, promotionCleared, state.sellingMode]);
 
   function clearAppliedPromotion() {
     setAppliedPromotion(null);
@@ -2001,6 +2012,58 @@ function PosPageInner() {
         variant: "warning",
         duration: 0,
       });
+      return;
+    }
+    if (state.sellingMode === "internal") {
+      if (!state.customer?.isInternal || !state.customer.branchId || state.customer.branchId === currentBranch?.id) {
+        toast({ title: "Chọn khách nội bộ của chi nhánh nhận hàng", variant: "warning" });
+        setCustomerModalOpen(true);
+        return;
+      }
+      if (state.lineDiscountTotal > 0 || state.orderDiscountAmount > 0 || state.orderVatRate > 0 || state.lines.some(l => l.variantId)) {
+        toast({ title: "Kiểm tra đơn nội bộ", description: "Luồng nội bộ hiện dùng giá bán theo đơn vị sản phẩm và VAT từng dòng. Chưa thể áp giảm giá cấp đơn hoặc biến thể chưa có ánh xạ tồn kho.", variant: "warning" });
+        return;
+      }
+      if (state.paymentMethod === "card" || state.paymentMethod === "mixed" || (state.paid > 0 && state.paid < state.total)) {
+        toast({ title: "Thanh toán nội bộ", description: "Chọn tiền mặt / chuyển khoản đủ tiền, hoặc để 0 để ghi công nợ nội bộ.", variant: "warning" });
+        return;
+      }
+      submitLockRef.current = true;
+      setSubmitting("complete");
+      try {
+        const result = await checkoutInternalPos({
+          branchId: currentBranch!.id, customerId: state.customer.id,
+          items: state.lines, paymentMethod: state.paid === 0 ? "debt" : state.paymentMethod,
+          expectedTotal: state.total, sessionId: clientSessionId,
+          draftId: state.loadedDraftId, revision: state.loadedDraftRevision ?? null,
+          shiftId: checkoutShift.id, note: state.note,
+        });
+        notifyPosStockChanged(currentBranch!.id);
+        notifyPosStockChanged(state.customer.branchId);
+        state.clearCart();
+        state.setSellingMode("internal");
+        setClientSessionId(nextClientSessionId());
+        setMobileCartOpen(false);
+        toast({ title: `Đã bán nội bộ ${result.code}`, description: "Đã ghi xuất kho nơi bán và nhập kho nơi nhận cùng một giao dịch.", variant: "success" });
+        if (autoPrint) {
+          try {
+            const [invoice, items, template] = await Promise.all([
+              getInvoiceById(result.invoiceId), getInvoiceItems(result.invoiceId),
+              resolvePrintTemplate("retail", "sale_invoice", currentBranch!.id),
+            ]);
+            if (!invoice || !template) {
+              toast({ title: "Đơn đã lưu, chưa in phiếu", description: "Mở chứng từ bán nội bộ để in lại; chưa tìm thấy mẫu in hoặc dữ liệu phiếu.", variant: "warning" });
+            } else {
+              const doc = buildInvoicePrintData(invoice, businessInfoRef.current ?? undefined, toPrintLines(items));
+              printDocument(applyTemplateToDocData(doc, template), { paperSize: template.paperSize });
+            }
+          } catch {
+            toast({ title: "Đơn đã lưu, chưa in phiếu", description: "Có thể in lại từ chứng từ bán nội bộ. Không cần tạo lại đơn.", variant: "warning" });
+          }
+        }
+      } catch (error) {
+        toast({ title: "Chưa hoàn tất bán nội bộ", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" });
+      } finally { submitLockRef.current = false; setSubmitting(null); }
       return;
     }
     // CEO 29/05/2026: CHO PHÉP bán đơn 0đ (hàng mẫu, nội bộ, KM/giảm 100%)
@@ -3421,6 +3484,10 @@ function PosPageInner() {
           </div>
 
           {/* ── Delivery form (Bán giao hàng mode, moved from items zone) ── */}
+          {state.sellingMode === "internal" && <div className="border-t border-blue-200 bg-blue-50 px-3 py-2 text-sm">
+            <div className="font-semibold text-blue-800">Bán nội bộ · {state.customer?.isInternal ? state.customer.name : "Chọn chi nhánh nhận hàng"}</div>
+            <p className="mt-1 text-xs text-slate-600">Xuất kho chi nhánh hiện tại, nhập kho bên nhận. Để tiền khách đưa bằng 0 nếu ghi công nợ.</p>
+          </div>}
           {state.sellingMode === "delivery" && (
             <DeliveryForm
               value={state.deliveryInfo}
@@ -3917,32 +3984,40 @@ function PosPageInner() {
 
       {/* ═══════════ SELLING MODE TABS (bottom bar) ═══════════ */}
       <div className="h-8 bg-white border-t border-border flex items-stretch px-3 gap-0 shrink-0">
+        {hasPermission("inventory.internal_export") && <SellingModeTab
+          icon={<Icon name="domain" size={14} />} label="Bán nội bộ"
+          active={state.sellingMode === "internal"}
+          onClick={() => { state.setSellingMode("internal"); if (!state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
+        />}
         <SellingModeTab
           icon={<Icon name="bolt" size={14} />}
           label="Bán nhanh"
           active={state.sellingMode === "fast"}
-          onClick={() => state.setSellingMode("fast")}
+          onClick={() => { state.setSellingMode("fast"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
         <SellingModeTab
           icon={<Icon name="schedule" size={14} />}
           label="Bán thường"
           active={state.sellingMode === "normal"}
-          onClick={() => state.setSellingMode("normal")}
+          onClick={() => { state.setSellingMode("normal"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
         <SellingModeTab
           icon={<Icon name="local_shipping" size={14} />}
           label="Bán giao hàng"
           active={state.sellingMode === "delivery"}
-          onClick={() => state.setSellingMode("delivery")}
+          onClick={() => { state.setSellingMode("delivery"); if (state.customer?.isInternal) state.setCustomer(null, "user-pick"); }}
         />
       </div>
 
       {/* ═══════════ MODALS ═══════════ */}
       <CustomerPicker
+        internalOnly={state.sellingMode === "internal"}
+        currentBranchId={currentBranch?.id}
         open={customerModalOpen}
         onClose={() => setCustomerModalOpen(false)}
         onSelect={(customer) => {
           state.setCustomer(customer, "user-pick");
+          if (customer?.isInternal) state.setSellingMode("internal");
           // R2: Cảnh báo nợ cũ — KH có currentDebt > 0 → toast warning
           // ngay khi chọn để cashier biết trước khi cộng thêm đơn mới.
           if (customer && customer.currentDebt > 0) {
