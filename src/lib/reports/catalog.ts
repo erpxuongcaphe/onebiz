@@ -173,6 +173,17 @@ const PROFIT_PERMISSIONS = [
 
 export const REPORT_CATALOG: ReportCatalogItem[] = [
   {
+    href: "/phan-tich/sku-chi-tiet",
+    title: "Chi tiết bán hàng và lãi gộp SKU",
+    shortTitle: "Chi tiết SKU",
+    description: "Số lượng bán, trả, doanh thu thuần và giá vốn lịch sử theo tất cả hoặc từng khách hàng.",
+    category: "sales",
+    icon: "table_rows",
+    keywords: ["sku", "sản phẩm", "khách hàng", "giá vốn", "lãi gộp"],
+    permissions: [PERMISSIONS.REPORTS_ANALYTICS, PERMISSIONS.REPORTS_VIEW_DETAIL],
+    permissionMode: "all",
+  },
+  {
     href: "/phan-tich",
     title: "Tổng quan kinh doanh",
     shortTitle: "Tổng quan",

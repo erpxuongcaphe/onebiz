@@ -75,6 +75,7 @@ export type ReportKind =
   | "platform-commission"
   | "khach-hang"
   | "khach-san-pham"
+  | "sku-chi-tiet"
   | "customer-cohort"
   | "rfm"
   | "xuat-nhap-ton"

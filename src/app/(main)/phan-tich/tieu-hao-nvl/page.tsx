@@ -1,218 +1,93 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ReportPageHeader, ReportTableFrame } from "@/components/shared/report";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ReportPageHeader, ReportDataTable, type DataTableColumn } from "@/components/shared/report";
 import { SummaryCard } from "@/components/shared/summary-card";
+import { Input } from "@/components/ui/input";
 import { Icon } from "@/components/ui/icon";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useBranchFilter, useToast } from "@/lib/contexts";
-import { formatCurrency, formatNumber } from "@/lib/format";
+import { formatCurrency, formatStockQuantity } from "@/lib/format";
 import { useReportState } from "@/lib/hooks/use-report-state";
-import {
-  getNvlConsumptionByBranch,
-  type NvlConsumptionRow,
-} from "@/lib/services";
-import {
-  buildReportTitleRows,
-  exportReportToExcel,
-  type ExcelSheet,
-} from "@/lib/utils/excel-export";
+import { getNvlConsumptionByBranch, type NvlConsumptionRow } from "@/lib/services";
+import { materialConsumptionView, materialConsumptionTotals, type MaterialConsumptionViewRow } from "@/lib/reports/material-consumption-view";
+import { buildReportTitleRows, exportReportToExcel } from "@/lib/utils/excel-export";
+
+const TABLE_KEY = "report.material-consumption.rows";
+const money = (value: number | null) => value === null ? "Chưa đủ giá vốn" : formatCurrency(value);
 
 export default function TieuHaoNvlPage() {
   const { toast } = useToast();
   const { activeBranchId, branchLabel, isReady } = useBranchFilter();
-  const { preset, range, setPreset, setCustomRange } = useReportState({
-    defaultPreset: "thisMonth",
-    defaultViewMode: "table",
-    forceTable: true,
-  });
+  const { preset, range, setPreset, setCustomRange } = useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table", forceTable: true });
   const [rows, setRows] = useState<NvlConsumptionRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [unit, setUnit] = useState("");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" }>({ id: "materialCode", direction: "asc" });
   const requestIdRef = useRef(0);
-
-  const fetchData = useCallback(async () => {
-    if (!isReady) return;
-    const requestId = ++requestIdRef.current;
-    setLoading(true);
-    try {
-      const data = await getNvlConsumptionByBranch({
-        fromDate: range.from,
-        toDate: range.to,
-        branchId: activeBranchId,
-      });
-      if (requestId !== requestIdRef.current) return;
-      setRows(data);
-    } catch (err) {
-      if (requestId !== requestIdRef.current) return;
-      setRows([]);
-      toast({
-        variant: "error",
-        title: "Không tải được báo cáo",
-        description: err instanceof Error ? err.message : "Lỗi không xác định",
-      });
-    } finally {
-      if (requestId === requestIdRef.current) setLoading(false);
-    }
-  }, [activeBranchId, isReady, range.from, range.to, toast]);
-
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
-  const totalCost = rows.reduce((sum, row) => sum + row.totalCost, 0);
-  const movementCount = rows.reduce((sum, row) => sum + row.movementCount, 0);
-  const uniqueBranches = new Set(rows.map((row) => row.branchId)).size;
-  const uniqueMaterials = new Set(rows.map((row) => row.materialId)).size;
-
-  const detailSheet = useCallback((): ExcelSheet => ({
-    name: "Chi tiết tiêu hao",
-    titleRows: buildReportTitleRows({
-      title: "BÁO CÁO TIÊU HAO NGUYÊN VẬT LIỆU",
-      range,
-      branchName: branchLabel,
-    }),
-    columns: [
-      { label: "Chi nhánh", key: "branchName", width: 24 },
-      { label: "Mã NVL", key: "materialCode", width: 14 },
-      { label: "Tên NVL", key: "materialName", width: 30 },
-      { label: "Số lượng", key: "totalQty", width: 14, format: "number" },
-      { label: "ĐVT", key: "unit", width: 10 },
-      { label: "Số lượt", key: "movementCount", width: 12, format: "number" },
-      { label: "Thành tiền", key: "totalCost", width: 18, format: "currency" },
-    ],
-    rows: rows.map((row) => ({
-      branchName: row.branchName,
-      materialCode: row.materialCode,
-      materialName: row.materialName,
-      totalQty: row.totalQty,
-      unit: row.unit,
-      movementCount: row.movementCount,
-      totalCost: row.totalCost,
-    })),
-    footer: {
-      branchName: "TỔNG",
-      materialCode: "",
-      materialName: `${uniqueMaterials} nguyên vật liệu`,
-      totalQty: "",
-      unit: "",
-      movementCount,
-      totalCost,
-    },
-  }), [branchLabel, movementCount, range, rows, totalCost, uniqueMaterials]);
-
-  const handleExport = useCallback(async (mode: "view" | "full") => {
+    const requestId = ++requestIdRef.current;
+    let cancelled = false;
+    if (!isReady) return;
+    setLoading(true);
+    getNvlConsumptionByBranch({ fromDate: range.from, toDate: range.to, branchId: activeBranchId })
+      .then(data => { if (cancelled || requestId !== requestIdRef.current) return; setRows(data); })
+      .catch(error => { if (cancelled || requestId !== requestIdRef.current) return; setRows([]); toast({ variant: "error", title: "Không tải được báo cáo", description: error instanceof Error ? error.message : "Vui lòng thử lại" }); })
+      .finally(() => { if (cancelled || requestId !== requestIdRef.current) return; setLoading(false); });
+    return () => { cancelled = true; };
+  }, [isReady, range.from, range.to, activeBranchId, toast]);
+  const visible = useMemo(() => materialConsumptionView(rows, search, unit, sort), [rows, search, unit, sort]);
+  const totals = useMemo(() => materialConsumptionTotals(visible), [visible]);
+  const units = useMemo(() => [...new Set(rows.map(row => row.unit))].filter(Boolean).sort((a, b) => a.localeCompare(b, "vi")), [rows]);
+  const columns: DataTableColumn<MaterialConsumptionViewRow>[] = [
+    { key: "materialCode", label: "Mã NVL", sticky: true, hideable: false, width: "150px" },
+    { key: "materialName", label: "Nguyên vật liệu", width: "260px" },
+    { key: "branchName", label: "Chi nhánh", width: "240px" },
+    { key: "unit", label: "ĐVT", width: "90px" },
+    { key: "totalQty", label: "Số lượng tiêu hao", align: "right", width: "160px", cell: row => formatStockQuantity(row.totalQty), subtotalCell: totals.quantity === null ? "Nhiều ĐVT" : formatStockQuantity(totals.quantity) },
+    { key: "averageUnitCost", label: "Đơn giá bình quân", align: "right", width: "180px", cell: row => row.averageUnitCost === null ? "—" : formatStockQuantity(row.averageUnitCost) },
+    { key: "totalCost", label: "Thành tiền", align: "right", width: "180px", cell: row => money(row.totalCost), subtotalCell: money(totals.totalCost) },
+    { key: "movementCount", label: "Số phát sinh", align: "right", width: "130px", subtotalCell: totals.movements },
+  ];
+  async function exportRows(mode: "view" | "full") {
+    if (exporting || loading) return;
+    setExporting(true);
     try {
-      const sheets: ExcelSheet[] = [];
-      if (mode === "full") {
-        sheets.push({
-          name: "Tổng hợp",
-          titleRows: buildReportTitleRows({
-            title: "TỔNG HỢP TIÊU HAO NGUYÊN VẬT LIỆU",
-            range,
-            branchName: branchLabel,
-          }),
-          columns: [
-            { label: "Chỉ tiêu", key: "metric", width: 30 },
-            { label: "Giá trị", key: "value", width: 22, format: "number" },
-          ],
-          rows: [
-            { metric: "Số lượt tiêu hao", value: movementCount },
-            { metric: "Số loại nguyên vật liệu", value: uniqueMaterials },
-            { metric: "Số chi nhánh có phát sinh", value: uniqueBranches },
-            { metric: "Tổng giá trị tiêu hao", value: totalCost },
-          ],
-        });
-      }
-      sheets.push(detailSheet());
-      await exportReportToExcel({
-        kind: "tieu-hao-nvl",
-        mode,
-        range,
-        branchName: branchLabel,
-        reportTitle: "Báo cáo tiêu hao nguyên vật liệu",
-        description: "Tổng hợp các phát sinh xuất kho loại bom_consume theo chi nhánh và nguyên vật liệu.",
-        sheets,
-      });
-      toast({ title: "Đã xuất báo cáo tiêu hao NVL", variant: "success" });
-    } catch (err) {
-      toast({
-        title: "Lỗi xuất Excel",
-        description: err instanceof Error ? err.message : "Không thể tạo file",
-        variant: "error",
-      });
-    }
-  }, [branchLabel, detailSheet, movementCount, range, toast, totalCost, uniqueBranches, uniqueMaterials]);
-
-  return (
-    <div className="flex min-h-full flex-col">
-      <ReportPageHeader
-        title="Tiêu hao NVL theo chi nhánh"
-        subtitle="Nguyên vật liệu được ghi nhận tự động khi bán SKU có công thức BOM"
-        preset={preset}
-        range={range}
-        onPresetChange={setPreset}
-        onCustomRangeChange={setCustomRange}
-        onExportView={() => handleExport("view")}
-        onExportFull={() => handleExport("full")}
-        exportDisabled={loading || rows.length === 0}
-      />
-
-      <div className="space-y-4 p-4 pb-8 lg:p-6">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <SummaryCard icon={<Icon name="receipt_long" size={16} />} label="Số lượt tiêu hao" value={loading ? "—" : formatNumber(movementCount)} />
-          <SummaryCard icon={<Icon name="science" size={16} />} label="Loại NVL" value={loading ? "—" : formatNumber(uniqueMaterials)} />
-          <SummaryCard icon={<Icon name="storefront" size={16} />} label="Chi nhánh" value={loading ? "—" : formatNumber(uniqueBranches)} />
-          <SummaryCard icon={<Icon name="payments" size={16} />} label="Tổng giá trị NVL tiêu hao" value={loading ? "—" : formatCurrency(totalCost)} highlight />
-        </div>
-
-        <ReportTableFrame tablePreferenceKey="report.material-consumption.rows">
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-container-low text-xs uppercase text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 text-left font-semibold">Chi nhánh</th>
-                <th className="px-4 py-3 text-left font-semibold">Mã NVL</th>
-                <th className="px-4 py-3 text-left font-semibold">Tên NVL</th>
-                <th className="px-4 py-3 text-right font-semibold">Số lượng</th>
-                <th className="px-4 py-3 text-left font-semibold">ĐVT</th>
-                <th className="px-4 py-3 text-right font-semibold">Số lượt</th>
-                <th className="px-4 py-3 text-right font-semibold">Thành tiền</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Đang tải...</td></tr>
-              ) : rows.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center text-muted-foreground">
-                    <Icon name="info" size={32} className="mx-auto mb-2 opacity-40" />
-                    <p className="text-sm">Chưa có dữ liệu tiêu hao NVL trong kỳ và phạm vi đã chọn.</p>
-                    <p className="mt-1 text-xs">Dữ liệu được lấy từ các phát sinh kho loại bom_consume.</p>
-                  </td>
-                </tr>
-              ) : rows.map((row) => (
-                <tr key={`${row.branchId}-${row.materialId}`} className="border-t border-border hover:bg-surface-container-low/50">
-                  <td className="px-4 py-2">{row.branchName}</td>
-                  <td className="px-4 py-2 font-medium text-primary">{row.materialCode}</td>
-                  <td className="px-4 py-2">{row.materialName}</td>
-                  <td className="px-4 py-2 text-right font-medium">{formatNumber(row.totalQty)}</td>
-                  <td className="px-4 py-2 text-muted-foreground">{row.unit}</td>
-                  <td className="px-4 py-2 text-right text-muted-foreground">{row.movementCount}</td>
-                  <td className="px-4 py-2 text-right font-medium">{formatCurrency(row.totalCost)}</td>
-                </tr>
-              ))}
-            </tbody>
-            {rows.length > 0 && (
-              <tfoot className="border-t-2 border-border bg-surface-container-low/30">
-                <tr>
-                  <td colSpan={6} className="px-4 py-3 text-right font-semibold">Tổng cộng:</td>
-                  <td className="px-4 py-3 text-right font-semibold text-primary">{formatCurrency(totalCost)}</td>
-                </tr>
-              </tfoot>
-            )}
-          </table>
-          </div>
-        </ReportTableFrame>
+      const titleRows = buildReportTitleRows({ title: "BÁO CÁO TIÊU HAO NGUYÊN VẬT LIỆU", range, branchName: branchLabel });
+      titleRows.push(`Tìm kiếm: ${search || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
+      titleRows.push("Giá vốn chốt tại phát sinh kho; ô trống là thiếu giá lịch sử. Đơn giá bình quân = thành tiền / số lượng.");
+      await exportReportToExcel({ kind: "tieu-hao-nvl", mode, range, branchName: branchLabel, sheets: [{
+        name: "Tiêu hao NVL", titleRows, autoFilter: true,
+        tablePreferenceKey: mode === "view" ? TABLE_KEY : undefined,
+        columns: columns.map(column => ({ key: String(column.key), label: column.label, width: column.key === "materialName" ? 32 : 22,
+          hideable: column.hideable, decimalPlaces: 4,
+          format: ["totalQty", "averageUnitCost", "totalCost", "movementCount"].includes(String(column.key)) ? "number" as const : undefined })),
+        rows: visible.map(row => ({ ...row })),
+        footer: { materialCode: "TỔNG", totalQty: totals.quantity ?? "Nhiều ĐVT", totalCost: totals.totalCost, movementCount: totals.movements },
+      }] });
+      toast({ title: "Đã xuất báo cáo", variant: "success" });
+    } catch (error) { toast({ title: "Không xuất được Excel", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" }); }
+    finally { setExporting(false); }
+  }
+  return <div className="flex min-h-full flex-col">
+    <ReportPageHeader title="Tiêu hao nguyên vật liệu" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+      onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={loading || exporting || !visible.length} />
+    <div className="space-y-4 p-4 lg:p-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <SummaryCard label="Nguyên vật liệu" value={loading ? "—" : String(totals.materials)} />
+        <SummaryCard label="Phát sinh" value={loading ? "—" : String(totals.movements)} />
+        <SummaryCard label="Giá trị đủ giá vốn" value={loading ? "—" : formatCurrency(totals.knownCost)} />
+        <SummaryCard label="Tổng tiêu hao" value={loading ? "—" : money(totals.totalCost)} highlight />
       </div>
+      {totals.missing > 0 && <p role="status" className="border-l-4 border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">{totals.missing} dòng chưa đủ giá vốn lịch sử. Tổng đủ giá vốn được hiển thị riêng, không tính giá thiếu thành 0.</p>}
+      <div className="flex flex-wrap gap-3">
+        <div className="relative min-w-60 flex-1"><Icon name="search" size={18} className="absolute left-3 top-3 text-muted-foreground" /><Input aria-label="Tìm nguyên vật liệu" placeholder="Mã, tên NVL hoặc chi nhánh" value={search} onChange={event => setSearch(event.target.value)} className="pl-9" /></div>
+        <Select value={unit || "all"} onValueChange={value => setUnit(value === "all" ? "" : value ?? "")}><SelectTrigger className="w-44" aria-label="Đơn vị tính"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả ĐVT</SelectItem>{units.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
+      </div>
+      <ReportDataTable columns={columns} rows={loading ? [] : visible} getRowKey={row => `${row.branchId}:${row.materialId}`} tablePreferenceKey={TABLE_KEY}
+        sortState={sort} onSortChange={setSort} subtotalLabel={`${visible.length} dòng`} emptyState={loading ? "Đang tải..." : "Không có phát sinh phù hợp."} />
     </div>
-  );
+  </div>;
 }

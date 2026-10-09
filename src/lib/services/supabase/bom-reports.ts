@@ -21,7 +21,7 @@ export interface NvlConsumptionRow {
   materialName: string;
   totalQty: number;
   unit: string;
-  totalCost: number;
+  totalCost: number | null;
   movementCount: number;
 }
 
@@ -59,7 +59,7 @@ export async function getNvlConsumptionByBranch(params: {
     materialName: r.material_name,
     totalQty: Number(r.total_qty ?? 0),
     unit: r.unit ?? "",
-    totalCost: Number(r.total_cost ?? 0),
+    totalCost: r.total_cost == null ? null : Number(r.total_cost),
     movementCount: Number(r.movement_count ?? 0),
   }));
 }

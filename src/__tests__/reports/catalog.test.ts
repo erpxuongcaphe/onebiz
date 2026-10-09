@@ -13,7 +13,7 @@ describe("report catalog", () => {
   it("registers every report route once", () => {
     const paths = REPORT_CATALOG.map((report) => report.href);
 
-    expect(REPORT_CATALOG).toHaveLength(36);
+    expect(REPORT_CATALOG).toHaveLength(37);
     expect(new Set(paths).size).toBe(paths.length);
     expect(getReportByPath("/phan-tich/khach-san-pham")?.title).toBe(
       "Doanh số mặt hàng theo khách hàng",
