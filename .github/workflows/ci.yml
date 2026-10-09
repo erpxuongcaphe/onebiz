@@ -484,6 +484,16 @@ jobs:
           createdb fnb_void_method_test
           PGDATABASE=fnb_void_method_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00456_fnb_void_methods.integration.sql
 
+      - name: Verify historical SKU and material reports in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb report_completeness_test
+          PGDATABASE=report_completeness_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00461_report_stock_and_sku_snapshots.integration.sql
+
       - name: Verify PIN onboarding and recovery in isolated PostgreSQL
         env:
           PGHOST: localhost

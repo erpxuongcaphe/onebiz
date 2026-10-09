@@ -42,6 +42,33 @@ opening balances are changed in this work.
 
 Opening inventory is owned by the parallel chat and is explicitly excluded.
 
+## SKU And Material Detail Release
+
+- New `/phan-tich/sku-chi-tiet` report has all-customer or selected-customer
+  scope, product code/name/category/unit filters, source-value sorting and
+  filtered Excel exports. It separates sales, returns, net revenue, historical
+  COGS and gross profit; invoice discounts are allocated to product lines.
+- Sales use invoice issue time, returns use return-document time. A return in
+  a later period remains visible without requiring a sale in that period.
+  Zero-price sales retain their inventory cost and resulting gross loss.
+- Material consumption now uses the exact branch cost event, or the historical
+  stock-movement cost outside branch cost tracking. Current product cost is not
+  a replacement for a missing snapshot. Missing monetary totals remain null.
+- Both tables keep code first, expose unit quantities and average unit values,
+  and use the same filtered/sorted row source for display and Excel. Quantity
+  totals are not added across heterogeneous units. Unit prices are not summed.
+- Local validation: 257 existing report/Excel tests passed; two static guard
+  checks were corrected and rerun with the six new data tests (12/12 passed).
+  TypeScript passed. Disposable PostgreSQL fixture checks historical values,
+  missing costs, discounts, dates, permission/customer scope and returns.
+- Migration `00461_report_stock_and_sku_snapshots.sql` is approved for production
+  after tests, but has NOT been applied at this checkpoint. Codex browser runtime
+  fails to initialize and the Supabase CLI session is invalid. Do not merge the
+  new report route into production until the reporting RPC exists and is verified.
+- Actual source-document reconciliation and new-page browser/Excel acceptance
+  remain pending. This release does not resolve missing opening inventory costs
+  or certify all report-center financial values.
+
 ## Whole-center source screening
 
 All 37 report-route page files were screened for table/export/search/sort/request
