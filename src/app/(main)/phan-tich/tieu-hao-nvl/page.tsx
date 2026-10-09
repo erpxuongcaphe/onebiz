@@ -58,6 +58,7 @@ export default function TieuHaoNvlPage() {
       const titleRows = buildReportTitleRows({ title: "BÁO CÁO TIÊU HAO NGUYÊN VẬT LIỆU", range, branchName: branchLabel });
       titleRows.push(`Tìm kiếm: ${search || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
       titleRows.push("Giá vốn chốt tại phát sinh kho; ô trống là thiếu giá lịch sử. Đơn giá bình quân = thành tiền / số lượng.");
+      titleRows.push("Phạm vi: xuất kho theo BOM trong kỳ, chưa trừ hoàn nhập từ trả hoặc hủy hóa đơn.");
       await exportReportToExcel({ kind: "tieu-hao-nvl", mode, range, branchName: branchLabel, sheets: [{
         name: "Tiêu hao NVL", titleRows, autoFilter: true,
         tablePreferenceKey: mode === "view" ? TABLE_KEY : undefined,
@@ -72,7 +73,7 @@ export default function TieuHaoNvlPage() {
     finally { setExporting(false); }
   }
   return <div className="flex min-h-full flex-col">
-    <ReportPageHeader title="Tiêu hao nguyên vật liệu" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+    <ReportPageHeader title="Tiêu hao nguyên vật liệu" subtitle="Xuất kho theo BOM, chưa trừ hoàn nhập" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
       onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={loading || exporting || !visible.length} />
     <div className="space-y-4 p-4 lg:p-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
