@@ -273,13 +273,17 @@ export async function getInternalSaleById(id: string) {
     .eq("internal_sale_id", id)
     .order("product_name");
   if (itemsErr) handleError(itemsErr, "getInternalSaleById.items");
+  // The FK exists in PostgreSQL; the generated client relationship list predates it.
+  const linkedInvoice = data.invoice as unknown as {
+    paid: number | null; debt: number | null; discount_amount: number | null; delivery_fee: number | null;
+  } | null;
 
   return {
     ...mapInternalSale(data),
-    paid: data.invoice ? Number(data.invoice.paid) : null,
-    debt: data.invoice ? Number(data.invoice.debt) : null,
-    discountAmount: data.invoice ? Number(data.invoice.discount_amount) : null,
-    deliveryFee: data.invoice ? Number(data.invoice.delivery_fee ?? 0) : null,
+    paid: linkedInvoice ? Number(linkedInvoice.paid) : null,
+    debt: linkedInvoice ? Number(linkedInvoice.debt) : null,
+    discountAmount: linkedInvoice ? Number(linkedInvoice.discount_amount) : null,
+    deliveryFee: linkedInvoice ? Number(linkedInvoice.delivery_fee ?? 0) : null,
     items: (items ?? []).map((it: Record<string, unknown>) => ({
       id: it.id as string,
       productId: it.product_id as string,

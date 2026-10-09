@@ -2037,7 +2037,7 @@ function PosPageInner() {
       }
       const internalPayments = state.paymentMethod === "mixed"
         ? state.paymentBreakdown.filter(b => b.amount > 0)
-        : state.paid > 0 ? [{ method: state.paymentMethod, amount: Math.min(state.paid, state.total) }] : [];
+        : state.paid > 0 && state.total > 0 ? [{ method: state.paymentMethod, amount: Math.min(state.paid, state.total) }] : [];
       if (internalPayments.reduce((sum, p) => sum + p.amount, 0) > state.total) {
         toast({ title: "Tổng thanh toán vượt tiền đơn", description: "Điều chỉnh các khoản thanh toán hỗn hợp; tiền thừa của thanh toán một phương thức được trả lại.", variant: "warning" });
         return;
