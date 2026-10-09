@@ -29,7 +29,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
     {error && <p role="alert" className="text-sm text-status-warning">{error}. Dữ liệu trước đó có thể đã thay đổi.</p>}
     <Tabs value={orderFilter} onValueChange={(value) => { if (value === "all" || orderGroups.some(group => group.type === value)) setOrderFilter(value as OrderFilter); }} className="min-h-0 flex-1">
       <TabsList aria-label="Loại đơn chờ thanh toán" className="grid h-auto! w-full shrink-0 grid-cols-4 gap-1 rounded-lg border bg-muted/40 p-1 sm:w-fit">
-        {[{ type: "all", label: "Toàn bộ" }, ...orderGroups].map(group => <TabsTrigger key={group.type} value={group.type} className="min-h-11 gap-1 px-1 text-xs font-semibold sm:px-3 sm:text-sm data-active:bg-primary data-active:text-primary-foreground"><span>{group.label}</span><span className="rounded bg-current/10 px-1.5 tabular-nums">{group.type === "all" ? orders.length : orders.filter(order => order.orderType === group.type).length}</span></TabsTrigger>)}
+        {[{ type: "all", label: "Toàn bộ" }, ...orderGroups].map(group => <TabsTrigger key={group.type} value={group.type} className="min-h-11 min-w-0 flex-col gap-0 px-1 text-xs font-semibold sm:flex-row sm:gap-1 sm:px-3 sm:text-sm data-active:bg-primary data-active:text-primary-foreground"><span>{group.label}</span><span className="rounded bg-current/10 px-1.5 tabular-nums">{group.type === "all" ? orders.length : orders.filter(order => order.orderType === group.type).length}</span></TabsTrigger>)}
       </TabsList>
     <TabsContent value={orderFilter} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
       {orderGroups.filter(group => orderFilter === "all" || group.type === orderFilter).map(group => {
@@ -57,3 +57,4 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
     <p className="text-xs text-muted-foreground">Giá trị tạm tính của món đã gửi bếp, chưa phải doanh thu thực thu. Mất mạng: đơn lưu riêng trên máy chỉ xuất hiện ở thiết bị khác sau khi đồng bộ.</p>
   </section>;
 }
+
