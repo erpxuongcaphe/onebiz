@@ -105,10 +105,14 @@ Vietnam business dates. Read-only source queries; no business records modified.
 | Cash payments | 18 completed payments; 38,242,218 | 38,242,218 | Matched |
 | Cash net | 20,510,742 | 20,510,742 | Matched |
 | Completed invoices | 24 invoices; merchandise 71,212,080; delivery 101,000 | Same count and amounts | Matched |
+| Historical sales cost | 223 invoice lines; 56,294,319.11; no missing costs | 56,294,319.11 | Matched |
+| Returns | 1 line; refund 1,150,000; original cost 1,000,000 | Same refund and cost | Matched |
+| Net historical COGS | 55,294,319.11 | 55,294,319.11 | Matched |
 
 The user is selling during verification, so different-time snapshots can differ.
-Current display also shows returns of 1,150,000 and net historical COGS of
-55,294,319.11; these are not marked independently accepted by the invoice-only query.
+Sales cost uses the invoice-line snapshot; return cost resolves the original sold
+line, not current product cost. These checks reconcile 223 sale lines and one
+return line, rather than merely repeating a report RPC total.
 
 ### Acceptance corrections in this branch
 
