@@ -46,7 +46,9 @@ import {
 } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { buildInvoiceListDeepLink } from "@/lib/utils/invoice-list-deep-link";
-import { buildSalesInvoiceDayLink, buildSalesReturnDayLink } from "@/lib/reports/sales-drilldown";
+import { buildSalesInvoiceRangeLink, buildSalesReturnRangeLink } from "@/lib/reports/sales-drilldown";
+import { groupSalesPeriods, salesPeriodRange, type SalesPeriod } from "@/lib/reports/sales-period";
+import { sortReportRows } from "@/lib/reports/table-sort";
 import {
   exportReportToExcel,
   buildReportTitleRows,
@@ -196,6 +198,17 @@ export default function BanHangPage() {
   const [overviewMetric, setOverviewMetric] =
     useState<SalesOverviewMetric>("netRevenue");
   const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
+  const [salesPeriod, setSalesPeriod] = useState<SalesPeriod>("day");
+  const [periodSort, setPeriodSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const periodRows = useMemo(() => {
+    const rows = groupSalesPeriods(dailyRows, salesPeriod);
+    return periodSort ? sortReportRows(rows, (row) => row[periodSort.id as keyof SalesReportDailyRow], periodSort.direction) : rows;
+  }, [dailyRows, salesPeriod, periodSort]);
+  const periodLabel = salesPeriod === "week" ? "Tuần" : salesPeriod === "month" ? "Tháng" : "Ngày";
+  const formatPeriod = useCallback((date: string) => {
+    const selected = salesPeriodRange(date, salesPeriod, range);
+    return selected.from === selected.to ? formatReportDate(selected.from) : `${formatReportDate(selected.from)} – ${formatReportDate(selected.to)}`;
+  }, [salesPeriod, range]);
   const [invoiceRows, setInvoiceRows] = useState<SalesReportInvoiceDetailRow[]>([]);
   const [invoiceRowsHasMore, setInvoiceRowsHasMore] = useState(false);
   const [dailyLoading, setDailyLoading] = useState(false);
@@ -330,11 +343,11 @@ export default function BanHangPage() {
       const tableSheet =
         tableMode === "daily"
           ? {
-              name: "Theo ngày",
+              name: `Theo ${periodLabel.toLowerCase()}`,
               titleRows: tableTitleRows,
               tablePreferenceKey: "report.ban-hang.daily-revenue",
               columns: [
-                { label: "Ngày", key: "date", width: 14 },
+                { label: periodLabel, key: "date", width: 24 },
                 { label: "Đơn", key: "orderCount", width: 10 },
                 { label: "SL bán", key: "soldQty", width: 12 },
                 { label: "Bán gộp", key: "grossRevenue", width: 18, format: "currency" as const },
@@ -343,8 +356,8 @@ export default function BanHangPage() {
                 { label: "Đã thu", key: "paid", width: 18, format: "currency" as const },
                 { label: "Còn nợ", key: "debt", width: 18, format: "currency" as const },
               ],
-              rows: dailyRows.map((row) => ({
-                date: formatReportDate(row.date),
+              rows: periodRows.map((row) => ({
+                date: formatPeriod(row.date),
                 orderCount: row.orderCount,
                 soldQty: row.soldQty,
                 grossRevenue: row.grossRevenue,
@@ -440,7 +453,7 @@ export default function BanHangPage() {
         },
       ],
     });
-  }, [branchName, dailyRows, invoiceRows, kpis, range, tableMode, viewMode]);
+  }, [branchName, dailyRows, periodRows, periodLabel, formatPeriod, invoiceRows, kpis, range, tableMode, viewMode]);
 
   const handleExportFull = useCallback(async () => {
     if (!kpis) return;
@@ -664,18 +677,18 @@ export default function BanHangPage() {
   const selectedDetailLoading = tableMode === "daily" ? dailyLoading : invoiceLoading;
   const dailyColumns: DataTableColumn<SalesReportDailyRow>[] = [
     {
-      label: "Ngày",
+      label: periodLabel,
       key: "date",
       align: "left",
       sticky: true,
-      cell: (row) => formatReportDate(row.date),
+      cell: (row) => formatPeriod(row.date),
     },
     {
       label: "Đơn",
       key: "orderCount",
       align: "right",
       cell: (row) => row.orderCount > 0 ? (
-        <a href={buildSalesInvoiceDayLink(row.date, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem ${row.orderCount} hóa đơn ngày ${formatReportDate(row.date)}`}>
+        <a href={buildSalesInvoiceRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem ${row.orderCount} hóa đơn ${formatPeriod(row.date)}`}>
           {formatNumber(row.orderCount)}
         </a>
       ) : formatNumber(row.orderCount),
@@ -693,11 +706,11 @@ export default function BanHangPage() {
       cell: (row) => formatCurrency(row.grossRevenue) + "đ",
     },
     {
-      label: "Trả trong ngày",
+      label: "Trả trong kỳ",
       key: "returnAmount",
       align: "right",
       cell: (row) => row.returnAmount > 0 ? (
-        <a href={buildSalesReturnDayLink(row.date, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem phiếu trả ngày ${formatReportDate(row.date)}`}>
+        <a href={buildSalesReturnRangeLink(salesPeriodRange(row.date, salesPeriod, range).from, salesPeriodRange(row.date, salesPeriod, range).to, activeBranchId)} className="font-medium text-primary underline-offset-2 hover:underline" aria-label={`Xem phiếu trả ${formatPeriod(row.date)}`}>
           {formatCurrency(row.returnAmount)}đ
         </a>
       ) : formatCurrency(row.returnAmount) + "đ",
@@ -877,7 +890,7 @@ export default function BanHangPage() {
                       : "px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
                   }
                 >
-                  Theo ngày
+                  Theo thời gian
                 </button>
                 <button
                   type="button"
@@ -895,6 +908,13 @@ export default function BanHangPage() {
               </div>
             </div>
 
+            {tableMode === "daily" && <div className="flex items-center gap-2 border-b px-4 py-2">
+              <label htmlFor="sales-period" className="text-sm">Gộp theo</label>
+              <select id="sales-period" value={salesPeriod} onChange={(event) => setSalesPeriod(event.target.value as SalesPeriod)} className="h-9 rounded-md border bg-background px-3 text-sm">
+                <option value="day">Ngày</option><option value="week">Tuần</option><option value="month">Tháng</option>
+              </select>
+            </div>}
+
             {selectedDetailError ? (
               <div className="px-4 py-8 text-sm text-destructive">{selectedDetailError}</div>
             ) : selectedDetailLoading ? (
@@ -906,7 +926,9 @@ export default function BanHangPage() {
               <ReportDataTable<SalesReportDailyRow>
                 columns={dailyColumns}
                 tablePreferenceKey="report.ban-hang.daily-revenue"
-                rows={dailyRows}
+                rows={periodRows}
+                sortState={periodSort}
+                onSortChange={setPeriodSort}
                 getRowKey={(row) => row.date}
                 subtotalLabel={
                   "Doanh thu thuần: " +
