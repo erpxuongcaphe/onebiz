@@ -124,6 +124,8 @@ export interface ExcelColumn {
   width?: number;
   /** Format số: "number" | "currency" | "percent" | "date" | "text" */
   format?: "number" | "currency" | "percent" | "date" | "text";
+  /** Optional display precision for quantities/unit values; source numbers stay intact. */
+  decimalPlaces?: number;
   /** Alignment: "left" | "center" | "right". Default theo format. */
   align?: "left" | "center" | "right";
 }
@@ -386,10 +388,11 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 
   if (format === "number") {
     const n = typeof value === "number" ? value : Number(value);
+    const digits = Math.min(10, Math.max(0, Math.trunc(col.decimalPlaces ?? 2)));
     return {
       v: Number.isFinite(n) ? n : 0,
       t: "n",
-      z: "#,##0.##",
+      z: digits ? `#,##0.${"#".repeat(digits)}` : "#,##0",
       s: STYLE_DATA_NUMBER,
     };
   }

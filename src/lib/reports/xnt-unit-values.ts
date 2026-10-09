@@ -29,8 +29,8 @@ export const XNT_SUMMARY_EXCEL_COLUMNS = [
   { label: "Tên hàng", key: "name", width: 36 },
   { label: "ĐVT", key: "unit", width: 10 },
   ...XNT_VALUE_GROUPS.flatMap((group) => [
-    { label: "Số lượng", key: group.quantity, width: 16, format: "number" as const },
-    { label: "Đơn giá BQ", key: group.price, width: 18, format: "number" as const },
+    { label: "Số lượng", key: group.quantity, width: 16, format: "number" as const, decimalPlaces: 4 },
+    { label: "Đơn giá BQ", key: group.price, width: 18, format: "number" as const, decimalPlaces: 4 },
     { label: "Thành tiền", key: group.value, width: 20, format: "currency" as const },
   ]),
 ];

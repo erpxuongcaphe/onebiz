@@ -16,7 +16,7 @@ import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
-import { formatNumber, formatCurrency, formatDate } from "@/lib/format";
+import { formatStockQuantity as formatNumber, formatCurrency, formatDate } from "@/lib/format";
 import {
   ReportPageHeader,
   ReportDataTable,
@@ -239,7 +239,7 @@ export default function XuatNhapTonPage() {
               { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
               { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
               { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
-            ],
+            ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 })),
             rows: visibleRows.map((r) => ({
               code: r.code,
               name: r.name,
@@ -368,7 +368,7 @@ export default function XuatNhapTonPage() {
             { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
             { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
             { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
-          ],
+          ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 })),
           rows: visibleRows.map((r) => ({
             code: r.code,
             name: r.name,

@@ -38,7 +38,7 @@ describe('Report workbook numeric precision', () => {
         name: 'Quantities',
         columns: [
           { label: 'Code', key: 'code' },
-          { label: 'Quantity', key: 'qty', format: 'number' },
+          { label: 'Quantity', key: 'qty', format: 'number', decimalPlaces: 4 },
           { label: 'Cost', key: 'cost', format: 'currency' },
         ],
         rows: [{ qty: 0.005, cost: 13.333 }, { qty: -0.004, cost: null }],
@@ -50,6 +50,7 @@ describe('Report workbook numeric precision', () => {
     };
     const sheet = workbook.Sheets.Quantities;
     expect(sheet.B2.v).toBe(0.005);
+    expect(sheet.B2.z).toBe('#,##0.####');
     expect(sheet.B3.v).toBe(-0.004);
     expect(sheet.B4.v).toBe(0.001);
     expect(sheet.C2.v).toBe(13.33);

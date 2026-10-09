@@ -28,6 +28,8 @@ opening balances are changed in this work.
 - Current-view export follows active rows/sort/visible columns. Full export
   includes all columns for the same active row scope and records parameters.
 - Excel AutoFilter excludes report titles and subtotal/signature rows.
+- Quantity and average unit value display supports four fractional digits;
+  exported source numbers are not rounded to that display precision.
 - Customer filtering belongs to sales analysis or explicitly scoped movements;
   it must not redefine whole-branch opening/closing inventory.
 
@@ -39,3 +41,14 @@ opening balances are changed in this work.
   https://www.kiotviet.vn/huong-dan-su-dung-kiotviet/retail-bao-cao/bao-cao/
 
 Opening inventory is owned by the parallel chat and is explicitly excluded.
+
+## Whole-center source screening
+
+All 37 report-route page files were screened for table/export/search/sort/request
+guard wiring. This is not browser or financial acceptance: shared components can
+provide some controls even when the page has no local implementation. Priority
+manual checks remain material consumption, BOM COGS, FNB, returns, VAT, aging,
+staff, suppliers and channels. No page is marked complete merely because it has
+an export button or a table. Verify authorization, full-row source coverage,
+date semantics, meaningful quantities, nullable costs, filter/sort/export parity
+and source-document drilldown separately for each report.
