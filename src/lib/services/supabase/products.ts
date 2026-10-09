@@ -1488,6 +1488,9 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
     )
     .single();
 
+  if (error?.message?.includes("PRODUCT_STOCK_UNIT_LOCKED_BY_HISTORY")) {
+    throw new Error("Mã hàng đã có tồn kho, chứng từ hoặc BOM nên cần giữ đơn vị tồn gốc. Để nhập gram/ml hoặc đơn vị nhỏ hơn, hãy thiết lập quy đổi đơn vị của sản phẩm.");
+  }
   if (error) handleError(error, "updateProduct");
   return mapProduct(data);
 }

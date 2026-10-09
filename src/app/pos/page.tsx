@@ -2015,19 +2015,28 @@ function PosPageInner() {
       return;
     }
     if (state.sellingMode === "internal") {
+      if (state.lines.length === 0 || state.total < 0) {
+        toast({ title: state.lines.length === 0 ? "Giỏ hàng trống" : "Tổng đơn không hợp lệ", variant: "warning" });
+        return;
+      }
+      if (state.total === 0 && !zeroConfirmed) {
+        setZeroConfirmOpen(true);
+        return;
+      }
       if (!state.customer?.isInternal || !state.customer.branchId || state.customer.branchId === currentBranch?.id) {
         toast({ title: "Chọn khách nội bộ của chi nhánh nhận hàng", variant: "warning" });
         setCustomerModalOpen(true);
         return;
       }
-      if (state.lineDiscountTotal > 0 || state.orderDiscountAmount > 0 || state.orderVatRate > 0 || state.lines.some(l => l.variantId)) {
-        toast({ title: "Kiểm tra đơn nội bộ", description: "Luồng nội bộ hiện dùng giá bán theo đơn vị sản phẩm và VAT từng dòng. Chưa thể áp giảm giá cấp đơn hoặc biến thể chưa có ánh xạ tồn kho.", variant: "warning" });
+      if (state.lineDiscountTotal > 0 || state.orderDiscountAmount > 0 || state.orderVatRate > 0 || state.shippingFee > 0 || state.lines.some(l => l.variantId)) {
+        toast({ title: "Kiểm tra đơn nội bộ", description: "Đơn nội bộ dùng giá bán và VAT từng dòng. Bỏ giảm giá, VAT cấp đơn, phí giao hàng hoặc biến thể chưa có ánh xạ tồn kho trước khi hoàn tất.", variant: "warning" });
         return;
       }
       if (state.paymentMethod === "card" || state.paymentMethod === "mixed" || (state.paid > 0 && state.paid < state.total)) {
         toast({ title: "Thanh toán nội bộ", description: "Chọn tiền mặt / chuyển khoản đủ tiền, hoặc để 0 để ghi công nợ nội bộ.", variant: "warning" });
         return;
       }
+      if (state.paid === 0 && state.total > 0 && !window.confirm(`Ghi công nợ nội bộ ${formatCurrency(state.total)} ₫ cho ${state.customer.name}?`)) return;
       submitLockRef.current = true;
       setSubmitting("complete");
       try {

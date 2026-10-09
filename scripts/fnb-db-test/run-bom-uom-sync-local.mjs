@@ -43,5 +43,13 @@ try {
  assert.equal(Number((await scalar('select count(*) n from uom_conversions where is_active')).n),1);
  const audits=await scalar('select count(*) n from bom_uom_sync_history_00465');
  assert.equal(Number(audits.n),2);
- console.log('PASS: stale BOM repair; exact preparation preservation; atomic packaging change; missing conversion rollback; audit trail.');
+ await db.exec(`create table stock_movements(product_id uuid);
+ create table branch_stock(product_id uuid,quantity numeric);
+ create table purchase_order_items(product_id uuid);
+ create table invoice_items(product_id uuid);`);
+ await db.exec(fs.readFileSync('supabase/migrations/00468_product_stock_unit_history_guard.sql','utf8'));
+ await assert.rejects(db.exec(`update products set unit='G' where id='${material}'`), /PRODUCT_STOCK_UNIT_LOCKED_BY_HISTORY/);
+ assert.equal((await scalar('select unit from products')).unit,'Lon');
+ await db.exec(`update products set unit='LON' where id='${material}'`);
+ console.log('PASS: stale BOM repair; exact preparation preservation; atomic UOM change; missing conversion rollback; audit trail; stock-unit history guard.');
 } finally { await db.close(); }
