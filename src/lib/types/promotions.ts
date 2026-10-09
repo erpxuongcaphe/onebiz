@@ -15,7 +15,7 @@ export interface Promotion {
   getQuantity: number | null;
   appliesTo: "all" | "category" | "product";
   appliesToIds: string[];
-  beneficiaryKind?: "all" | "customer" | "customer_group" | "employee";
+  beneficiaryKind?: "all" | "customer" | "customer_group" | "employee" | "employee_group";
   beneficiaryIds?: string[];
   startDate: string;
   endDate: string;

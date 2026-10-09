@@ -6,7 +6,7 @@
 import { formatCurrency, formatDate, formatNumber, formatShortDate } from "@/lib/format";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { sendPrintJob } from "./printer/print-job";
-import { resolveThermalLayout, thermalBodyMargins, type ThermalLayoutConfig } from "./thermal-layout";
+import { resolveThermalLayout, thermalBodyMargins, thermalTypography, type ThermalLayoutConfig } from "./thermal-layout";
 
 export interface DocumentLineItem {
   name: string;
@@ -391,13 +391,14 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .bizfooter { margin-top: ${isThermal ? "3px" : "26px"}; text-align: center; font-size: ${isThermal ? "9px" : "11px"}; color: ${isThermal ? "#222" : "#555"}; border-top: ${isThermal ? "1px dashed #000" : "1px solid #ddd"}; padding-top: ${isThermal ? "3px" : "8px"}; }
 
   ${isThermal && d.fnbThermalReadable ? `
-  body { font-size: 14px; color: #000; font-family: ${fnbLayout!.font}; line-height:${fnbLayout!.compact ? 1.2 : 1.4}; }
+  body { font-size: 14px; color: #000; }
+  ${thermalTypography(fnbLayout!, ".sep")}
   .head-c .store { font-size: 16px; }
   .head-c .line, .head-c .doc-code, .note, .bizfooter { font-size: 12px; color: #000; }
   .meta td, .summary td { font-size: 14px; }
   .head-c .doc-type { font-size:${fnbLayout!.titleSize}px; margin-top:2px; }
-  .head-c { border:${fnbLayout!.headerFrame ? "1px solid #000" : "0"}; padding:${fnbLayout!.headerFrame ? "2px" : "0"}; }
-  .summary .bold td { font-size: ${fnbLayout!.totalSize}px; padding-top: 2px; }
+  .head-c { border:${fnbLayout!.headerFrame ? "1px solid #000" : "0"}; padding:${fnbLayout!.headerFrame ? "1mm" : "0"}; }
+  .summary .bold td { font-size: ${fnbLayout!.totalSize}px; padding-top: 1mm; }
   .t-name, .t-line, .compact-row { font-size: ${fnbLayout!.itemSize}px; }
   .t-name, .compact-name { font-weight:${fnbLayout!.boldItems ? 700 : 400}; }
   .t-note { font-size: ${fnbLayout!.detailSize}px; color: #000; font-weight:${fnbLayout!.boldDetails ? 700 : 400}; font-style:${fnbLayout!.italicDetails ? "italic" : "normal"}; overflow-wrap:anywhere; }
@@ -405,8 +406,8 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .compact-name { flex:1; min-width:0; overflow-wrap:anywhere; }
   .compact-qty, .compact-row .t-total { flex:none; white-space:nowrap; }
   .t-item { padding:1px 0; margin:0; }
-  .sep { border-top:${fnbLayout!.separator === "none" ? "0" : `1px ${fnbLayout!.separator} #000`}; margin:2px 0; }
   .summary .bold td, .bizfooter { border-top-style:${fnbLayout!.separator}; }
+  .bizfooter { margin-top:1mm; padding-top:1mm; }
   ` : ""}
   @media print {
     body { padding: ${isThermal ? ps.bodyPadding : "0"}; }

@@ -29,11 +29,20 @@ describe("compact F&B thermal layout", () => {
       expect(html).toContain("padding-top:1mm;padding-bottom:12mm");
       expect(html).toContain("font-weight:400");
       expect(html).toContain("font-style:italic");
+      expect(html).toContain("margin:1mm 0;clear:both");
+      expect(html).toContain("font-weight:400;line-height:1.25");
       const custom = build({ topMarginMm: 0, bottomMarginMm: 8, italicDetails: false, boldDetails: true });
       expect(custom).toContain("padding-top:0mm;padding-bottom:8mm");
       expect(custom).toContain("font-weight:700");
       expect(custom).toContain("font-style:normal");
     }
+  });
+  it("keeps long kitchen instructions normal and italic, including a variant inside a bold name", () => {
+    const html = buildKitchenTicketHtml(ticket);
+    expect(html).toContain('.qty{font-size:inherit;font-weight:inherit}');
+    expect(html).not.toContain('.modifier{font-size:16px;font-weight:bold');
+    expect(html).not.toContain('.note{font-size:16px;font-weight:bold');
+    expect(html).toContain('.modifier,.note,.toppings,.variant{font-size:16px;color:#000;font-weight:400;font-style:italic');
   });
   it("rejects invalid margins without changing existing explicit typography choices", () => {
     expect(resolveThermalLayout({ topMarginMm: NaN, bottomMarginMm: Infinity, italicDetails: false })).toMatchObject({ topMarginMm: 1, bottomMarginMm: 12, italicDetails: false });

@@ -10,7 +10,7 @@ import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 import { EscPosBuilder } from "@/lib/printer/escpos";
 import { getPrintSettings, sendPrintJob } from "@/lib/printer/print-job";
 import type { StoredPrinter } from "@/lib/printer/webusb-printer";
-import { resolveThermalLayout, thermalBodyMargins, type ThermalLayoutConfig } from "./thermal-layout";
+import { resolveThermalLayout, thermalBodyMargins, thermalTypography, type ThermalLayoutConfig } from "./thermal-layout";
 import { withFnbReceiptBrand } from "./fnb-receipt-brand";
 
 // ============================================================
@@ -263,7 +263,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
     itemsHtml = data.items.map((item) => {
       const itemTotal = item.quantity * item.unitPrice;
       let html = `<tr>
-        <td class="receipt-item"><strong>${formatNumber(item.quantity)}x ${escapeKitchenText(item.name)}${item.variant ? ` (${escapeKitchenText(item.variant)})` : ""}</strong></td>
+        <td class="receipt-item"><strong>${formatNumber(item.quantity)}x ${escapeKitchenText(item.name)}${item.variant ? ` <span class="variant">(${escapeKitchenText(item.variant)})</span>` : ""}</strong></td>
         <td class="right">${formatCurrency(itemTotal)}</td>
       </tr>`;
 
@@ -340,12 +340,12 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
 <style>${baseStyles(width, pageSize)}
 .title{font-size:20px;font-weight:bold;letter-spacing:1px}
 .invoice-code{font-size:14px;margin:2px 0}
-body{font-family:${layout.font};line-height:${layout.compact ? 1.2 : 1.4}}
+${thermalTypography(layout, ".line,.line-thin")}
 .receipt-item{font-size:${layout.itemSize}px}.receipt-item strong{font-weight:${layout.boldItems ? 700 : 400}}
 .receipt-detail{font-size:${layout.detailSize}px;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};color:#000;overflow-wrap:anywhere}
 ${thermalBodyMargins(layout)}
 td{padding:1px 0;vertical-align:top}.right{white-space:nowrap}
-.line,.line-thin{margin:2px 0}.title{font-size:${layout.titleSize}px;letter-spacing:0}
+.title{font-size:${layout.titleSize}px;letter-spacing:0}
 </style></head><body>
 
 ${data.isOffline ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● CHỜ ĐỒNG BỘ ●</div>` : ""}
@@ -477,17 +477,17 @@ export function buildKitchenTicketHtml(data: KitchenTicketDataV2): string {
 .qty{font-size:${style === "compact" ? "18px" : "22px"};font-weight:bold;margin-right:4px}
 .variant{font-size:14px;font-weight:normal;color:#000}
 .toppings{font-size:14px;padding-left:8px;margin-top:1px}
-.modifier{font-size:16px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000;color:#000}
-.note{font-size:16px;font-weight:bold;padding:1px 6px;margin-top:1px;border-left:2px solid #000}
+.modifier{font-size:16px;padding:1px 6px;margin-top:1px;color:#000}
+.note{font-size:16px;padding:1px 6px;margin-top:1px}
 .price{font-size:12px;color:#555;padding-left:24px;margin-top:2px}
 .time{font-size:16px;font-weight:bold}
-body{font-family:${layout.font};line-height:${layout.compact ? 1.2 : 1.4}}
+${thermalTypography(layout, ".line,.line-thin")}
 .item-name{font-size:${layout.itemSize}px;font-weight:${layout.boldItems ? 700 : 400}}
+.qty{font-size:inherit;font-weight:inherit}
 .table-label{font-size:${layout.titleSize}px}
-.table-label{border:${layout.headerFrame ? "1px solid #000" : "0"};margin:2px 0}
+.table-label{border:${layout.headerFrame ? "1px solid #000" : "0"};padding:${layout.headerFrame ? "1mm" : "0"};margin:1mm 0}
 .modifier,.note,.toppings,.variant{font-size:${layout.detailSize}px;color:#000;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};overflow-wrap:anywhere}
 ${thermalBodyMargins(layout)}
-.line{border-top:${layout.separator === "none" ? "0" : `1px ${layout.separator} #000`};margin:2px 0}
 .item{padding:2px 0;border:0}
 </style></head><body>
 

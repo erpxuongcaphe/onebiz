@@ -186,7 +186,7 @@ export function CreatePromotionDialog({
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (appliesTo !== "all" && !appliesToIds.length) newErrors.scope = "Chọn ít nhất một món hoặc danh mục.";
-    if ((beneficiaryKind === "customer" || beneficiaryKind === "customer_group") && !beneficiaryIds.length) newErrors.beneficiary = "Chọn khách hoặc nhóm được hưởng.";
+    if ((beneficiaryKind === "customer" || beneficiaryKind === "customer_group" || beneficiaryKind === "employee_group") && !beneficiaryIds.length) newErrors.beneficiary = "Chọn người hoặc nhóm được hưởng.";
     if (!name.trim()) newErrors.name = "Vui lòng nhập tên chương trình";
     if (type === "discount_percent" || type === "discount_fixed") {
       if (!value.trim() || isNaN(Number(value)) || Number(value) <= 0)
