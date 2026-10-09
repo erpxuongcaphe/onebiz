@@ -528,9 +528,9 @@ export const REPORT_CATALOG: ReportCatalogItem[] = [
   },
   {
     href: "/phan-tich/nhan-vien",
-    title: "Doanh thu theo nhân viên",
+    title: "Doanh số theo nhân viên",
     shortTitle: "Nhân viên",
-    description: "So sánh doanh thu và số đơn theo nhân viên bán hàng.",
+    description: "Hóa đơn hoàn thành và số đơn theo nhân viên, chưa trừ trả hàng.",
     category: "operations",
     icon: "badge",
     keywords: ["staff", "salesperson", "hiệu suất", "người bán"],

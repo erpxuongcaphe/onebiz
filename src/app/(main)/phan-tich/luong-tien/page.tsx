@@ -15,7 +15,8 @@ import {
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
 import { useBranchFilter, useAuth, useToast } from "@/lib/contexts";
-import { formatCurrency, formatDate, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
+import { formatCurrency, formatChartCurrency, formatChartTooltipCurrency } from "@/lib/format";
+import { formatCashBookDate, formatCashTime } from "@/lib/cash-time";
 import { getCashFlowDetailed } from "@/lib/services/supabase/analytics";
 import type { CashFlowDetailedRow } from "@/lib/services/supabase/analytics";
 import { getAllCashBookEntries } from "@/lib/services/supabase/cash-book";
@@ -210,9 +211,10 @@ export default function LuongTienPage() {
       const cfSheet = allSheets.find((s) => s.name === "Thu chi theo tháng");
       const detailSheet: ExcelSheet = {
         name: "Chứng từ đã lọc",
+        autoFilter: true,
         columns: [
-          { label: "Ngày chứng từ", key: "date", width: 18 },
           { label: "Mã phiếu", key: "code", width: 18 },
+          { label: "Ngày chứng từ", key: "date", width: 18 },
           { label: "Loại", key: "type", width: 12 },
           { label: "Chi nhánh", key: "branchName", width: 28 },
           { label: "Người tạo", key: "createdByName", width: 24 },
@@ -224,7 +226,7 @@ export default function LuongTienPage() {
           { label: "Chứng từ gốc", key: "referenceCode", width: 20 },
           { label: "Số tiền", key: "amount", width: 20, format: "currency" },
         ],
-        rows: filteredLedgerRows.map(row => ({ ...row, type: row.type === "receipt" ? "Thu" : "Chi", category: cashCategoryLabel(row.category), paymentMethod: cashPaymentMethodLabel(row.paymentMethod) })),
+        rows: filteredLedgerRows.map(row => ({ ...row, date: formatCashBookDate(row.date), occurredAt: formatCashTime(row.occurredAt), type: row.type === "receipt" ? "Thu" : "Chi", category: cashCategoryLabel(row.category), paymentMethod: cashPaymentMethodLabel(row.paymentMethod) })),
       };
       await exportReportToExcel({
         kind: "luong-tien",
@@ -265,6 +267,7 @@ export default function LuongTienPage() {
         sheets.push({name:'Nguồn dòng tiền',columns:[{label:'Phiếu',key:'code',width:18},{label:'Ngày hạch toán',key:'date',width:18},{label:'Hoạt động',key:'activity',width:28},{label:'Khoản mục',key:'category',width:30},{label:'Mã khoản mục',key:'categoryCode',width:22},{label:'Khoản ghi nhận',key:'eventCode',width:22},{label:'Chi nhánh',key:'branchName',width:30},{label:'Người thực hiện',key:'performedByName',width:26},{label:'Đối tượng',key:'counterparty',width:30},{label:'Thu',key:'receipt',format:'currency',width:22},{label:'Chi',key:'payment',format:'currency',width:22}],rows:checked.detail.map(r => ({...r,activity:CASH_FLOW_LABELS[r.activity],receipt:r.type === 'receipt' ? r.amount : 0,payment:r.type === 'payment' ? r.amount : 0}))});
         sheets.push({
           name: "Chứng từ thu chi",
+          autoFilter: true,
           titleRows: buildReportTitleRows({
             title: ledgerType === "receipt" ? "PHIẾU THU TRONG KỲ" : ledgerType === "payment" ? "PHIẾU CHI TRONG KỲ" : "CHỨNG TỪ THU CHI TRONG KỲ",
             range,
@@ -273,8 +276,8 @@ export default function LuongTienPage() {
             generatedAt: new Date(),
           }),
           columns: [
-            { label: "Ngày chứng từ", key: "date", width: 18 },
             { label: "Mã phiếu", key: "code", width: 18 },
+            { label: "Ngày chứng từ", key: "date", width: 18 },
             { label: "Loại", key: "type", width: 14 },
             { label: "Chi nhánh", key: "branch", width: 26 },
             { label: "Người tạo phiếu", key: "createdBy", width: 24 },
@@ -287,13 +290,13 @@ export default function LuongTienPage() {
             { label: "Số tiền", key: "amount", width: 20, format: "currency" },
           ],
           rows: cashReportRows(entries, { ...ledgerFilter, type: ledgerType }).map((entry) => ({
-            date: entry.date,
+            date: formatCashBookDate(entry.date),
             code: entry.code,
             type: entry.type === "receipt" ? "Thu" : "Chi",
             branch: entry.branchName ?? "",
             createdBy: entry.createdByName ?? "",
             performedBy: entry.performedByName ?? "Chưa ghi nhận",
-            occurredAt: entry.occurredAt ?? "",
+            occurredAt: formatCashTime(entry.occurredAt),
             counterparty: entry.counterparty,
             category: cashCategoryLabel(entry.category),
             paymentMethod: cashPaymentMethodLabel(entry.paymentMethod),
@@ -571,8 +574,8 @@ export default function LuongTienPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b text-left text-xs text-muted-foreground">
-                    <th className="px-3 py-2">Ngày chứng từ</th>
                     <th className="px-3 py-2">Mã phiếu</th>
+                    <th className="px-3 py-2">Ngày chứng từ</th>
                     <th className="px-3 py-2">Loại</th>
                     <th className="px-3 py-2">Chi nhánh</th>
                     <th className="px-3 py-2">Người tạo phiếu</th>
@@ -588,13 +591,13 @@ export default function LuongTienPage() {
                 <tbody>
                   {ledgerRows.map((entry) => (
                     <tr key={entry.id} className="border-b">
-                      <td className="whitespace-nowrap px-3 py-2">{formatDate(entry.date)}</td>
                       <td className="whitespace-nowrap px-3 py-2 font-medium">{entry.code}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatCashBookDate(entry.date)}</td>
                       <td className="px-3 py-2">{entry.type === "receipt" ? "Thu" : "Chi"}</td>
                       <td className="px-3 py-2">{entry.branchName ?? "—"}</td>
                       <td className="px-3 py-2">{entry.createdByName || "—"}</td>
                       <td className="px-3 py-2">{entry.performedByName || "Chưa ghi nhận"}</td>
-                      <td className="whitespace-nowrap px-3 py-2">{entry.occurredAt ? new Date(entry.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận"}</td>
+                      <td className="whitespace-nowrap px-3 py-2">{formatCashTime(entry.occurredAt)}</td>
                       <td className="px-3 py-2">{entry.counterparty || "—"}</td>
                       <td className="px-3 py-2">{cashCategoryLabel(entry.category)}</td>
                       <td className="px-3 py-2">{cashPaymentMethodLabel(entry.paymentMethod)}</td>

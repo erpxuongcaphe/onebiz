@@ -61,13 +61,13 @@ Opening inventory is owned by the parallel chat and is explicitly excluded.
   checks were corrected and rerun with the six new data tests (12/12 passed).
   TypeScript passed. Disposable PostgreSQL fixture checks historical values,
   missing costs, discounts, dates, permission/customer scope and returns.
-- Migration `00461_report_stock_and_sku_snapshots.sql` is approved for production
-  after tests, but has NOT been applied at this checkpoint. Codex browser runtime
-  fails to initialize and the Supabase CLI session is invalid. Do not merge the
-  new report route into production until the reporting RPC exists and is verified.
-- Actual source-document reconciliation and new-page browser/Excel acceptance
-  remain pending. This release does not resolve missing opening inventory costs
-  or certify all report-center financial values.
+- Migration `00461_report_stock_and_sku_snapshots.sql` was applied and verified
+  on production. PR585 was merged at `9bd582b8acf518eeabf033d314eaf081dc906765`;
+  the associated Vercel production deployment is READY.
+- SKU source-document reconciliation and a downloaded filtered XLSX were checked.
+  Material consumption was reconciled with exact historical cost events. It is
+  gross BOM issues, not net consumption after return/void restoration.
+  This does not resolve missing opening inventory costs or certify every report.
 
 ## Whole-center source screening
 
@@ -91,3 +91,53 @@ and source-document drilldown separately for each report.
   Merged subtotal cells are not pinned across the whole table.
 - This is a presentation change, not acceptance of missing SKU financial detail,
   historical costs, customer aggregation or Excel source reconciliation.
+
+## Production numerical checks on 2026-10-09
+
+Scope: Kho Tong `558adc8f-a629-4ae6-90a6-d13c2a83896c`, October 1-9 inclusive,
+Vietnam business dates. Read-only source queries; no business records modified.
+
+| Check | Independent source | Screen | Result |
+| --- | --- | --- | --- |
+| XNT period receipts | 67 movements; 43,571,322.82 | 43,571,322.82 | Matched |
+| XNT period issues | 243 movements; 60,474,893.31936 | 60,474,893.32 | Matched to display precision |
+| Cash receipts | 19 completed receipts; 58,752,960 | 58,752,960 | Matched |
+| Cash payments | 18 completed payments; 38,242,218 | 38,242,218 | Matched |
+| Cash net | 20,510,742 | 20,510,742 | Matched |
+| Completed invoices | 24 invoices; merchandise 71,212,080; delivery 101,000 | Same count and amounts | Matched |
+| Historical sales cost | 223 invoice lines; 56,294,319.11; no missing costs | 56,294,319.11 | Matched |
+| Returns | 1 line; refund 1,150,000; original cost 1,000,000 | Same refund and cost | Matched |
+| Net historical COGS | 55,294,319.11 | 55,294,319.11 | Matched |
+
+The user is selling during verification, so different-time snapshots can differ.
+Sales cost uses the invoice-line snapshot; return cost resolves the original sold
+line, not current product cost. These checks reconcile 223 sale lines and one
+return line, rather than merely repeating a report RPC total.
+
+### Acceptance corrections in this branch
+
+- Staff detail uses one filtered/sorted source for the table and Excel, records
+  the selected branch and filter parameters, and exports AutoFilter ranges.
+- Customer counts are per employee/branch/channel. They are no longer summed
+  into a misleading unique-customer total. Staff gross invoice sales are labeled
+  distinctly from net sales after returns.
+- Cash document date is a calendar date, not a synthetic 07:00 timestamp.
+  Actual receipt/payment time remains a separate column. Code is the first column
+  in the ledger and exports; missing operator information is not fabricated.
+- End-of-day gross invoice total and net-after-return total match the same source
+  period. Daily mixed-unit quantities are removed from the table and workbook;
+  a branch/date-scoped SKU detail link provides meaningful per-unit quantities.
+- Baseline: 55 report test files / 266 tests passed. Targeted changes: 23 tests
+  passed, including three new staff-view cases. TypeScript passed before release.
+
+### Still not blanket-accepted
+
+- Historical amount for every XNT movement-type bucket (current buckets have qty).
+- Gross BOM issues versus restored/net consumption, with invoice-level drilldown.
+- End-of-day, channel, supplier, VAT and aging numerical acceptance against their
+  distinct source documents; all 37 routes were screened but not all reconciled.
+- Production Excel acceptance for every individual report/filter combination.
+- Missing opening/closing costs remain the parallel opening-inventory workstream.
+
+No new migration, changes to stock, BOM, prices, invoices or Retail business data
+are included in this presentation/export acceptance correction.
