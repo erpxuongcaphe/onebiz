@@ -13,6 +13,10 @@ describe("report audit corrections", () => {
     expect(page).toContain("currentRequest === requestId.current");
     expect(page).toContain("exportDisabled={loading || loadError}");
     expect(page).not.toContain("remainingQty: rows.reduce");
+    expect(page).toContain("sortReportRows(filtered");
+    expect(page).toContain("sortState={sort}");
+    expect(page).toContain("onSortChange={setSort}");
+    expect(page).toContain("autoFilter: true");
   });
   it("does not aggregate sales quantities across incompatible units", () => {
     const page = read("src/app/(main)/phan-tich/ban-hang/page.tsx");
