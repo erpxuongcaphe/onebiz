@@ -116,6 +116,8 @@ interface FnbCartProps {
   onMergeTable?: () => void;
   /** Lịch sử đơn — mở modal danh sách hoá đơn hôm nay + reprint. */
   onOrderHistory?: () => void;
+  /** Read-only history; provided only with audit permission. */
+  auditHistoryHref?: string;
   /**
    * Sprint POS-FNB-4: switch order type instant từ cart (dine_in/takeaway/delivery).
    * Chỉ hiển thị pill row khi callback được pass + chưa gửi bếp (tránh
@@ -193,6 +195,7 @@ export function FnbCart({
   onTransferTable,
   onMergeTable,
   onOrderHistory,
+  auditHistoryHref,
   onChangeOrderType,
   onApplyCoupon,
   onRemoveCoupon,
@@ -295,6 +298,7 @@ export function FnbCart({
               {onMergeTable && <DropdownMenuItem onClick={onMergeTable}><Icon name="call_merge" size={18} /> Gộp bill vào bàn khác</DropdownMenuItem>}
               {onSplitBill && activeTab?.kitchenOrderId && lines.length > 1 && <DropdownMenuItem onClick={onSplitBill}><Icon name="content_cut" size={18} /> Tách bill</DropdownMenuItem>}
               {onPrintPreBill && !isEmpty && <DropdownMenuItem onClick={onPrintPreBill}><Icon name="description" size={18} /> In tạm tính</DropdownMenuItem>}
+              {auditHistoryHref && activeTab?.kitchenOrderId && <DropdownMenuItem render={<a href={auditHistoryHref} target="_blank" rel="noopener noreferrer" title="Mở nhật ký bill trong tab mới" />}><Icon name="history" size={18} /> Nhật ký bill</DropdownMenuItem>}
               {onOrderHistory && <DropdownMenuItem onClick={onOrderHistory}><Icon name="receipt_long" size={18} /> Lịch sử đơn / in lại</DropdownMenuItem>}
               {activeTab?.kitchenOrderId && onCancelSentItems && <DropdownMenuItem onClick={onCancelSentItems} className="text-status-error"><Icon name="remove_shopping_cart" size={18} /> Hủy một / nhiều món</DropdownMenuItem>}
               {activeTab?.kitchenOrderId && onVoidKitchenOrder && <><DropdownMenuSeparator /><DropdownMenuItem onClick={onVoidKitchenOrder} className="text-status-error"><Icon name="cancel" size={18} /> {voidKitchenOrderLabel}</DropdownMenuItem></>}

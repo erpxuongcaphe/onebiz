@@ -5,7 +5,9 @@
  * Real DataTable with filters, pagination, detail viewer.
  */
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { auditEntryFilters } from "@/lib/operation-history-entry";
 import { ColumnDef } from "@tanstack/react-table";
 import { PageHeader } from "@/components/shared/page-header";
 import { DataTable } from "@/components/shared/data-table";
@@ -75,13 +77,15 @@ const ACTION_COLORS: Record<string, string> = {
 export default function AuditPageGuarded() {
   return (
     <PermissionPage requires={PERMISSIONS.SYSTEM_VIEW_AUDIT}>
-      <AuditPage />
+      <Suspense fallback={<p className="p-4 text-muted-foreground">Đang tải nhật ký…</p>}><AuditPage /></Suspense>
     </PermissionPage>
   );
 }
 
 function AuditPage() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const [entry] = useState(() => auditEntryFilters(searchParams));
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const requestSequence = useRef(0);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -89,18 +93,18 @@ function AuditPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(entry.search);
   const debouncedSearch = useDebounce(search, 300);
 
   // Filters
   const [actionFilter, setActionFilter] = useState("all");
   const [entityFilter, setEntityFilter] = useState("all");
-  const [datePreset, setDatePreset] = useState<DatePresetValue>("all");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [datePreset, setDatePreset] = useState<DatePresetValue>(entry.datePreset);
+  const [dateFrom, setDateFrom] = useState(entry.dateFrom);
+  const [dateTo, setDateTo] = useState(entry.dateTo);
   const [filterOpen, setFilterOpen] = useState(false);
-  const [sourceFilter, setSourceFilter] = useState("all");
-  const [branchFilter, setBranchFilter] = useState("current");
+  const [sourceFilter, setSourceFilter] = useState(entry.source);
+  const [branchFilter, setBranchFilter] = useState(entry.branch);
   const [actorFilter, setActorFilter] = useState("all");
   const [approverFilter, setApproverFilter] = useState("all");
   const [timeFrom, setTimeFrom] = useState("");
@@ -335,7 +339,7 @@ function AuditPage() {
         title="Lịch sử thao tác"
         density="compact"
         searchPlaceholder="Tìm mã bill, người thực hiện hoặc hành động…"
-        searchValue={search}
+        searchValue={entry.search && search === entry.search ? entry.label : search}
         onSearchChange={(v) => {
           setSearch(v);
           setPage(0);

@@ -1,4 +1,5 @@
 "use client";
+import { billAuditHref } from "@/lib/operation-history-entry";
 import { useFnbTabReconciliation } from "@/lib/hooks/use-fnb-tab-reconciliation";
 
 import { useState, useEffect, useRef, useCallback, useMemo, lazy, Suspense } from "react";
@@ -471,6 +472,9 @@ function FnbPosPageInner() {
   const canCheckout = hasPermission(PERMISSIONS.POS_FNB_CHECKOUT);
   const canSplitBill = hasPermission(PERMISSIONS.POS_FNB_SPLIT_BILL);
   const canViewOrderHistory = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS) || canCheckout;
+  const activeBillAuditHref = hasPermission(PERMISSIONS.SYSTEM_VIEW_AUDIT)
+    ? billAuditHref(branchId, pos.activeTab?.kitchenOrderId, openOrders.orders.find(order => order.id === pos.activeTab?.kitchenOrderId)?.orderNumber ?? pos.activeTab?.label ?? "Bill đang xem")
+    : undefined;
   const canVoidPaidBill =
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
@@ -3879,6 +3883,7 @@ function FnbPosPageInner() {
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
+          auditHistoryHref={activeBillAuditHref}
           onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
           onApplyCoupon={handleApplyCoupon}
           onRemoveCoupon={handleRemoveCoupon}
@@ -4094,7 +4099,8 @@ function FnbPosPageInner() {
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
-              onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
+              auditHistoryHref={activeBillAuditHref}
+          onOrderHistory={canViewOrderHistory ? () => setOrderHistoryOpen(true) : undefined}
               onApplyCoupon={handleApplyCoupon}
               onRemoveCoupon={handleRemoveCoupon}
               appliedCouponCode={couponApplied?.code}

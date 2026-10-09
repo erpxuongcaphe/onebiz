@@ -59,6 +59,8 @@ export interface AuditFilters {
 /* ------------------------------------------------------------------ */
 
 const ACTION_LABELS: Record<string, string> = {
+  fnb_cancel_request_reject: "Từ chối yêu cầu hủy F&B",
+  employee_benefit_group_save: "Lưu nhóm ưu đãi nội bộ",
   create: "Tạo mới",
   update: "Cập nhật",
   delete: "Xóa",
@@ -182,6 +184,7 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 const ENTITY_TYPE_LABELS: Record<string, string> = {
+  employee_benefit_group: "Nhóm ưu đãi nội bộ",
   approval: "Duyệt thao tác",
   invoice: "Hóa đơn",
   product: "Sản phẩm",
