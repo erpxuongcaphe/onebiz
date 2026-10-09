@@ -15,6 +15,36 @@ describe("PIN setup and mobile OTP shortcut", () => {
   it("does not require POS PIN for warehouse-only staff", () => { render(<PosPinOnboarding><button>Bán</button></PosPinOnboarding>); expect(screen.getByRole("button", { name: "Bán" })).toBeVisible(); expect(mocks.fetch).not.toHaveBeenCalled(); });
   it("shows first-time setup and keeps the existing page mounted", async () => { mocks.permissions.add("pos_fnb.send_kitchen"); render(<PosPinOnboarding><input aria-label="Giỏ nháp" defaultValue="2 món" /></PosPinOnboarding>); expect(await screen.findByLabelText("PIN mới (6 chữ số)")).toBeVisible(); expect(screen.getByLabelText("Giỏ nháp")).toHaveValue("2 món"); expect(screen.getByLabelText("Giỏ nháp")).not.toBeVisible(); });
   it("skips setup when a PIN already exists", async () => { mocks.permissions.add("pos_fnb.send_kitchen"); mocks.fetch.mockResolvedValue(response(true)); render(<PosPinOnboarding><button>Bán</button></PosPinOnboarding>); await waitFor(() => expect(screen.getByRole("button", { name: "Bán" })).toBeVisible()); expect(screen.queryByText("Tạo PIN cá nhân")).not.toBeInTheDocument(); });
+  it("never shows PIN creation while a reload is waiting for the existing account status", async () => {
+    mocks.permissions.add("pos_fnb.send_kitchen");
+    let complete!: (value: ReturnType<typeof response>) => void;
+    mocks.fetch.mockReturnValue(new Promise(resolve => { complete = resolve; }));
+    render(<PosPinOnboarding><input aria-label="Đơn đang mở" defaultValue="Bàn 9" /></PosPinOnboarding>);
+    expect(screen.getByRole("heading", { name: "Kiểm tra phiên làm việc" })).toBeVisible();
+    expect(screen.queryByText("Tạo PIN cá nhân")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("PIN mới (6 chữ số)")).not.toBeInTheDocument();
+    await act(async () => complete(response(true)));
+    expect(screen.getByLabelText("Đơn đang mở")).toBeVisible();
+    expect(screen.getByLabelText("Đơn đang mở")).toHaveValue("Bàn 9");
+    expect(mocks.change).not.toHaveBeenCalled();
+  });
+  it("does not recheck PIN when the same user profile object is refreshed", async () => {
+    mocks.permissions.add("pos_fnb.send_kitchen"); mocks.fetch.mockResolvedValue(response(true));
+    const view = render(<PosPinOnboarding>POS</PosPinOnboarding>);
+    await waitFor(() => expect(screen.queryByText("Kiểm tra phiên làm việc")).not.toBeInTheDocument());
+    mocks.user = { ...mocks.user };
+    view.rerender(<PosPinOnboarding>POS</PosPinOnboarding>);
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+  it("requires setup after a real manager PIN reset without discarding the open page", async () => {
+    mocks.permissions.add("pos_fnb.send_kitchen"); mocks.fetch.mockResolvedValue(response(true));
+    render(<PosPinOnboarding><input aria-label="Đơn giữ nguyên" defaultValue="2 món" /></PosPinOnboarding>);
+    await waitFor(() => expect(screen.getByLabelText("Đơn giữ nguyên")).toBeVisible());
+    mocks.fetch.mockResolvedValue(response(false));
+    act(() => window.dispatchEvent(new Event("onebiz:pin-updated")));
+    expect(await screen.findByLabelText("PIN mới (6 chữ số)")).toBeVisible();
+    expect(screen.getByLabelText("Đơn giữ nguyên")).toHaveValue("2 món");
+  });
   it("shows retry after a read error instead of permitting first-time overwrite", async () => { mocks.permissions.add("pos_fnb.send_kitchen"); mocks.fetch.mockResolvedValue({ ok: false, json: async () => ({ message: "Mất kết nối" }) }); render(<PosPinOnboarding>POS</PosPinOnboarding>); expect(await screen.findByRole("alert")).toHaveTextContent("Mất kết nối"); expect(screen.queryByLabelText("PIN mới (6 chữ số)")).not.toBeInTheDocument(); });
   it("will not submit a mismatched confirmation", () => { render(<MyPosPin hasPin={false} onSaved={vi.fn()} />); fireEvent.change(screen.getByLabelText("PIN mới (6 chữ số)"), { target: { value: "123456" } }); fireEvent.change(screen.getByLabelText("Nhập lại PIN mới"), { target: { value: "654321" } }); expect(screen.getByRole("button", { name: "Tạo PIN và tiếp tục" })).toBeDisabled(); expect(mocks.change).not.toHaveBeenCalled(); });
   it("creates own PIN once, clears inputs, and continues", async () => { const saved = vi.fn(); render(<MyPosPin hasPin={false} onSaved={saved} />); fireEvent.change(screen.getByLabelText("PIN mới (6 chữ số)"), { target: { value: "123456" } }); fireEvent.change(screen.getByLabelText("Nhập lại PIN mới"), { target: { value: "123456" } }); fireEvent.click(screen.getByRole("button", { name: "Tạo PIN và tiếp tục" })); await waitFor(() => expect(saved).toHaveBeenCalledTimes(1)); expect(mocks.change).toHaveBeenCalledWith("123456", null); expect(screen.getByLabelText("PIN mới (6 chữ số)")).toHaveValue(""); });

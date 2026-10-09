@@ -36,6 +36,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
+  DialogBody,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1114,7 +1115,7 @@ export default function NhomHangPage() {
           setDialogOpen(o);
         }}
       >
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {editingCategory ? "Sửa nhóm hàng" : "Thêm nhóm hàng mới"}
@@ -1126,7 +1127,7 @@ export default function NhomHangPage() {
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-4 py-2">
+          <DialogBody className="grid gap-4 py-2 pr-1">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 Tên nhóm <span className="text-destructive">*</span>
@@ -1315,7 +1316,7 @@ export default function NhomHangPage() {
                 />}
               </div>
             )}
-          </div>
+          </DialogBody>
 
           <DialogFooter>
             <Button
