@@ -138,16 +138,17 @@ function nextLineId(): string {
   return `ln-${++lineCounter}-${Date.now()}`;
 }
 
-function computeLineDiscount(line: OrderLine): number {
-  const gross = line.quantity * line.unitPrice;
+function computeLineDiscount(line: OrderLine, roundMoney = false): number {
+  const gross = roundMoney ? Math.round(line.quantity * line.unitPrice) : line.quantity * line.unitPrice;
   if (line.discount.mode === "percent") {
     return Math.round((gross * line.discount.value) / 100);
   }
   return Math.max(0, line.discount.value);
 }
 
-function computeLineTotal(line: OrderLine): number {
-  return Math.max(0, line.quantity * line.unitPrice - computeLineDiscount(line));
+function computeLineTotal(line: OrderLine, roundMoney = false): number {
+  const gross = roundMoney ? Math.round(line.quantity * line.unitPrice) : line.quantity * line.unitPrice;
+  return Math.max(0, gross - computeLineDiscount(line, roundMoney));
 }
 
 // ============================================================
@@ -475,13 +476,13 @@ export function usePosState() {
   // --- Computed totals ---
 
   const subtotal = useMemo(
-    () => lines.reduce((sum, l) => sum + l.quantity * l.unitPrice, 0),
-    [lines]
+    () => lines.reduce((sum, l) => sum + (sellingMode === "internal" ? Math.round(l.quantity * l.unitPrice) : l.quantity * l.unitPrice), 0),
+    [lines, sellingMode]
   );
 
   const lineDiscountTotal = useMemo(
-    () => lines.reduce((sum, l) => sum + computeLineDiscount(l), 0),
-    [lines]
+    () => lines.reduce((sum, l) => sum + computeLineDiscount(l, sellingMode === "internal"), 0),
+    [lines, sellingMode]
   );
 
   const afterLineDiscount = Math.max(0, subtotal - lineDiscountTotal);
@@ -500,10 +501,12 @@ export function usePosState() {
     if (afterLineDiscount <= 0) return 0;
     const discScale = Math.max(0, (afterLineDiscount - orderDiscountAmount) / afterLineDiscount);
     return lines.reduce((sum, l) => {
-      const lineNet = (l.quantity * l.unitPrice - computeLineDiscount(l)) * discScale;
+      const gross = sellingMode === "internal" ? Math.round(l.quantity * l.unitPrice) : l.quantity * l.unitPrice;
+      const lineNet = (gross - computeLineDiscount(l, sellingMode === "internal")) * discScale;
       return sum + Math.round(lineNet * (l.vatRate ?? 0) / 100);
     }, 0);
-  }, [lines, afterLineDiscount, orderDiscountAmount]);
+  }, [lines, afterLineDiscount, orderDiscountAmount, sellingMode]);
+  const computeCurrentLineTotal = useCallback((line: OrderLine) => computeLineTotal(line, sellingMode === "internal"), [sellingMode]);
 
   const shippingFee = sellingMode === "delivery" || sellingMode === "internal" ? deliveryInfo.shippingFee : 0;
   // P0-1 fix: orderVatAmount = VAT cấp đơn trên (after - orderDisc + lineVAT + shipping)
@@ -679,7 +682,7 @@ export function usePosState() {
     restoreSnapshot,
 
     // Utility
-    computeLineTotal,
+    computeLineTotal: computeCurrentLineTotal,
   };
 }
 

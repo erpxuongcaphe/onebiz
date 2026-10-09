@@ -44,9 +44,9 @@ begin
  for v_item in select value from jsonb_array_elements(p_checkout->'items') loop
   v_qty:=(v_item->>'quantity')::numeric; v_price:=(v_item->>'unitPrice')::numeric;
   v_disc:=coalesce((v_item->>'discount')::numeric,0); v_vat:=coalesce((v_item->>'vatRate')::numeric,0);
-  if v_qty is null or v_qty<=0 or v_price is null or v_price<0 or v_disc<0 or v_disc>v_qty*v_price or v_vat not between 0 and 100 then raise exception 'INTERNAL_POS_ITEM_INVALID'; end if;
+  if v_qty is null or v_qty<=0 or v_price is null or v_price<0 or v_disc<0 or v_disc>round(v_qty*v_price) or v_vat not between 0 and 100 then raise exception 'INTERNAL_POS_ITEM_INVALID'; end if;
   if nullif(v_item->>'variantId','') is not null then raise exception 'INTERNAL_POS_VARIANT_REQUIRES_STOCK_MAPPING'; end if;
-  v_subtotal:=v_subtotal+v_qty*v_price; v_line_disc:=v_line_disc+v_disc;
+  v_subtotal:=v_subtotal+round(v_qty*v_price); v_line_disc:=v_line_disc+v_disc;
  end loop;
  if v_order_disc>v_subtotal-v_line_disc then raise exception 'INTERNAL_POS_DISCOUNT_INVALID'; end if;
  if v_line_disc+v_order_disc>0 then perform verify_otp_authorization(nullif(p_checkout->>'discountOtpId','')::uuid,'pos_retail.discount_override',v_actor,null); end if;
@@ -59,7 +59,7 @@ begin
   v_qty:=(v_item->>'quantity')::numeric; v_price:=(v_item->>'unitPrice')::numeric;
   v_factor:=resolve_product_uom_factor(v_tenant,v_product.id,v_item->>'unit');
   if round(v_qty*v_factor,4)<=0 or round(round(v_qty*v_factor,4)*(v_price/v_factor))<>round(v_qty*v_price) then raise exception 'INTERNAL_POS_UNIT_PRECISION_INVALID'; end if;
-  v_net:=v_qty*v_price-coalesce((v_item->>'discount')::numeric,0);
+  v_net:=round(v_qty*v_price)-coalesce((v_item->>'discount')::numeric,0);
   v_tax:=v_tax+round(v_net*v_scale*coalesce((v_item->>'vatRate')::numeric,0)/100);
   -- Cumulative allocation preserves the exact bill discount, including the last dong.
   v_accum:=v_accum+v_net; v_allocation:=round(v_accum*v_scale)-v_allocated; v_allocated:=v_allocated+v_allocation;
@@ -76,6 +76,7 @@ begin
   v_paid:=v_paid+v_amount;
  end loop;
  if v_paid>v_total then raise exception 'INTERNAL_POS_PAYMENT_EXCEEDS_TOTAL'; end if;
+ if coalesce((p_checkout->>'amountTendered')::numeric,v_paid)<v_paid then raise exception 'INTERNAL_POS_TENDERED_INVALID'; end if;
  -- Reuse the established source/destination stock, catalog, lots and cost chain.
  v_result:=checkout_internal_pos_atomic(v_branch,v_customer,v_rows,'debt',v_allocated,v_session,v_draft,v_revision,v_shift,p_checkout->>'note');
  v_sale:=(v_result->>'internal_sale_id')::uuid; v_invoice:=(v_result->>'invoice_id')::uuid; v_input:=(v_result->>'input_invoice_id')::uuid;
@@ -95,7 +96,7 @@ begin
   v_disc:=coalesce((v_item->>'discount')::numeric,0); v_vat:=coalesce((v_item->>'vatRate')::numeric,0);
   insert into invoice_items(invoice_id,product_id,product_name,unit,quantity,unit_price,discount,vat_rate,vat_amount,total)
    values(v_invoice,v_product.id,v_product.name,v_product.unit,round(v_qty*v_factor,4),v_price/v_factor,v_disc,v_vat,
-    round((v_qty*v_price-v_disc)*v_scale*v_vat/100),v_qty*v_price-v_disc);
+    round((round(v_qty*v_price)-v_disc)*v_scale*v_vat/100),round(v_qty*v_price)-v_disc);
  end loop;
  -- The immutable snapshot retains entered units, prices and discounts; stock stays in base units.
  for v_pay in select value from jsonb_array_elements(p_checkout->'payments') loop

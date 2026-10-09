@@ -89,6 +89,13 @@ try {
  const reversalCount=Number((await db.query(`select count(*) n from stock_movements where reference_type='internal_sale_cancel'`)).rows[0].n);
  await db.query(`select cancel_internal_sale_atomic('${upgraded.internal_sale_id}','Kiểm thử gọi lại')`);
  assert.equal(Number((await db.query(`select count(*) n from stock_movements where reference_type='internal_sale_cancel'`)).rows[0].n),reversalCount);
+ const fractional={...payload,items:[{productId:context.product,unit:context.unit,quantity:.1234,unitPrice:100,vatRate:0,discount:0}],
+  orderDiscount:0,shippingFee:0,expectedTotal:12,payments:[{method:'card',amount:12}],amountTendered:12,sessionId:'91000000-0000-0000-0000-000000000006'};
+ const fractionalResult=(await db.query(call(fractional))).rows[0].result;
+ const fractionalLine=(await db.query(`select quantity,total from invoice_items where invoice_id='${fractionalResult.invoice_id}'`)).rows[0];
+ assert.equal(Number(fractionalLine.quantity),.1234); assert.equal(Number(fractionalLine.total),12);
+ await assert.rejects(db.query(call({...fractional,amountTendered:0,sessionId:'91000000-0000-0000-0000-000000000007'})),/TENDERED_INVALID/);
+ console.log('PASS: fractional quantities are retained while VND line totals and paired receipt cost round consistently.');
  console.log('PASS: paired completed cancellation restores actual stock in both branches, reverses paired cash, clears debt, retains documents, blocks one-sided void/return and is idempotent.');
  console.log('PASS: established internal document/stock/cost chain; POS debt checkout, shift linkage and replay without duplicate stock.');
 } catch(error) { console.error(error.message,error.where??''); process.exitCode=1; }

@@ -2054,7 +2054,7 @@ function PosPageInner() {
         const result = await checkoutInternalPos({
           branchId: currentBranch!.id, customerId: state.customer.id,
           items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
-            ? Math.round(line.quantity * line.unitPrice * line.discount.value / 100) : line.discount.value })),
+            ? Math.round(Math.round(line.quantity * line.unitPrice) * line.discount.value / 100) : line.discount.value })),
           payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
           orderDiscount: state.orderDiscountAmount, orderVatRate: state.orderVatRate, shippingFee: state.shippingFee,
           amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
