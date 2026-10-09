@@ -8,6 +8,13 @@ const service = readFileSync(
 const page = readFileSync("src/app/(main)/hang-hoa/page.tsx", "utf8");
 
 describe("F&B outlet Retail ingredient catalog", () => {
+  it("labels menu BOM availability separately from physical stock", () => {
+    expect(page).toContain('header: isFnbOutletView ? "Có thể pha" : "Tồn kho"');
+    expect(page).toContain('"Ước tính từ tồn nguyên liệu theo BOM"');
+    expect(page).toContain('header: "Tồn kho"');
+    expect(page).toContain("formatNumber(avail.available)");
+  });
+
   it("derives the outlet catalog from active Retail SKUs instead of stock rows", () => {
     expect(service).toContain(
       'return query.or("channel.eq.fnb,channel.eq.retail")',
