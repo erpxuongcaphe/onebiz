@@ -46,6 +46,12 @@ export default function TieuHaoNvlPage() {
     { key: "materialName", label: "Nguyên vật liệu", width: "260px" },
     { key: "branchName", label: "Chi nhánh", width: "240px" },
     { key: "unit", label: "ĐVT", width: "90px" },
+    { key: "issueQty", label: "Số lượng", align: "right", width: "150px", cell: row => formatStockQuantity(row.issueQty), subtotalCell: totals.issueQty === null ? "Nhiều ĐVT" : formatStockQuantity(totals.issueQty) },
+    { key: "issueUnitCost", label: "Đơn giá", align: "right", width: "150px", cell: row => row.issueUnitCost === null ? "—" : formatStockQuantity(row.issueUnitCost) },
+    { key: "issueCost", label: "Thành tiền", align: "right", width: "180px", cell: row => money(row.issueCost), subtotalCell: money(totals.issueCost) },
+    { key: "restoreQty", label: "Số lượng", align: "right", width: "150px", cell: row => formatStockQuantity(row.restoreQty), subtotalCell: totals.restoreQty === null ? "Nhiều ĐVT" : formatStockQuantity(totals.restoreQty) },
+    { key: "restoreUnitCost", label: "Đơn giá", align: "right", width: "150px", cell: row => row.restoreUnitCost === null ? "—" : formatStockQuantity(row.restoreUnitCost) },
+    { key: "restoreCost", label: "Thành tiền", align: "right", width: "180px", cell: row => money(row.restoreCost), subtotalCell: money(totals.restoreCost) },
     { key: "totalQty", label: "Số lượng tiêu hao", align: "right", width: "160px", cell: row => formatStockQuantity(row.totalQty), subtotalCell: totals.quantity === null ? "Nhiều ĐVT" : formatStockQuantity(totals.quantity) },
     { key: "averageUnitCost", label: "Đơn giá bình quân", align: "right", width: "180px", cell: row => row.averageUnitCost === null ? "—" : formatStockQuantity(row.averageUnitCost) },
     { key: "totalCost", label: "Thành tiền", align: "right", width: "180px", cell: row => money(row.totalCost), subtotalCell: money(totals.totalCost) },
@@ -58,22 +64,23 @@ export default function TieuHaoNvlPage() {
       const titleRows = buildReportTitleRows({ title: "BÁO CÁO TIÊU HAO NGUYÊN VẬT LIỆU", range, branchName: branchLabel });
       titleRows.push(`Tìm kiếm: ${search || "Tất cả"}; ĐVT: ${unit || "Tất cả"}; Sắp xếp: ${sort.id} ${sort.direction}`);
       titleRows.push("Giá vốn chốt tại phát sinh kho; ô trống là thiếu giá lịch sử. Đơn giá bình quân = thành tiền / số lượng.");
-      titleRows.push("Phạm vi: xuất kho theo BOM trong kỳ, chưa trừ hoàn nhập từ trả hoặc hủy hóa đơn.");
+      titleRows.push("Tiêu hao ròng = xuất BOM - hoàn nhập. Hoàn nhập được ghi theo ngày phát sinh kho.");
       await exportReportToExcel({ kind: "tieu-hao-nvl", mode, range, branchName: branchLabel, sheets: [{
         name: "Tiêu hao NVL", titleRows, autoFilter: true,
+        columnGroups: [{ label: "", span: 4 }, { label: "XUẤT BOM", span: 3 }, { label: "HOÀN NHẬP", span: 3 }, { label: "TIÊU HAO RÒNG", span: 3 }, { label: "", span: 1 }],
         tablePreferenceKey: mode === "view" ? TABLE_KEY : undefined,
         columns: columns.map(column => ({ key: String(column.key), label: column.label, width: column.key === "materialName" ? 32 : 22,
           hideable: column.hideable, decimalPlaces: 4,
-          format: ["totalQty", "averageUnitCost", "totalCost", "movementCount"].includes(String(column.key)) ? "number" as const : undefined })),
+          format: !["materialCode", "materialName", "branchName", "unit"].includes(String(column.key)) ? "number" as const : undefined })),
         rows: visible.map(row => ({ ...row })),
-        footer: { materialCode: "TỔNG", totalQty: totals.quantity ?? "Nhiều ĐVT", totalCost: totals.totalCost, movementCount: totals.movements },
+        footer: { materialCode: "TỔNG", issueQty: totals.issueQty ?? "Nhiều ĐVT", restoreQty: totals.restoreQty ?? "Nhiều ĐVT", issueCost: totals.issueCost, restoreCost: totals.restoreCost, totalQty: totals.quantity ?? "Nhiều ĐVT", totalCost: totals.totalCost, movementCount: totals.movements },
       }] });
       toast({ title: "Đã xuất báo cáo", variant: "success" });
     } catch (error) { toast({ title: "Không xuất được Excel", description: error instanceof Error ? error.message : "Vui lòng thử lại", variant: "error" }); }
     finally { setExporting(false); }
   }
   return <div className="flex min-h-full flex-col">
-    <ReportPageHeader title="Tiêu hao nguyên vật liệu" subtitle="Xuất kho theo BOM, chưa trừ hoàn nhập" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
+    <ReportPageHeader title="Tiêu hao nguyên vật liệu" subtitle="Xuất BOM · Hoàn nhập · Tiêu hao ròng" preset={preset} range={range} onPresetChange={setPreset} onCustomRangeChange={setCustomRange}
       onExportView={() => exportRows("view")} onExportFull={() => exportRows("full")} exportDisabled={loading || exporting || !visible.length} />
     <div className="space-y-4 p-4 lg:p-6">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -87,7 +94,7 @@ export default function TieuHaoNvlPage() {
         <div className="relative min-w-60 flex-1"><Icon name="search" size={18} className="absolute left-3 top-3 text-muted-foreground" /><Input aria-label="Tìm nguyên vật liệu" placeholder="Mã, tên NVL hoặc chi nhánh" value={search} onChange={event => setSearch(event.target.value)} className="pl-9" /></div>
         <Select value={unit || "all"} onValueChange={value => setUnit(value === "all" ? "" : value ?? "")}><SelectTrigger className="w-44" aria-label="Đơn vị tính"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">Tất cả ĐVT</SelectItem>{units.map(value => <SelectItem key={value} value={value}>{value}</SelectItem>)}</SelectContent></Select>
       </div>
-      <ReportDataTable columns={columns} rows={loading ? [] : visible} getRowKey={row => `${row.branchId}:${row.materialId}`} tablePreferenceKey={TABLE_KEY}
+      <ReportDataTable columns={columns} columnGroups={[{ label: "", span: 4 }, { label: "Xuất BOM", span: 3 }, { label: "Hoàn nhập", span: 3 }, { label: "Tiêu hao ròng", span: 3 }, { label: "", span: 1 }]} rows={loading ? [] : visible} getRowKey={row => `${row.branchId}:${row.materialId}`} tablePreferenceKey={TABLE_KEY}
         sortState={sort} onSortChange={setSort} subtotalLabel={`${visible.length} dòng`} emptyState={loading ? "Đang tải..." : "Không có phát sinh phù hợp."} />
     </div>
   </div>;

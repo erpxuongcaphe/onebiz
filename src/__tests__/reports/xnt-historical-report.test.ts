@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { rpc } = vi.hoisted(() => ({ rpc: vi.fn() }));
 
@@ -22,6 +22,7 @@ const service = readFileSync(
 );
 
 describe("historical XNT report", () => {
+  beforeEach(() => { rpc.mockReset(); rpc.mockResolvedValue({ data: [], error: null }); });
   it("maps server buckets and keeps the stock equation balanced", async () => {
     rpc.mockResolvedValueOnce({
       data: [

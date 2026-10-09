@@ -22,6 +22,10 @@ export interface NvlConsumptionRow {
   totalQty: number;
   unit: string;
   totalCost: number | null;
+  issueQty?: number;
+  restoreQty?: number;
+  issueCost?: number | null;
+  restoreCost?: number | null;
   movementCount: number;
 }
 
@@ -33,7 +37,7 @@ export async function getNvlConsumptionByBranch(params: {
   const supabase = getClient();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "report_nvl_consumption_by_branch",
+    "report_nvl_consumption_net",
     {
       p_from_date: params.fromDate,
       p_to_date: params.toDate,
@@ -44,7 +48,7 @@ export async function getNvlConsumptionByBranch(params: {
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có RPC report_nvl_consumption_by_branch. Vui lòng chạy migration 00099 trước.",
+        "Báo cáo tiêu hao chưa được cập nhật trên máy chủ. Vui lòng liên hệ quản trị viên.",
       );
     }
     handleError(error, "getNvlConsumptionByBranch");
@@ -60,6 +64,10 @@ export async function getNvlConsumptionByBranch(params: {
     totalQty: Number(r.total_qty ?? 0),
     unit: r.unit ?? "",
     totalCost: r.total_cost == null ? null : Number(r.total_cost),
+    issueQty: Number(r.issue_qty ?? 0),
+    restoreQty: Number(r.restore_qty ?? 0),
+    issueCost: r.issue_cost == null ? null : Number(r.issue_cost),
+    restoreCost: r.restore_cost == null ? null : Number(r.restore_cost),
     movementCount: Number(r.movement_count ?? 0),
   }));
 }

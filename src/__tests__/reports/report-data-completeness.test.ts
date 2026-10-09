@@ -5,6 +5,18 @@ import type { SkuFinancialRow } from "@/lib/services/supabase/sku-financial-repo
 
 const material = { branchId: "b", branchName: "Quán", materialId: "m", materialCode: "NVL-02", materialName: "Cà phê", unit: "G", totalQty: 100, totalCost: 30000, movementCount: 2 };
 describe("material report source parity", () => {
+  it("keeps gross and restored historical costs independent from incomplete net cost", () => {
+    const rows = materialConsumptionView([{ ...material, totalQty: 80, totalCost: null,
+      issueQty: 100, issueCost: 41000, restoreQty: 20, restoreCost: null }], "", "", { id: "issueUnitCost", direction: "asc" });
+    expect(rows[0]).toMatchObject({ issueUnitCost: 410, restoreUnitCost: null, averageUnitCost: null });
+    expect(materialConsumptionTotals(rows)).toMatchObject({ issueCost: 41000, restoreCost: null, totalCost: null, issueQty: 100, restoreQty: 20 });
+  });
+  it("allows negative net consumption when a prior-period issue is restored", () => {
+    const rows = materialConsumptionView([{ ...material, totalQty: -20, totalCost: -8200,
+      issueQty: 0, issueCost: 0, restoreQty: 20, restoreCost: 8200 }], "", "", { id: "totalQty", direction: "asc" });
+    expect(rows[0]).toMatchObject({ averageUnitCost: 410, issueUnitCost: null, restoreUnitCost: 410 });
+    expect(materialConsumptionTotals(rows).totalCost).toBe(-8200);
+  });
   it("does not turn unknown cost into zero or price", () => {
     const rows = materialConsumptionView([{ ...material, totalCost: null }, { ...material, materialId: "free", totalCost: 0 }], "", "", { id: "totalCost", direction: "desc" });
     expect(rows[0].averageUnitCost).toBe(0);
