@@ -758,6 +758,9 @@ function PosPageInner() {
     const urlDraftId = typeof window !== "undefined"
       ? new URLSearchParams(window.location.search).get("draftId")
       : null;
+    if (!urlDraftId && state.lines.length === 0 && new URLSearchParams(window.location.search).get("mode") === "internal") {
+      state.setSellingMode("internal");
+    }
 
     // Priority 1: nếu URL có ?draftId → load thẳng draft đó
     if (urlDraftId) {
@@ -2028,21 +2031,34 @@ function PosPageInner() {
         setCustomerModalOpen(true);
         return;
       }
-      if (state.lineDiscountTotal > 0 || state.orderDiscountAmount > 0 || state.orderVatRate > 0 || state.shippingFee > 0 || state.lines.some(l => l.variantId)) {
-        toast({ title: "Kiểm tra đơn nội bộ", description: "Đơn nội bộ dùng giá bán và VAT từng dòng. Bỏ giảm giá, VAT cấp đơn, phí giao hàng hoặc biến thể chưa có ánh xạ tồn kho trước khi hoàn tất.", variant: "warning" });
+      if (state.lines.some(l => l.variantId)) {
+        toast({ title: "Biến thể chưa có ánh xạ tồn kho nội bộ", description: "Chọn mã hàng riêng để xuất và nhập đúng cùng một SKU.", variant: "warning" });
         return;
       }
-      if (state.paymentMethod === "card" || state.paymentMethod === "mixed" || (state.paid > 0 && state.paid < state.total)) {
-        toast({ title: "Thanh toán nội bộ", description: "Chọn tiền mặt / chuyển khoản đủ tiền, hoặc để 0 để ghi công nợ nội bộ.", variant: "warning" });
+      const internalPayments = state.paymentMethod === "mixed"
+        ? state.paymentBreakdown.filter(b => b.amount > 0)
+        : state.paid > 0 ? [{ method: state.paymentMethod, amount: Math.min(state.paid, state.total) }] : [];
+      if (internalPayments.reduce((sum, p) => sum + p.amount, 0) > state.total) {
+        toast({ title: "Tổng thanh toán vượt tiền đơn", description: "Điều chỉnh các khoản thanh toán hỗn hợp; tiền thừa của thanh toán một phương thức được trả lại.", variant: "warning" });
         return;
       }
-      if (state.paid === 0 && state.total > 0 && !window.confirm(`Ghi công nợ nội bộ ${formatCurrency(state.total)} ₫ cho ${state.customer.name}?`)) return;
+      if (state.lineDiscountTotal + state.orderDiscountAmount > 0 && !state.discountAuditCtx?.otpId) {
+        pendingApprovalRef.current = null; setDiscountOtpOpen(true);
+        toast({ title: "Cần duyệt chiết khấu", description: "Nhập OTP quản lý rồi thanh toán lại.", variant: "warning" }); return;
+      }
+      const internalPaid = internalPayments.reduce((sum, p) => sum + p.amount, 0);
+      if (internalPaid < state.total && !window.confirm(`Ghi công nợ nội bộ ${formatCurrency(state.total - internalPaid)} ₫ cho ${state.customer.name}?`)) return;
       submitLockRef.current = true;
       setSubmitting("complete");
       try {
         const result = await checkoutInternalPos({
           branchId: currentBranch!.id, customerId: state.customer.id,
-          items: state.lines, paymentMethod: state.paid === 0 ? "debt" : state.paymentMethod,
+          items: state.lines.map(line => ({ ...line, discount: line.discount.mode === "percent"
+            ? Math.round(line.quantity * line.unitPrice * line.discount.value / 100) : line.discount.value })),
+          payments: internalPayments as Array<{ method: "cash" | "transfer" | "card"; amount: number }>,
+          orderDiscount: state.orderDiscountAmount, orderVatRate: state.orderVatRate, shippingFee: state.shippingFee,
+          amountTendered: state.paymentMethod === "mixed" ? internalPayments.reduce((sum,p) => sum+p.amount,0) : state.paid,
+          discountOtpId: state.discountAuditCtx?.otpId ?? null,
           expectedTotal: state.total, sessionId: clientSessionId,
           draftId: state.loadedDraftId, revision: state.loadedDraftRevision ?? null,
           shiftId: checkoutShift.id, note: state.note,
@@ -3496,6 +3512,13 @@ function PosPageInner() {
           {state.sellingMode === "internal" && <div className="border-t border-blue-200 bg-blue-50 px-3 py-2 text-sm">
             <div className="font-semibold text-blue-800">Bán nội bộ · {state.customer?.isInternal ? state.customer.name : "Chọn chi nhánh nhận hàng"}</div>
             <p className="mt-1 text-xs text-slate-600">Xuất kho chi nhánh hiện tại, nhập kho bên nhận. Để tiền khách đưa bằng 0 nếu ghi công nợ.</p>
+            <label className="mt-2 flex items-center justify-between gap-3 text-blue-900">
+              Phí giao nội bộ
+              <input type="number" min={0} step={1000} aria-label="Phí giao nội bộ"
+                className="h-9 w-28 rounded border border-blue-200 bg-white px-2 text-right text-sm"
+                value={state.deliveryInfo.shippingFee || ""} placeholder="0"
+                onChange={e => state.setDeliveryInfo({ ...state.deliveryInfo, shippingFee: Math.max(0, Number(e.target.value) || 0) })} />
+            </label>
           </div>}
           {state.sellingMode === "delivery" && (
             <DeliveryForm
@@ -3581,8 +3604,8 @@ function PosPageInner() {
               </div>
             )}
 
-            {/* Coupon / voucher — hidden in fast mode */}
-            {state.sellingMode !== "fast" && (
+            {/* Internal discounts are explicit and approved; retail vouchers stay in retail. */}
+            {state.sellingMode !== "fast" && state.sellingMode !== "internal" && (
               <div className="flex items-center justify-between gap-2">
                 <span className="text-xs text-muted-foreground shrink-0">Mã KM</span>
                 {couponApplied ? (

@@ -505,7 +505,7 @@ export function usePosState() {
     }, 0);
   }, [lines, afterLineDiscount, orderDiscountAmount]);
 
-  const shippingFee = sellingMode === "delivery" ? deliveryInfo.shippingFee : 0;
+  const shippingFee = sellingMode === "delivery" || sellingMode === "internal" ? deliveryInfo.shippingFee : 0;
   // P0-1 fix: orderVatAmount = VAT cấp đơn trên (after - orderDisc + lineVAT + shipping)
   // → fold vào total để checkout payload truyền đủ tiền khách trả.
   const baseBeforeOrderVat = Math.max(0, afterLineDiscount - orderDiscountAmount + taxAmount + shippingFee);

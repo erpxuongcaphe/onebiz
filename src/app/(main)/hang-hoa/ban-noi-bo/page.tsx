@@ -34,7 +34,7 @@ import {
 } from "@/components/shared/inline-detail-panel";
 import type { DetailTab } from "@/components/shared/inline-detail-panel";
 import type { ItemColumn } from "@/components/shared/inline-detail-panel";
-import { formatCurrency, formatDate, formatNumber, formatUser } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatUser, formatStockQuantity } from "@/lib/format";
 import {
   phamViBanNoiBo,
   getInternalSalesTheoPhamVi,
@@ -45,7 +45,7 @@ import {
   getBranches,
   getProfilesForPersonFilter,
 } from "@/lib/services";
-import { CreateInternalSaleDialog, ConfirmDialog } from "@/components/shared/dialogs";
+import { ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { usePermissions, useTxRowPermissions } from "@/lib/permissions";
@@ -162,10 +162,10 @@ function InternalSaleDetail({
 }) {
   const meta = STATUS_META[item.status];
 
-  const [detail, setDetail] = useState<{ items?: InternalSaleItemDetail[] } | null>(null);
+  const [detail, setDetail] = useState<{ items?: InternalSaleItemDetail[]; paid?: number | null; debt?: number | null; discountAmount?: number | null; deliveryFee?: number | null } | null>(null);
   useEffect(() => {
     getInternalSaleById(item.id)
-      .then((d) => setDetail(d as { items?: InternalSaleItemDetail[] }))
+      .then((d) => setDetail(d))
       .catch(() => {});
   }, [item.id]);
 
@@ -181,7 +181,7 @@ function InternalSaleDetail({
         </div>
       ),
     },
-    { header: "SL", accessor: "quantity", align: "right", className: "w-16" },
+    { header: "SL (ĐVT kho)", accessor: it => formatStockQuantity(it.quantity), align: "right", className: "w-24" },
     {
       header: "Đơn giá",
       accessor: (it) => formatCurrency(it.unitPrice),
@@ -240,6 +240,10 @@ function InternalSaleDetail({
               { label: "Tạm tính", value: formatCurrency(item.subtotal) },
               { label: "Thuế VAT", value: formatCurrency(item.taxAmount) },
               { label: "Tổng cộng", value: formatCurrency(item.total) },
+              { label: "Giảm giá", value: detail?.discountAmount == null ? "—" : formatCurrency(detail.discountAmount) },
+              { label: "Phí giao", value: detail?.deliveryFee == null ? "—" : formatCurrency(detail.deliveryFee) },
+              { label: "Đã thu / bên nhận đã chi", value: detail?.paid == null ? "—" : formatCurrency(detail.paid) },
+              { label: "Nội bộ còn phải thanh toán", value: detail?.debt == null ? "—" : formatCurrency(detail.debt) },
               { label: "Ghi chú", value: item.note || "—" },
             ]}
           />
@@ -303,6 +307,7 @@ export default function InternalSalePage() {
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("internal_sale");
   const [data, setData] = useState<InternalSaleRow[]>([]);
+  const [cancelReason, setCancelReason] = useState("");
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -327,7 +332,6 @@ export default function InternalSalePage() {
   >([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [expandedRow, setExpandedRow] = useState<number | null>(null);
-  const [showCreate, setShowCreate] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [cancellingItem, setCancellingItem] = useState<InternalSaleRow | null>(null);
   const [cancelLoading, setCancelLoading] = useState(false);
@@ -703,7 +707,7 @@ export default function InternalSalePage() {
     if (!cancellingItem) return;
     setCancelLoading(true);
     try {
-      await cancelInternalSale(cancellingItem.id);
+        await cancelInternalSale(cancellingItem.id, cancelReason.trim());
       toast({
         title: "Đã hủy đơn nội bộ",
         description: `Đơn ${cancellingItem.code} đã được hủy thành công.`,
@@ -768,7 +772,7 @@ export default function InternalSalePage() {
             {
               label: "Tạo đơn nội bộ",
               icon: <Icon name="add" size={16} />,
-              onClick: () => setShowCreate(true),
+              onClick: () => window.location.assign("/pos?mode=internal"),
             },
             {
               label: "Nhập Excel",
@@ -916,8 +920,8 @@ export default function InternalSalePage() {
               item={row}
               onClose={onClose}
               onCancel={
-                row.status !== "completed" && row.status !== "cancelled"
-                  ? () => setCancellingItem(row)
+                row.status !== "cancelled" && (row.status !== "completed" || hasAny(["pos_retail.void"]))
+                  ? () => { setCancelReason(""); setCancellingItem(row); }
                   : undefined
               }
             />
@@ -947,8 +951,8 @@ export default function InternalSalePage() {
               },
               onAuditLog: () => setAuditDialogTarget(row),
               onCancel:
-                row.status !== "completed" && row.status !== "cancelled"
-                  ? () => setCancellingItem(row)
+                row.status !== "cancelled" && (row.status !== "completed" || hasAny(["pos_retail.void"]))
+                  ? () => { setCancelReason(""); setCancellingItem(row); }
                   : undefined,
             })
           }
@@ -1046,23 +1050,26 @@ export default function InternalSalePage() {
         </FilterPanel>
       </ListPageLayout>
 
-      <CreateInternalSaleDialog
-        open={showCreate}
-        onOpenChange={setShowCreate}
-        onSuccess={fetchData}
-      />
-
       <ConfirmDialog
         open={!!cancellingItem}
         onOpenChange={(open) => {
           if (!open && !cancelLoading) setCancellingItem(null);
         }}
         title="Hủy đơn nội bộ"
-        description={`Bạn có chắc muốn hủy đơn ${cancellingItem?.code ?? ""}? Chỉ đơn nháp hoặc đã xác nhận mới được hủy; thao tác này không làm thay đổi tồn kho.`}
+        description={<>
+          <span className="block">{cancellingItem?.status === "completed"
+            ? `Hủy ${cancellingItem.code}: hoàn kho hai chi nhánh và hoàn các khoản tiền đã thu/chi. Chứng từ gốc được giữ trong nhật ký. Bên nhận phải còn đủ hàng.`
+            : `Hủy đơn ${cancellingItem?.code ?? ""}; đơn chưa hoàn tất không thay đổi tồn kho.`}</span>
+          <label className="mt-3 block text-sm font-medium text-foreground">Lý do hủy
+            <textarea className="mt-1 block w-full rounded border bg-white p-2 font-normal" rows={2}
+              value={cancelReason} onChange={e => setCancelReason(e.target.value)} placeholder="Nhập ít nhất 5 ký tự" />
+          </label>
+        </>}
         confirmLabel="Hủy đơn"
         cancelLabel="Đóng"
         variant="destructive"
         loading={cancelLoading}
+        confirmDisabled={cancelReason.trim().length < 5}
         onConfirm={handleCancel}
       />
 
