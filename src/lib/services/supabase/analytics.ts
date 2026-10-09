@@ -2635,11 +2635,12 @@ function formatFinanceBucketLabel(value: string, granularity: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   if (granularity === "day") {
-    return new Intl.DateTimeFormat("vi-VN", {
+    const parts = new Intl.DateTimeFormat("vi-VN", {
       day: "2-digit",
       month: "2-digit",
       timeZone: "Asia/Ho_Chi_Minh",
-    }).format(date);
+    }).formatToParts(date);
+    return `${parts.find((part) => part.type === "day")?.value}/${parts.find((part) => part.type === "month")?.value}`;
   }
   const parts = new Intl.DateTimeFormat("en", {
     year: "numeric", month: "numeric", timeZone: "Asia/Ho_Chi_Minh",
