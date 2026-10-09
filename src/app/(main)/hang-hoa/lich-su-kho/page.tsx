@@ -20,7 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useBranchFilter, useToast } from "@/lib/contexts";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatNumber, formatStockQuantity } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getAllStockMovements, getBranches } from "@/lib/services";
 import type { AllStockMovementRow } from "@/lib/services/supabase";
@@ -435,7 +435,7 @@ export default function LichSuKhoPage() {
         return (
           <span className={`font-semibold ${color}`}>
             {prefix}
-            {formatNumber(Math.abs(qty))}
+            {formatStockQuantity(Math.abs(qty))}
           </span>
         );
       },

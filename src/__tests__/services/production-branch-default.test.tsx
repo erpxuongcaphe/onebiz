@@ -23,16 +23,16 @@ vi.mock("@/lib/contexts", () => ({
   useBranchFilter: () => ({ activeBranchId: mocks.activeBranchId }),
 }));
 vi.mock("@/lib/services", () => ({
-  getAllBOMs: async () => mocks.boms,
-  getBOMsByProduct: async () => mocks.boms,
+  getAllBOMs: async () => mocks.boms.map((bom) => ({ ...bom, isFnbStockItem: mocks.prepared })),
+  getBOMsByProduct: async () => mocks.boms.map((bom) => ({ ...bom, isFnbStockItem: mocks.prepared })),
   getBOMById: async () => mocks.boms[0],
   getProductById: async () => ({ isFnbStockItem: mocks.prepared, stockUnit: mocks.stockUnit, unit: mocks.unit }),
   checkMaterialsAvailability: async () => [{ productId: "ingredient", available: mocks.available }],
   createProductionOrder: mocks.createProductionOrder,
   completeProductionAtomic: mocks.completeProductionAtomic,
   getBranches: async () => [
-    { id: "warehouse", name: "Kho Tổng", branchType: "factory" },
-    { id: "xtb", name: "Xưởng Tư Búa", branchType: "store" },
+    { id: "warehouse", name: "Kho Tổng", branchType: "factory", cascadeMode: "production" },
+    { id: "xtb", name: "Xưởng Tư Búa", branchType: "store", cascadeMode: "outlet" },
   ],
 }));
 vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({
@@ -185,7 +185,7 @@ describe("production branch selection", () => {
     [true, "", "G", "G"],
     [false, "Kg", "Kg", "cái"],
   ])("labels output in stock units only for F&B prepared goods (%s, %s)", async (prepared, stockUnit, unit, expectedUnit) => {
-    mocks.activeBranchId = "xtb";
+    mocks.activeBranchId = prepared ? "xtb" : "warehouse";
     mocks.prepared = prepared;
     mocks.stockUnit = stockUnit;
     mocks.unit = unit;
@@ -202,7 +202,7 @@ describe("production branch selection", () => {
     mocks.createProductionOrder.mockResolvedValue({ id: "order", code: "SX-UAT" });
     mocks.completeProductionAtomic.mockResolvedValue("lot");
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
-    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
+    await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue(mocks.activeBranchId));
     const finish = selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
     expect(screen.getByText(expectedUnit, { exact: true })).toBeTruthy();
@@ -211,7 +211,7 @@ describe("production branch selection", () => {
     fireEvent.click(finish);
     await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalled());
     expect(mocks.createProductionOrder).toHaveBeenCalledWith(expect.objectContaining({
-      branchId: "xtb", plannedQty: 2,
+      branchId: mocks.activeBranchId, plannedQty: 2,
       materials: [{ productId: "ingredient", plannedQty: 0.4, unit: "Túi" }],
     }));
     expect(mocks.completeProductionAtomic.mock.calls[0][1]).toBe(2);

@@ -102,7 +102,7 @@ export interface AddLineOptions {
 }
 
 export type PaymentMethod = "cash" | "transfer" | "card" | "mixed";
-export type SellingMode = "fast" | "normal" | "delivery";
+export type SellingMode = "fast" | "normal" | "delivery" | "internal";
 
 export interface DeliveryInfo {
   /** Khách hàng được liên kết với người nhận; null khi nhập tay. */

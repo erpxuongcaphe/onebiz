@@ -35,6 +35,7 @@ import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
+import { filterProductionOutputBoms } from "@/lib/production-output-scope";
 
 interface CreateProductionOrderDialogProps {
   open: boolean;
@@ -92,6 +93,7 @@ export function CreateProductionOrderDialog({
   const [saving, setSaving] = useState(false);
   const submittingRef = useRef(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const selectedBranchMode = branches.find((branch) => branch.id === branchId)?.cascadeMode;
 
   // Load options
   useEffect(() => {
@@ -147,10 +149,14 @@ export function CreateProductionOrderDialog({
       setBomId("");
       return;
     }
+    let cancelled = false;
+    setBomsOfProduct([]);
+    setBomId("");
     (async () => {
       try {
         const list = await getBOMsByProduct(productId);
-        const actives = list.filter((b) => b.isActive !== false);
+        if (cancelled) return;
+        const actives = filterProductionOutputBoms(list, branchId, selectedBranchMode);
         setBomsOfProduct(actives);
         if (actives.length === 1) {
           setBomId(actives[0].id);
@@ -167,17 +173,19 @@ export function CreateProductionOrderDialog({
           setBomId("");
         }
       } catch (err) {
+        if (cancelled) return;
         console.error("[CreateProductionOrder] load BOMs by product", err);
         setBomsOfProduct([]);
         setBomId("");
       }
     })();
-  }, [productId, toast]);
+    return () => { cancelled = true; };
+  }, [productId, branchId, selectedBranchMode, toast]);
 
   // Danh sách SP unique từ boms list (sản phẩm có ít nhất 1 BOM active).
   const productOptions = useMemo(() => {
     const map = new Map<string, { id: string; code: string; name: string }>();
-    for (const b of boms) {
+    for (const b of filterProductionOutputBoms(boms, branchId, selectedBranchMode)) {
       if (!b.productId) continue;
       if (b.isActive === false) continue;
       if (!map.has(b.productId)) {
@@ -191,7 +199,17 @@ export function CreateProductionOrderDialog({
     return Array.from(map.values()).sort((a, b) =>
       (a.code || "").localeCompare(b.code || ""),
     );
-  }, [boms]);
+  }, [boms, branchId, selectedBranchMode]);
+
+  useEffect(() => {
+    if (productId && !productOptions.some((product) => product.id === productId)) {
+      setProductId("");
+      setBomId("");
+      setSelectedBom(null);
+      setMaterials([]);
+      setCheckedMaterialKey("");
+    }
+  }, [productId, productOptions]);
 
   // Filter SP theo search query (CEO 25/05/2026): mã hoặc tên SP
   const filteredProductOptions = useMemo(() => {
@@ -324,6 +342,9 @@ export function CreateProductionOrderDialog({
   function validate(): boolean {
     const e: Record<string, string> = {};
     if (!productId) e.productId = "Chọn sản phẩm cần SX";
+    else if (!productOptions.some((product) => product.id === productId)) {
+      e.productId = "Mặt hàng không phù hợp với chi nhánh sản xuất";
+    }
     if (!bomId) e.bomId = "Sản phẩm chưa có BOM hợp lệ";
     if (!branchId || !branches.some((branch) => branch.id === branchId)) {
       e.branchId = "Chọn chi nhánh";
@@ -418,7 +439,7 @@ export function CreateProductionOrderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Sản phẩm cần sản xuất <span className="text-destructive">*</span>
+                {selectedBranchMode === "outlet" ? "Bán thành phẩm cần sản xuất" : "Sản phẩm cần sản xuất"} <span className="text-destructive">*</span>
               </label>
               {/* CEO 25/05/2026: thay Select bằng input search để gõ tìm SP
                   nhanh (mã hoặc tên). Click input → show dropdown filtered. */}
@@ -461,9 +482,9 @@ export function CreateProductionOrderDialog({
                   <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-md border border-border bg-white shadow-lg">
                     {productOptions.length === 0 && (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
-                        Chưa có SP nào có BOM. Tạo BOM ở{" "}
-                        <span className="font-mono">/hang-hoa/cong-thuc</span>{" "}
-                        trước.
+                        {!branchId ? "Chọn chi nhánh để xem mặt hàng sản xuất." : selectedBranchMode === "outlet"
+                          ? "Chưa có bán thành phẩm F&B với công thức phù hợp. Kiểm tra đánh dấu Bán thành phẩm và BOM của sản phẩm."
+                          : "Chưa có sản phẩm với công thức phù hợp tại chi nhánh này. Kiểm tra mục Công thức BOM."}
                       </div>
                     )}
                     {productOptions.length > 0 &&

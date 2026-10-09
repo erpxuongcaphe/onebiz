@@ -22,6 +22,8 @@ interface CustomerPickerProps {
   /** Nếu cung cấp, hiển thị row "+ Thêm khách hàng mới" — click sẽ bubble
    *  search query về parent để mở CreateCustomerDialog. */
   onRequestCreate?: (initialName: string) => void;
+  internalOnly?: boolean;
+  currentBranchId?: string;
 }
 
 const GUEST_OPTION_ID = "__guest__";
@@ -31,6 +33,8 @@ export function CustomerPicker({
   onSelect,
   onClose,
   onRequestCreate,
+  internalOnly = false,
+  currentBranchId,
 }: CustomerPickerProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Customer[]>([]);
@@ -59,7 +63,7 @@ export function CustomerPicker({
       page: 0,
       pageSize: 10,
       search: debouncedQuery.trim() || "",
-      filters: {},
+      filters: internalOnly ? { internalOnly: "true", ...(currentBranchId ? { excludeBranch: currentBranchId } : {}) } : {},
       sortBy: "name",
       sortOrder: "asc",
     })
@@ -78,7 +82,7 @@ export function CustomerPicker({
     return () => {
       cancelled = true;
     };
-  }, [debouncedQuery, open]);
+  }, [debouncedQuery, open, internalOnly, currentBranchId]);
 
   useEffect(() => {
     if (!listRef.current) return;
@@ -89,20 +93,21 @@ export function CustomerPicker({
   }, [highlighted]);
 
   // Combined options: guest (-1) then real customers (0..n-1)
-  const totalOptions = 1 + results.length;
+  const guestOffset = internalOnly ? 0 : 1;
+  const totalOptions = guestOffset + results.length;
 
   const commitSelection = useCallback(
     (idx: number) => {
-      if (idx === 0) {
+      if (!internalOnly && idx === 0) {
         onSelect(null); // Khách lẻ
       } else {
-        const cust = results[idx - 1];
+        const cust = results[idx - guestOffset];
         if (!cust) return;
         onSelect(cust);
       }
       onClose();
     },
-    [results, onSelect, onClose]
+    [results, onSelect, onClose, internalOnly, guestOffset]
   );
 
   const handleKeyDown = useCallback(
@@ -144,7 +149,7 @@ export function CustomerPicker({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Tìm tên / SĐT / mã khách hàng..."
+              placeholder={internalOnly ? "Tìm tên / mã khách nội bộ..." : "Tìm tên / SĐT / mã khách hàng..."}
               className="flex-1 bg-transparent text-base outline-none placeholder:text-muted-foreground"
             />
             {loading && <Icon name="progress_activity" size={16} className="animate-spin text-muted-foreground" />}
@@ -155,7 +160,7 @@ export function CustomerPicker({
 
           <ul ref={listRef} className="max-h-96 overflow-y-auto">
             {/* Walk-in guest option always first */}
-            <li
+            {!internalOnly && <li
               data-idx={0}
               onMouseEnter={() => setHighlighted(0)}
               onClick={() => commitSelection(0)}
@@ -171,10 +176,10 @@ export function CustomerPicker({
                 <div className="text-sm font-medium text-foreground">Khách lẻ</div>
                 <div className="text-xs text-muted-foreground">Không gán khách hàng</div>
               </div>
-            </li>
+            </li>}
 
             {results.map((c, i) => {
-              const idx = i + 1;
+              const idx = i + guestOffset;
               return (
                 <li
                   key={c.id || `${GUEST_OPTION_ID}-${i}`}
@@ -207,7 +212,7 @@ export function CustomerPicker({
             })}
 
             {/* Quick-create row — chỉ show khi parent cung cấp handler */}
-            {onRequestCreate && (
+            {!internalOnly && onRequestCreate && (
               <li
                 onClick={() => {
                   onRequestCreate(query.trim());
