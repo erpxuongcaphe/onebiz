@@ -50,19 +50,15 @@ export interface InternalSaleResult {
 export async function checkoutInternalPos(input: {
   branchId: string; customerId: string; items: Array<{
     productId: string; productCode: string; productName: string; unit: string;
-    quantity: number; unitPrice: number; vatRate: number; variantId?: string;
+    quantity: number; unitPrice: number; vatRate: number; variantId?: string; discount: number;
   }>;
-  paymentMethod: "cash" | "transfer" | "debt"; expectedTotal: number;
+  payments: Array<{ method: "cash" | "transfer" | "card"; amount: number }>; expectedTotal: number;
+  orderDiscount: number; orderVatRate: number; shippingFee: number; amountTendered: number;
+  discountOtpId: string | null;
   sessionId: string; draftId: string | null; revision: number | null;
   shiftId: string; note: string;
 }): Promise<{ invoiceId: string; code: string; total: number }> {
-  const { data, error } = await (getClient().rpc as any)("checkout_internal_pos_atomic", {
-    p_from_branch_id: input.branchId, p_customer_id: input.customerId,
-    p_items: input.items, p_payment_method: input.paymentMethod,
-    p_expected_total: input.expectedTotal, p_client_session_id: input.sessionId,
-    p_draft_id: input.draftId, p_expected_revision: input.revision,
-    p_shift_id: input.shiftId, p_note: input.note || null,
-  });
+  const { data, error } = await (getClient().rpc as any)("checkout_internal_pos_v2", { p_checkout: input });
   if (error) handleError(error, "checkoutInternalPos");
   if (!data?.invoice_id) throw new Error("Máy chủ chưa xác nhận đơn nội bộ");
   return { invoiceId: data.invoice_id, code: data.code, total: Number(data.total) };
@@ -265,7 +261,7 @@ export async function getInternalSaleById(id: string) {
   const { data, error } = await supabase
     .from("internal_sales")
     .select(
-      "*, from_branch:branches!internal_sales_from_branch_id_fkey(name), to_branch:branches!internal_sales_to_branch_id_fkey(name), creator:profiles!internal_sales_created_by_fkey(full_name)",
+      "*, from_branch:branches!internal_sales_from_branch_id_fkey(name), to_branch:branches!internal_sales_to_branch_id_fkey(name), creator:profiles!internal_sales_created_by_fkey(full_name), invoice:invoices!internal_sales_invoice_id_fkey(paid,debt,discount_amount,delivery_fee)",
     )
     .eq("id", id)
     .single();
@@ -277,9 +273,17 @@ export async function getInternalSaleById(id: string) {
     .eq("internal_sale_id", id)
     .order("product_name");
   if (itemsErr) handleError(itemsErr, "getInternalSaleById.items");
+  // The FK exists in PostgreSQL; the generated client relationship list predates it.
+  const linkedInvoice = data.invoice as unknown as {
+    paid: number | null; debt: number | null; discount_amount: number | null; delivery_fee: number | null;
+  } | null;
 
   return {
     ...mapInternalSale(data),
+    paid: linkedInvoice ? Number(linkedInvoice.paid) : null,
+    debt: linkedInvoice ? Number(linkedInvoice.debt) : null,
+    discountAmount: linkedInvoice ? Number(linkedInvoice.discount_amount) : null,
+    deliveryFee: linkedInvoice ? Number(linkedInvoice.delivery_fee ?? 0) : null,
     items: (items ?? []).map((it: Record<string, unknown>) => ({
       id: it.id as string,
       productId: it.product_id as string,

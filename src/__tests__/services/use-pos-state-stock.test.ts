@@ -15,6 +15,17 @@ const product = {
 } as Product;
 
 describe("usePosState stock refresh", () => {
+  it("keeps fractional stock quantity while rounding internal money consistently", () => {
+    const { result } = renderHook(() => usePosState());
+    act(() => { result.current.addLine(product); result.current.setSellingMode("internal"); });
+    act(() => { result.current.updateLineQty(result.current.lines[0].lineId, .1234); });
+    expect(result.current.lines[0].quantity).toBe(.1234);
+    expect(result.current.subtotal).toBe(12);
+    expect(result.current.total).toBe(12);
+    expect(result.current.computeLineTotal(result.current.lines[0])).toBe(12);
+    act(() => { result.current.setSellingMode("normal"); });
+    expect(result.current.subtotal).toBeCloseTo(12.34);
+  });
   it("refreshes stock metadata when adding an existing cart line", () => {
     const { result } = renderHook(() => usePosState());
 
