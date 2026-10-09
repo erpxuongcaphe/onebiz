@@ -5,302 +5,93 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/contexts";
-import {
-  REPORT_CATALOG,
-  REPORT_CATEGORIES,
-  REPORT_WORKFLOWS,
-  canAccessReport,
-  searchReports,
-  type ReportCatalogItem,
-} from "@/lib/reports/catalog";
-import {
-  readFavoriteReportPaths,
-  readRecentReportPaths,
-  toggleFavoriteReportPath,
-} from "@/lib/reports/preferences";
+import { REPORT_CATALOG, REPORT_CATEGORIES, canAccessReport, searchReports } from "@/lib/reports/catalog";
+import { readFavoriteReportPaths, readRecentReportPaths, toggleFavoriteReportPath } from "@/lib/reports/preferences";
 import { cn } from "@/lib/utils";
 
 export default function ReportCenterPage() {
   const { hasPermission } = useAuth();
   const [query, setQuery] = useState("");
-  const [workflowId, setWorkflowId] = useState(REPORT_WORKFLOWS[0]?.id ?? "");
+  const [section, setSection] = useState("all");
   const [favoritePaths, setFavoritePaths] = useState<string[]>([]);
   const [recentPaths, setRecentPaths] = useState<string[]>([]);
   const deferredQuery = useDeferredValue(query);
-
-  const accessibleReports = useMemo(
-    () => REPORT_CATALOG.filter((report) => canAccessReport(report, hasPermission)),
-    [hasPermission],
-  );
-  const visibleReports = useMemo(
-    () => searchReports(accessibleReports, deferredQuery),
-    [accessibleReports, deferredQuery],
-  );
-  const favorites = accessibleReports.filter((report) =>
-    favoritePaths.includes(report.href),
-  );
-  const recent = recentPaths
-    .map((path) => accessibleReports.find((report) => report.href === path))
-    .filter((report): report is ReportCatalogItem => Boolean(report));
-  const selectedWorkflow =
-    REPORT_WORKFLOWS.find((workflow) => workflow.id === workflowId) ??
-    REPORT_WORKFLOWS[0];
-  const workflowReports = (selectedWorkflow?.reportPaths ?? [])
-    .map((path) => accessibleReports.find((report) => report.href === path))
-    .filter((report): report is ReportCatalogItem => Boolean(report));
+  const reports = useMemo(() => REPORT_CATALOG.filter((report) => canAccessReport(report, hasPermission)), [hasPermission]);
+  const matching = useMemo(() => searchReports(reports, deferredQuery), [reports, deferredQuery]);
+  const visible = matching.filter((report) => section === "all" ||
+    (section === "favorites" ? favoritePaths.includes(report.href) :
+      section === "recent" ? recentPaths.includes(report.href) : report.category === section));
+  const groups = REPORT_CATEGORIES.filter((category) => reports.some((report) => report.category === category.id));
   useEffect(() => {
-    const frameId = window.requestAnimationFrame(() => {
+    const frame = requestAnimationFrame(() => {
       setFavoritePaths(readFavoriteReportPaths());
       setRecentPaths(readRecentReportPaths());
     });
-
-    return () => window.cancelAnimationFrame(frameId);
+    return () => cancelAnimationFrame(frame);
   }, []);
-
-  const handleFavorite = (path: string) => {
-    setFavoritePaths(toggleFavoriteReportPath(path));
-  };
-
+  const options = [
+    { id: "all", title: "Tất cả báo cáo", icon: "assessment", count: reports.length },
+    { id: "favorites", title: "Đã ghim", icon: "star", count: reports.filter((report) => favoritePaths.includes(report.href)).length },
+    { id: "recent", title: "Gần đây", icon: "history", count: reports.filter((report) => recentPaths.includes(report.href)).length },
+    ...groups.map((category) => ({ ...category, count: reports.filter((report) => report.category === category.id).length })),
+  ];
   return (
-    <div className="h-full overflow-y-auto">
-      <header className="border-b border-border bg-surface-container-lowest px-4 py-5 lg:px-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-foreground">Trung tâm báo cáo</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Tìm số liệu theo nhu cầu công việc; chỉ hiển thị báo cáo tài khoản được cấp quyền.
-            </p>
-          </div>
-          <div className="relative w-full lg:w-[420px]">
-            <Icon
-              name="search"
-              size={19}
-              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Tìm báo cáo, ví dụ: khách mua sản phẩm gì"
-              className="pl-10"
-            />
+    <div className="flex h-full min-h-0 flex-col bg-surface-container-lowest">
+      <header className="shrink-0 border-b border-border px-4 py-4 lg:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-xl font-semibold text-foreground">Trung tâm báo cáo</h1>
+          <div className="relative w-full sm:w-96">
+            <Icon name="search" size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input aria-label="Tìm báo cáo" placeholder="Tìm tên báo cáo hoặc nghiệp vụ…" value={query}
+              onChange={(event) => setQuery(event.target.value)} className="h-10 pl-10 pr-10" />
+            {query && <button type="button" aria-label="Xóa tìm kiếm" title="Xóa tìm kiếm" onClick={() => setQuery("")}
+              className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"><Icon name="close" size={16} /></button>}
           </div>
         </div>
       </header>
-
-      <div className="space-y-7 px-4 py-5 lg:px-6">
-        {!query && workflowReports.length > 0 ? (
-          <section aria-labelledby="report-workflow-title">
-            <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2
-                  id="report-workflow-title"
-                  className="text-base font-semibold text-foreground"
-                >
-                  Tìm nhanh theo nhu cầu
-                </h2>
-                <p className="text-xs text-muted-foreground">
-                  {selectedWorkflow?.description ??
-                    "Chọn câu hỏi cần trả lời để đi thẳng tới nhóm báo cáo phù hợp."}
-                </p>
-              </div>
-              <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground sm:w-[360px]">
-                Nhu cầu công việc
-                <select
-                  value={workflowId}
-                  onChange={(event) => setWorkflowId(event.target.value)}
-                  className="h-9 w-full rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground outline-none focus:border-primary focus:ring-2 focus:ring-primary/15"
-                >
-                  {REPORT_WORKFLOWS.map((workflow) => (
-                    <option key={workflow.id} value={workflow.id}>
-                      {workflow.title}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-            <div className="grid border-y border-border md:grid-cols-2 xl:grid-cols-3">
-              {workflowReports.map((report) => (
-                <Link
-                  key={report.href}
-                  href={report.href}
-                  prefetch={false}
-                  className="group flex min-w-0 items-start gap-3 border-b border-border p-3 hover:bg-surface-container-low md:border-r md:[&:nth-child(2n)]:border-r-0 xl:[&:nth-child(2n)]:border-r xl:[&:nth-child(3n)]:border-r-0"
-                >
-                  <Icon
-                    name={report.icon}
-                    size={21}
-                    className="mt-0.5 shrink-0 text-primary"
-                  />
-                  <span className="min-w-0">
-                    <span className="block break-words text-sm font-medium leading-5 text-foreground group-hover:text-primary">
-                      {report.title}
-                    </span>
-                    <span className="mt-1 block text-xs leading-4 text-muted-foreground">
-                      {report.description}
-                    </span>
-                  </span>
-                </Link>
-              ))}
-            </div>
-          </section>
-        ) : null}
-        {!query && (favorites.length > 0 || recent.length > 0) ? (
-          <div
-            className={cn(
-              "grid gap-4",
-              favorites.length > 0 && recent.length > 0 && "xl:grid-cols-2",
-            )}
-          >
-            {favorites.length > 0 ? (
-              <ReportList
-                title="Báo cáo đã ghim"
-                icon="star"
-                reports={favorites}
-                favoritePaths={favoritePaths}
-                onFavorite={handleFavorite}
-              />
-            ) : null}
-            {recent.length > 0 ? (
-              <ReportList
-                title="Mở gần đây"
-                icon="history"
-                reports={recent.slice(0, 5)}
-                favoritePaths={favoritePaths}
-                onFavorite={handleFavorite}
-              />
-            ) : null}
+      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
+        <nav aria-label="Nhóm báo cáo" className="shrink-0 border-b border-border bg-surface-container-low p-2 lg:w-60 lg:overflow-y-auto lg:border-b-0 lg:border-r">
+          <div className="flex gap-1 overflow-x-auto lg:flex-col">
+            {options.map((option) => <button key={option.id} type="button" onClick={() => setSection(option.id)} aria-pressed={section === option.id}
+              className={cn("flex min-h-10 shrink-0 items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring lg:w-full", section === option.id ? "bg-primary text-primary-foreground" : "text-foreground hover:bg-surface-container")}>
+              <Icon name={option.icon} size={18} className="shrink-0" /><span className="whitespace-nowrap lg:whitespace-normal">{option.title}</span>
+              <span className="ml-auto pl-2 text-xs tabular-nums opacity-80">{option.count}</span>
+            </button>)}
           </div>
-        ) : null}
-
-        {visibleReports.length === 0 ? (
-          <div className="border-y border-border py-14 text-center">
-            <Icon name="search_off" size={34} className="mx-auto text-muted-foreground" />
-            <p className="mt-2 text-sm font-medium text-foreground">
-              Không tìm thấy báo cáo phù hợp
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Thử từ khóa theo nghiệp vụ như doanh thu, tồn kho, khách hàng hoặc giá vốn.
-            </p>
+        </nav>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto px-4 py-4 lg:px-6">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-foreground">{options.find((option) => option.id === section)?.title}</h2>
+            <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">{visible.length} báo cáo</span>
           </div>
-        ) : (
-          REPORT_CATEGORIES.map((category) => {
-            const reports = visibleReports.filter(
-              (report) => report.category === category.id,
-            );
-            if (reports.length === 0) return null;
-            return (
-              <section key={category.id} aria-labelledby={`report-category-${category.id}`}>
-                <div className="mb-2 flex items-start gap-3">
-                  <Icon name={category.icon} size={22} className="mt-0.5 text-primary" />
-                  <div>
-                    <h2
-                      id={`report-category-${category.id}`}
-                      className="text-base font-semibold text-foreground"
-                    >
-                      {category.title}
-                    </h2>
-                    <p className="text-xs text-muted-foreground">{category.description}</p>
-                  </div>
-                </div>
-                <div className="grid border-y border-border md:grid-cols-2 2xl:grid-cols-3">
-                  {reports.map((report) => {
-                    const isFavorite = favoritePaths.includes(report.href);
-                    return (
-                      <div
-                        key={report.href}
-                        className="group flex min-w-0 items-start border-b border-border p-3 last:border-b-0 md:border-r md:[&:nth-child(2n)]:border-r-0 2xl:[&:nth-child(2n)]:border-r 2xl:[&:nth-child(3n)]:border-r-0"
-                      >
-                        <Link
-                          href={report.href}
-                          prefetch={false}
-                          className="flex min-w-0 flex-1 items-start gap-3"
-                        >
-                          <Icon
-                            name={report.icon}
-                            size={21}
-                            className="mt-0.5 shrink-0 text-primary"
-                          />
-                          <span className="min-w-0">
-                            <span className="block break-words text-sm font-medium leading-5 text-foreground group-hover:text-primary">
-                              {report.title}
-                            </span>
-                            <span className="mt-1 block text-xs leading-4 text-muted-foreground">
-                              {report.description}
-                            </span>
-                          </span>
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => handleFavorite(report.href)}
-                          className={cn(
-                            "ml-2 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-surface-container",
-                            isFavorite ? "text-status-warning" : "text-muted-foreground",
-                          )}
-                          aria-label={isFavorite ? `Bỏ ghim ${report.title}` : `Ghim ${report.title}`}
-                          title={isFavorite ? "Bỏ ghim" : "Ghim báo cáo"}
-                        >
-                          <Icon name="star" size={18} fill={isFavorite} />
-                        </button>
-                      </div>
-                    );
+          {visible.length === 0 ? <div className="border-y border-border py-12 text-center text-sm text-muted-foreground">{query ? "Không tìm thấy báo cáo phù hợp" : section === "favorites" ? "Chưa có báo cáo đã ghim" : "Chưa có báo cáo trong nhóm này"}</div> :
+            groups.map((category) => {
+              const items = visible.filter((report) => report.category === category.id);
+              if (!items.length) return null;
+              return <section key={category.id} aria-labelledby={`category-${category.id}`} className="mb-6">
+                <h3 id={`category-${category.id}`} className="border-b border-border bg-surface-container-low px-3 py-2 text-sm font-semibold text-foreground">{category.title}</h3>
+                <div className="grid sm:grid-cols-2">
+                  {items.map((report) => {
+                    const pinned = favoritePaths.includes(report.href);
+                    return <div key={report.href} className="group flex min-w-0 items-center gap-2 border-b border-border py-1 sm:odd:border-r">
+                      <Link href={report.href} prefetch={false} className="flex min-h-20 min-w-0 flex-1 items-center gap-3 px-3 py-3 outline-none hover:bg-surface-container-low focus-visible:ring-2 focus-visible:ring-ring">
+                        <Icon name={report.icon} size={22} className="shrink-0 text-primary" />
+                        <span className="min-w-0 flex-1"><span className="block break-words text-sm font-semibold leading-5 text-foreground group-hover:text-primary">{report.title}</span>
+                          <span className="mt-1 block break-words text-sm leading-5 text-muted-foreground">{report.description}</span></span>
+                        <Icon name="north_east" size={16} className="shrink-0 text-muted-foreground" />
+                      </Link>
+                      <button type="button" aria-label={`${pinned ? "Bỏ ghim" : "Ghim"} ${report.title}`} aria-pressed={pinned} title={pinned ? "Bỏ ghim" : "Ghim báo cáo"}
+                        onClick={() => setFavoritePaths(toggleFavoriteReportPath(report.href))}
+                        className={cn("mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", pinned ? "text-status-warning" : "text-muted-foreground")}>
+                        <Icon name="star" size={18} fill={pinned} />
+                      </button>
+                    </div>;
                   })}
                 </div>
-              </section>
-            );
-          })
-        )}
+              </section>;
+            })}
+        </main>
       </div>
     </div>
-  );
-}
-
-function ReportList({
-  title,
-  icon,
-  reports,
-  favoritePaths,
-  onFavorite,
-}: {
-  title: string;
-  icon: string;
-  reports: ReportCatalogItem[];
-  favoritePaths: string[];
-  onFavorite: (path: string) => void;
-}) {
-  return (
-    <section>
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
-        <Icon name={icon} size={18} className="text-primary" />
-        {title}
-      </h2>
-      <div className="divide-y divide-border border-y border-border">
-        {reports.map((report) => {
-          const isFavorite = favoritePaths.includes(report.href);
-          return (
-            <div key={report.href} className="flex items-center gap-2 py-2">
-              <Link
-                href={report.href}
-                prefetch={false}
-                className="flex min-w-0 flex-1 items-center gap-2 text-sm font-medium text-foreground hover:text-primary"
-              >
-                <Icon name={report.icon} size={18} className="shrink-0 text-primary" />
-                <span className="break-words leading-5">{report.title}</span>
-              </Link>
-              <button
-                type="button"
-                onClick={() => onFavorite(report.href)}
-                className={cn(
-                  "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg hover:bg-surface-container",
-                  isFavorite ? "text-status-warning" : "text-muted-foreground",
-                )}
-                aria-label={isFavorite ? `Bỏ ghim ${report.title}` : `Ghim ${report.title}`}
-              >
-                <Icon name="star" size={17} fill={isFavorite} />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-    </section>
   );
 }

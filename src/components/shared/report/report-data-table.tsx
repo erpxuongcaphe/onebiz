@@ -22,6 +22,7 @@ import { usePathname } from "next/navigation";
 import { sortReportRows } from "@/lib/reports/table-sort";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { ReportTableViewport } from "./report-table-viewport";
 import { Icon } from "@/components/ui/icon";
 import {
   Select,
@@ -121,7 +122,7 @@ const DEFAULT_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 const DEFAULT_TABLE_PREFERENCES: ReportTablePreferences = {
   density: "standard",
   wrapText: true,
-  freezeFirstColumn: false,
+  freezeFirstColumn: true,
   stripedRows: true,
   hiddenColumnKeys: [],
 };
@@ -418,16 +419,16 @@ export function ReportDataTable<T>({
           </DropdownMenu>
         </div>
       )}
-      <div className="min-w-0 overflow-x-auto">
+      <ReportTableViewport>
         <table
           className={cn(
-          "w-full border-collapse text-sm",
+          "w-full border-separate border-spacing-0 text-sm",
           preferences.wrapText
             ? "[&_td]:whitespace-normal"
             : "[&_td]:whitespace-nowrap",
         )}
       >
-        <thead>
+        <thead className="sticky top-0 z-20 bg-surface-container-lowest shadow-sm">
           {/* Column groups header (optional) */}
           {visibleColumnGroups && visibleColumnGroups.length > 0 && (
             <tr className="bg-surface-container">
@@ -464,9 +465,10 @@ export function ReportDataTable<T>({
                   col.align === "center" && "text-center",
                   (!col.align || col.align === "left") && "text-left",
                   isStickyColumn(col, originalIndex) &&
-                    "sticky left-0 z-10 bg-primary-fixed/40",
+                    "sticky left-0 z-30 bg-surface-container",
                 )}
-                style={col.width ? { width: col.width } : undefined}
+                style={{ width: col.width, minWidth: col.width }}
+                aria-sort={sortState?.id === id ? (sortState.direction === "asc" ? "ascending" : "descending") : undefined}
               >
                 {!sortableColumnIds.has(id) ? col.label : (
                   <button
@@ -502,7 +504,7 @@ export function ReportDataTable<T>({
                     col.align === "center" && "text-center",
                     (!col.align || col.align === "left") && "text-left",
                     isStickyColumn(col, originalIndex) &&
-                      "sticky left-0 z-10 bg-primary-fixed/20",
+                      "sticky left-0 z-10 bg-surface-container-low",
                   )}
                 >
                   {i === 0 ? subtotalLabel : col.subtotalCell ?? ""}
@@ -569,7 +571,7 @@ export function ReportDataTable<T>({
                           col.align === "center" && "text-center",
                           (!col.align || col.align === "left") && "text-left",
                           isStickyColumn(col, originalIndex) &&
-                            "sticky left-0 z-10 bg-inherit",
+                            "sticky left-0 z-10 bg-surface-container-lowest",
                         )}
                       >
                         {col.cell
@@ -614,7 +616,7 @@ export function ReportDataTable<T>({
           )}
         </tbody>
         </table>
-      </div>
+      </ReportTableViewport>
       {showPagination && (
         <div className="flex min-h-12 flex-wrap items-center justify-between gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
           <span className="tabular-nums">
