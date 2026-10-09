@@ -3418,7 +3418,7 @@ function PosPageInner() {
               <button
                 type="button"
                 onClick={() => setCustomerModalOpen(true)}
-                title={state.customer?.name ?? "Khách lẻ"}
+                title={state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Khách lẻ")}
                 className={cn(
                   "flex-1 flex items-center gap-2 px-3 h-8 rounded-lg text-xs transition-colors press-scale-sm min-w-0",
                   state.customer
@@ -3432,7 +3432,7 @@ function PosPageInner() {
                   <Icon name="person" size={14} className="shrink-0" />
                 )}
                 <span className="flex-1 text-left truncate font-medium">
-                  {state.customer?.name ?? "Khách lẻ"}
+                  {state.customer?.name ?? (state.sellingMode === "internal" ? "Chọn khách nội bộ" : "Khách lẻ")}
                 </span>
                 <kbd className="font-mono text-xs bg-surface-container-lowest border border-outline-variant/30 rounded px-1 py-0.5 text-muted-foreground shrink-0">
                   F4

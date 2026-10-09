@@ -439,7 +439,7 @@ export function CreateProductionOrderDialog({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Sản phẩm cần sản xuất <span className="text-destructive">*</span>
+                {selectedBranchMode === "outlet" ? "Bán thành phẩm cần sản xuất" : "Sản phẩm cần sản xuất"} <span className="text-destructive">*</span>
               </label>
               {/* CEO 25/05/2026: thay Select bằng input search để gõ tìm SP
                   nhanh (mã hoặc tên). Click input → show dropdown filtered. */}
@@ -482,9 +482,9 @@ export function CreateProductionOrderDialog({
                   <div className="absolute z-50 mt-1 w-full max-h-64 overflow-y-auto rounded-md border border-border bg-white shadow-lg">
                     {productOptions.length === 0 && (
                       <div className="px-3 py-2 text-xs text-muted-foreground">
-                        Chưa có SP nào có BOM. Tạo BOM ở{" "}
-                        <span className="font-mono">/hang-hoa/cong-thuc</span>{" "}
-                        trước.
+                        {!branchId ? "Chọn chi nhánh để xem mặt hàng sản xuất." : selectedBranchMode === "outlet"
+                          ? "Chưa có bán thành phẩm F&B với công thức phù hợp. Kiểm tra đánh dấu Bán thành phẩm và BOM của sản phẩm."
+                          : "Chưa có sản phẩm với công thức phù hợp tại chi nhánh này. Kiểm tra mục Công thức BOM."}
                       </div>
                     )}
                     {productOptions.length > 0 &&
