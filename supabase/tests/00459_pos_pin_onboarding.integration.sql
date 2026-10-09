@@ -2,9 +2,11 @@
 create schema auth;
 create schema extensions;
 create extension pgcrypto with schema extensions;
-create role anon;
-create role authenticated;
-create role service_role;
+do $$ begin
+ if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
+ if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
+ if not exists(select 1 from pg_roles where rolname='service_role') then create role service_role; end if;
+end $$;
 create function auth.uid() returns uuid language sql as $$ select nullif(current_setting('test.actor',true),'')::uuid $$;
 create function auth.role() returns text language sql as $$ select current_setting('test.role',true) $$;
 create table profiles(id uuid primary key,tenant_id uuid,full_name text,role text,is_active boolean default true,
