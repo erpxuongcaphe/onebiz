@@ -23,8 +23,8 @@ end; $$;
 revoke all on function public.get_rfm_report_unsecured_legacy() from public;
 create temp table report_acl_before as select oid, proacl from pg_proc
 where proname = 'get_rfm_report_unsecured_legacy';
-\ir ../migrations/00465_report_rfm_and_vietnam_time.sql
-\ir ../migrations/00465_report_rfm_and_vietnam_time.sql
+\ir ../migrations/00469_report_rfm_and_vietnam_time.sql
+\ir ../migrations/00469_report_rfm_and_vietnam_time.sql
 set timezone = 'UTC';
 do $$ declare result jsonb; begin
   result := public.get_rfm_report_unsecured_legacy();

@@ -22,7 +22,7 @@ describe("report audit corrections", () => {
     expect(orders).toContain("canSumQuantity ? productRows.reduce");
   });
   it("corrects only guarded report definitions without modifying business rows", () => {
-    const sql = read("supabase/migrations/00465_report_rfm_and_vietnam_time.sql");
+    const sql = read("supabase/migrations/00469_report_rfm_and_vietnam_time.sql");
     expect(sql).toContain("percent_rank()");
     expect(sql).toContain("Asia/Ho_Chi_Minh");
     expect(sql).toContain("Unexpected report definition");

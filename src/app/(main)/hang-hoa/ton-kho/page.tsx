@@ -34,7 +34,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { useToast, useBranchFilter, useAuth } from "@/lib/contexts";
-import { formatCurrency, formatDate, formatNumber } from "@/lib/format";
+import { formatCurrency, formatDate, formatStockQuantity } from "@/lib/format";
 import { exportToCsv } from "@/lib/utils/export";
 import {
   getBranchStockPage,
@@ -154,7 +154,7 @@ function StockRowDetail({
       });
       toast({
         title: "Đã điều chỉnh tồn",
-        description: `${row.productName}: ${formatNumber(row.quantity)} → ${formatNumber(newQty)} ${row.unit ?? ""}`,
+        description: `${row.productName}: ${formatStockQuantity(row.quantity)} → ${formatStockQuantity(newQty)} ${row.unit ?? ""}`,
         variant: "success",
       });
       setAdjustOpen(false);
@@ -374,7 +374,7 @@ function StockRowDetail({
                               />
                             </td>
                             <td className="p-2 text-right tabular-nums text-muted-foreground">
-                              {formatNumber(b.reserved)}
+                              {formatStockQuantity(b.reserved)}
                             </td>
                             <td className="p-2 text-right">
                               <StockWithConversion
@@ -400,7 +400,7 @@ function StockRowDetail({
                             />
                           </td>
                           <td className="p-2 text-right tabular-nums">
-                            {formatNumber(totalReserved)}
+                            {formatStockQuantity(totalReserved)}
                           </td>
                           <td className="p-2 text-right">
                             <StockWithConversion
@@ -441,11 +441,11 @@ function StockRowDetail({
                   Math.abs(stockDrift.computed - stockDrift.system) > 0.001 && (
                     <div className="rounded-md border-l-4 border-status-warning bg-status-warning/10 px-3 py-2 text-xs">
                       <div className="font-medium text-status-warning">
-                        Sổ lệch tồn hệ thống {formatNumber(stockDrift.computed - stockDrift.system)} {row.unit ?? ""}
+                        Sổ lệch tồn hệ thống {formatStockQuantity(stockDrift.computed - stockDrift.system)} {row.unit ?? ""}
                       </div>
                       <div className="text-muted-foreground">
-                        Tồn cộng dồn từ sổ <b>{formatNumber(stockDrift.computed)}</b> ·
-                        tồn hệ thống <b>{formatNumber(stockDrift.system)}</b>.
+                        Tồn cộng dồn từ sổ <b>{formatStockQuantity(stockDrift.computed)}</b> ·
+                        tồn hệ thống <b>{formatStockQuantity(stockDrift.system)}</b>.
                         Sổ có thể thiếu/thừa bút toán hoặc tồn bị chỉnh tay — nên đối soát.
                       </div>
                     </div>
@@ -534,7 +534,7 @@ function StockRowDetail({
                             {/* Đợt 4: Tồn cuối sau giao dịch (KiotViet). */}
                             <td className="p-2 text-right font-medium tabular-nums whitespace-nowrap">
                               {m.runningBalance != null
-                                ? `${formatNumber(m.runningBalance)} ${row.unit ?? ""}`.trim()
+                                ? `${formatStockQuantity(m.runningBalance)} ${row.unit ?? ""}`.trim()
                                 : "—"}
                             </td>
                             <td className={`p-2 text-xs max-w-[200px] truncate ${pColor}`} title={m.partner ?? ""}>
@@ -594,7 +594,7 @@ function StockRowDetail({
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Tồn hiện tại</span>
                     <span className="font-semibold tabular-nums">
-                      {formatNumber(row.quantity)} {row.unit ?? ""}
+                      {formatStockQuantity(row.quantity)} {row.unit ?? ""}
                     </span>
                   </div>
                 </div>
@@ -628,7 +628,7 @@ function StockRowDetail({
                           }
                         >
                           {Number(newQtyInput.replace(/,/g, ".")) - row.quantity >= 0 ? "+" : ""}
-                          {formatNumber(
+                          {formatStockQuantity(
                             Number(newQtyInput.replace(/,/g, ".")) - row.quantity,
                           )}{" "}
                           {row.unit ?? ""}
@@ -682,10 +682,10 @@ function StockRowDetail({
                       <div className="flex items-center justify-between">
                         <span className="text-muted-foreground">Tồn kho</span>
                         <span className="font-semibold tabular-nums">
-                          {formatNumber(row.quantity)} →{" "}
-                          <span className="text-primary">{formatNumber(newQty)}</span> {unit}{" "}
+                          {formatStockQuantity(row.quantity)} →{" "}
+                          <span className="text-primary">{formatStockQuantity(newQty)}</span> {unit}{" "}
                           <span className={isIncrease ? "text-status-success" : "text-status-error"}>
-                            ({isIncrease ? "+" : ""}{formatNumber(delta)})
+                            ({isIncrease ? "+" : ""}{formatStockQuantity(delta)})
                           </span>
                         </span>
                       </div>
@@ -702,11 +702,11 @@ function StockRowDetail({
                     <ul className="space-y-1.5">
                       <li className="flex items-start gap-2">
                         <Icon name="check_circle" size={16} className="text-status-success shrink-0 mt-0.5" />
-                        <span>Đặt tồn về <b>{formatNumber(newQty)} {unit}</b> (ghi đè số hiện tại).</span>
+                        <span>Đặt tồn về <b>{formatStockQuantity(newQty)} {unit}</b> (ghi đè số hiện tại).</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Icon name="receipt_long" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
-                        <span>Tạo 1 bút toán <b>{isIncrease ? "nhập" : "xuất"} điều chỉnh</b> {formatNumber(Math.abs(delta))} {unit} trong sổ kho.</span>
+                        <span>Tạo 1 bút toán <b>{isIncrease ? "nhập" : "xuất"} điều chỉnh</b> {formatStockQuantity(Math.abs(delta))} {unit} trong sổ kho.</span>
                       </li>
                       <li className="flex items-start gap-2">
                         <Icon name="history" size={16} className="text-muted-foreground shrink-0 mt-0.5" />
@@ -1002,7 +1002,7 @@ export default function TonKhoPage() {
       size: 90,
       cell: ({ row }) => (
         <span className="text-muted-foreground tabular-nums">
-          {formatNumber(row.original.reserved)}
+          {formatStockQuantity(row.original.reserved)}
         </span>
       ),
     },
@@ -1026,7 +1026,7 @@ export default function TonKhoPage() {
       size: 100,
       cell: ({ row }) =>
         row.original.minStock !== undefined
-          ? formatNumber(row.original.minStock)
+          ? formatStockQuantity(row.original.minStock)
           : "—",
     },
     {
@@ -1192,9 +1192,9 @@ export default function TonKhoPage() {
         density="compact"
         toolbarMetrics={
           <>
-            <ListMetric label="Tổng sản phẩm" value={formatNumber(totalRows)} icon={<Icon name="inventory" size={15} />} />
+            <ListMetric label="Tổng sản phẩm" value={formatStockQuantity(totalRows)} icon={<Icon name="inventory" size={15} />} />
             <ListMetric label="Giá trị tồn" value={formatCurrency(totalValue)} tone="primary" icon={<Icon name="payments" size={15} />} />
-            <ListMetric label="Dưới định mức" value={formatNumber(lowStockCount)} tone={lowStockCount > 0 ? "danger" : "default"} icon={<Icon name="warning" size={15} />} />
+            <ListMetric label="Dưới định mức" value={formatStockQuantity(lowStockCount)} tone={lowStockCount > 0 ? "danger" : "default"} icon={<Icon name="warning" size={15} />} />
           </>
         }
         toolbarActions={
