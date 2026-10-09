@@ -942,7 +942,7 @@ function TemplateEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-3xl lg:max-w-4xl max-h-[92vh] overflow-y-auto overflow-x-hidden">
+      <DialogContent className="flex flex-col md:max-w-3xl lg:max-w-4xl max-h-[calc(100dvh-2rem)] overflow-hidden">
         <DialogHeader>
           <DialogTitle>{editId ? "Sửa mẫu in" : "Tạo mẫu in"}</DialogTitle>
           <DialogDescription>
@@ -950,6 +950,7 @@ function TemplateEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pr-1">
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-[minmax(0,1fr)_280px]">
           {/* ── Cột trái: form ── */}
           <div className="min-w-0 space-y-5">
@@ -1245,7 +1246,8 @@ function TemplateEditorDialog({
           </div>
         </div>
 
-        <DialogFooter className="sticky bottom-0 border-t bg-background py-3">
+        </div>
+        <DialogFooter className="shrink-0 border-t bg-background py-3">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
             Hủy
           </Button>
