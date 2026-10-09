@@ -44,3 +44,15 @@ export function thermalBodyMargins(layout: ReturnType<typeof resolveThermalLayou
   return `body{padding-top:${layout.topMarginMm}mm;padding-bottom:${layout.bottomMarginMm}mm} @media print{body{padding-top:${layout.topMarginMm}mm;padding-bottom:${layout.bottomMarginMm}mm}}`;
 }
 
+/** Shared receipt/kitchen typography. Separators get their own empty line box;
+ * they never occupy a text baseline, including when a name wraps on 58 mm. */
+export function thermalTypography(layout: ReturnType<typeof resolveThermalLayout>, separatorSelector: string) {
+  const detailWeight = layout.boldDetails ? 700 : 400;
+  return `
+body{font-family:${layout.font};font-weight:400;line-height:${layout.compact ? 1.25 : 1.4};color:#000}
+.receipt-detail,.t-note,.modifier,.note,.toppings,.variant{font-weight:${detailWeight};font-style:${layout.italicDetails ? "italic" : "normal"};line-height:1.25;overflow-wrap:anywhere}
+.receipt-detail strong,.t-note strong,.modifier strong,.note strong,.toppings strong,.variant strong{font-weight:inherit}
+${separatorSelector}{display:block;height:0;min-height:0;padding:0;border:0;border-top:${layout.separator === "none" ? "0" : `1px ${layout.separator} #000`};margin:1mm 0;clear:both}
+`;
+}
+

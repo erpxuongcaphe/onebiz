@@ -13,7 +13,7 @@ function expand(file) {
  return fs.readFileSync(file,'utf8').replace(/^\\i(r?)\s+(.+)$/gm,(_m,relative,target)=>expand(relative?path.resolve(path.dirname(file),target.trim()):(target.trim()==='/tmp/fnb-void-core.sql'?voidCore:generated))).replace(/^\\set.*$/gm,'');
 }
 const db=new PGlite();
-try { await db.exec(expand(path.resolve('supabase/tests/00455_fnb_cancel_requests.integration.sql'))); console.log('PASS: partial cancellation, quantities, toppings, net discount, OTP exact request, stale data, branch and retry'); }
+try { await db.exec(expand(path.resolve('supabase/tests/00462_fnb_cancel_request_review.integration.sql'))); console.log('PASS: partial cancellation, quantities, toppings, net discount, OTP exact request, rejection/replay, stale data, branch and retry'); }
 catch(e) { console.error(e.message, e.detail ?? '', e.where ?? ''); process.exitCode=1; }
 finally { await db.close(); }
 

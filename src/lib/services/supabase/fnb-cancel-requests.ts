@@ -6,6 +6,7 @@ export interface CancelRequest {
   items: { id: string; quantity: number; name: string }[];
 }
 export interface PendingCancelRequest extends CancelRequest {
+  cancel_net_amount: number;
   order_number: string; reason: string; requested_by_name: string; expires_at: string; branch_name?: string; order_label?: string;
 }
 async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise<T> {
@@ -14,6 +15,7 @@ async function rpc<T>(name: string, args: Record<string, unknown> = {}): Promise
   const { data, error } = await (getClient().rpc as any)(name, args);
   if (error) {
     const message = String(error.message);
+    if (message.includes('REQUEST_REJECTED')) throw new Error(`Quản lý đã từ chối yêu cầu hủy. ${message.split('REJECTED:')[1]?.trim() ?? ''}`);
     if (message.includes('ORDER_CHANGED')) throw new Error('Bill vừa thay đổi hoặc yêu cầu đã hết hạn. Tải lại và chọn món cần hủy.');
     if (message.includes('USE_WHOLE_BILL')) throw new Error('Anh/chị đang chọn toàn bộ món. Hãy chọn Hủy toàn bill.');
     if (message.includes('OTP_SCOPE')) throw new Error('Mã duyệt phải được cấp từ đúng yêu cầu hủy này.');
@@ -30,6 +32,9 @@ export function executeFnbCancellation(requestId: string, otpId?: string, shiftI
 }
 export function pendingFnbCancellations() {
   return rpc<PendingCancelRequest[]>('fnb_pending_cancel_requests_00455');
+}
+export function rejectFnbCancellation(requestId: string, reason: string) {
+  return rpc<{ success: boolean }>('fnb_reject_cancel_request_00462', { p_request_id: requestId, p_reason: reason });
 }
 export async function issueFnbCancellationOtp(requestId: string): Promise<IssuedOtp> {
   const d = await rpc<Record<string, unknown>>('fnb_issue_cancel_otp_00455', { p_request_id: requestId });
