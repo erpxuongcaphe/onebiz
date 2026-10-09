@@ -68,6 +68,13 @@ export function MyPosPinSettings() {
   const [revision, setRevision] = useState(0);
   const [saved, setSaved] = useState(false);
   useEffect(() => {
+    // The profile renders after authentication loads, so native hash scrolling
+    // can happen before this section exists. Scroll once its content is ready.
+    if (status?.userId === user?.id && window.location.hash === "#pin-cua-toi") {
+      document.getElementById("pin-cua-toi")?.scrollIntoView({ block: "start" });
+    }
+  }, [status?.userId, user?.id]);
+  useEffect(() => {
     let active = true;
     readMyPinStatus().then(value => { if (active && value.userId === user?.id) { setStatus(value); setError(""); } }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };

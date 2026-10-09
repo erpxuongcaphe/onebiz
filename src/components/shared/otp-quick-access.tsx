@@ -29,7 +29,7 @@ export function OtpQuickAccess() {
   }, [canIssue, canCancel, userId]);
   if (!canIssue) return null;
   const count = pending?.userId === user?.id ? pending?.count ?? 0 : 0;
-  return <Link href="/cap-otp" className="relative inline-flex min-h-11 items-center gap-1 rounded-lg border border-status-warning/30 bg-status-warning/10 px-2.5 text-sm font-semibold text-status-warning hover:bg-status-warning/20" aria-label={`Cấp OTP${count ? `, ${count} yêu cầu hủy chờ duyệt` : ""}`} title="Cấp OTP duyệt từ xa">
+  return <Link href="/cap-otp" className="relative inline-flex min-h-11 items-center gap-1 rounded-lg border border-primary/20 bg-primary/10 px-2.5 text-sm font-semibold text-primary hover:bg-primary/20" aria-label={`Cấp OTP${count ? `, ${count} yêu cầu hủy chờ duyệt` : ""}`} title="Cấp OTP duyệt từ xa">
     <Icon name="vpn_key" size={18} /><span>Cấp OTP</span>
     {count > 0 && <span className="rounded-full bg-status-error px-1.5 text-xs text-white">{count >= 50 ? "50+" : count}</span>}
   </Link>;
