@@ -6,8 +6,10 @@ do $$ begin
  end if;
 end $$;
 create schema auth;
-create role anon;
-create role authenticated;
+do $$ begin
+ if not exists(select 1 from pg_roles where rolname='anon') then create role anon; end if;
+ if not exists(select 1 from pg_roles where rolname='authenticated') then create role authenticated; end if;
+end $$;
 create function auth.uid() returns uuid language sql stable as $$ select '00000000-0000-0000-0000-000000000001'::uuid $$;
 create table public.profiles(id uuid,tenant_id uuid,is_active boolean);
 create table public.products(id uuid,tenant_id uuid,code text,name text,stock_unit text,unit text,category_id uuid,cost_price numeric);
