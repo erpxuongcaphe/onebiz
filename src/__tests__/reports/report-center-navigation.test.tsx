@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ReportCenterPage from "@/app/(main)/phan-tich/trung-tam/page";
 
 vi.mock("@/lib/contexts", () => ({ useAuth: () => ({ hasPermission: () => true }) }));
+vi.mock("lucide-react", () => ({ ArrowUpRight: () => null, Search: () => null, Star: () => null, X: () => null }));
 vi.mock("@/lib/reports/preferences", () => ({
   readFavoriteReportPaths: () => [], readRecentReportPaths: () => [],
   toggleFavoriteReportPath: (path: string) => [path],
