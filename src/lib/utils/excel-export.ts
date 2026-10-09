@@ -162,6 +162,8 @@ export interface ExcelSheet {
    * Khi true: tạo 3 cột "Người lập / Kế toán trưởng / Giám đốc" cuối sheet.
    */
   withSignature?: boolean;
+  /** Filter only the rectangular data range, excluding titles and totals. */
+  autoFilter?: boolean;
 }
 
 export function filterExcelSheetColumns(
@@ -259,6 +261,7 @@ function buildWorksheet(
   }
 
   // ───── Column header row ─────
+  const columnHeaderRow = row;
   for (let c = 0; c < sheet.columns.length; c++) {
     const cellRef = XLSX.utils.encode_cell({ r: row, c });
     ws[cellRef] = { v: sheet.columns[c].label, t: "s", s: STYLE_COL_HEADER };
@@ -287,6 +290,9 @@ function buildWorksheet(
   }
 
   // ───── Footer total ─────
+  if (sheet.autoFilter && sheet.rows.length > 0 && !Object.keys(sheet.sections ?? {}).length) {
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: columnHeaderRow, c: 0 }, e: { r: row - 1, c: totalCols - 1 } }) };
+  }
   if (sheet.footer) {
     // Label cell ở cột đầu
     const labelRef = XLSX.utils.encode_cell({ r: row, c: 0 });

@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
 import { filterXntRows, sumXntRows, sumXntQuantities, type XntRowFilter } from "@/lib/reports/xnt-view";
 import { sortReportRows } from "@/lib/reports/table-sort";
+import { withXntUnitValues, XNT_VALUE_GROUPS, XNT_SUMMARY_EXCEL_COLUMNS, XNT_SUMMARY_COLUMN_GROUPS, type XntValuedRow } from "@/lib/reports/xnt-unit-values";
 
 type SubMode = "summary" | "detail";
 
@@ -114,8 +115,8 @@ export default function XuatNhapTonPage() {
     branches.find((b) => b.id === activeBranchId)?.name ?? "Tất cả chi nhánh";
   const visibleRows = useMemo(
     () => {
-      const filtered = filterXntRows(data?.rows ?? [], rowFilter, { categoryName: categoryFilter, unit: unitFilter });
-      return sortState ? sortReportRows(filtered, (row) => row[sortState.id as keyof XntRow], sortState.direction) : filtered;
+      const filtered = filterXntRows(data?.rows ?? [], rowFilter, { categoryName: categoryFilter, unit: unitFilter }).map(withXntUnitValues);
+      return sortState ? sortReportRows(filtered, (row) => row[sortState.id as keyof XntValuedRow], sortState.direction) : sortReportRows(filtered, (row) => row.code, "asc");
     },
     [data?.rows, rowFilter, sortState, categoryFilter, unitFilter],
   );
@@ -162,22 +163,13 @@ export default function XuatNhapTonPage() {
         sheets: [
           {
             name: "Xuất nhập tồn",
+            autoFilter: true,
             titleRows,
             tablePreferenceKey: "report.xuat-nhap-ton.summary",
-            columns: [
-              { label: "Mã hàng", key: "code", width: 14 },
-              { label: "Tên hàng", key: "name", width: 36 },
-              { label: "ĐVT", key: "unit", width: 8 },
-              { label: "Tồn đầu kỳ", key: "openingQty", width: 12, format: "number" },
-              { label: "Giá trị đầu kỳ", key: "openingValue", width: 16, format: "currency" },
-              { label: "SL Nhập", key: "totalIn", width: 10, format: "number" },
-              { label: "Giá trị nhập", key: "inValue", width: 16, format: "currency" },
-              { label: "SL Xuất", key: "totalOut", width: 10, format: "number" },
-              { label: "Giá trị xuất", key: "outValue", width: 16, format: "currency" },
-              { label: "Tồn cuối kỳ", key: "closingQty", width: 12, format: "number" },
-              { label: "Giá trị cuối kỳ", key: "closingValue", width: 16, format: "currency" },
-            ],
+            columnGroups: XNT_SUMMARY_COLUMN_GROUPS,
+            columns: XNT_SUMMARY_EXCEL_COLUMNS,
             rows: visibleRows.map((r) => ({
+              ...r,
               code: r.code,
               name: r.name,
               unit: r.unit,
@@ -214,6 +206,7 @@ export default function XuatNhapTonPage() {
         sheets: [
           {
             name: "XNT chi tiết",
+            autoFilter: true,
             titleRows,
             tablePreferenceKey: "report.xuat-nhap-ton.detail",
             columnGroups: [
@@ -311,22 +304,12 @@ export default function XuatNhapTonPage() {
         // Sheet 1 — Tổng hợp 9 cột
         {
           name: "1. Tổng hợp",
+          autoFilter: true,
           titleRows,
-          columns: [
-            { label: "Mã hàng", key: "code", width: 14 },
-            { label: "Tên hàng", key: "name", width: 36 },
-            { label: "ĐVT", key: "unit", width: 8 },
-            { label: "Nhóm hàng", key: "categoryName", width: 18 },
-            { label: "Tồn đầu kỳ", key: "openingQty", width: 12, format: "number" },
-            { label: "GT đầu kỳ", key: "openingValue", width: 16, format: "currency" },
-            { label: "SL Nhập", key: "totalIn", width: 10, format: "number" },
-            { label: "GT Nhập", key: "inValue", width: 16, format: "currency" },
-            { label: "SL Xuất", key: "totalOut", width: 10, format: "number" },
-            { label: "GT Xuất", key: "outValue", width: 16, format: "currency" },
-            { label: "Tồn cuối kỳ", key: "closingQty", width: 12, format: "number" },
-            { label: "GT cuối kỳ", key: "closingValue", width: 16, format: "currency" },
-          ],
+          columnGroups: [{ label: "MẶT HÀNG", span: 4 }, ...XNT_SUMMARY_COLUMN_GROUPS.slice(1)],
+          columns: [...XNT_SUMMARY_EXCEL_COLUMNS.slice(0, 3), { label: "Nhóm hàng", key: "categoryName", width: 22 }, ...XNT_SUMMARY_EXCEL_COLUMNS.slice(3)],
           rows: visibleRows.map((r) => ({
+            ...r,
             code: r.code,
             name: r.name,
             unit: r.unit,
@@ -355,6 +338,7 @@ export default function XuatNhapTonPage() {
         // Sheet 2 — Chi tiết NHẬP/XUẤT 20 cột
         {
           name: "2. Chi tiết NHẬP-XUẤT",
+          autoFilter: true,
           titleRows,
           columnGroups: [
             { label: "", span: 5 },
@@ -427,7 +411,8 @@ export default function XuatNhapTonPage() {
             { key: "Đơn vị tính", value: unitFilter ?? "Tất cả" },
             { key: "Tổng số lượng", value: unitFilter ?? (units.length > 1 ? "Không cộng các đơn vị khác nhau" : units[0] ?? "Không có dữ liệu") },
             { key: "Lọc tồn", value: rowFilter === "activity" ? "Có phát sinh" : rowFilter === "closing-stock" ? "Tồn cuối khác 0" : "Tất cả" },
-            { key: "Sắp xếp", value: sortState ? `${sortState.id} (${sortState.direction})` : "Theo dữ liệu báo cáo" },
+            { key: "Sắp xếp", value: sortState ? `${sortState.id} (${sortState.direction})` : "Mã hàng tăng dần" },
+            { key: "Đơn giá BQ", value: "Thành tiền lịch sử / số lượng; để trống khi số lượng bằng 0 hoặc thiếu giá trị; không cộng đơn giá" },
             { key: "Cơ sở giá trị tồn", value: "Snapshot giá vốn tại từng phát sinh; dòng thiếu lịch sử không được ước tính" },
             { key: "Người xuất", value: "—" },
             {
@@ -450,9 +435,10 @@ export default function XuatNhapTonPage() {
   // Render: column definitions
   // ========================================================
 
-  const summaryColumns: DataTableColumn<XntRow>[] = [
+  const summaryBaseColumns: DataTableColumn<XntValuedRow>[] = [
     {
       label: "Mã hàng", key: "code", align: "left", width: "120px",
+      sticky: true, hideable: false,
       cell: (r) => (
         <Link
           className="text-primary hover:underline"
@@ -523,9 +509,23 @@ export default function XuatNhapTonPage() {
     },
   ];
 
+  const summaryColumns: DataTableColumn<XntValuedRow>[] = [
+    ...summaryBaseColumns.slice(0, 3),
+    ...XNT_VALUE_GROUPS.flatMap((group): DataTableColumn<XntValuedRow>[] => [
+      { ...summaryBaseColumns.find((column) => column.key === group.quantity)!, label: "Số lượng", width: "130px" },
+      {
+        label: "Đơn giá BQ", key: group.price, align: "right", width: "140px",
+        cell: (row) => row[group.price] === null ? (Math.abs(row[group.quantity]) < 1e-9 ? "—" : "Chưa đủ dữ liệu") : formatNumber(row[group.price]!),
+        subtotalCell: "—",
+      },
+      { ...summaryBaseColumns.find((column) => column.key === group.value)!, label: "Thành tiền", width: "160px" },
+    ]),
+  ];
+
   const detailColumns: DataTableColumn<XntRow>[] = [
     {
       label: "Mã hàng", key: "code", align: "left", width: "110px",
+      sticky: true, hideable: false,
       cell: (r) => (
         <Link
           className="text-primary hover:underline"
@@ -629,7 +629,7 @@ export default function XuatNhapTonPage() {
       />
 
       <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground lg:px-6">
-        <p>{HISTORICAL_VALUE_NOTE} Bấm mã hàng để đối chiếu phát sinh.</p>
+        <p>{HISTORICAL_VALUE_NOTE} Đơn giá BQ = thành tiền / số lượng; không cộng đơn giá. Bấm mã hàng để đối chiếu phát sinh.</p>
         {!loading && incompleteVisibleCount > 0 && (
           <p className="mt-1 font-medium text-status-warning" role="status">
             {incompleteVisibleCount} mặt hàng chưa đủ căn cứ định giá tồn; giá trị từng cột thiếu dữ liệu được để trống để tránh cộng sai.
@@ -743,6 +743,7 @@ export default function XuatNhapTonPage() {
             {subMode === "summary" ? (
               <ReportDataTable
                 columns={summaryColumns}
+                columnGroups={XNT_SUMMARY_COLUMN_GROUPS}
                 tablePreferenceKey="report.xuat-nhap-ton.summary"
                 rows={visibleRows}
                 sortState={sortState}
