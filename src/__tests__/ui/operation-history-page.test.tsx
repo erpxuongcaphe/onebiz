@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 import AuditPage from "@/app/(main)/he-thong/audit/page";
+import { auditStoreDate } from "@/lib/operation-history-entry";
 
-const mocks = vi.hoisted(() => ({ history: vi.fn(), toast: vi.fn(), branch: "b1", people: [] }));
+const mocks = vi.hoisted(() => ({ history: vi.fn(), toast: vi.fn(), branch: "b1", people: [], params: "" }));
+vi.mock("next/navigation", () => ({ useSearchParams: () => new URLSearchParams(mocks.params) }));
 vi.mock("@/lib/contexts", () => ({
   useToast: () => ({ toast: mocks.toast }),
   useBranchFilter: () => ({ activeBranchId: mocks.branch, branchLabel: mocks.branch, branches: [], isReady: true }),
@@ -19,12 +21,27 @@ vi.mock("@/components/shared/page-header", () => ({ PageHeader: () => <h1>Lịch
 // Keep the page's request lifecycle real; replace only the shared table layout.
 vi.mock("@/components/shared/data-table", () => ({ DataTable: ({ data, loading, total }: { data: { entityName: string }[]; loading: boolean; total: number }) => <section aria-label="Nhật ký">{loading ? "Đang tải" : <><p>{total} bản ghi</p>{data.map((r, i) => <p key={i}>{r.entityName}</p>)}</>}</section> }));
 beforeEach(() => {
-  mocks.history.mockReset(); mocks.toast.mockReset(); mocks.branch = "b1";
+  mocks.history.mockReset(); mocks.toast.mockReset(); mocks.branch = "b1"; mocks.params = "";
   Object.defineProperty(window, "matchMedia", { writable: true, value: vi.fn(() => ({
     matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn(),
   })) });
 });
 describe("operation history page results", () => {
+  it("starts the general history at today in the current branch", async () => {
+    mocks.history.mockResolvedValue({ total: 0, data: [] });
+    render(<AuditPage />);
+    await waitFor(() => expect(mocks.history).toHaveBeenCalled());
+    expect(mocks.history).toHaveBeenLastCalledWith(expect.objectContaining({ filters: expect.objectContaining({ branchId: "b1", dateFrom: auditStoreDate(), dateTo: auditStoreDate() }) }));
+  });
+  it("opens an exact bill in its own branch even when the ERP selects another branch", async () => {
+    const branch = "11111111-1111-1111-1111-111111111111";
+    const bill = "22222222-2222-2222-2222-222222222222";
+    mocks.params = new URLSearchParams({ branch, bill, label: "KB000067" }).toString();
+    mocks.history.mockResolvedValue({ total: 1, data: [{ entityName: "KB000067" }] });
+    render(<AuditPage />);
+    expect(await screen.findByText("KB000067")).toBeInTheDocument();
+    expect(mocks.history).toHaveBeenLastCalledWith(expect.objectContaining({ search: bill, filters: expect.objectContaining({ branchId: branch, source: "fnb", dateFrom: undefined, dateTo: undefined }) }));
+  });
   it("uses the current branch and shows an explicit error with retry", async () => {
     mocks.history.mockRejectedValueOnce(new Error("Không đủ quyền xem chi nhánh"));
     render(<AuditPage />);
