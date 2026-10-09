@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { getBranchPrintState, savePrintPoint, rotatePrintPointToken, resolvePrintJob, enqueueBranchPrint, checkBranchPrinter, type PrintPoint, type PrintRoute, type BranchPrintJob } from "@/lib/printer/branch-queue";
-import { generateDocumentHtml } from "@/lib/print-document";
-import { buildKitchenTicketHtml } from "@/lib/print-fnb";
+import { resolveBranchPrintTestBuilder } from "@/lib/printer/print-test-template";
 import { getKitchenStationsByBranch } from "@/lib/services/supabase/kitchen-stations";
 import { PrintRouteEditor } from "./print-route-editor";
 import { saveDevicePrintOverride } from "./branch-print-defaults";
@@ -106,9 +105,7 @@ function BranchPrintSetupForBranch() {
       const saved = point?.routes.find(r => r.key === route.key);
       if (!saved || saved.printer !== route.printer || saved.paper !== route.paper) throw new Error("Lưu thay đổi trước khi in thử. Phiếu thử dùng cấu hình đã lưu của chi nhánh.");
       const testTime = new Date().toISOString();
-      const buildHtml = (paper: "58mm" | "80mm") => route.key === "cashier"
-        ? generateDocumentHtml({ fnbThermalReadable: true, documentType: "DỮ LIỆU IN THỬ", documentCode: "TEST-ONEBIZ", date: testTime, headerFields: [{ label: "Nơi nhận", value: route.label }], items: [{ name: "Cà phê sữa đá", quantity: 2, unitPrice: 35000, total: 70000, note: "Đường 70% • ít đá • thêm trân châu" }], summaryRows: [{ label: "Tổng thử", value: "70.000 đ", bold: true }], showSignature: false, note: "Phiếu thử không ghi nhận doanh thu. Kiểm tra chữ, lề và dao cắt." }, paper)
-        : buildKitchenTicketHtml({ title: "IN THỬ BAR / BẾP", orderNumber: "TEST-ONEBIZ", tableName: "Bàn thử", orderType: "dine_in", createdAt: testTime, stationName: route.label, paperSize: paper, style: point?.policy?.kitchenTicketStyle ?? "compact", items: [{ name: "Cà phê sữa đá", quantity: 2, unitPrice: 35000, modifierLabels: ["Đường: 70%", "Đá: Ít"], note: "Thêm trân châu" }], footerText: "DỮ LIỆU THỬ — KHÔNG GHI DOANH THU" });
+      const buildHtml = await resolveBranchPrintTestBuilder(branchId, route, point?.policy?.kitchenTicketStyle, testTime);
       const job = await enqueueBranchPrint({ branchId, routeKey: route.key, label: `IN THỬ ${route.label}`.slice(0,80), html: buildHtml(route.paper), paper: route.paper, buildHtml, jobId: crypto.randomUUID() });
       setMessage(`Đã nhận phiếu thử tới ${job.route_label}. Kiểm tra giấy tại máy; xem kết quả ở lịch sử.`);
       const state = await getBranchPrintState(branchId); setJobs(state.jobs);
