@@ -52,3 +52,15 @@ staff, suppliers and channels. No page is marked complete merely because it has
 an export button or a table. Verify authorization, full-row source coverage,
 date semantics, meaningful quantities, nullable costs, filter/sort/export parity
 and source-document drilldown separately for each report.
+
+## Shared report UX release
+
+- PR581 replaces the report-center workflow blocks with permission-filtered
+  category navigation, readable report names, search, favorites and recent views.
+- Both report-table implementations now share a bounded scroll viewport and
+  a synchronized bottom horizontal scrollbar. Headers stay inside the viewport;
+  simple tables default to a pinned first column. Existing preferences remain.
+- Legacy nested overflow containers are flattened within the report scope only.
+  Merged subtotal cells are not pinned across the whole table.
+- This is a presentation change, not acceptance of missing SKU financial detail,
+  historical costs, customer aggregation or Excel source reconciliation.

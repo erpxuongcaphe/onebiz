@@ -32,7 +32,7 @@ import {
 export const DEFAULT_REPORT_TABLE_PREFERENCES: ReportTablePreferences = {
   density: "standard",
   wrapText: true,
-  freezeFirstColumn: false,
+  freezeFirstColumn: true,
   stripedRows: true,
   hiddenColumnKeys: [],
 };

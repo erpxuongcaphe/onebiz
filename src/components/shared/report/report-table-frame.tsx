@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils";
+import { ReportTableViewport } from "./report-table-viewport";
 import {
   ReportTableDisplayMenu,
   useReportTableDisplayPreferences,
@@ -143,7 +144,7 @@ export function ReportTableFrame({
       " table:first-of-type > tbody > tr:nth-child(even)>*" +
       "{background-color:var(--surface-container-low)!important;}"
     : "";
-  const freezeCss = preferences.freezeFirstColumn
+  const freezeCss = preferences.freezeFirstColumn && !hasMergedCells
     ? scopedSelector +
       " table:first-of-type > thead > tr > :first-child," +
       scopedSelector +
@@ -156,6 +157,11 @@ export function ReportTableFrame({
       " table:first-of-type > thead > tr > :first-child" +
       "{z-index:3;background-color:var(--surface-container);}"
     : "";
+  const viewportCss = scopedSelector +
+    " [data-report-viewport] > div{overflow:visible!important;max-height:none!important;}" +
+    scopedSelector + " table{border-collapse:separate;border-spacing:0;}" +
+    scopedSelector + " table > thead{position:sticky;top:0;z-index:10;" +
+    "background-color:var(--surface-container-lowest);}";
 
   return (
     <div className={cn("min-w-0", className)}>
@@ -169,10 +175,10 @@ export function ReportTableFrame({
       <div
         ref={tableRootRef}
         data-report-table-scope={scopeId}
-        className="min-w-0 overflow-x-auto"
+        className="min-w-0"
       >
-        <style>{hiddenCss + compactCss + wrapCss + stripedCss + freezeCss}</style>
-        {children}
+        <style>{hiddenCss + compactCss + wrapCss + stripedCss + freezeCss + viewportCss}</style>
+        <ReportTableViewport>{children}</ReportTableViewport>
       </div>
     </div>
   );
