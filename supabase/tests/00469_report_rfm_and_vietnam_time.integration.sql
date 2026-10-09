@@ -13,12 +13,17 @@ create function public.get_fnb_serve_time_report_unsecured_legacy() returns inte
   select extract(hour from ko.created_at)::int as hour_of_day
   from (values ('2026-10-08 21:30+00'::timestamptz)) ko(created_at);
 $$;
-create function public.get_finance_dashboard_report(p_current_from timestamptz)
+create function public.get_finance_dashboard_report(p_current_from timestamptz, v_granularity text default 'day')
 returns timestamptz language plpgsql as $$
-declare v_bucket_start timestamptz; v_granularity text := 'day';
+declare v_bucket_start timestamptz; v_bucket_end timestamptz;
+  v_step interval := case when v_granularity='month' then interval '1 month' else interval '1 day' end;
+  p_current_to timestamptz := '2027-01-01';
 begin
   v_bucket_start := date_trunc(v_granularity, p_current_from);
-  return v_bucket_start;
+  v_bucket_end := least(v_bucket_start + v_step, p_current_to);
+  v_bucket_start := v_bucket_start + v_step;
+  if v_bucket_start <> v_bucket_end then raise exception 'Inconsistent next bucket'; end if;
+  return v_bucket_end;
 end; $$;
 revoke all on function public.get_rfm_report_unsecured_legacy() from public;
 create temp table report_acl_before as select oid, proacl from pg_proc
@@ -39,8 +44,11 @@ do $$ declare result jsonb; begin
   if public.get_fnb_serve_time_report_unsecured_legacy() <> 4 then
     raise exception 'Service hour is not Vietnam time';
   end if;
-  if public.get_finance_dashboard_report('2026-09-30 17:00+00') <> '2026-09-30 17:00+00'::timestamptz then
+  if public.get_finance_dashboard_report('2026-09-30 17:00+00') <> '2026-10-01 17:00+00'::timestamptz then
     raise exception 'October first day has a phantom September bucket';
+  end if;
+  if public.get_finance_dashboard_report('2026-09-30 17:00+00', 'month') <> '2026-10-31 17:00+00'::timestamptz then
+    raise exception 'Month step does not reach November first in Vietnam';
   end if;
   if exists(select 1 from report_acl_before b join pg_proc p using(oid)
             where b.proacl is distinct from p.proacl) then

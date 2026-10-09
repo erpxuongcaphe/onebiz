@@ -39,8 +39,16 @@ begin
       v_anchors := array['extract(hour from ko.created_at)::int as hour_of_day'];
       v_replacements := array['extract(hour from timezone(''Asia/Ho_Chi_Minh'', ko.created_at))::int as hour_of_day'];
     else
-      v_anchors := array['v_bucket_start := date_trunc(v_granularity, p_current_from);'];
-      v_replacements := array['v_bucket_start := date_trunc(v_granularity, timezone(''Asia/Ho_Chi_Minh'', p_current_from)) at time zone ''Asia/Ho_Chi_Minh'';'];
+      v_anchors := array[
+        'v_bucket_start := date_trunc(v_granularity, p_current_from);',
+        'v_bucket_end := least(v_bucket_start + v_step, p_current_to);',
+        'v_bucket_start := v_bucket_start + v_step;'
+      ];
+      v_replacements := array[
+        'v_bucket_start := date_trunc(v_granularity, timezone(''Asia/Ho_Chi_Minh'', p_current_from)) at time zone ''Asia/Ho_Chi_Minh'';',
+        'v_bucket_end := least((timezone(''Asia/Ho_Chi_Minh'', v_bucket_start) + v_step) at time zone ''Asia/Ho_Chi_Minh'', p_current_to);',
+        'v_bucket_start := (timezone(''Asia/Ho_Chi_Minh'', v_bucket_start) + v_step) at time zone ''Asia/Ho_Chi_Minh'';'
+      ];
     end if;
     for v_index in 1..array_length(v_anchors, 1) loop
       v_old := v_anchors[v_index];
