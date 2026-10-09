@@ -13,6 +13,11 @@ const historyTab = readFileSync(
 );
 
 describe("Vietnamese audit log", () => {
+  it("names cancellation rejection and employee benefit groups clearly", () => {
+    expect(getAuditActionLabel("fnb_cancel_request_reject")).toBe("Từ chối yêu cầu hủy F&B");
+    expect(getAuditActionLabel("employee_benefit_group_save")).toBe("Lưu nhóm ưu đãi nội bộ");
+    expect(getAuditEntityTypeLabel("employee_benefit_group")).toBe("Nhóm ưu đãi nội bộ");
+  });
   it("translates common ERP and MKT action codes", () => {
     expect(getAuditActionLabel("cash_transaction_created")).toBe(
       "Tạo phiếu thu/chi",
