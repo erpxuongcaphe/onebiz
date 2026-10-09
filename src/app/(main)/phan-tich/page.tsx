@@ -133,7 +133,7 @@ export default function TongQuanPage() {
 
       // Sheet duy nhất gom KPI + top products (mirror view)
       const kpiRows = [
-        { metric: "Doanh thu thuần", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
+        { metric: "Doanh thu hàng hóa", value: kpis?.revenue ?? 0, prev: kpis?.prevRevenue ?? 0 },
         { metric: "Đơn hàng", value: kpis?.orders ?? 0, prev: kpis?.prevOrders ?? 0 },
         { metric: "Khách mới", value: kpis?.newCustomers ?? 0, prev: kpis?.prevNewCustomers ?? 0 },
         { metric: "Lợi nhuận", value: kpis?.profit ?? 0, prev: kpis?.prevProfit ?? 0 },
@@ -412,7 +412,7 @@ export default function TongQuanPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Doanh thu thuần"
+            label="Doanh thu hàng hóa"
             value={formatCurrency(kpis?.revenue ?? 0) + "đ"}
             change={calcChange(kpis?.revenue ?? 0, kpis?.prevRevenue ?? 0)}
             positive={(kpis?.revenue ?? 0) >= (kpis?.prevRevenue ?? 0)}
@@ -459,7 +459,7 @@ export default function TongQuanPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Revenue line chart */}
             <ChartCard
-              title="Doanh thu thuần theo ngày"
+              title="Giá trị hóa đơn sau trả theo ngày"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -494,7 +494,7 @@ export default function TongQuanPage() {
                     <Line
                       type="linear"
                       dataKey="revenue"
-                      name="Doanh thu thuần"
+                      name="Giá trị hóa đơn sau trả"
                       stroke="#004AC6"
                       strokeWidth={2}
                       dot={false}
@@ -554,7 +554,7 @@ export default function TongQuanPage() {
           /* Table view — 2 bảng số liệu kế toán: theo ngày + theo danh mục */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <ChartCard
-              title="Doanh thu thuần theo ngày"
+              title="Giá trị hóa đơn sau trả theo ngày"
               subtitle={selectedPeriodLabel}
               actions={
                 <Link
@@ -579,7 +579,7 @@ export default function TongQuanPage() {
                         <th className="py-2 px-3 font-medium">Ngày</th>
                         <th className="py-2 px-3 font-medium text-right">Bán gộp</th>
                         <th className="py-2 px-3 font-medium text-right">Hàng trả</th>
-                        <th className="py-2 px-3 font-medium text-right">Doanh thu thuần</th>
+                        <th className="py-2 px-3 font-medium text-right">Giá trị hóa đơn sau trả</th>
                       </tr>
                     </thead>
                     <tbody>

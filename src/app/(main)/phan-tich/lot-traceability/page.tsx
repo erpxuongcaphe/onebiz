@@ -13,7 +13,7 @@
  * - Cảnh báo hết hạn (ưu tiên xả slow movers cận date)
  */
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { Icon } from "@/components/ui/icon";
 import {
   Select,
@@ -38,12 +38,14 @@ import { getAllProductLots } from "@/lib/services";
 import { useBranchFilter } from "@/lib/contexts";
 import { cn } from "@/lib/utils";
 import { KpiCard } from "../_components";
+import { lotDaysToExpiry } from "@/lib/reports/lot-expiry";
 
 interface LotRow {
   id: string;
   lotCode: string;
   productCode: string;
   productName: string;
+  productUnit: string;
   quantity: number;
   remainingQty: number;
   receivedDate: string;
@@ -75,23 +77,22 @@ const STATUS_FILTER_OPTIONS = [
   { value: "depleted", label: "Hết hàng" },
   { value: "expired", label: "Hết hạn" },
   { value: "recalled", label: "Thu hồi" },
+  { value: "consumed", label: "Đã dùng hết" },
+  { value: "disposed", label: "Đã hủy" },
 ] as const;
 
 type ProductLotRow = Awaited<ReturnType<typeof getAllProductLots>>[number];
 
 function toLotRow(lot: ProductLotRow, now: number): LotRow {
   const expiryDate = lot.expiryDate ?? null;
-  const daysToExpiry = expiryDate
-    ? Math.floor(
-        (new Date(expiryDate).getTime() - now) / (1000 * 60 * 60 * 24),
-      )
-    : null;
+  const daysToExpiry = lotDaysToExpiry(expiryDate, now);
 
   return {
     id: lot.id,
     lotCode: lot.lotNumber,
     productCode: lot.productCode,
     productName: lot.productName,
+    productUnit: lot.productUnit,
     quantity: Number(lot.initialQty ?? 0),
     remainingQty: Number(lot.currentQty ?? 0),
     receivedDate: lot.receivedDate,
@@ -113,7 +114,7 @@ function summarizeLots(rows: LotRow[]) {
         lot.daysToExpiry >= 0 &&
         lot.daysToExpiry <= 30,
     ).length,
-    remainingQty: rows.reduce((sum, lot) => sum + lot.remainingQty, 0),
+    productCount: new Set(rows.map((lot) => lot.productCode)).size,
   };
 }
 
@@ -124,48 +125,52 @@ export default function LotTraceabilityPage() {
   const { activeBranchId, branchLabel, branches, isReady } = useBranchFilter();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [lots, setLots] = useState<LotRow[]>([]);
-  const [expiringCount, setExpiringCount] = useState(0);
+  const [allLots, setLots] = useState<LotRow[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const requestId = useRef(0);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
+    const currentRequest = ++requestId.current;
     setLoading(true);
+    setLoadError(false);
     try {
       const lotData = await getAllProductLots({
-        search: search || undefined,
-        status: statusFilter !== "all" ? statusFilter : undefined,
         branchId: activeBranchId,
+        fetchAll: true,
       });
 
       const now = Date.now();
       const rows = lotData.map((lot) => toLotRow(lot, now));
 
-      setLots(rows);
-      setExpiringCount(
-        rows.filter(
-          (lot) =>
-            lot.status === "active" &&
-            lot.daysToExpiry !== null &&
-            lot.daysToExpiry >= 0 &&
-            lot.daysToExpiry <= 30,
-        ).length,
-      );
+      if (currentRequest === requestId.current) setLots(rows);
     } catch (err) {
       console.error("Failed to fetch lot data:", err);
-      setLots([]);
+      if (currentRequest === requestId.current) {
+        setLots([]);
+        setLoadError(true);
+      }
     } finally {
-      setLoading(false);
+      if (currentRequest === requestId.current) setLoading(false);
     }
-  }, [activeBranchId, isReady, search, statusFilter]);
+  }, [activeBranchId, isReady]);
 
   useEffect(() => {
     fetchData();
+    return () => { requestId.current++; };
   }, [fetchData]);
 
-  const totalLots = lots.length;
-  const activeLots = lots.filter((l) => l.status === "active").length;
-  const totalQty = lots.reduce((s, l) => s + l.remainingQty, 0);
+  const lots = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("vi");
+    return allLots.filter((lot) =>
+      (statusFilter === "all" || lot.status === statusFilter) &&
+      (!term || [lot.lotCode, lot.productCode, lot.productName].some(
+        (value) => value.toLocaleLowerCase("vi").includes(term),
+      )),
+    );
+  }, [allLots, search, statusFilter]);
+  const { totalLots, activeLots, expiringLots: expiringCount, productCount } = summarizeLots(lots);
 
   const handleExport = useCallback(async (mode: "view" | "full") => {
     const exportNow = Date.now();
@@ -216,8 +221,8 @@ export default function LotTraceabilityPage() {
                     format: "number",
                   },
                   {
-                    label: "Tổng số lượng còn lại",
-                    value: exportSummary.remainingQty,
+                    label: "Số mặt hàng",
+                    value: exportSummary.productCount,
                     format: "number",
                   },
                 ],
@@ -232,6 +237,7 @@ export default function LotTraceabilityPage() {
             { label: "Mã lô", key: "lotCode", width: 14 },
             { label: "Mã hàng", key: "productCode", width: 12 },
             { label: "Tên hàng", key: "productName", width: 30 },
+            { label: "ĐVT", key: "productUnit", width: 10 },
             { label: "SL nhập", key: "quantity", width: 10, format: "number" },
             { label: "Còn lại", key: "remainingQty", width: 10, format: "number" },
             { label: "Ngày nhập", key: "receivedDate", width: 14 },
@@ -244,6 +250,7 @@ export default function LotTraceabilityPage() {
             lotCode: l.lotCode,
             productCode: l.productCode,
             productName: l.productName,
+            productUnit: l.productUnit,
             quantity: l.quantity,
             remainingQty: l.remainingQty,
             receivedDate: formatShortDate(l.receivedDate),
@@ -262,6 +269,7 @@ export default function LotTraceabilityPage() {
     { label: "Mã lô", key: "lotCode", align: "left", width: "120px" },
     { label: "Mã hàng", key: "productCode", align: "left", width: "100px" },
     { label: "Tên hàng", key: "productName", align: "left" },
+    { label: "ĐVT", key: "productUnit", align: "left", width: "80px" },
     {
       label: "Số lượng nhập",
       key: "quantity",
@@ -347,7 +355,7 @@ export default function LotTraceabilityPage() {
         hideDateRange
         onExportView={() => handleExport("view")}
         onExportFull={() => handleExport("full")}
-        exportDisabled={loading}
+        exportDisabled={loading || loadError}
       />
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
@@ -379,8 +387,8 @@ export default function LotTraceabilityPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tổng số lượng còn lại"
-            value={formatNumber(totalQty)}
+            label="Số mặt hàng"
+            value={formatNumber(productCount)}
             icon="warehouse"
             bg="bg-status-info/10"
             iconColor="text-status-info"
@@ -400,7 +408,8 @@ export default function LotTraceabilityPage() {
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Tìm theo mã lô / mã hàng..."
+              placeholder="Tìm mã lô, mã hàng, tên hàng..."
+              aria-label="Tìm lô hàng"
               className="pl-8 pr-3 h-8 text-xs rounded-full border border-border bg-surface-container-lowest outline-none focus:ring-1 focus:ring-primary w-64"
             />
           </div>
@@ -429,7 +438,12 @@ export default function LotTraceabilityPage() {
           </Select>
         </div>
 
-        {loading ? (
+        {loadError ? (
+          <div role="alert" className="flex items-center gap-3 text-sm text-status-error">
+            Không tải được lô hàng.
+            <button type="button" onClick={fetchData} className="underline">Thử lại</button>
+          </div>
+        ) : loading ? (
           <div className="flex flex-col items-center justify-center py-16">
             <Icon
               name="progress_activity"
@@ -437,7 +451,7 @@ export default function LotTraceabilityPage() {
               className="animate-spin text-muted-foreground"
             />
             <p className="mt-2 text-sm text-muted-foreground">
-              Đang tải dữ liệu lot...
+              Đang tải lô hàng...
             </p>
           </div>
         ) : (
@@ -448,7 +462,7 @@ export default function LotTraceabilityPage() {
               rows={lots}
               getRowKey={(r) => r.id}
               subtotalLabel={`SL lô: ${lots.length}`}
-              emptyState="Chưa có lot nào"
+              emptyState="Không có lô phù hợp"
             />
           </div>
         )}

@@ -349,7 +349,6 @@ export default function BanHangPage() {
               columns: [
                 { label: periodLabel, key: "date", width: 24 },
                 { label: "Đơn", key: "orderCount", width: 10 },
-                { label: "SL bán", key: "soldQty", width: 12 },
                 { label: "Bán gộp", key: "grossRevenue", width: 18, format: "currency" as const },
                 { label: "Trả trong ngày", key: "returnAmount", width: 18, format: "currency" as const },
                 { label: "Doanh thu thuần", key: "netRevenue", width: 18, format: "currency" as const },
@@ -359,7 +358,6 @@ export default function BanHangPage() {
               rows: periodRows.map((row) => ({
                 date: formatPeriod(row.date),
                 orderCount: row.orderCount,
-                soldQty: row.soldQty,
                 grossRevenue: row.grossRevenue,
                 returnAmount: row.returnAmount,
                 netRevenue: row.netRevenue,
@@ -384,7 +382,6 @@ export default function BanHangPage() {
                 { label: "Thời gian", key: "createdAt", width: 20 },
                 { label: "Khách hàng", key: "customerName", width: 28 },
                 { label: "Dòng", key: "itemCount", width: 10 },
-                { label: "SL bán", key: "soldQty", width: 12 },
                 { label: "Tổng đơn", key: "total", width: 18, format: "currency" as const },
                 { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" as const },
                 { label: "Thuần", key: "netAmount", width: 18, format: "currency" as const },
@@ -396,7 +393,6 @@ export default function BanHangPage() {
                 createdAt: formatReportDateTime(row.createdAt),
                 customerName: row.customerName,
                 itemCount: row.itemCount,
-                soldQty: row.soldQty,
                 total: row.total,
                 returnAmount: row.returnAmount,
                 netAmount: row.netAmount,
@@ -446,7 +442,7 @@ export default function BanHangPage() {
             { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
               { label: "(-) Giá trị trả hàng", current: kpis.returnAmount, previous: kpis.prevReturnAmount },
             { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
-            { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
+            { label: "Số hóa đơn", current: kpis.invoiceCount ?? 0, previous: kpis.prevInvoiceCount ?? 0 },
             { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
             { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
           ],
@@ -491,7 +487,7 @@ export default function BanHangPage() {
               { label: "Phí giao hàng thu hộ", current: kpis.deliveryFee, previous: kpis.prevDeliveryFee },
               { label: "(-) Giá trị trả hàng", current: kpis.returnAmount, previous: kpis.prevReturnAmount },
               { label: "Tổng thu (gồm phí giao)", current: kpis.netRevenue, previous: kpis.prevNetRevenue },
-              { label: "Số lượng bán", current: kpis.soldQty, previous: kpis.prevSoldQty },
+              { label: "Số hóa đơn", current: kpis.invoiceCount ?? 0, previous: kpis.prevInvoiceCount ?? 0 },
               { label: "Giá trị trung bình mỗi đơn", current: kpis.avgOrderValue, previous: kpis.prevAvgOrderValue },
               { label: "Tỷ lệ trả hàng (%)", current: kpis.returnRate, previous: kpis.prevReturnRate },
             ],
@@ -662,7 +658,7 @@ export default function BanHangPage() {
     ? calcChangePct(kpis.goodsRevenue, kpis.prevGoodsRevenue)
     : { text: "0%", positive: true };
   const qtyChange = kpis
-    ? calcChangePct(kpis.soldQty, kpis.prevSoldQty)
+    ? calcChangePct(kpis.invoiceCount ?? 0, kpis.prevInvoiceCount ?? 0)
     : { text: "0%", positive: true };
   const avgChange = kpis
     ? calcChangePct(kpis.avgOrderValue, kpis.prevAvgOrderValue)
@@ -692,12 +688,6 @@ export default function BanHangPage() {
           {formatNumber(row.orderCount)}
         </a>
       ) : formatNumber(row.orderCount),
-    },
-    {
-      label: "SL bán",
-      key: "soldQty",
-      align: "right",
-      cell: (row) => formatNumber(row.soldQty),
     },
     {
       label: "Bán gộp",
@@ -763,10 +753,10 @@ export default function BanHangPage() {
       cell: (row) => branchNames.get(row.branchId) ?? row.branchId,
     },
     {
-      label: "Dòng / SL",
-      key: "soldQty",
+      label: "Số dòng hàng",
+      key: "itemCount",
       align: "right",
-      cell: (row) => formatNumber(row.itemCount) + " / " + formatNumber(row.soldQty),
+      cell: (row) => formatNumber(row.itemCount),
     },
     {
       label: "Tổng đơn",
@@ -831,8 +821,8 @@ export default function BanHangPage() {
             }
           />
           <KpiCard
-            label="Số lượng bán"
-            value={formatNumber(kpis?.soldQty ?? 0)}
+            label="Số hóa đơn"
+            value={formatNumber(kpis?.invoiceCount ?? 0)}
             change={`${qtyChange.text} so với kỳ trước`}
             positive={qtyChange.positive}
             icon="inventory_2"

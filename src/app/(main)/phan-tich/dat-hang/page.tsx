@@ -168,6 +168,8 @@ export default function DatHangPage() {
   const [recentOrdersList, setRecentOrdersList] = useState<RecentOrder[]>([]);
   // CEO 13/07 (chuẩn KiotViet): đặt hàng theo hàng hóa — mỗi SP 1 dòng.
   const [productRows, setProductRows] = useState<OrderProductBreakdownRow[]>([]);
+  const quantityUnits = new Set(productRows.map((row) => row.unit?.trim()).filter(Boolean));
+  const canSumQuantity = quantityUnits.size === 1 && productRows.every((row) => row.unit?.trim());
   const requestIdRef = useRef(0);
 
 
@@ -291,7 +293,7 @@ export default function DatHangPage() {
           })),
           footer: {
             code: "TỔNG",
-            qty: productRows.reduce((s, r) => s + r.quantity, 0),
+            qty: canSumQuantity ? productRows.reduce((s, r) => s + r.quantity, 0) : "",
             amount: productRows.reduce((s, r) => s + r.amount, 0),
           },
         },
@@ -333,7 +335,7 @@ export default function DatHangPage() {
         variant: "error",
       });
     }
-  }, [kpis, orderVolume, orderStatus, recentOrdersList, productRows, range, branchLabel, toast]);
+  }, [kpis, orderVolume, orderStatus, recentOrdersList, productRows, canSumQuantity, range, branchLabel, toast]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -587,7 +589,7 @@ export default function DatHangPage() {
                   <tr className="font-bold">
                     <td className="py-2.5 pr-4" colSpan={3}>TỔNG</td>
                     <td className="py-2.5 pr-4 text-right">
-                      {formatNumber(productRows.reduce((s, r) => s + r.quantity, 0))}
+                      {canSumQuantity ? formatNumber(productRows.reduce((s, r) => s + r.quantity, 0)) : "—"}
                     </td>
                     <td className="py-2.5 pr-4" />
                     <td className="py-2.5 text-right">
