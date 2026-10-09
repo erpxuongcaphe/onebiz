@@ -5,7 +5,7 @@ import type { XntRow } from "@/lib/services/supabase/xnt-report";
 describe("XNT historical average unit values", () => {
   it("preserves bucket values even when opening valuation is unknown", () => {
     const row = withXntUnitValues({ openingQty: 2, openingValue: null, inSupplier: 3, outSale: 1, inOther: 0,
-      movementValues: { inSupplier: 90, outSale: null }, totalIn: 3, totalOut: 1 } as XntRow);
+      movementValues: { inSupplier: 90, outSale: null }, totalIn: 3, totalOut: 1 } as unknown as XntRow);
     expect(row).toMatchObject({ inSupplierValue: 90, inSupplierUnitValue: 30, outSaleValue: null, inOtherValue: 0, inOtherUnitValue: null });
     expect(xntMovementValueTotals([row])).toMatchObject({ inSupplierValue: 90, outSaleValue: null, inOtherValue: 0 });
   });

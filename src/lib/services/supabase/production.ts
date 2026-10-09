@@ -374,7 +374,7 @@ export async function getAllProductLots(options?: {
   sourceType?: string;
   branchId?: string;
   fetchAll?: boolean;
-}): Promise<(ProductLot & { productName: string; productCode: string })[]> {
+}): Promise<(ProductLot & { productName: string; productCode: string; productUnit: string })[]> {
   const tenantId = await getCurrentTenantId();
 
   const pageSize = options?.fetchAll ? 1000 : 200;
@@ -383,7 +383,7 @@ export async function getAllProductLots(options?: {
   for (let offset = 0; ; offset += pageSize) {
     let query = supabase
       .from("product_lots")
-      .select("*, products!inner(name, code)")
+      .select("*, products!inner(name, code, unit)")
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
@@ -418,6 +418,7 @@ export async function getAllProductLots(options?: {
       productId: row.product_id as string,
       productName: (product?.name as string) ?? "",
       productCode: (product?.code as string) ?? "",
+      productUnit: (product?.unit as string) ?? "",
       lotNumber: row.lot_number as string,
       sourceType: row.source_type as "production" | "purchase",
       productionOrderId: row.production_order_id as string | undefined,

@@ -939,7 +939,7 @@ export default function BaoCaoTaiChinhPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="Doanh thu"
+            label="Giá trị hóa đơn sau trả"
             value={cur ? formatCurrency(cur.revenue) : "—"}
             change={
               cur && prev
@@ -1033,7 +1033,7 @@ export default function BaoCaoTaiChinhPage() {
                     prev: prev?.deliveryFee ?? 0,
                   },
                   {
-                    label: "= Tổng doanh thu sau trả hàng",
+                    label: "Giá trị hóa đơn sau trả (gồm phí giao hàng)",
                     cur: cur?.revenue ?? 0,
                     prev: prev?.revenue ?? 0,
                     bold: true,
@@ -1047,7 +1047,7 @@ export default function BaoCaoTaiChinhPage() {
                     dependsOnCogs: true,
                   },
                   {
-                    label: "= Lãi gộp",
+                    label: "= Lãi gộp hàng hóa",
                     cur: cur?.grossProfit ?? 0,
                     prev: prev?.grossProfit ?? 0,
                     bold: true,

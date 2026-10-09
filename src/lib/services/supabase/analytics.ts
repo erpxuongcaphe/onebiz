@@ -67,6 +67,8 @@ export interface TopInvoice {
 }
 
 export interface SalesKpis {
+  invoiceCount?: number;
+  prevInvoiceCount?: number;
   netRevenue: number;
   prevNetRevenue: number;
   goodsRevenue: number;
@@ -752,6 +754,8 @@ export async function getSalesReportSummary(
 
     return {
       kpis: {
+        invoiceCount: currentCount,
+        prevInvoiceCount: previousCount,
         netRevenue: currentRevenue,
         prevNetRevenue: previousRevenue,
         goodsRevenue: currentRevenue - currentDelivery,
@@ -2634,10 +2638,16 @@ function formatFinanceBucketLabel(value: string, granularity: string): string {
     return new Intl.DateTimeFormat("vi-VN", {
       day: "2-digit",
       month: "2-digit",
+      timeZone: "Asia/Ho_Chi_Minh",
     }).format(date);
   }
-  if (granularity === "year") return String(date.getFullYear());
-  return `T${date.getMonth() + 1}/${date.getFullYear()}`;
+  const parts = new Intl.DateTimeFormat("en", {
+    year: "numeric", month: "numeric", timeZone: "Asia/Ho_Chi_Minh",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value ?? "";
+  const month = parts.find((part) => part.type === "month")?.value ?? "";
+  if (granularity === "year") return year;
+  return `T${month}/${year}`;
 }
 
 export async function getFinanceDashboardReport(

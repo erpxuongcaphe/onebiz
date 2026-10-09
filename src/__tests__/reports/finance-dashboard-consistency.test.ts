@@ -83,6 +83,14 @@ beforeEach(() => {
 });
 
 describe("finance dashboard consistency", () => {
+  it("labels a Vietnam midnight bucket as October rather than September", async () => {
+    rpc.mockResolvedValueOnce({ data: {
+      current: {}, previous: {}, granularity: "day",
+      trend: [{ bucket_start: "2026-09-30T17:00:00Z" }], expense_breakdown: [],
+    }, error: null });
+    const report = await getFinanceDashboardReport("branch-1", { from: "2026-10-01", to: "2026-10-09" });
+    expect(report.trend[0].label).toBe("01/10");
+  });
   it("derives revenue, expense and profit from the same P&L response", async () => {
     const report = await getFinanceDashboardReport("branch-1", {
       from: "2026-07-01",
