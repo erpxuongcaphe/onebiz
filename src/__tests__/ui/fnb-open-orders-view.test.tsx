@@ -13,6 +13,20 @@ function mount(overrides = {}) {
   return { onOpenOrder, onOpenChange };
 }
 describe("full POS unpaid checks view", () => {
+  it("filters by order type while preserving search and opens the exact matching bill", () => {
+    const { onOpenOrder } = mount();
+    fireEvent.click(screen.getByRole("tab", { name: /Mang về\s*1/ }));
+    expect(screen.queryByRole("region", { name: "Tại quán" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Giao hàng" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("textbox", { name: "Tìm đơn đang mở" }), { target: { value: "KB004" } });
+    expect(within(screen.getByRole("region", { name: "Mang về" })).queryByRole("button")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: /Giao hàng\s*1/ }));
+    fireEvent.click(within(screen.getByRole("region", { name: "Giao hàng" })).getByRole("button"));
+    expect(onOpenOrder.mock.calls[0][0].id).toBe("004");
+    fireEvent.click(screen.getByRole("tab", { name: /Toàn bộ\s*4/ }));
+    expect(screen.getByRole("region", { name: "Tại quán" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Tìm đơn đang mở" })).toHaveValue("KB004");
+  });
   it("groups all branch checks without a modal and opens the exact split check", () => {
     const { onOpenOrder } = mount();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
@@ -52,3 +66,4 @@ describe("full POS unpaid checks view", () => {
     }
   });
 });
+
