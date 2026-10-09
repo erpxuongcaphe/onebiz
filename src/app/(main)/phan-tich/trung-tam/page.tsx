@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
-import { ArrowUpRight, Search, Star, X } from "lucide-react";
 import { Icon } from "@/components/ui/icon";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/contexts";
@@ -42,11 +41,11 @@ export default function ReportCenterPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-xl font-semibold text-foreground">Trung tâm báo cáo</h1>
           <div className="relative w-full sm:w-96">
-            <Search size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Icon name="search" size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input aria-label="Tìm báo cáo" placeholder="Tìm tên báo cáo hoặc nghiệp vụ…" value={query}
               onChange={(event) => setQuery(event.target.value)} className="h-10 pl-10 pr-10" />
             {query && <button type="button" aria-label="Xóa tìm kiếm" title="Xóa tìm kiếm" onClick={() => setQuery("")}
-              className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"><X size={16} /></button>}
+              className="absolute right-1 top-1 inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"><Icon name="close" size={16} /></button>}
           </div>
         </div>
       </header>
@@ -79,12 +78,12 @@ export default function ReportCenterPage() {
                         <Icon name={report.icon} size={22} className="shrink-0 text-primary" />
                         <span className="min-w-0 flex-1"><span className="block break-words text-sm font-semibold leading-5 text-foreground group-hover:text-primary">{report.title}</span>
                           <span className="mt-1 block break-words text-sm leading-5 text-muted-foreground">{report.description}</span></span>
-                        <ArrowUpRight size={16} className="shrink-0 text-muted-foreground" />
+                        <Icon name="north_east" size={16} className="shrink-0 text-muted-foreground" />
                       </Link>
                       <button type="button" aria-label={`${pinned ? "Bỏ ghim" : "Ghim"} ${report.title}`} aria-pressed={pinned} title={pinned ? "Bỏ ghim" : "Ghim báo cáo"}
                         onClick={() => setFavoritePaths(toggleFavoriteReportPath(report.href))}
                         className={cn("mr-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring", pinned ? "text-status-warning" : "text-muted-foreground")}>
-                        <Star size={18} fill={pinned ? "currentColor" : "none"} />
+                        <Icon name="star" size={18} fill={pinned} />
                       </button>
                     </div>;
                   })}
