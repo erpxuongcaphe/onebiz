@@ -100,6 +100,8 @@ export interface Database {
           email: string | null;
           phone: string | null;
           avatar_url: string | null;
+          pos_pin_hash: string | null;
+          pos_pin_reset_required: boolean;
           role: "owner" | "admin" | "manager" | "staff" | "cashier";
           is_active: boolean;
           created_at: string;

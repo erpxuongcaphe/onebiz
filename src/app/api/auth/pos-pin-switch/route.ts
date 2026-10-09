@@ -173,6 +173,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (!verifyData || !(verifyData as { success?: boolean }).success) {
+      const failure = verifyData as { code?: string; attempts_remaining?: number } | null;
+      if (failure?.code === "INVALID_PIN") {
+        return NextResponse.json({ success: false, message: failure.attempts_remaining === 0 ? "PIN chưa đúng. Tài khoản tạm khóa 15 phút." : "PIN chưa đúng. Vui lòng nhập lại PIN của mình.", code: "INVALID_PIN" }, { status: 401 });
+      }
       return NextResponse.json(
         { success: false, message: "Server không trả kết quả verify hợp lệ" },
         { status: 500 },

@@ -33,6 +33,7 @@ interface FnbSidenavDrawerProps {
   hasOpenShift?: boolean;
   /** Sprint B.5 (CEO 12/05): mở dialog switch user qua PIN POS. */
   onSwitchUser?: () => void;
+  onManagePin?: () => void;
 }
 
 interface NavItem {
@@ -68,6 +69,7 @@ export function FnbSidenavDrawer({
   onCloseShift,
   hasOpenShift,
   onSwitchUser,
+  onManagePin,
 }: FnbSidenavDrawerProps) {
   const { user, currentBranch, logout, hasPermission } = useAuth();
   const { isFnb } = useFnbSubdomain();
@@ -158,6 +160,7 @@ export function FnbSidenavDrawer({
               <span className="flex-1 text-left font-medium">Đổi nhân viên (PIN)</span>
             </button>
           )}
+          {onManagePin && <button type="button" onClick={() => { onClose(); onManagePin(); }} className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-primary hover:bg-surface-container"><Icon name="pin" size={18} /><span className="font-medium">PIN của tôi</span></button>}
           {onCloseShift && hasOpenShift && (
             <button
               type="button"

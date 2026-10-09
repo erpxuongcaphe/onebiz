@@ -130,6 +130,7 @@ import {
 } from "./components/fnb-category-sidebar";
 import { FnbCategoryGrid } from "./components/fnb-category-grid";
 import { FnbSidenavDrawer } from "./components/fnb-sidenav-drawer";
+import { MyPosPinSettings } from "@/components/shared/my-pos-pin";
 import { FnbPinHandoverDialog } from "./components/fnb-pin-handover-dialog";
 import { PosPinSwitchDialog } from "@/components/shared/dialogs/pos-pin-switch-dialog";
 import { FnbProductGrid, type FnbProduct } from "./components/fnb-product-grid";
@@ -306,6 +307,7 @@ function FnbPosPageInner() {
   const [sidenavOpen, setSidenavOpen] = useState(false);
   // Sprint B.5 (CEO 12/05): PIN POS switch user dialog
   const [pinSwitchOpen, setPinSwitchOpen] = useState(false);
+  const [myPinOpen, setMyPinOpen] = useState(false);
   const [pinHandoverOpen, setPinHandoverOpen] = useState(false);
   // CEO 13/05: discount manual OTP dialog (BẤT KỲ giảm giá manual nào)
   const [discountOtpOpen, setDiscountOtpOpen] = useState(false);
@@ -3553,7 +3555,7 @@ function FnbPosPageInner() {
           onSearch={() => setSearchModalOpen(true)}
           onMenuClick={() => setSidenavOpen(true)}
         />
-        <FnbSidenavDrawer
+        <FnbSidenavDrawer onManagePin={() => setMyPinOpen(true)}
           open={sidenavOpen}
           onClose={() => setSidenavOpen(false)}
         />
@@ -3651,6 +3653,7 @@ function FnbPosPageInner() {
         }}
       />
 
+      <Dialog open={myPinOpen} onOpenChange={setMyPinOpen}><DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto"><DialogHeader><DialogTitle>PIN cá nhân</DialogTitle></DialogHeader>{myPinOpen && <MyPosPinSettings />}</DialogContent></Dialog>
       {/* Sprint B.5 (CEO 12/05): PIN POS switch user (Approach Z) */}
       {branchId && (
         <PosPinSwitchDialog

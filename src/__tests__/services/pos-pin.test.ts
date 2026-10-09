@@ -55,7 +55,7 @@ describe("changeMyPosPin — NV tự đặt/đổi PIN", () => {
 
     const result = await changeMyPosPin("123456", null);
 
-    expect(mockRpc).toHaveBeenCalledWith("change_my_pos_pin", {
+    expect(mockRpc).toHaveBeenCalledWith("change_my_pos_pin_00459", {
       p_old_pin: null,
       p_new_pin: "123456",
     });
@@ -70,7 +70,7 @@ describe("changeMyPosPin — NV tự đặt/đổi PIN", () => {
 
     const result = await changeMyPosPin("234567", "123456");
 
-    expect(mockRpc).toHaveBeenCalledWith("change_my_pos_pin", {
+    expect(mockRpc).toHaveBeenCalledWith("change_my_pos_pin_00459", {
       p_old_pin: "123456",
       p_new_pin: "234567",
     });
@@ -148,7 +148,7 @@ describe("changeMyPosPin — NV tự đặt/đổi PIN", () => {
     });
 
     await expect(changeMyPosPin("123456", null)).rejects.toThrow(
-      "Chưa có RPC change_my_pos_pin",
+      "Chưa cập nhật được chức năng PIN",
     );
   });
 

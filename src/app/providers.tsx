@@ -9,6 +9,8 @@ import { AuthSessionToast } from "@/components/shared/auth-session-toast";
 import { PrintJobFeedback } from "@/components/shared/print-job-feedback";
 import { BranchPrintDefaults } from "@/components/shared/branch-print-defaults";
 
+import { PosPinOnboarding } from "@/components/shared/pos-pin-onboarding";
+
 export function Providers({ children }: { children: ReactNode }) {
   return (
     <AuthProvider>
@@ -16,7 +18,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <BranchPrintDefaults />
         <ToastProvider>
           <TooltipProvider>
-            {children}
+            <PosPinOnboarding>{children}</PosPinOnboarding>
             <ToastContainer />
             <PwaInstallPrompt />
             <AuthSessionToast />
