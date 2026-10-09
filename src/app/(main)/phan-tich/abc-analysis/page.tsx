@@ -27,6 +27,7 @@ import {
 import { getAbcReport } from "@/lib/services/supabase/abc-analysis";
 import type { AbcRow, AbcReportResult } from "@/lib/services/supabase/abc-analysis";
 import { cn } from "@/lib/utils";
+import { sortedReportView } from "@/lib/reports/table-sort";
 import { KpiCard } from "../_components";
 
 type FilterMode = "all" | "A" | "B" | "C" | "slow";
@@ -45,6 +46,7 @@ export default function AbcAnalysisPage() {
     useReportState({ defaultPreset: "thisMonth", defaultViewMode: "table" });
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [sort, setSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
   const [data, setData] = useState<AbcReportResult | null>(null);
   const [loading, setLoading] = useState(true);
   const requestIdRef = useRef(0);
@@ -77,10 +79,10 @@ export default function AbcAnalysisPage() {
 
   const filteredRows = useMemo(
     () =>
-      data && filterMode !== "all"
+      sortedReportView(data && filterMode !== "all"
         ? data.rows.filter((row) => row.abcClass === filterMode)
-        : data?.rows ?? [],
-    [data, filterMode],
+        : data?.rows ?? [], sort),
+    [data, filterMode, sort],
   );
 
   const handleExportView = useCallback(() => {
@@ -355,6 +357,8 @@ export default function AbcAnalysisPage() {
               columns={columns}
               tablePreferenceKey="report.abc-analysis.products"
               rows={filteredRows}
+              sortState={sort}
+              onSortChange={setSort}
               getRowKey={(r) => r.productId}
               subtotalLabel={`SL mặt hàng: ${filteredRows.length}`}
               emptyState={

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import {
   LineChart,
   Line,
@@ -17,7 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { KpiCard, ChartCard } from "../_components";
-import { ReportDataTable, ReportPageHeader, ReportTableFrame, type DataTableColumn } from "@/components/shared/report";
+import { ReportDataTable, ReportPageHeader, type DataTableColumn } from "@/components/shared/report";
 import { useReportState } from "@/lib/hooks/use-report-state";
 import { useDebounce } from "@/lib/utils/use-debounce";
 import { useBranchFilter, useToast } from "@/lib/contexts";
@@ -41,6 +41,7 @@ import {
   getSupplierPaymentStatus,
   getSupplierSummary,
   getPurchaseOrders,
+  getPayableAgingReport,
 } from "@/lib/services";
 import type { PurchaseOrder } from "@/lib/types";
 import type {
@@ -49,6 +50,7 @@ import type {
 } from "@/lib/services/supabase/analytics";
 import { Icon } from "@/components/ui/icon";
 import { formatSelectedPeriodLabel } from "@/lib/utils/date-presets";
+import { reconcileSupplierPayables, supplierSummaryView } from "@/lib/reports/supplier-summary-view";
 
 // === Helpers ===
 
@@ -175,6 +177,11 @@ export default function NhaCungCapPage() {
   const [topSuppliers, setTopSuppliers] = useState<{ name: string; amount: number }[]>([]);
   const [paymentStatus, setPaymentStatus] = useState<{ name: string; value: number }[]>([]);
   const [supplierTable, setSupplierTable] = useState<SupplierSummaryRow[]>([]);
+  const [supplierSearch, setSupplierSearch] = useState("");
+  const [supplierSort, setSupplierSort] = useState<{ id: string; direction: "asc" | "desc" } | null>(null);
+  const visibleSuppliers = useMemo(() => supplierSummaryView(supplierTable, supplierSearch, supplierSort),
+    [supplierTable, supplierSearch, supplierSort]);
+  const debtLabel = canViewDetail ? "Phải trả hiện tại" : "Nợ trên phiếu nhập";
   const [tableMode, setTableMode] = useState<"vouchers" | "suppliers">("vouchers");
   const [voucherSearch, setVoucherSearch] = useState("");
   const [voucherSort, setVoucherSort] = useState<keyof typeof VOUCHER_SORTS>("recent");
@@ -267,21 +274,23 @@ export default function NhaCungCapPage() {
         titleRows: title,
         columns: [
           { label: "Nhà cung cấp", key: "name", width: 32 },
-          { label: "Đã mua (VND)", key: "purchased", width: 18, format: "currency" },
-          { label: "Công nợ (VND)", key: "debt", width: 18, format: "currency" },
-          { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
+          { label: "Mua trong kỳ (VND)", key: "total", width: 18, format: "currency" },
+          { label: debtLabel, key: "debt", width: 18, format: "currency" },
+          { label: "Số phiếu nhập", key: "orders", width: 12, format: "number" },
         ],
-        rows: supplierTable.map((s) => ({
+        autoFilter: true,
+        tablePreferenceKey: "report.suppliers.summary",
+        rows: visibleSuppliers.map((s) => ({
           name: s.name,
-          purchased: s.total,
+          total: s.total,
           debt: s.debt,
-          orderCount: s.orders,
+          orders: s.orders,
         })),
         footer: {
           name: "TỔNG",
-          purchased: supplierTable.reduce((sum, s) => sum + s.total, 0),
-          debt: supplierTable.reduce((sum, s) => sum + s.debt, 0),
-          orderCount: supplierTable.reduce((sum, s) => sum + s.orders, 0),
+          total: visibleSuppliers.reduce((sum, s) => sum + s.total, 0),
+          debt: visibleSuppliers.reduce((sum, s) => sum + s.debt, 0),
+          orders: visibleSuppliers.reduce((sum, s) => sum + s.orders, 0),
         },
       };
       await exportReportToExcel({ kind: "nha-cung-cap", mode: "view", range, branchName: branchLabel, sheets: [sheet] });
@@ -291,16 +300,18 @@ export default function NhaCungCapPage() {
     } finally {
       setExporting(false);
     }
-  }, [supplierTable, vouchers, range, branchLabel, branches, exporting, toast, viewMode, tableMode, canViewDetail]);
+  }, [visibleSuppliers, debtLabel, vouchers, range, branchLabel, branches, exporting, toast, viewMode, tableMode, canViewDetail]);
 
   const handleExportFull = useCallback(async () => {
     if (exporting) return;
     setExporting(true);
     try {
-      const [allTopSuppliers, allSupplierRows] = await Promise.all([
+      const [allTopSuppliers, purchaseSummary, payables] = await Promise.all([
         getTopSuppliersByPurchase(null, activeBranchId, range),
         getSupplierSummary(null, activeBranchId, range),
+        canViewDetail ? getPayableAgingReport({ branchId: activeBranchId ?? null }) : Promise.resolve(null),
       ]);
+      const allSupplierRows = payables ? reconcileSupplierPayables(purchaseSummary, payables.rows) : purchaseSummary;
       const title = buildReportTitleRows({
         title: "BÁO CÁO NHÀ CUNG CẤP — ĐẦY ĐỦ",
         range,
@@ -319,7 +330,7 @@ export default function NhaCungCapPage() {
             { metric: "Tổng NCC", value: kpis?.totalSuppliers ?? 0 },
             { metric: "Mua trong kỳ", value: kpis?.purchaseThisMonth ?? 0 },
             { metric: "Mua kỳ trước", value: kpis?.prevPurchase ?? 0 },
-            { metric: "Tổng công nợ", value: kpis?.totalDebt ?? 0 },
+            { metric: debtLabel, value: allSupplierRows.reduce((sum, row) => sum + row.debt, 0) },
             { metric: "Số đơn trả", value: kpis?.returnCount ?? 0 },
           ],
         },
@@ -346,12 +357,12 @@ export default function NhaCungCapPage() {
           titleRows: ["TỔNG HỢP NCC", ...title.slice(1)],
           columns: [
             { label: "Nhà cung cấp", key: "name", width: 32 },
-            { label: "Đã mua (VND)", key: "purchased", width: 18, format: "currency" },
-            { label: "Công nợ (VND)", key: "debt", width: 18, format: "currency" },
-            { label: "Đơn nhập", key: "orderCount", width: 12, format: "number" },
+            { label: "Mua trong kỳ (VND)", key: "total", width: 18, format: "currency" },
+            { label: debtLabel, key: "debt", width: 18, format: "currency" },
+            { label: "Số phiếu nhập", key: "orders", width: 12, format: "number" },
           ],
           rows: allSupplierRows.map((s) => ({
-            name: s.name, purchased: s.total, debt: s.debt, orderCount: s.orders,
+            name: s.name, total: s.total, debt: s.debt, orders: s.orders,
           })),
         },
         {
@@ -402,7 +413,7 @@ export default function NhaCungCapPage() {
     } finally {
       setExporting(false);
     }
-  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, range, branchLabel, branches, debouncedVoucherSearch, voucherSort, canViewDetail, exporting, toast]);
+  }, [activeBranchId, kpis, purchaseByMonth, paymentStatus, debtLabel, range, branchLabel, branches, debouncedVoucherSearch, voucherSort, canViewDetail, exporting, toast]);
 
   const reportHeader = (
     <ReportPageHeader
@@ -425,26 +436,32 @@ export default function NhaCungCapPage() {
     try {
       setLoading(true);
       setLoadError(null);
-      const [kpiData, purchase, top, payment, summary] = await Promise.all([
+      const [kpiData, purchase, top, payment, summary, payables] = await Promise.all([
         getSupplierKpis(activeBranchId, range),
         getPurchaseByMonth(6, activeBranchId, range),
         getTopSuppliersByPurchase(5, activeBranchId, range),
         getSupplierPaymentStatus(activeBranchId),
         getSupplierSummary(null, activeBranchId, range),
+        canViewDetail ? getPayableAgingReport({ branchId: activeBranchId ?? null }) : Promise.resolve(null),
       ]);
       if (requestId !== requestIdRef.current) return;
-      setKpis(kpiData);
+      const reconciled = payables ? reconcileSupplierPayables(summary, payables.rows) : summary;
+      setKpis({ ...kpiData, totalSuppliers: reconciled.length,
+        totalDebt: reconciled.reduce((sum, row) => sum + row.debt, 0) });
       setPurchaseByMonth(purchase);
       setTopSuppliers(top);
-      setPaymentStatus(payment);
-      setSupplierTable(summary);
+      setPaymentStatus(payables ? [
+        { name: "Đã thanh toán", value: reconciled.filter(row => row.debt <= 0).length },
+        { name: "Còn nợ", value: reconciled.filter(row => row.debt > 0).length },
+      ] : payment);
+      setSupplierTable(reconciled);
     } catch (err) {
       if (requestId !== requestIdRef.current) return;
       setLoadError(err instanceof Error ? err.message : "Không tải được báo cáo nhà cung cấp.");
     } finally {
       if (requestId === requestIdRef.current) setLoading(false);
     }
-  }, [activeBranchId, range]);
+  }, [activeBranchId, range, canViewDetail]);
 
   useEffect(() => {
     if (!isReady) return;
@@ -475,7 +492,7 @@ export default function NhaCungCapPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            label="NCC đã giao dịch"
+            label="NCC trong báo cáo"
             value={String(kpis?.totalSuppliers ?? 0)}
             change={`${kpis?.totalSuppliers ?? 0} nhà cung cấp`}
             positive
@@ -495,7 +512,7 @@ export default function NhaCungCapPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Công nợ NCC"
+            label={debtLabel}
             value={formatCurrency(kpis?.totalDebt ?? 0)}
             change="Dư nợ tại thời điểm hiện tại"
             positive={(kpis?.totalDebt ?? 0) === 0}
@@ -606,7 +623,7 @@ export default function NhaCungCapPage() {
         </div>
 
         {/* Payment status pie chart */}
-        <ChartCard title="Tình trạng thanh toán NCC" subtitle="Dư nợ tại thời điểm hiện tại">
+        <ChartCard title="Tình trạng thanh toán NCC" subtitle={canViewDetail ? "NCC mua trong kỳ hoặc còn phải trả" : "Nợ trên phiếu nhập, chưa bù trừ ứng trước"}>
           <div className="h-72">
             {paymentStatus.length === 0 ? (
               <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
@@ -703,45 +720,25 @@ export default function NhaCungCapPage() {
             </button>}
           </div> : <div className="p-4">
           <h3 className="mb-2 text-sm font-semibold">Tổng hợp theo nhà cung cấp</h3>
+          <input aria-label="Tìm nhà cung cấp" placeholder="Tìm tên nhà cung cấp"
+            value={supplierSearch} onChange={event => setSupplierSearch(event.target.value)}
+            className="mb-3 h-10 w-full max-w-sm rounded border border-border bg-background px-3 text-sm" />
           {supplierTable.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
               Chưa có dữ liệu nhà cung cấp
             </div>
           ) : (
-            <ReportTableFrame tablePreferenceKey="report.suppliers.summary">
-              <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground">
-                    <th className="text-left py-2 pr-4 font-medium">#</th>
-                    <th className="text-left py-2 pr-4 font-medium">NCC</th>
-                    <th className="text-right py-2 pr-4 font-medium">Tổng mua</th>
-                    <th className="text-right py-2 pr-4 font-medium">Công nợ</th>
-                    <th className="text-right py-2 font-medium">Số đơn</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {supplierTable.map((item) => (
-                    <tr key={item.rank} className="border-b last:border-0">
-                      <td className="py-3 pr-4 text-muted-foreground">{item.rank}</td>
-                      <td className="py-3 pr-4 font-medium">{item.name}</td>
-                      <td className="py-3 pr-4 text-right font-medium text-primary">
-                        {formatCurrency(item.total)}
-                      </td>
-                      <td className="py-3 pr-4 text-right">
-                        {item.debt > 0 ? (
-                          <span className="text-status-error font-medium">{formatCurrency(item.debt)}</span>
-                        ) : (
-                          <span className="text-status-success">0</span>
-                        )}
-                      </td>
-                      <td className="py-3 text-right">{item.orders}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
-            </ReportTableFrame>
+            <ReportDataTable<SupplierSummaryRow> tablePreferenceKey="report.suppliers.summary"
+              rows={visibleSuppliers} getRowKey={row => row.supplierId ?? String(row.rank)}
+              sortState={supplierSort} onSortChange={setSupplierSort}
+              columns={[
+                { key: "name", label: "Nhà cung cấp", sticky: true, hideable: false },
+                { key: "total", label: "Mua trong kỳ", align: "right", cell: row => formatCurrency(row.total) },
+                { key: "debt", label: debtLabel, align: "right", cell: row => formatCurrency(row.debt) },
+                { key: "orders", label: "Số phiếu nhập", align: "right" },
+              ]}
+              subtotalLabel={`${visibleSuppliers.length} nhà cung cấp`}
+              emptyState="Không có nhà cung cấp khớp bộ lọc" />
           )}
           </div>}
         </section>}

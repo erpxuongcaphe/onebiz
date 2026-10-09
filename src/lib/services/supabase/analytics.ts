@@ -205,6 +205,7 @@ export interface TopDebtor {
 // === Nhà cung cấp (Suppliers) ===
 
 export interface SupplierSummaryRow {
+  supplierId?: string;
   rank: number;
   name: string;
   total: number;
@@ -2604,7 +2605,8 @@ export async function getSupplierSummary(
     current.debt += Number(order.debt ?? 0);
     totals.set(supplierId, current);
   }
-  const ranked = Array.from(totals.values())
+  const ranked = Array.from(totals.entries())
+    .map(([supplierId, supplier]) => ({ supplierId, ...supplier }))
     .filter((supplier) => supplier.orders > 0 || supplier.debt > 0)
     .sort((a, b) => b.total - a.total)
     .map((supplier, index) => ({ rank: index + 1, ...supplier }));
