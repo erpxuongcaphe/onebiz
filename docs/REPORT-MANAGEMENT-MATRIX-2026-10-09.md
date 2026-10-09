@@ -124,6 +124,9 @@ return line, rather than merely repeating a report RPC total.
 - Cash document date is a calendar date, not a synthetic 07:00 timestamp.
   Actual receipt/payment time remains a separate column. Code is the first column
   in the ledger and exports; missing operator information is not fabricated.
+- End-of-day gross invoice total and net-after-return total match the same source
+  period. Daily mixed-unit quantities are removed from the table and workbook;
+  a branch/date-scoped SKU detail link provides meaningful per-unit quantities.
 - Baseline: 55 report test files / 266 tests passed. Targeted changes: 23 tests
   passed, including three new staff-view cases. TypeScript passed before release.
 

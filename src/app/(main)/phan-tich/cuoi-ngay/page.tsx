@@ -202,7 +202,6 @@ export default function CuoiNgayPage() {
           columns: [
             { label: "Ngày", key: "date", width: 14 },
             { label: "Hóa đơn", key: "orderCount", width: 12, format: "number" },
-            { label: "SL bán", key: "soldQty", width: 12, format: "number" },
             { label: "Giá trị hóa đơn", key: "grossRevenue", width: 18, format: "currency" },
             { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" },
             { label: "Sau trả hàng", key: "netRevenue", width: 18, format: "currency" },
@@ -273,7 +272,6 @@ export default function CuoiNgayPage() {
           columns: [
             { label: "Ngày", key: "date", width: 14 },
             { label: "Hóa đơn", key: "orderCount", width: 12, format: "number" },
-            { label: "SL bán", key: "soldQty", width: 12, format: "number" },
             { label: "Giá trị hóa đơn", key: "grossRevenue", width: 18, format: "currency" },
             { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" },
             { label: "Sau trả hàng", key: "netRevenue", width: 18, format: "currency" },
@@ -291,7 +289,7 @@ export default function CuoiNgayPage() {
             { label: "Giá trị", key: "value", width: 22, format: "currency" },
           ],
           rows: [
-            { label: "Tổng doanh thu", value: stats.totalRevenue },
+            { label: "Doanh số hóa đơn", value: stats.totalRevenue },
             { label: "Tổng đơn hoàn thành", value: stats.totalOrders },
             { label: "Tiền mặt", value: stats.cashAmount },
             { label: "Chuyển khoản", value: stats.transferAmount },
@@ -407,7 +405,6 @@ export default function CuoiNgayPage() {
   const dailyColumns: DataTableColumn<SalesReportDailyRow>[] = [
     { label: "Ngày", key: "date", sticky: true, cell: (row) => <Link className="text-primary hover:underline" href={buildSalesInvoiceDayLink(row.date, activeBranchId)}>{row.date.split("-").reverse().join("/")}</Link> },
     { label: "Hóa đơn", key: "orderCount", align: "right", cell: (row) => formatNumber(row.orderCount) },
-    { label: "SL bán", key: "soldQty", align: "right", cell: (row) => formatNumber(row.soldQty) },
     { label: "Giá trị hóa đơn", key: "grossRevenue", align: "right", cell: (row) => formatCurrency(row.grossRevenue) },
     { label: "Trả trong kỳ", key: "returnAmount", align: "right", cell: (row) => <Link className="text-primary hover:underline" href={buildSalesReturnDayLink(row.date, activeBranchId)}>{formatCurrency(row.returnAmount)}</Link> },
     { label: "Sau trả hàng", key: "netRevenue", align: "right", cell: (row) => formatCurrency(row.netRevenue) },
@@ -495,6 +492,7 @@ export default function CuoiNgayPage() {
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
         <nav className="flex flex-wrap gap-3 text-sm" aria-label="Chi tiết cuối ngày">
+          <Link className="text-primary hover:underline" href={`/phan-tich/sku-chi-tiet?${new URLSearchParams({ preset: "custom", from: range.from, to: range.to, view: "table", ...(activeBranchId ? { branch: activeBranchId } : {}) })}`}>SKU · số lượng, doanh thu, giá vốn</Link>
           <Link className="text-primary hover:underline" href={buildSalesInvoiceRangeLink(range.from, range.to, activeBranchId)}>Hóa đơn trong kỳ</Link>
           <Link className="text-primary hover:underline" href={`/phan-tich/khach-san-pham?${new URLSearchParams({ preset: "custom", from: range.from, to: range.to, view: "table", ...(activeBranchId ? { branch: activeBranchId } : {}) })}`}>Doanh thu khách hàng · mặt hàng</Link>
           <Link className="text-primary hover:underline" href={`/phan-tich/luong-tien?${new URLSearchParams({ preset: "custom", from: range.from, to: range.to, view: "table", ...(activeBranchId ? { branch: activeBranchId } : {}) })}`}>Thu chi trong kỳ</Link>
@@ -502,7 +500,7 @@ export default function CuoiNgayPage() {
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiCard
-            label="Tổng doanh thu"
+            label="Doanh số hóa đơn"
             value={formatCurrency(totalRevenue) + "đ"}
             change={`${revenuePct >= 0 ? "+" : ""}${revenuePct.toFixed(1)}% so với kỳ trước`}
             positive={revenuePct >= 0}
