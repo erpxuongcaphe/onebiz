@@ -155,7 +155,7 @@ export async function changeMyPosPin(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("change_my_pos_pin", {
+  const { data, error } = await (supabase.rpc as any)("change_my_pos_pin_00459", {
     p_old_pin: oldPin,
     p_new_pin: newPin,
   });
@@ -163,7 +163,7 @@ export async function changeMyPosPin(
   if (error) {
     if (isRpcUnavailable(error)) {
       throw new Error(
-        "Chưa có RPC change_my_pos_pin. Vui lòng chạy migration 00071 trước.",
+        "Chưa cập nhật được chức năng PIN. Vui lòng liên hệ quản lý.",
       );
     }
     handleError(error, "changeMyPosPin");
@@ -175,6 +175,21 @@ export async function changeMyPosPin(
   }
 
   return { isFirstTime: Boolean(result.is_first_time) };
+}
+
+export async function requestPosPinReset(targetUserId: string): Promise<void> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient().rpc as any)("request_pos_pin_reset_00459", { p_target_user_id: targetUserId });
+  if (error) handleError(error, "requestPosPinReset");
+  if (!data?.success) throw new Error("Chưa đặt lại được PIN.");
+}
+
+export async function getManagedPinStatuses(): Promise<{ id: string; hasPin: boolean; resetRequired: boolean }[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient().rpc as any)("pos_pin_statuses_00459");
+  if (error) handleError(error, "getManagedPinStatuses");
+  if (!Array.isArray(data)) throw new Error("Chưa kiểm tra được trạng thái PIN.");
+  return data;
 }
 
 /**

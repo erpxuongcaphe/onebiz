@@ -69,6 +69,7 @@ const RPC_CHO_MIGRATION = new Map<string, string>([
   ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
+  ["profiles.pos_pin_reset_required", "00459"],
   ["customer_groups.code", "00437"],
   ["cash_transactions.performed_by", "00435"],
   ["cash_transactions.performed_by_name", "00435"],

@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // 1. Profile TRƯỚC — các query khác cần profile.tenant_id + profile.id.
         const { data: profile } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id,tenant_id,branch_id,role_id,full_name,email,phone,role,is_active,created_at")
           .eq("id", authUser.id)
           .single();
 

@@ -484,6 +484,16 @@ jobs:
           createdb fnb_void_method_test
           PGDATABASE=fnb_void_method_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00456_fnb_void_methods.integration.sql
 
+      - name: Verify PIN onboarding and recovery in isolated PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: |
+          createdb pos_pin_onboarding_test
+          PGDATABASE=pos_pin_onboarding_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00459_pos_pin_onboarding.integration.sql
+
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20

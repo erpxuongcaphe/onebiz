@@ -38,8 +38,8 @@ import { getRoles, getTenantUsers } from "@/lib/services/supabase/roles";
 import type { DbRole } from "@/lib/services/supabase/roles";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
-import { setUserPosPin, removeUserPosPin } from "@/lib/services/supabase/pos-pin";
-import { SetPinDialog } from "@/components/shared/dialogs";
+import { requestPosPinReset, getManagedPinStatuses } from "@/lib/services/supabase/pos-pin";
+
 // CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
 import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
 import { Input } from "@/components/ui/input";
@@ -105,6 +105,8 @@ function UsersPage() {
   // thời chặn ở UI layer cho đến khi route gating sẵn sàng).
   const isCurrentUserOwner = user?.role === "owner";
 
+  const [pinStatuses, setPinStatuses] = useState<Record<string, { hasPin: boolean; resetRequired: boolean }> | null>(null);
+  const [resettingPin, setResettingPin] = useState(false);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [roles, setRoles] = useState<DbRole[]>([]);
   const [loading, setLoading] = useState(true);
@@ -300,12 +302,14 @@ function UsersPage() {
     if (!tenantId) return;
     setLoading(true);
     try {
-      const [u, r] = await Promise.all([
+      const [u, r, pins] = await Promise.all([
         getTenantUsers(tenantId),
         getRoles(tenantId),
+        getManagedPinStatuses().catch(() => null),
       ]);
       setUsers(u);
       setRoles(r);
+      setPinStatuses(pins ? Object.fromEntries(pins.map(p => [p.id, p])) : null);
     } catch {
       // silent
     } finally {
@@ -459,6 +463,7 @@ function UsersPage() {
                       >
                         {user.isActive ? "Hoạt động" : "Vô hiệu"}
                       </Badge>
+                      <p className="mt-1 text-xs text-muted-foreground">PIN: {pinStatuses?.[user.id] ? pinStatuses[user.id].resetRequired ? "Cần tạo lại" : pinStatuses[user.id].hasPin ? "Đã tạo" : "Chưa tạo" : "Chưa kiểm tra được"}</p>
                     </td>
                     <td className="py-3">
                       <DropdownMenu>
@@ -511,7 +516,7 @@ function UsersPage() {
                           {/* Sprint B.4 (CEO 12/05): đặt PIN POS cho nhân viên */}
                           <DropdownMenuItem onSelect={() => setSetPinUser(user)}>
                             <Icon name="pin" size={16} className="mr-2 text-status-warning" />
-                            Đặt PIN POS
+                            Đặt lại PIN POS
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -944,33 +949,18 @@ function UsersPage() {
       </Dialog>
 
       {/* Sprint B.4 (CEO 12/05): Đặt PIN POS cho nhân viên */}
-      <SetPinDialog
-        open={setPinUser !== null}
-        onOpenChange={(o) => {
-          if (!o) setSetPinUser(null);
-        }}
-        targetUserName={setPinUser?.fullName ?? ""}
-        hasExistingPin={false}
-        onConfirm={async (pin) => {
-          if (!setPinUser) return;
-          try {
-            await setUserPosPin(setPinUser.id, pin);
-            toast({
-              title: "Đã đặt PIN POS",
-              description: `${setPinUser.fullName} — nhân viên có thể switch user trên POS bằng PIN mới`,
-              variant: "success",
-            });
-            setSetPinUser(null);
-          } catch (err) {
-            toast({
-              title: "Đặt PIN thất bại",
-              description: err instanceof Error ? err.message : "Vui lòng thử lại",
-              variant: "error",
-            });
-            throw err; // để SetPinDialog giữ open + hiện error inline
-          }
-        }}
-      />
+<Dialog open={setPinUser !== null} onOpenChange={o => { if (!o) setSetPinUser(null); }}>
+        <DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>Đặt lại PIN — {setPinUser?.fullName}</DialogTitle></DialogHeader>
+          <p className="text-sm">PIN cũ sẽ ngừng sử dụng. Nhân viên đăng nhập bằng tài khoản của mình để tự tạo PIN mới; quản lý không đặt hoặc nhìn thấy PIN mới.</p>
+          <DialogFooter><Button variant="outline" onClick={() => setSetPinUser(null)}>Đóng</Button><Button onClick={async () => {
+            if (!setPinUser || resettingPin) return;
+            setResettingPin(true);
+            try { await requestPosPinReset(setPinUser.id); await load(); toast({ title: "Đã đặt lại PIN", description: "Nhân viên cần tự tạo PIN khi mở lại Onebiz.", variant: "success" }); setSetPinUser(null); }
+            catch (e) { toast({ title: "Chưa đặt lại được PIN", description: e instanceof Error ? e.message : "Vui lòng thử lại.", variant: "error" }); }
+          finally { setResettingPin(false); }
+          }} disabled={resettingPin}>{resettingPin ? "Đang đặt lại…" : "Xác nhận đặt lại"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* CEO 23/05/2026 (Phase 2): Per-user permission override dialog */}
       <PermissionOverrideDialog

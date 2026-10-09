@@ -252,7 +252,7 @@ export async function getTenantUsers(tenantId: string): Promise<{
   const supabase = getClient();
   const { data, error } = await supabase
     .from("profiles")
-    .select("*, roles(name)")
+    .select("id,tenant_id,full_name,email,phone,role,role_id,branch_id,is_active,created_at,roles(name)")
     .eq("tenant_id", tenantId)
     .order("created_at");
 

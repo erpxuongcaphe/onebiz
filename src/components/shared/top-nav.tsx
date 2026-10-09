@@ -46,6 +46,7 @@ import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
 import { Icon } from "@/components/ui/icon";
 import { useFnbSubdomain } from "@/lib/hooks/use-fnb-subdomain";
+import { OtpQuickAccess } from "./otp-quick-access";
 import { PERMISSIONS } from "@/lib/permissions/constants";
 
 // ---------------------------------------------------------------------------
@@ -265,10 +266,13 @@ function UserDropdown() {
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            onSelect={() => router.push("/cai-dat")}
+            onSelect={() => router.push("/ho-so#pin-cua-toi")}
           >
-            <Icon name="settings" size={16} />
-            Cài đặt
+            <Icon name="pin" size={16} />
+            PIN của tôi
+          </DropdownMenuItem>
+          <DropdownMenuItem className="cursor-pointer" onSelect={() => router.push("/cai-dat")}>
+            <Icon name="settings" size={16} /> Cài đặt
           </DropdownMenuItem>
         </DropdownMenuGroup>
         <DropdownMenuSeparator />
@@ -692,7 +696,7 @@ export function TopNav() {
               variant="ghost"
               size="icon"
               onClick={() => setImportOpen(true)}
-              className="text-foreground/70 hover:text-foreground hover:bg-surface-container-low md:hidden"
+              className={cn("text-foreground/70 hover:text-foreground hover:bg-surface-container-low", hasPermission(PERMISSIONS.SYSTEM_ISSUE_OTP) ? "hidden" : "md:hidden")}
               title="Trung tâm nhập Excel"
             >
               <Icon name="cloud_upload" size={16} />
@@ -701,15 +705,7 @@ export function TopNav() {
             {/* CEO 12/05: Shortcut "Cấp OTP" trên header — desktop route
                 /cap-otp có sidebar đầy đủ (back nav tự nhiên). Mobile manager
                 portal dùng /manager/otp riêng. */}
-            <Link href="/cap-otp" className="hidden sm:flex" title="Cấp OTP duyệt từ xa">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-status-warning hover:text-status-warning hover:bg-status-warning/10"
-              >
-                <Icon name="vpn_key" size={16} />
-              </Button>
-            </Link>
+            <OtpQuickAccess />
 
             {/* Notification bell — badge hiển thị unread count thật từ DB */}
             <Link href="/thong-bao" className="relative hidden sm:flex">
