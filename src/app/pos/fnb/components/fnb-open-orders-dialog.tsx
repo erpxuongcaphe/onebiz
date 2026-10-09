@@ -4,6 +4,9 @@ import { fnbOpenOrderLabel, type FnbOpenOrder } from "@/lib/fnb-open-orders";
 import type { FnbTabSnapshot } from "@/lib/types/fnb";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+const orderGroups = [{ type: "dine_in", label: "Tại quán" }, { type: "takeaway", label: "Mang về" }, { type: "delivery", label: "Giao hàng" }] as const;
+type OrderFilter = "all" | typeof orderGroups[number]["type"];
 const normalize = (value: string) => value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d");
 export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, activeOrderId, onOpenOrder, onOpenDraft, loading, error, connected, busy, onRefresh, updatedAt }: {
   open: boolean; onOpenChange: (open: boolean) => void; orders: FnbOpenOrder[]; drafts: FnbTabSnapshot[];
@@ -12,6 +15,7 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
   updatedAt: Date | null; loading: boolean; error: string | null; connected: boolean; busy: boolean; onRefresh: () => void;
 }) {
   const [search, setSearch] = useState("");
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
   const filtered = orders.filter((order) => normalize(`${fnbOpenOrderLabel(order)} ${order.orderNumber} ${order.createdByName ?? ""}`).includes(normalize(search.trim())));
   if (!open) return null;
   return <section aria-label="Đơn chờ thanh toán" className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden bg-background p-3 sm:p-4">
@@ -23,8 +27,12 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
     {updatedAt && <p className="text-xs text-muted-foreground">Cập nhật {updatedAt.toLocaleTimeString("vi-VN")}</p>}
     <input aria-label="Tìm đơn đang mở" placeholder="Tìm bàn, mã đơn hoặc nhân viên…" value={search} onChange={(event) => setSearch(event.target.value)} className="min-h-11 w-full rounded-md border bg-background px-3 text-sm" />
     {error && <p role="alert" className="text-sm text-status-warning">{error}. Dữ liệu trước đó có thể đã thay đổi.</p>}
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      {([{type:"dine_in",label:"Tại quán"},{type:"takeaway",label:"Mang về"},{type:"delivery",label:"Giao hàng"}] as const).map(group => {
+    <Tabs value={orderFilter} onValueChange={(value) => { if (value === "all" || orderGroups.some(group => group.type === value)) setOrderFilter(value as OrderFilter); }} className="min-h-0 flex-1">
+      <TabsList aria-label="Loại đơn chờ thanh toán" className="grid h-auto! w-full shrink-0 grid-cols-4 gap-1 rounded-lg border bg-muted/40 p-1 sm:w-fit">
+        {[{ type: "all", label: "Toàn bộ" }, ...orderGroups].map(group => <TabsTrigger key={group.type} value={group.type} className="min-h-11 gap-1 px-1 text-xs font-semibold sm:px-3 sm:text-sm data-active:bg-primary data-active:text-primary-foreground"><span>{group.label}</span><span className="rounded bg-current/10 px-1.5 tabular-nums">{group.type === "all" ? orders.length : orders.filter(order => order.orderType === group.type).length}</span></TabsTrigger>)}
+      </TabsList>
+    <TabsContent value={orderFilter} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {orderGroups.filter(group => orderFilter === "all" || group.type === orderFilter).map(group => {
         const checks = filtered.filter(order => order.orderType === group.type);
         return <section key={group.type} className="mb-4" aria-label={group.label}>
           <h2 className="mb-2 text-base font-bold text-primary">{group.label} · {checks.length} bill</h2>
@@ -43,7 +51,8 @@ export function FnbOpenOrdersDialog({ open, onOpenChange, orders, drafts, active
       {!checks.length && <p className="text-sm text-muted-foreground">{loading ? "Đang tải…" : "Chưa có bill phù hợp."}</p>}
       </section>;
       })}
-    </div>
+    </TabsContent>
+    </Tabs>
     {drafts.length > 0 && <details className="max-h-28 shrink-0 overflow-y-auto border-t pt-2"><summary className="cursor-pointer text-sm font-medium text-muted-foreground">Nháp trên máy này · {drafts.length} · chưa gửi bếp</summary><div className="mt-2 flex flex-wrap gap-2">{drafts.map((tab) => <button key={tab.id} type="button" disabled={busy} onClick={() => onOpenDraft(tab.id)} className="min-h-11 rounded-md border px-3 text-sm disabled:opacity-50">{tab.label} · {tab.lines.length} món</button>)}</div></details>}
     <p className="text-xs text-muted-foreground">Giá trị tạm tính của món đã gửi bếp, chưa phải doanh thu thực thu. Mất mạng: đơn lưu riêng trên máy chỉ xuất hiện ở thiết bị khác sau khi đồng bộ.</p>
   </section>;
