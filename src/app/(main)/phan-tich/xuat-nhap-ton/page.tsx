@@ -33,7 +33,7 @@ import { cn } from "@/lib/utils";
 import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
 import { filterXntRows, sumXntRows, sumXntQuantities, type XntRowFilter } from "@/lib/reports/xnt-view";
 import { sortReportRows } from "@/lib/reports/table-sort";
-import { withXntUnitValues, XNT_VALUE_GROUPS, XNT_SUMMARY_EXCEL_COLUMNS, XNT_SUMMARY_COLUMN_GROUPS, type XntValuedRow } from "@/lib/reports/xnt-unit-values";
+import { withXntUnitValues, XNT_VALUE_GROUPS, XNT_SUMMARY_EXCEL_COLUMNS, XNT_SUMMARY_COLUMN_GROUPS, XNT_MOVEMENT_BUCKETS, XNT_DETAIL_COLUMN_GROUPS, expandXntExcelColumns, xntMovementValueTotals, type XntValuedRow, type XntMovementBucket } from "@/lib/reports/xnt-unit-values";
 
 type SubMode = "summary" | "detail";
 
@@ -122,6 +122,7 @@ export default function XuatNhapTonPage() {
   );
   const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
   const quantityTotals = useMemo(() => sumXntQuantities(visibleRows), [visibleRows]);
+  const movementValueTotals = useMemo(() => xntMovementValueTotals(visibleRows), [visibleRows]);
   const categories = useMemo(() => [...new Set([
     ...(data?.rows ?? []).map((row) => row.categoryName ?? ""),
     ...(categoryFilter === undefined ? [] : [categoryFilter]),
@@ -209,13 +210,8 @@ export default function XuatNhapTonPage() {
             autoFilter: true,
             titleRows,
             tablePreferenceKey: "report.xuat-nhap-ton.detail",
-            columnGroups: [
-              { label: "", span: 5 },
-              { label: "NHẬP", span: 6 },
-              { label: "XUẤT", span: 8 },
-              { label: "", span: 2 }, // Tồn cuối + GT cuối
-            ],
-            columns: [
+            columnGroups: XNT_DETAIL_COLUMN_GROUPS,
+            columns: expandXntExcelColumns([
               { label: "Mã hàng", key: "code", width: 14 },
               { label: "Tên hàng", key: "name", width: 32 },
               { label: "ĐVT", key: "unit", width: 8 },
@@ -239,8 +235,9 @@ export default function XuatNhapTonPage() {
               { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
               { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
               { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
-            ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 })),
+            ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 }))),
             rows: visibleRows.map((r) => ({
+              ...r,
               code: r.code,
               name: r.name,
               unit: r.unit,
@@ -264,7 +261,7 @@ export default function XuatNhapTonPage() {
               closingValue: r.closingValue,
             })),
             footerLabel: `SL mặt hàng: ${visibleSubtotal.productCount}`,
-            footer: { ...quantityTotals, openingValue: visibleSubtotal.openingValue, closingValue: visibleSubtotal.closingValue },
+            footer: { ...quantityTotals, ...movementValueTotals, openingValue: visibleSubtotal.openingValue, closingValue: visibleSubtotal.closingValue },
           },
         ],
       });
@@ -275,7 +272,7 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast]);
+  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast]);
 
   // ========================================================
   // Excel export — full mode (multi-sheet kế toán pivot)
@@ -340,13 +337,8 @@ export default function XuatNhapTonPage() {
           name: "2. Chi tiết NHẬP-XUẤT",
           autoFilter: true,
           titleRows,
-          columnGroups: [
-            { label: "", span: 5 },
-            { label: "NHẬP", span: 6 },
-            { label: "XUẤT", span: 8 },
-            { label: "", span: 2 },
-          ],
-          columns: [
+          columnGroups: XNT_DETAIL_COLUMN_GROUPS,
+          columns: expandXntExcelColumns([
             { label: "Mã hàng", key: "code", width: 14 },
             { label: "Tên hàng", key: "name", width: 32 },
             { label: "ĐVT", key: "unit", width: 8 },
@@ -368,8 +360,9 @@ export default function XuatNhapTonPage() {
             { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
             { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
             { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
-          ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 })),
+          ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 }))),
           rows: visibleRows.map((r) => ({
+            ...r,
             code: r.code,
             name: r.name,
             unit: r.unit,
@@ -393,7 +386,7 @@ export default function XuatNhapTonPage() {
             closingValue: r.closingValue,
           })),
           footerLabel: `SL mặt hàng: ${visibleSubtotal.productCount}`,
-          footer: { ...quantityTotals, openingValue: visibleSubtotal.openingValue, closingValue: visibleSubtotal.closingValue },
+          footer: { ...quantityTotals, ...movementValueTotals, openingValue: visibleSubtotal.openingValue, closingValue: visibleSubtotal.closingValue },
         },
         // Sheet 3 — Tham số (kỳ báo cáo + chi nhánh + phương pháp)
         {
@@ -429,7 +422,7 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast]);
+  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast]);
 
   // ========================================================
   // Render: column definitions
@@ -522,7 +515,7 @@ export default function XuatNhapTonPage() {
     ]),
   ];
 
-  const detailColumns: DataTableColumn<XntRow>[] = [
+  const detailColumns: DataTableColumn<XntValuedRow>[] = [
     {
       label: "Mã hàng", key: "code", align: "left", width: "110px",
       sticky: true, hideable: false,
@@ -581,21 +574,26 @@ export default function XuatNhapTonPage() {
     },
   ];
 
-  const detailColumnGroups: ColumnGroup[] = [
-    { label: "", span: 5 },
-    { label: "NHẬP", span: 6, variant: "input" },
-    { label: "XUẤT", span: 8, variant: "output" },
-    { label: "", span: 2 },
-  ];
+  const detailColumnGroups: ColumnGroup[] = XNT_DETAIL_COLUMN_GROUPS;
 
-  const detailColumnsWithTotals = detailColumns.map((column) => {
+  const detailColumnsWithTotals = detailColumns.flatMap((column): DataTableColumn<XntValuedRow>[] => {
+    if (XNT_MOVEMENT_BUCKETS.some(bucket => bucket.key === column.key)) {
+      const key = column.key as XntMovementBucket;
+      const priceKey = `${key}UnitValue` as const;
+      const valueKey = `${key}Value` as const;
+      return [
+        { ...column, label: "Số lượng", width: "130px", subtotalCell: formatQuantityTotal(quantityTotals[key]) },
+        { key: priceKey, label: "Đơn giá BQ", align: "right", width: "150px", cell: row => row[priceKey] === null ? "—" : formatNumber(row[priceKey]!), subtotalCell: "—" },
+        { key: valueKey, label: "Thành tiền", align: "right", width: "180px", cell: row => formatValuation(row[valueKey]), subtotalCell: formatValuation(movementValueTotals[valueKey]) },
+      ];
+    }
     if (column.key in quantityTotals) {
-      return { ...column, subtotalCell: formatQuantityTotal(quantityTotals[column.key as keyof typeof quantityTotals]) };
+      return [{ ...column, subtotalCell: formatQuantityTotal(quantityTotals[column.key as keyof typeof quantityTotals]) }];
     }
     if (column.key === "openingValue" || column.key === "closingValue") {
-      return { ...column, subtotalCell: formatValuation(visibleSubtotal[column.key]) };
+      return [{ ...column, subtotalCell: formatValuation(visibleSubtotal[column.key]) }];
     }
-    return column;
+    return [column];
   });
 
   const subtotalLabel = data

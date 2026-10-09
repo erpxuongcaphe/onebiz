@@ -493,6 +493,8 @@ jobs:
         run: |
           createdb report_completeness_test
           PGDATABASE=report_completeness_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00461_report_stock_and_sku_snapshots.integration.sql
+          createdb report_movement_values_test
+          PGDATABASE=report_movement_values_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00464_report_movement_values_and_net_bom.integration.sql
 
       - name: Verify PIN onboarding and recovery in isolated PostgreSQL
         env:

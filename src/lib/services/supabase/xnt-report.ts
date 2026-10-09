@@ -41,6 +41,7 @@ export interface XntRow {
   missingCostMovementCount: number;
   valuationComplete: boolean;
   byBranch?: XntBranchBreakdown[];
+  movementValues?: Record<string, number | null>;
 }
 
 export interface XntBranchBreakdown {
@@ -109,6 +110,22 @@ export async function getXntReport(
   if (!Array.isArray(data)) {
     throw new Error("Máy chủ không trả kết quả Xuất - Nhập - Tồn.");
   }
+  // Keep quantities and historical amounts separate: missing opening valuation
+  // must not suppress a fully valued movement bucket in the current period.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const valuesResult = await (supabase.rpc as any)("get_xnt_movement_values", {
+    p_date_from: rangeWindow.start, p_date_to: rangeWindow.end,
+    p_branch_id: options.branchId ?? null,
+  });
+  if (valuesResult.error) handleError(valuesResult.error, "getXntMovementValues");
+  if (!Array.isArray(valuesResult.data)) throw new Error("Máy chủ không trả giá trị phát sinh kho.");
+  const movementValues = new Map<string, Record<string, number | null>>();
+  for (const raw of valuesResult.data as Array<Record<string, unknown>>) {
+    const id = String(raw.product_id ?? "");
+    const values = movementValues.get(id) ?? {};
+    values[String(raw.bucket)] = nullableNumber(raw.amount);
+    movementValues.set(id, values);
+  }
 
   const rows: XntRow[] = (data as Array<Record<string, unknown>>).map((raw) => {
     const inSupplier = number(raw.in_supplier);
@@ -135,6 +152,7 @@ export async function getXntReport(
 
     return {
       productId: String(raw.product_id ?? ""),
+      movementValues: movementValues.get(String(raw.product_id ?? "")) ?? {},
       code: String(raw.code ?? ""),
       name: String(raw.name ?? ""),
       unit: String(raw.unit ?? ""),
