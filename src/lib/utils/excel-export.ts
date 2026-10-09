@@ -124,6 +124,8 @@ export interface ExcelColumn {
   width?: number;
   /** Format số: "number" | "currency" | "percent" | "date" | "text" */
   format?: "number" | "currency" | "percent" | "date" | "text";
+  /** Optional display precision for quantities/unit values; source numbers stay intact. */
+  decimalPlaces?: number;
   /** Alignment: "left" | "center" | "right". Default theo format. */
   align?: "left" | "center" | "right";
 }
@@ -162,6 +164,8 @@ export interface ExcelSheet {
    * Khi true: tạo 3 cột "Người lập / Kế toán trưởng / Giám đốc" cuối sheet.
    */
   withSignature?: boolean;
+  /** Filter only the rectangular data range, excluding titles and totals. */
+  autoFilter?: boolean;
 }
 
 export function filterExcelSheetColumns(
@@ -259,6 +263,7 @@ function buildWorksheet(
   }
 
   // ───── Column header row ─────
+  const columnHeaderRow = row;
   for (let c = 0; c < sheet.columns.length; c++) {
     const cellRef = XLSX.utils.encode_cell({ r: row, c });
     ws[cellRef] = { v: sheet.columns[c].label, t: "s", s: STYLE_COL_HEADER };
@@ -287,6 +292,9 @@ function buildWorksheet(
   }
 
   // ───── Footer total ─────
+  if (sheet.autoFilter && sheet.rows.length > 0 && !Object.keys(sheet.sections ?? {}).length) {
+    ws["!autofilter"] = { ref: XLSX.utils.encode_range({ s: { r: columnHeaderRow, c: 0 }, e: { r: row - 1, c: totalCols - 1 } }) };
+  }
   if (sheet.footer) {
     // Label cell ở cột đầu
     const labelRef = XLSX.utils.encode_cell({ r: row, c: 0 });
@@ -380,10 +388,11 @@ function formatCell(value: unknown, col: ExcelColumn): XLSXTypes.CellObject {
 
   if (format === "number") {
     const n = typeof value === "number" ? value : Number(value);
+    const digits = Math.min(10, Math.max(0, Math.trunc(col.decimalPlaces ?? 2)));
     return {
       v: Number.isFinite(n) ? n : 0,
       t: "n",
-      z: "#,##0.##",
+      z: digits ? `#,##0.${"#".repeat(digits)}` : "#,##0",
       s: STYLE_DATA_NUMBER,
     };
   }
