@@ -6,7 +6,7 @@
 import { formatCurrency, formatDate, formatNumber, formatShortDate } from "@/lib/format";
 import { formatCashBookDate } from "@/lib/cash-time";
 import { sendPrintJob } from "./printer/print-job";
-import { resolveThermalLayout, type ThermalLayoutConfig } from "./thermal-layout";
+import { resolveThermalLayout, thermalBodyMargins, type ThermalLayoutConfig } from "./thermal-layout";
 
 export interface DocumentLineItem {
   name: string;
@@ -400,7 +400,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
   .summary .bold td { font-size: ${fnbLayout!.totalSize}px; padding-top: 2px; }
   .t-name, .t-line, .compact-row { font-size: ${fnbLayout!.itemSize}px; }
   .t-name, .compact-name { font-weight:${fnbLayout!.boldItems ? 700 : 400}; }
-  .t-note { font-size: ${fnbLayout!.detailSize}px; color: #000; font-style:${fnbLayout!.italicDetails ? "italic" : "normal"}; }
+  .t-note { font-size: ${fnbLayout!.detailSize}px; color: #000; font-weight:${fnbLayout!.boldDetails ? 700 : 400}; font-style:${fnbLayout!.italicDetails ? "italic" : "normal"}; overflow-wrap:anywhere; }
   .compact-row { display:flex; align-items:baseline; gap:5px; }
   .compact-name { flex:1; min-width:0; overflow-wrap:anywhere; }
   .compact-qty, .compact-row .t-total { flex:none; white-space:nowrap; }
@@ -413,6 +413,7 @@ export function generateDocumentHtml(d: DocumentPrintData, paperSize: PaperSize)
     thead { display: table-header-group; }
     .items tr, .summary tr, .footer, .t-item { break-inside: avoid; page-break-inside: avoid; }
   }
+  ${fnbLayout ? thermalBodyMargins(fnbLayout) : ""}
 </style></head><body>
 
 ${

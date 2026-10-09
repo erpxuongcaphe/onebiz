@@ -10,7 +10,7 @@ import { getFnbFreeTextNote } from "@/lib/fnb-item-note";
 import { EscPosBuilder } from "@/lib/printer/escpos";
 import { getPrintSettings, sendPrintJob } from "@/lib/printer/print-job";
 import type { StoredPrinter } from "@/lib/printer/webusb-printer";
-import { resolveThermalLayout, type ThermalLayoutConfig } from "./thermal-layout";
+import { resolveThermalLayout, thermalBodyMargins, type ThermalLayoutConfig } from "./thermal-layout";
 import { withFnbReceiptBrand } from "./fnb-receipt-brand";
 
 // ============================================================
@@ -33,6 +33,7 @@ export interface FnbPrintItem {
 }
 
 export interface PreBillData {
+  thermalLayout?: ThermalLayoutConfig;
   branchName?: string;
   customerName?: string;
   tipAmount?: number;
@@ -227,6 +228,7 @@ export function printPreBill(data: PreBillData): void {
  * user toggle paperSize / receiptStyle / showQr / etc.
  */
 export function buildFnbReceiptHtml(data: FnbReceiptData): string {
+  const layout = resolveThermalLayout(data.thermalLayout);
   const width = getWidth(data.paperSize);
   const pageSize = getPageSize(data.paperSize);
   const typeLabel = ORDER_TYPE_VN[data.orderType] ?? data.orderType;
@@ -261,7 +263,7 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
     itemsHtml = data.items.map((item) => {
       const itemTotal = item.quantity * item.unitPrice;
       let html = `<tr>
-        <td><strong>${formatNumber(item.quantity)}x ${escapeKitchenText(item.name)}${item.variant ? ` (${escapeKitchenText(item.variant)})` : ""}</strong></td>
+        <td class="receipt-item"><strong>${formatNumber(item.quantity)}x ${escapeKitchenText(item.name)}${item.variant ? ` (${escapeKitchenText(item.variant)})` : ""}</strong></td>
         <td class="right">${formatCurrency(itemTotal)}</td>
       </tr>`;
 
@@ -269,18 +271,18 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
         for (const t of item.toppings) {
           if (t.quantity <= 0) continue;
           const tTotal = t.quantity * item.quantity * t.price;
-          html += `<tr><td style="padding-left:6px;font-size:12px;color:#000">+ ${escapeKitchenText(t.name)} x${formatNumber(t.quantity)}${item.quantity > 1 ? " / món" : ""}</td>
+          html += `<tr><td class="receipt-detail" style="padding-left:6px">+ ${escapeKitchenText(t.name)} x${formatNumber(t.quantity)}${item.quantity > 1 ? " / món" : ""}</td>
             <td class="right" style="font-size:11px;color:#555">${formatCurrency(tTotal)}</td></tr>`;
         }
       }
       // Mọi hoá đơn có danh sách món đều phải nói rõ lựa chọn pha chế.
       if (item.modifierLabels && item.modifierLabels.length > 0) {
         const label = item.modifierLabels.join(" • ");
-        html += `<tr><td colspan="2" style="padding-left:6px;font-size:12px;color:#000">${escapeKitchenText(label)}</td></tr>`;
+        html += `<tr><td class="receipt-detail" colspan="2" style="padding-left:6px">${escapeKitchenText(label)}</td></tr>`;
       }
       const freeTextNote = getFnbFreeTextNote(item.note, item.modifierLabels);
       if (freeTextNote) {
-        html += `<tr><td colspan="2" style="padding-left:6px;font-size:12px;color:#000">${escapeKitchenText(freeTextNote)}</td></tr>`;
+        html += `<tr><td class="receipt-detail" colspan="2" style="padding-left:6px">${escapeKitchenText(freeTextNote)}</td></tr>`;
       }
       return html;
     }).join("");
@@ -338,9 +340,12 @@ export function buildFnbReceiptHtml(data: FnbReceiptData): string {
 <style>${baseStyles(width, pageSize)}
 .title{font-size:20px;font-weight:bold;letter-spacing:1px}
 .invoice-code{font-size:14px;margin:2px 0}
-body{font-family:Arial,'Segoe UI',sans-serif;line-height:1.2}
+body{font-family:${layout.font};line-height:${layout.compact ? 1.2 : 1.4}}
+.receipt-item{font-size:${layout.itemSize}px}.receipt-item strong{font-weight:${layout.boldItems ? 700 : 400}}
+.receipt-detail{font-size:${layout.detailSize}px;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};color:#000;overflow-wrap:anywhere}
+${thermalBodyMargins(layout)}
 td{padding:1px 0;vertical-align:top}.right{white-space:nowrap}
-.line,.line-thin{margin:2px 0}.title{font-size:18px;letter-spacing:0}
+.line,.line-thin{margin:2px 0}.title{font-size:${layout.titleSize}px;letter-spacing:0}
 </style></head><body>
 
 ${data.isOffline ? `<div class="center" style="background:#f59e0b;color:#000;padding:4px;font-size:13px;font-weight:bold;letter-spacing:2px;border:2px dashed #000;margin-bottom:4px">● CHỜ ĐỒNG BỘ ●</div>` : ""}
@@ -480,7 +485,8 @@ body{font-family:${layout.font};line-height:${layout.compact ? 1.2 : 1.4}}
 .item-name{font-size:${layout.itemSize}px;font-weight:${layout.boldItems ? 700 : 400}}
 .table-label{font-size:${layout.titleSize}px}
 .table-label{border:${layout.headerFrame ? "1px solid #000" : "0"};margin:2px 0}
-.modifier,.note,.toppings,.variant{font-size:${layout.detailSize}px;color:#000;font-style:${layout.italicDetails ? "italic" : "normal"}}
+.modifier,.note,.toppings,.variant{font-size:${layout.detailSize}px;color:#000;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};overflow-wrap:anywhere}
+${thermalBodyMargins(layout)}
 .line{border-top:${layout.separator === "none" ? "0" : `1px ${layout.separator} #000`};margin:2px 0}
 .item{padding:2px 0;border:0}
 </style></head><body>
@@ -505,7 +511,7 @@ ${layout.compact ? `<div class="center"><div class="table-label">${escapeKitchen
 
 ${
   data.orderNote
-    ? `<div style="margin:2px 0;padding:1px 4px;border-left:2px solid #000;font-size:${layout.detailSize}px;font-weight:bold;line-height:1.2">GHI CHÚ ĐƠN: ${escapeKitchenText(data.orderNote)}</div>`
+    ? `<div style="margin:2px 0;padding:1px 4px;border-left:2px solid #000;font-size:${layout.detailSize}px;font-weight:${layout.boldDetails ? 700 : 400};font-style:${layout.italicDetails ? "italic" : "normal"};line-height:1.2;overflow-wrap:anywhere">GHI CHÚ ĐƠN: ${escapeKitchenText(data.orderNote)}</div>`
     : ""
 }
 

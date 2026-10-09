@@ -7,6 +7,9 @@ export interface ThermalLayoutConfig {
   totalSize?: number;
   boldItems?: boolean;
   italicDetails?: boolean;
+  boldDetails?: boolean;
+  topMarginMm?: number;
+  bottomMarginMm?: number;
   separator?: "none" | "solid" | "dashed";
   showItemNotes?: boolean;
   showStaff?: boolean;
@@ -24,11 +27,20 @@ export function resolveThermalLayout(config?: ThermalLayoutConfig, kitchen = fal
     detailSize: size(config?.detailSize, kitchen ? 16 : 12, 11, 20),
     totalSize: size(config?.totalSize, 18, 14, 28),
     boldItems: config?.boldItems !== false,
-    italicDetails: config?.italicDetails === true,
+    italicDetails: config?.italicDetails !== false,
+    boldDetails: config?.boldDetails === true,
+    topMarginMm: size(config?.topMarginMm, 1, 0, 20),
+    // Keep the last line clear of the cutter on existing branch print agents.
+    // This is part of the rendered image, so old agents also honor the setting.
+    bottomMarginMm: size(config?.bottomMarginMm, 12, 2, 25),
     separator: config?.separator === "none" ? "none" : config?.separator === "solid" ? "solid" : "dashed",
     showItemNotes: config?.showItemNotes !== false,
     showStaff: config?.showStaff === true,
     headerFrame: config?.headerFrame === true,
   };
+}
+
+export function thermalBodyMargins(layout: ReturnType<typeof resolveThermalLayout>) {
+  return `body{padding-top:${layout.topMarginMm}mm;padding-bottom:${layout.bottomMarginMm}mm} @media print{body{padding-top:${layout.topMarginMm}mm;padding-bottom:${layout.bottomMarginMm}mm}}`;
 }
 
