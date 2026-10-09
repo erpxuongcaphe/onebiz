@@ -625,9 +625,9 @@ export default function CuoiNgayPage() {
             </div>
 
             {/* Top 5 products */}
-            <ChartCard title="20 mặt hàng bán nhiều nhất" subtitle="Theo số lượng bán">
+            <ChartCard title="20 mặt hàng bán nhiều nhất" subtitle="Theo số lượng bán trước trả hàng">
               {topProducts.length > 0 ? (
-                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={Math.max(280, topProducts.length * 28 + 40)} minWidth={0}>
                   <BarChart data={topProducts} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis type="number" tick={{ fontSize: 11 }} />
