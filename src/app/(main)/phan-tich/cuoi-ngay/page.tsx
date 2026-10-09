@@ -1,14 +1,8 @@
 "use client";
 
-/**
- * Báo cáo cuối ngày — refactored Sprint REP-1 (CEO 06/05/2026).
- *
- * Đã wire date filter (`useReportState`) — fetch lại khi đổi preset.
- * Format chuẩn KiotViet: 7 cột table (Mã / Giờ / SL / DT / Thu khác / VAT /
- * Làm tròn / Phí trả hàng / Thực thu) + Chart toggle + Export 2 mode.
- */
-
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Link from "next/link";
+import { sortReportRows } from "@/lib/reports/table-sort";
 import {
   BarChart,
   Bar,
@@ -35,8 +29,10 @@ import {
   getEndOfDayStats,
   getSalesRevenueByHour,
   getTodayTopProducts,
+  getSalesReportDailyRows,
 } from "@/lib/services";
-import type { EndOfDayStats, ChartPoint } from "@/lib/services/supabase/analytics";
+import type { EndOfDayStats, ChartPoint, SalesReportDailyRow } from "@/lib/services/supabase/analytics";
+import { buildSalesInvoiceDayLink, buildSalesReturnDayLink, buildSalesInvoiceRangeLink } from "@/lib/reports/sales-drilldown";
 import { Icon } from "@/components/ui/icon";
 import {
   ReportPageHeader,
@@ -124,26 +120,45 @@ export default function CuoiNgayPage() {
     setViewMode,
   } = useReportState({
     defaultPreset: "today",
-    defaultViewMode: "chart",
+    defaultViewMode: "table",
   });
 
   const [stats, setStats] = useState<EndOfDayStats | null>(null);
   const [revenueByHour, setRevenueByHour] = useState<ChartPoint[]>([]);
   const [topProducts, setTopProducts] = useState<{ name: string; qty: number }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dailyRows, setDailyRows] = useState<SalesReportDailyRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const requestId = useRef(0);
+  const [tableSort, setTableSort] = useState<Record<string, { id: string; direction: "asc" | "desc" } | null>>({});
+  const sortRows = useCallback(<T,>(rows: T[], table: string): T[] => {
+    const sort = tableSort[table];
+    return sort ? sortReportRows(rows, (row) => row[sort.id as keyof T], sort.direction) : rows;
+  }, [tableSort]);
 
   const fetchData = useCallback(async () => {
+    const request = ++requestId.current;
     setLoading(true);
+    setError(null);
     try {
-      const [statsData, hourData, productsData] = await Promise.all([
+      const [statsData, hourData, productsData, dailyData] = await Promise.all([
         getEndOfDayStats(activeBranchId, range),
         getSalesRevenueByHour(activeBranchId, range),
-        getTodayTopProducts(5, activeBranchId, range),
+        getTodayTopProducts(20, activeBranchId, range),
+        getSalesReportDailyRows(activeBranchId, range),
       ]);
+      if (request !== requestId.current) return;
       setStats(statsData);
       setRevenueByHour(hourData);
       setTopProducts(productsData);
+      setDailyRows(dailyData);
     } catch (err) {
+      if (request !== requestId.current) return;
+      setStats(null);
+      setDailyRows([]);
+      setRevenueByHour([]);
+      setTopProducts([]);
+      setError(err instanceof Error ? err.message : "Không tải được báo cáo");
       console.error("Failed to fetch end-of-day data", err);
       toast({
         title: "Lỗi tải báo cáo cuối ngày",
@@ -151,13 +166,14 @@ export default function CuoiNgayPage() {
         variant: "error",
       });
     } finally {
-      setLoading(false);
+      if (request === requestId.current) setLoading(false);
     }
   }, [activeBranchId, range, toast]);
 
   useEffect(() => {
     if (!isReady) return;
     fetchData();
+    return () => { requestId.current += 1; };
   }, [fetchData, isReady]);
 
   const branchName =
@@ -180,28 +196,59 @@ export default function CuoiNgayPage() {
       branchName,
       sheets: [
         {
-          name: "Tổng hợp thanh toán",
+          name: "Bán hàng theo ngày",
+          titleRows,
+          tablePreferenceKey: "report.cuoi-ngay.daily",
+          columns: [
+            { label: "Ngày", key: "date", width: 14 },
+            { label: "Hóa đơn", key: "orderCount", width: 12, format: "number" },
+            { label: "SL bán", key: "soldQty", width: 12, format: "number" },
+            { label: "Giá trị hóa đơn", key: "grossRevenue", width: 18, format: "currency" },
+            { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" },
+            { label: "Sau trả hàng", key: "netRevenue", width: 18, format: "currency" },
+            { label: "Đã thu theo HĐ", key: "paid", width: 18, format: "currency" },
+            { label: "Còn nợ theo HĐ", key: "debt", width: 18, format: "currency" },
+          ],
+          rows: sortRows(dailyRows, "daily").map((row) => ({ ...row })),
+        },
+        {
+          name: "Doanh số theo PTTT",
           titleRows,
           tablePreferenceKey: "report.cuoi-ngay.payments",
           columns: [
-            { label: "Phương thức", key: "method", width: 18 },
-            { label: "Số tiền", key: "amount", width: 18, format: "currency" },
+            { label: "Phương thức trên HĐ", key: "method", width: 24 },
+            { label: "Giá trị hóa đơn", key: "amount", width: 18, format: "currency" },
             { label: "Tỷ lệ %", key: "pct", width: 10, format: "number" },
           ],
-          rows: [
+          rows: sortRows([
             { method: "Tiền mặt", amount: stats.cashAmount, pct: totalRev > 0 ? (stats.cashAmount / totalRev) * 100 : 0 },
             { method: "Chuyển khoản", amount: stats.transferAmount, pct: totalRev > 0 ? (stats.transferAmount / totalRev) * 100 : 0 },
             { method: "Thẻ", amount: stats.cardAmount, pct: totalRev > 0 ? (stats.cardAmount / totalRev) * 100 : 0 },
             // P0-2 fix: thêm bucket Khác (hỗn hợp / ví điện tử) để tổng = totalRevenue
             { method: "Khác (Hỗn hợp / Ví)", amount: stats.otherAmount, pct: totalRev > 0 ? (stats.otherAmount / totalRev) * 100 : 0 },
-            { method: "Trả hàng (-)", amount: -stats.returnAmount, pct: totalRev > 0 ? (stats.returnAmount / totalRev) * 100 : 0 },
+          ], "payments"),
+          footerLabel: "Tổng giá trị hóa đơn",
+          footer: { amount: totalRev, pct: totalRev > 0 ? 100 : 0 },
+        },
+        {
+          name: "Doanh thu theo giờ",
+          tablePreferenceKey: "report.cuoi-ngay.hours",
+          columns: [
+            { label: "Giờ", key: "label", width: 12 },
+            { label: "Doanh thu", key: "value", width: 18, format: "currency" },
+            { label: "Tỷ trọng", key: "share", width: 12, format: "number" },
           ],
-          footerLabel: "Doanh thu thực",
-          footer: { amount: totalRev - stats.returnAmount, pct: 100 },
+          rows: sortRows(revenueByHour.map((row) => ({ ...row, share: totalRev > 0 ? row.value / totalRev * 100 : 0 })), "hours"),
+        },
+        {
+          name: "20 mặt hàng bán nhiều",
+          tablePreferenceKey: "report.cuoi-ngay.products",
+          columns: [{ label: "Mặt hàng", key: "name", width: 36 }, { label: "SL bán", key: "qty", width: 14, format: "number" }],
+          rows: sortRows(topProducts, "products").map((row) => ({ ...row })),
         },
       ],
     });
-  }, [stats, range, branchName]);
+  }, [stats, dailyRows, revenueByHour, topProducts, range, branchName, sortRows]);
 
   /* ---------- export full ---------- */
   const handleExportFull = useCallback(() => {
@@ -220,6 +267,21 @@ export default function CuoiNgayPage() {
       range,
       branchName,
       sheets: [
+        {
+          name: "Bán hàng theo ngày",
+          titleRows,
+          columns: [
+            { label: "Ngày", key: "date", width: 14 },
+            { label: "Hóa đơn", key: "orderCount", width: 12, format: "number" },
+            { label: "SL bán", key: "soldQty", width: 12, format: "number" },
+            { label: "Giá trị hóa đơn", key: "grossRevenue", width: 18, format: "currency" },
+            { label: "Trả trong kỳ", key: "returnAmount", width: 18, format: "currency" },
+            { label: "Sau trả hàng", key: "netRevenue", width: 18, format: "currency" },
+            { label: "Đã thu theo HĐ", key: "paid", width: 18, format: "currency" },
+            { label: "Còn nợ theo HĐ", key: "debt", width: 18, format: "currency" },
+          ],
+          rows: dailyRows.map((row) => ({ ...row })),
+        },
         // Sheet 1 — KPI tổng hợp
         {
           name: "1. Tổng hợp ngày",
@@ -236,7 +298,7 @@ export default function CuoiNgayPage() {
             { label: "Thẻ", value: stats.cardAmount },
             { label: "Khác (Hỗn hợp / Ví)", value: stats.otherAmount },
             { label: "Trả hàng", value: stats.returnAmount },
-            { label: "Doanh thu thực", value: stats.totalRevenue - stats.returnAmount },
+            { label: "Giá trị sau trả hàng", value: stats.totalRevenue - stats.returnAmount },
             { label: "Doanh thu kỳ trước", value: stats.previousRevenue },
             { label: "Đơn kỳ trước", value: stats.previousOrders },
           ],
@@ -245,8 +307,8 @@ export default function CuoiNgayPage() {
         {
           name: "2. Theo phương thức TT",
           columns: [
-            { label: "Phương thức", key: "method", width: 18 },
-            { label: "Số tiền", key: "amount", width: 18, format: "currency" },
+            { label: "Phương thức trên HĐ", key: "method", width: 24 },
+            { label: "Giá trị hóa đơn", key: "amount", width: 18, format: "currency" },
             { label: "Tỷ lệ %", key: "pct", width: 10, format: "number" },
           ],
           rows: [
@@ -295,7 +357,7 @@ export default function CuoiNgayPage() {
         },
       ],
     });
-  }, [stats, revenueByHour, topProducts, range, branchName]);
+  }, [stats, dailyRows, revenueByHour, topProducts, range, branchName]);
 
   /* --- table data for "Báo cáo" view --- */
 
@@ -327,9 +389,9 @@ export default function CuoiNgayPage() {
     : [];
 
   const paymentColumns: DataTableColumn<PaymentRow>[] = [
-    { label: "Phương thức", key: "method", align: "left" },
+    { label: "Phương thức trên HĐ", key: "method", align: "left" },
     {
-      label: "Số tiền",
+      label: "Giá trị hóa đơn",
       key: "amount",
       align: "right",
       cell: (r) => formatCurrency(r.amount) + "đ",
@@ -341,6 +403,18 @@ export default function CuoiNgayPage() {
       cell: (r) => `${r.pct.toFixed(1)}%`,
     },
   ];
+
+  const dailyColumns: DataTableColumn<SalesReportDailyRow>[] = [
+    { label: "Ngày", key: "date", sticky: true, cell: (row) => <Link className="text-primary hover:underline" href={buildSalesInvoiceDayLink(row.date, activeBranchId)}>{row.date.split("-").reverse().join("/")}</Link> },
+    { label: "Hóa đơn", key: "orderCount", align: "right", cell: (row) => formatNumber(row.orderCount) },
+    { label: "SL bán", key: "soldQty", align: "right", cell: (row) => formatNumber(row.soldQty) },
+    { label: "Giá trị hóa đơn", key: "grossRevenue", align: "right", cell: (row) => formatCurrency(row.grossRevenue) },
+    { label: "Trả trong kỳ", key: "returnAmount", align: "right", cell: (row) => <Link className="text-primary hover:underline" href={buildSalesReturnDayLink(row.date, activeBranchId)}>{formatCurrency(row.returnAmount)}</Link> },
+    { label: "Sau trả hàng", key: "netRevenue", align: "right", cell: (row) => formatCurrency(row.netRevenue) },
+    { label: "Đã thu theo HĐ", key: "paid", align: "right", cell: (row) => formatCurrency(row.paid) },
+    { label: "Còn nợ theo HĐ", key: "debt", align: "right", cell: (row) => formatCurrency(row.debt) },
+  ];
+  const hourRows = revenueByHour.map((row) => ({ ...row, share: totalRev > 0 ? row.value / totalRev * 100 : 0 }));
 
   /* --- header always visible --- */
   const header = (
@@ -380,7 +454,9 @@ export default function CuoiNgayPage() {
       <div className="flex flex-col h-full">
         {header}
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          Không có dữ liệu cuối ngày.
+          <div role={error ? "alert" : undefined}>{error ?? "Không có dữ liệu cuối ngày."}
+            {error && <button type="button" onClick={fetchData} className="ml-3 text-primary underline">Thử lại</button>}
+          </div>
         </div>
       </div>
     );
@@ -405,6 +481,7 @@ export default function CuoiNgayPage() {
     { name: "Tiền mặt", value: cashAmount, color: "#22c55e", total: totalRevenue },
     { name: "Chuyển khoản", value: transferAmount, color: "#004AC6", total: totalRevenue },
     { name: "Thẻ", value: cardAmount, color: "#f97316", total: totalRevenue },
+    { name: "Khác (Hỗn hợp / Ví)", value: stats.otherAmount, color: "#0891b2", total: totalRevenue },
   ];
 
   const hourChartData = revenueByHour.map((p) => ({
@@ -417,6 +494,11 @@ export default function CuoiNgayPage() {
       {header}
 
       <div className="flex-1 overflow-auto p-4 lg:p-6 space-y-4">
+        <nav className="flex flex-wrap gap-3 text-sm" aria-label="Chi tiết cuối ngày">
+          <Link className="text-primary hover:underline" href={buildSalesInvoiceRangeLink(range.from, range.to, activeBranchId)}>Hóa đơn trong kỳ</Link>
+          <Link className="text-primary hover:underline" href={`/phan-tich/khach-san-pham?${new URLSearchParams({ preset: "custom", from: range.from, to: range.to, view: "table", ...(activeBranchId ? { branch: activeBranchId } : {}) })}`}>Doanh thu khách hàng · mặt hàng</Link>
+          <Link className="text-primary hover:underline" href={`/phan-tich/luong-tien?${new URLSearchParams({ preset: "custom", from: range.from, to: range.to, view: "table", ...(activeBranchId ? { branch: activeBranchId } : {}) })}`}>Thu chi trong kỳ</Link>
+        </nav>
         {/* KPI Cards */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           <KpiCard
@@ -440,7 +522,7 @@ export default function CuoiNgayPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Tiền mặt"
+            label="Hóa đơn tiền mặt"
             value={formatCurrency(cashAmount) + "đ"}
             icon="payments"
             bg="bg-status-success/10"
@@ -448,7 +530,7 @@ export default function CuoiNgayPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Chuyển khoản"
+            label="Hóa đơn chuyển khoản"
             value={formatCurrency(transferAmount) + "đ"}
             icon="account_balance"
             bg="bg-status-info/10"
@@ -456,7 +538,7 @@ export default function CuoiNgayPage() {
             valueColor="text-foreground"
           />
           <KpiCard
-            label="Thẻ"
+            label="Hóa đơn thẻ"
             value={formatCurrency(cardAmount) + "đ"}
             icon="credit_card"
             bg="bg-status-warning/10"
@@ -507,7 +589,7 @@ export default function CuoiNgayPage() {
               </ChartCard>
 
               {/* Payment method pie */}
-              <ChartCard title="Phương thức thanh toán" subtitle="Tỷ lệ theo giá trị">
+              <ChartCard title="Doanh số theo phương thức trên hóa đơn" subtitle="Tỷ lệ theo giá trị hóa đơn">
                 {totalRevenue > 0 ? (
                   <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
                     <PieChart>
@@ -543,9 +625,9 @@ export default function CuoiNgayPage() {
             </div>
 
             {/* Top 5 products */}
-            <ChartCard title="Top 5 sản phẩm bán chạy" subtitle="Theo số lượng bán">
+            <ChartCard title="20 mặt hàng bán nhiều nhất" subtitle="Theo số lượng bán trước trả hàng">
               {topProducts.length > 0 ? (
-                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={280} minWidth={0}>
+                <ResponsiveContainer initialDimension={{ width: 320, height: 224 }} width="100%" height={Math.max(280, topProducts.length * 28 + 40)} minWidth={0}>
                   <BarChart data={topProducts} layout="vertical">
                     <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                     <XAxis type="number" tick={{ fontSize: 11 }} />
@@ -573,15 +655,39 @@ export default function CuoiNgayPage() {
           </>
         ) : (
           /* TABLE mode */
-          <div className="bg-surface-container-lowest rounded-lg ambient-shadow">
+          <div className="space-y-5">
+            <section className="border border-border">
+              <h2 className="border-b px-4 py-3 text-base font-semibold">Tổng kết bán hàng theo ngày</h2>
+              <ReportDataTable columns={dailyColumns} rows={dailyRows} getRowKey={(row) => row.date} tablePreferenceKey="report.cuoi-ngay.daily" sortState={tableSort.daily ?? null} onSortChange={(sort) => setTableSort((current) => ({ ...current, daily: sort }))} subtotalLabel={`Giá trị sau trả hàng: ${formatCurrency(dailyRows.reduce((sum, row) => sum + row.netRevenue, 0))}đ`} />
+            </section>
+            <section className="border border-border">
+              <h2 className="border-b px-4 py-3 text-base font-semibold">Doanh số theo phương thức trên hóa đơn</h2>
             <ReportDataTable<PaymentRow>
               columns={paymentColumns}
               tablePreferenceKey="report.cuoi-ngay.payments"
+              sortState={tableSort.payments ?? null}
+              onSortChange={(sort) => setTableSort((current) => ({ ...current, payments: sort }))}
               rows={paymentRows}
               getRowKey={(r) => r.method}
               subtotalLabel={`Tổng cộng: ${formatCurrency(totalRev)}đ`}
               emptyState="Chưa có giao dịch trong kỳ"
             />
+            </section>
+            <section className="border border-border">
+              <h2 className="border-b px-4 py-3 text-base font-semibold">Doanh thu theo giờ</h2>
+              <ReportDataTable columns={[
+                { label: "Giờ", key: "label" },
+                { label: "Doanh thu", key: "value", align: "right", cell: (row) => formatCurrency(row.value) },
+                { label: "Tỷ trọng", key: "share", align: "right", cell: (row) => `${row.share.toFixed(1)}%` },
+              ]} rows={hourRows} getRowKey={(row) => row.label} tablePreferenceKey="report.cuoi-ngay.hours" sortState={tableSort.hours ?? null} onSortChange={(sort) => setTableSort((current) => ({ ...current, hours: sort }))} />
+            </section>
+            <section className="border border-border">
+              <h2 className="border-b px-4 py-3 text-base font-semibold">20 mặt hàng bán nhiều nhất</h2>
+              <ReportDataTable columns={[
+                { label: "Mặt hàng", key: "name" },
+                { label: "SL bán trước trả", key: "qty", align: "right", cell: (row) => formatNumber(row.qty) },
+              ]} rows={topProducts} getRowKey={(row, index) => `${row.name}-${index}`} tablePreferenceKey="report.cuoi-ngay.products" sortState={tableSort.products ?? null} onSortChange={(sort) => setTableSort((current) => ({ ...current, products: sort }))} />
+            </section>
           </div>
         )}
       </div>
