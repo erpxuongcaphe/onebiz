@@ -4,14 +4,23 @@
 alter table public.products add column inventory_role text;
 alter table public.stock_movements add column unit_price numeric;
 alter table public.stock_movements add column reference_id uuid;
+create table public.internal_sales(id uuid,tenant_id uuid,to_branch_id uuid,input_invoice_id uuid);
+alter table public.fnb_branch_product_cost_events add column source_type text;
+alter table public.fnb_branch_product_cost_events add column source_reference_type text;
+alter table public.fnb_branch_product_cost_events add column source_reference_id uuid;
 update public.stock_movements set reference_id='00000000-0000-0000-0000-000000000009' where id='00000000-0000-0000-0000-000000000006';
 insert into public.stock_movements(id,tenant_id,branch_id,product_id,quantity,type,reference_type,created_at,unit_cost,reference_id) values
  ('00000000-0000-0000-0000-000000000018','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',20,'in','return_bom_restore','2026-10-09 12:00+07',9999,null),
  ('00000000-0000-0000-0000-000000000020','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',30,'in','invoice_void','2026-10-10 12:00+07',9999,'00000000-0000-0000-0000-000000000009'),
  ('00000000-0000-0000-0000-000000000022','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000004',10,'in','invoice_void','2026-10-10 12:00+07',9999,'00000000-0000-0000-0000-000000000016');
-insert into public.fnb_branch_product_cost_events values
+insert into public.fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,source_stock_movement_id,quantity,direction,total_cost) values
  ('00000000-0000-0000-0000-000000000019','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000018',20,'in',8200),
  ('00000000-0000-0000-0000-000000000021','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000020',30,'in',12300);
+insert into public.internal_sales values('00000000-0000-0000-0000-000000000023','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000024');
+insert into public.stock_movements(id,tenant_id,branch_id,product_id,quantity,type,reference_type,created_at,unit_cost,reference_id) values
+ ('00000000-0000-0000-0000-000000000025','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',10,'in','internal_sale','2026-10-09 12:00+07',9999,'00000000-0000-0000-0000-000000000024');
+insert into public.fnb_branch_product_cost_events(id,tenant_id,branch_id,product_id,quantity,direction,total_cost,source_type,source_reference_type,source_reference_id) values
+ ('00000000-0000-0000-0000-000000000026','00000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000003',10,'in',5000,'internal_sale_receipt','internal_sale','00000000-0000-0000-0000-000000000023');
 \ir ../migrations/00464_report_movement_values_and_net_bom.sql
 \ir ../migrations/00464_report_movement_values_and_net_bom.sql
 do $$ declare result jsonb; r jsonb; begin
@@ -27,6 +36,8 @@ do $$ declare result jsonb; r jsonb; begin
  if (r->>'amount')::numeric<>41000 then raise exception 'Issue historical amount incorrect: %',r; end if;
  select value into r from jsonb_array_elements(result) where value->>'bucket'='inReturn';
  if (r->>'amount')::numeric<>8200 then raise exception 'Return value incorrect: %',r; end if;
+ select value into r from jsonb_array_elements(result) where value->>'bucket'='inOther';
+ if (r->>'amount')::numeric<>5000 then raise exception 'Internal receipt branch snapshot lost: %',r; end if;
  perform set_config('test.deny','yes',true);
  begin perform public.report_nvl_consumption_net('2026-10-09','2026-10-09',null); raise exception 'ACL missing'; exception when insufficient_privilege then null; end;
  begin perform public.get_xnt_movement_values('2026-10-09','2026-10-10',null); raise exception 'ACL missing'; exception when insufficient_privilege then null; end;

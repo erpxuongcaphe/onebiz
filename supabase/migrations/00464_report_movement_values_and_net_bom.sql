@@ -11,7 +11,11 @@ language sql stable set search_path='' as $$
     case
       when e.id is not null and e.direction=sm.type
         and abs(e.quantity-sm.quantity)<0.0000001 then e.total_cost
-      when public._fnb_branch_cost_tracking_enabled_00390(sm.tenant_id,sm.branch_id) then null
+      when e.id is not null then null
+      when sm.type='out' and sm.reference_type='bom_consume'
+        and public._fnb_branch_cost_tracking_enabled_00390(sm.tenant_id,sm.branch_id) then null
+      when sm.type='in' and sm.reference_type='internal_sale'
+        and public._fnb_branch_cost_tracking_enabled_00390(sm.tenant_id,sm.branch_id) then internal_cost.total_cost
       when sm.unit_cost>=0 then sm.quantity*sm.unit_cost
       when sm.type='in' and sm.unit_price>=0 then sm.quantity*sm.unit_price
       else null end,
@@ -26,6 +30,23 @@ language sql stable set search_path='' as $$
   left join public.fnb_branch_product_cost_events e
     on e.source_stock_movement_id=sm.id and e.tenant_id=sm.tenant_id
     and e.branch_id=sm.branch_id and e.product_id=sm.product_id
+  left join lateral (
+    select case when count(distinct sale.id)=1 and count(receipt.id)>0
+      and abs(coalesce(sum(receipt.quantity),0)-sm.quantity)<=0.0001
+      then sum(receipt.total_cost) else null end as total_cost
+    from public.internal_sales sale
+    join public.fnb_branch_product_cost_events receipt
+      on receipt.tenant_id=sale.tenant_id and receipt.branch_id=sale.to_branch_id
+      and receipt.product_id=sm.product_id and receipt.source_stock_movement_id is null
+      and receipt.direction='in' and receipt.source_type='internal_sale_receipt'
+      and receipt.source_reference_type='internal_sale' and receipt.source_reference_id=sale.id
+    where sm.type='in' and sm.reference_type='internal_sale'
+      and sale.tenant_id=sm.tenant_id and sale.to_branch_id=sm.branch_id
+      and sale.input_invoice_id=sm.reference_id
+      and (select count(*) from public.internal_sales candidate
+        where candidate.tenant_id=sm.tenant_id and candidate.to_branch_id=sm.branch_id
+          and candidate.input_invoice_id=sm.reference_id)=1
+  ) internal_cost on true
   where sm.tenant_id=p_tenant and sm.created_at>=p_from and sm.created_at<p_to
     and sm.type in ('in','out') and (p_branch is null or sm.branch_id=p_branch)
 $$;
