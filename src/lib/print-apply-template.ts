@@ -72,7 +72,7 @@ export function applyTemplateToDocData(
   const ctx: TokenContext = {
     businessName: base.fnbThermalReadable ? undefined : brand.businessName ?? base.businessName,
     branchName: brand.branchName ?? base.branchName,
-    taxCode: brand.taxCode ?? base.businessTaxCode,
+    taxCode: base.fnbThermalReadable ? undefined : brand.taxCode ?? base.businessTaxCode,
     address: brand.address ?? base.businessAddress,
     phone: brand.phone ?? base.businessPhone,
     documentCode: base.documentCode,

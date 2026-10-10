@@ -1241,7 +1241,7 @@ function TemplateEditorDialog({
             <p className="mt-2 text-xs text-muted-foreground">
               {docType === "kitchen_ticket"
                 ? `Phiếu bếp minh họa khổ ${paperSize} — bàn, số lượng và yêu cầu pha chế được ưu tiên.`
-                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin doanh nghiệp/chi nhánh; dùng cùng bộ dựng HTML với bản in thật; dữ liệu giao dịch là ví dụ.`}
+                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin ${channel === "fnb" ? "chi nhánh đang bán" : "doanh nghiệp/chi nhánh"}; dùng cùng bộ dựng HTML với bản in thật; dữ liệu giao dịch là ví dụ.`}
             </p>
           </div>
         </div>
