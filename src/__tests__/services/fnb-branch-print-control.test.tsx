@@ -8,6 +8,13 @@ vi.mock("@/lib/printer/branch-queue", () => ({ getBranchPrintState: mock.state }
 import { FnbBranchPrintControl } from "@/components/shared/fnb-branch-print-control";
 beforeEach(() => { cleanup(); vi.clearAllMocks(); });
 describe("personal-phone branch print selection", () => {
+  it("shows recent jobs immediately without expanding a hidden history", async () => {
+    mock.state.mockResolvedValue({ point: null, jobs: [{ id: "job", label: "Bếp KB000078", route_label: "Bar", status: "queued", created_at: "2026-10-10T01:00:00Z", actor_name: "Nhân viên", message: null }] });
+    render(<FnbBranchPrintControl branchId="branch" compact />);
+    fireEvent.click(screen.getByRole("button", { name: "Nơi nhận & lệnh in" }));
+    expect(await screen.findByText("Bếp KB000078 · Bar")).toBeVisible();
+    expect(screen.getByText("Chờ điểm in")).toBeVisible();
+  });
   it("lets staff select kitchen and receipt triggers independently", async () => {
     mock.state.mockResolvedValue({ point: null, jobs: [] });
     render(<FnbBranchPrintControl branchId="branch" />);

@@ -34,6 +34,12 @@ khi đăng nhập Windows, hoặc chạy node agent.mjs để kiểm tra thủ c
 LAN/Wi-Fi (IP/cổng) hoặc USB/Windows cho từng nơi nhận; gán máy/
 khổ giấy cho từng nơi nhận và lưu. Danh sách máy được quét lại mỗi 5 phút.
 Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh.
+Trên POS, nút “In & lệnh” mở ngay lịch sử, tự cập nhật mỗi 5 giây.
+Dò máy Windows chạy nền, không chặn lệnh LAN. Khi hàng đợi trống,
+điểm in kiểm tra lệnh mới sau 1 giây; lệnh đang gửi vẫn xử lý tuần tự.
+Nhật ký kỹ thuật tại logs/print-agent.log ghi thời gian lấy lệnh,
+gửi máy và xác nhận. Khởi động lại giữ bản trước ở đuôi .previous.
+Nhật ký không chứa mã kết nối hoặc nội dung phiếu.
 6. Gửi phiếu thử và kiểm tra giấy. Windows đã nhận không bảo đảm giấy đã ra.
 LAN có Kiểm tra kết nối chỉ mở socket IP/cổng, không gửi dữ liệu in.
 USB có Kiểm tra kết nối kiểm tra tên máy trong Windows, chưa xác nhận dây

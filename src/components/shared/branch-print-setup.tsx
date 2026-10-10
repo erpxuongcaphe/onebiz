@@ -66,6 +66,22 @@ function BranchPrintSetupForBranch() {
     finally { setBusy(false); }
   }, [branchId]);
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (!branchId || step !== "test") return;
+    let disposed = false, loading = false;
+    const refresh = async () => {
+      if (loading) return;
+      loading = true;
+      try {
+        const state = await getBranchPrintState(branchId);
+        // Do not hydrate editable routes/policy during background refresh.
+        if (!disposed) { setPoint(state.point); setJobs(state.jobs); }
+      } catch { /* Keep the last successful history; manual refresh reports errors. */ }
+      finally { loading = false; }
+    };
+    const timer = setInterval(refresh, 5000);
+    return () => { disposed = true; clearInterval(timer); };
+  }, [branchId, step]);
   const save = async () => {
     if (!branchId) return;
     setBusy(true);
@@ -154,7 +170,7 @@ function BranchPrintSetupForBranch() {
         </>}
       </fieldset>}
       {message && <p role="status" className="rounded-lg border-l-4 border-primary bg-primary/5 px-3 py-2 text-sm break-words">{message}</p>}
-      {step === "test" && <details className="rounded-lg border p-3"><summary className="min-h-11 cursor-pointer text-sm font-semibold text-primary">Lịch sử lệnh in · {jobs.length} lệnh gần nhất</summary><PrintJobList jobs={jobs} onAction={canManage && !busy ? action : undefined} /></details>}
+      {step === "test" && <section aria-label="Lịch sử lệnh in" className="rounded-lg border p-3"><h3 className="text-sm font-semibold text-primary">Lịch sử lệnh in · {jobs.length} lệnh gần nhất</h3><p className="mb-2 text-xs text-muted-foreground">Tự cập nhật mỗi 5 giây. Đã chuyển dữ liệu in chưa xác nhận giấy đã ra; kiểm tra máy trước khi in lại.</p><PrintJobList jobs={jobs} onAction={canManage && !busy ? action : undefined} /></section>}
     </>}
   </CardContent></Card>;
 }
