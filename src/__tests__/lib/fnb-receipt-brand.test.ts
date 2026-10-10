@@ -8,13 +8,17 @@ beforeEach(() => { vi.clearAllMocks(); mock.brand.mockResolvedValue({ branchName
 describe("default F&B receipt branch information", () => {
   it("uses the current branch and its resolved print address for both bill phases", async () => {
     const result = await withFnbReceiptBrand(base);
-    expect(mock.brand).toHaveBeenCalledWith("tu-bua");
+    expect(mock.brand).toHaveBeenCalledWith("tu-bua", { branchOnly: true });
     expect(result).toMatchObject({ storeName: "Xưởng Tư Búa", storeAddress: "03 Trần Minh Trí", storePhone: "0901664656", total: 0 });
     expect(base.storeName).toBe("OneBiz");
   });
   it("keeps disabled header fields hidden", async () => {
     const result = await withFnbReceiptBrand({ ...base, storeName: undefined, storeAddress: undefined, storePhone: undefined });
     expect(result.storeName).toBeUndefined(); expect(result.storeAddress).toBeUndefined(); expect(result.storePhone).toBeUndefined();
+  });
+  it("never falls back to the legal company name when the branch name is unavailable", async () => {
+    mock.brand.mockResolvedValue({ businessName: "Công ty TNHH" });
+    expect((await withFnbReceiptBrand(base)).storeName).toBe(base.storeName);
   });
   it("does not block offline printing with a server lookup", async () => {
     expect(await withFnbReceiptBrand({ ...base, isOffline: true })).toEqual({ ...base, isOffline: true });

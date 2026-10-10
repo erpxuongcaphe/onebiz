@@ -140,6 +140,7 @@ export async function printFnbBillWithTemplate(
     }
 
     const base: DocumentPrintData = {
+      fnbThermalReadable: true,
       documentType: "PHIẾU THANH TOÁN", // mẫu in sẽ đè tiêu đề
       documentCode: p.invoiceCode,
       date: p.createdAt ?? new Date().toISOString(),

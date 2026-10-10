@@ -779,7 +779,7 @@ function TemplateEditorDialog({
     }
     let alive = true;
     setBrandLoading(true);
-    void getResolvedBrand(branchId)
+    void getResolvedBrand(branchId, { branchOnly: channel === "fnb" })
       .then((b) => {
         if (alive) setBrand(b);
       })
@@ -793,7 +793,7 @@ function TemplateEditorDialog({
     return () => {
       alive = false;
     };
-  }, [open, branchId]);
+  }, [open, branchId, channel]);
 
   // Khởi tạo form khi mở dialog (prefill từ existing nếu edit).
   useEffect(() => {
@@ -1034,10 +1034,10 @@ function TemplateEditorDialog({
             </> : <>
             <ToggleGroupBox title="Đầu trang">
               <div className="grid gap-x-6 sm:grid-cols-2 divide-border">
-                {HEADER_FLAGS.map((f) => (
+                {HEADER_FLAGS.filter(f => channel !== "fnb" || !["businessName", "taxCode"].includes(f.key)).map((f) => (
                   <Toggle
                     key={f.key}
-                    label={f.label}
+                    label={channel === "fnb" && f.key === "branch" ? "Tên chi nhánh" : f.label}
                     checked={config.header?.[f.key] ?? false}
                     onCheckedChange={(v) => setHeaderFlag(f.key, v)}
                   />
@@ -1241,7 +1241,7 @@ function TemplateEditorDialog({
             <p className="mt-2 text-xs text-muted-foreground">
               {docType === "kitchen_ticket"
                 ? `Phiếu bếp minh họa khổ ${paperSize} — bàn, số lượng và yêu cầu pha chế được ưu tiên.`
-                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin doanh nghiệp/chi nhánh; dùng cùng bộ dựng HTML với bản in thật; dữ liệu giao dịch là ví dụ.`}
+                : `Minh họa khổ ${paperSize} — đầu trang lấy thông tin ${channel === "fnb" ? "chi nhánh đang bán" : "doanh nghiệp/chi nhánh"}; dùng cùng bộ dựng HTML với bản in thật; dữ liệu giao dịch là ví dụ.`}
             </p>
           </div>
         </div>
@@ -1335,7 +1335,7 @@ function BillPreview({
     fnbThermalReadable: channel === "fnb",
     documentType: title, documentCode: docType === "cash_voucher" ? "PT-DEMO-001" : "HD-DEMO-001", date: "2026-10-06T10:30:00+07:00",
     businessName: brand?.businessName || "(Chưa đặt tên doanh nghiệp)", businessAddress: brand?.address, businessPhone: brand?.phone,
-    createdBy: "Nhân viên minh họa", showSignature: channel !== "fnb", branchName: "Chi nhánh minh họa",
+    createdBy: "Nhân viên minh họa", showSignature: channel !== "fnb", branchName: brand?.branchName || "Chi nhánh minh họa",
     headerFields: docType === "cash_voucher" ? [{label:"Người nộp / nhận",value:"Nguyễn Văn An"},{label:"Nội dung",value:"Thu tiền thanh toán hóa đơn"},{label:"Phương thức",value:"Tiền mặt"}] : [...(showCustomer ? [{label:"Khách hàng",value:"Nguyễn Văn An"},{label:"Mã KH",value:"KH-DEMO"},{label:"Điện thoại",value:"0900000000"},{label:"Địa chỉ",value:"Địa chỉ minh họa"}] : [])],
     items: columnOptions.length ? [{code:"CF001",name:"Cà phê sữa đá",quantity:2,unitPrice:35000,total:70000,note:"Size L • Đường: 70% • Đá: ít"},{code:"CF002",name:"Bạc xỉu",quantity:1,unitPrice:39000,total:39000,note:"Pha nhạt"}] : undefined,
     itemColumns: ["Mã hàng","Tên hàng","SL","Đơn giá","Thành tiền","Ghi chú"],

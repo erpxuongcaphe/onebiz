@@ -2409,16 +2409,16 @@ function FnbPosPageInner() {
       total: netTotal,
       createdAt: new Date().toISOString(),
       cashierName: user?.fullName,
-      storeName: settings.print.showStoreName ? settings.store.name : undefined,
-      storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
-      storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+      storeName: settings.print.showStoreName ? currentBranch?.name : undefined,
+      storeAddress: settings.print.showStoreAddress ? currentBranch?.address : undefined,
+      storePhone: settings.print.showStorePhone ? currentBranch?.phone : undefined,
       paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
       footer: settings.print.receiptFooter,
       deliveryPlatform: tab.deliveryPlatform,
       platformCommissionPercent: isPlatformOrder ? commissionPercent : undefined,
       platformCommissionAmount: isPlatformOrder ? commissionAmount : undefined,
     });
-  }, [pos, settings, user, fnbBenefitDisplay, currentBranch?.name, branchId]);
+  }, [pos, settings, user, fnbBenefitDisplay, currentBranch, branchId]);
 
   // P1-3D-P1 12/06/2026: submit-lock chống double-click / F9-spam tạo 2 kitchen
   // order. POS Retail có submitLockRef nhưng FnB trước đây thiếu — dialog đóng
@@ -2618,9 +2618,9 @@ function FnbPosPageInner() {
               paid: serverTendered,
               change: isPlatformOrderPrint ? 0 : serverChange,
               customerName: payload.customerName,
-              storeName: settings.print.showStoreName ? settings.store.name : undefined,
-              storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
-              storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+              storeName: settings.print.showStoreName ? currentBranch?.name : undefined,
+              storeAddress: settings.print.showStoreAddress ? currentBranch?.address : undefined,
+              storePhone: settings.print.showStorePhone ? currentBranch?.phone : undefined,
               paperSize: settings.print.paperSize === "58mm" ? "58mm" : "80mm",
               footer: settings.print.receiptFooter,
               receiptStyle: settings.print.receiptStyle,
@@ -2692,7 +2692,7 @@ function FnbPosPageInner() {
         setPaymentSubmitting(false);
       }
     },
-    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits, requireTable]
+    [pos, tenantId, branchId, userId, handleSendToKitchen, toast, settings, user, networkStatus.isOnline, currentShift?.id, currentBranch, appliedPromotion, couponApplied, fnbBenefitDisplay, clearTabBenefits, requireTable]
   );
 
   // ── Table select (from floor plan) ──
@@ -2905,9 +2905,9 @@ function FnbPosPageInner() {
         printShiftReport({
           branchId: branchId ?? undefined,
           type: "Z",
-          storeName: settings.print.showStoreName ? settings.store.name : undefined,
-          storeAddress: settings.print.showStoreAddress ? settings.store.address : undefined,
-          storePhone: settings.print.showStorePhone ? settings.store.phone : undefined,
+          storeName: settings.print.showStoreName ? currentBranch?.name : undefined,
+          storeAddress: settings.print.showStoreAddress ? currentBranch?.address : undefined,
+          storePhone: settings.print.showStorePhone ? currentBranch?.phone : undefined,
           branchName: currentBranch?.name,
           cashierName: report.cashierName ?? user?.fullName,
           openedAt: report.openedAt,
@@ -4183,9 +4183,9 @@ function FnbPosPageInner() {
             canVoidPaidBill={canVoidPaidBill}
             cashierName={user?.fullName}
             paperSize={settings.print.paperSize === "58mm" ? "58mm" : "80mm"}
-            storeName={settings.print.showStoreName ? settings.store.name : undefined}
-            storeAddress={settings.print.showStoreAddress ? settings.store.address : undefined}
-            storePhone={settings.print.showStorePhone ? settings.store.phone : undefined}
+            storeName={settings.print.showStoreName ? currentBranch?.name : undefined}
+            storeAddress={settings.print.showStoreAddress ? currentBranch?.address : undefined}
+            storePhone={settings.print.showStorePhone ? currentBranch?.phone : undefined}
             receiptFooter={settings.print.receiptFooter}
             receiptStyle={settings.print.receiptStyle}
           />

@@ -346,14 +346,14 @@ export async function setBranchPrintBrand(
 }
 
 /** Brand đã merge: tenant business_info ← branch.print_brand override. */
-export async function getResolvedBrand(branchId?: string | null): Promise<ResolvedBrand> {
+export async function getResolvedBrand(branchId?: string | null, options?: { branchOnly?: boolean }): Promise<ResolvedBrand> {
   const t = await getTenantBusinessInfo();
   const base: ResolvedBrand = {
     logoUrl: t.logoUrl,
-    businessName: t.businessName,
-    taxCode: t.taxCode,
-    address: t.address,
-    phone: t.phone,
+    businessName: options?.branchOnly ? undefined : t.businessName,
+    taxCode: options?.branchOnly ? undefined : t.taxCode,
+    address: options?.branchOnly ? undefined : t.address,
+    phone: options?.branchOnly ? undefined : t.phone,
     footer: t.invoiceFooter,
     bankBin: t.bankBin,
     bankCode: t.bankCode,
@@ -378,6 +378,12 @@ export async function getResolvedBrand(branchId?: string | null): Promise<Resolv
         (merged as Record<string, unknown>)[k] = v;
       }
     }
+  }
+  if (options?.branchOnly) {
+    // F&B slips identify the outlet, never the legal company or its contacts.
+    merged.branchName = rec.name;
+    merged.businessName = rec.name;
+    merged.taxCode = undefined;
   }
   return merged;
 }
@@ -416,6 +422,6 @@ export async function resolvePrintTemplate(
   if (!tpl) tpl = await pick(null);
   if (!tpl) return null;
 
-  const brand = await getResolvedBrand(branchId);
+  const brand = await getResolvedBrand(branchId, { branchOnly: channel === "fnb" });
   return { template: tpl, paperSize: tpl.paperSize, config: tpl.config, brand };
 }
