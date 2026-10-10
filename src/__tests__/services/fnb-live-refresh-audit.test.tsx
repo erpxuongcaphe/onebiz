@@ -36,6 +36,16 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("F&B live refresh recovery", () => {
+  it("refreshes catalog prices using tenant filters rather than nonexistent branch columns", () => {
+    const refresh = vi.fn();
+    const tables = ["products", "product_variants", "product_platform_prices", "categories"];
+    renderHook(() => useLiveDataRefresh(refresh, "tenant", undefined, tables));
+    for (const [index, table] of tables.entries()) {
+      expect(mocks.on.mock.calls[index][1]).toMatchObject({ table, filter: "tenant_id=eq.tenant" });
+    }
+    act(() => { mocks.events.forEach(event => event()); vi.advanceTimersByTime(350); });
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
   it("isolates identical subscriptions and recreation before asynchronous cleanup completes", () => {
     const first = vi.fn();
     const { rerender } = renderHook(({ refresh }) => {
@@ -92,6 +102,16 @@ describe("F&B live refresh recovery", () => {
 });
 
 describe("F&B live data wiring", () => {
+  it("refreshes online catalog and variant prices without repricing existing bills", () => {
+    const source = readFileSync("src/app/pos/fnb/page.tsx", "utf8");
+    expect(source).toContain("useLiveDataRefresh(refreshLiveCatalog, tenantId, undefined");
+    expect(source).toContain("networkStatus.isOnline, catalogRefreshRevision]");
+    expect(source).not.toContain("await shouldRefreshMenu(");
+    expect(source).toContain("if (cached && !networkStatus.isOnline)");
+    expect(source).toContain("if (catalogResult[1].error) throw catalogResult[1].error");
+    expect(source).toContain("return () => { cancelled = true; }");
+    expect(source).not.toContain("pos.reprice");
+  });
   it("history refreshes only while open and rejects stale results", () => {
     const source = readFileSync("src/app/pos/fnb/components/fnb-order-history-dialog.tsx", "utf8");
     expect(source).toContain('["kitchen_orders", "invoices"], open && Boolean(branchId)');

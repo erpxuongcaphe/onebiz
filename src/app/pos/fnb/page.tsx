@@ -39,11 +39,9 @@ import {
   saveToppingsToCache,
   getMenuFromCache,
   getTablesFromCache,
-  shouldRefreshMenu,
   invalidateMenuCache,
   saveVariantsToCache,
   getVariantsFromCache,
-  shouldRefreshVariants,
   hapticTap,
   hapticSuccess,
   hapticError,
@@ -82,7 +80,6 @@ import {
 } from "@/lib/services/supabase/fnb-toppings";
 import {
   filterFnbProductsForBranch,
-  getFnbMenuScopeFingerprint,
   listFnbProductBranchMenuScopes,
 } from "@/lib/services/supabase/fnb-product-branch-menu";
 // CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups cho POS FnB
@@ -479,25 +476,39 @@ function FnbPosPageInner() {
     hasPermission(PERMISSIONS.POS_FNB_VOID_PAID_BILL) ||
     hasPermission(PERMISSIONS.POS_FNB_VOID);
 
+  const [catalogRefreshRevision, setCatalogRefreshRevision] = useState(0);
+  const catalogScopeRef = useRef<string | null>(null);
+  const refreshLiveCatalog = useCallback(() => setCatalogRefreshRevision(value => value + 1), []);
+  // Catalog tables are tenant-scoped, not branch-scoped.
+  useLiveDataRefresh(refreshLiveCatalog, tenantId, undefined, [
+    "products", "product_variants", "product_platform_prices", "categories",
+    "fnb_product_branch_menu_scopes", "fnb_product_branch_menu_policies",
+    "price_tiers", "branch_price_tier_assignments", "branches",
+  ], Boolean(tenantId && networkStatus.isOnline));
+
   // ── Load data (cache-first, then network refresh) ──
   useEffect(() => {
     if (!tenantId) return;
+    let cancelled = false;
+    const scope = `${tenantId}:${branchId ?? ""}`;
+    const backgroundRefresh = catalogScopeRef.current === scope && catalogRefreshRevision > 0;
+    catalogScopeRef.current = scope;
     (async () => {
-      setLoading(true);
-      let mustRefreshCatalog = false;
+      if (!backgroundRefresh) setLoading(true);
       try {
         // Step 1: Load from IndexedDB cache instantly
         try {
           // 08/08: cache topping có dấu phạm vi (phiên bản nguồn + chi
           // nhánh) — cache đời NVL-TOP hoặc của quán khác thì toppings về
           // RỖNG, thà thiếu còn hơn hiện topping nguyên liệu giá túi/hộp.
-          const cached = await getMenuFromCache(tenantId, branchId);
+          const cached = backgroundRefresh ? null : await getMenuFromCache(tenantId, branchId);
+          if (cancelled) return;
+          if (cached) {
           const cachedProducts = cached.products.filter(
             (product) =>
               isFnbMenuSaleItem(product) && Number.isFinite(product.sell_price) &&
               (product.sell_price > 0 || product.allow_free_sale === true),
           );
-          mustRefreshCatalog = cachedProducts.length !== cached.products.length || cachedProducts.some(product => product.sort_order === undefined) || cached.categories.some(category => category.sort_order === undefined);
           if (cachedProducts.length > 0) {
             const categoryIds = new Set(
               cachedProducts
@@ -520,9 +531,11 @@ function FnbPosPageInner() {
           }
           if (branchId) {
             const cachedTables = await getTablesFromCache(tenantId, branchId);
+            if (cancelled) return;
             if (cachedTables.length > 0) {
               setTables(cachedTables as RestaurantTable[]);
             }
+          }
           }
         } catch {
           // IndexedDB not available — continue with network
@@ -538,19 +551,11 @@ function FnbPosPageInner() {
             listFnbProductBranchMenuScopes(tenantId),
             readFnbMenuOrderRevision().catch(() => undefined),
           ]);
-          const needsRefresh =
-            mustRefreshCatalog ||
-            (await shouldRefreshMenu(
-              tenantId,
-              branchId,
-              getFnbMenuScopeFingerprint(menuScopes),
-              orderRevision,
-            ).catch(() => true));
+          if (cancelled) return;
           const supabase = getClient();
 
           // Parallel fetch: catalog (cats + products + platform_prices) + branch-scoped (tables + shift)
-          const catalogPromise = needsRefresh
-            ? Promise.all([
+          const catalogPromise = Promise.all([
                 // CEO 04/05: chỉ load categories có SP FnB → POS FnB không
                 // còn thấy category retail (Cốc giấy, Bột cacao đóng gói...).
                 getProductCategoriesAsync("sku", "fnb"),
@@ -573,8 +578,7 @@ function FnbPosPageInner() {
                   .from("product_platform_prices")
                   .select("product_id, variant_id, platform, override_price")
                   .eq("tenant_id", tenantId),
-              ])
-            : Promise.resolve(null);
+              ]);
 
           // 08/08 Giai đoạn 2 topping (CEO): SKU-TPP bán theo phần, BOM áp
           // dụng ĐÚNG chi nhánh — nên KHÔNG nấp sau cổng stale 30 phút của
@@ -600,6 +604,9 @@ function FnbPosPageInner() {
             toppingsPromise,
             tablesPromise,
           ]);
+          if (cancelled) return;
+          if (catalogResult[1].error) throw catalogResult[1].error;
+          if (catalogResult[2].error) throw catalogResult[2].error;
 
           if (toppingsMoi) {
             // Đã là {id, name, price} với price = giá MỘT PHẦN.
@@ -685,15 +692,16 @@ function FnbPosPageInner() {
           setCatalogStatus("fresh_ready");
         }
       } catch (err) {
+        if (cancelled) return;
         // 06/08: chỉ báo LỖI khi không có gì để hiển thị. Nếu cache đã đổ
         // được thì giữ `cache_ready` — danh sách vẫn dùng được, chỉ là cũ.
-        setCatalogStatus((truoc) =>
+        if (!backgroundRefresh) setCatalogStatus((truoc) =>
           truoc === "cache_ready" ? "cache_ready" : "error",
         );
         // Nếu đã có cached data → chỉ cảnh báo nhẹ, không block UI.
         // Nếu chưa có gì → toast lỗi để nhân viên biết menu có thể cũ.
         console.error("FnB data load error:", err);
-        toast({
+        if (!backgroundRefresh) toast({
           title: "Không tải được dữ liệu mới",
           description:
             networkStatus.isOnline
@@ -702,14 +710,15 @@ function FnbPosPageInner() {
           variant: "warning",
         });
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
+    return () => { cancelled = true; };
     // Bỏ `toast` khỏi deps — nếu ToastContext re-render, tham chiếu đổi →
     // init flow re-run → 2000+ rows products + variants refetch → POS treo.
     // toast chỉ dùng trong catch path, ref vẫn đúng tại thời điểm fire.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tenantId, branchId, networkStatus.isOnline]);
+  }, [tenantId, branchId, networkStatus.isOnline, catalogRefreshRevision]);
 
   // 06/08 — TẢI CA: effect RIÊNG (CEO chốt). Bốn điểm khác bản cũ:
   //  1. Không nằm chung Promise.all với catalog nữa → trạng thái ca không
@@ -1225,12 +1234,11 @@ function FnbPosPageInner() {
     [modifierCacheRef, readModifierCache],
   );
 
-  // ── Warm variant cache từ IndexedDB ngay khi mount (cache-first).
-  //    Chạy 1 lần, không chờ network. Nếu có data → dialog mở instant trên cold
-  //    start + offline reload. Sau đó effect prefetch bên dưới sẽ refresh nếu
-  //    cache stale (>30 phút) và online. ──
+  useEffect(() => { variantCacheRef.clear(); }, [tenantId, variantCacheRef]);
+
+  // Offline uses the saved variants; online always reads current prices.
   useEffect(() => {
-    if (!tenantId) return;
+    if (!tenantId || networkStatus.isOnline) return;
     let cancelled = false;
     (async () => {
       try {
@@ -1249,13 +1257,9 @@ function FnbPosPageInner() {
     return () => {
       cancelled = true;
     };
-  }, [tenantId, variantCacheRef]);
+  }, [tenantId, variantCacheRef, networkStatus.isOnline]);
 
-  // ── Variant PREFETCH: batch load variants cho TẤT CẢ SP NGAY SAU khi products load.
-  //    Mục đích: click SP bất kỳ → dialog mở instant (0 round-trip network).
-  //    Gate bằng requestIdleCallback → không block first paint.
-  //    Skip nếu cache IndexedDB còn fresh (<30 phút) → tiết kiệm 500 queries.
-  //    Sau khi fetch xong → persist vào IndexedDB để reload sau không phải refetch. ──
+  // Keep the offline variant snapshot current using one batched request.
   useEffect(() => {
     if (!networkStatus.isOnline) return;
     if (!tenantId) return;
@@ -1264,19 +1268,6 @@ function FnbPosPageInner() {
     let cancelled = false;
 
     const runPrefetch = async () => {
-      if (cancelled) return;
-
-      // Nếu cache IndexedDB còn tươi + đã khớp phần lớn products trong ref
-      // → skip fetch network (đã warm từ effect trên).
-      try {
-        const fresh = !(await shouldRefreshVariants(tenantId));
-        if (fresh && variantCacheRef.size >= products.length * 0.8) {
-          return;
-        }
-      } catch {
-        // Fall through → vẫn fetch để fail-safe
-      }
-
       if (cancelled) return;
 
       // Fetch TẤT CẢ products — getVariantsByProductIds dùng `in()` filter
@@ -1501,9 +1492,9 @@ function FnbPosPageInner() {
         },
       );
 
-      // 1. Cache hit — quyết định ngay không network
+      // Cached prices are only authoritative while offline.
       const cached = variantCacheRef.get(product.id);
-      if (cached) {
+      if (cached && !networkStatus.isOnline) {
         if (cached.length === 0) {
           // SP không có biến thể nhưng vẫn có thể có Đường/Đá/Topping.
           // Nếu cache modifier chưa có/hết hạn thì PHẢI chờ lần đọc đang chạy;
@@ -1580,6 +1571,7 @@ function FnbPosPageInner() {
     [
       toast,
       variantCacheRef,
+      networkStatus.isOnline,
       readModifierCache,
       loadModifierForProduct,
       pos,
