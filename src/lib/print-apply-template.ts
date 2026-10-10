@@ -71,7 +71,7 @@ export function applyTemplateToDocData(
   // Ngữ cảnh token: ưu tiên brand đã resolve, fallback giá trị base.
   const ctx: TokenContext = {
     businessName: base.fnbThermalReadable ? undefined : brand.businessName ?? base.businessName,
-    branchName: brand.branchName ?? base.branchName,
+    branchName: base.fnbThermalReadable ? brand.branchName ?? base.branchName : base.branchName,
     taxCode: base.fnbThermalReadable ? undefined : brand.taxCode ?? base.businessTaxCode,
     address: brand.address ?? base.businessAddress,
     phone: brand.phone ?? base.businessPhone,
