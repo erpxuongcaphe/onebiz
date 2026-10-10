@@ -45,8 +45,10 @@ describe("FnB checkout permission", () => {
   });
 
   it("does not restore unfinished products from offline cache", () => {
-    expect(posPage).toContain("mustRefreshCatalog");
-    expect(posPage).toContain("cachedProducts.length !== cached.products.length");
+    expect(posPage).toContain("const cachedProducts = cached.products.filter(");
+    expect(posPage).toContain("isFnbMenuSaleItem(product) && Number.isFinite(product.sell_price)");
+    expect(posPage).toContain("product.sell_price > 0 || product.allow_free_sale === true");
+    expect(posPage).not.toContain("await shouldRefreshMenu(");
     expect(menuCache).toContain('.eq("allow_sale", true)');
     expect(menuCache).toContain("product.allow_free_sale === true");
   });
