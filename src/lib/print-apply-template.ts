@@ -70,8 +70,8 @@ export function applyTemplateToDocData(
 
   // Ngữ cảnh token: ưu tiên brand đã resolve, fallback giá trị base.
   const ctx: TokenContext = {
-    businessName: brand.businessName ?? base.businessName,
-    branchName: base.branchName,
+    businessName: base.fnbThermalReadable ? undefined : brand.businessName ?? base.businessName,
+    branchName: brand.branchName ?? base.branchName,
     taxCode: brand.taxCode ?? base.businessTaxCode,
     address: brand.address ?? base.businessAddress,
     phone: brand.phone ?? base.businessPhone,
@@ -108,6 +108,14 @@ export function applyTemplateToDocData(
     if (h.address === false) data.businessAddress = undefined;
     if (h.phone === false) data.businessPhone = undefined;
     if (h.branch === false) data.branchName = undefined;
+  }
+
+  if (base.fnbThermalReadable) {
+    data.businessName = undefined;
+    data.businessTaxCode = undefined;
+    data.storeName = h?.branch === false ? undefined : brand.branchName || base.branchName || base.storeName;
+    // One prominent branch heading rather than a repeated secondary line.
+    data.branchName = undefined;
   }
 
   // ── Footer ──────────────────────────────────────────────────
@@ -243,6 +251,12 @@ export function applyBrandToDocData(
   if (brand.phone) data.businessPhone = brand.phone;
   if (brand.logoUrl) data.businessLogoUrl = brand.logoUrl;
   if (brand.footer) data.businessFooter = brand.footer;
+  if (base.fnbThermalReadable) {
+    data.businessName = undefined;
+    data.businessTaxCode = undefined;
+    data.storeName = brand.branchName || base.branchName || base.storeName;
+    data.branchName = undefined;
+  }
   return data;
 }
 
@@ -282,7 +296,7 @@ export async function printDocumentWithTemplate(
       opts.fallbackPaperSize ?? (opts.channel === "fnb" ? "80mm" : "A4");
     // VẪN áp thương hiệu chi nhánh (in ĐÚNG địa chỉ/SĐT chi nhánh) dù chưa có mẫu riêng.
     try {
-      const brand = await getResolvedBrand(opts.branchId ?? null);
+      const brand = await getResolvedBrand(opts.branchId ?? null, { branchOnly: opts.channel === "fnb" });
       printDocument(applyBrandToDocData(opts.base, brand), { paperSize: fallback });
     } catch {
       printDocument(opts.base, { paperSize: fallback });

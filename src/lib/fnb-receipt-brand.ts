@@ -5,11 +5,11 @@ export async function withFnbReceiptBrand<T extends PreBillData & { isOffline?: 
   if (!data.branchId || data.isOffline) return data;
   try {
     const { getResolvedBrand } = await import("./services");
-    const brand = await getResolvedBrand(data.branchId);
+    const brand = await getResolvedBrand(data.branchId, { branchOnly: true });
     return {
       ...data,
       // Undefined means the POS explicitly disabled this header field.
-      storeName: data.storeName === undefined ? undefined : brand.branchName || brand.businessName || data.storeName,
+      storeName: data.storeName === undefined ? undefined : brand.branchName || data.storeName,
       storeAddress: data.storeAddress === undefined ? undefined : brand.address || data.storeAddress,
       storePhone: data.storePhone === undefined ? undefined : brand.phone || data.storePhone,
     };
