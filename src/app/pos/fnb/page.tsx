@@ -591,9 +591,9 @@ function FnbPosPageInner() {
               })
             : Promise.resolve(null);
 
-          const tablesPromise = branchId
-            ? getTablesByBranch(branchId).catch(() => [] as RestaurantTable[])
-            : Promise.resolve([] as RestaurantTable[]);
+          const tablesPromise = branchId && !backgroundRefresh
+            ? getTablesByBranch(branchId).catch(() => null)
+            : Promise.resolve(null);
 
           // 06/08: TẢI CA ĐÃ TÁCH RA EFFECT RIÊNG (xem bên dưới). Trước đây
           // nằm chung Promise.all này nên lỗi mạng bị `.catch(() => null)`
@@ -682,7 +682,7 @@ function FnbPosPageInner() {
             );
           }
 
-          if (branchId) {
+          if (branchId && tbls) {
             setTables(tbls);
             prefetchTableData(tenantId, branchId).catch((err) =>
               console.warn("[FnB] prefetchTableData failed:", err),
