@@ -24,6 +24,8 @@ if(process.env.FNB_LIVE_BOM) await db.exec(fs.readFileSync(process.env.FNB_LIVE_
 if(process.env.FNB_LIVE_SNAPSHOT) await db.exec(fs.readFileSync(process.env.FNB_LIVE_SNAPSHOT,'utf8'));
 await db.exec(fs.readFileSync(root+'/supabase/migrations/00473_branch_negative_sale_policy.sql','utf8'));
 await db.exec(fn('00390_fnb_branch_cost_ledger.sql','_capture_fnb_branch_cost_stock_movement_00390'));
+if(process.env.FNB_LIVE_TRIGGER) await db.exec(fs.readFileSync(process.env.FNB_LIVE_TRIGGER,'utf8'));
+await db.exec(fs.readFileSync(root+'/supabase/migrations/00474_legacy_linked_modifier_branch_cost.sql','utf8'));
 await db.exec(`create trigger capture after insert on stock_movements for each row execute function _capture_fnb_branch_cost_stock_movement_00390();`);
 await db.exec(fs.readFileSync(root+'/scripts/fnb-db-test/negative-sale-cases.sql','utf8'));
 console.log('PASS: branch policy, real BOM movements, cost deficits, receipts, returns, idempotency, unknown invoice cost');

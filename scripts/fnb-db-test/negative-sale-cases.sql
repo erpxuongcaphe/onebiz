@@ -8,7 +8,7 @@ begin
  insert into profiles(id,tenant_id,role) values(a,t,'owner'),(cashier,t,'cashier');
  perform set_config('test.actor',a::text,false);
  perform test_assert(not branch_sale_stock_policy_00473(b),'F&B remains blocked until enabled');
- insert into products(id,tenant_id,code,name,stock,inventory_role) values(sku,t,'TEST-MENU','Drink',0,'fnb_menu_item'),(mat,t,'TEST-MAT','Milk',.01,'fnb_material'),(unknown,t,'TEST-UNKNOWN','Bottle',0,'fnb_material');
+ insert into products(id,tenant_id,code,name,stock,inventory_role) values(sku,t,'TEST-MENU','Drink',0,'fnb_menu_item'),(mat,t,'TEST-MAT','Milk',2.01,'fnb_material'),(unknown,t,'TEST-UNKNOWN','Bottle',0,'fnb_material');
  insert into bom(id,tenant_id,product_id,code,name) values(recipe,t,sku,'TEST-BOM','Drink');
  insert into bom_items(bom_id,material_id,unit,quantity) values(recipe,mat,'Kg',.015);
  insert into branch_stock(tenant_id,branch_id,product_id,quantity) values(t,b,mat,.01),(t,b2,mat,2);
@@ -26,7 +26,7 @@ begin
  payload:=consume_bom_for_sale(t,b,sku,1,inv,a);
  perform test_assert(jsonb_array_length(payload->'warnings')=1,'POS shortage warning');
  perform test_assert((select abs(quantity-(-.005))<.0001 from branch_stock where branch_id=b and product_id=mat),'full BOM deducted to negative stock');
- perform test_assert((select abs(stock-(-.005))<.0001 from products where id=mat),'company aggregate follows deduction');
+ perform test_assert((select abs(stock-1.995)<.0001 from products where id=mat),'company aggregate follows deduction');
  perform test_assert((select sum(current_qty)=0 from product_lots where branch_id=b),'FIFO consumes available quantity when selling beyond stock');
  perform test_assert((select deficit_quantity=.005 and costed_quantity=0 from fnb_branch_product_cost_balances where branch_id=b and product_id=mat),'cost deficit matches short quantity');
  perform test_assert((select sum(total_cost)=1500 from fnb_branch_product_cost_events where source_reference_id=inv),'entire sale cost uses confirmed branch quote');
@@ -72,4 +72,10 @@ begin
  perform _post_fnb_branch_cost_in_00390(t,b,unknown,1,0,'invoice_void_restore','invoice_void',inv2,gen_random_uuid(),null,a);
  perform test_assert((select deficit_quantity=0 and costed_quantity=0 from fnb_branch_product_cost_balances where branch_id=b and product_id=unknown),'void restores shortage without phantom stock');
  perform test_assert((select pending_quantity=0 from fnb_sale_cost_shortfalls_00473 where invoice_id=inv2),'void settles its own shortage');
+ -- Legacy linked toppings lock and deduct their own material, not the recipe's last ingredient.
+ payload:=consume_bom_for_sale(t,b,sku,1,gen_random_uuid(),a,null,
+ jsonb_build_array(jsonb_build_object('options',jsonb_build_array(jsonb_build_object('linkedProductId',unknown,'label','Bottle')))));
+ perform test_assert((select quantity=-1 from branch_stock where branch_id=b and product_id=unknown),'linked topping deducts correct product');
+ perform test_assert((select quantity=.982 from branch_stock where branch_id=b and product_id=mat),'recipe quantity remains exact with topping');
+ perform test_assert((select deficit_quantity=1 from fnb_branch_product_cost_balances where branch_id=b and product_id=unknown),'linked topping cost shortage uses its own balance');
 end; $test$;
