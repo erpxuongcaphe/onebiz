@@ -8,7 +8,9 @@ const dialog = readFileSync("src/components/shared/dialogs/create-product-dialog
 describe("FnB branch menu UI contract", () => {
   it("filters the fresh POS catalog with the server-backed branch whitelist", () => {
     expect(pos).toContain("listFnbProductBranchMenuScopes(tenantId)");
-    expect(pos).toContain("getFnbMenuScopeFingerprint(menuScopes)");
+    expect(pos).not.toContain("await shouldRefreshMenu(");
+    expect(pos).toContain("const catalogPromise = Promise.all([");
+    expect(pos).toContain('"fnb_product_branch_menu_scopes", "fnb_product_branch_menu_policies"');
     expect(pos).toContain("filterFnbProductsForBranch(");
   });
 

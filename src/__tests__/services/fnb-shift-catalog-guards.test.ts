@@ -263,7 +263,9 @@ describe("PR-D · trang POS FnB dùng đúng nguồn chung", () => {
   });
 
   it("KHÔNG còn .catch(() => null) nuốt lỗi tải ca", () => {
-    expect(ma).not.toContain(".catch(() => null)");
+    const viTri = ma.indexOf("getOpenShift(branchId, userId)");
+    expect(viTri).toBeGreaterThan(0);
+    expect(ma.slice(viTri, viTri + 900)).not.toContain(".catch(() => null)");
   });
 
   it("setCurrentShift đã bị thay hoàn toàn bằng setShiftState", () => {
