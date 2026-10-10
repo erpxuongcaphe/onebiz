@@ -25,8 +25,8 @@ interface Product { id: string; name: string; sell_price: number; allow_free_sal
 /**
  * CEO 01/06/2026 — Sprint 2.2e:
  * Dynamic modifier groups load từ DB (Mức đường, Mức đá, Topping, Size...).
- * Backward compat: nếu không có dynamic groups → fallback hardcoded R7
- * (SWEETNESS_OPTIONS + ICE_OPTIONS) để cashier không bị mất UX cũ.
+ * Empty groups means no configured choices. Never invent preparation options.
+ * Variants remain independent and preserve their BOM mapping.
  */
 export interface DynamicModifierData {
   groups: ModifierGroup[];
@@ -98,8 +98,8 @@ interface FnbItemDialogProps {
   confirmLabel?: string;
   /**
    * CEO 01/06/2026 — Sprint 2.2e: dynamic modifier groups + options.
-   * Nếu có → ẩn hardcoded sweetness/ice, render dynamic.
-   * Nếu không → giữ hardcoded fallback.
+   * Render only groups resolved from the product/category configuration.
+   * Empty groups means no preparation options; undefined means loading.
    */
   dynamicModifiers?: DynamicModifierData;
   /**
@@ -111,10 +111,9 @@ interface FnbItemDialogProps {
 
 // ── Component ──
 
-// R7: Modifier preset cho cà phê — sweetness + ice level. Build vào note
-// để bếp đọc nhanh thay vì khách "viết tay". Mặc định "Bình thường" cho cả 2.
-const SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as const;
-const ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
+// Stored legacy notes are preserved when editing existing cart lines.
+const LEGACY_SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as const;
+const LEGACY_ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
 /**
  * Quy cách thật (`product_variants`) là nguồn duy nhất cho cỡ, giá và BOM.
@@ -173,11 +172,11 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
   const remaining: string[] = [];
   const tokens = modPart.split(",").map((s) => s.trim()).filter(Boolean);
   for (const tok of tokens) {
-    if ((ICE_OPTIONS as readonly string[]).includes(tok)) {
+    if ((LEGACY_ICE_OPTIONS as readonly string[]).includes(tok)) {
       ice = tok;
     } else if (tok.endsWith(" đường")) {
       const sw = tok.slice(0, -" đường".length).trim();
-      if ((SWEETNESS_OPTIONS as readonly string[]).includes(sw)) {
+      if ((LEGACY_SWEETNESS_OPTIONS as readonly string[]).includes(sw)) {
         sweet = sw;
       } else {
         remaining.push(tok);
@@ -297,10 +296,6 @@ export function FnbItemDialog({
     [coQuyCach, dynamicModifiers],
   );
   const hasDynamicModifiers = effectiveModifierGroups.length > 0;
-  // Có cấu hình động nhưng toàn bộ chỉ là nhóm Size cũ thì cũng không được
-  // rơi về bộ Đường/Đá hardcoded. Cấu hình động đã là nguồn dữ liệu của món.
-  const hasConfiguredDynamicModifiers =
-    (dynamicModifiers?.groups.length ?? 0) > 0;
 
   // 06/08 — 3 trạng thái tải tuỳ chọn. `undefined` = đang tải (tầng cha
   // chưa set); `failed` = tải hỏng. Cả hai đều KHÔNG cho xác nhận: lúc đó
@@ -947,60 +942,6 @@ export function FnbItemDialog({
             {/* Mọi nhóm theo đúng thứ tự liên kết. Nhóm chọn nhiều
                 tự chiếm trọn hàng nhưng không bị ép xuống cuối. */}
             {hasDynamicModifiers && nhomDaSapXep.map(veNhom)}
-
-            {/* Khi CHƯA cấu hình nhóm tuỳ chọn: giữ Đường/Đá mặc định cũ để
-                thu ngân không mất thao tác quen. Chỉ hiện sau khi máy chủ xác
-                nhận món không có cấu hình động; trong lúc tải, bộ cũ sẽ làm
-                nhân viên thấy lựa chọn sai trước khi nhóm thật xuất hiện. */}
-            {!modifiersLoading &&
-              !modifiersFailed &&
-              !hasConfiguredDynamicModifiers && (
-                <>
-                  <section className={O_NHOM}>
-                    <Label className="text-sm font-medium">Mức đường</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {SWEETNESS_OPTIONS.map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => setSweetness(sweetness === s ? "" : s)}
-                          aria-pressed={sweetness === s}
-                          className={cn(
-                            CHIP,
-                            sweetness === s
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border hover:border-primary/40",
-                          )}
-                        >
-                          {s}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-
-                  <section className={O_NHOM}>
-                    <Label className="text-sm font-medium">Mức đá</Label>
-                    <div className="flex flex-wrap gap-2">
-                      {ICE_OPTIONS.map((i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setIceLevel(iceLevel === i ? "" : i)}
-                          aria-pressed={iceLevel === i}
-                          className={cn(
-                            CHIP,
-                            iceLevel === i
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "border-border hover:border-primary/40",
-                          )}
-                        >
-                          {i}
-                        </button>
-                      ))}
-                    </div>
-                  </section>
-                </>
-              )}
           </div>
 
           {/* ══ TOPPING — nhóm DÀI, chiếm TOÀN chiều ngang ══
