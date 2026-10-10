@@ -27,6 +27,19 @@ export function applyCutSetting(bytes, cut = true) {
   return bytes.subarray(0, bytes.length - 3);
 }
 
+// Printer enumeration can take seconds on Windows. It must never hold up LAN jobs.
+export function createPrinterRefresh(discover, heartbeat, reportError, now = Date.now) {
+  let nextRefresh = 0, pending = null;
+  return () => {
+    if (pending || now() < nextRefresh) return pending;
+    nextRefresh = now() + 300000;
+    pending = Promise.resolve().then(discover).then(printers => heartbeat({ printers }))
+      .catch(error => { nextRefresh = now() + 30000; reportError(error); })
+      .finally(() => { pending = null; });
+    return pending;
+  };
+}
+
 export async function runAgent(configPath) {
   if(process.platform!=='win32') throw new Error('Điểm in này hiện hỗ trợ Windows.');
   const config=JSON.parse(await readFile(configPath,'utf8')), url=new URL(config.url);
@@ -44,15 +57,17 @@ export async function runAgent(configPath) {
     child.on('error',()=>{clearTimeout(timer);done([]);});
     child.on('close',()=>{clearTimeout(timer);try{const names=JSON.parse(out||'[]');done((Array.isArray(names)?names:[names]).filter(n=>typeof n==='string').slice(0,100));}catch{done([]);}});
   });
-  let lastDiscovery=0;
+  const refreshPrinters = createPrinterRefresh(discover, data => call('heartbeat', data), error => console.error(error.message));
   let stopped=false;
   process.on('SIGINT',()=>{stopped=true;}); process.on('SIGTERM',()=>{stopped=true;});
   console.log('Onebiz · Điểm in đang chạy. Giữ máy bật.');
   while(!stopped) {
     try {
-      if(Date.now()-lastDiscovery>300000){await call('heartbeat',{printers:await discover()});lastDiscovery=Date.now();}
+      void refreshPrinters();
+      const claimStarted = Date.now();
       const job=await call('claim');
-      if(!job){await sleep(2500);continue;}
+      if(!job){await sleep(1000);continue;}
+      const sendStarted = Date.now();
       let status='failed',message='Không dựng được dữ liệu in.',attempted=false,tempPath;
       try {
         const bytes=Buffer.from(job.bytes,'base64');
@@ -84,12 +99,13 @@ export async function runAgent(configPath) {
         }
       }catch(error){status=attempted?'unknown':'failed';message=error.message;}
       finally{if(tempPath)await unlink(tempPath).catch(()=>{});}
+      const acknowledgementStarted = Date.now();
       // Retry acknowledgement only. Never repeat the physical send.
       for(let attempt=0;attempt<3;attempt++){
         try{await call('finish',{id:job.id,claim_id:job.claim_id,status,message});break;}
         catch(error){console.error(error.message);await sleep(2500);}
       }
-      console.log(`${job.id} · ${status}`);
+      console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
     }catch(error){console.error(error.message);await sleep(5000);}
   }
 }
