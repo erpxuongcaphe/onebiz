@@ -174,13 +174,14 @@ export function ModuleSidebarLayout({
               )}
               {filteredNav.map((group, gi) => {
                 // Khi đang search → luôn mở để hiển thị kết quả
-                const expanded = search.trim() ? true : openMap[gi] ?? true;
+                const expanded = search.trim() || group.items.some(isActive) ? true : openMap[gi] ?? true;
                 const showChevron = group.collapsible && !search.trim();
                 return (
                   <div key={gi}>
                     {group.label && (
                       <button
                         type="button"
+                        aria-expanded={group.collapsible ? expanded : undefined}
                         onClick={() =>
                           group.collapsible ? toggleGroup(gi) : undefined
                         }

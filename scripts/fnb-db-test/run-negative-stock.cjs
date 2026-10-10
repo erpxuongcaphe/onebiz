@@ -1,0 +1,30 @@
+const fs=require('fs'); const {PGlite}=require(process.env.FNB_PGLITE_DIR || '@electric-sql/pglite');
+const root=process.cwd();
+function fn(file,name){let sql=fs.readFileSync(root+'/supabase/migrations/'+file,'utf8');let re=new RegExp('create(?: or replace)? function public\\.'+name+'\\s*\\(','i');let start=sql.search(re);if(start<0)throw Error(name);let tail=sql.slice(start);let m=/\bas\s+(\$[a-z_]*\$)/i.exec(tail);let end=tail.indexOf(m[1]+';',m.index+m[0].length);return tail.slice(0,end+m[1].length+1);}
+(async()=>{const db=new PGlite();try{
+let schema=fs.readFileSync(root+'/scripts/fnb-db-test/schema.sql','utf8').replace(/do \$\$ begin[\s\S]*?end \$\$;/,'');
+await db.exec(schema);
+await db.exec(`create role anon; create role authenticated; create schema auth;
+create function auth.uid() returns uuid language sql as $$select nullif(current_setting('test.actor',true),'')::uuid$$;
+create table tenants(id uuid primary key); create table branches(id uuid primary key,tenant_id uuid);
+create table profiles(id uuid primary key,tenant_id uuid,role text,is_active boolean default true);
+create table tenant_settings(tenant_id uuid,key text,value jsonb,description text,updated_by uuid,updated_at timestamptz default now(),primary key(tenant_id,key));
+create table audit_log(tenant_id uuid,user_id uuid,action text,entity_type text,entity_id uuid,old_data jsonb,new_data jsonb);
+create function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select exists(select 1 from profiles p join branches b on b.tenant_id=p.tenant_id where p.id=$1 and b.id=$2)$$;
+create function user_has_permission(uuid,text) returns boolean language sql as $$select exists(select 1 from profiles where id=$1 and role in ('owner','admin'))$$;
+create function _fnb_branch_cost_tracking_enabled_00390(uuid,uuid) returns boolean language sql as $$select true$$;
+create table invoices(id uuid primary key,tenant_id uuid,branch_id uuid,source text);
+create table invoice_items(id uuid primary key,invoice_id uuid,product_id uuid,quantity numeric,unit_cost numeric);
+alter table products add column inventory_role text; alter table product_lots add column variant_id uuid;
+alter table stock_movements add column id uuid primary key default gen_random_uuid();
+create table fnb_branch_product_cost_balances(tenant_id uuid,branch_id uuid,product_id uuid,costed_quantity numeric(18,4) default 0,total_cost numeric(18,4) default 0,unit_cost numeric(18,6) default 0,opening_cost_confirmed boolean default false,updated_by uuid,updated_at timestamptz default now(),primary key(tenant_id,branch_id,product_id));
+create table fnb_branch_product_cost_events(id uuid primary key default gen_random_uuid(),tenant_id uuid,branch_id uuid,product_id uuid,direction text,source_type text,source_reference_type text,source_reference_id uuid,source_stock_movement_id uuid unique,quantity numeric,unit_cost numeric,total_cost numeric,note text,created_by uuid,created_at timestamptz default now());`);
+for(const [f,n] of [['00011_atomic_stock_rpcs.sql','increment_product_stock'],['00156_branch_stock_null_variant_guard.sql','upsert_branch_stock'],['00147_variant_aware_bom_lookup.sql','get_active_bom_for_branch'],['00142_block_expired_lots_fifo.sql','allocate_lots_fifo'],['00350_fnb_exact_modifier_bom_quantities.sql','consume_bom_for_sale'],['00095_tenant_settings.sql','set_tenant_setting'],['00412_fnb_invoice_line_branch_bom_cost.sql','_snapshot_fnb_invoice_line_cost_00412']])await db.exec(fn(f,n));
+if(process.env.FNB_LIVE_BOM) await db.exec(fs.readFileSync(process.env.FNB_LIVE_BOM,'utf8'));
+if(process.env.FNB_LIVE_SNAPSHOT) await db.exec(fs.readFileSync(process.env.FNB_LIVE_SNAPSHOT,'utf8'));
+await db.exec(fs.readFileSync(root+'/supabase/migrations/00473_branch_negative_sale_policy.sql','utf8'));
+await db.exec(fn('00390_fnb_branch_cost_ledger.sql','_capture_fnb_branch_cost_stock_movement_00390'));
+await db.exec(`create trigger capture after insert on stock_movements for each row execute function _capture_fnb_branch_cost_stock_movement_00390();`);
+await db.exec(fs.readFileSync(root+'/scripts/fnb-db-test/negative-sale-cases.sql','utf8'));
+console.log('PASS: branch policy, real BOM movements, cost deficits, receipts, returns, idempotency, unknown invoice cost');
+}catch(e){console.error(e.message);process.exitCode=1;}finally{await db.close();}})();

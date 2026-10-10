@@ -29,7 +29,7 @@ export const settingsNav: SettingsGroup[] = [
   ] },
   { label: "Kho & thiết bị", items: [
     { label: "Kho & công thức", href: "/cai-dat/kho-hang", icon: "inventory_2" },
-    { label: "In ấn", href: "/cai-dat/in-an", icon: "print", permissions: ["system.manage_branches"] },
+    { label: "Máy in & mẫu phiếu", href: "/cai-dat/in-an", icon: "print", permissions: ["system.manage_branches"] },
     { label: "Thiết bị POS", href: "/cai-dat/thiet-bi-pos", icon: "lock" },
   ] },
   { label: "Kiểm soát & lịch sử", items: [

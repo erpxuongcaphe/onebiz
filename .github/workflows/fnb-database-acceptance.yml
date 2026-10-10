@@ -34,6 +34,10 @@ jobs:
         env:
           FNB_EPHEMERAL_DB: onebiz_fnb_test
         run: node scripts/fnb-db-test/run.mjs
+      - name: Test branch negative-sale policy and cost settlement in isolated PostgreSQL
+        run: |
+          npm install --prefix /tmp/onebiz-pglite --no-audit --no-fund @electric-sql/pglite@0.5.8
+          FNB_PGLITE_DIR=/tmp/onebiz-pglite/node_modules/@electric-sql/pglite node scripts/fnb-db-test/run-negative-stock.cjs
       - name: Run actual shift functions on synthetic operations
         env:
           FNB_EPHEMERAL_DB: onebiz_fnb_test
