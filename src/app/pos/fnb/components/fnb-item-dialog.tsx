@@ -112,6 +112,8 @@ interface FnbItemDialogProps {
 // ── Component ──
 
 // Stored legacy notes are preserved when editing existing cart lines.
+const LEGACY_SWEETNESS_OPTIONS = ["Không đường", "30%", "50%", "70%", "100%"] as const;
+const LEGACY_ICE_OPTIONS = ["Không đá", "Ít đá", "Vừa đá", "Nhiều đá"] as const;
 
 /**
  * Quy cách thật (`product_variants`) là nguồn duy nhất cho cỡ, giá và BOM.
@@ -170,11 +172,11 @@ function parseStoredNote(note: string): { ice: string; sweet: string; free: stri
   const remaining: string[] = [];
   const tokens = modPart.split(",").map((s) => s.trim()).filter(Boolean);
   for (const tok of tokens) {
-    if ((ICE_OPTIONS as readonly string[]).includes(tok)) {
+    if ((LEGACY_ICE_OPTIONS as readonly string[]).includes(tok)) {
       ice = tok;
     } else if (tok.endsWith(" đường")) {
       const sw = tok.slice(0, -" đường".length).trim();
-      if ((SWEETNESS_OPTIONS as readonly string[]).includes(sw)) {
+      if ((LEGACY_SWEETNESS_OPTIONS as readonly string[]).includes(sw)) {
         sweet = sw;
       } else {
         remaining.push(tok);

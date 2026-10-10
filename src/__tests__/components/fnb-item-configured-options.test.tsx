@@ -21,6 +21,16 @@ describe('F&B configured preparation options', () => {
     expect(screen.queryByText('Mức đường')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Đang tải/ })).toBeDisabled();
   });
+  it('editing a stored legacy note preserves it without inventing choices', () => {
+    const onConfirm = vi.fn();
+    render(<FnbItemDialog open onOpenChange={vi.fn()} product={product} variants={variants}
+      initialSelection={{ variantId: 'l', note: 'Ít đá, 50% đường — ghi chú cũ' }}
+      dynamicModifiers={{ groups: [], optionsByGroup: new Map() }} onConfirm={onConfirm} />);
+    expect(screen.queryByText('Mức đường')).not.toBeInTheDocument();
+    expect(screen.queryByText('Mức đá')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Thêm vào đơn/ }));
+    expect(onConfirm).toHaveBeenCalledWith(expect.objectContaining({ variantId: 'l', note: 'Ít đá, 50% đường — ghi chú cũ' }));
+  });
   it('a configured required group still requires and records its selection', () => {
     const onConfirm = vi.fn();
     const group = { id: 'sugar', tenantId: 'tenant', name: 'Mức đường', rule: 'single_required' as const,
