@@ -629,7 +629,12 @@ export function AppSidebar() {
   };
 
   const topGroups = sidebarNavGroups.filter((g) => !g.pinBottom);
-  const bottomGroups = sidebarNavGroups.filter((g) => g.pinBottom);
+  // Keep the full navigation catalog for command search and breadcrumbs.
+  // The main sidebar only needs shortcuts; detailed setup lives in its workspace.
+  const settingsShortcuts = new Set(["/cai-dat", "/cap-otp", "/cai-dat/in-an", "/he-thong/audit"]);
+  const bottomGroups = sidebarNavGroups.filter((g) => g.pinBottom).map(group =>
+    group.label === "Cài đặt" ? { ...group, items: group.items?.filter(item => settingsShortcuts.has(item.href)) } : group,
+  );
 
   return (
     <aside
