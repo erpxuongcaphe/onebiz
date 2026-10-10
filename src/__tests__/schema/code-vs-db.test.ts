@@ -46,45 +46,13 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["get_operation_history_00453", "00453"],
-  ["get_management_finance_categories", "00438"],
-  ["save_management_finance_category", "00438"],
-  ["save_management_finance_document", "00438"],
-  ["settle_management_finance_event", "00438"],
-  ["cancel_management_finance_event", "00438"],
-  ["get_management_finance_workspace", "00438"],
-  ["get_management_finance_cash_links", "00440"],
-  ["save_management_finance_category_with_cash_flow", "00440"],
-  ["get_cash_performers", "00435"],
-  ["record_cash_transaction_context", "00435"],
-  ["record_cash_transaction_timed", "00428"],
-  ["fnb_complete_payment_timed_v1", "00429"],
-  ["save_fnb_modifier_links_atomic", "00426"],
-  ["save_fnb_modifier_display_order_atomic", "00426"],
-  ["fnb_kitchen_return_lines", "00424"],
-  ["fnb_kitchen_return_summary", "00422"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
-  ["set_fnb_branch_opening_cost_00390", "00390"],
-  ["calculate_fnb_bom_branch_cost_00390", "00390"],
 ]);
 const COT_CHO_MIGRATION = new Map<string, string>([
-  ["profiles.pos_pin_reset_required", "00459"],
-  ["customer_groups.code", "00437"],
-  ["cash_transactions.performed_by", "00435"],
-  ["cash_transactions.performed_by_name", "00435"],
-  ["cash_transactions.occurred_at", "00428"],
-  ["cash_transactions.time_source", "00428"],
-  ["cash_transactions.time_reason", "00428"],
-  ["product_modifier_groups.use_common_order", "00426"],
-  ["category_modifier_groups.use_common_order", "00426"],
-  ["products.allow_free_sale", "00391"],
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
-  ["inventory_opening_batches", "00442"],
-  ["fnb_branch_product_cost_balances", "00390"],
-  ["fnb_branch_product_cost_events", "00390"],
 ]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */

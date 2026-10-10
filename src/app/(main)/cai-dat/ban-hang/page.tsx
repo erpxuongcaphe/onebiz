@@ -25,9 +25,6 @@ export default function SalesSettingsPage() {
   const { settings, updateSettings } = useSettings();
   const { toast } = useToast();
 
-  const [allowSellOutOfStock, setAllowSellOutOfStock] = useState(
-    settings.sales.allowSellOutOfStock
-  );
   const [requireCustomer, setRequireCustomer] = useState(
     settings.sales.requireCustomer
   );
@@ -88,7 +85,6 @@ export default function SalesSettingsPage() {
     }
 
     updateSettings("sales", {
-      allowSellOutOfStock,
       requireCustomer,
       autoPrintInvoice,
       showCostOnPos,
@@ -125,12 +121,9 @@ export default function SalesSettingsPage() {
         </CardHeader>
         <CardContent>
           <div className="divide-y">
-            <Toggle
-              checked={allowSellOutOfStock}
-              onCheckedChange={setAllowSellOutOfStock}
-              label="Cho phép bán khi hết hàng"
-              description="Cho phép tạo đơn hàng khi sản phẩm hết tồn kho"
-            />
+            <Link href="/cai-dat/kho-hang" className="flex min-h-12 items-center justify-between gap-3 py-3 text-sm text-primary">
+              <span>Bán khi không đủ tồn — cài riêng theo chi nhánh</span><Icon name="chevron_right" size={18} />
+            </Link>
             <Toggle
               checked={requireCustomer}
               onCheckedChange={setRequireCustomer}

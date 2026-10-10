@@ -1,226 +1,63 @@
 "use client";
-
-import { SettingsSwitch } from "@/components/shared/settings-toggle";
-
-/**
- * Cài đặt Kho & BOM (CEO 18/05/2026)
- *
- * 2 toggle chính:
- *   - allow_negative_stock: cho phép bán SKU khi NVL trong BOM không đủ tồn
- *   - require_bom_for_sku:  bắt buộc SKU phải có BOM trước khi cho bán
- *
- * Chỉ owner/admin được sửa (server enforce qua RPC set_tenant_setting).
- */
-
-import { useEffect, useState, useCallback, useId } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+import { SettingsToggle } from "@/components/shared/settings-toggle";
 import { PageHeader } from "@/components/shared/page-header";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/lib/contexts";
-import { useAuth } from "@/lib/contexts/auth-context";
+import { useAuth, useToast } from "@/lib/contexts";
 import { isOwnerRole } from "@/lib/types/auth";
-import {
-  isAllowNegativeStock,
-  setAllowNegativeStock,
-  isRequireBomForSku,
-  setRequireBomForSku,
-} from "@/lib/services";
-import { Icon } from "@/components/ui/icon";
-
-interface ToggleRowProps {
-  label: string;
-  description: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  disabled?: boolean;
-  warning?: string;
-}
-
-function ToggleRow({ label, description, value, onChange, disabled, warning }: ToggleRowProps) {
-  const id = useId();
-  return (
-    <div className="flex items-start justify-between gap-4 py-4 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
-          <label htmlFor={id} className="cursor-pointer text-sm font-medium">{label}</label>
-          {value && (
-            <span className="inline-flex items-center rounded-full bg-primary/10 text-primary text-xs px-2 py-0.5">
-              Đang bật
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-on-surface-variant">{description}</p>
-        {warning && value && (
-          <p className="mt-2 text-xs text-status-warning flex items-center gap-1">
-            <Icon name="warning" size={12} />
-            {warning}
-          </p>
-        )}
-      </div>
-      <SettingsSwitch id={id} label={label} checked={value} disabled={disabled} onCheckedChange={onChange} />
-    </div>
-  );
-}
+import { isRequireBomForSku, setRequireBomForSku } from "@/lib/services/supabase/tenant-settings";
+import { branchSaleStockPolicy, listSaleCostShortfalls, type SaleCostShortfall } from "@/lib/services/supabase/branch-stock-policy";
+import { formatNumber } from "@/lib/format";
 
 export default function CaiDatKhoHangPage() {
-  const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, currentBranch } = useAuth(); const { toast } = useToast();
+  const branchId = currentBranch?.id;
+  const activeBranch = useRef(branchId);
   const canEdit = isOwnerRole(user?.role) || user?.role === "admin";
-
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [allowNegative, setAllowNegative] = useState(true);
-  const [requireBom, setRequireBom] = useState(false);
-
-  const fetchSettings = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [neg, req] = await Promise.all([
-        isAllowNegativeStock(),
-        isRequireBomForSku(),
-      ]);
-      setAllowNegative(neg);
-      setRequireBom(req);
-    } catch (err) {
-      toast({
-        variant: "error",
-        title: "Không tải được cài đặt",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại sau.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [toast]);
-
+  const [readyBranch, setReadyBranch] = useState<string>();
+  const [saving, setSaving] = useState(false); const [allow, setAllow] = useState(false);
+  const [requireBom, setRequireBom] = useState(false); const [rows, setRows] = useState<SaleCostShortfall[]>([]);
+  const [error, setError] = useState("");
   useEffect(() => {
-    fetchSettings();
-  }, [fetchSettings]);
-
-  const updateAllowNegative = async (value: boolean) => {
-    if (!canEdit) return;
-    setSaving(true);
-    const prev = allowNegative;
-    setAllowNegative(value);
+    activeBranch.current = branchId;
+    if (!branchId) return;
+    let active = true;
+    Promise.all([branchSaleStockPolicy(branchId), isRequireBomForSku(), listSaleCostShortfalls(branchId)])
+      .then(([policy, bom, shortfalls]) => {
+        if (!active) return;
+        setAllow(policy); setRequireBom(bom); setRows(shortfalls); setError(""); setReadyBranch(branchId);
+      }).catch((err) => { if (active) setError(err instanceof Error ? err.message : "Không tải được cài đặt."); });
+    return () => { active = false; };
+  }, [branchId]);
+  async function save(kind: "stock" | "bom", value: boolean) {
+    if (!canEdit || !branchId || saving || readyBranch !== branchId) return;
+    const target = branchId; setSaving(true);
     try {
-      await setAllowNegativeStock(value);
-      toast({
-        variant: "success",
-        title: value ? "Đã bật cho phép tồn âm" : "Đã tắt cho phép tồn âm",
-        description: value
-          ? "POS sẽ cho bán kể cả NVL không đủ — admin tự cân đối kế toán."
-          : "POS sẽ chặn bán nếu NVL trong BOM không đủ tồn.",
-        duration: 6000,
-      });
-    } catch (err) {
-      setAllowNegative(prev);
-      toast({
-        variant: "error",
-        title: "Không cập nhật được",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại.",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const updateRequireBom = async (value: boolean) => {
-    if (!canEdit) return;
-    setSaving(true);
-    const prev = requireBom;
-    setRequireBom(value);
-    try {
-      await setRequireBomForSku(value);
-      toast({
-        variant: "success",
-        title: value ? "Đã bật bắt buộc BOM" : "Đã tắt bắt buộc BOM",
-        description: value
-          ? "POS sẽ reject nếu SKU đánh dấu has_bom=true mà chưa setup BOM."
-          : "POS vẫn cho bán SKU chưa setup BOM — chỉ cảnh báo trong toast.",
-        duration: 6000,
-      });
-    } catch (err) {
-      setRequireBom(prev);
-      toast({
-        variant: "error",
-        title: "Không cập nhật được",
-        description: err instanceof Error ? err.message : "Vui lòng thử lại.",
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <PageHeader
-        title="Cài đặt kho & công thức"
-        subtitle="Cấu hình hành vi BOM, tồn kho khi bán hàng"
-      />
-
-      <div className="px-4 pb-8 space-y-4">
-        {!canEdit && (
-          <div className="rounded-lg border border-status-warning/30 bg-status-warning/10 p-3 text-sm text-foreground">
-            <Icon name="lock" size={14} className="inline-block mr-1 align-text-bottom" />
-            Chỉ chủ sở hữu (owner) hoặc quản trị (admin) mới được đổi các cài đặt này.
-          </div>
-        )}
-
-        <section className="rounded-lg border border-border bg-card">
-          <div className="px-4 py-3 border-b border-border">
-            <h2 className="text-sm font-semibold">Kiểm soát tồn kho khi bán</h2>
-            <p className="text-xs text-on-surface-variant mt-1">
-              Khi POS bán SKU có BOM, server tự trừ NVL theo công thức.
-              Các flag dưới đây kiểm soát hành vi khi NVL không đủ tồn hoặc
-              chưa setup BOM.
-            </p>
-          </div>
-          <div className="px-4">
-            {loading ? (
-              <div className="py-8 text-center text-on-surface-variant text-sm">
-                Đang tải cài đặt...
-              </div>
-            ) : (
-              <>
-                <ToggleRow
-                  label="Cho phép bán khi NVL không đủ tồn"
-                  description="Khi bật, POS vẫn cho thanh toán dù NVL trong BOM không đủ — tồn kho sẽ âm. Admin tự cân đối qua nhập bổ sung / kiểm kê sau. Khi tắt, POS sẽ reject với thông báo rõ NVL nào thiếu."
-                  value={allowNegative}
-                  onChange={updateAllowNegative}
-                  disabled={!canEdit || saving}
-                  warning="Tồn kho có thể âm — chỉ dùng giai đoạn đầu khi data BOM chưa chính xác."
-                />
-                <ToggleRow
-                  label="Bắt buộc SKU phải có BOM trước khi bán"
-                  description="Khi bật, POS reject nếu SKU đánh dấu has_bom=true nhưng chưa setup công thức. Khi tắt, vẫn cho bán + cảnh báo trong toast (mặc định)."
-                  value={requireBom}
-                  onChange={updateRequireBom}
-                  disabled={!canEdit || saving}
-                />
-              </>
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-lg border border-border bg-card p-4">
-          <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <Icon name="info" size={16} className="text-primary" />
-            Cách hoạt động
-          </h3>
-          <ul className="text-xs text-on-surface-variant space-y-1.5 ml-5 list-disc">
-            <li>
-              <b>SKU có BOM</b>: khi bán 1 ly → server tìm BOM cho chi nhánh hiện tại
-              (ưu tiên BOM riêng, fallback BOM global) → trừ từng NVL theo công thức.
-            </li>
-            <li>
-              <b>SKU chưa setup BOM</b>: badge vàng &quot;Chưa setup&quot; trên danh sách hàng hoá.
-              POS vẫn cho bán (nếu &quot;Bắt buộc BOM&quot; tắt) nhưng không trừ NVL → COGS không chính xác.
-            </li>
-            <li>
-              <b>Báo cáo</b>: xem &quot;Tiêu hao NVL theo chi nhánh&quot; và &quot;COGS thực
-              theo BOM&quot; trong menu Phân tích.
-            </li>
-          </ul>
-        </section>
-      </div>
-    </>
-  );
+      if (kind === "stock") await branchSaleStockPolicy(target, value); else await setRequireBomForSku(value);
+      if (activeBranch.current !== target) return;
+      if (kind === "stock") setAllow(value); else setRequireBom(value);
+      toast({ variant: "success", title: "Đã lưu cài đặt", description: kind === "stock" ? `${currentBranch?.name}: ${value ? "cho phép bán thiếu tồn" : "chặn bán thiếu tồn"}.` : "Đã lưu quy tắc công thức chung." });
+    } catch (err) { toast({ variant: "error", title: "Chưa lưu được", description: err instanceof Error ? err.message : "Vui lòng thử lại." }); }
+    finally { setSaving(false); }
+  }
+  return <div className="space-y-5">
+    <PageHeader title="Kho & công thức" subtitle="Quy tắc tồn kho khi bán hàng" />
+    <section className="rounded-xl border bg-card p-4 md:p-5 space-y-4">
+      <div><p className="text-xs text-muted-foreground">Chi nhánh đang cài đặt</p><h2 className="font-semibold text-primary">{currentBranch?.name ?? "Chọn chi nhánh trên thanh đầu trang"}</h2></div>
+      {!canEdit && <p className="text-sm text-muted-foreground">Chỉ chủ sở hữu hoặc quản trị được thay đổi quy tắc.</p>}
+      {error ? <p role="alert" className="text-sm text-destructive">{error} Tải lại trang để thử lại.</p> : readyBranch !== branchId || !branchId ? <p className="text-sm text-muted-foreground">{branchId ? "Đang tải…" : "Chưa chọn chi nhánh."}</p> : <>
+        <SettingsToggle label="Cho phép bán khi không đủ tồn kho" checked={allow} disabled={!canEdit || saving} onCheckedChange={(v) => void save("stock", v)} description="Áp dụng riêng cho chi nhánh này. Khi bật, POS vẫn thanh toán và trừ đủ nguyên liệu theo công thức; phần thiếu xuống tồn âm." />
+        <div className="rounded-lg bg-muted/40 px-3 py-2 text-sm text-muted-foreground">{allow ? "Đang cho phép bán thiếu tồn. Nhập bù đúng số lượng thực nhận; không cần duyệt thêm từng bill." : "Đang chặn bán thiếu tồn. POS sẽ báo nguyên liệu thiếu trước khi hoàn tất thanh toán."}</div>
+        <p className="text-xs text-muted-foreground">Giá vốn lấy theo chi nhánh. Phần thiếu được ghi nhận để đối chiếu khi nhập bù; chưa có giá vốn sẽ được đánh dấu chưa đầy đủ trên báo cáo.</p>
+      </>}
+    </section>
+    {readyBranch === branchId && rows.length > 0 && <section className="rounded-xl border bg-card p-4 space-y-3">
+      <h2 className="font-semibold">Phần thiếu tồn hoặc giá vốn cần đối chiếu</h2>
+      <p className="text-xs text-muted-foreground">Tối đa 100 lần thiếu gần nhất. Xem tồn thực tế tại <Link className="text-primary underline" href="/hang-hoa/ton-kho">Tồn kho</Link>; xem đối chiếu giá vốn tại Lịch sử thao tác.</p>
+      <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead><tr className="text-left text-muted-foreground"><th className="py-2">Nguyên liệu</th><th className="text-right">Chưa đối chiếu</th><th className="pl-3">Giá vốn</th></tr></thead><tbody>{rows.map(row => <tr key={row.id} className="border-t"><td className="py-2">{row.products?.name}<span className="block text-xs text-muted-foreground">{row.products?.code}</span></td><td className="text-right">{formatNumber(row.pending_quantity)} {row.products?.unit}</td><td className="pl-3 text-xs">{row.cost_known ? "Tạm tính theo giá đã có" : "Chưa có giá vốn"}</td></tr>)}</tbody></table></div>
+    </section>}
+    <details className="rounded-xl border bg-card p-4"><summary className="cursor-pointer font-semibold">Công thức — áp dụng chung doanh nghiệp</summary>
+      <div className="pt-4"><SettingsToggle label="Bắt buộc có công thức trước khi bán" checked={requireBom} disabled={!canEdit || saving || readyBranch !== branchId} onCheckedChange={(v) => void save("bom", v)} description="Chặn món được đánh dấu có công thức nhưng chưa thiết lập công thức. Không tự thêm ly/nắp vào công thức." /></div>
+    </details>
+  </div>;
 }

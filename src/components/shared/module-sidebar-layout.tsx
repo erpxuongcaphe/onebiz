@@ -97,11 +97,14 @@ export function ModuleSidebarLayout({
         return;
       }
       const stored = window.localStorage.getItem(`sidebar:${persistKey}:${i}`);
-      restored[i] = stored === null ? g.defaultOpen !== false : stored === "1";
+      const containsCurrentPage = g.items.some(item => item.exact
+        ? pathname === item.href
+        : pathname === item.href || pathname.startsWith(item.href + "/"));
+      restored[i] = containsCurrentPage || (stored === null ? g.defaultOpen !== false : stored === "1");
     });
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenMap(restored);
-  }, [persistKey, nav]);
+  }, [persistKey, nav, pathname]);
 
   const toggleGroup = (idx: number) => {
     setOpenMap((prev) => {
@@ -174,13 +177,14 @@ export function ModuleSidebarLayout({
               )}
               {filteredNav.map((group, gi) => {
                 // Khi đang search → luôn mở để hiển thị kết quả
-                const expanded = search.trim() ? true : openMap[gi] ?? true;
+                const expanded = search.trim() ? true : openMap[gi] ?? group.defaultOpen !== false;
                 const showChevron = group.collapsible && !search.trim();
                 return (
                   <div key={gi}>
                     {group.label && (
                       <button
                         type="button"
+                        aria-expanded={group.collapsible ? expanded : undefined}
                         onClick={() =>
                           group.collapsible ? toggleGroup(gi) : undefined
                         }
