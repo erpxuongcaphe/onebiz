@@ -84,6 +84,20 @@ export interface ActiveProductionOrder {
 // KPIs
 // ────────────────────────────────────────────
 
+async function getRecipeMaterialIds(branchId?: string): Promise<Set<string>> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  let recipes = supabase.from("bom_scoped").select("id").eq("tenant_id", tenantId).eq("is_active", true);
+  if (branchId) recipes = recipes.or(`branch_id.is.null,branch_id.eq.${branchId}`);
+  const { data: boms, error: bomError } = await recipes;
+  if (bomError) handleError(bomError, "getRecipeMaterialIds:recipes");
+  const ids = (boms ?? []).map(row => row.id);
+  if (!ids.length) return new Set();
+  const { data, error } = await supabase.from("bom_items").select("material_id").in("bom_id", ids);
+  if (error) handleError(error, "getRecipeMaterialIds:items");
+  return new Set((data ?? []).map(row => row.material_id));
+}
+
 export async function getProductionKpis(branchId?: string): Promise<ProductionKpis> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
@@ -124,20 +138,23 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
 
   let nvlQuery = supabase
     .from("branch_stock")
-    .select("quantity, products:products_scoped(cost_price, min_stock, product_type)")
+    .select("product_id, quantity, products:products_scoped(cost_price, min_stock, product_type)")
     .eq("tenant_id", tenantId)
     .gt("quantity", 0);
   if (branchId) nvlQuery = nvlQuery.eq("branch_id", branchId);
 
-  const [ordersRes, activeRes, lotsRes, nvlRes] = await Promise.all([
+  const [ordersRes, activeRes, lotsRes, nvlRes, recipeMaterials] = await Promise.all([
     ordersQuery,
     activeQuery,
     lotsQuery,
     nvlQuery,
+    getRecipeMaterialIds(branchId),
   ]);
 
   if (ordersRes.error) handleError(ordersRes.error, "getProductionKpis:orders");
   if (activeRes.error) handleError(activeRes.error, "getProductionKpis:active");
+  if (nvlRes.error) handleError(nvlRes.error, "getProductionKpis:stock");
+  if (lotsRes.error) handleError(lotsRes.error, "getProductionKpis:lots");
 
   const orders = (ordersRes.data ?? []) as any[];
   const completedOrders = orders.filter((o) => o.status === "completed");
@@ -157,7 +174,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   // NVL stock calculations
   const nvlRows = ((nvlRes.data ?? []) as any[]).filter((r) => {
     const product = r.products as { product_type?: string } | null;
-    return product?.product_type === "nvl";
+    return product?.product_type === "nvl" || recipeMaterials.has(r.product_id);
   });
 
   let nvlStockValue = 0;
@@ -208,13 +225,13 @@ export async function getNvlStock(params?: {
 
   if (params?.branchId) query = query.eq("branch_id", params.branchId);
 
-  const { data, error } = await query;
+  const [{ data, error }, recipeMaterials] = await Promise.all([query, getRecipeMaterialIds(params?.branchId)]);
   if (error) handleError(error, "getNvlStock");
 
   let rows: NvlStockRow[] = ((data ?? []) as any[])
     .filter((r) => {
       const product = r.products as { product_type?: string } | null;
-      return product?.product_type === "nvl";
+      return product?.product_type === "nvl" || recipeMaterials.has(r.product_id);
     })
     .map((r) => {
       const product = r.products as any ?? {};
