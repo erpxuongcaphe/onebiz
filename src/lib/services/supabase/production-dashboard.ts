@@ -139,8 +139,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   let nvlQuery = supabase
     .from("branch_stock")
     .select("product_id, quantity, products:products_scoped(cost_price, min_stock, product_type)")
-    .eq("tenant_id", tenantId)
-    .gt("quantity", 0);
+    .eq("tenant_id", tenantId);
   if (branchId) nvlQuery = nvlQuery.eq("branch_id", branchId);
 
   const [ordersRes, activeRes, lotsRes, nvlRes, recipeMaterials] = await Promise.all([
@@ -185,7 +184,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
     const costPrice = Number(product?.cost_price ?? 0);
     const minStock = Number(product?.min_stock ?? 0);
     nvlStockValue += qty * costPrice;
-    if (minStock > 0 && qty <= minStock) nvlLowStockCount++;
+    if (qty <= 0 || (minStock > 0 && qty <= minStock)) nvlLowStockCount++;
   }
 
   return {
@@ -254,7 +253,7 @@ export async function getNvlStock(params?: {
         costPrice,
         stockValue: qty * costPrice,
         isLow: minStock > 0 && qty > 0 && qty <= minStock,
-        isOut: minStock > 0 && qty === 0,
+        isOut: qty <= 0,
       };
     });
 
