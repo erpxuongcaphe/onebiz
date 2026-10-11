@@ -9,6 +9,14 @@
 // ── Permission codes ──
 
 export const PERMISSIONS = {
+  // Hub uses the existing role/grant/revoke model; branch assignments stay separate.
+  OPS_VIEW: "ops.view",
+  OPS_WORK: "ops.work",
+  OPS_VERIFY: "ops.verify",
+  OPS_CONFIGURE: "ops.configure",
+  OPS_CLOSE_PERIOD: "ops.close_period",
+  OPS_CANCEL_TODO: "ops.cancel_todo",
+  OPS_MANAGE_MEMBERS: "ops.manage_members",
   // POS FnB
   POS_FNB_SEND_KITCHEN: "pos_fnb.send_kitchen",
   POS_FNB_CHECKOUT: "pos_fnb.checkout",
@@ -179,6 +187,18 @@ export interface PermissionGroup {
 }
 
 export const PERMISSION_GROUPS: PermissionGroup[] = [
+  {
+    group: "Hub vận hành",
+    permissions: [
+      { code: PERMISSIONS.OPS_VIEW, label: "Xem Hub trong phạm vi được giao" },
+      { code: PERMISSIONS.OPS_WORK, label: "Ghi kết quả và xử lý công việc" },
+      { code: PERMISSIONS.OPS_VERIFY, label: "Xác minh kết quả và doanh thu" },
+      { code: PERMISSIONS.OPS_CONFIGURE, label: "Cấu hình và duyệt tiêu chuẩn, chỉ tiêu, chính sách" },
+      { code: PERMISSIONS.OPS_CLOSE_PERIOD, label: "Chốt kỳ và duyệt điều chỉnh" },
+      { code: PERMISSIONS.OPS_CANCEL_TODO, label: "Hủy công việc có lý do" },
+      { code: PERMISSIONS.OPS_MANAGE_MEMBERS, label: "Phân công người và phạm vi Hub" },
+    ],
+  },
   {
     group: "POS FnB",
     permissions: [
@@ -384,7 +404,9 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
     description: "Quản trị hệ thống (trừ phân quyền)",
     legacyRole: "admin",
     color: "bg-purple-500",
-    permissions: ALL_PERMISSION_CODES.filter((c) => c !== PERMISSIONS.SYSTEM_MANAGE_ROLES),
+    permissions: ALL_PERMISSION_CODES.filter(
+      (c) => c !== PERMISSIONS.SYSTEM_MANAGE_ROLES && !c.startsWith("ops."),
+    ),
   },
   {
     name: "Quản lý",

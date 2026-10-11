@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSharedCookieDomain } from "./cookie-domain";
+import { isOperationsHubHost } from "@/lib/operations/routing";
 
 /**
  * Extract root domain for cross-subdomain cookie sharing.
@@ -278,6 +279,11 @@ export async function updateSession(request: NextRequest) {
     process.env.NODE_ENV !== "production" &&
     process.env.BYPASS_AUTH === "true";
   if (DEMO_MODE) {
+    if (isOperationsHubHost(request.headers.get("host")) && request.nextUrl.pathname === "/") {
+      const url = request.nextUrl.clone();
+      url.pathname = "/hub";
+      return NextResponse.rewrite(url);
+    }
     // Vẫn xử lý FnB subdomain routing
     if (isFnbSubdomain(request)) {
       const { pathname } = request.nextUrl;
@@ -366,6 +372,14 @@ export async function updateSession(request: NextRequest) {
   }
 
   // ── Standard ERP routing ──
+  if (isOperationsHubHost(request.headers.get("host")) && request.nextUrl.pathname === "/") {
+    const url = request.nextUrl.clone();
+    url.pathname = isAuthenticated ? "/hub" : "/dang-nhap";
+    if (!isAuthenticated) url.searchParams.set("redirect", "/hub");
+    const response = isAuthenticated ? NextResponse.rewrite(url) : NextResponse.redirect(url);
+    copySetCookies(supabaseResponse, response);
+    return response;
+  }
   const publicPaths = ["/dang-nhap", "/quen-mat-khau", "/dat-lai-mat-khau"];
   const isPublicPath = publicPaths.some((path) =>
     request.nextUrl.pathname.startsWith(path)

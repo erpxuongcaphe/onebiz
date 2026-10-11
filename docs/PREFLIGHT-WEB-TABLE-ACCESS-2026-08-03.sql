@@ -60,7 +60,6 @@ with required(relation_name, operation) as (
     ('favorites', 'select'),
     ('floor_plan_decorations', 'select'),
     ('floor_plan_zones', 'select'),
-    ('floor-plans', 'select'),
     ('fnb_branch_product_cost_balances', 'select'),
     ('fnb_branch_product_cost_events', 'select'),
     ('fnb_delivery_fee_tiers', 'delete'),

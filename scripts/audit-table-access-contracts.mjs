@@ -34,6 +34,11 @@ function literalFromCall(node) {
   if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== "from") {
     return null;
   }
+  // Storage buckets are not relations in the public PostgreSQL schema.
+  const receiver = unwrap(expression.expression);
+  if (ts.isPropertyAccessExpression(receiver) && receiver.name.text === "storage") {
+    return null;
+  }
   const argument = node.arguments[0];
   return argument && (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument))
     ? argument.text.toLowerCase()

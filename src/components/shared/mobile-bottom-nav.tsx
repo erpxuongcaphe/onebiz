@@ -1,4 +1,5 @@
 "use client";
+import { useHubAccess } from "@/lib/operations/use-hub-access";
 
 // ---------------------------------------------------------------------------
 // MobileBottomNav — thanh điều hướng cố định ở đáy màn hình cho mobile
@@ -147,7 +148,9 @@ export function MobileBottomNav() {
   const [posOpen, setPosOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { posFnbUrl } = useFnbSubdomain();
-  const { hasPermission } = useAuth();
+  const { hasPermission: baseHasPermission } = useAuth();
+  const hubAllowed = useHubAccess();
+  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : baseHasPermission(code);
   const canSeeRetailPos = hasPermission(PERMISSIONS.POS_RETAIL_CHECKOUT);
   const canSeeFnbPos = hasPermission(PERMISSIONS.POS_FNB_SEND_KITCHEN);
   const canSeeKds = hasPermission(PERMISSIONS.POS_FNB_VIEW_ORDERS);
