@@ -28,7 +28,7 @@ beforeEach(() => {
     data: { user: { id: "test" } },
     error: null,
   });
-  mocks.rpc.mockResolvedValue({ data: { generated: 1 }, error: null });
+  mocks.rpc.mockImplementation(async (name: string) => ({ data: name === "ops_access_context" ? { allowed: true } : { generated: 1 }, error: null }));
 });
 describe("Operations API", () => {
   it("requires verified authentication before reading data", async () => {
@@ -56,7 +56,7 @@ describe("Operations API", () => {
     ).toBe(400);
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
-  it("uses one bounded workspace RPC", async () => {
+  it("checks Hub relation before the bounded workspace RPC", async () => {
     const result = await GET(
       new NextRequest(
         `http://localhost:3000/api/operations?period=2026-10&branch=${branchId}`,
@@ -64,7 +64,7 @@ describe("Operations API", () => {
     );
     expect(result.status).toBe(200);
     expect(result.headers.get("Cache-Control")).toContain("no-store");
-    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.rpc).toHaveBeenCalledTimes(2);
     expect(mocks.rpc).toHaveBeenCalledWith("ops_workspace", {
       p_branch: branchId,
       p_period: "2026-10",

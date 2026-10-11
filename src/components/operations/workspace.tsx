@@ -48,7 +48,9 @@ import {
   type Frequency,
 } from "@/lib/operations/configuration";
 import { ConfigurationReview } from "./configuration-review";
-import { OperationsTodoList } from "./todo-list";
+import { OperationsFilteredList } from "./filtered-list";
+import { OperationsFilterBar } from "./filter-bar";
+import { filterParams, initialFilters, matchesConfiguration } from "@/lib/operations/filters";
 import { OperationsTodoPicker } from "./todo-picker";
 import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
@@ -171,6 +173,9 @@ export default function OperationsWorkspace() {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [search, setSearch] = useState("");
   const [onlyMine, setOnlyMine] = useState(true);
+  const [workFilters, setWorkFilters] = useState(() => initialFilters("run"));
+  const [todoFilters, setTodoFilters] = useState(() => initialFilters("todo"));
+  const [reviewFilters, setReviewFilters] = useState(() => ({ ...initialFilters("run"), verification: "pending_review" }));
   const [notice, setNotice] = useState("");
   const [adjustedPeriod, setAdjustedPeriod] = useState<AdjustedPeriod | null>(
     null,
@@ -309,12 +314,9 @@ export default function OperationsWorkspace() {
         (m) => m.user_id === p.id && m.member_role === "manager" && m.active,
       ),
     ) ?? [];
-  const visibleRuns =
-    data?.runs.filter(
-      (r) =>
-        (!onlyMine || r.assignee_id === data.userId) &&
-        r.title.toLocaleLowerCase().includes(search.toLocaleLowerCase()),
-    ) ?? [];
+  const selectedFilters = tab === "todo" ? todoFilters : tab === "review" ? reviewFilters : workFilters;
+  let listParams: string | null = null;
+  try { listParams = filterParams(selectedFilters, period); } catch { /* The filter bar reports invalid dates. */ }
   const summary = useMemo(() => {
     if (!data || !period) return null;
     const [year, month] = period.split("-").map(Number);
@@ -464,7 +466,7 @@ export default function OperationsWorkspace() {
       </header>
       <div className={styles.layout}>
         <aside className={styles.nav}>
-          {tabs.map(({ key, label, icon }) => (
+          {tabs.filter(item => !data || data.isCeo || data.branches.length > 0 || item.key === "todo").map(({ key, label, icon }) => (
             <button
               type="button"
               key={key}
@@ -549,12 +551,13 @@ export default function OperationsWorkspace() {
                   </strong>
                 </div>
               </div>
-              {(tab === "work" || tab === "todo") && (
+              {(tab === "work" || tab === "todo" || tab === "review") && (
                 <div className={styles.toolbar}>
                   <input
                     type="search"
                     aria-label="Tìm công việc"
                     placeholder="Tìm công việc"
+                    maxLength={200}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -577,9 +580,13 @@ export default function OperationsWorkspace() {
                   )}
                 </div>
               )}
+              {(tab === "work" || tab === "todo" || tab === "review") && <OperationsFilterBar
+                kind={tab === "todo" ? "todo" : "run"} value={selectedFilters}
+                onChange={tab === "todo" ? setTodoFilters : tab === "review" ? setReviewFilters : setWorkFilters}
+                people={data.people} standards={data.standards} period={period} />}
               {tab === "work" && (
-                <div className={styles.list}>
-                  {visibleRuns.map((r) => (
+                <OperationsFilteredList<Run> kind="run" branch={branch} search={search} onlyMine={onlyMine} params={listParams} revision={data}
+                  renderItem={(r) => (
                     <article key={r.id} className={styles.row}>
                       <div>
                         <h2>{r.title}</h2>
@@ -614,6 +621,8 @@ export default function OperationsWorkspace() {
                             r.state === "transferred") && (
                             <>
                               <button
+                                disabled={localDateTime(r.original_due_at).slice(0, 7) !== period}
+                                title={localDateTime(r.original_due_at).slice(0, 7) !== period ? "Chọn đúng kỳ của công việc để ghi kết quả." : undefined}
                                 onClick={() =>
                                   setEditor({ kind: "result", run: r })
                                 }
@@ -624,7 +633,7 @@ export default function OperationsWorkspace() {
                               <button
                                 title="Chuyển To-do"
                                 disabled={
-                                  r.state !== "pending" || !!data.periods.length
+                                  r.state !== "pending" || !!data.periods.length || localDateTime(r.original_due_at).slice(0, 7) !== period
                                 }
                                 aria-label="Chuyển To-do"
                                 onClick={() =>
@@ -637,17 +646,15 @@ export default function OperationsWorkspace() {
                           )}
                       </div>
                     </article>
-                  ))}
-                  {!visibleRuns.length && (
-                    <Empty label="Chưa có công việc trong phạm vi này." />
-                  )}
-                </div>
+                  )} />
               )}
               {tab === "todo" && (
-                <OperationsTodoList
+                <OperationsFilteredList<Todo>
+                  kind="todo"
                   branch={branch}
                   search={search}
                   onlyMine={onlyMine}
+                  params={listParams}
                   revision={data}
                   renderItem={(t) => (
                     <article key={t.id} className={styles.row}>
@@ -700,15 +707,8 @@ export default function OperationsWorkspace() {
               )}
               {tab === "review" && (
                 <>
-                  <div className={styles.list}>
-                    {data.runs
-                      .filter(
-                        (r) =>
-                          !r.verified_at &&
-                          (r.quality !== "unknown" ||
-                            Date.parse(r.original_due_at) <= Date.now()),
-                      )
-                      .map((r) => (
+                  <OperationsFilteredList<Run> kind="run" branch={branch} search={search} onlyMine={onlyMine} params={listParams} revision={data}
+                      renderItem={(r) => (
                         <article className={styles.row} key={r.id}>
                           <div>
                             <h2>{r.title}</h2>
@@ -720,8 +720,10 @@ export default function OperationsWorkspace() {
                           <Badge value={r.quality} />
                           {can("verify") &&
                             r.assignee_id !== data.userId &&
-                            !data.periods.length && (
+                            !data.periods.length && !r.verified_at && (
                               <button
+                                disabled={localDateTime(r.original_due_at).slice(0, 7) !== period}
+                                title={localDateTime(r.original_due_at).slice(0, 7) !== period ? "Chọn đúng kỳ của công việc để xác minh." : undefined}
                                 onClick={() =>
                                   setEditor({ kind: "verify", run: r })
                                 }
@@ -731,8 +733,7 @@ export default function OperationsWorkspace() {
                               </button>
                             )}
                         </article>
-                      ))}
-                  </div>
+                      )} />
                   <h2 className={styles.sectionTitle}>Lịch sử</h2>
                   <div className={styles.list}>
                     {data.audit.map((a) => (
@@ -1028,9 +1029,18 @@ function SettingsView({
   onEdit: (editor: Editor) => void;
   onSave: (action: string, payload: Record<string, unknown>) => Promise<void>;
 }) {
+  const [target, setTarget] = useState<"standards" | "policies" | "members">("standards");
+  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState(() => initialFilters("settings"));
   const name = (id: string) =>
     data.people.find((p) => p.id === id)?.name ??
     "Tài khoản chưa được hiển thị";
+  const matches = (item: Parameters<typeof matchesConfiguration>[0]) => {
+    try { return matchesConfiguration(item, filters, search, data.period); } catch { return false; }
+  };
+  const standards = data.standards.filter(matches);
+  const policies = data.policies.filter(matches);
+  const members = data.members.filter(member => matches({ ...member, title: name(member.user_id) }));
   return (
     <>
       <div className={styles.toolbar}>
@@ -1060,9 +1070,15 @@ function SettingsView({
           </button>
         )}
       </div>
-      <h2 className={styles.sectionTitle}>Standard Working</h2>
+      <div className={styles.toolbar}>
+        <label className={styles.field}><span>Danh mục thiết lập</span><select value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option><option value="policies">Chính sách thưởng</option><option value="members">Phân công chi nhánh</option></select></label>
+        <label className={styles.field}><span>Tìm trong thiết lập</span><input type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
+      </div>
+      <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={data.people} period={data.period} />
+      {target === "standards" && <>
+      <h2 className={styles.sectionTitle}>Standard Working · {formatNumber(standards.length)}</h2>
       <div className={styles.list}>
-        {data.standards.map((s) => (
+        {standards.map((s) => (
           <article className={styles.row} key={s.id}>
             <div>
               <h2>{s.title}</h2>
@@ -1114,9 +1130,12 @@ function SettingsView({
           </article>
         ))}
       </div>
-      <h2 className={styles.sectionTitle}>Chính sách thưởng</h2>
+      {!standards.length && <Empty label="Không có mẫu phù hợp với bộ lọc." />}
+      </>}
+      {target === "policies" && <>
+      <h2 className={styles.sectionTitle}>Chính sách thưởng · {formatNumber(policies.length)}</h2>
       <div className={styles.list}>
-        {data.policies.map((p) => (
+        {policies.map((p) => (
           <article className={styles.row} key={p.id}>
             <div>
               <h2>{p.title}</h2>
@@ -1148,8 +1167,11 @@ function SettingsView({
           </article>
         ))}
       </div>
-      <h2 className={styles.sectionTitle}>Phân công chi nhánh</h2>
-      {data.members.map((m) => (
+      {!policies.length && <Empty label="Không có chính sách phù hợp với bộ lọc." />}
+      </>}
+      {target === "members" && <>
+      <h2 className={styles.sectionTitle}>Phân công chi nhánh · {formatNumber(members.length)}</h2>
+      {members.map((m) => (
         <div className={styles.audit} key={m.user_id}>
           <span>{name(m.user_id)}</span>
           <span>
@@ -1162,6 +1184,8 @@ function SettingsView({
           <span>{m.active ? "Đang áp dụng" : "Ngừng áp dụng"}</span>
         </div>
       ))}
+      {!members.length && <Empty label="Không có phân công phù hợp với bộ lọc." />}
+      </>}
     </>
   );
 }

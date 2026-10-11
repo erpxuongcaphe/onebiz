@@ -79,6 +79,9 @@ export async function GET(request: NextRequest) {
     (branch && !z.uuid().safeParse(branch).success)
   )
     return failure("OPS_INVALID_RANGE");
+  const access = await (supabase as unknown as RpcClient).rpc("ops_access_context", {});
+  if (access.error) return NextResponse.json({ error: "Chưa kiểm tra được quyền Hub. Vui lòng tải lại chủ động.", setupRequired: ["PGRST202", "42883"].includes(access.error.code ?? "") }, { status: 503 });
+  if (!(access.data as { allowed?: boolean } | null)?.allowed) return failure("OPS_FORBIDDEN");
   const result = await (supabase as unknown as RpcClient).rpc("ops_workspace", {
     p_branch: branch || null,
     p_period: period,

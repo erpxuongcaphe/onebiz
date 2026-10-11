@@ -108,6 +108,7 @@ export const sidebarNavGroups: SidebarGroup[] = [
     icon: "dashboard",
     items: [
       { label: "Trang chủ", href: "/", icon: "home" },
+      { label: "Hub vận hành", href: "/hub", icon: "task_alt", permission: "ops.view", exact: true },
       // 05/08/2026: BỔ SUNG `permission`. Trước đây mục này không khai báo
       // quyền → `canViewLeaf` (app-sidebar.tsx:25) trả true cho MỌI người,
       // nên thu ngân / kho vận thấy lối tắt này và mở được trang cảnh báo

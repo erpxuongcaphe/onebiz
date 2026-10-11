@@ -1,10 +1,10 @@
 # Hướng dẫn CEO thiết lập và sử dụng Hub Vận hành OneBiz
 
-Ngày cập nhật: 11/10/2026. Tài liệu mô tả giao diện đã viết trong code. Chỉ sử dụng trên web thật sau khi hoàn tất nghiệm thu tích hợp và kích hoạt database. CEO tự cấu hình công việc; hệ thống không tự nạp danh sách công việc bắt buộc. Phần quyền mới trong bản Markdown này chưa được đồng bộ vào bản Word ngày 10/10.
+Ngày cập nhật: 11/10/2026. Địa chỉ sử dụng: [onebiz.com.vn/hub](https://onebiz.com.vn/hub). Tài liệu cho bản bộ lọc đầy đủ, nút dẫn từ ERP và điều kiện quyền kèm phân công đã qua kiểm thử. CEO tự cấu hình công việc; hệ thống không tự nạp danh sách công việc bắt buộc. Bản Word ngày 10/10 không bao gồm nội dung mới trong tài liệu này.
 
 ## 1. Bắt đầu và các thuật ngữ
 
-Đăng nhập bằng tài khoản OneBiz hiện có, vào `/hub`. Chọn chi nhánh và tháng ở thanh trên cùng. Không cần tài khoản riêng cho Hub, MKT hoặc bảo trì.
+Đăng nhập bằng tài khoản OneBiz hiện có, vào [Hub vận hành](https://onebiz.com.vn/hub). Chọn chi nhánh và tháng ở thanh trên cùng. Không cần tài khoản riêng cho Hub, MKT hoặc bảo trì. Sau khi phát hành bản cập nhật: từ ERP chọn **Tổng quan → Hub vận hành** hoặc **Ứng dụng → Hub vận hành** trên desktop. Mobile dùng menu Tổng quan. Các lối vào chỉ hiện sau khi hệ thống xác nhận quyền và công việc/phân công liên quan; nhập link trực tiếp không vượt được quyền. Từ Hub bấm **ERP** để quay lại.
 
 - **Standard Working:** mẫu quy định việc phải làm, kết quả cần đạt, người phụ trách và lịch thực hiện.
 - **Công việc:** một lần thực hiện mẫu, có hạn riêng; ngày hôm sau vẫn sinh việc mới dù việc hôm trước chưa đạt.
@@ -35,7 +35,7 @@ Tiền và số dùng dạng `1,234.56`; dấu phẩy chia hàng nghìn, dấu c
 
 CEO/owner giữ cơ chế toàn quyền hiện có trong doanh nghiệp mình. Các vai trò khác không tự nhận quyền Hub mới. Người được ủy quyền phân công không sửa phân công của chính mình, không cấp vượt quyền/phạm vi của mình và không cấp tiếp quyền phân công. CEO vẫn có thể phân công trưởng bộ phận tại nhiều chi nhánh.
 
-Hiện CEO được nhận diện bằng tài khoản có vai trò hệ thống `owner` đang hoạt động. Đây là điều kiện kỹ thuật cần kiểm tra với tài khoản thực tế trước khi phát hành; không tự nâng quyền `admin`. Chưa cần tạo người dùng khi còn xây dựng. Khi bắt đầu dùng thật, mỗi công việc phải gắn người phụ trách đã được phân công quản lý ở chi nhánh.
+CEO được nhận diện bằng tài khoản có vai trò hệ thống `owner` đang hoạt động, toàn quyền trong doanh nghiệp mình; không tự nâng quyền `admin`. Với người khác, cần đồng thời **Xem Hub** và **phân công đang áp dụng tại chi nhánh**, hoặc là **người phối hợp một To-do thuộc doanh nghiệp và chi nhánh đang hoạt động**. Chỉ có quyền Xem Hub mà không liên quan thì không vào được. Khi thu hồi quyền hoặc phân công cuối cùng, những lần truy cập dữ liệu tiếp theo bị chặn, kể cả còn mở tab cũ. Chưa cần tạo người dùng khi còn xây dựng; chỉ chọn tài khoản đã có lúc triển khai thực tế.
 
 Người văn phòng/bảo trì có thể được chọn làm người phối hợp To-do. Họ cần quyền **Xem Hub**, chỉ xem, trao đổi và gửi minh chứng ở các To-do được giao nếu chưa được cấp phạm vi rộng hơn. Không cần cấp quyền **Ghi kết quả và xử lý công việc** chỉ để phối hợp. Người phối hợp không tự đổi kết quả công việc hoặc duyệt thưởng. Thu hồi quyền Xem Hub sẽ chặn cả quyền truy cập các việc đã giao.
 
@@ -162,10 +162,49 @@ Cả hai luồng dùng chung thứ tự phiên bản. Điều chỉnh doanh thu 
 
 Biểu tượng chuông mở thông báo nội bộ; có thể đánh dấu đã đọc. Việc đến hạn/quá hạn và To-do chờ tới ngày theo dõi được nhắc theo tác vụ riêng, chống tạo trùng cùng ngày. Tác vụ chỉ hoạt động tự động sau khi kỹ thuật kích hoạt lịch gọi `/api/cron/operations` và cấu hình khóa xác thực. Hiện chưa tự gửi email/Zalo/Telegram.
 
-Lịch chuẩn bị hiện tại chạy mỗi ngày lúc 05:00 giờ Việt Nam; chưa kích hoạt. Đây không phải thông báo tức thời tại từng deadline. Nếu cần nhắc ngay trong ngày, kỹ thuật phải cấu hình lịch phù hợp và kiểm tra giới hạn nền tảng trước; CEO không cần sửa code.
+Lịch gọi tác vụ đã có trong cấu hình phát hành: mỗi ngày lúc 05:00 giờ Việt Nam. Đây không phải thông báo tức thời tại từng deadline. Việc có cấu hình lịch không thay thế kiểm tra log chạy thực tế. Nếu cần nhắc ngay trong ngày, kỹ thuật phải cấu hình lịch phù hợp và kiểm tra giới hạn nền tảng trước; CEO không cần sửa code.
 
 To-do tải theo từng trang 50 công việc. Bấm **Xem thêm** để tiếp tục; tìm kiếm và **Của tôi** lọc trên database theo quyền, không chỉ lọc trang đang thấy. Không giới hạn âm thầm ở 500 công việc. Xanh lá là đạt/đã duyệt; vàng là chờ/nháp; đỏ là chưa đạt/hủy; xanh dương là đang xử lý. Luôn đọc kèm chữ trạng thái.
 
 Tám migration Hub đã được chạy trên PostgreSQL local cô lập. Đã nghiệm thu đăng nhập chung, ghi kết quả, phân quyền, upload ảnh và To-do qua trình duyệt → API web → Supabase local; không dùng database đang bán hàng để test. Docker đã hoạt động sau khi khởi động lại Windows, không cần thuê staging riêng.
 
-Trước khi mở dùng thật, kỹ thuật còn phải đối chiếu cấu trúc/quyền database production bằng kiểm tra chỉ đọc, duyệt và áp dụng migration, cấu hình tên miền cùng lịch nhắc việc, rồi kiểm tra bản phát hành. Những bước này chưa được thực hiện và chưa deploy. Không cần CEO nhập danh sách công việc trước để hoàn thiện code. Khi hệ thống được mở dùng, CEO thực hiện lần lượt mục 2, 3, 7 và 8.
+Tám migration nền Hub đã được áp dụng trong đợt phát hành trước, không chạy lại. Migration **00509_operations_filters_access.sql** đã được duyệt và áp dụng trên production ngày 11/10/2026, chỉ tạo hai hàm đọc dữ liệu và kiểm tra phạm vi; không sửa kho, tiền, tài khoản hoặc công việc. Đã xác minh không cho tài khoản ẩn danh thực thi. Không chạy lại SQL này. Không cần CEO nhập danh sách công việc trước để hoàn thiện code. Khi triển khai, CEO thực hiện lần lượt mục 2, 3, 7 và 8.
+
+## 11. Tìm công việc, To-do và cấu hình
+
+**Lưu ý:** các thao tác dưới đây thuộc bản bộ lọc mới. Bộ lọc không sửa công việc và không tính lại KPI hay thưởng; nếu chưa thấy giao diện này, tải lại trang sau khi bản phát hành hoàn tất.
+
+1. Chọn chi nhánh ở thanh trên cùng. Phạm vi chỉ gồm nơi được cấp quyền. Người chỉ phối hợp To-do không được xem toàn bộ chi nhánh.
+2. Vào **Công việc**, **To-do** hoặc **Xác minh**; nhập tên/nội dung ở ô tìm kiếm. Bỏ **Của tôi** khi cần xem người khác trong phạm vi cho phép.
+3. Chọn **Trạng thái** và **Người chịu trách nhiệm**. Các điều kiện được kết hợp đồng thời, không phải chọn điều kiện này rồi mất điều kiện khác.
+4. Chọn **Lọc theo ngày** trước khi chọn thời gian. Công việc: hạn, ngày đạt, ngày xác minh. To-do: ngày tạo, deadline hiện tại, ngày hoàn thành, ngày theo dõi lại.
+5. Khoảng thời gian có: tất cả, kỳ đang chọn, hôm nay/hôm qua, tuần này/trước, tháng này/trước, quý này/trước, năm này/trước và tùy chỉnh. **Tuần bắt đầu thứ Hai**, ngày tính theo Việt Nam, gồm cả ngày kết thúc.
+6. Với **Tùy chỉnh**, nhập đủ **Từ ngày** và **Đến ngày**. Ngày bị ngược hoặc thiếu sẽ báo đỏ, không gửi yêu cầu tìm sai. Ô lịch theo ngôn ngữ thiết bị; ngày hiển thị trên công việc vẫn theo `dd/mm/yyyy`.
+7. Mở **Tiêu chí bổ sung** theo bảng dưới. Bấm **Đặt lại** để bỏ điều kiện. Nếu không có kết quả, thử bỏ Của tôi, đặt lại tiêu chí và kiểm tra chi nhánh.
+8. Danh sách tải từng trang 50 việc. **Xem thêm** tải tiếp theo cùng bộ lọc. Truy vấn lọc trên database trước khi phân trang, không bỏ sót việc vì chưa tải trang chứa nó.
+
+| Màn hình | Tiêu chí bổ sung |
+|---|---|
+| Công việc / Xác minh | Kết quả đạt/chưa đạt/chưa có kết quả; đã/chưa/chờ xác minh; mẫu công việc và phiên bản; tần suất; quá hạn/chưa đến hạn/đúng hạn gốc/trễ hạn gốc. |
+| To-do | 11 nhóm công việc; 4 mức độ; người phối hợp; quá hạn/chưa đến hạn/hoàn thành đúng hạn gốc/trễ/đến ngày theo dõi lại. |
+| Thiết lập → Mẫu công việc | Tên, trạng thái, người phụ trách, ngày áp dụng, tần suất, mẫu chung hoặc riêng chi nhánh. |
+| Thiết lập → Chính sách | Tên, trạng thái và ngày áp dụng. Không hiển thị tiêu chí không liên quan. |
+| Thiết lập → Phân công | Tên/tài khoản, vai trò, đang áp dụng hoặc ngừng áp dụng. |
+
+Danh sách tìm ngoài kỳ đánh giá vẫn xem được nhưng thao tác ghi kết quả/xác minh yêu cầu chọn đúng tháng của việc. Đây là bảo vệ kỳ đã chốt. Không dùng bộ lọc ngày thay cho chọn kỳ đánh giá khi ghi nghiệp vụ.
+
+### CEO nghiệm thu bộ lọc và quyền
+
+| Thử | Kết quả cần thấy | CEO ghi kết quả |
+|---|---|---|
+| Tìm To-do, chọn nhóm Bảo trì + mức Quan trọng và khẩn cấp + người phối hợp | Chỉ hiện việc đồng thời thỏa cả ba điều kiện. | __________ |
+| Lọc ngày tạo, chọn cùng một ngày từ/đến | Hiện đủ việc trong ngày Việt Nam, không lẫn ngày kế tiếp. | __________ |
+| Nhập ngày kết thúc trước ngày bắt đầu | Báo lỗi rõ, không tải dữ liệu bằng khoảng ngày sai. | __________ |
+| Đổi sang lọc Deadline rồi chọn tháng khác | Kết quả theo hạn, không theo ngày tạo; KPI của kỳ trên thanh đầu giữ nguyên. | __________ |
+| Mở Xác minh → Đã xác minh | Hiện công việc đã kiểm tra, không hiện nút xác minh lần nữa. | __________ |
+| Có trên 50 việc phù hợp → Xem thêm | Không lặp, không mất việc; bộ lọc vẫn giữ nguyên. | __________ |
+| Tài khoản có Xem Hub nhưng chưa phân công/phối hợp | Không hiện nút ERP → Hub; link trực tiếp báo không có quyền/phân công liên quan. | __________ |
+| Người bảo trì chỉ phối hợp một To-do | Chỉ xem việc được giao, không thấy KPI/cấu hình/công việc của toàn quán. | __________ |
+| Thu hồi phân công cuối cùng hoặc quyền Xem Hub | Lần tải tiếp theo bị chặn; không tự cấp quyền lại. | __________ |
+
+**Màu để nhận biết:** xanh dương là thao tác/bộ lọc; xanh lá là đạt/đã duyệt; vàng là cần xem/chờ; đỏ là lỗi/chưa đạt. Mọi màu đi kèm nhãn chữ, không chỉ dựa vào màu.

@@ -41,6 +41,7 @@ import {
 } from "./nav-config";
 import { useCommandPalette } from "./command-palette";
 import { AppSwitcher } from "./app-switcher";
+import { useHubAccess } from "@/lib/operations/use-hub-access";
 import { ImportDataDialog } from "./import-data-dialog";
 import { LogoIcon, LogoWordmark } from "@/components/brand/logo";
 import { cn } from "@/lib/utils";
@@ -496,7 +497,9 @@ function MobileGroupAccordion({
 
 function MobileNav() {
   const pathname = usePathname();
-  const { branches, currentBranch, switchBranch, hasPermission } = useAuth();
+  const { branches, currentBranch, switchBranch, hasPermission: baseHasPermission } = useAuth();
+  const hubAllowed = useHubAccess();
+  const hasPermission = (code: string) => code === "ops.view" ? hubAllowed : baseHasPermission(code);
   const [open, setOpen] = useState(false);
   // CEO 13/07: đồng bộ với BranchSelector — mở "Tất cả chi nhánh" theo quyền
   // RBAC `system.manage_branches` (Chủ cửa hàng + Admin), không chỉ vai trò cũ.

@@ -5,6 +5,17 @@
   font-size: 14px;
   letter-spacing: 0;
 }
+.filters { background: #fff; border: 1px solid #dce2eb; border-radius: 6px; padding: 12px; margin: 0 0 16px; }
+.filterHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.filterHeading strong { display: inline-flex; align-items: center; gap: 6px; color: #19499c; }
+.filterGrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr)); gap: 10px; }
+.filterGrid select, .filterGrid input { width: 100%; }
+@media (min-width: 1200px) { .filterGridDates { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.filterDetails { margin-top: 10px; }
+.filterDetails summary { cursor: pointer; color: #174bc4; padding: 8px 0; min-height: 38px; }
+.filterDetails[open] { border-top: 1px solid #e2e7ef; }
+.filterHint { font-size: 12px; color: #53627a; margin: 8px 0 0; }
+@media (max-width: 600px) { .filterGrid { grid-template-columns: 1fr 1fr; } .filterGrid .field { min-width: 0; } .filterGrid select { font-size: 13px; } }
 .root button,
 .root input,
 .root select,

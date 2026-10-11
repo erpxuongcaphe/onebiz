@@ -13,15 +13,20 @@ import {
   DropdownMenuContent,
 } from "@/components/ui/dropdown-menu";
 import { Icon } from "@/components/ui/icon";
+import { usePermissions } from "@/lib/permissions/use-permission";
+import { PERMISSIONS } from "@/lib/permissions/constants";
+import { useHubAccess } from "@/lib/operations/use-hub-access";
 
 interface AppTile {
   label: string;
   href: string;
   iconName: string;
+  permission?: string;
 }
 
 const APPS: AppTile[] = [
   { label: "Tổng quan", href: "/", iconName: "dashboard" },
+  { label: "Hub vận hành", href: "/hub", iconName: "task_alt", permission: PERMISSIONS.OPS_VIEW },
   { label: "Kho", href: "/hang-hoa/ton-kho", iconName: "warehouse" },
   { label: "Bán hàng", href: "/don-hang/hoa-don", iconName: "receipt_long" },
   { label: "Mua hàng", href: "/hang-hoa/dat-hang-nhap", iconName: "add_box" },
@@ -34,11 +39,15 @@ const APPS: AppTile[] = [
 ];
 
 export function AppSwitcher() {
+  const { hasPermission, isLoading } = usePermissions();
+  const hubAllowed = useHubAccess();
+  const visibleApps = APPS.filter(app => app.href === "/hub" ? hubAllowed : !app.permission || (!isLoading && hasPermission(app.permission)));
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
         className="hidden md:inline-flex items-center justify-center h-10 w-10 rounded-full text-muted-foreground hover:text-primary hover:bg-surface-container-low transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-primary/30 press-scale-sm"
         title="Ứng dụng"
+        aria-label="Ứng dụng"
       >
         <Icon name="apps" size={20} />
       </DropdownMenuTrigger>
@@ -48,7 +57,7 @@ export function AppSwitcher() {
         className="!w-[320px] p-4 rounded-lg"
       >
         <div className="grid grid-cols-3 gap-1">
-          {APPS.map((app) => (
+          {visibleApps.map((app) => (
             <Link
               key={app.label}
               href={app.href}
