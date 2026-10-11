@@ -105,7 +105,7 @@ export async function listFnbBranchOpeningCostRows(branchId: string, signal?: Ab
   const client = getClient() as any;
 
   let stockQuery = client.from("branch_stock")
-    .select("product_id, quantity, products:product_id!inner(code, name, unit, inventory_role)")
+    .select("product_id, quantity, products:products_scoped!inner(code, name, unit, inventory_role)")
     .eq("tenant_id", tenantId)
     .eq("branch_id", branchId)
     .is("variant_id", null)

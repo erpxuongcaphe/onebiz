@@ -46,9 +46,6 @@ const RPC = new Set(schema.rpc as string[]);
  * dưới sẽ BẮT XOÁ dòng ngay khi dump đã có (sau `node scripts/dump-db-schema.mjs`).
  */
 const RPC_CHO_MIGRATION = new Map<string, string>([
-  ["get_fnb_production_stock_health_00476", "00512_inventory_scope_and_cost_visibility.sql"],
-  ["ops_access_context", "00509_operations_filters_access.sql"],
-  ["ops_filtered_page", "00509_operations_filters_access.sql"],
   // 00390 đã chạy trên Production; snapshot không thể làm mới tại workspace này
   // vì không có service-role credential. Xóa các dòng này ngay lần dump schema kế tiếp.
 ]);
@@ -56,14 +53,6 @@ const COT_CHO_MIGRATION = new Map<string, string>([
   // (trống — 00331 đã chạy trên prod 17/08/2026)
 ]);
 const BANG_CHO_MIGRATION = new Map<string, string>([
-  ["products_scoped", "00512_inventory_scope_and_cost_visibility.sql"],
-  ["product_variants_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["bom_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["production_orders_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["production_order_materials_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["stock_movements_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["invoice_items_scoped", "00513_inventory_operational_read_projections.sql"],
-  ["inventory_check_items_scoped", "00513_inventory_operational_read_projections.sql"],
 ]);
 
 /** Bỏ ghi chú, giữ nguyên độ dài để số dòng không lệch. */

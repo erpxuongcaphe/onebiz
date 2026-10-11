@@ -17,7 +17,7 @@ export async function listSaleCostShortfalls(branchId: string): Promise<SaleCost
   const tenantId = await getCurrentTenantId();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (getClient() as any).from("fnb_sale_cost_shortfalls_00473")
-    .select("id,invoice_id,pending_quantity,quantity,estimated_unit_cost,cost_known,settled_actual_cost,products:product_id(code,name,unit)")
+    .select("id,invoice_id,pending_quantity,quantity,estimated_unit_cost,cost_known,settled_actual_cost,products:products_scoped(code,name,unit)")
     .eq("tenant_id", tenantId).eq("branch_id", branchId).gt("pending_quantity", 0)
     .order("created_at", { ascending: false }).limit(100);
   if (error) handleError(error, "listSaleCostShortfalls");

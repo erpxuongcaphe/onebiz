@@ -184,7 +184,7 @@ export async function getBranchStockPage(params: {
   // `alias!inner:fk` (đặt !inner ở giữa → PGRST100 "failed to parse select
   // parameter" → HTTP 400 → toast "Lỗi tải tồn kho").
   const productsRel =
-    "products:product_id!inner ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )";
+    "products:products_scoped!inner ( id, code, name, product_type, unit, cost_price, min_stock, max_stock )";
 
   let query = supabase
     .from("branch_stock")
@@ -298,7 +298,7 @@ export async function getBranchStockAggregates(params: {
   const rawRows: Array<Record<string, unknown>> = [];
   const inactiveFilter = await inactiveEmptyStockFilter(tenantId);
   const productsRel =
-    "products:product_id!inner ( product_type, code, name, cost_price, min_stock )";
+    "products:products_scoped!inner ( product_type, code, name, cost_price, min_stock )";
 
   for (let offset = 0; ; offset += pageSize) {
     let query = supabase
