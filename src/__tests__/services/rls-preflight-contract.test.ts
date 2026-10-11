@@ -28,6 +28,8 @@ describe("RLS preflight contracts", () => {
     );
 
     expect(normalizeSql(staticPreflight)).toBe(normalizeSql(generated));
+    expect(generated).not.toContain("('operations-evidence',");
+    expect(generated).not.toContain("('floor-plans',");
   }, 60_000);
 
   it("keeps both RLS preflights read-only", () => {
