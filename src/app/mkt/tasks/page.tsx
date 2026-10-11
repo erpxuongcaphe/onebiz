@@ -10,6 +10,7 @@ import {
 import { AcceptanceBadge, ContentStatusBadge, TaskStatusBadge } from "@/components/mkt/badges";
 import { TaskActions, ReviewTaskActions } from "@/components/mkt/task-actions";
 import { MktLink } from "@/components/mkt/mkt-routing";
+import {OperationsMktLinks} from "@/components/operations/mkt-links";
 
 export const dynamic = "force-dynamic";
 
@@ -80,6 +81,7 @@ function TaskCard({
       }
     >
       <div className="text-sm font-semibold leading-snug">{task.title}</div>
+      <OperationsMktLinks taskId={task.id}/>
       <div className="mt-1 text-xs text-on-surface-variant">
         {task.campaignName ?? "Không thuộc chiến dịch"}
         {reviewMode && task.assigneeName ? <> · Người làm: <b>{task.assigneeName}</b></> : null}
