@@ -32,7 +32,7 @@ describe("FnB payment submit lock", () => {
     expect(paymentTry?.finallyBlock).toBeDefined();
 
     const protectedCode = paymentTry!.tryBlock.getText(source);
-    expect(protectedCode).toContain("await handleSendToKitchen()");
+    expect(protectedCode).toContain("await handleSendToKitchen(true)");
     expect(protectedCode).toContain("await offlineFnbPayment(");
     expect(protectedCode).toContain("checkoutStarted = true");
     expect(paymentTry!.catchClause!.getText(source)).toContain("Chưa gửi được món xuống bếp");

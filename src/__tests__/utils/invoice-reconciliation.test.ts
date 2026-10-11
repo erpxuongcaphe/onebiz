@@ -225,7 +225,7 @@ describe("reconcileInvoiceTotal", () => {
 
   it("falls back to the product VAT rate for legacy invoice items", () => {
     expect(invoiceService).toContain(
-      "products!invoice_items_product_id_fkey(code, vat_rate)",
+      "products:products_scoped!invoice_items_product_id_fkey(code, vat_rate)",
     );
     expect(invoiceService).toContain("row.products?.vat_rate ?? 0");
   });

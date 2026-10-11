@@ -104,7 +104,7 @@ describe("report data integrity", () => {
 
   it("paginates product sales and builds movement dates from the selected range", () => {
     expect(analytics).toContain(".range(offset, offset + pageSize - 1)");
-    expect(analytics).toContain("products!invoice_items_product_id_fkey(code, categories(name))");
+    expect(analytics).toContain("products:products_scoped!invoice_items_product_id_fkey(code, categories(name))");
     expect(analytics).toContain("return aggregateProductSaleLines(rows.map(");
     expect(inventoryPage).toContain("getTopProductsByRevenue(0, activeBranchId, range)");
     expect(inventoryPage).toContain('viewMode === "chart"');
@@ -155,7 +155,7 @@ describe("report data integrity", () => {
     expect(promotionAnalytics).toContain("fetchAllPromotionRows");
     expect(abcAnalysis).toContain("fetchAllAbcRows");
     expect(xntReport).toContain('"get_xnt_report_v2"');
-    expect(xntReport).not.toContain('.from("stock_movements")');
+    expect(xntReport).not.toContain('.from("stock_movements_scoped")');
     expect(xntMigration).toContain("period_movements");
     expect(xntMigration).toContain("movements_after_period");
     expect(inventoryCheckReport).toContain("fetchAllInventoryCheckRows");

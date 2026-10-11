@@ -172,7 +172,7 @@ describe("Khoá nguồn topping — một cửa fnb-toppings.ts", () => {
     expect(nguon).toContain('eq("product_type", "sku")');
     expect(nguon).toContain('eq("channel", "fnb")');
     expect(nguon).toContain('eq("is_active", true)');
-    expect(nguon).toContain('from("bom")');
+    expect(nguon).toContain('from("bom_scoped")');
     expect(nguon).toContain("branch_id.eq.");
     expect(nguon).toContain("branch_id.is.null");
     expect(TIEN_TO_SKU_TOPPING).toBe("SKU-TPP");

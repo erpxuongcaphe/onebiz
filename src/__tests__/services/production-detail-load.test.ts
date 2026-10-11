@@ -4,7 +4,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: (table: string) => {
     const query = {
       select: () => query, eq: () => query, single: mocks.single,
-      then: (resolve: (v: unknown) => unknown) => Promise.resolve(table === "production_order_materials" ? mocks.materials : {}).then(resolve),
+      then: (resolve: (v: unknown) => unknown) => Promise.resolve(table === "production_order_materials_scoped" ? mocks.materials : {}).then(resolve),
     };
     return query;
   } }),

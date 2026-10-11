@@ -277,7 +277,7 @@ function buildBranchProfitAndLossRpc() {
 vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({
     from: vi.fn((table: string) => {
-      const data = tableDataMap[table] ?? { data: [], error: null };
+      const data = tableDataMap[table.replace(/_scoped$/, "")] ?? { data: [], error: null };
       return createChain(data);
     }),
     rpc: vi.fn((fn: string, params?: Record<string, unknown>) => {
