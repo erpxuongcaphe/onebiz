@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const state = vi.hoisted(() => ({ cost: 0, skuInput: false, selects: [] as string[] }));
+const state = vi.hoisted(() => ({ cost: 0, quantity: 4, skuInput: false, selects: [] as string[] }));
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant",
   handleError: (error: { message: string }) => { throw new Error(error.message); },
@@ -16,7 +16,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
         } else if (table === "bom_items" && state.skuInput) {
           result = { data: [{ material_id: "p" }], error: null };
         } else if (table === "branch_stock") {
-          result = { data: [{ product_id: "p", branch_id: "b", quantity: 4,
+          result = { data: [{ product_id: "p", branch_id: "b", quantity: state.quantity,
             branches: { name: "Quán" }, products: { code: "NVL", name: "Đường", unit: "G",
               product_type: state.skuInput ? "sku" : "nvl", cost_price: state.cost, min_stock: 5, max_stock: 100 } }], error: null };
         }
@@ -32,6 +32,15 @@ vi.mock("@/lib/services/supabase/base", () => ({
 import { getNvlStock, getProductionKpis } from "@/lib/services/supabase/production-dashboard";
 
 describe("production dashboard with scoped product costs", () => {
+  it("warns about negative and empty stock even without a minimum threshold", async () => {
+    state.quantity = -2;
+    const [rows, kpis] = await Promise.all([getNvlStock({ lowStockOnly: true }), getProductionKpis()]);
+    expect(rows[0]).toMatchObject({ quantity: -2, isOut: true, isLow: false });
+    expect(kpis.nvlLowStockCount).toBe(1);
+    state.quantity = 0;
+    expect((await getNvlStock())[0].isOut).toBe(true);
+    state.quantity = 4;
+  });
   it("keeps stock and low-stock indicators usable when cost is masked", async () => {
     state.cost = 0;
     state.skuInput = false;

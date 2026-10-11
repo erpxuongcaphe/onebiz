@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -181,7 +181,7 @@ function TrendTooltip({ active, payload, label }: any) {
 // ────────────────────────────────────────────
 
 export default function ProductionDashboardPage() {
-  const { activeBranchId } = useBranchFilter();
+  const { activeBranchId, isReady, branchLabel } = useBranchFilter();
   const labels = useProductionLabels();
   const [loading, setLoading] = useState(true);
   const [kpis, setKpis] = useState<ProductionKpis | null>(null);
@@ -190,7 +190,10 @@ export default function ProductionDashboardPage() {
   const [topProducts, setTopProducts] = useState<TopOutputProduct[]>([]);
   const [activeOrders, setActiveOrders] = useState<ActiveProductionOrder[]>([]);
 
-  const fetchData = useCallback(async () => {
+  useEffect(() => {
+    if (!isReady) return;
+    let cancelled = false;
+    const fetchData = async () => {
     try {
       setLoading(true);
       const [k, n, t, p, a] = await Promise.all([
@@ -200,6 +203,7 @@ export default function ProductionDashboardPage() {
         getTopOutputProducts(8, activeBranchId),
         getActiveProductionOrders(activeBranchId, 8),
       ]);
+      if (cancelled) return;
       setKpis(k);
       setNvl(n);
       setTrend(t);
@@ -208,13 +212,12 @@ export default function ProductionDashboardPage() {
     } catch (err) {
       console.error("Production dashboard error:", err);
     } finally {
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     }
-  }, [activeBranchId]);
-
-  useEffect(() => {
+    };
     fetchData();
-  }, [fetchData]);
+    return () => { cancelled = true; };
+  }, [activeBranchId, isReady]);
 
   if (loading) {
     return (
@@ -229,6 +232,7 @@ export default function ProductionDashboardPage() {
   return (
     <div className="space-y-4">
       <PageHeader title={`Dashboard ${labels.title}`} />
+      <p className="text-sm text-muted-foreground">Phạm vi: {branchLabel}</p>
 
       {/* KPI Row — Stitch: primary-fixed tint cho tile chính + semantic token cho status */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -435,7 +439,7 @@ export default function ProductionDashboardPage() {
                     {r.isOut ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-error/10 text-status-error">
                         <span className="size-1.5 rounded-full bg-status-error" />
-                        Hết hàng
+                        {r.quantity < 0 ? "Tồn âm" : "Hết hàng"}
                       </span>
                     ) : r.isLow ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full bg-status-warning/10 text-status-warning">
