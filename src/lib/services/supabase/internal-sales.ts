@@ -408,7 +408,7 @@ export async function createInternalSale(
   const itemProductIds = input.items.map((it) => it.productId);
   if (itemProductIds.length > 0) {
     const { data: prods } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, channel, product_type, has_bom")
       .eq("tenant_id", ctx.tenantId)
       .in("id", itemProductIds);

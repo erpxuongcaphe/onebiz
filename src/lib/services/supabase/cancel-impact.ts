@@ -144,7 +144,7 @@ async function countInvoiceItems(invoiceId: string, _tenantId: string): Promise<
   // invoice_items KHÔNG có cột tenant_id — đã scope qua invoice_id (thuộc tenant).
   const supabase = getClient();
   const { count } = await supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("id", { count: "exact", head: true })
     .eq("invoice_id", invoiceId);
   return count ?? 0;
@@ -329,7 +329,7 @@ async function fetchProductStocks(
   const supabase = getClient();
   for (let i = 0; i < ids.length; i += 200) {
     const { data } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, stock")
       .eq("tenant_id", tenantId)
       .in("id", ids.slice(i, i + 200));

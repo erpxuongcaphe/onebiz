@@ -142,7 +142,7 @@ export async function getAllUnits(): Promise<
   const tenantId = await getCurrentTenantId();
 
   const { data, error } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("unit, purchase_unit, stock_unit, sell_unit")
     .eq("tenant_id", tenantId)
     .eq("is_active", true);

@@ -435,15 +435,15 @@ export async function nextSimpleCode(prefix: string): Promise<string> {
  * tiếp cho table có cột `tenant_id`:
  *
  *   // Cách CŨ (KHÔNG dùng nữa)
- *   const { data } = await supabase.from("products").select("*")
+ *   const { data } = await supabase.from("products_scoped").select("*")
  *
  *   // Cách MỚI — luôn áp filter qua applyTenantFilter:
  *   const { data } = await applyTenantFilter(
- *     supabase.from("products").select("*", { count: "exact" })
+ *     supabase.from("products_scoped").select("*", { count: "exact" })
  *   );
  *
  * Hoặc cho query phức tạp với chain dài:
- *   let q = supabase.from("products").select("*").eq("is_active", true);
+ *   let q = supabase.from("products_scoped").select("*").eq("is_active", true);
  *   q = await applyTenantFilter(q);
  *   q = q.order("created_at", { ascending: false }).range(0, 19);
  *   const { data, error } = await q;

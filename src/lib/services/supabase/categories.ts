@@ -31,7 +31,7 @@ export async function getCategoriesByScope(
   let countByCategoryId: Map<string, number> | null = null;
   if (channel) {
     const { data: prodRows } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("category_id")
       .eq("tenant_id", tenantId)
       .eq("channel", channel)
@@ -235,7 +235,7 @@ export async function getProductsByCategoryId(
   // products của tenant khác.
   const tenantId = await getCurrentTenantId();
   let query = supabase
-    .from("products")
+    .from("products_scoped")
     .select("id, code, name, stock, unit")
     .eq("tenant_id", tenantId)
     .eq("category_id", categoryId)
@@ -333,7 +333,7 @@ export async function getCategoriesWithCounts(
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("categories")
-    .select("*, products(count)")
+    .select("*, products:products_scoped(count)")
     .eq("tenant_id", tenantId)
     .eq("scope", scope)
     .order("sort_order");
@@ -400,7 +400,7 @@ export async function getCategoriesWithChannelBreakdown(): Promise<
 
   // Load products with channel + category_id
   const { data: prods, error: prodsErr } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("category_id, channel")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)

@@ -105,7 +105,7 @@ export async function getProductsWithPlatformPrices(params?: {
 
   // Step 1: query products (filter + pagination)
   let prodQuery = supabase
-    .from("products")
+    .from("products_scoped")
     .select(
       "id, code, name, sell_price, category_id, categories!products_category_id_fkey(name)",
     )
@@ -128,7 +128,7 @@ export async function getProductsWithPlatformPrices(params?: {
   const [{ data: variants, error: variantErr }, { data: overrides, error: overErr }] =
     await Promise.all([
       supabase
-        .from("product_variants")
+        .from("product_variants_scoped")
         .select("id, product_id, name, sell_price, sort_order")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)

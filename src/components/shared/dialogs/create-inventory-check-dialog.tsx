@@ -138,7 +138,7 @@ export function CreateInventoryCheckDialog({
         // PostgREST chỉ nhận một biểu thức `or` cho mỗi truy vấn.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let q: any = (supabase as any)
-          .from("products")
+          .from("products_scoped")
           .select("id, code, name, unit, cost_price")
           .eq("tenant_id", ctx.tenantId)
           .eq("is_active", true);

@@ -116,7 +116,7 @@ export async function getStockDocumentDetail(
   ));
   const [productsResult, branchesResult, creatorResult] = await Promise.all([
     productIds.length
-      ? db.from("products").select("id, code, name, unit").eq("tenant_id", tenantId).in("id", productIds)
+      ? db.from("products_scoped").select("id, code, name, unit").eq("tenant_id", tenantId).in("id", productIds)
       : Promise.resolve({ data: [] }),
     branchIds.length
       ? db.from("branches").select("id, name").eq("tenant_id", tenantId).in("id", branchIds)

@@ -169,7 +169,7 @@ export function CompleteProductionOrderDialog({
           const supabase = getClient();
           const ctx = await getCurrentContext();
           const { data: product } = await supabase
-            .from("products")
+            .from("products_scoped")
             .select("code, name, unit, sell_price, vat_rate")
             .eq("tenant_id", ctx.tenantId)
             .eq("id", order.productId)

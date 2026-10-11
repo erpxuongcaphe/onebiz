@@ -18,7 +18,7 @@ export async function loadFnbMenuOrder(): Promise<FnbMenuOrder> {
   const client = getClient();
   const [categories, products] = await Promise.all([
     client.from("categories").select("id,name,sort_order").eq("tenant_id", tenantId).eq("scope", "sku").order("sort_order").order("name").order("id"),
-    client.from("products").select("id,name,category_id,sort_order").eq("tenant_id", tenantId).eq("channel", "fnb").eq("product_type", "sku").eq("is_active", true).eq("allow_sale", true).order("sort_order").order("name").order("id"),
+    client.from("products_scoped").select("id,name,category_id,sort_order").eq("tenant_id", tenantId).eq("channel", "fnb").eq("product_type", "sku").eq("is_active", true).eq("allow_sale", true).order("sort_order").order("name").order("id"),
   ]);
   if (categories.error) throw categories.error;
   if (products.error) throw products.error;

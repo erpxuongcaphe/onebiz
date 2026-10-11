@@ -95,7 +95,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   // All queries in parallel — tất cả tables (production_orders, product_lots,
   // branch_stock) đều có tenant_id, filter ngay đầu chain.
   let ordersQuery = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select("id, status, planned_qty, completed_qty", { count: "exact" })
     .eq("tenant_id", tenantId)
     .gte("created_at", monthStart)
@@ -103,7 +103,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
   if (branchId) ordersQuery = ordersQuery.eq("branch_id", branchId);
 
   let activeQuery = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select("id", { count: "exact" })
     .eq("tenant_id", tenantId)
     .in("status", ["in_production", "quality_check"]);
@@ -269,7 +269,7 @@ export async function getProductionTrend(
   const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   let query = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select("status, planned_qty, completed_qty, created_at")
     .eq("tenant_id", tenantId)
     .gte("created_at", start.toISOString())
@@ -320,7 +320,7 @@ export async function getTopOutputProducts(
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
 
   let query = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select("product_id, completed_qty, products:product_id(name, code)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
@@ -362,7 +362,7 @@ export async function getActiveProductionOrders(
   const tenantId = await getCurrentTenantId();
 
   let query = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select(
       `id, code, status, planned_qty, completed_qty,
        planned_start, planned_end, actual_start, created_at,

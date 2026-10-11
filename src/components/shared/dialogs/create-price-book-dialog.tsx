@@ -68,7 +68,7 @@ export function CreatePriceBookDialog({
       const supabase = getClient();
       const ctx = await getCurrentContext();
       const { data } = await supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, code, name, unit, sell_price, cost_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", ctx.tenantId)

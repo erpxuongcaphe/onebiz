@@ -24,7 +24,11 @@ const statements = names.map((name) => {
     definition.test(readFileSync(new URL(file, directory), "utf8")),
   );
   const upgraded = ["_post_fnb_branch_cost_in_00390", "_post_fnb_branch_cost_out_00390"].includes(name);
-  const expectedOverrides = upgraded ? ["00473_branch_negative_sale_policy.sql"] : [];
+  // This extractor bootstraps the legacy commercial fixture. The full 00474
+  // upgrade (new columns, real receipts, correction and reversal) is exercised
+  // separately by run-actual-receiving-local.mjs, after the legacy assertions.
+  const expectedOverrides = upgraded ? ["00473_branch_negative_sale_policy.sql"]
+    : name === 'create_internal_sale_atomic' ? ['00510_fnb_internal_actual_receiving.sql'] : [];
   if (JSON.stringify(overrides) !== JSON.stringify(expectedOverrides)) throw new Error(`Update test source for ${name}: ${overrides.join(", ")}`);
 
   const selectedSource = upgraded ? readFileSync(new URL("00473_branch_negative_sale_policy.sql", directory), "utf8") : source;

@@ -630,8 +630,8 @@ async function computeActualForKpi(
     const invIds = invoiceRows.map((r) => r.id);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: items, error: itemsErr } = await (supabase as any)
-      .from("invoice_items")
-      .select("quantity, products(cost_price)")
+      .from("invoice_items_scoped")
+      .select("quantity, products:products_scoped(cost_price)")
       .in("invoice_id", invIds);
     if (itemsErr) throw new Error(itemsErr.message);
 
@@ -666,7 +666,7 @@ async function computeActualForKpi(
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase as any)
         .from("branch_stock")
-        .select("quantity, products(cost_price, inventory_role)")
+        .select("quantity, products:products_scoped(cost_price, inventory_role)")
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId);
       if (error) throw new Error(error.message);
@@ -685,7 +685,7 @@ async function computeActualForKpi(
     // inventory_role (00164) chưa có trong generated types → cast any.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
-      .from("products")
+      .from("products_scoped")
       .select("stock, cost_price")
       .eq("tenant_id", tenantId)
       // A2 (07/07): bỏ món menu F&B (không giữ tồn thật) khỏi giá trị tồn

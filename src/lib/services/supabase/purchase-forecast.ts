@@ -187,7 +187,7 @@ async function fetchActiveBoms(
   const map = new Map<string, { id: string; yieldQty: number }>();
   for (let i = 0; i < productIds.length; i += 200) {
     const { data } = await supabase
-      .from("bom")
+      .from("bom_scoped")
       .select("id, product_id, yield_qty")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -314,7 +314,7 @@ export async function getPurchaseForecast(
   const orderLines: PurchaseForecastOrderLine[] = [];
   for (let i = 0; i < orderIds.length; i += 100) {
     const { data: items } = await supabase
-      .from("invoice_items")
+      .from("invoice_items_scoped")
       .select("invoice_id, product_id, quantity, total")
       .in("invoice_id", orderIds.slice(i, i + 100));
     for (const it of (items ?? []) as AnyRow[]) {
@@ -355,7 +355,7 @@ export async function getPurchaseForecast(
   const childSaleIds = childSales.map((sale) => sale.id);
   for (let i = 0; i < childSaleIds.length; i += 100) {
     const { data: items } = await supabase
-      .from("invoice_items")
+      .from("invoice_items_scoped")
       .select("invoice_id, product_id, quantity")
       .in("invoice_id", childSaleIds.slice(i, i + 100));
     for (const it of (items ?? []) as AnyRow[]) {
@@ -455,7 +455,7 @@ export async function getPurchaseForecast(
   const nvlInfo = new Map<string, { code: string; name: string; unit: string; cost: number }>();
   for (let i = 0; i < nvlIds.length; i += 200) {
     const { data } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, unit, cost_price")
       .eq("tenant_id", tenantId)
       .in("id", nvlIds.slice(i, i + 200));
@@ -510,7 +510,7 @@ export async function getPurchaseForecast(
   const skuInfo = new Map<string, { code: string; name: string; unit: string }>();
   for (let i = 0; i < skuProductIds.length; i += 200) {
     const { data } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, unit")
       .eq("tenant_id", tenantId)
       .in("id", skuProductIds.slice(i, i + 200));

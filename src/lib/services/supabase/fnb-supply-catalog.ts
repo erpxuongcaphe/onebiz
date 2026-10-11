@@ -27,7 +27,7 @@ export async function listFnbSupplyCatalog(branchId: string, page: number, signa
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = getClient() as any;
   let query = client.from("fnb_supply_catalog")
-    .select("product_id, branch_id, products!inner(code, name, unit, is_active)", { count: "exact" })
+    .select("product_id, branch_id, products:products_scoped!inner(code, name, unit, is_active)", { count: "exact" })
     .eq("tenant_id", tenantId).eq("branch_id", branchId)
     .order("created_at", { ascending: false }).order("product_id")
     .range(page * 30, page * 30 + 29);
@@ -84,7 +84,7 @@ export async function listFnbSupplyBomSuggestions(
     ((catalogRows ?? []) as Array<{ product_id: string }>).map((row) => row.product_id),
   );
 
-  let menuQuery = client.from("products")
+  let menuQuery = client.from("products_scoped")
     .select("id")
     .eq("tenant_id", tenantId)
     .eq("product_type", "sku")
@@ -106,7 +106,7 @@ export async function listFnbSupplyBomSuggestions(
   ).map((row) => row.id);
   if (!menuIds.length) return [];
 
-  let bomQuery = client.from("bom")
+  let bomQuery = client.from("bom_scoped")
     .select("id")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
@@ -135,7 +135,7 @@ export async function listFnbSupplyBomSuggestions(
   )].filter((id) => !assignedIds.has(id));
   if (!candidateIds.length) return [];
 
-  let productQuery = client.from("products")
+  let productQuery = client.from("products_scoped")
     .select("id, code, name, unit")
     .eq("tenant_id", tenantId)
     .eq("product_type", "sku")

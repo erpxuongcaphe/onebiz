@@ -1,5 +1,7 @@
 "use client";
 
+import { usePermissions } from "@/lib/permissions/use-permission";
+
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ModifierOrderPicker } from "@/components/shared/modifier-order-picker";
 import { modifierOrderMode, orderedModifierIds, type ModifierOrderMode } from "@/lib/modifier-display-order";
@@ -324,6 +326,8 @@ export function CreateProductDialog({
   onSuccess,
   initialData,
 }: CreateProductDialogProps) {
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
   const isEdit = !!initialData;
   const dialogProductKey = initialData?.id ?? "__new_product__";
   const { toast } = useToast();
@@ -1624,7 +1628,7 @@ export function CreateProductDialog({
         await updateVariant(v.id, {
           name: v.name.trim() || "Default",
           sellPrice: v.sellPrice,
-          costPrice: v.costPrice,
+          costPrice: canViewCost ? v.costPrice : undefined,
           bomCode: v.bomCode,
           isDefault: v.isDefault,
           sortOrder: i,
@@ -1635,7 +1639,7 @@ export function CreateProductDialog({
           productId,
           name: v.name.trim() || "Default",
           sellPrice: v.sellPrice,
-          costPrice: v.costPrice,
+          costPrice: canViewCost ? v.costPrice : undefined,
           bomCode: v.bomCode,
           isDefault: v.isDefault,
           sortOrder: i,
@@ -1843,7 +1847,7 @@ export function CreateProductDialog({
     const preparedProductIds = materialOptions
       .filter((material) => material.isFnbStockItem)
       .map((material) => material.id);
-    if (!open || !usesFnbRecipeCosts || !activeBranchId || preparedProductIds.length === 0) {
+    if (!canViewCost || !open || !usesFnbRecipeCosts || !activeBranchId || preparedProductIds.length === 0) {
       setFnbPreparedCostByProductId({});
       setFnbPreparedCostLoading(false);
       return;
@@ -2175,7 +2179,7 @@ export function CreateProductDialog({
       if (!material) return true;
       return (
         getDirectConversionFactor(
-          material.stockUnit || material.unit || "",
+          material.unit || material.stockUnit || "",
           row.unit,
           recipeConversionsByMaterial[row.materialId] ?? [],
         ) == null
@@ -2289,7 +2293,7 @@ export function CreateProductDialog({
         minStock: minStock ? Number(minStock) : undefined,
         maxStock: maxStock ? Number(maxStock) : undefined,
         sellPrice: scope === "sku" ? representativeSellPrice : 0,
-        costPrice: representativeCostPrice,
+        costPrice: canViewCost ? representativeCostPrice : undefined,
         description: description || undefined,
         image: image ?? undefined,
         allowSale: scope === "sku" ? (isFnbStockItem ? false : allowSale) : false,
@@ -2561,7 +2565,7 @@ export function CreateProductDialog({
             stockUnit: finalUnit,
             sellUnit: finalUnit,
             sellPrice: representativeSellPrice,
-            costPrice: representativeCostPrice,
+            costPrice: canViewCost ? representativeCostPrice : undefined,
             minStock: commonPayload.minStock,
             maxStock: commonPayload.maxStock,
             vatRate: commonPayload.vatRate,
@@ -3019,6 +3023,7 @@ export function CreateProductDialog({
                   if (v === "fnb_stock") {
                     setChannel("retail");
                     setIsFnbStockItem(true);
+                    if (!isEdit) setStockUnit("G");
                     setAllowSale(false);
                     setHasBom(true);
                     return;
@@ -3300,7 +3305,7 @@ export function CreateProductDialog({
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold">Quy cách</th>
                         <th className="w-40 px-3 py-2 text-right font-semibold">Giá bán (đ)</th>
-                        <th className="w-44 px-3 py-2 text-right font-semibold">Giá vốn theo công thức</th>
+                        {canViewCost && <th className="w-44 px-3 py-2 text-right font-semibold">Giá vốn theo công thức</th>}
                         <th className="px-3 py-2 text-left font-semibold">Mã BOM</th>
                         <th className="w-28 px-3 py-2 text-center font-semibold">POS mặc định</th>
                       </tr>
@@ -3326,9 +3331,9 @@ export function CreateProductDialog({
                               placeholder="0"
                             />
                           </td>
-                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {canViewCost && <td className="px-3 py-2 text-right font-semibold tabular-nums">
                             {renderPerSizeCost(variant)}
-                          </td>
+                          </td>}
                           <td className="px-3 py-2 font-mono text-xs">
                             {variant.bomCode || "Chưa tạo"}
                           </td>
@@ -3353,7 +3358,7 @@ export function CreateProductDialog({
                 ? "grid grid-cols-1 gap-4 sm:max-w-sm"
                 : "grid grid-cols-1 gap-4 sm:grid-cols-3"
             }>
-              {!hasFnbSizeVariants && !fnbVariantContextPending && (
+              {canViewCost && !hasFnbSizeVariants && !fnbVariantContextPending && (
                 usesFnbRecipeCosts && hasBom ? (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Dự toán theo công thức (₫)</label>
@@ -4613,9 +4618,9 @@ export function CreateProductDialog({
                       <tr>
                         <th className="text-left px-3 py-2 font-semibold w-28">Tên</th>
                         <th className="text-right px-3 py-2 font-semibold w-32">Giá bán (đ)</th>
-                        <th className="text-right px-3 py-2 font-semibold w-32">
+                        {canViewCost && <th className="text-right px-3 py-2 font-semibold w-32">
                           {channel === "fnb" ? "Giá vốn tự tính" : "Giá vốn (đ)"}
-                        </th>
+                        </th>}
                         <th className="text-center px-3 py-2 font-semibold w-24">POS mặc định</th>
                         <th className="w-10"></th>
                       </tr>
@@ -4643,7 +4648,7 @@ export function CreateProductDialog({
                               )}
                             </div>
                           </td>
-                          {channel !== "fnb" ? (
+                          {canViewCost && (channel !== "fnb" ? (
                             <td className="px-3 py-2">
                               <Input
                                 inputMode="numeric"
@@ -4665,7 +4670,7 @@ export function CreateProductDialog({
                             <td className="px-3 py-2 text-right font-medium tabular-nums">
                               {renderPerSizeCost(v)}
                             </td>
-                          )}
+                          ))}
                           <td className="px-3 py-2 text-center">
                             <input
                               type="radio"
@@ -5008,8 +5013,8 @@ export function CreateProductDialog({
                                           ? "SKU"
                                           : "NVL"}
                                       {p.categoryName && ` · ${p.categoryName}`}
-                                      {(p.stockUnit || p.unit) &&
-                                        ` · ĐVT ${p.stockUnit || p.unit}`}
+                                      {(p.unit || p.stockUnit) &&
+                                        ` · ĐVT ${p.unit || p.stockUnit}`}
                                     </span>
                                     {channel === "fnb" &&
                                       (supplyStatusByProductId[p.id]?.requiredBranches ?? 0) > 0 && (
@@ -5094,8 +5099,8 @@ export function CreateProductDialog({
                       costPrice: m.isFnbStockItem
                         ? fnbPreparedCostByProductId[m.id]?.unitCost ?? 0
                         : getBomComponentUnitPrice(m, usesFnbRecipeCosts ? "fnb" : channel),
-                      unit: m.stockUnit || m.unit || "",
-                      stockUnit: m.stockUnit || m.unit || "",
+                      unit: m.unit || m.stockUnit || "",
+                      stockUnit: m.unit || m.stockUnit || "",
                       conversions: await getUOMConversions(m.id).catch(() => []),
                       quantity: 1,
                       wastePercent: 0,

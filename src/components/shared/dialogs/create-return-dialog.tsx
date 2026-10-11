@@ -168,7 +168,7 @@ export function CreateReturnDialog({
     // BATCH 3R: select thêm returned_qty (cột mới 00144) để clamp chống trả vượt.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data } = await (supabase as any)
-      .from("invoice_items")
+      .from("invoice_items_scoped")
       .select("id, product_id, product_name, unit, quantity, unit_price, total, returned_qty")
       .eq("invoice_id", invoiceId);
 

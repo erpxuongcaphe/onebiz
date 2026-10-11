@@ -220,7 +220,7 @@ export async function getToppingPhanHopLe(
   const supabase = getClient();
 
   const { data: prodsRaw, error: prodErr } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("id, name, sell_price, bom_code")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
@@ -248,7 +248,7 @@ export async function getToppingPhanHopLe(
   // Chỉ kéo bom CÓ THỂ áp dụng: đúng chi nhánh này hoặc global. Hai .or trên
   // cùng builder AND với nhau: (match SP) AND (match chi nhánh).
   let q = supabase
-    .from("bom")
+    .from("bom_scoped")
     .select("product_id, code, branch_id")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)

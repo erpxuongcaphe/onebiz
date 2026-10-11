@@ -382,7 +382,7 @@ export async function getPurchaseOrderItems(
   const { data, error } = await (supabase as any)
     .from("purchase_order_items")
     .select(
-      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, lot_number, products(code)",
+      "id, product_id, product_name, quantity, received_quantity, unit_price, discount, vat_rate, unit, transaction_quantity, transaction_unit, transaction_unit_price, conversion_factor, expiry_date, lot_number, products:products_scoped(code)",
     )
     .eq("purchase_order_id", orderId)
     .order("id", { ascending: true });

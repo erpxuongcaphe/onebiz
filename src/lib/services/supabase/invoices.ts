@@ -453,7 +453,7 @@ export async function getFnbInvoiceForReprint(invoiceId: string): Promise<{
     .maybeSingle();
 
   const { data: items, error: itemsErr } = await supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("*")
     // invoice_items KHÔNG có created_at → .order("created_at") lỗi 42703.
     // Dòng trả về theo thứ tự ghi, đúng thứ tự trên bill gốc.
@@ -623,13 +623,13 @@ export async function getInvoiceItems(
     .maybeSingle();
   if (!inv) return [];
 
-  // Schema invoice_items không có cột product_code — phải join `products(code)`.
+  // Schema invoice_items không có cột product_code — phải join `products:products_scoped(code)`.
   // Schema cũng dùng `discount` (không phải `discount_amount`) cho line item.
   // Field `unit` có sẵn trên invoice_items (snapshot lúc tạo HD).
   // 00208: select("*") + join để lấy cả note mà không vỡ trước khi migrate.
   const { data, error } = await supabase
-    .from("invoice_items")
-    .select("*, products!invoice_items_product_id_fkey(code, vat_rate)")
+    .from("invoice_items_scoped")
+    .select("*, products:products_scoped!invoice_items_product_id_fkey(code, vat_rate)")
     .eq("invoice_id", invoiceId);
 
   if (error) {

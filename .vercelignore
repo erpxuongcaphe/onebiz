@@ -1,0 +1,4 @@
+.tmp/
+outputs/
+node_modules/
+.env*

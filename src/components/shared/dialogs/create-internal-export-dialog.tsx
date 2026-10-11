@@ -90,7 +90,7 @@ export function CreateInternalExportDialog({
       const supabase = getClient();
       const ctx = await getCurrentContext();
       const { data } = await supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, code, name, unit, stock, cost_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)

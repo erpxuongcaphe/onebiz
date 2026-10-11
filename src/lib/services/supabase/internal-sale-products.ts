@@ -27,7 +27,7 @@ export async function searchInternalSaleProducts(
   const ctx = await getCurrentContext();
   if (signal?.aborted) return [];
   let query = getClient()
-    .from("products")
+    .from("products_scoped")
     .select("id, code, name, unit, sell_price, vat_rate")
     .eq("tenant_id", ctx.tenantId)
     .eq("is_active", true)

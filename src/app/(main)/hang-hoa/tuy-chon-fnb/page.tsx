@@ -837,7 +837,7 @@ function OptionDialog({
         const supabase = getClient();
         const tenantId = await getCurrentTenantId();
         const { data } = await supabase
-          .from("products")
+          .from("products_scoped")
           .select("id")
           .eq("tenant_id", tenantId)
           .eq("code", linkedCode.trim())

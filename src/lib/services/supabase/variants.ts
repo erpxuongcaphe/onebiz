@@ -51,7 +51,7 @@ export interface AtomicFnbProductInput {
   stockUnit?: string;
   sellUnit?: string;
   sellPrice: number;
-  costPrice: number;
+  costPrice?: number;
   minStock?: number;
   maxStock?: number;
   vatRate?: number;
@@ -77,7 +77,7 @@ export interface AtomicFnbProductResult {
 
 async function requireTenantProduct(productId: string, tenantId: string): Promise<void> {
   const { data, error } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("id")
     .eq("id", productId)
     .eq("tenant_id", tenantId)
@@ -92,7 +92,7 @@ export async function getVariantsByProduct(
 ): Promise<ProductVariant[]> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
-    .from("product_variants")
+    .from("product_variants_scoped")
     .select("*")
     .eq("tenant_id", tenantId)
     .eq("product_id", productId)
@@ -122,7 +122,7 @@ export async function getVariantsByProductIds(
   const unique = Array.from(new Set(productIds)).slice(0, 500);
 
   const { data, error } = await supabase
-    .from("product_variants")
+    .from("product_variants_scoped")
     .select("*")
     .eq("tenant_id", tenantId)
     .in("product_id", unique)
@@ -149,7 +149,7 @@ export async function createVariant(variant: {
   unitCount?: number;
   barcode?: string;
   sellPrice: number;
-  costPrice: number;
+  costPrice?: number;
   weight?: number;
   isDefault?: boolean;
   sortOrder?: number;
@@ -169,17 +169,19 @@ export async function createVariant(variant: {
     unit_count: variant.unitCount ?? 1,
     barcode: variant.barcode ?? null,
     sell_price: variant.sellPrice,
-    cost_price: variant.costPrice,
+    cost_price: variant.costPrice ?? 0,
     weight: variant.weight ?? null,
     is_default: variant.isDefault ?? false,
     sort_order: variant.sortOrder ?? 0,
     bom_code: variant.bomCode ?? null,
   })
-    .select()
+    .select("id")
     .single();
 
   if (error) throw error;
-  return mapVariant(data);
+  const { data: saved, error: readError } = await supabase.from("product_variants_scoped").select("*").eq("id", data.id).single();
+  if (readError) throw readError;
+  return mapVariant(saved);
 }
 
 export async function updateVariant(

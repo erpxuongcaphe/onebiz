@@ -7,11 +7,12 @@ import { getKitchenOrderById } from '@/lib/services/supabase/kitchen-orders';
 import { requestFnbCancellation, executeFnbCancellation, type CancelRequest } from '@/lib/services/supabase/fnb-cancel-requests';
 import { OTP_ACTION_CODES } from '@/lib/services/supabase/manager-otp';
 import { OtpApprovalDialog } from '@/components/shared/dialogs/otp-approval-dialog';
-import type { KitchenOrderItem } from '@/lib/types/fnb';
+import { findCancellationItem } from '@/lib/fnb-cancellation-line';
+import type { FnbOrderLine, KitchenOrderItem } from '@/lib/types/fnb';
 
-export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, wholeBill, canCancel, shiftId, onCompleted }: {
+export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, initialItemId, initialLine, wholeBill, canCancel, shiftId, onCompleted }: {
   open: boolean; onOpenChange: (open: boolean) => void; orderId?: string; label: string;
-  wholeBill: boolean; canCancel: boolean; shiftId?: string; onCompleted: (whole: boolean, orderId: string) => Promise<void>;
+  initialItemId?: string; initialLine?: FnbOrderLine; wholeBill: boolean; canCancel: boolean; shiftId?: string; onCompleted: (whole: boolean, orderId: string) => Promise<void>;
 }) {
   const [items, setItems] = useState<KitchenOrderItem[]>([]);
   const [quantities, setQuantities] = useState<Record<string, number>>({});
@@ -29,11 +30,14 @@ export function CancelSentItemsDialog({ open, onOpenChange, orderId, label, whol
     getKitchenOrderById(orderId).then(order => {
       if (!alive) return;
       if (!order || order.invoiceId || order.status === 'cancelled') throw new Error('Bill đã đóng. Hãy tải lại danh sách đơn.');
-      setItems((order.items ?? []).filter(i => i.quantity > 0));
+      const available = (order.items ?? []).filter(i => i.quantity > 0);
+      setItems(available);
+      const selectedId = initialItemId ? available.find(i => i.id === initialItemId)?.id : findCancellationItem(initialLine, available);
+      if (selectedId) setQuantities({ [selectedId]: 1 });
     }).catch(e => { if (alive) setError(e instanceof Error ? e.message : 'Không tải được món.'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, [open, orderId, loadRevision]);
+  }, [open, orderId, initialItemId, initialLine, loadRevision]);
   const selected = items.filter(i => (quantities[i.id] ?? 0) > 0).map(i => ({ id: i.id, quantity: quantities[i.id] }));
   const valid = !loading && items.length > 0 && reason.trim().length >= 3
     && (wholeBill || (selected.length > 0 && selected.every(i => Number.isInteger(i.quantity) && i.quantity <= (items.find(x => x.id === i.id)?.quantity ?? 0))));

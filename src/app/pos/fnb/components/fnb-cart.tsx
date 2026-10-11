@@ -110,6 +110,7 @@ interface FnbCartProps {
   /** Huỷ đơn bếp — chỉ hiển thị khi activeTab.kitchenOrderId tồn tại (đã gửi bếp). */
   onVoidKitchenOrder?: () => void;
   onCancelSentItems?: () => void;
+  onCancelSentLine?: (line: FnbOrderLine) => void;
   voidKitchenOrderLabel?: string;
   /** Chuyển bàn — chỉ hiển thị khi dine_in + kitchenOrderId tồn tại. */
   onTransferTable?: () => void;
@@ -191,6 +192,7 @@ export function FnbCart({
   onEditLine,
   onVoidKitchenOrder,
   onCancelSentItems,
+  onCancelSentLine,
   voidKitchenOrderLabel = "Hủy đơn chưa thanh toán",
   onTransferTable,
   onMergeTable,
@@ -662,7 +664,7 @@ export function FnbCart({
                 line={line}
                 sentToKitchen={isSent}
                 onUpdateQty={isSent ? undefined : (qty) => updateLineQty(line.id, qty)}
-                onRemove={isSent ? undefined : () => removeLine(line.id)}
+                onRemove={isSent ? (onCancelSentLine ? () => onCancelSentLine(line) : undefined) : () => removeLine(line.id)}
                 onEdit={isSent || !onEditLine ? undefined : () => onEditLine(line)}
               />
               );
@@ -1164,6 +1166,7 @@ function CartLineItem({
           <button type="button" onClick={() => setExpanded(value => !value)} aria-expanded={expanded} aria-controls={detailId} aria-label={"Số lượng: " + formatNumber(line.quantity) + " — " + line.productName} title="Đổi số lượng" className="min-h-11 min-w-11 rounded-md px-1 text-center text-sm font-semibold tabular-nums whitespace-nowrap text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary">×{formatNumber(line.quantity)}</button>
         )}
         <span className="shrink-0 text-right text-sm font-bold text-primary tabular-nums whitespace-nowrap" title={"Đơn giá " + formatCurrency(line.unitPrice) + "đ × " + formatNumber(line.quantity)}>{formatCurrency(line.lineTotal)}</span>
+        {onRemove && <button type="button" onClick={onRemove} aria-label={(sentToKitchen ? "Hủy món: " : "Xóa món: ") + line.productName} title={sentToKitchen ? "Hủy món đã gửi bếp" : "Xóa món"} className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-status-error/10 hover:text-status-error focus-visible:ring-2 focus-visible:ring-primary"><Icon name="delete" size={18} /></button>}
         <button type="button" aria-label={"Thao tác món: " + line.productName} aria-expanded={expanded} aria-controls={detailId} onClick={() => setExpanded(value => !value)} className="flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary"><Icon name={expanded ? "expand_less" : "more_horiz"} size={20} /></button>
       </div>
       {(line.variantLabel || modifierDetails.length > 0) && (
@@ -1186,7 +1189,7 @@ function CartLineItem({
           </div>
           <div className="flex items-center gap-1">
             {onEdit && <button type="button" onClick={onEdit} className="flex size-11 items-center justify-center rounded-md text-primary hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary" title="Sửa tuỳ chọn" aria-label="Sửa tuỳ chọn"><Icon name="tune" size={18} /></button>}
-            <button type="button" onClick={onRemove} className="flex size-11 items-center justify-center rounded-md text-muted-foreground hover:text-status-error hover:bg-status-error/10 focus-visible:ring-2 focus-visible:ring-primary" title="Xoá" aria-label="Xoá món"><Icon name="delete" size={18} /></button>
+
           </div>
         </div>}
       </div>}

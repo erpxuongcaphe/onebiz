@@ -580,11 +580,11 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
   const stockQuery = branchId
     ? (supabase as any)
         .from("branch_stock")
-        .select("product_id, quantity, products(id, name, code, min_stock, max_stock, unit, is_active)")
+        .select("product_id, quantity, products:products_scoped(id, name, code, min_stock, max_stock, unit, is_active)")
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
     : supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, name, stock, min_stock, max_stock, unit")
         .eq("tenant_id", tenantId)
         .filter("is_active", "eq", true);
@@ -594,7 +594,7 @@ export async function getFinancialAlerts(branchId?: string): Promise<FinancialAl
   // sắp hết hạn không hoạt động được.
   let lotQuery = (supabase as any)
     .from("product_lots")
-    .select("id, lot_number, product_id, expiry_date, current_qty, products(name)")
+    .select("id, lot_number, product_id, expiry_date, current_qty, products:products_scoped(name)")
     .eq("tenant_id", tenantId)
     .gt("current_qty", 0)
     // CEO 16/08/2026: chỉ tính lô còn TỒN VẬT LÝ. Lô 'cancelled' (phiếu nhập
@@ -1034,7 +1034,7 @@ export async function getStockAlerts(): Promise<StockAlert[]> {
 
   const data = await fetchAllReportRows(
     () => supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, stock, min_stock, max_stock, unit")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)

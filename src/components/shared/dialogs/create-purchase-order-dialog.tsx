@@ -288,7 +288,7 @@ export function CreatePurchaseOrderDialog({
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data } = await (supabase as any)
           .from("purchase_order_items")
-          .select("*, products(code)")
+          .select("*, products:products_scoped(code)")
           .eq("purchase_order_id", editingPO.id);
 
         if (!data) return;
@@ -445,7 +445,7 @@ export function CreatePurchaseOrderDialog({
       // ⚠️ Cũ dùng `has_bom is not true` → LEAK 147 SKU chưa gắn BOM (retail + fnb)
       // vào picker. Nay lọc thẳng `product_type='nvl'` — đúng ý CEO: nhập = chỉ NVL.
       const { data } = await supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, code, name, unit, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)

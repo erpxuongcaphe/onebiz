@@ -227,7 +227,7 @@ export async function getPurchaseOrdersForExport(params: {
   const { data: items, error: iErr } = await supabase
     .from("purchase_order_items")
     .select(
-      "purchase_order_id, quantity, unit_price, transaction_quantity, transaction_unit, transaction_unit_price, discount, vat_rate, product:products(code)"
+      "purchase_order_id, quantity, unit_price, transaction_quantity, transaction_unit, transaction_unit_price, discount, vat_rate, product:products_scoped(code)"
     )
     .in("purchase_order_id", poIds);
   if (iErr) handleError(iErr, "getPurchaseOrdersForExport.items");
@@ -436,7 +436,7 @@ export async function getInputInvoiceItems(invoiceId: string): Promise<PrintItem
 
   const { data, error } = await sb
     .from("purchase_order_items")
-    .select("product_name, quantity, unit_price, unit, transaction_quantity, transaction_unit, transaction_unit_price, products(code)")
+    .select("product_name, quantity, unit_price, unit, transaction_quantity, transaction_unit, transaction_unit_price, products:products_scoped(code)")
     .eq("purchase_order_id", poId)
     .order("id", { ascending: true });
   if (error) handleError(error, "getInputInvoiceItems:items");
