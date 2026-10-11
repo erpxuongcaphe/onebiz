@@ -200,7 +200,7 @@ export async function getReturnItems(returnId: string): Promise<ReturnItemRow[]>
   const { data, error } = await supabase
     .from("return_items")
     .select(
-      "id, product_id, product_name, unit, quantity, unit_price, total, products!return_items_product_id_fkey(code)",
+      "id, product_id, product_name, unit, quantity, unit_price, total, products:products_scoped!return_items_product_id_fkey(code)",
     )
     .eq("return_id", returnId);
 

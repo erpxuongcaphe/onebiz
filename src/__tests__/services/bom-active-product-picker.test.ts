@@ -23,7 +23,7 @@ describe("active product filter for new production orders", () => {
     const builder = query();
     mocks.from.mockReturnValue(builder);
     await getAllBOMs({ activeProductsOnly: true });
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("products!bom_product_id_fkey!inner("));
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("products:products_scoped!bom_product_id_fkey!inner("));
     expect(builder.eq).toHaveBeenCalledWith("products.is_active", true);
     expect(builder.eq).toHaveBeenCalledWith("tenant_id", "tenant");
     expect(builder.eq).toHaveBeenCalledWith("is_active", true);
@@ -33,18 +33,18 @@ describe("active product filter for new production orders", () => {
     const builder = query();
     mocks.from.mockReturnValue(builder);
     await getAllBOMs();
-    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("products!bom_product_id_fkey("));
+    expect(builder.select).toHaveBeenCalledWith(expect.stringContaining("products:products_scoped!bom_product_id_fkey("));
     expect(builder.eq).not.toHaveBeenCalledWith("products.is_active", true);
   });
 
   it("keeps the branch-history filter compatible with the opt-in product filter", async () => {
     const builder = query();
-    const orders = query([{ bom_id: "bom" }]);
-    mocks.from.mockImplementation((table: string) => table === "production_orders" ? orders : builder);
+    const orders = query([{ bom_id: "bom_scoped" }]);
+    mocks.from.mockImplementation((table: string) => table === "production_orders_scoped" ? orders : builder);
     await getAllBOMs({ activeProductsOnly: true, usedAtBranchId: "xtb" });
     expect(orders.eq).toHaveBeenCalledWith("tenant_id", "tenant");
     expect(orders.eq).toHaveBeenCalledWith("branch_id", "xtb");
-    expect(builder.in).toHaveBeenCalledWith("id", ["bom"]);
+    expect(builder.in).toHaveBeenCalledWith("id", ["bom_scoped"]);
     expect(builder.eq).toHaveBeenCalledWith("products.is_active", true);
   });
 

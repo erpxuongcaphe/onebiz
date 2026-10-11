@@ -45,6 +45,7 @@ export const PERMISSIONS = {
 
   // Inventory / Warehouse
   INVENTORY_VIEW: "inventory.view",
+  INVENTORY_VIEW_ASSIGNED_TOTALS: "inventory.view_assigned_totals",
   INVENTORY_ADJUST: "inventory.adjust",
   INVENTORY_CREATE_PO: "inventory.create_po",
   INVENTORY_DISPOSE: "inventory.dispose",
@@ -229,6 +230,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     group: "Kho hàng",
     permissions: [
       { code: PERMISSIONS.INVENTORY_VIEW, label: "Xem tồn kho" },
+      { code: PERMISSIONS.INVENTORY_VIEW_ASSIGNED_TOTALS, label: "Xem tổng tồn các chi nhánh được giao" },
       { code: PERMISSIONS.INVENTORY_ADJUST, label: "Điều chỉnh kho" },
       { code: PERMISSIONS.INVENTORY_CREATE_PO, label: "Tạo phiếu nhập" },
       { code: PERMISSIONS.INVENTORY_DISPOSE, label: "Xuất hủy" },
@@ -425,8 +427,8 @@ export const DEFAULT_ROLE_TEMPLATES: RoleTemplate[] = [
       PERMISSIONS.FINANCE_VIEW_CASH_BOOK,
       PERMISSIONS.FINANCE_CREATE_TRANSACTION,
       PERMISSIONS.FINANCE_VIEW_REPORTS,
-      // Products full (cả view_cost + view_profit)
-      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("products.")),
+      // Cost and profit require an explicit grant for managers.
+      ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("products.") && c !== PERMISSIONS.PRODUCTS_VIEW_COST && c !== PERMISSIONS.PRODUCTS_VIEW_PROFIT),
       // Customers full
       ...ALL_PERMISSION_CODES.filter((c) => c.startsWith("customers.")),
       // Suppliers full

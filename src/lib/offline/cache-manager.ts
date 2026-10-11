@@ -87,7 +87,7 @@ export async function prefetchMenuData(
 
   // Fetch products — chỉ FnB menu (channel='fnb')
   const { data: prods } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("id, name, code, sell_price, image_url, stock, category_id, allow_free_sale, sort_order, inventory_role")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)

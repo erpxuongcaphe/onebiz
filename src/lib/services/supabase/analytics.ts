@@ -497,8 +497,8 @@ export async function getRevenueByCategory(
   const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
-    .from("invoice_items")
-    .select("total, products!inner(category_id, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
+    .from("invoice_items_scoped")
+    .select("total, products:products_scoped!inner(category_id, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
     .gte("invoices.ngay_chung_tu", r.start)
     .lt("invoices.ngay_chung_tu", r.end)
@@ -560,11 +560,11 @@ export async function getSalesKpis(
       "[getSalesKpis.previousInvoices]",
     ),
     fetchAllPostgrestRows(
-      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", current.start).lt("invoices.ngay_chung_tu", current.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      () => bqJoin(supabase.from("invoice_items_scoped").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", current.start).lt("invoices.ngay_chung_tu", current.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
       "[getSalesKpis.currentItems]",
     ),
     fetchAllPostgrestRows(
-      () => bqJoin(supabase.from("invoice_items").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", prev.start).lt("invoices.ngay_chung_tu", prev.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
+      () => bqJoin(supabase.from("invoice_items_scoped").select("quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)").eq("invoices.tenant_id", tenantId).gte("invoices.ngay_chung_tu", prev.start).lt("invoices.ngay_chung_tu", prev.end).eq("invoices.status", "completed")).order("id", { ascending: true }),
       "[getSalesKpis.previousItems]",
     ),
     fetchAllPostgrestRows(
@@ -1075,7 +1075,7 @@ export async function getTodayTopProducts(
   const r = toCreatedAtRangeWindow(range) ?? todayRange();
 
   let query = supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("product_name, quantity, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
     .gte("invoices.ngay_chung_tu", r.start)
@@ -1341,7 +1341,7 @@ export async function getOrderProductBreakdown(
   for (let i = 0; i < ids.length; i += 200) {
     const chunk = await fetchAllPostgrestRows(
       () => supabase
-        .from("invoice_items")
+        .from("invoice_items_scoped")
         .select("invoice_id, product_id, product_name, unit, quantity, total")
         .in("invoice_id", ids.slice(i, i + 200))
         .order("id", { ascending: true }),
@@ -1357,7 +1357,7 @@ export async function getOrderProductBreakdown(
   const codeMap = new Map<string, string>();
   for (let i = 0; i < productIds.length; i += 200) {
     const { data: prods } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code")
       .in("id", productIds.slice(i, i + 200));
     for (const p of prods ?? []) codeMap.set(p.id as string, (p.code as string) ?? "");
@@ -1433,8 +1433,8 @@ export async function getTopProductsByRevenue(
 
   while (true) {
     let query = supabase
-      .from("invoice_items")
-      .select("id, invoice_id, product_id, product_name, unit, quantity, total, discount, products!invoice_items_product_id_fkey(code, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id, discount_amount)")
+      .from("invoice_items_scoped")
+      .select("id, invoice_id, product_id, product_name, unit, quantity, total, discount, products:products_scoped!invoice_items_product_id_fkey(code, categories(name)), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id, discount_amount)")
       .eq("invoices.tenant_id", tenantId)
       .gte("invoices.ngay_chung_tu", resolved.start)
       .lt("invoices.ngay_chung_tu", resolved.end)
@@ -1502,7 +1502,7 @@ export async function getCategoryDistribution(
   } else {
     const data = await fetchAllPostgrestRows(
       () => supabase
-        .from("products")
+        .from("products_scoped")
         .select("category_id, categories(name)")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
@@ -1531,8 +1531,8 @@ export async function getStockMovements(
   const range = resolveRange(customRange, lastNDaysRange(days));
 
   let query = supabase
-    .from("stock_movements")
-    .select("id, created_at, product_id, type, quantity, products(name, code, unit)")
+    .from("stock_movements_scoped")
+    .select("id, created_at, product_id, type, quantity, products:products_scoped(name, code, unit)")
     .eq("tenant_id", tenantId)
     .gte("created_at", range.start)
     .lt("created_at", range.end);
@@ -2180,9 +2180,9 @@ export async function getRevenueByCustomerAndCategory(
   const data = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
       let query = supabase
-        .from("invoice_items")
+        .from("invoice_items_scoped")
         .select(
-          "quantity, total, product_id, products!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
+          "quantity, total, product_id, products:products_scoped!inner(category_id, categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
         )
         .eq("invoices.tenant_id", tenantId)
         .gte("invoices.ngay_chung_tu", r.start)
@@ -2275,9 +2275,9 @@ export async function getRevenueByCustomerAndProduct(
   const data = await fetchAllPostgrestRows<Record<string, unknown>>(
     () => {
       let query = supabase
-        .from("invoice_items")
+        .from("invoice_items_scoped")
         .select(
-          "product_id, product_name, quantity, total, products(categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
+          "product_id, product_name, quantity, total, products:products_scoped(categories(name)), invoices!inner(customer_id, customer_name, customers(name), ngay_chung_tu, status, branch_id, tenant_id)",
         )
         .eq("invoices.tenant_id", tenantId)
         .gte("invoices.ngay_chung_tu", r.start)
@@ -3036,9 +3036,9 @@ export async function getCrossChannelKpis(
 
   async function fetchRange(r: { start: string; end: string }) {
     let query = supabase
-      .from("invoice_items")
+      .from("invoice_items_scoped")
       .select(
-        "total, invoice_id, products!inner(channel), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
+        "total, invoice_id, products:products_scoped!inner(channel), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
       )
       .eq("invoices.tenant_id", tenantId)
       .gte("invoices.ngay_chung_tu", r.start)
@@ -3098,9 +3098,9 @@ export async function getCrossChannelTrend(
   const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select(
-      "total, products!inner(channel), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
+      "total, products:products_scoped!inner(channel), invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
     )
     .eq("invoices.tenant_id", tenantId)
     .gte("invoices.ngay_chung_tu", r.start)
@@ -3145,9 +3145,9 @@ export async function getCrossChannelTopProducts(
   const r = resolveRange(range, thisMonthRange());
 
   let query = supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select(
-      "product_id, product_name, quantity, total, products!inner(channel, name), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
+      "product_id, product_name, quantity, total, products:products_scoped!inner(channel, name), invoices!inner(status, ngay_chung_tu, branch_id, tenant_id)",
     )
     .eq("invoices.tenant_id", tenantId)
     .gte("invoices.ngay_chung_tu", r.start)

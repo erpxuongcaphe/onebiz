@@ -337,7 +337,7 @@ export function CreateOrderDialog({
       // (không được bán) lẫn món F&B của quán khi đang đứng ở Kho Tổng.
       // Nay: chỉ hàng BÁN (sku) + đúng ngành của chi nhánh đang chọn.
       let query = supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, code, name, unit, sell_price")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", ctx.tenantId)

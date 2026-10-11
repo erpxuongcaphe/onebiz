@@ -170,6 +170,7 @@ function kitchenItemToCartLine(
   item: KitchenOrderItem,
 ): Omit<FnbOrderLine, "id" | "lineTotal"> {
   return {
+    kitchenOrderItemId: item.id,
     productId: item.productId,
     productName: item.productName,
     variantId: item.variantId ?? undefined,
@@ -270,6 +271,8 @@ function FnbPosPageInner() {
   const [keyboardHelpOpen, setKeyboardHelpOpen] = useState(false);
   const [syncDrawerOpen, setSyncDrawerOpen] = useState(false);
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
+  const [cancelSentItemId, setCancelSentItemId] = useState<string | undefined>();
+  const [cancelSentLine, setCancelSentLine] = useState<FnbOrderLine | undefined>();
   const [cancelSentMode, setCancelSentMode] = useState<"whole" | "items" | null>(null);
   const [promotionLoadError, setPromotionLoadError] = useState(false);
   const [promotionLoadRevision, setPromotionLoadRevision] = useState(0);
@@ -560,7 +563,7 @@ function FnbPosPageInner() {
                 // còn thấy category retail (Cốc giấy, Bột cacao đóng gói...).
                 getProductCategoriesAsync("sku", "fnb"),
                 supabase
-                  .from("products")
+                  .from("products_scoped")
                   .select("id, name, code, sell_price, image_url, stock, category_id, brand, allow_free_sale, sort_order, inventory_role")
                   .eq("tenant_id", tenantId)
                   .eq("is_active", true)
@@ -1743,7 +1746,7 @@ function FnbPosPageInner() {
   }, [pos]);
 
   const fnbKitchenSubmitLockRef = useRef(false);
-  const handleSendToKitchen = useCallback(async (): Promise<string | null> => {
+  const handleSendToKitchen = useCallback(async (keepCartOpen = false): Promise<string | null> => {
     const tab = pos.activeTab;
     if (!tab || tab.lines.length === 0) return null;
     if (requireTable()) return null;
@@ -1804,7 +1807,7 @@ function FnbPosPageInner() {
         // Server (hoặc hàng đợi offline bền vững) đã nhận món. Chuyển ngay
         // khỏi hàng chờ trước khi in để lỗi máy in không biến lần bấm F10
         // tiếp theo thành một lần gửi trùng vào bếp.
-        pos.markActiveLinesSent(tab.lines);
+        pos.markActiveLinesSent(tab.lines, tab.id);
 
         // In ticket bổ sung (đánh dấu "BỔ SUNG") — Sprint KITCHEN-1: split
         // theo station, mỗi station 1 phiếu với header lớn (BAR / BẾP / ...).
@@ -1865,6 +1868,8 @@ function FnbPosPageInner() {
             variant: "success",
           });
         }
+        window.dispatchEvent(new Event("fnb-open-orders-changed"));
+        if (!keepCartOpen && !addResult.isOffline) pos.finishKitchenSubmission(tab.id);
         return tab.kitchenOrderId ?? null;
       }
 
@@ -1893,7 +1898,7 @@ function FnbPosPageInner() {
       pos.updateTabMeta(tab.id, { kitchenOrderId: result.kitchenOrderId });
       // Xem giải thích ở nhánh "gửi bổ sung" phía trên. Mốc này phải đứng
       // trước in phiếu vì máy chủ đã chốt đơn bếp rồi.
-      pos.markActiveLinesSent(tab.lines);
+      pos.markActiveLinesSent(tab.lines, tab.id);
 
       // The server has claimed this table; reflect it without waiting for a reload.
       if (networkStatus.isOnline && tab.orderType === "dine_in" && tab.tableId && result.kitchenOrderId) {
@@ -1957,6 +1962,7 @@ function FnbPosPageInner() {
         toast({ title: "Đã gửi bếp", description: `Đơn ${result.orderNumber ?? ""} đã gửi bếp thành công`, variant: "success" });
       }
       window.dispatchEvent(new Event("fnb-open-orders-changed"));
+      if (!keepCartOpen && !result.isOffline && result.kitchenOrderId) pos.finishKitchenSubmission(tab.id);
       return result.kitchenOrderId ?? null;
     } catch (err) {
       hapticError();
@@ -2457,7 +2463,7 @@ function FnbPosPageInner() {
         // Món còn trong giỏ chưa được gửi bếp; gửi trước để hóa đơn khớp KDS.
         const soMonChuaGui = tab?.lines.length ?? 0;
         if (tab && soMonChuaGui > 0) {
-          koId = await handleSendToKitchen();
+          koId = await handleSendToKitchen(true);
         }
 
         if (!tab || !koId) {
@@ -3861,7 +3867,7 @@ function FnbPosPageInner() {
           updateLineQty={pos.updateLineQty}
           removeLine={pos.removeLine}
           onEditLine={handleEditLine}
-          onSendToKitchen={handleSendToKitchen}
+          onSendToKitchen={() => handleSendToKitchen()}
           kitchenSubmitting={kitchenSubmitting}
           onPayment={requestPayment}
           canCheckout={canCheckout}
@@ -3871,7 +3877,8 @@ function FnbPosPageInner() {
           onDiscountChange={handleManualDiscount}
           onPrintPreBill={handlePrintPreBill}
           onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}
-          onCancelSentItems={networkStatus.isOnline ? () => setCancelSentMode("items") : undefined}
+          onCancelSentItems={networkStatus.isOnline ? () => { setCancelSentItemId(undefined); setCancelSentLine(undefined); setCancelSentMode("items"); } : undefined}
+          onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
           onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
@@ -4087,7 +4094,8 @@ function FnbPosPageInner() {
               onDiscountChange={handleManualDiscount}
               onPrintPreBill={handlePrintPreBill}
               onVoidKitchenOrder={networkStatus.isOnline ? () => setCancelSentMode("whole") : undefined}
-          onCancelSentItems={networkStatus.isOnline ? () => setCancelSentMode("items") : undefined}
+          onCancelSentItems={networkStatus.isOnline ? () => { setCancelSentItemId(undefined); setCancelSentLine(undefined); setCancelSentMode("items"); } : undefined}
+          onCancelSentLine={networkStatus.isOnline ? line => { setCancelSentItemId(line.kitchenOrderItemId); setCancelSentLine(line); setCancelSentMode("items"); } : undefined}
           voidKitchenOrderLabel={canCancelUnpaidOrder ? "Hủy đơn chưa thanh toán" : "Xin duyệt hủy đơn"}
               onTransferTable={canTransferTables && canTransferFnbTab(pos.activeTab, tables) ? () => setTransferTableOpen(true) : undefined}
           onMergeTable={canManageTables && networkStatus.isOnline && tables.some(t => t.id === pos.activeTab?.tableId && t.currentOrderId === pos.activeTab?.kitchenOrderId) ? () => { setMergeSourceTable(tables.find(t => t.id === pos.activeTab?.tableId) ?? null); setMergeTargetTableId(""); } : undefined}
@@ -4193,7 +4201,7 @@ function FnbPosPageInner() {
       )}
 
       {/* Void confirm dialog */}
-      {cancelSentMode && <Suspense fallback={null}><CancelSentItemsDialog open onOpenChange={o => { if (!o) setCancelSentMode(null); }} orderId={pos.activeTab?.kitchenOrderId} label={pos.activeTab?.label ?? ""} wholeBill={cancelSentMode === "whole"} canCancel={canCancelUnpaidOrder} shiftId={currentShift?.id} onCompleted={async (whole, orderId) => {
+      {cancelSentMode && <Suspense fallback={null}><CancelSentItemsDialog open onOpenChange={o => { if (!o) setCancelSentMode(null); }} orderId={pos.activeTab?.kitchenOrderId} label={pos.activeTab?.label ?? ""} initialItemId={cancelSentItemId} initialLine={cancelSentLine} wholeBill={cancelSentMode === "whole"} canCancel={canCancelUnpaidOrder} shiftId={currentShift?.id} onCompleted={async (whole, orderId) => {
         const cancelledTab = pos.tabs.find(t => t.kitchenOrderId === orderId);
         if (whole && cancelledTab) {
           clearTabBenefits(cancelledTab.id);

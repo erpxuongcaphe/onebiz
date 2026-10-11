@@ -157,7 +157,7 @@ async function loadMovementRows(
 
   for (let pageIndex = 0; pageIndex < MAX_FALLBACK_MOVEMENT_PAGES; pageIndex += 1) {
     let query = supabase
-      .from("stock_movements")
+      .from("stock_movements_scoped")
       .select("product_id,type,quantity,reference_type,created_at")
       .eq("tenant_id", tenantId)
       .gte("created_at", startDateIso(params.days))

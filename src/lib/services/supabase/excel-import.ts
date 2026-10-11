@@ -103,7 +103,7 @@ export async function bulkImportProducts(
   // Day 20/05/2026 (CEO BOM decouple Phase 4): Preload Mã BOM trong tenant
   // để verify khi user nhập cột "Mã BOM" trong Excel SP. Set lookup O(1).
   const { data: bomRows } = await supabase
-    .from("bom")
+    .from("bom_scoped")
     .select("code")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
@@ -118,7 +118,7 @@ export async function bulkImportProducts(
   // Giờ: mã đã có → CẬP NHẬT, mã mới → THÊM. Tồn kho tuyệt đối không đụng
   // (đã chặn ở trên: file hàng hóa không được ghi tồn).
   const { data: existingProducts } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("id, code")
     .eq("tenant_id", tenantId);
   const codeToId = new Map<string, string>();
@@ -579,7 +579,7 @@ export async function bulkImportPurchaseOrders(
   const [suppRes, branchRes, prodRes] = await Promise.all([
     supabase.from("suppliers").select("id, code, name").eq("tenant_id", ctx.tenantId),
     supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
-    supabase.from("products").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
+    supabase.from("products_scoped").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
   ]);
   const suppMap = new Map<string, { id: string; name: string }>();
   for (const s of suppRes.data ?? []) suppMap.set(s.code, { id: s.id, name: s.name });
@@ -677,7 +677,7 @@ export async function bulkImportInternalSales(
 
   const [branchRes, prodRes] = await Promise.all([
     supabase.from("branches").select("id, code").eq("tenant_id", ctx.tenantId),
-    supabase.from("products").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
+    supabase.from("products_scoped").select("id, code, name, unit").eq("tenant_id", ctx.tenantId),
   ]);
   const branchMap = new Map<string, string>();
   for (const b of branchRes.data ?? []) {
@@ -787,7 +787,7 @@ export async function bulkImportBOMs(
 
   // Preload: materials by code + branches by code
   const { data: products } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("id, code, unit")
     .eq("tenant_id", tenantId);
   const materialMap = new Map<string, { id: string; unit: string }>();

@@ -50,9 +50,10 @@ describe("C3 — dòng món chỉ render, không tự tính", () => {
   });
 
   it("nút −/+/sửa/xoá đủ aria-label + chạm 44px mobile", () => {
-    for (const nhan of ["Giảm số lượng", "Tăng số lượng", "Sửa tuỳ chọn", "Xoá món"]) {
+    for (const nhan of ["Giảm số lượng", "Tăng số lượng", "Sửa tuỳ chọn"]) {
       expect(LINE).toContain(`aria-label="${nhan}"`);
     }
+    expect(LINE).toContain('"Xóa món: "');
     expect((LINE.match(/size-11/g) ?? []).length).toBeGreaterThanOrEqual(4);
   });
 });

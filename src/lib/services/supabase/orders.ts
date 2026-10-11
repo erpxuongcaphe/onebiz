@@ -592,7 +592,7 @@ export async function getSalesOrderItems(
   const { data, error } = await supabase
     .from("sales_order_items")
     .select(
-      "id, product_id, product_name, unit, quantity, unit_price, discount, total, products!sales_order_items_product_id_fkey(code)",
+      "id, product_id, product_name, unit, quantity, unit_price, discount, total, products:products_scoped!sales_order_items_product_id_fkey(code)",
     )
     .eq("order_id", orderId);
 
@@ -635,7 +635,7 @@ export async function getDraftOrderItems(
 
   // 00208: select("*") để lấy cả note mà không vỡ khi cột chưa migrate.
   const { data, error } = await supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("*")
     .eq("invoice_id", invoiceId);
 
@@ -878,7 +878,7 @@ export async function listDraftOrders(
   let query = (supabase as any)
     .from("invoices")
     .select(
-      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, draft_revision, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items(product_name)",
+      "id, code, customer_id, customer_name, total, subtotal, discount_amount, note, created_at, updated_at, auto_saved, client_session_id, draft_revision, created_by, profiles!invoices_created_by_fkey(full_name), invoice_items:invoice_items_scoped(product_name)",
     )
     .eq("tenant_id", tenantId)
     .eq("status", "draft")
@@ -938,7 +938,7 @@ export async function getDraftOrderById(
   const { data, error } = await (supabase as any)
     .from("invoices")
     .select(
-      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, draft_revision, source, invoice_items(*)",
+      "id, code, branch_id, customer_id, customer_name, subtotal, discount_amount, delivery_fee, total, note, created_at, updated_at, status, auto_saved, client_session_id, draft_revision, source, invoice_items:invoice_items_scoped(*)",
     )
     .eq("tenant_id", tenantId)
     .eq("id", invoiceId)
@@ -1609,7 +1609,7 @@ export async function getOrderReconciliation(orderId: string): Promise<{
   // Mặt hàng đơn gốc.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: hangDat, error: loiDat } = await (supabase as any)
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("product_id, variant_id, product_name, unit, quantity")
     .eq("invoice_id", orderId);
   if (loiDat) handleError(loiDat, "getOrderReconciliation.parent");
@@ -1623,7 +1623,7 @@ export async function getOrderReconciliation(orderId: string): Promise<{
   if (idsCompleted.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase as any)
-      .from("invoice_items")
+      .from("invoice_items_scoped")
       .select("product_id, variant_id, product_name, unit, quantity")
       .in("invoice_id", idsCompleted);
     if (error) handleError(error, "getOrderReconciliation.children");

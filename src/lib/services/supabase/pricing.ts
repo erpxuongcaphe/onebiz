@@ -192,7 +192,7 @@ export async function getPriceTierItems(
 
   const { data, error } = await supabase
     .from("price_tier_items")
-    .select("*, products(name, code), product_variants(name)")
+    .select("*, products:products_scoped(name, code), product_variants:product_variants_scoped(name)")
     .eq("price_tier_id", tierId)
     .order("created_at", { ascending: false });
 

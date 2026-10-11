@@ -1080,6 +1080,7 @@ export default function NhapHangPage() {
           csv: () => handleExport("csv"),
         }}
         actions={[
+          { label: "Nhận nội bộ", icon: <Icon name="move_to_inbox" size={16} />, variant: "outline", onClick: () => router.push("/hang-hoa/nhap-hang/noi-bo") },
           {
             label: viewMode === "list" ? "Xem Kanban" : "Xem danh sách",
             icon:

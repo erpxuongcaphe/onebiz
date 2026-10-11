@@ -60,7 +60,7 @@ export async function getPosStockSnapshot(
     const productResults = await Promise.all(
       chunks(unknownProductIds, QUERY_CHUNK_SIZE).map(async (ids) => {
         const { data, error } = await supabase
-          .from("products")
+          .from("products_scoped")
           .select("id, has_bom")
           .eq("tenant_id", tenantId)
           .in("id", ids);

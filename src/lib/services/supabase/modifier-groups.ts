@@ -296,7 +296,7 @@ export async function listModifierOptions(groupId: string): Promise<ModifierOpti
   await requireTenantRecord("modifier_groups", groupId, tenantId);
   const { data, error } = await supabase
     .from("modifier_options")
-    .select("*, products!modifier_options_linked_product_id_fkey(code, name)")
+    .select("*, products:products_scoped!modifier_options_linked_product_id_fkey(code, name)")
     .eq("group_id", groupId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
@@ -329,7 +329,7 @@ export async function createModifierOption(
       is_default: input.isDefault ?? false,
       sort_order: input.sortOrder ?? 0,
     })
-    .select("*, products!modifier_options_linked_product_id_fkey(code, name)")
+    .select("*, products:products_scoped!modifier_options_linked_product_id_fkey(code, name)")
     .single();
   if (error) handleError(error, "createModifierOption");
   return mapOption(data);
@@ -359,7 +359,7 @@ export async function updateModifierOption(
     .from("modifier_options")
     .update(patch)
     .eq("id", id)
-    .select("*, products!modifier_options_linked_product_id_fkey(code, name)")
+    .select("*, products:products_scoped!modifier_options_linked_product_id_fkey(code, name)")
     .single();
   if (error) handleError(error, "updateModifierOption");
   return mapOption(data);

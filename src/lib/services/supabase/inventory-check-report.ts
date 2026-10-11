@@ -111,7 +111,7 @@ export async function getInventoryCheckReport(
   let query = (supabase as any)
     .from("inventory_checks")
     .select(
-      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items(id, difference, products(cost_price))",
+      "id, code, created_at, branch_id, status, profiles!inventory_checks_created_by_fkey(full_name), branches(name), inventory_check_items:inventory_check_items_scoped(id, difference, products:products_scoped(cost_price))",
     )
     .eq("tenant_id", tenantId)
     // A5 (07/07): chỉ tính phiếu ĐÃ CÂN BẰNG (balanced) — bỏ draft/in_progress/
@@ -163,7 +163,7 @@ export async function getInventoryCheckReport(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prevQuery = (supabase as any)
     .from("inventory_checks")
-    .select("id, inventory_check_items(difference, products(cost_price))")
+    .select("id, inventory_check_items:inventory_check_items_scoped(difference, products:products_scoped(cost_price))")
     .eq("tenant_id", tenantId)
     .eq("status", "balanced")
     .gte("created_at", prevFrom.toISOString())

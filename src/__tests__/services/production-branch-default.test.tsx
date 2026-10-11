@@ -39,7 +39,7 @@ vi.mock("@/lib/services/supabase/fnb-supply-catalog", () => ({
   getFnbSupplyBranchScope: async () => ({ enforcementEnabled: mocks.scopeEnabled }),
 }));
 vi.mock("@/lib/services/supabase/fnb-branch-cost", () => ({
-  getFnbBranchComponentCosts: async () => new Map(mocks.costedQuantity === null ? [] : [[
+  getFnbProductionStockHealth: async () => new Map(mocks.costedQuantity === null ? [] : [[
     "ingredient", { productId: "ingredient", costedQuantity: mocks.costedQuantity,
       physicalQuantity: mocks.physicalQuantity ?? mocks.available, unitCost: 10000 },
   ]]),
@@ -71,9 +71,13 @@ vi.mock("@/components/ui/button", () => ({
 vi.mock("@/components/ui/icon", () => ({ Icon: () => <span /> }));
 
 describe("production branch selection", () => {
-  function selectPreparedProduct() {
+  async function selectPreparedProduct() {
     fireEvent.focus(screen.getByPlaceholderText("Gõ mã hoặc tên sản phẩm..."));
     fireEvent.click(screen.getByRole("button", { name: /SKU-BTP-TEST/ }));
+    if (mocks.activeBranchId === "xtb") {
+      await waitFor(() => expect(screen.getByLabelText(/Cân cả hộp/)).toBeTruthy());
+      fireEvent.change(screen.getByLabelText(/Cân cả hộp/), { target: { value: "2" } });
+    }
     return screen.getByRole("button", { name: "Hoàn thành sản xuất & nhập kho" });
   }
 
@@ -117,7 +121,7 @@ describe("production branch selection", () => {
 
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(screen.getByText(/Thiếu nguyên liệu tại chi nhánh này/)).toBeTruthy());
     expect(screen.queryByText(/Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp/)).toBeNull();
     expect(finish).toBeDisabled();
@@ -125,7 +129,7 @@ describe("production branch selection", () => {
 
     mocks.available = 2;
     mocks.costedQuantity = 2;
-    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "2" } });
     await waitFor(() => expect(finish).toBeEnabled());
     expect(mocks.createProductionOrder).not.toHaveBeenCalled();
   });
@@ -143,22 +147,22 @@ describe("production branch selection", () => {
     }];
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
 
     await waitFor(() => expect(screen.getByText(/Tồn và sổ giá vốn F&B tại chi nhánh chưa khớp/)).toBeTruthy());
     expect(finish).toBeDisabled();
     expect(mocks.createProductionOrder).not.toHaveBeenCalled();
 
     mocks.costedQuantity = 1;
-    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "2" } });
     await waitFor(() => expect(finish).toBeDisabled());
 
     mocks.costedQuantity = 2;
-    fireEvent.change(screen.getByDisplayValue("2"), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "1" } });
     await waitFor(() => expect(finish).toBeEnabled());
 
     mocks.physicalQuantity = 0;
-    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "2" } });
     await waitFor(() => expect(finish).toBeDisabled());
   });
 
@@ -176,12 +180,12 @@ describe("production branch selection", () => {
     }];
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("warehouse"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
   });
 
   it.each([
-    [true, "Mẻ/100g", "G", "Mẻ/100g"],
+    [true, "Mẻ/100g", "G", "G"],
     [true, "", "G", "G"],
     [false, "Kg", "Kg", "cái"],
   ])("labels output in stock units only for F&B prepared goods (%s, %s)", async (prepared, stockUnit, unit, expectedUnit) => {
@@ -203,10 +207,10 @@ describe("production branch selection", () => {
     mocks.completeProductionAtomic.mockResolvedValue("lot");
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue(mocks.activeBranchId));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
-    expect(screen.getByText(expectedUnit, { exact: true })).toBeTruthy();
-    fireEvent.change(screen.getByDisplayValue("1"), { target: { value: "2" } });
+    expect(screen.getByText(prepared ? new RegExp(`Cân cả hộp`) : expectedUnit, { exact: !prepared })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất"), { target: { value: "2" } });
     await waitFor(() => expect(finish).toBeEnabled());
     fireEvent.click(finish);
     await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalled());
@@ -244,21 +248,21 @@ describe("production branch selection", () => {
     const success = vi.fn();
     render(<CreateProductionOrderDialog open onOpenChange={close} onSuccess={success} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
     act(() => {
       finish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       finish.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     expect(mocks.createProductionOrder).toHaveBeenCalledTimes(1);
-    expect(screen.getByDisplayValue("1")).toBeDisabled();
+    expect(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất")).toBeDisabled();
     expect(screen.getByRole("combobox")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Hủy" })).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
     expect(close).not.toHaveBeenCalled();
     await act(async () => resolveCreate({ id: "order", code: "SX-UAT" }));
     expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1);
-    expect(screen.getByDisplayValue("1")).toBeDisabled();
+    expect(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất")).toBeDisabled();
     expect(mocks.createProductionOrder).toHaveBeenCalledWith(expect.objectContaining({
       branchId: "xtb", plannedQty: 1,
       materials: [{ productId: "ingredient", plannedQty: 0.2, unit: "Túi" }],
@@ -275,12 +279,12 @@ describe("production branch selection", () => {
     mocks.completeProductionAtomic.mockResolvedValue("lot");
     render(<CreateProductionOrderDialog open onOpenChange={vi.fn()} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
     fireEvent.click(finish);
     await waitFor(() => expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "Lỗi tạo lệnh sản xuất" })));
     expect(mocks.completeProductionAtomic).not.toHaveBeenCalled();
-    expect(screen.getByDisplayValue("1")).toBeEnabled();
+    expect(screen.getByLabelText("Số mẻ hoặc số lượng sản xuất")).toBeEnabled();
     fireEvent.click(finish);
     await waitFor(() => expect(mocks.completeProductionAtomic).toHaveBeenCalledTimes(1));
     expect(mocks.completeProductionAtomic.mock.calls[0][0]).toBe("retry-order");
@@ -294,7 +298,7 @@ describe("production branch selection", () => {
     const close = vi.fn();
     render(<CreateProductionOrderDialog open onOpenChange={close} />);
     await waitFor(() => expect(screen.getByRole("combobox")).toHaveValue("xtb"));
-    const finish = selectPreparedProduct();
+    const finish = await selectPreparedProduct();
     await waitFor(() => expect(finish).toBeEnabled());
     fireEvent.click(finish);
     await waitFor(() => expect(close).toHaveBeenCalledWith(false));

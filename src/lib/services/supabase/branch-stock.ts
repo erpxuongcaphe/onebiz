@@ -14,7 +14,7 @@ const supabase = getClient();
 async function inactiveEmptyStockFilter(tenantId: string): Promise<string | undefined> {
   const ids: string[] = [];
   for (let offset = 0; ; offset += 1000) {
-    const { data, error } = await supabase.from("products").select("id")
+    const { data, error } = await supabase.from("products_scoped").select("id")
       .eq("tenant_id", tenantId).eq("is_active", false)
       .order("id").range(offset, offset + 999);
     if (error) throw error;
@@ -199,7 +199,7 @@ export async function getBranchStockPage(params: {
       updated_at,
       branches:branch_id ( id, name, code ),
       ${productsRel},
-      product_variants:variant_id ( id, name )
+      product_variants:product_variants_scoped!variant_id ( id, name )
       `,
       { count: "exact" }
     )

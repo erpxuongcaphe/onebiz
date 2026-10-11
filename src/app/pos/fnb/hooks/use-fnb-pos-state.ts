@@ -1,6 +1,7 @@
 "use client";
 
 import { changeDraftOrderType } from "../order-type-selection";
+import { finishKitchenSubmissionTabs } from './kitchen-submission-tabs';
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import type {
@@ -129,7 +130,8 @@ export interface UseFnbPosStateReturn {
   updateLine: (lineId: string, line: Omit<FnbOrderLine, "id" | "lineTotal">) => void;
   clearCart: () => void;
   /** Chuyển các món vừa được server nhận vào snapshot "đã gửi bếp". */
-  markActiveLinesSent: (snapshot?: FnbOrderLine[]) => void;
+  markActiveLinesSent: (snapshot?: FnbOrderLine[], tabId?: string) => void;
+  finishKitchenSubmission: (tabId: string) => void;
   /**
    * 29/07: nạp món vào MỘT tab chỉ định (không cần tab đó đang mở). Dùng cho
    * tách bill: tab con phải cầm sẵn món của đơn con, nếu không màn thanh toán
@@ -464,11 +466,11 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     updateActiveTab(() => []);
   }, [updateActiveTab]);
 
-  const markActiveLinesSent = useCallback((snapshot?: FnbOrderLine[]) => {
+  const markActiveLinesSent = useCallback((snapshot?: FnbOrderLine[], submittedTabId?: string) => {
     tabsMutationVersionRef.current += 1;
     setTabs((prev) =>
       prev.map((tab) => {
-        if (tab.id !== activeTabId || (snapshot ?? tab.lines).length === 0) return tab;
+        if (tab.id !== (submittedTabId ?? activeTabId) || (snapshot ?? tab.lines).length === 0) return tab;
         const acknowledged = snapshot ?? tab.lines;
         const lines = tab.lines.flatMap((line) => {
           const sent = acknowledged.find((item) => item.id === line.id);
@@ -490,6 +492,16 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
         };
       }),
     );
+  }, [activeTabId]);
+
+  const finishKitchenSubmission = useCallback((tabId: string) => {
+    tabsMutationVersionRef.current += 1;
+    const fresh: FnbTabSnapshot = { id: nextTabId(), label: 'Mang về #1', orderType: 'takeaway', customerName: 'Khách lẻ', customerConfirmationRequired: false, lines: [] };
+    setTabs(prev => {
+      const result = finishKitchenSubmissionTabs(prev, tabId, activeTabId, fresh);
+      setActiveTabId(current => current === activeTabId ? result.activeId : current);
+      return result.tabs;
+    });
   }, [activeTabId]);
 
   // 29/07: nạp món vào tab chỉ định — khác addLine ở chỗ KHÔNG bám activeTab,
@@ -706,6 +718,7 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     updateLine,
     clearCart,
     markActiveLinesSent,
+    finishKitchenSubmission,
     loadLinesIntoTab,
     loadSentLinesIntoTab,
     setOrderDiscount,

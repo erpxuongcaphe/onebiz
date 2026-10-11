@@ -27,7 +27,7 @@ describe("prepared F&B BOM estimate", () => {
         in: vi.fn((key: string, values: string[]) => { field = key; ids = values; return query; }),
         order: vi.fn().mockReturnThis(),
         then(resolve: (value: unknown) => unknown) {
-          const rows = table === "products" ? mock.products : table === "bom" ? mock.bom : mock.items;
+          const rows = table === "products_scoped" ? mock.products : table === "bom_scoped" ? mock.bom : mock.items;
           return Promise.resolve({ data: rows.filter((row) =>
             ids.includes(String((row as unknown as Record<string, unknown>)[field]))), error: null }).then(resolve);
         },

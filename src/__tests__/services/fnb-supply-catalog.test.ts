@@ -100,10 +100,10 @@ describe("F&B supply catalog service", () => {
     });
     mocks.from.mockImplementation((table: string) => {
       if (table === "fnb_supply_catalog") return makeQuery({ data: [{ product_id: "already" }], error: null });
-      if (table === "bom") return makeQuery({ data: [{ id: "bom-1" }], error: null });
+      if (table === "bom_scoped") return makeQuery({ data: [{ id: "bom-1" }], error: null });
       if (table === "bom_items") return makeQuery({ data: [{ material_id: "already" }, { material_id: "box" }], error: null });
-      if (table === "products") {
-        const callCount = mocks.from.mock.calls.filter((call) => call[0] === "products").length;
+      if (table === "products_scoped") {
+        const callCount = mocks.from.mock.calls.filter((call) => call[0] === "products_scoped").length;
         return callCount === 1
           ? makeQuery({ data: [{ id: "menu-1" }], error: null })
           : makeQuery({ data: [{ id: "box", code: "SKU-BOX", name: "Hộp sữa", unit: "Hộp" }], error: null });
@@ -130,10 +130,10 @@ describe("F&B supply catalog service", () => {
     mocks.menuScopes.mockResolvedValue([{ productId: "hidden-menu", branchId: "other-store", mode: "only" }]);
     mocks.from.mockImplementation((table: string) => {
       if (table === "fnb_supply_catalog") return query({ data: [], error: null });
-      if (table === "bom") return bomQuery;
+      if (table === "bom_scoped") return bomQuery;
       if (table === "bom_items") return query({ data: [{ material_id: "box" }], error: null });
-      if (table === "products") {
-        const calls = mocks.from.mock.calls.filter((call) => call[0] === "products").length;
+      if (table === "products_scoped") {
+        const calls = mocks.from.mock.calls.filter((call) => call[0] === "products_scoped").length;
         return calls === 1
           ? query({ data: [{ id: "visible-menu" }, { id: "hidden-menu" }], error: null })
           : query({ data: [{ id: "box", code: "SKU-SUA-001", name: "Sữa hộp", unit: "Hộp" }], error: null });

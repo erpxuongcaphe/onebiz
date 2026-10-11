@@ -126,7 +126,7 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   // 1. Fetch all active products
   const products = await fetchAllAbcRows<AbcProductQueryRow>(
     () => supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, unit")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -137,7 +137,7 @@ export async function getAbcReport(options: AbcOptions): Promise<AbcReportResult
   // 2. Fetch all invoice_items in range (joined with completed invoices)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let itemsQuery = (supabase as any)
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select(
       "product_id, product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)",
     )

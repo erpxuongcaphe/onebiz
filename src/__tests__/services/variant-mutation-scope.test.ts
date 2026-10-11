@@ -66,7 +66,7 @@ describe("product variant mutation scope", () => {
       costPrice: 10000,
     });
 
-    expect(from).toHaveBeenCalledWith("products");
+    expect(from).toHaveBeenCalledWith("products_scoped");
     expect(chain.eq).toHaveBeenCalledWith("id", "product-1");
     expect(chain.eq).toHaveBeenCalledWith("tenant_id", "tenant-current");
     expect(from).toHaveBeenCalledWith("product_variants");

@@ -1,5 +1,7 @@
 "use client";
 
+import { usePermissions } from "@/lib/permissions/use-permission";
+
 import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Dialog,
@@ -90,6 +92,8 @@ export function BOMEditorDialog({
   defaultBranchId,
   onSuccess,
 }: BOMEditorDialogProps) {
+  const { hasPermission } = usePermissions();
+  const canViewCost = hasPermission("products.view_cost");
   const { toast } = useToast();
   const { branches } = useAuth();
 
@@ -291,7 +295,7 @@ export function BOMEditorDialog({
   const preparedIdsKey = preparedIds.join(",");
 
   useEffect(() => {
-    if (!open || !isFnbRecipe || !branchId || !preparedIdsKey) {
+    if (!canViewCost || !open || !isFnbRecipe || !branchId || !preparedIdsKey) {
       setPreparedCosts({});
       return;
     }
@@ -308,7 +312,7 @@ export function BOMEditorDialog({
       })
       .catch(() => { if (!cancelled) setPreparedCosts({}); });
     return () => { cancelled = true; };
-  }, [open, isFnbRecipe, branchId, preparedIdsKey]);
+  }, [canViewCost, open, isFnbRecipe, branchId, preparedIdsKey]);
 
   const previewUnitCost = (item: MaterialLine) => {
     if (!isFnbRecipe) return item.costPrice;
@@ -349,8 +353,8 @@ export function BOMEditorDialog({
         materialCode: mat.code,
         costPrice: mat.costPrice,
         quantity: "1",
-        unit: mat.stockUnit ?? mat.unit ?? "",
-        stockUnit: mat.stockUnit ?? mat.unit ?? "",
+        unit: mat.unit ?? mat.stockUnit ?? "",
+        stockUnit: mat.unit ?? mat.stockUnit ?? "",
         conversions,
         wastePercent: "0",
       },
@@ -548,7 +552,7 @@ export function BOMEditorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>{bomId ? "Sửa công thức sản xuất (BOM)" : "Tạo công thức sản xuất (BOM)"}</DialogTitle>
           <DialogDescription>
@@ -558,7 +562,7 @@ export function BOMEditorDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-2">
+        <div className="grid min-h-0 gap-4 overflow-y-auto py-2 pr-1">
           {/* Output SKU + Name */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -717,7 +721,7 @@ export function BOMEditorDialog({
                       <th className="text-right p-2 font-medium w-24">Số lượng</th>
                       <th className="text-left p-2 font-medium w-20">ĐVT</th>
                       <th className="text-right p-2 font-medium w-20">Hao hụt %</th>
-                      <th className="text-right p-2 font-medium w-32">Thành tiền</th>
+                      {canViewCost && <th className="text-right p-2 font-medium w-32">Thành tiền</th>}
                       <th className="w-10" />
                     </tr>
                   </thead>
@@ -741,7 +745,7 @@ export function BOMEditorDialog({
                           <td className="p-2">
                             <div className="font-medium">{it.materialName}</div>
                             <div className="text-xs text-muted-foreground">
-                              {it.materialCode} · {unitCost == null ? "Chưa có giá tại quán" : formatCurrency(unitCost)}/{it.stockUnit}
+                              {it.materialCode}{canViewCost && <> · {unitCost == null ? "Chưa có giá tại quán" : formatCurrency(unitCost)}/{it.stockUnit}</>}
                             </div>
                             {isConverted && stockQuantity != null && (
                               <div className="mt-1 text-xs text-primary">
@@ -818,9 +822,9 @@ export function BOMEditorDialog({
                               className="h-8 text-right"
                             />
                           </td>
-                          <td className="p-2 text-right font-medium">
+                          {canViewCost && <td className="p-2 text-right font-medium">
                             {formatCurrency(lineCost)}
-                          </td>
+                          </td>}
                           <td className="p-2">
                             <button
                               type="button"
@@ -834,7 +838,7 @@ export function BOMEditorDialog({
                       );
                     })}
                   </tbody>
-                  <tfoot className="bg-muted/30 border-t">
+                  {canViewCost && <tfoot className="bg-muted/30 border-t">
                     <tr>
                       <td colSpan={4} className="p-2 text-right font-medium">
                         {isFnbRecipe ? "Dự toán / mẻ:" : "Tổng giá vốn / batch:"}
@@ -855,9 +859,9 @@ export function BOMEditorDialog({
                         <td />
                       </tr>
                     )}
-                  </tfoot>
+                  </tfoot>}
                 </table>
-                {hasPendingPreparedCost && (
+                {canViewCost && hasPendingPreparedCost && (
                   <p className="border-t px-3 py-2 text-xs text-muted-foreground">
                     Vẫn lưu được công thức. Giá vốn thực tế của bán thành phẩm sẽ có sau khi hoàn tất mẻ tại quán.
                   </p>
@@ -971,7 +975,7 @@ export function BOMEditorDialog({
           )}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t pt-3">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
@@ -1037,7 +1041,7 @@ export function BOMEditorDialog({
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{product.name}</span>
                         <span className="block truncate text-xs text-muted-foreground">
-                          {product.code} · {product.stockUnit || product.unit || "Chưa có ĐVT"}
+                          {product.code} · {product.unit || product.stockUnit || "Chưa có ĐVT"}
                         </span>
                       </span>
                     </button>
@@ -1046,7 +1050,7 @@ export function BOMEditorDialog({
               )}
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="shrink-0 border-t pt-3">
             <Button variant="outline" onClick={() => setPickerOpen(false)}>
               Hủy
             </Button>

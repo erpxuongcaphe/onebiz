@@ -504,7 +504,7 @@ export async function getInventoryChecks(params: QueryParams): Promise<QueryResu
 
   let query = supabase
     .from("inventory_checks")
-    .select("*, profiles!inventory_checks_created_by_fkey(full_name), inventory_check_items(id, system_stock, actual_stock, difference, products(cost_price))", { count: "exact" })
+    .select("*, profiles!inventory_checks_created_by_fkey(full_name), inventory_check_items:inventory_check_items_scoped(id, system_stock, actual_stock, difference, products:products_scoped(cost_price))", { count: "exact" })
     .eq("tenant_id", tenantId);
 
   // Search
@@ -652,9 +652,9 @@ export async function getInventoryCheckItems(
   const sb = supabase as any;
 
   const { data, error } = await sb
-    .from("inventory_check_items")
+    .from("inventory_check_items_scoped")
     .select(
-      "id, product_id, product_name, system_stock, actual_stock, difference, products(code, unit, cost_price)"
+      "id, product_id, product_name, system_stock, actual_stock, difference, products:products_scoped(code, unit, cost_price)"
     )
     .eq("check_id", checkId)
     .order("difference", { ascending: true });

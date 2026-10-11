@@ -301,7 +301,7 @@ export async function getStationsByProductIds(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select("id, category_id, categories!inner(kitchen_station_id)")
     .eq("tenant_id", tenantId)
     .in("id", productIds);

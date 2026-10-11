@@ -120,7 +120,7 @@ describe("unified sale pricing 00363", () => {
     expect(tierItemDialog).toContain("Giá chung cho mọi size");
     expect(tierItemDialog).toContain("variantId:");
     expect(tierPage).toContain("item.variantName");
-    expect(pricingService).toContain("product_variants(name)");
+    expect(pricingService).toContain("product_variants:product_variants_scoped(name)");
     expect(pricingService).toContain('deleteQuery.is("variant_id", null)');
   });
 });

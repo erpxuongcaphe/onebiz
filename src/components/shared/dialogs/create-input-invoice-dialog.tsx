@@ -209,7 +209,7 @@ export function CreateInputInvoiceDialog({
       const supabase = getClient();
       const ctx = await getCurrentContext();
       const { data } = await supabase
-        .from("products")
+        .from("products_scoped")
         .select("id, code, name, unit, cost_price, vat_rate")
         .or(`name.ilike.%${productSearch}%,code.ilike.%${productSearch}%`)
         .eq("tenant_id", currentTenantId ?? ctx.tenantId)

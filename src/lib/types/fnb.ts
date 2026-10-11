@@ -171,6 +171,8 @@ export interface FnbCartTopping {
 
 export interface FnbOrderLine {
   id: string; // unique key for React
+  /** Server line identity; required for cancelling the exact saved item. */
+  kitchenOrderItemId?: string;
   productId: string;
   productName: string;
   variantId?: string;

@@ -19,6 +19,20 @@ export interface FnbBranchComponentCost {
   physicalQuantity: number;
 }
 
+/** Quantity-only production check; never returns prices or cost amounts. */
+export async function getFnbProductionStockHealth(branchId: string, productIds: string[]) {
+  // Migration RPC precedes generated schema types.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (getClient() as any).rpc("get_fnb_production_stock_health_00476", {
+    p_branch_id: branchId, p_product_ids: Array.from(new Set(productIds)),
+  });
+  if (error) handleError(error, "getFnbProductionStockHealth");
+  return new Map<string, { physicalQuantity: number; costedQuantity: number }>(
+    (data ?? []).map((row: { product_id: string; physical_quantity: number; costed_quantity: number }) =>
+      [row.product_id, { physicalQuantity: Number(row.physical_quantity), costedQuantity: Number(row.costed_quantity) }]),
+  );
+}
+
 /**
  * Branch cost is needed only for prepared F&B stock. Regular Retail SKUs in a
  * recipe continue to use their Retail sell price as the branch's supply price.

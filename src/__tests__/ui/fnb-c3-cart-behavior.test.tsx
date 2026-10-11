@@ -130,7 +130,7 @@ describe("flat cart line actions", () => {
     expect(updateLineQty).toHaveBeenCalledWith(line.id, 1);
     fireEvent.click(screen.getByRole("button", { name: "Sửa tuỳ chọn" }));
     expect(onEditLine).toHaveBeenCalledWith(line);
-    fireEvent.click(screen.getByRole("button", { name: "Xoá món" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Xóa món:/ }));
     expect(removeLine).toHaveBeenCalledWith(line.id);
   });
   it("shows sent line details while preventing direct edits", () => {
@@ -139,7 +139,7 @@ describe("flat cart line actions", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Thao tác món:/ }));
     expect(screen.getByTestId("fnb-cart-line")).toHaveTextContent("Đã gửi bếp");
     expect(screen.queryByRole("button", { name: "Tăng số lượng" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Xoá món" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Xóa món:/ })).not.toBeInTheDocument();
   });
 });
 
@@ -148,9 +148,9 @@ describe("C3 hành vi — fixture 20 dòng", () => {
     const { container } = renderGio(
       Array.from({ length: 20 }, (_, i) => taoDong(i)),
     );
-    expect(screen.queryByLabelText("Xoá món")).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText(/^Xóa món:/)).toHaveLength(20);
     screen.getAllByRole("button", { name: /^Thao tác món:/ }).forEach(button => fireEvent.click(button));
-    expect(screen.getAllByLabelText("Xoá món")).toHaveLength(20);
+    expect(screen.getAllByLabelText(/^Xóa món:/)).toHaveLength(20);
     // format.ts dùng NUMBER_LOCALE en-US: nghìn dấu PHẨY, thập phân dấu CHẤM.
     expect(demSpan(container, "45,000 × 1")).toBe(20);
   });

@@ -23,9 +23,9 @@ export async function getProductionOrders(params?: {
   offset?: number;
 }) {
   let query = supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select(
-      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)",
+      "*, products:products_scoped!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)",
       { count: "exact" }
     )
     .order("created_at", { ascending: false });
@@ -73,17 +73,17 @@ export async function getProductionOrdersForExport(params:Omit<ProductionOrderLi
 
 export async function getProductionOrderById(id: string) {
   const { data, error } = await supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select(
-      "*, products!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)"
+      "*, products:products_scoped!production_orders_product_id_fkey(name, code), branches!production_orders_branch_id_fkey(name), profiles!production_orders_created_by_fkey(full_name)"
     )
     .eq("id", id)
     .single();
   if (error) throw error;
 
   const { data: materials, error: materialsError } = await supabase
-    .from("production_order_materials")
-    .select("*, products!production_order_materials_product_id_fkey(name, code)")
+    .from("production_order_materials_scoped")
+    .select("*, products:products_scoped!production_order_materials_product_id_fkey(name, code)")
     .eq("production_order_id", id);
   if (materialsError) throw materialsError;
 
@@ -383,7 +383,7 @@ export async function getAllProductLots(options?: {
   for (let offset = 0; ; offset += pageSize) {
     let query = supabase
       .from("product_lots")
-      .select("*, products!inner(name, code, unit)")
+      .select("*, products:products_scoped!inner(name, code, unit)")
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });

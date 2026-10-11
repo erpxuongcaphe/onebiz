@@ -63,10 +63,10 @@ export async function getAllBOMs(params?: {
 }): Promise<BOM[]> {
   const tenantId = await getCurrentTenantId();
   let query = supabase
-    .from("bom")
+    .from("bom_scoped")
     .select(params?.activeProductsOnly
-      ? "*, products!bom_product_id_fkey!inner(name, code, channel, is_fnb_stock_item), branches:branch_id(name)"
-      : "*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
+      ? "*, products:products_scoped!bom_product_id_fkey!inner(name, code, channel, is_fnb_stock_item), branches:branch_id(name)"
+      : "*, products:products_scoped!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
     .order("branch_id", { ascending: true, nullsFirst: true })
@@ -77,7 +77,7 @@ export async function getAllBOMs(params?: {
   // Nếu có filter branch → chỉ trả BOM có ít nhất 1 production_order tại branch đó.
   if (params?.usedAtBranchId) {
     const { data: bomIds, error: poErr } = await supabase
-      .from("production_orders")
+      .from("production_orders_scoped")
       .select("bom_id")
       .eq("tenant_id", tenantId)
       .eq("branch_id", params.usedAtBranchId);
@@ -111,7 +111,7 @@ export async function getBOMProductionHistory(
 }>> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
-    .from("production_orders")
+    .from("production_orders_scoped")
     .select("id, code, branch_id, planned_qty, completed_qty, status, created_at, branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("bom_id", bomId)
@@ -144,7 +144,7 @@ export async function getBOMByCode(code: string): Promise<BOM[]> {
   if (!code || !code.trim()) return [];
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
-    .from("bom")
+    .from("bom_scoped")
     .select("*, branches:branch_id(name), products:product_id(name, code, channel, is_fnb_stock_item)")
     .eq("tenant_id", tenantId)
     .eq("code", code.trim())
@@ -167,7 +167,7 @@ export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
 
   // 1. Đọc bom_code của SKU (model mới)
   const { data: sku } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("bom_code")
     .eq("tenant_id", tenantId)
     .eq("id", productId)
@@ -176,7 +176,7 @@ export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
   // 2. Query union: hoặc product_id match HOẶC code match bom_code SKU
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
-    .from("bom")
+    .from("bom_scoped")
     .select("*, branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
@@ -212,7 +212,7 @@ export async function getProductIdsWithActiveBom(
   if (productIds.length === 0) return new Set();
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
-    .from("bom")
+    .from("bom_scoped")
     .select("product_id")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
@@ -287,7 +287,7 @@ export async function cloneBOMForBranch(
       yield_unit: source.yieldUnit,
       note: source.note ?? null,
     })
-    .select()
+    .select("id")
     .single();
 
   if (insErr) throw insErr;
@@ -308,14 +308,14 @@ export async function cloneBOMForBranch(
     if (itemsErr) throw itemsErr;
   }
 
-  return mapBOM(cloned as Record<string, unknown>);
+  return getBOMById(cloned.id);
 }
 
 export async function getBOMById(id: string): Promise<BOM> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
-    .from("bom")
-    .select("*, products!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
+    .from("bom_scoped")
+    .select("*, products:products_scoped!bom_product_id_fkey(name, code, channel, is_fnb_stock_item), branches:branch_id(name)")
     .eq("tenant_id", tenantId)
     .eq("id", id)
     .single();
@@ -327,7 +327,7 @@ export async function getBOMById(id: string): Promise<BOM> {
   // Join products để mapBOMItem có tên/mã/giá vốn NVL (nếu không sẽ hiện rỗng + 0).
   const { data: items } = await supabase
     .from("bom_items")
-    .select("*, products!bom_items_material_id_fkey(name, code, cost_price)")
+    .select("*, products:products_scoped!bom_items_material_id_fkey(name, code, cost_price)")
     .eq("bom_id", id)
     .order("sort_order");
 
@@ -377,7 +377,7 @@ export async function createBOM(bom: {
     yield_unit: bom.yieldUnit ?? "cái",
     note: bom.note,
   })
-    .select()
+    .select("id")
     .single();
 
   if (error) throw error;
@@ -402,7 +402,7 @@ export async function createBOM(bom: {
     if (itemsError) throw itemsError;
   }
 
-  return mapBOM(data);
+  return getBOMById(data.id);
 }
 
 export async function updateBOM(
@@ -540,7 +540,7 @@ export async function getFnbPreparedBomEstimates(
   const ids = [...new Set(productIds)];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = supabase as any;
-  const { data: products, error: productError } = await client.from("products")
+  const { data: products, error: productError } = await client.from("products_scoped")
     .select("id, bom_code")
     .eq("tenant_id", tenantId)
     .in("id", ids);
@@ -550,7 +550,7 @@ export async function getFnbPreparedBomEstimates(
       .map((product: { id: string; bom_code: string }) => [product.id, product.bom_code]),
   );
   const headerSelect = "id, product_id, code, branch_id, version, yield_qty";
-  const { data: directHeaders, error: headerError } = await client.from("bom")
+  const { data: directHeaders, error: headerError } = await client.from("bom_scoped")
     .select(headerSelect)
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
@@ -558,7 +558,7 @@ export async function getFnbPreparedBomEstimates(
     .order("version", { ascending: false });
   if (headerError) throw headerError;
   const { data: linkedHeaders, error: linkedError } = linkedCodes.size
-    ? await client.from("bom")
+    ? await client.from("bom_scoped")
       .select(headerSelect)
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -589,7 +589,7 @@ export async function getFnbPreparedBomEstimates(
   if (!bomIds.length) return estimates;
 
   const { data: items, error: itemError } = await client.from("bom_items")
-    .select("bom_id, quantity, waste_percent, products!bom_items_material_id_fkey(sell_price, is_fnb_stock_item)")
+    .select("bom_id, quantity, waste_percent, products:products_scoped!bom_items_material_id_fkey(sell_price, is_fnb_stock_item)")
     .in("bom_id", bomIds);
   if (itemError) throw itemError;
   const lines = new Map<string, Array<{ quantity: number; waste_percent: number; products: { sell_price: number; is_fnb_stock_item: boolean } | null }>>();

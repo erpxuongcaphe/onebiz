@@ -410,7 +410,7 @@ export async function getFnbReadiness(
 
   const [menuProductsResult, groupsResult, menuScopes] = await Promise.all([
     supabase
-      .from("products")
+      .from("products_scoped")
       .select("id, code, name, sell_price, allow_sale, allow_free_sale, bom_code, has_bom")
       .eq("tenant_id", tenantId)
       .eq("is_active", true)
@@ -472,7 +472,7 @@ export async function getFnbReadiness(
 
   const variantsPromise = setupProductIds.length
     ? (supabase as any)
-        .from("product_variants")
+        .from("product_variants_scoped")
         .select("id, product_id, name, sell_price, bom_code, is_default")
         .eq("tenant_id", tenantId)
         .eq("is_active", true)
@@ -523,7 +523,7 @@ export async function getFnbReadiness(
   const bomsPromise = setupProductIds.length
     ? (() => {
         let query = (supabase as any)
-          .from("bom")
+          .from("bom_scoped")
           .select("id, product_id, code, branch_id, bom_items(count)")
           .eq("tenant_id", tenantId)
           .eq("is_active", true)

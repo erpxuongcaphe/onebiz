@@ -29,7 +29,7 @@ import {
   completeProductionAtomic,
   checkMaterialsAvailability,
 } from "@/lib/services";
-import { getFnbBranchComponentCosts } from "@/lib/services/supabase/fnb-branch-cost";
+import { getFnbProductionStockHealth } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbSupplyBranchScope } from "@/lib/services/supabase/fnb-supply-catalog";
 import { formatDateInputValue, formatNumber } from "@/lib/format";
 import type { BOM } from "@/lib/types";
@@ -75,6 +75,10 @@ export function CreateProductionOrderDialog({
   const [bomId, setBomId] = useState("");
   const [branchId, setBranchId] = useState("");
   const [plannedQty, setPlannedQty] = useState("1");
+  const [batchCount, setBatchCount] = useState("1");
+  const [weighedQty, setWeighedQty] = useState("");
+  const [tareQty, setTareQty] = useState("0");
+  const [materialActuals, setMaterialActuals] = useState<Record<string, string>>({});
   const [plannedStart, setPlannedStart] = useState("");
   const [plannedEnd, setPlannedEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -127,7 +131,7 @@ export function CreateProductionOrderDialog({
       setBomsOfProduct([]);
       setBomId("");
       setBranchId("");
-      setPlannedQty("1");
+      setPlannedQty("1"); setBatchCount("1"); setWeighedQty(""); setTareQty("0"); setMaterialActuals({});
       setPlannedStart("");
       setPlannedEnd("");
       setNotes("");
@@ -229,13 +233,14 @@ export function CreateProductionOrderDialog({
   }, [productId, productOptions]);
 
   // When BOM or qty changes → recompute material needs
+  useEffect(() => { setMaterialActuals({}); setWeighedQty(""); setTareQty("0"); }, [bomId]);
   useEffect(() => {
     let cancelled = false;
-    setSelectedBom(null);
-    setOutputUnit("");
-    setMaterials([]);
     setCheckedMaterialKey("");
     if (!bomId) {
+      setSelectedBom(null);
+      setOutputUnit("");
+      setMaterials([]);
       setComputing(false);
       return;
     }
@@ -245,7 +250,7 @@ export function CreateProductionOrderDialog({
         const bom = await getBOMById(bomId);
 
         const qty = Number(plannedQty) || 0;
-        const batches = bom.yieldQty > 0 ? qty / bom.yieldQty : 0;
+        const batches = selectedBranchMode === "outlet" ? Number(batchCount) || 0 : bom.yieldQty > 0 ? qty / bom.yieldQty : 0;
 
         const baseNeeds = (bom.items ?? []).map((item) => {
           const perBatch = item.quantity * (1 + (item.wastePercent ?? 0) / 100);
@@ -255,7 +260,7 @@ export function CreateProductionOrderDialog({
             productName: item.materialName ?? "",
             unit: item.unit,
             perBatch,
-            needed: perBatch * batches,
+            needed: materialActuals[item.materialId] !== undefined ? Number(materialActuals[item.materialId]) : perBatch * batches,
           };
         });
 
@@ -281,13 +286,13 @@ export function CreateProductionOrderDialog({
           // Completion credits the entered quantity in the product's stock unit,
           // not in a legacy inline BOM's default yield label.
           if (product.isFnbStockItem) {
-            resolvedOutputUnit = product.stockUnit?.trim() || product.unit?.trim() || bom.yieldUnit;
+            resolvedOutputUnit = product.unit?.trim() || product.stockUnit?.trim() || bom.yieldUnit;
           }
           const scope = product.isFnbStockItem
             ? await getFnbSupplyBranchScope(branchId)
             : null;
           const costs = scope?.enforcementEnabled
-            ? await getFnbBranchComponentCosts(branchId, baseNeeds.map((n) => n.productId))
+            ? await getFnbProductionStockHealth(branchId, baseNeeds.map((n) => n.productId))
             : null;
           const availOf = new Map(checks.map((c) => [c.productId, c.available]));
           needs = baseNeeds.map((n) => {
@@ -315,7 +320,7 @@ export function CreateProductionOrderDialog({
         setSelectedBom(bom);
         setOutputUnit(resolvedOutputUnit);
         setMaterials(needs);
-        setCheckedMaterialKey(JSON.stringify([bomId, plannedQty, branchId]));
+        setCheckedMaterialKey(JSON.stringify([bomId, plannedQty, branchId, batchCount, materialActuals]));
       } catch (err) {
         if (cancelled) return;
         setSelectedBom(null);
@@ -330,11 +335,13 @@ export function CreateProductionOrderDialog({
       }
     })();
     return () => { cancelled = true; };
-  }, [bomId, plannedQty, branchId, toast]);
+  }, [bomId, plannedQty, branchId, selectedBranchMode, batchCount, materialActuals, toast]);
 
+  const expectedOutput = selectedBranchMode === "outlet" ? (selectedBom?.yieldQty ?? 0) * Number(batchCount) : Number(plannedQty);
+  const actualOutput = selectedBranchMode === "outlet" ? Number(weighedQty) - Number(tareQty) : Number(plannedQty);
   const hasShortage = materials.some((m) => m.shortage);
   const hasCostMismatch = materials.some((m) => m.costMismatch);
-  const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId]);
+  const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId, batchCount, materialActuals]);
   const canComplete = !computing && selectedBom?.id === bomId &&
     checkedMaterialKey === materialCheckKey && materials.length > 0 &&
     !hasShortage && !hasCostMismatch;
@@ -349,7 +356,9 @@ export function CreateProductionOrderDialog({
     if (!branchId || !branches.some((branch) => branch.id === branchId)) {
       e.branchId = "Chọn chi nhánh";
     }
-    if (!plannedQty || Number(plannedQty) <= 0) e.plannedQty = "Số lượng phải > 0";
+    if (!Number.isFinite(expectedOutput) || expectedOutput <= 0) e.plannedQty = "Số mẻ / số lượng phải lớn hơn 0";
+    if (!Number.isFinite(actualOutput) || actualOutput <= 0 || Number(tareQty) < 0) e.actualOutput = "Nhập khối lượng thực tế lớn hơn khối lượng vỏ hộp";
+    if (materials.some(m => !Number.isFinite(m.needed) || m.needed <= 0)) e.materials = "Nguyên liệu thực dùng phải lớn hơn 0";
     setErrors(e);
     return Object.keys(e).length === 0;
   }
@@ -369,10 +378,10 @@ export function CreateProductionOrderDialog({
         branchId,
         bomId,
         productId: selectedBom.productId,
-        plannedQty: Number(plannedQty),
+        plannedQty: expectedOutput,
         plannedStart: plannedStart || undefined,
         plannedEnd: plannedEnd || undefined,
-        notes: notes || undefined,
+        notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty}; vỏ ${tareQty}; thực nhập ${actualOutput} ${outputUnit}.`.trim() : notes || undefined,
         materials: materials.map((m) => ({
           productId: m.productId,
           plannedQty: m.needed,
@@ -389,14 +398,14 @@ export function CreateProductionOrderDialog({
       try {
         await completeProductionAtomic(
           createdId,
-          Number(plannedQty),
+          actualOutput,
           lot,
           manufacturedDate || today,
           expiryDate || undefined,
         );
         toast({
           title: "Sản xuất hoàn thành",
-          description: `${createdCode}: +${formatNumber(Number(plannedQty) || 0)} ${outputUnit} ${selectedBom.productName ?? ""} vào kho — NVL đã trừ, lô ${lot ?? "tự sinh"}.`,
+          description: `${createdCode}: +${formatNumber(actualOutput)} ${outputUnit} ${selectedBom.productName ?? ""} vào kho — NVL đã trừ, lô ${lot ?? "tự sinh"}.`,
           variant: "success",
         });
       } catch (err) {
@@ -426,16 +435,15 @@ export function CreateProductionOrderDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!submittingRef.current) onOpenChange(next); }}>
-      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="md:max-w-2xl lg:max-w-3xl max-h-[90dvh] flex flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle>Sản xuất &amp; nhập kho</DialogTitle>
           <DialogDescription>
-            Chọn sản phẩm + số lượng mẻ đã làm xong. Bấm <b>Hoàn thành</b> là trừ
-            NVL và nhập thành phẩm vào kho ngay (không còn bước lên kế hoạch).
+            Ghi nhận nguyên liệu đã dùng và thành phẩm thực nhận. Hoàn thành một lần để xuất nguyên liệu và nhập thành phẩm.
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset disabled={saving} className="grid min-w-0 gap-4 py-2">
+        <fieldset disabled={saving} className="grid min-h-0 min-w-0 gap-4 overflow-y-auto py-2 pr-1">
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -585,17 +593,19 @@ export function CreateProductionOrderDialog({
           <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <label className="text-sm font-medium">
-                Số lượng <span className="text-destructive">*</span>
+                {selectedBranchMode === "outlet" ? "Số mẻ nguyên liệu đã làm" : "Số lượng"} <span className="text-destructive">*</span>
               </label>
               <div className="flex gap-2">
                 <Input
                   type="number"
-                  value={plannedQty}
-                  onChange={(e) => setPlannedQty(e.target.value)}
+                  aria-label="Số mẻ hoặc số lượng sản xuất"
+                  value={selectedBranchMode === "outlet" ? batchCount : plannedQty}
+                  min="0" step="any"
+                  onChange={(e) => { setMaterialActuals({}); selectedBranchMode === "outlet" ? setBatchCount(e.target.value) : setPlannedQty(e.target.value); }}
                 />
                 {selectedBom && (
                   <span className="flex items-center text-sm text-muted-foreground">
-                    {outputUnit}
+                    {selectedBranchMode === "outlet" ? "mẻ" : outputUnit}
                   </span>
                 )}
               </div>
@@ -665,11 +675,22 @@ export function CreateProductionOrderDialog({
             </div>
           </div>
 
+          {selectedBranchMode === "outlet" && selectedBom && <section className="space-y-3 rounded-lg border bg-primary/5 p-3">
+            <h3 className="font-medium text-primary">Cân thành phẩm thực nhận</h3>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="space-y-1 text-sm">Cân cả hộp ({outputUnit})<Input type="number" min="0" step="any" value={weighedQty} onChange={e => setWeighedQty(e.target.value)} /></label>
+              <label className="space-y-1 text-sm">Trừ vỏ hộp ({outputUnit})<Input type="number" min="0" step="any" value={tareQty} onChange={e => setTareQty(e.target.value)} /></label>
+            </div>
+            <p className="text-sm">Thực nhập <b>{formatNumber(Math.max(0, actualOutput))} {outputUnit}</b> · Dự kiến {formatNumber(expectedOutput)} {outputUnit}</p>
+            <p className="text-xs text-muted-foreground">Tương đương {formatNumber(Math.max(0, actualOutput) / selectedBom.yieldQty)} mẻ chuẩn — chỉ để tham khảo. Nguyên liệu trừ theo số mẻ đã làm / thực dùng bên dưới, không suy ngược từ cân thành phẩm.</p>
+            {outputUnit.toLowerCase() !== "g" && outputUnit.toLowerCase() !== "gram" && <p className="text-xs text-muted-foreground">Mã cũ đang dùng {outputUnit}. Không tự đổi tồn sang gram; cần khai báo sản lượng chuẩn và chuyển đổi trước.</p>}
+            {errors.actualOutput && <p className="text-xs text-destructive">{errors.actualOutput}</p>}
+          </section>}
           {/* Material needs */}
           {bomId && (
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium">NVL cần dùng</h3>
+                <h3 className="text-sm font-medium">Nguyên liệu thực dùng</h3>
                 {computing && (
                   <Icon name="progress_activity" size={14} className="animate-spin text-muted-foreground" />
                 )}
@@ -694,7 +715,7 @@ export function CreateProductionOrderDialog({
                             <div className="text-xs text-muted-foreground">{m.productCode}</div>
                           </td>
                           <td className="p-2 text-right">
-                            <span className="font-medium">{formatNumber(m.needed)}</span>{" "}
+                            {selectedBranchMode === "outlet" ? <Input className="w-28 text-right" aria-label={`Thực dùng ${m.productName}`} type="number" min="0" step="any" value={materialActuals[m.productId] ?? String(m.needed)} onChange={e => setMaterialActuals(previous => ({...previous, [m.productId]: e.target.value}))} /> : <span className="font-medium">{formatNumber(m.needed)}</span>}{" "}
                             <span className="text-xs text-muted-foreground">{m.unit}</span>
                           </td>
                           <td className="p-2 text-right">
@@ -753,12 +774,12 @@ export function CreateProductionOrderDialog({
           </div>
         </fieldset>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0 border-t pt-3">
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
           {/* CEO 06/07: 1 nút duy nhất — tạo lệnh = hoàn thành + nhập kho luôn */}
-          <Button onClick={() => handleSave()} disabled={saving || !canComplete}>
+          <Button onClick={() => handleSave()} disabled={saving || !canComplete || !Number.isFinite(actualOutput) || actualOutput <= 0 || materials.some(m => !Number.isFinite(m.needed) || m.needed <= 0)}>
             {saving && (
               <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />
             )}

@@ -112,7 +112,7 @@ export async function getProducts(params: QueryParams): Promise<QueryResult<Prod
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select(selectCols, { count: "exact" })
     .eq("tenant_id", tenantId);
 
@@ -230,7 +230,7 @@ export async function getAllMatchingProductIds(params: QueryParams): Promise<str
   const hasStockFilter = Boolean(params.filters?.stock);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let query = (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select(branchId ? `id, branch_stock${hasStockFilter ? "!inner" : ""}(quantity)` : "id")
     .eq("tenant_id", tenantId);
   if (branchId) {
@@ -335,7 +335,7 @@ export async function getProductStats(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const branchId = options?.branchId;
   let query = (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select(
       "stock, cost_price, inventory_role" +
         (branchId ? ", branch_stock(quantity)" : ""),
@@ -450,7 +450,7 @@ export async function getProductCategoriesAsync(
   // Count per category: chỉ select 1 column (category_id), filter is_active
   // để bỏ soft-deleted. Không select product_type (đã filter qua scope).
   let prodQuery = supabase
-    .from("products")
+    .from("products_scoped")
     .select("category_id")
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
@@ -498,7 +498,7 @@ export async function getProductBrands(
   const tenantId = await getCurrentTenantId();
 
   let query = supabase
-    .from("products")
+    .from("products_scoped")
     .select("brand")
     .eq("tenant_id", tenantId)
     .not("brand", "is", null)
@@ -529,7 +529,7 @@ export async function getProductById(id: string): Promise<ProductDetail | null> 
   // Defense-in-depth: id là UUID global unique nhưng vẫn filter tenant để
   // tránh leak nếu URL bị share / scan.
   const { data, error } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select(
       "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
     )
@@ -586,8 +586,8 @@ export async function getAllStockMovements(
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
-    .from("stock_movements")
-    .select("*, products!inner(name, code, unit), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
+    .from("stock_movements_scoped")
+    .select("*, products:products_scoped!inner(name, code, unit), profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId);
   if (params.productId) query = query.eq("product_id", params.productId);
 
@@ -704,8 +704,8 @@ export async function getStockMovementCounts(
       return 0;
     }
     let query = supabase
-      .from("stock_movements")
-      .select("id, products!inner(name, code)", { count: "exact", head: true })
+      .from("stock_movements_scoped")
+      .select("id, products:products_scoped!inner(name, code)", { count: "exact", head: true })
       .eq("tenant_id", tenantId);
     if (params.productId) query = query.eq("product_id", params.productId);
 
@@ -958,7 +958,7 @@ export async function getStockMovements(
   const { from, to } = getPaginationRange(params);
 
   let query = supabase
-    .from("stock_movements")
+    .from("stock_movements_scoped")
     .select("*, profiles!stock_movements_created_by_fkey(full_name)", { count: "exact" })
     .eq("tenant_id", tenantId)
     .eq("product_id", productId);
@@ -1105,7 +1105,7 @@ export async function getStockCard(
   const ledger: any[] = [];
   for (let page = 0; ; page++) {
     let q = supabase
-      .from("stock_movements")
+      .from("stock_movements_scoped")
       .select("*, profiles!stock_movements_created_by_fkey(full_name)")
       .eq("tenant_id", tenantId)
       .eq("product_id", productId);
@@ -1145,7 +1145,7 @@ export async function getStockCard(
     systemStock = Number((bs as { quantity?: number } | null)?.quantity ?? 0);
   } else {
     const { data: pr } = await supabase
-      .from("products")
+      .from("products_scoped")
       .select("stock")
       .eq("id", productId)
       .maybeSingle();
@@ -1218,7 +1218,7 @@ export async function getSalesHistory(
   const { from, to } = getPaginationRange(params);
 
   const { data, count, error } = await supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select(`
       id, quantity, unit_price, discount, total,
       invoices!inner(id, code, created_at, ngay_chung_tu, customer_name, status, created_by, profiles!invoices_created_by_fkey(full_name))
@@ -1418,13 +1418,13 @@ export async function createProduct(product: Partial<Product & ProductDetail>): 
       supplier_id: product.supplierId,
       brand: product.brand,
     } satisfies ProductInsert)
-    .select(
-      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
-    )
+    .select("id")
     .single();
 
   if (error) handleError(error, "createProduct");
-  return mapProduct(data);
+  const refreshed = await getProductById(data.id);
+  if (!refreshed) throw new Error("Đã lưu nhưng chưa tải lại được sản phẩm. Vui lòng cập nhật danh sách.");
+  return refreshed;
 }
 
 /**
@@ -1483,16 +1483,16 @@ export async function updateProduct(id: string, updates: Partial<Product & Produ
     .update(payload)
     .eq("id", id)
     .eq("tenant_id", tenantId)
-    .select(
-      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
-    )
+    .select("id")
     .single();
 
   if (error?.message?.includes("PRODUCT_STOCK_UNIT_LOCKED_BY_HISTORY")) {
     throw new Error("Mã hàng đã có tồn kho, chứng từ hoặc BOM nên cần giữ đơn vị tồn gốc. Để nhập gram/ml hoặc đơn vị nhỏ hơn, hãy thiết lập quy đổi đơn vị của sản phẩm.");
   }
   if (error) handleError(error, "updateProduct");
-  return mapProduct(data);
+  const refreshed = await getProductById(data.id);
+  if (!refreshed) throw new Error("Đã lưu nhưng chưa tải lại được sản phẩm. Vui lòng cập nhật danh sách.");
+  return refreshed;
 }
 
 /**
@@ -1564,7 +1564,7 @@ export async function moveProductSortOrder(
   // bypass — KHI nào regen types qua `supabase gen types` thì xoá cast.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: currentRaw, error: e1 } = await (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select("id, sort_order, category_id, product_type, channel")
     .eq("tenant_id", tenantId)
     .eq("id", productId)
@@ -1582,7 +1582,7 @@ export async function moveProductSortOrder(
   // RLS đã filter tenant, nhưng vẫn .eq() cho rõ + tận dụng index composite.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let neighborQuery = (supabase as any)
-    .from("products")
+    .from("products_scoped")
     .select("id, sort_order")
     .eq("tenant_id", tenantId)
     .eq("is_active", true);
@@ -2114,13 +2114,13 @@ export async function duplicateProduct(sourceId: string): Promise<Product> {
       supplier_id: source.supplierId,
       brand: source.brand,
     } satisfies ProductInsert)
-    .select(
-      "*, categories!products_category_id_fkey(name, code), suppliers!products_supplier_id_fkey(name)",
-    )
+    .select("id")
     .single();
 
   if (error) handleError(error, "duplicateProduct");
-  return mapProduct(data);
+  const refreshed = await getProductById(data.id);
+  if (!refreshed) throw new Error("Đã lưu nhưng chưa tải lại được sản phẩm. Vui lòng cập nhật danh sách.");
+  return refreshed;
 }
 
 /* ------------------------------------------------------------------ */

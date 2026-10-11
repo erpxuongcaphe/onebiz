@@ -661,7 +661,7 @@ export async function getRevenueByCategory(
     const chunk = await fetchAllFnbRows<FnbCategoryItemRow>(
       () => supabase
         .from("kitchen_order_items")
-        .select("product_id, product_name, quantity, unit_price, products(category_id, product_categories(name))")
+        .select("product_id, product_name, quantity, unit_price, products:products_scoped(category_id, product_categories(name))")
         .in("kitchen_order_id", chunkIds)
         .order("id", { ascending: true }) as unknown as FnbPagedQuery<FnbCategoryItemRow>,
       "[getRevenueByCategory.items]",

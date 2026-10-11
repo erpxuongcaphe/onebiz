@@ -692,13 +692,13 @@ export interface Database {
           {
             foreignKeyName: "invoice_items_product_id_fkey";
             columns: ["product_id"];
-            referencedRelation: "products";
+            referencedRelation: "products_scoped";
             referencedColumns: ["id"];
           },
           {
             foreignKeyName: "invoice_items_variant_id_fkey";
             columns: ["variant_id"];
-            referencedRelation: "product_variants";
+            referencedRelation: "product_variants_scoped";
             referencedColumns: ["id"];
           },
         ];
@@ -813,7 +813,7 @@ export interface Database {
           {
             foreignKeyName: "po_items_product_id_fkey";
             columns: ["product_id"];
-            referencedRelation: "products";
+            referencedRelation: "products_scoped";
             referencedColumns: ["id"];
           },
         ];
@@ -2885,7 +2885,18 @@ export interface Database {
         Relationships: [];
       };
     };
-    Views: Record<string, never>;
+    Views: Record<string, never> & {
+      product_variants_scoped: { Row: Database["public"]["Tables"]["product_variants"]["Row"]; Relationships: Database["public"]["Tables"]["product_variants"]["Relationships"]; };
+      bom_scoped: { Row: Database["public"]["Tables"]["bom"]["Row"]; Relationships: Database["public"]["Tables"]["bom"]["Relationships"]; };
+      production_orders_scoped: { Row: Database["public"]["Tables"]["production_orders"]["Row"]; Relationships: Database["public"]["Tables"]["production_orders"]["Relationships"]; };
+      production_order_materials_scoped: { Row: Database["public"]["Tables"]["production_order_materials"]["Row"]; Relationships: Database["public"]["Tables"]["production_order_materials"]["Relationships"]; };
+      stock_movements_scoped: { Row: Database["public"]["Tables"]["stock_movements"]["Row"]; Relationships: Database["public"]["Tables"]["stock_movements"]["Relationships"]; };
+      invoice_items_scoped: { Row: Database["public"]["Tables"]["invoice_items"]["Row"]; Relationships: Database["public"]["Tables"]["invoice_items"]["Relationships"]; };
+      products_scoped: {
+        Row: Database["public"]["Tables"]["products"]["Row"];
+        Relationships: Database["public"]["Tables"]["products"]["Relationships"];
+      };
+    };
     Functions: {
       fnb_kitchen_return_lines: {
         Args: { p_branch_id: string };

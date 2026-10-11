@@ -409,7 +409,7 @@ export async function getTopProducts(limit: number = 10, branchId?: string): Pro
 
   // invoice_items không có tenant_id riêng — scope qua invoices.tenant_id
   let query = supabase
-    .from("invoice_items")
+    .from("invoice_items_scoped")
     .select("product_name, quantity, total, invoices!inner(ngay_chung_tu, status, branch_id, tenant_id)")
     .eq("invoices.tenant_id", tenantId)
     .gte("invoices.ngay_chung_tu", range.start)
@@ -443,7 +443,7 @@ export async function getLowStockProducts(limit: number = 5, branchId?: string):
   const tenantId = await getCurrentTenantId();
   if (branchId) {
     const { data, error } = await supabase.from("branch_stock")
-      .select("quantity, products!inner(name, min_stock, is_active)")
+      .select("quantity, products:products_scoped!inner(name, min_stock, is_active)")
       .eq("tenant_id", tenantId).eq("branch_id", branchId)
       .eq("products.is_active", true).gt("products.min_stock", 0);
     if (error) handleError(error, "getLowStockProducts");
@@ -453,7 +453,7 @@ export async function getLowStockProducts(limit: number = 5, branchId?: string):
   }
 
   const { data, error } = await supabase
-    .from("products")
+    .from("products_scoped")
     .select("name, stock, min_stock")
     .eq("tenant_id", tenantId)
     .eq("is_active", true)
