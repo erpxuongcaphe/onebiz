@@ -32,4 +32,10 @@ Bản build từ HEAD cộng đúng phạm vi Hub đã đạt TypeScript và 152
 
 Web production được kiểm tra chỉ đọc sau khóa nền: phiên đăng nhập admin, chi nhánh và dashboard tải xong; không có lỗi console trong lượt kiểm tra. Chưa thực hiện giao dịch nghiệp vụ để thử.
 
-Git checkout chính đang có tiến trình/khóa từ công việc khác; phát hành qua checkout riêng từ cùng HEAD, không xóa khóa hoặc ghi index checkout chính.
+Git checkout chính đang có tiến trình/khóa từ công việc khác; không xóa khóa hoặc ghi index checkout chính. Đã phát hiện HEAD local cũ hơn GitHub khoảng 696 commit. Commit Hub được rebase vào main mới nhất `7164d704`; không phát hành ảnh chụp code cũ. Các kết quả build/test ở đoạn trên thuộc vòng kiểm tra cũ, không thay thế cổng kiểm tra bản tích hợp mới nhất.
+
+## Chuẩn hóa lịch sử migration
+
+Chủ hệ thống duyệt chuẩn hóa riêng tám file Hub sang `00501`–`00508` ngày 11/10/2026. Đã kiểm tra dãy mới chưa dùng và lịch sử chưa ghi nhận Hub. Sau xác minh 18 bảng bật RLS và bucket riêng tư, chỉ ghi tám bản ghi lịch sử áp dụng; SELECT kiểm tra lại đủ tám phiên bản. Không chạy lại migration, không thay đổi kho/tiền hay cấp quyền mới. Các file Retail/FnB `00301`–`00308` giữ nguyên.
+
+Bảy component Hub chuyển icon sang component chung của main mới nhất, không thêm lại thư viện icon đã được ERP loại bỏ. Bản tích hợp đã đạt production build, TypeScript, 144/144 trang và 155/155 test Hub trên 15 file. Lượt test đầu có hai worker timeout; lượt chạy lại một worker hoàn tất không có lỗi. Chưa xác nhận deploy trong báo cáo này.

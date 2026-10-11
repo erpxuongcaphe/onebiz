@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { Download, Upload } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import {
   revenueHeaders,
   validateRevenueRows,
@@ -51,7 +51,7 @@ export function RevenueExcel({
     <section>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button onClick={() => void download()}>
-          <Download size={16} />
+          <Icon name="download" size={16} />
           Tải mẫu doanh thu
         </button>
         <button
@@ -59,7 +59,7 @@ export function RevenueExcel({
           disabled={busy || reading}
           onClick={() => fileInput.current?.click()}
         >
-          <Upload size={16} />
+          <Icon name="upload" size={16} />
           Nhập XLSX
         </button>
         <input

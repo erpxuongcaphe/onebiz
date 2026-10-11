@@ -13,19 +13,7 @@ import {
   type FormEvent,
   type ReactElement,
 } from "react";
-import {
-  ClipboardCheck,
-  ListTodo,
-  ShieldCheck,
-  ChartNoAxesCombined,
-  Settings2,
-  Plus,
-  RefreshCw,
-  X,
-  ArrowRight,
-  Check,
-  LockKeyhole,
-} from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { formatNumber, formatDate } from "@/lib/format";
 import {
@@ -66,11 +54,11 @@ import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
 
 const tabs = [
-  { key: "work", label: "Công việc", icon: ClipboardCheck },
-  { key: "todo", label: "To-do", icon: ListTodo },
-  { key: "review", label: "Xác minh", icon: ShieldCheck },
-  { key: "kpi", label: "KPI & thưởng", icon: ChartNoAxesCombined },
-  { key: "settings", label: "Thiết lập", icon: Settings2 },
+  { key: "work", label: "Công việc", icon: "fact_check" },
+  { key: "todo", label: "To-do", icon: "checklist" },
+  { key: "review", label: "Xác minh", icon: "verified_user" },
+  { key: "kpi", label: "KPI & thưởng", icon: "monitoring" },
+  { key: "settings", label: "Thiết lập", icon: "tune" },
 ] as const;
 type Tab = (typeof tabs)[number]["key"];
 type Editor = {
@@ -470,13 +458,13 @@ export default function OperationsWorkspace() {
             disabled={loading || busy}
             onClick={() => void load()}
           >
-            <RefreshCw size={17} />
+            <Icon name="refresh" size={17} />
           </button>
         </div>
       </header>
       <div className={styles.layout}>
         <aside className={styles.nav}>
-          {tabs.map(({ key, label, icon: Icon }) => (
+          {tabs.map(({ key, label, icon }) => (
             <button
               type="button"
               key={key}
@@ -486,7 +474,7 @@ export default function OperationsWorkspace() {
                 setSearch("");
               }}
             >
-              <Icon size={19} />
+              <Icon name={icon} size={19} />
               <span>{label}</span>
             </button>
           ))}
@@ -496,7 +484,7 @@ export default function OperationsWorkspace() {
             <h1>{tabs.find((t) => t.key === tab)?.label}</h1>
             {data?.periods.length ? (
               <span className={styles.lock}>
-                <LockKeyhole size={14} />
+                <Icon name="lock" size={14} />
                 Đã chốt kỳ
               </span>
             ) : null}
@@ -583,7 +571,7 @@ export default function OperationsWorkspace() {
                       className={styles.primary}
                       onClick={() => setEditor({ kind: "todo" })}
                     >
-                      <Plus size={16} />
+                      <Icon name="add" size={16} />
                       To-do
                     </button>
                   )}
@@ -613,7 +601,7 @@ export default function OperationsWorkspace() {
                           />
                         )}
                         {r.verified_at && (
-                          <ShieldCheck size={16} aria-label="Đã xác minh" />
+                          <Icon name="verified_user" size={16} aria-label="Đã xác minh" />
                         )}
                         {r.had_failure && (
                           <Badge value="Đã ghi nhận chưa đạt" />
@@ -630,7 +618,7 @@ export default function OperationsWorkspace() {
                                   setEditor({ kind: "result", run: r })
                                 }
                               >
-                                <ClipboardCheck size={16} />
+                                <Icon name="fact_check" size={16} />
                                 Kết quả
                               </button>
                               <button
@@ -643,7 +631,7 @@ export default function OperationsWorkspace() {
                                   setEditor({ kind: "transfer", run: r })
                                 }
                               >
-                                <ArrowRight size={16} />
+                                <Icon name="arrow_forward" size={16} />
                               </button>
                             </>
                           )}
@@ -738,7 +726,7 @@ export default function OperationsWorkspace() {
                                   setEditor({ kind: "verify", run: r })
                                 }
                               >
-                                <ShieldCheck size={16} />
+                                <Icon name="verified_user" size={16} />
                                 Xác minh
                               </button>
                             )}
@@ -770,14 +758,14 @@ export default function OperationsWorkspace() {
                   <div className={styles.toolbar}>
                     {can("approve_policy") && !data.periods.length && (
                       <button onClick={() => setEditor({ kind: "target" })}>
-                        <Plus size={16} />
+                        <Icon name="add" size={16} />
                         Chỉ tiêu
                       </button>
                     )}
                     {(can("work") || can("approve_policy")) &&
                       !data.periods.length && (
                         <button onClick={() => setEditor({ kind: "revenue" })}>
-                          <Plus size={16} />
+                          <Icon name="add" size={16} />
                           Doanh thu ngoài
                         </button>
                       )}
@@ -785,7 +773,7 @@ export default function OperationsWorkspace() {
                       <button
                         onClick={() => setEditor({ kind: "close_period" })}
                       >
-                        <LockKeyhole size={16} />
+                        <Icon name="lock" size={16} />
                         Chốt kỳ
                       </button>
                     )}
@@ -909,7 +897,7 @@ export default function OperationsWorkspace() {
                                   });
                               }}
                             >
-                              <Check size={16} />
+                              <Icon name="check" size={16} />
                               Duyệt
                             </button>
                           )}
@@ -939,7 +927,7 @@ export default function OperationsWorkspace() {
                             void send("onebiz_revenue", { period })
                           }
                         >
-                          <RefreshCw size={16} />
+                          <Icon name="refresh" size={16} />
                           Lấy doanh thu OneBiz FnB
                         </button>
                       )}
@@ -977,7 +965,7 @@ export default function OperationsWorkspace() {
               aria-label="Đóng"
               onClick={() => setEditor(null)}
             >
-              <X size={18} />
+              <Icon name="close" size={18} />
             </button>
           </DialogTitle>
           {editor && data && (
@@ -1049,25 +1037,25 @@ function SettingsView({
         {canConfigure && (
           <>
             <button onClick={() => onEdit({ kind: "standard" })}>
-              <Plus size={16} />
+              <Icon name="add" size={16} />
               Standard Working
             </button>
             <button onClick={() => onEdit({ kind: "policy" })}>
-              <Plus size={16} />
+              <Icon name="add" size={16} />
               Chính sách thưởng
             </button>
             <button
               disabled={busy}
               onClick={() => void onSave("generate", { until: today() })}
             >
-              <RefreshCw size={16} />
+              <Icon name="refresh" size={16} />
               Tạo lịch đến hôm nay
             </button>
           </>
         )}
         {canManageMembers && (
           <button onClick={() => onEdit({ kind: "member" })}>
-            <Plus size={16} />
+            <Icon name="add" size={16} />
             Phân công
           </button>
         )}
@@ -1101,7 +1089,7 @@ function SettingsView({
                   disabled={busy}
                   onClick={() => onEdit({ kind: "event", standard: s })}
                 >
-                  <Plus size={16} />
+                  <Icon name="add" size={16} />
                   Tạo lần thực hiện
                 </button>
               )}
@@ -1110,7 +1098,7 @@ function SettingsView({
                 disabled={busy}
                 onClick={() => onEdit({ kind: "standard", standard: s })}
               >
-                <Plus size={16} />
+                <Icon name="add" size={16} />
                 Phiên bản mới
               </button>
             )}
@@ -1119,7 +1107,7 @@ function SettingsView({
                 disabled={busy}
                 onClick={() => void onSave("approve_standard", { id: s.id })}
               >
-                <Check size={16} />
+                <Icon name="check" size={16} />
                 Duyệt áp dụng
               </button>
             )}
@@ -1144,7 +1132,7 @@ function SettingsView({
                 disabled={busy}
                 onClick={() => onEdit({ kind: "policy", policy: p })}
               >
-                <Plus size={16} />
+                <Icon name="add" size={16} />
                 Phiên bản mới
               </button>
             )}
@@ -1153,7 +1141,7 @@ function SettingsView({
                 disabled={busy}
                 onClick={() => void onSave("approve_policy", { id: p.id })}
               >
-                <Check size={16} />
+                <Icon name="check" size={16} />
                 Duyệt
               </button>
             )}
@@ -1872,7 +1860,7 @@ function EditorForm({
                           )
                         }
                       >
-                        <X size={16} />
+                        <Icon name="close" size={16} />
                       </button>
                     )}
                   </div>
@@ -1883,7 +1871,7 @@ function EditorForm({
                 disabled={criteria.length >= 30}
                 onClick={() => setCriteria((old) => [...old, blankCriterion()])}
               >
-                <Plus size={16} />
+                <Icon name="add" size={16} />
                 Tiêu chí
               </button>
             </>
@@ -2301,7 +2289,7 @@ function EditorForm({
                     }
                     title="Xóa bậc"
                   >
-                    <X size={16} />
+                    <Icon name="close" size={16} />
                   </button>
                 </div>
               ))}
@@ -2315,7 +2303,7 @@ function EditorForm({
                   ])
                 }
               >
-                <Plus size={16} />
+                <Icon name="add" size={16} />
                 Bậc thưởng
               </button>
             </>

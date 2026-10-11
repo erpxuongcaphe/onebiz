@@ -4,7 +4,9 @@
 
 Ngày 11/10/2026: chủ hệ thống đã duyệt bản khóa nền và phát hành khi kiểm tra đạt. Đã áp dụng bản khóa nền và tám migration Hub trên production, đối soát 18 bảng bật RLS, không có quyền ghi trực tiếp authenticated/anon, bucket riêng tư 5 MB, trigger liên kết MKT tồn tại. Chưa tạo mẫu, công việc, tài khoản hoặc sửa số liệu nghiệp vụ. Trạng thái deploy web được ghi riêng trong báo cáo phát hành; không suy ra từ việc SQL thành công.
 
-Code và migration Hub được kiểm thử trên dữ liệu giả. Production chưa được thay đổi. Hai GET chỉ đọc ngày 10/10/2026 xác nhận cột nền `tenants`, `profiles`, `branches`, `mkt_tasks` có trong API; hàm `mkt_is_lead` được quảng bá. API trả 5 owner hoạt động thuộc 3 tenant. Không suy ra tài khoản đang đăng nhập là CEO và không tự chọn tenant thay người quản trị.
+### Lịch sử preflight trước khi áp dụng (không phải trạng thái hiện tại)
+
+Code và migration Hub được kiểm thử trên dữ liệu giả trước thay đổi production. Hai GET chỉ đọc ngày 10/10/2026 xác nhận cột nền `tenants`, `profiles`, `branches`, `mkt_tasks` có trong API; hàm `mkt_is_lead` được quảng bá. Không suy ra tài khoản đang đăng nhập là CEO và không tự chọn tenant thay người quản trị.
 
 Ngày 11/10/2026 đã đọc catalog production: chưa có bảng/hàm `ops_*` hoặc bucket minh chứng Hub. Phát hiện RLS đang tắt trên `profiles`, `branches`, `tenants`, trong khi `authenticated` có quyền cập nhật `profiles.role/tenant_id/is_active`. **Chặn kích hoạt Hub cho tới khi rà và khóa nền phân quyền bằng phương án được duyệt riêng.** Xem `DOI_CHIEU_PRODUCTION_2026_10_11.md`. Không tự sửa quyền production để vượt điều kiện này.
 
@@ -15,7 +17,7 @@ Phân quyền Hub hiện dùng nhóm quyền chung OneBiz và phạm vi chi nhá
 1. Giữ bộ code hiện tại; tách các file Hub khỏi thay đổi ERP/POS của AI khác. Không chạy `git add .`, không gom `.tmp`, ảnh test hoặc tài liệu gốc người dùng vào commit.
 2. Chạy preflight chỉ đọc, xác nhận đúng project/tenant và tài khoản CEO. Đối chiếu cột/kết quả hàm nền với migration, đặc biệt `profiles`, `mkt_tasks`, `get_user_tenant_id` và `mkt_is_lead`.
 3. Xác nhận có bản sao lưu và cách khôi phục trước SQL production. Không coi bản dump fixture local là sao lưu production. Không hứa có point-in-time recovery ở tài khoản free.
-4. Sau khi được phép, áp dụng đúng thứ tự `00301` đến `00308`; mỗi file có giao dịch. Nếu lỗi, dừng ngay, không chạy tiếp hoặc chạy lại toàn bộ mù quáng. File đã thành công phải ghi nhận riêng vì tám file không phải một giao dịch chung.
+4. Tám SQL Hub đã áp dụng bằng SQL Editor dưới tên cũ `00301` đến `00308`. File phát hành được đổi sang `00501` đến `00508` để tránh trùng Retail/FnB; tám phiên bản mới đã được ghi nhận là đã áp dụng trong lịch sử Supabase. **Không chạy lại tám SQL này trên production.** `RECONCILE_APPLIED_HUB_HISTORY.sql` chỉ lưu dấu vết thao tác lịch sử đã thực hiện, không phải migration mới cần chạy. Database mới hoàn toàn mới được áp dụng các file `00501` đến `00508` theo thứ tự.
 5. Kiểm tra lại catalog, RLS, quyền execute, bucket riêng tư và trigger liên kết MKT. Không tự sửa vai trò CEO hoặc sinh mẫu/công việc thật.
 6. Nghiệm thu trên bản phát hành được phép, chưa mở rộng người dùng: login chung, đúng chi nhánh, không đọc chéo tenant, công việc → kết quả → xác minh → To-do → doanh thu → thưởng → chốt/điều chỉnh.
 7. Chỉ khi được phép deploy mới đưa code lên môi trường thật và kích hoạt lịch nhắc. Phải có người kiểm tra vòng đầu và theo dõi lỗi.

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { Link2, RefreshCw } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { states } from "@/lib/operations/contracts";
 import { operationsModuleLink } from "@/lib/operations/module-link";
 import styles from "./workspace.module.css";
@@ -103,7 +103,7 @@ export function OperationsMktLinks({
       className={styles.moduleLinks}
     >
       <summary>
-        <Link2 size={14} /> Phối hợp {todoId ? "MKT" : "Vận hành"}
+        <Icon name="link" size={14} /> Phối hợp {todoId ? "MKT" : "Vận hành"}
       </summary>
       {error && <p role="alert">{error}</p>}
       <button
@@ -113,7 +113,7 @@ export function OperationsMktLinks({
         disabled={busy}
         onClick={() => void load()}
       >
-        <RefreshCw size={14} />
+        <Icon name="refresh" size={14} />
       </button>
       {rows.map((row) => (
         <p key={row.id}>

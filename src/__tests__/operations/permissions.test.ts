@@ -23,7 +23,7 @@ describe("Hub uses OneBiz permissions and branch scope", () => {
     expect(hasOperationsPermission(["ops.view", "ops.verify"], "verify")).toBe(true);
   });
   it("maps the same codes in SQL without auto-granting production roles", () => {
-    const sql = readFileSync(join(process.cwd(), "supabase/migrations/00301_operations_hub.sql"), "utf8");
+    const sql = readFileSync(join(process.cwd(), "supabase/migrations/00501_operations_hub.sql"), "utf8");
     for (const [capability, code] of Object.entries(operationsPermissionByCapability))
       expect(sql).toContain(`when '${capability}' then '${code}'`);
     expect(sql).not.toMatch(/insert\s+into\s+(?:public\.)?(role_permissions|user_permission_overrides)/i);

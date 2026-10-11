@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardCheck, Calculator } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import type { Criterion, Person } from "@/lib/operations/contracts";
 import {
   rewardPolicyFromForm,
@@ -73,7 +73,7 @@ export function ConfigurationReview({
       aria-label="Kiểm tra cấu hình"
     >
       <h3>
-        <ClipboardCheck size={18} />
+        <Icon name="fact_check" size={18} />
         Kiểm tra trước khi lưu
       </h3>
       <dl className={styles.reviewValues}>
@@ -150,7 +150,7 @@ export function ConfigurationReview({
       {kind === "policy" && (
         <section className={styles.simulation} aria-label="Mô phỏng thưởng">
           <h3>
-            <Calculator size={18} />
+            <Icon name="calculate" size={18} />
             Mô phỏng thưởng
           </h3>
           <label className={styles.field}>

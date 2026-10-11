@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Search, X } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/format";
 import type { Todo } from "@/lib/operations/contracts";
 import { OperationsTodoList } from "./todo-list";
@@ -20,7 +20,7 @@ export function OperationsTodoPicker({
   return (
     <section className={styles.todoPicker} aria-label="Liên kết To-do">
       <div className={styles.pickerSearch}>
-        <Search size={16} aria-hidden="true" />
+        <Icon name="search" size={16} aria-hidden="true" />
         <input
           aria-label="Tìm To-do đang mở"
           value={search}
@@ -32,7 +32,7 @@ export function OperationsTodoPicker({
       {value && (
         <div className={styles.pickerSelected}>
           <span>
-            <Check size={16} aria-hidden="true" /> {value.title}
+            <Icon name="check" size={16} aria-hidden="true" /> {value.title}
           </span>
           <button
             type="button"
@@ -40,7 +40,7 @@ export function OperationsTodoPicker({
             aria-label="Bỏ liên kết To-do"
             onClick={() => onChange(null)}
           >
-            <X size={16} />
+            <Icon name="close" size={16} />
           </button>
         </div>
       )}

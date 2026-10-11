@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Paperclip, Download } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { MAX_EVIDENCE_BYTES } from "@/lib/operations/evidence";
 import styles from "./workspace.module.css";
 import { formatDate } from "@/lib/format";
@@ -99,7 +99,7 @@ export function EvidenceFiles({
             disabled={busy}
             onClick={() => fileInput.current?.click()}
           >
-            <Paperclip size={16} /> Chọn ảnh hoặc PDF
+            <Icon name="attach_file" size={16} /> Chọn ảnh hoặc PDF
           </button>
           <input
             ref={fileInput}
@@ -120,7 +120,7 @@ export function EvidenceFiles({
       {files.map((file) => (
         <p key={file.id}>
           <button type="button" onClick={() => void download(file.id)}>
-            <Download size={16} />
+            <Icon name="download" size={16} />
             {file.file_name}
           </button>
           <small>{formatDate(file.created_at)}</small>

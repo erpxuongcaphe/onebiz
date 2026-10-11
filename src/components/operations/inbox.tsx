@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { Bell } from "lucide-react";
+import { Icon } from "@/components/ui/icon";
 import { formatDate } from "@/lib/format";
 import styles from "./workspace.module.css";
 interface Notice {
@@ -75,7 +75,7 @@ export function OperationsInbox() {
         aria-expanded={open}
         onClick={() => setOpen(!open)}
       >
-        <Bell size={18} />
+        <Icon name="notifications" size={18} />
       </button>
       {open && (
         <section className={styles.inboxPanel} aria-label="Thông báo">
