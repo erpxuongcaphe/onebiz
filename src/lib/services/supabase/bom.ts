@@ -166,12 +166,14 @@ export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
   // Strategy: query union qua bom_code của SKU + product_id reference cũ.
 
   // 1. Đọc bom_code của SKU (model mới)
-  const { data: sku } = await supabase
+  const { data: sku, error: skuError } = await supabase
     .from("products_scoped")
-    .select("bom_code")
+    .select("bom_code, name, code, channel, is_fnb_stock_item")
     .eq("tenant_id", tenantId)
     .eq("id", productId)
     .maybeSingle();
+
+  if (skuError) throw skuError;
 
   // 2. Query union: hoặc product_id match HOẶC code match bom_code SKU
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -195,7 +197,7 @@ export async function getBOMsByProduct(productId: string): Promise<BOM[]> {
 
   const { data, error } = await query;
   if (error) throw error;
-  return (data ?? []).map((row: Record<string, unknown>) => mapBOM(row));
+  return (data ?? []).map((row: Record<string, unknown>) => mapBOM({ ...row, products: sku }));
 }
 
 /**

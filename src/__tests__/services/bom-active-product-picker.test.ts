@@ -5,7 +5,8 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getClient: () => ({ from: mocks.from }),
   getCurrentTenantId: mocks.tenant,
 }));
-import { getAllBOMs } from "@/lib/services/supabase/bom";
+import { getAllBOMs, getBOMsByProduct } from "@/lib/services/supabase/bom";
+import { filterProductionOutputBoms } from "@/lib/production-output-scope";
 
 function query(data: unknown[] = [], error: unknown = null) {
   const builder = {
@@ -19,6 +20,18 @@ function query(data: unknown[] = [], error: unknown = null) {
 beforeEach(() => { vi.clearAllMocks(); mocks.tenant.mockResolvedValue("tenant"); });
 
 describe("active product filter for new production orders", () => {
+  it("retains prepared-product metadata when loading its shared recipe", async () => {
+    const recipes = query([{ id: "recipe", product_id: null, code: "BOM-COLD", is_active: true, yield_qty: 600, yield_unit: "G" }]);
+    (recipes as any).or = vi.fn().mockReturnValue(recipes);
+    const sku = { select: vi.fn(), eq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue({ data: {
+      bom_code: "BOM-COLD", name: "Cold Brew", code: "BTP-COLD", channel: "fnb", is_fnb_stock_item: true,
+    }, error: null }) };
+    sku.select.mockReturnValue(sku); sku.eq.mockReturnValue(sku);
+    mocks.from.mockImplementation((table: string) => table === "products_scoped" ? sku : recipes);
+    const loaded = await getBOMsByProduct("prepared");
+    expect(filterProductionOutputBoms(loaded, "xtb", "outlet")).toHaveLength(1);
+    expect(loaded[0]).toMatchObject({ isFnbStockItem: true, productName: "Cold Brew", yieldQty: 600 });
+  });
   it("requires an active output through an inner join and preserves tenant/BOM guards", async () => {
     const builder = query();
     mocks.from.mockReturnValue(builder);
