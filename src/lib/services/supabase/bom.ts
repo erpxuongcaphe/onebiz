@@ -145,7 +145,7 @@ export async function getBOMByCode(code: string): Promise<BOM[]> {
   const tenantId = await getCurrentTenantId();
   const { data, error } = await supabase
     .from("bom_scoped")
-    .select("*, branches:branch_id(name), products:product_id(name, code, channel, is_fnb_stock_item)")
+    .select("*, branches:branch_id(name), products:products_scoped(name, code, channel, is_fnb_stock_item)")
     .eq("tenant_id", tenantId)
     .eq("code", code.trim())
     .eq("is_active", true)

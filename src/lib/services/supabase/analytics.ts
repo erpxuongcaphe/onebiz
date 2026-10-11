@@ -1484,7 +1484,7 @@ export async function getCategoryDistribution(
     const data = await fetchAllPostgrestRows(
       () => supabase
         .from("branch_stock")
-        .select("quantity, products:product_id!inner(category_id, inventory_role, categories(name))")
+        .select("quantity, products:products_scoped!inner(category_id, inventory_role, categories(name))")
         .eq("tenant_id", tenantId)
         .eq("branch_id", branchId)
         .neq("products.inventory_role", "fnb_menu_item")

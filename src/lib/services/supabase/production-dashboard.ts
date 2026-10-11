@@ -124,7 +124,7 @@ export async function getProductionKpis(branchId?: string): Promise<ProductionKp
 
   let nvlQuery = supabase
     .from("branch_stock")
-    .select("quantity, products:product_id(cost_price, min_stock, product_type)")
+    .select("quantity, products:products_scoped(cost_price, min_stock, product_type)")
     .eq("tenant_id", tenantId)
     .gt("quantity", 0);
   if (branchId) nvlQuery = nvlQuery.eq("branch_id", branchId);
@@ -201,7 +201,7 @@ export async function getNvlStock(params?: {
     .select(
       `id, branch_id, product_id, quantity,
        branches:branch_id (name),
-       products:product_id (code, name, unit, product_type, cost_price, min_stock, max_stock)`,
+       products:products_scoped (code, name, unit, product_type, cost_price, min_stock, max_stock)`,
     )
     .eq("tenant_id", tenantId)
     .order("quantity", { ascending: true });
@@ -321,7 +321,7 @@ export async function getTopOutputProducts(
 
   let query = supabase
     .from("production_orders_scoped")
-    .select("product_id, completed_qty, products:product_id(name, code)")
+    .select("product_id, completed_qty, products:products_scoped(name, code)")
     .eq("tenant_id", tenantId)
     .eq("status", "completed")
     .gte("created_at", monthStart);
@@ -367,7 +367,7 @@ export async function getActiveProductionOrders(
       `id, code, status, planned_qty, completed_qty,
        planned_start, planned_end, actual_start, created_at,
        branches:branch_id (name),
-       products:product_id (code, name, unit)`,
+       products:products_scoped (code, name, unit)`,
     )
     .eq("tenant_id", tenantId)
     .in("status", ["planned", "material_check", "in_production", "quality_check"])
