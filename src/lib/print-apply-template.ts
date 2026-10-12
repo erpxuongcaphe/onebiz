@@ -13,6 +13,7 @@ import { printDocument } from "./print-document";
 import { resolvePrintTemplate, getResolvedBrand } from "./services";
 import type { PrintChannel, PrintDocType, ResolvedPrint, ResolvedBrand } from "./services";
 import { buildVietQrUrl } from "./vietqr";
+import { withOperationalPrintUnits } from "./operational-uom-print";
 
 /** Ngữ cảnh thay token cho tiêu đề / customText. */
 interface TokenContext {
@@ -277,6 +278,14 @@ export interface PrintWithTemplateOptions {
 export async function printDocumentWithTemplate(
   opts: PrintWithTemplateOptions,
 ): Promise<void> {
+  let baseWithUnits = opts.base;
+  try {
+    baseWithUnits = await withOperationalPrintUnits(opts.base,opts.docType);
+  } catch (error) {
+    // Optional metadata being offline must not block canonical stock printing.
+    console.warn("[print:units] In theo đơn vị kho gốc; chưa tải được thông tin quy đổi.",error);
+  }
+  opts = {...opts,base:baseWithUnits};
   let resolved: ResolvedPrint | null = null;
   try {
     resolved = await resolvePrintTemplate(

@@ -143,6 +143,7 @@ with required(relation_name, operation) as (
     ('notifications', 'update'),
     ('online_orders', 'select'),
     ('online_orders', 'update'),
+    ('operational_uom_requests', 'select'),
     ('pending_shifts_view', 'select'),
     ('pipeline_items', 'insert'),
     ('pipeline_items', 'select'),

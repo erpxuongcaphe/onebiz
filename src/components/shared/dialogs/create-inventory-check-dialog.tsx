@@ -17,6 +17,8 @@ import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
 import { pickBestConversion, getConversionText, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
 import { inventoryCountFromStock, inventoryCountToStock } from "@/lib/inventory-count-uom";
+import { preferredWeighingUnit, stockToInput, operationalFactor } from "@/lib/operational-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
 import { isRpcUnavailable } from "@/lib/services/supabase/rpc-utils";
@@ -94,6 +96,7 @@ export function CreateInventoryCheckDialog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const saveLockRef = useRef(false);
+  const requestId = useMemo(() => crypto.randomUUID(), [checkItems, notes, activeBranchId]);
 
   useEffect(() => {
     if (!open) return;
@@ -226,8 +229,8 @@ export function CreateInventoryCheckDialog({
         unit: product.unit,
         costPrice: Number(product.cost_price ?? 0),
         systemStock,
-        actualStock: systemStock,
-        countUnit: allowFlexibleCountUnits && !convFactor ? product.unit : null,
+        actualStock: allowFlexibleCountUnits ? stockToInput(Math.max(0,systemStock),product.unit,preferredWeighingUnit(product.unit,conversions),conversions) ?? Math.max(0,systemStock) : systemStock,
+        countUnit: allowFlexibleCountUnits ? preferredWeighingUnit(product.unit,conversions) : null,
         conversions,
         convFactor,
         convBigUnit,
@@ -342,13 +345,21 @@ export function CreateInventoryCheckDialog({
       // Tạo phiếu, tạo dòng và cân bằng kho cùng một giao dịch.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (supabase.rpc as any)(
-        "create_and_apply_inventory_check_atomic",
+        "create_stock_operation_with_uom",
         {
           p_branch_id: branchId,
+          p_kind: "inventory_check",
+          p_request_id: requestId,
           p_note: notes.trim() || null,
           p_items: checkItems.map((item) => ({
             product_id: item.productId,
-            actual_stock: lineActual(item),
+            quantity: item.countUnit !== null ? item.actualStock : lineActual(item),
+            inputUnit: item.countUnit ?? item.unit,
+            expectedFactor: operationalFactor(item.unit,item.countUnit ?? item.unit,item.conversions)?.toDecimalPlaces(12).toNumber(),
+            ...(item.countUnit === null && item.convFactor && item.convBigUnit ? {parts:[
+              {quantity:item.actualBig,unit:item.convBigUnit,expectedFactor:operationalFactor(item.unit,item.convBigUnit,item.conversions)?.toDecimalPlaces(12).toNumber()},
+              {quantity:item.actualSmall,unit:item.unit,expectedFactor:1},
+            ]} : {}),
           })),
         },
       );
@@ -545,10 +556,7 @@ export function CreateInventoryCheckDialog({
                         <div className="flex items-baseline justify-between gap-2 md:block md:text-right">
                           <span className="text-xs font-medium uppercase text-muted-foreground md:hidden">Tồn kho</span>
                           <div className="text-right">
-                            <div className="text-sm font-medium tabular-nums">{formatStockQuantity(item.systemStock)}</div>
-                            {sysConvText && (
-                              <div className="text-xs tabular-nums text-muted-foreground">{sysConvText}</div>
-                            )}
+                            <StockWithConversion quantity={item.systemStock} unit={item.unit} conversions={item.conversions} />
                           </div>
                         </div>
 

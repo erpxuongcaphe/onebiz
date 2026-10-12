@@ -216,6 +216,7 @@ export interface ManufacturingOrder {
   productName: string;
   productCode: string;
   quantity: number;
+  unit?: string;
   status: "completed" | "processing" | "cancelled";
   statusName: string;
   costAmount: number;

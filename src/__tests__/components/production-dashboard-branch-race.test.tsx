@@ -8,6 +8,7 @@ vi.mock("@/lib/contexts", () => ({ useBranchFilter: () => ({
   isReady: state.ready, activeBranchId: state.branch, branchLabel: state.branch ?? "Tất cả chi nhánh",
   currentBranch: { branchType: "store" },
 }) }));
+vi.mock("@/lib/hooks/use-product-uom", () => ({useProductUom:()=>({map:new Map(),units:new Map(),loading:false,error:''})}));
 vi.mock("@/lib/services", () => ({
   getProductionKpis: services.kpis,
   getNvlStock: async () => [], getProductionTrend: async () => [],

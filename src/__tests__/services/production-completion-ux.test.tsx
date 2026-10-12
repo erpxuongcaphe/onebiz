@@ -9,6 +9,8 @@ vi.mock("@/lib/contexts", () => ({ useToast: () => ({ toast: mocks.toast }), use
 vi.mock("@/lib/services", () => ({
   checkMaterialsAvailability: mocks.check, completeProductionAtomic: mocks.complete,
   getProductionOrderById: mocks.detail,
+  getProductById: async () => ({unit:"G"}),
+  getUOMConversionsByProductIds: async () => new Map(),
   getBranches: async () => [], createInternalSale: vi.fn(), syncInternalEntities: vi.fn(),
 }));
 vi.mock("@/lib/services/supabase/base", () => ({ getClient: vi.fn(), getCurrentContext: vi.fn() }));

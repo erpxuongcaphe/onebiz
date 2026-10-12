@@ -17,6 +17,8 @@ import {
   completeProductionAtomic,
   checkMaterialsAvailability,
   getProductionOrderById,
+  getProductById,
+  getUOMConversionsByProductIds,
   getBranches,
   createInternalSale,
   syncInternalEntities,
@@ -26,6 +28,8 @@ import type { BranchDetail, MaterialCheckResult } from "@/lib/services";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { formatNumber, formatDateInputValue } from "@/lib/format";
 import { Icon } from "@/components/ui/icon";
+import type { UOMConversion } from "@/lib/types";
+import { preferredWeighingUnit, stockToInput, quantityToStock, operationalFactor, formatOperationalQuantity } from "@/lib/operational-uom";
 
 interface CompleteProductionOrderDialogProps {
   open: boolean;
@@ -43,6 +47,10 @@ export function CompleteProductionOrderDialog({
   const { toast } = useToast();
   const { user } = useAuth();
   const [completedQty, setCompletedQty] = useState("");
+  const [entryUnit, setEntryUnit] = useState("");
+  const [outputStockUnit, setOutputStockUnit] = useState("");
+  const [outputConversions, setOutputConversions] = useState<UOMConversion[]>([]);
+  const [unitsLoading, setUnitsLoading] = useState(false);
   const [lotNumber, setLotNumber] = useState("");
   const [manufacturedDate, setManufacturedDate] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
@@ -67,6 +75,16 @@ export function CompleteProductionOrderDialog({
     let active = true;
     if (open && order) {
       setCompletedQty(String(order.plannedQty));
+      setEntryUnit(""); setOutputStockUnit(""); setOutputConversions([]); setUnitsLoading(true);
+      Promise.all([getProductById(order.productId),getUOMConversionsByProductIds([order.productId])]).then(([product,map]) => {
+        if (!active) return;
+        if (!product?.unit) throw new Error("Chưa đọc được đơn vị kho của thành phẩm.");
+        const conversions = map.get(order.productId) ?? [];
+        const preferred = preferredWeighingUnit(product.unit,conversions);
+        setOutputStockUnit(product.unit); setOutputConversions(conversions); setEntryUnit(preferred);
+        setCompletedQty(String(stockToInput(order.plannedQty,product.unit,preferred,conversions) ?? order.plannedQty));
+      }).catch(e => { if (active) toast({title:"Chưa tải được đơn vị",description:e instanceof Error ? e.message : "Mở lại để tải đơn vị trước khi hoàn tất.",variant:"warning"}); })
+        .finally(() => { if (active) setUnitsLoading(false); });
       const today = formatDateInputValue(new Date());
       setManufacturedDate(today);
       setLotNumber(`${order.code}-${today.replace(/-/g, "")}`);
@@ -88,7 +106,7 @@ export function CompleteProductionOrderDialog({
       }).catch(() => {});
     }
     return () => { active = false; };
-  }, [open, order]);
+  }, [open, order, toast]);
 
   useEffect(() => {
     let active = true;
@@ -124,11 +142,12 @@ export function CompleteProductionOrderDialog({
   }, [checkAttempt, open, order]);
 
   const hasShortage = materialChecks.some((m) => !m.sufficient);
+  const completedStockQty = order ? quantityToStock(completedQty,outputStockUnit,entryUnit,outputConversions) : null;
 
   async function handleComplete() {
     if (!order) return;
-    if (checking || detailError) return;
-    if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0) {
+    if (checking || detailError || unitsLoading) return;
+    if (!completedQty || !Number.isFinite(Number(completedQty)) || Number(completedQty) <= 0 || completedStockQty == null || completedStockQty <= 0) {
       toast({ title: "Số lượng phải > 0", variant: "warning" });
       return;
     }
@@ -151,10 +170,11 @@ export function CompleteProductionOrderDialog({
       // ra thành phẩm, và bấm lại không trừ kép (thay 2 lời gọi rời trước đây).
       await completeProductionAtomic(
         order.id,
-        Number(completedQty),
+        completedStockQty,
         lotNumber || undefined,
         manufacturedDate || undefined,
         expiryDate || undefined,
+        {quantity:Number(completedQty),unit:entryUnit,expectedFactor:operationalFactor(outputStockUnit,entryUnit,outputConversions)?.toDecimalPlaces(12).toNumber()},
       );
 
       // Step 3: Auto-sell to target branch if enabled
@@ -184,7 +204,7 @@ export function CompleteProductionOrderDialog({
                 productCode: product?.code ?? order.productCode ?? "",
                 productName: product?.name ?? order.productName ?? "",
                 unit: product?.unit ?? "cái",
-                quantity: Number(completedQty),
+                quantity: completedStockQty,
                 unitPrice: Number(product?.sell_price ?? 0),
                 vatRate: Number(product?.vat_rate ?? 0),
               },
@@ -195,7 +215,7 @@ export function CompleteProductionOrderDialog({
 
           toast({
             title: "Đã chuyển thành phẩm",
-            description: `${formatNumber(Number(completedQty))} ${product?.unit ?? "sp"} → ${warehouses.find((w) => w.id === targetBranchId)?.name ?? "kho"}`,
+            description: `${formatOperationalQuantity(completedStockQty)} ${product?.unit ?? "sp"} → ${warehouses.find((w) => w.id === targetBranchId)?.name ?? "kho"}`,
             variant: "success",
           });
         } catch (err) {
@@ -210,7 +230,7 @@ export function CompleteProductionOrderDialog({
 
       toast({
         title: "Hoàn thành lệnh sản xuất",
-        description: `Đã tạo lô ${lotNumber} với ${formatNumber(Number(completedQty))} đơn vị`,
+        description: `Đã tạo lô ${lotNumber}: thực cân ${formatOperationalQuantity(Number(completedQty))} ${entryUnit}, ghi kho ${formatOperationalQuantity(completedStockQty)} ${outputStockUnit}`,
         variant: "success",
       });
       onOpenChange(false);
@@ -243,15 +263,18 @@ export function CompleteProductionOrderDialog({
 
         <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto py-2 pr-1 [&>*]:shrink-0">
           <div className="space-y-2">
-            <label htmlFor="production-completed-qty" className="text-sm font-medium">Số lượng thực tế</label>
+            <label htmlFor="production-completed-qty" className="text-sm font-medium">Số lượng thực tế {entryUnit && `(${entryUnit})`}</label>
             <Input
               id="production-completed-qty"
+              aria-label="Số lượng thực tế"
               type="number"
               min="0"
               step="any"
               value={completedQty}
+              disabled={unitsLoading || !outputStockUnit}
               onChange={(e) => setCompletedQty(e.target.value)}
             />
+            {completedStockQty != null && <p className="text-xs text-muted-foreground">Ghi kho {formatOperationalQuantity(completedStockQty)} {outputStockUnit}. Số thực cân và hệ số được lưu trên chứng từ.</p>}
           </div>
 
           <div className="space-y-2">
@@ -383,7 +406,7 @@ export function CompleteProductionOrderDialog({
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
             Hủy
           </Button>
-          <Button onClick={handleComplete} disabled={saving || checking || detailError}>
+          <Button onClick={handleComplete} disabled={saving || checking || detailError || unitsLoading || completedStockQty == null || completedStockQty <= 0}>
             {saving && <Icon name="progress_activity" size={16} className="mr-2 animate-spin" />}
             Hoàn thành
           </Button>

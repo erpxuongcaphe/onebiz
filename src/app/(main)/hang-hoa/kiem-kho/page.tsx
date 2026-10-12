@@ -40,6 +40,7 @@ import { usePermissions } from "@/lib/permissions/use-permission";
 import { usePrintWithPicker } from "@/lib/hooks/use-print-with-picker";
 import { buildInventoryCheckPrintData } from "@/lib/print-templates";
 import { Icon } from "@/components/ui/icon";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 
 /* ------------------------------------------------------------------ */
 /*  Status config                                                      */
@@ -387,6 +388,7 @@ function InventoryCheckDetail({
     >
       <div className="p-4 space-y-4">
         <DetailTabs tabs={tabs} defaultTab="info" />
+        <UnitSnapshotHistory referenceType="inventory_check" referenceId={item.id} />
       </div>
     </InlineDetailPanel>
   );

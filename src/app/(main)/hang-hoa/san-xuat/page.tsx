@@ -54,6 +54,11 @@ import {
 } from "@/lib/services";
 import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { getProductStockUnitsByIds, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
+import { formatOperationalQuantity, preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
 
 type ViewMode = "list" | "kanban";
 
@@ -90,6 +95,7 @@ function ProductionOrderDetail({
 }) {
   const [order, setOrder] = useState<ProductionOrder | null>(null);
   const [loading, setLoading] = useState(true);
+  const units=useProductUom(order ? [order.productId,...(order.materials ?? []).map(material=>material.productId)] : []);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +129,7 @@ function ProductionOrderDetail({
       onDelete={onDelete}
       deleteLabel="Hủy"
     >
+      <UnitSnapshotHistory referenceType="production" referenceId={orderId} />
       <DetailTabs
         tabs={[
           {
@@ -152,11 +159,11 @@ function ProductionOrderDetail({
                     },
                     {
                       label: "Số lượng kế hoạch",
-                      value: <span className="font-semibold">{formatNumber(order.plannedQty)}</span>,
+                      value: <StockWithConversion quantity={order.plannedQty} unit={units.units.get(order.productId) ?? ''} conversions={units.map.get(order.productId)} />,
                     },
                     {
                       label: "Đã hoàn thành",
-                      value: <span className="font-semibold">{formatNumber(order.completedQty)}</span>,
+                      value: <StockWithConversion quantity={order.completedQty} unit={units.units.get(order.productId) ?? ''} conversions={units.map.get(order.productId)} />,
                     },
                     {
                       label: "Bắt đầu KH",
@@ -215,10 +222,10 @@ function ProductionOrderDetail({
                               </div>
                             </td>
                             <td className="p-2 text-right">
-                              {m.plannedQty} {m.unit}
+                              <StockWithConversion quantity={m.plannedQty} unit={m.unit} conversions={units.map.get(m.productId)} />
                             </td>
                             <td className="p-2 text-right">
-                              {m.actualQty || 0} {m.unit}
+                              <StockWithConversion quantity={m.actualQty || 0} unit={m.unit} conversions={units.map.get(m.productId)} />
                             </td>
                             <td className="p-2 text-right tabular-nums">
                               {m.unitCost != null ? formatCurrency(m.unitCost) : "—"}
@@ -251,6 +258,7 @@ export default function SanXuatPage() {
   const { hasAny, isLoading: permissionsLoading } = usePermissions();
   const txPerms = useTxRowPermissions("production");
   const [data, setData] = useState<ProductionOrder[]>([]);
+  const units=useProductUom(data.map(order=>order.productId));
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -378,6 +386,13 @@ export default function SanXuatPage() {
       search, searchField, statuses: statusFilters, dateFrom: range.from, dateTo: range.to, createdBy: creatorFilter || undefined, qtyMin: qtyMin ? Number(qtyMin) : undefined, qtyMax: qtyMax ? Number(qtyMax) : undefined,
       branchId: duocXemToanChuoi && viewAllBranches ? undefined : activeBranchId || undefined,
     });
+    const [stockUnits,conversions]=await Promise.all([getProductStockUnitsByIds(rows.map(row=>row.productId)),getUOMConversionsByProductIds(rows.map(row=>row.productId))]);
+    const exportRows=rows.map(row=>{
+      const stockUnit=stockUnits.get(row.productId) ?? '';
+      const alternatives=conversions.get(row.productId) ?? [];
+      const convertedUnit=preferredWeighingUnit(stockUnit,alternatives);
+      return {...row,stockUnit,convertedUnit,convertedCompletedQty:stockToInput(row.completedQty,stockUnit,convertedUnit,alternatives)};
+    });
     const exportColumns = [
       { header: "Mã lệnh", key: "code", width: 16 },
       { header: "Chi nhánh", key: "branchName", width: 24 },
@@ -385,13 +400,16 @@ export default function SanXuatPage() {
       { header: "Tên thành phẩm", key: "productName", width: 28 },
       { header: "Số lô", key: "lotNumber", width: 18 },
       { header: "SL kế hoạch", key: "plannedQty", width: 14 },
-      { header: "SL thực tế", key: "actualQty", width: 14 },
+      { header: "SL thực tế", key: "completedQty", width: 14 },
+      { header: "ĐVT kho", key: "stockUnit", width: 14 },
+      { header: "SL thực tế quy đổi hiện tại", key: "convertedCompletedQty", width: 25 },
+      { header: "ĐVT quy đổi", key: "convertedUnit", width: 15 },
       { header: "Giá vốn", key: "cogsAmount", width: 16 },
       { header: "Trạng thái", key: "status", width: 18, format: (value: ProductionOrderStatus) => STATUS_META[value]?.label ?? value },
       { header: "Ngày tạo", key: "createdAt", width: 18, format: (value: string) => formatDate(value) },
       { header: "Ghi chú", key: "notes", width: 28 },
     ];
-    if (type === "excel") exportToExcel(rows, exportColumns, "lenh-san-xuat"); else exportToCsv(rows, exportColumns, "lenh-san-xuat");
+    if (type === "excel") exportToExcel(exportRows, exportColumns, "lenh-san-xuat"); else exportToCsv(exportRows, exportColumns, "lenh-san-xuat");
   };
 
   // Derive Kanban columns from STATUS_META (skip cancelled in the main board)
@@ -469,8 +487,8 @@ export default function SanXuatPage() {
       size: 130,
       cell: ({ row }) => (
         <span>
-          <span className="font-medium">{formatNumber(row.original.completedQty)}</span>
-          <span className="text-muted-foreground"> / {formatNumber(row.original.plannedQty)}</span>
+          <StockWithConversion quantity={row.original.completedQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />
+          <span className="text-muted-foreground"> / dự kiến {formatOperationalQuantity(row.original.plannedQty)} {units.units.get(row.original.productId)}</span>
         </span>
       ),
     },
@@ -606,7 +624,7 @@ export default function SanXuatPage() {
                       SL kế hoạch
                     </span>
                     <span className="text-xs font-semibold">
-                      {formatNumber(order.completedQty)} / {formatNumber(order.plannedQty)}
+                      {formatOperationalQuantity(order.completedQty)} / {formatOperationalQuantity(order.plannedQty)} {units.units.get(order.productId)}
                     </span>
                   </div>
                 </div>
@@ -673,7 +691,8 @@ export default function SanXuatPage() {
                       date: row.createdAt,
                       productName: row.productName ?? "",
                       productCode: row.productCode ?? "",
-                      quantity: row.plannedQty,
+                      quantity: row.status === "completed" ? row.completedQty : row.plannedQty,
+                      unit: units.units.get(row.productId),
                       status: row.status as
                         | "completed"
                         | "processing"

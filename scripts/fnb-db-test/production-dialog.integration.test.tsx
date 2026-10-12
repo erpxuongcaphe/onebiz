@@ -18,6 +18,7 @@ vi.mock("@/lib/services", async () => {
     completeProductionAtomic: production.completeProductionAtomic,
     getProductionOrderById: bridge.detail, checkMaterialsAvailability: bridge.check,
     getBranches: async () => [], createInternalSale: vi.fn(), syncInternalEntities: vi.fn(),
+    getProductById: async (id:string) => ({id,unit:'G'}), getUOMConversionsByProductIds: async () => new Map(),
   };
 });
 import { CompleteProductionOrderDialog } from "@/components/shared/dialogs/complete-production-order-dialog";
@@ -57,6 +58,7 @@ function snapshot() {
     'events', (select jsonb_agg(to_jsonb(e) order by id) from fnb_branch_product_cost_events e),
     'costs', (select jsonb_agg(to_jsonb(c) order by product_id) from fnb_branch_product_cost_balances c),
     'audits', (select count(*) from audit_log),
+    'unit_entries', (select count(*) from operational_uom_requests),
     'reconciliations', (select count(*) from lot_reconciliations));`);
 }
 function stock(product: string) {
@@ -88,16 +90,17 @@ beforeAll(() => {
       available: stock(m.productId), sufficient: stock(m.productId) >= m.plannedQty }));
   });
   bridge.rpc.mockImplementation(async (name: string, params: Record<string, unknown>) => {
-    expect(name).toBe("complete_production_atomic");
+    expect(name).toBe("complete_production_with_uom");
     expect([successId, retryId]).toContain(params.p_production_order_id);
     assertDisposable();
     try {
       const { stdout } = await asyncExec("psql", [...args, "-c", `begin;
         set local request.jwt.claim.sub='${actor}';
-        select public.complete_production_atomic(
-          ${literal(params.p_production_order_id)}::uuid, ${literal(params.p_completed_qty)}::numeric,
+        select public.complete_production_with_uom(
+          ${literal(params.p_production_order_id)}::uuid, ${literal(params.p_input_quantity)}::numeric,
+          ${literal(params.p_input_unit)}::text, ${literal(params.p_expected_factor)}::numeric,
           ${literal(params.p_lot_number)}::text, ${literal(params.p_manufactured_date)}::date,
-          ${literal(params.p_expiry_date)}::date); commit;`], { timeout: 10000 });
+          ${literal(params.p_expiry_date)}::date,null::jsonb); commit;`], { timeout: 10000 });
       return { data: stdout.trim(), error: null };
     } catch (error) {
       const stderr = (error as { stderr?: string }).stderr ?? "Database completion failed";
@@ -125,6 +128,7 @@ describe("completion dialog connected to the actual production RPC", () => {
     expect(Number(sql(`select current_qty from product_lots where production_order_id='${successId}'`))).toBe(10);
     expect(Number(sql(`select count(*) from fnb_branch_product_cost_events where source_reference_id='${successId}'`))).toBe(2);
     expect(Number(sql(`select count(*) from fnb_branch_product_cost_events where branch_id <> '${branch}'`))).toBe(0);
+    expect(Number(sql(`select count(*) from operational_uom_requests where reference_id='${successId}' and snapshots->0->>'inputUnit'='G'`))).toBe(1);
   });
 
   it("rolls back a late database failure, keeps input and posts once on explicit retry", async () => {

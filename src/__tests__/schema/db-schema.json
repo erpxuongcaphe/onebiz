@@ -229,6 +229,19 @@
    "vat_amount",
    "vat_rate"
   ],
+  "operational_uom_requests": [
+   "branch_id",
+   "created_at",
+   "created_by",
+   "payload",
+   "reference_id",
+   "reference_type",
+   "request_id",
+   "result",
+   "snapshots",
+   "tenant_id",
+   "to_branch_id"
+  ],
   "invoice_items_cost_backup_00237": [
    "invoice_item_id",
    "luu_luc",
@@ -401,6 +414,7 @@
    "family_id",
    "frequency",
    "id",
+   "review_note",
    "revision",
    "scope",
    "status",
@@ -3008,6 +3022,7 @@
   "complete_legacy_sales_order_atomic",
   "complete_production_atomic",
   "complete_production_order",
+  "complete_production_with_uom",
   "complete_stock_transfer_atomic",
   "consume_bom_for_sale",
   "consume_production_materials",
@@ -3020,6 +3035,7 @@
   "create_manual_cash_transaction_atomic",
   "create_production_order_atomic",
   "create_sales_return_atomic",
+  "create_stock_operation_with_uom",
   "create_stock_transfer_atomic",
   "create_supplier_return_atomic",
   "delete_customer_atomic",
@@ -3261,6 +3277,7 @@
   "ops_evidence_visible",
   "ops_execute",
   "ops_execute_core",
+  "ops_execute_pre_proposals",
   "ops_filtered_page",
   "ops_generate",
   "ops_generate_internal",
@@ -3277,6 +3294,7 @@
   "ops_propose_result_adjustment",
   "ops_reward_snapshot",
   "ops_reward_values",
+  "ops_standard_proposal",
   "ops_tick",
   "ops_todo_page",
   "ops_todo_visible",
@@ -3301,6 +3319,7 @@
   "promotion_link_employee_customer_00458",
   "recalculate_bom_cost_cache",
   "receive_internal_sale_actual",
+  "receive_internal_sale_with_uom",
   "receive_purchase_items_atomic",
   "receive_purchase_items_with_uom_atomic",
   "recompute_all_customer_debts",
@@ -3404,7 +3423,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 206,
- "soCot": 2471,
- "soRpc": 518
+ "soBang": 207,
+ "soCot": 2483,
+ "soRpc": 523
 }

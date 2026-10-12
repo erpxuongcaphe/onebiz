@@ -40,6 +40,18 @@ export function isAscending(params: QueryParams): boolean {
  * Throws a descriptive error if the query failed.
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
+  const unitErrors: Record<string,string> = {
+    UOM_CONVERSION_CHANGED: "Hệ số quy đổi vừa thay đổi. Tải lại dữ liệu rồi kiểm tra số lượng trước khi lưu; kho chưa thay đổi.",
+    UOM_REQUEST_CHANGED: "Thao tác này đã được ghi nhận với nội dung khác. Cập nhật chứng từ để đối chiếu trước khi lưu tiếp.",
+    UOM_QUANTITY_BELOW_LEDGER_PRECISION: "Số lượng quá nhỏ so với độ chính xác của đơn vị kho. Kiểm tra lại số lượng và đơn vị.",
+    UOM_QUANTITY_INVALID: "Số lượng hoặc đơn vị nhập chưa hợp lệ. Kiểm tra lại trước khi lưu.",
+    UOM_OPERATION_DENIED: "Tài khoản chưa có quyền thực hiện thao tác tại chi nhánh này.",
+    UOM_DUPLICATE_ITEM: "Mỗi mặt hàng chỉ được có một dòng trên chứng từ.",
+    UOM_MATERIAL_INPUTS_INVALID: "Đơn vị hoặc số nguyên liệu thực dùng không khớp lệnh sản xuất. Kiểm tra lại lệnh; chưa ghi nhận trừ kho.",
+    UOM_COUNT_PARTS_INVALID: "Số kiện nguyên và số lẻ không khớp tổng thực kiểm. Tải lại quy đổi rồi kiểm tra trước khi lưu.",
+  };
+  const unitMessage = Object.entries(unitErrors).find(([code]) => error.message?.includes(code))?.[1];
+  if (unitMessage) throw new Error(unitMessage);
   // F1b (CEO 15/08): khi grant ghi trực tiếp bị thu hồi, tab chạy bundle CŨ
   // còn ghi thẳng bảng sẽ nhận 42501 "permission denied for table ..." —
   // báo bằng lời người dùng hiểu được thay vì mã lỗi thô.

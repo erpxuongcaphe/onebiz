@@ -32,6 +32,7 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getInternalExportListWorkspace, getInternalExportsForExport, getInternalExportStatuses, cancelInternalExport, getProfilesForPersonFilter } from "@/lib/services";
 import type { InternalExport } from "@/lib/types";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 import { CreateInternalExportDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
@@ -152,6 +153,7 @@ function InternalExportDetail({
   return (
     <InlineDetailPanel open onClose={onClose}>
       <div className="p-4 space-y-4">
+        <UnitSnapshotHistory referenceType="internal_export" referenceId={item.id} />
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
     </InlineDetailPanel>

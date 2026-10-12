@@ -37,22 +37,30 @@ export async function getUOMConversionsByProductIds(
   if (productIds.length === 0) return result;
 
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
-    .from("uom_conversions")
-    .select("*")
-    .eq("tenant_id", tenantId)
-    .in("product_id", productIds)
-    .eq("is_active", true);
-
-  if (error) throw error;
-
-  for (const row of data ?? []) {
+  const ids = [...new Set(productIds)];
+  const batches: string[][] = [];
+  for (let offset=0;offset<ids.length;offset+=100) batches.push(ids.slice(offset,offset+100));
+  const responses = await Promise.all(batches.map(batch => supabase.from("uom_conversions").select("*").eq("tenant_id",tenantId).in("product_id",batch).eq("is_active",true)));
+  for (const response of responses) if(response.error) throw response.error;
+  for (const row of responses.flatMap(response=>response.data ?? [])) {
     const conv = mapConversion(row);
     const list = result.get(conv.productId) ?? [];
     list.push(conv);
     result.set(conv.productId, list);
   }
   return result;
+}
+
+/** Canonical units from the same scoped product source used by stock screens. */
+export async function getProductStockUnitsByIds(productIds: string[]): Promise<Map<string,string>> {
+  const ids=[...new Set(productIds.filter(Boolean))];
+  if(!ids.length)return new Map();
+  const tenantId=await getCurrentTenantId();
+  const batches:string[][]=[];
+  for(let offset=0;offset<ids.length;offset+=100)batches.push(ids.slice(offset,offset+100));
+  const responses=await Promise.all(batches.map(batch=>supabase.from('products_scoped').select('id,unit').eq('tenant_id',tenantId).in('id',batch)));
+  for(const response of responses)if(response.error)throw response.error;
+  return new Map(responses.flatMap(response=>response.data ?? []).map(row=>[row.id,row.unit]));
 }
 
 export async function replaceProductUOMConversions(
@@ -115,7 +123,7 @@ function mapConversion(row: Record<string, unknown>): UOMConversion {
     productId: row.product_id as string,
     fromUnit: row.from_unit as string,
     toUnit: row.to_unit as string,
-    factor: row.factor as number,
+    factor: Number(row.factor),
     isActive: (row.is_active as boolean) ?? true,
     createdAt: row.created_at as string,
   };

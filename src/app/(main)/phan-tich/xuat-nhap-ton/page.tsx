@@ -30,6 +30,9 @@ import {
 } from "@/lib/utils/excel-export";
 import { getXntReport, type XntRow, type XntReportResult } from "@/lib/services";
 import { cn } from "@/lib/utils";
+import { preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { buildXntMovementHref } from "@/lib/reports/xnt-drilldown";
 import { filterXntRows, sumXntRows, sumXntQuantities, type XntRowFilter } from "@/lib/reports/xnt-view";
 import { sortReportRows } from "@/lib/reports/table-sort";
@@ -70,6 +73,7 @@ export default function XuatNhapTonPage() {
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [data, setData] = useState<XntReportResult | null>(null);
+  const uom = useProductUom((data?.rows ?? []).map(row => row.productId));
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
   const requestIdRef = useRef(0);
@@ -120,6 +124,16 @@ export default function XuatNhapTonPage() {
     },
     [data?.rows, rowFilter, sortState, categoryFilter, unitFilter],
   );
+  const unitExportColumns = [
+    { label: "ĐVT quy đổi hiện tại", key: "convertedUnit", width: 18 },
+    { label: "1 ĐVT kho tương đương", key: "convertedFactor", width: 20, format: "number" as const, decimalPlaces: 4 },
+    { label: "Tồn cuối quy đổi hiện tại", key: "convertedClosingQty", width: 22, format: "number" as const, decimalPlaces: 4 },
+  ];
+  const unitExportValues = useCallback((row: XntRow) => {
+    const conversions = uom.map.get(row.productId) ?? [];
+    const convertedUnit = preferredWeighingUnit(row.unit,conversions);
+    return {convertedUnit,convertedFactor:stockToInput(1,row.unit,convertedUnit,conversions),convertedClosingQty:stockToInput(row.closingQty,row.unit,convertedUnit,conversions)};
+  },[uom.map]);
   const visibleSubtotal = useMemo(() => sumXntRows(visibleRows), [visibleRows]);
   const quantityTotals = useMemo(() => sumXntQuantities(visibleRows), [visibleRows]);
   const movementValueTotals = useMemo(() => xntMovementValueTotals(visibleRows), [visibleRows]);
@@ -153,6 +167,7 @@ export default function XuatNhapTonPage() {
       generatedAt: new Date(),
     });
     titleRows.push(HISTORICAL_VALUE_NOTE);
+    titleRows.push("Cột quy đổi dùng cấu hình hiện tại để đối chiếu; số lượng/giá trị chứng từ gốc giữ nguyên.");
     titleRows.push(`Nhóm hàng: ${categoryFilter === undefined ? "Tất cả" : categoryFilter || "Chưa phân nhóm"}; ĐVT: ${unitFilter ?? "Tất cả"}; Tìm kiếm: ${debouncedSearch || "Tất cả"}`);
 
     if (subMode === "summary") {
@@ -167,10 +182,10 @@ export default function XuatNhapTonPage() {
             autoFilter: true,
             titleRows,
             tablePreferenceKey: "report.xuat-nhap-ton.summary",
-            columnGroups: XNT_SUMMARY_COLUMN_GROUPS,
-            columns: XNT_SUMMARY_EXCEL_COLUMNS,
+            columnGroups: [...XNT_SUMMARY_COLUMN_GROUPS,{label:"QUY ĐỔI HIỆN TẠI",span:3}],
+            columns: [...XNT_SUMMARY_EXCEL_COLUMNS,...unitExportColumns],
             rows: visibleRows.map((r) => ({
-              ...r,
+              ...r, ...unitExportValues(r),
               code: r.code,
               name: r.name,
               unit: r.unit,
@@ -210,7 +225,7 @@ export default function XuatNhapTonPage() {
             autoFilter: true,
             titleRows,
             tablePreferenceKey: "report.xuat-nhap-ton.detail",
-            columnGroups: XNT_DETAIL_COLUMN_GROUPS,
+            columnGroups: [...XNT_DETAIL_COLUMN_GROUPS,{label:"QUY ĐỔI HIỆN TẠI",span:3}],
             columns: expandXntExcelColumns([
               { label: "Mã hàng", key: "code", width: 14 },
               { label: "Tên hàng", key: "name", width: 32 },
@@ -235,9 +250,10 @@ export default function XuatNhapTonPage() {
               { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
               { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
               { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
+              ...unitExportColumns,
             ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 }))),
             rows: visibleRows.map((r) => ({
-              ...r,
+              ...r, ...unitExportValues(r),
               code: r.code,
               name: r.name,
               unit: r.unit,
@@ -272,7 +288,7 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast]);
+  }, [data, range, branchName, subMode, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, debouncedSearch, exporting, toast, unitExportValues]);
 
   // ========================================================
   // Excel export — full mode (multi-sheet kế toán pivot)
@@ -303,10 +319,10 @@ export default function XuatNhapTonPage() {
           name: "1. Tổng hợp",
           autoFilter: true,
           titleRows,
-          columnGroups: [{ label: "MẶT HÀNG", span: 4 }, ...XNT_SUMMARY_COLUMN_GROUPS.slice(1)],
-          columns: [...XNT_SUMMARY_EXCEL_COLUMNS.slice(0, 3), { label: "Nhóm hàng", key: "categoryName", width: 22 }, ...XNT_SUMMARY_EXCEL_COLUMNS.slice(3)],
+          columnGroups: [{ label: "MẶT HÀNG", span: 4 }, ...XNT_SUMMARY_COLUMN_GROUPS.slice(1),{label:"QUY ĐỔI HIỆN TẠI",span:3}],
+          columns: [...XNT_SUMMARY_EXCEL_COLUMNS.slice(0, 3), { label: "Nhóm hàng", key: "categoryName", width: 22 }, ...XNT_SUMMARY_EXCEL_COLUMNS.slice(3), ...unitExportColumns],
           rows: visibleRows.map((r) => ({
-            ...r,
+            ...r, ...unitExportValues(r),
             code: r.code,
             name: r.name,
             unit: r.unit,
@@ -337,7 +353,7 @@ export default function XuatNhapTonPage() {
           name: "2. Chi tiết NHẬP-XUẤT",
           autoFilter: true,
           titleRows,
-          columnGroups: XNT_DETAIL_COLUMN_GROUPS,
+          columnGroups: [...XNT_DETAIL_COLUMN_GROUPS,{label:"QUY ĐỔI HIỆN TẠI",span:3}],
           columns: expandXntExcelColumns([
             { label: "Mã hàng", key: "code", width: 14 },
             { label: "Tên hàng", key: "name", width: 32 },
@@ -360,9 +376,10 @@ export default function XuatNhapTonPage() {
             { label: "Khác(-)", key: "outOther", width: 10, format: "number" },
             { label: "Tồn cuối", key: "closingQty", width: 10, format: "number" },
             { label: "GT cuối", key: "closingValue", width: 14, format: "currency" },
+              ...unitExportColumns,
           ].map((column) => ({ ...column, format: column.format as "number" | "currency" | undefined, decimalPlaces: 4 }))),
           rows: visibleRows.map((r) => ({
-            ...r,
+            ...r, ...unitExportValues(r),
             code: r.code,
             name: r.name,
             unit: r.unit,
@@ -422,7 +439,7 @@ export default function XuatNhapTonPage() {
     } finally {
       setExporting(false);
     }
-  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast]);
+  }, [data, range, branchName, visibleRows, visibleSubtotal, quantityTotals, movementValueTotals, categoryFilter, unitFilter, units, debouncedSearch, rowFilter, sortState, exporting, toast, unitExportValues]);
 
   // ========================================================
   // Render: column definitions
@@ -448,7 +465,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn đầu kỳ",
       key: "openingQty",
       align: "right",
-      cell: (r) => formatNumber(r.openingQty),
+      cell: (r) => <StockWithConversion quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
       subtotalCell: formatQuantityTotal(quantityTotals.openingQty),
     },
     {
@@ -490,7 +507,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn cuối kỳ",
       key: "closingQty",
       align: "right",
-      cell: (r) => formatNumber(r.closingQty),
+      cell: (r) => <StockWithConversion quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
       subtotalCell: formatQuantityTotal(quantityTotals.closingQty),
     },
     {
@@ -535,7 +552,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn đầu kỳ",
       key: "openingQty",
       align: "right",
-      cell: (r) => formatNumber(r.openingQty),
+      cell: (r) => <StockWithConversion quantity={r.openingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
     },
     {
       label: "Giá trị đầu kỳ",
@@ -564,7 +581,7 @@ export default function XuatNhapTonPage() {
       label: "Tồn cuối kỳ",
       key: "closingQty",
       align: "right",
-      cell: (r) => formatNumber(r.closingQty),
+      cell: (r) => <StockWithConversion quantity={r.closingQty} unit={r.unit} conversions={uom.map.get(r.productId)} hideUnit />,
     },
     {
       label: "Giá trị cuối kỳ",

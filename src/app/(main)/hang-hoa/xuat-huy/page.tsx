@@ -35,6 +35,7 @@ import { formatCurrency, formatDate, formatUser } from "@/lib/format";
 import { exportToExcel, exportToCsv } from "@/lib/utils/export";
 import { getDisposalExportListWorkspace, getDisposalExportsForExport, getDisposalStatuses, cancelDisposalExport } from "@/lib/services";
 import type { DisposalExport } from "@/lib/types";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 import { CreateDisposalDialog, ConfirmDialog } from "@/components/shared/dialogs";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { DocumentNoteBox } from "@/components/shared/document-note-box";
@@ -156,6 +157,7 @@ function DisposalExportDetail({
   return (
     <InlineDetailPanel open onClose={onClose}>
       <div className="p-4 space-y-4">
+        <UnitSnapshotHistory referenceType="disposal" referenceId={item.id} />
         <DetailTabs tabs={tabs} defaultTab="info" />
       </div>
     </InlineDetailPanel>

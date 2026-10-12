@@ -51,7 +51,7 @@ it("keeps warehouse packaging entry without the outlet unit picker", async () =>
   expect(screen.getByLabelText("Số lẻ Sữa")).toHaveValue("0.5");
   fireEvent.click(screen.getByRole("button", { name: "Hoàn thành kiểm kho" }));
   await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
-  expect(mocks.rpc.mock.calls[0][1].p_items).toEqual([{ product_id: "milk", actual_stock: 24.5 }]);
+  expect(mocks.rpc.mock.calls[0][1].p_items).toEqual([{ product_id: "milk", quantity: 24.5, inputUnit:"Lon", expectedFactor:1,parts:[{quantity:2,unit:"Thùng",expectedFactor:12},{quantity:.5,unit:"Lon",expectedFactor:1}] }]);
 }, 15_000);
 
 async function addMilk() {
@@ -63,21 +63,16 @@ async function addMilk() {
 
 it("preserves the count on unit changes and posts grams in canonical units once", async () => {
   await addMilk();
-  expect(screen.getByLabelText("Số Thùng Sữa")).toHaveValue("2");
-  expect(screen.getByLabelText("Số lẻ Sữa")).toHaveValue("0.5");
-  fireEvent.click(screen.getByRole("combobox", { name: "Đơn vị kiểm Sữa" }));
-  const gramsOption = await screen.findByRole("option", { name: "G" });
-  fireEvent.focus(gramsOption);
-  fireEvent.click(gramsOption);
   const input = await screen.findByLabelText("Tồn thực tế Sữa");
   expect(input).toHaveValue("24,500");
   fireEvent.change(input, { target: { value: "500" } });
   fireEvent.blur(input);
   fireEvent.click(screen.getByRole("button", { name: "Hoàn thành kiểm kho" }));
   await waitFor(() => expect(mocks.rpc).toHaveBeenCalledTimes(1));
-  expect(mocks.rpc).toHaveBeenCalledWith("create_and_apply_inventory_check_atomic", {
-    p_branch_id: "xtb", p_note: null, p_items: [{ product_id: "milk", actual_stock: 0.5 }],
-  });
+  expect(mocks.rpc).toHaveBeenCalledWith("create_stock_operation_with_uom", expect.objectContaining({
+    p_kind:"inventory_check",p_request_id:expect.any(String),p_branch_id: "xtb", p_note: null,
+    p_items: [{ product_id: "milk", quantity: 500, inputUnit:"G", expectedFactor:.001 }],
+  }));
 }, 15_000);
 
 it("does not silently fall back to a stock unit when conversions fail to load", async () => {
