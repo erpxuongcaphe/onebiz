@@ -261,7 +261,8 @@ export function CompleteProductionOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset disabled={saving} className="flex min-h-0 min-w-0 flex-col gap-4 overflow-y-auto py-2 pr-1 [&>*]:shrink-0">
+        <div className="min-h-0 min-w-0 overflow-y-auto py-2 pr-1" data-production-scroll-area>
+        <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4 [&>*]:shrink-0">
           <div className="space-y-2">
             <label htmlFor="production-completed-qty" className="text-sm font-medium">Số lượng thực tế {entryUnit && `(${entryUnit})`}</label>
             <Input
@@ -401,6 +402,7 @@ export function CompleteProductionOrderDialog({
             </span>
           </div>
         </fieldset>
+        </div>
 
         <DialogFooter>
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>

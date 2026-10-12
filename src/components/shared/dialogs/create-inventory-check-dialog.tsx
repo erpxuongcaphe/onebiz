@@ -17,7 +17,7 @@ import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { getUOMConversions } from "@/lib/services/supabase/uom";
 import { pickBestConversion, getConversionText, getDirectConvertibleUnits, getDirectConversionFactor } from "@/lib/format-uom";
 import { inventoryCountFromStock, inventoryCountToStock } from "@/lib/inventory-count-uom";
-import { preferredWeighingUnit, stockToInput, operationalFactor } from "@/lib/operational-uom";
+import { preferredWeighingUnit, stockToInput, operationalFactor, switchInputQuantity } from "@/lib/operational-uom";
 import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import type { UOMConversion } from "@/lib/types";
 import type { Database } from "@/lib/supabase/types";
@@ -257,8 +257,16 @@ export function CreateInventoryCheckDialog({
   function updateCountUnit(productId: string, countUnit: string | null) {
     setCheckItems((items) => items.map((item) => {
       if (item.productId !== productId) return item;
-      const stock = lineActual(item);
-      if (!Number.isFinite(stock)) return item;
+      // Keep entered precision during unit switches. Only the stock preview and
+      // posting use ledger rounding; the entered weight is never an intermediate.
+      if (countUnit !== null && item.countUnit !== null) {
+        const actualStock=switchInputQuantity(item.actualStock,item.unit,item.countUnit,countUnit,item.conversions);
+        return actualStock == null ? item : {...item,countUnit,actualStock};
+      }
+      const stock=item.countUnit !== null
+        ? switchInputQuantity(item.actualStock,item.unit,item.countUnit,item.unit,item.conversions)
+        : item.convFactor ? item.actualBig*item.convFactor+item.actualSmall : item.actualStock;
+      if (stock == null || !Number.isFinite(stock)) return item;
       if (countUnit === null && item.convFactor) {
         const actualBig = Math.floor(stock / item.convFactor);
         return { ...item, countUnit, actualBig, actualSmall: stock - actualBig * item.convFactor };

@@ -456,7 +456,8 @@ export function CreateProductionOrderDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <fieldset disabled={saving} className="grid min-h-0 min-w-0 gap-4 overflow-y-auto py-2 pr-1">
+        <div className="min-h-0 min-w-0 flex-auto overflow-y-auto py-2 pr-1" data-production-scroll-area>
+        <fieldset disabled={saving} className="grid min-w-0 gap-4">
           <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
@@ -785,6 +786,7 @@ export function CreateProductionOrderDialog({
             />
           </div>
         </fieldset>
+        </div>
 
         <DialogFooter className="shrink-0 border-t pt-3">
           <Button variant="outline" disabled={saving} onClick={() => onOpenChange(false)}>
