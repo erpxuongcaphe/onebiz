@@ -106,7 +106,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
     } catch (err) { setActionError(err instanceof Error ? err.message : "Không xuất được lịch sử thu chi."); }
     finally { setExporting(false); }
   };
-  return <div className="space-y-3">
+  return <div className="min-w-0 w-full space-y-3">
     <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
       <span className="text-muted-foreground">{branchLabel}</span>
       <div className="flex flex-wrap gap-2">
@@ -133,7 +133,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
       <span>Số dư ròng: <strong>{formatCurrency(balance.debt - balance.advance)}</strong></span>
     </div>}
     {balanceError && <p role="alert" className="text-sm text-destructive">{balanceError}</p>}
-    {invalidDates ? null : error ? <p role="alert" className="py-4 text-sm text-destructive">{error}</p> : loading ? <p className="py-4 text-sm text-muted-foreground">Đang tải phiếu thu chi...</p> : rows.length === 0 ? <p className="py-4 text-sm text-muted-foreground">Chưa có phiếu thu chi trong phạm vi này.</p> : <div className="overflow-auto max-h-[480px] border rounded-md">
+    {invalidDates ? null : error ? <p role="alert" className="py-4 text-sm text-destructive">{error}</p> : loading ? <p className="py-4 text-sm text-muted-foreground">Đang tải phiếu thu chi...</p> : rows.length === 0 ? <p className="py-4 text-sm text-muted-foreground">Chưa có phiếu thu chi trong phạm vi này.</p> : <div className="min-w-0 w-full overflow-auto max-h-[480px] border rounded-md">
       <table className="w-full text-sm">
         <thead className="sticky top-0 z-10 bg-muted text-left"><tr>{["Mã phiếu", "Ngày ghi nhận", "Thu / Chi", "Khoản mục", "Số tiền", "Phương thức", "Chi nhánh", "Người lập", "Trạng thái"].map((label, index) => <th key={label} className={`px-3 py-2 whitespace-nowrap ${index === 0 ? "sticky left-0 z-20 bg-muted" : ""}`}>{label}</th>)}</tr></thead>
         <tbody>{rows.map(row => <tr key={row.id} className="border-t">
