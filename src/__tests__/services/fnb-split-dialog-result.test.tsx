@@ -41,6 +41,9 @@ describe("F&B split result", () => {
     expect(screen.getByRole("button", { name: "Hủy" })).toBeDisabled();
     expect(screen.getAllByRole("checkbox")[0]).toBeDisabled();
     fireEvent.click(screen.getByRole("button", { name: "Đóng" }));
+    expect(screen.getByRole("dialog", { name: "Có nội dung chưa lưu" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Quay lại để lưu" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Có nội dung chưa lưu" })).not.toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Tách 1 món" }));
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(byItems).toHaveBeenCalledTimes(1);
