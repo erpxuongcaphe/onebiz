@@ -457,7 +457,7 @@ export function CreateProductionOrderDialog({
         </DialogHeader>
 
         <fieldset disabled={saving} className="grid min-h-0 min-w-0 gap-4 overflow-y-auto py-2 pr-1">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 {selectedBranchMode === "outlet" ? "Bán thành phẩm cần sản xuất" : "Sản phẩm cần sản xuất"} <span className="text-destructive">*</span>
@@ -603,7 +603,7 @@ export function CreateProductionOrderDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <label className="text-sm font-medium">
                 {selectedBranchMode === "outlet" ? "Số mẻ nguyên liệu đã làm" : "Số lượng"} <span className="text-destructive">*</span>
@@ -660,7 +660,7 @@ export function CreateProductionOrderDialog({
               <Icon name="package_2" size={16} className="text-primary" />
               Lô thành phẩm nhập kho
             </div>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">Số lô</label>
                 <Input
@@ -690,7 +690,7 @@ export function CreateProductionOrderDialog({
 
           {selectedBranchMode === "outlet" && selectedBom && <section className="space-y-3 rounded-lg border bg-primary/5 p-3">
             <h3 className="font-medium text-primary">Cân thành phẩm thực nhận</h3>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
               <label className="space-y-1 text-sm">Cân cả hộp ({actualWeighUnit})<Input aria-label={`Cân cả hộp (${actualWeighUnit})`} type="number" min="0" step="any" value={weighedQty} onChange={e => setWeighedQty(e.target.value)} /></label>
               <label className="space-y-1 text-sm">Trừ vỏ hộp ({actualWeighUnit})<Input type="number" min="0" step="any" value={tareQty} onChange={e => setTareQty(e.target.value)} /></label>
             </div>
@@ -702,7 +702,7 @@ export function CreateProductionOrderDialog({
           </section>}
           {/* Material needs */}
           {bomId && (
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Nguyên liệu thực dùng</h3>
                 {computing && (
@@ -711,8 +711,8 @@ export function CreateProductionOrderDialog({
               </div>
 
               {materials.length > 0 && (
-                <div className="border rounded-lg overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="min-w-0 w-full overflow-x-auto rounded-lg border">
+                  <table className="w-full min-w-[560px] text-sm">
                     <thead className="bg-muted/30">
                       <tr>
                         <th className="text-left p-2 font-medium">NVL</th>
