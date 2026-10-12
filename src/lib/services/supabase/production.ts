@@ -112,6 +112,7 @@ export async function createProductionOrder(order: {
   productId: string;
   variantId?: string;
   plannedQty: number;
+  stockUnit?: string;
   plannedStart?: string;
   plannedEnd?: string;
   notes?: string;
@@ -130,6 +131,7 @@ export async function createProductionOrder(order: {
         product_id: order.productId,
         variant_id: order.variantId ?? null,
         planned_qty: order.plannedQty,
+        ...(order.stockUnit ? { stock_unit: order.stockUnit } : {}),
         planned_start: order.plannedStart ?? null,
         planned_end: order.plannedEnd ?? null,
         notes: order.notes ?? null,
@@ -141,7 +143,7 @@ export async function createProductionOrder(order: {
       },
     },
   );
-  if (error) throw error;
+  if (error) handleError(error, "createProductionOrder");
   return data as {
     id: string;
     code: string;

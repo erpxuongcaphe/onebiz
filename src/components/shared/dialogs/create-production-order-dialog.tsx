@@ -391,6 +391,7 @@ export function CreateProductionOrderDialog({
         bomId,
         productId: selectedBom.productId,
         plannedQty: expectedOutput,
+        stockUnit: outputUnit,
         plannedStart: plannedStart || undefined,
         plannedEnd: plannedEnd || undefined,
         notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty} ${actualWeighUnit}; vỏ ${tareQty} ${actualWeighUnit}; thực cân ${netWeight} ${actualWeighUnit}; ghi kho ${actualOutput} ${outputUnit}.`.trim() : notes || undefined,
