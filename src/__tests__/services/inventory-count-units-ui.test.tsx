@@ -10,6 +10,21 @@ vi.mock("@/lib/contexts", () => ({
   useToast: () => ({ toast: mocks.toast }),
 }));
 vi.mock("@/lib/services/supabase/uom", () => ({ getUOMConversions: mocks.conversions }));
+// The quantity workflow is independent of Base UI portal/exit animations.
+// Shared select behavior is covered separately; use its native semantic contract.
+vi.mock("@/components/ui/select",async()=>{
+  const React=await import("react");
+  const SelectTrigger=(_props:any)=>null;
+  return {
+    Select:(props:any)=>{
+      const trigger:any=React.Children.toArray(props.children).find((child:any)=>child?.type===SelectTrigger);
+      return React.createElement("select",{value:props.value,"aria-label":trigger?.props["aria-label"],onChange:(event:any)=>props.onValueChange(event.target.value)},props.children);
+    },
+    SelectTrigger,SelectValue:()=>null,
+    SelectContent:({children}:any)=>children,
+    SelectItem:({value,children}:any)=>React.createElement("option",{value},children),
+  };
+});
 vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentContext: async () => ({ tenantId: "tenant", branchId: "xtb" }),
   getClient: () => ({
@@ -84,3 +99,20 @@ it("does not silently fall back to a stock unit when conversions fail to load", 
   expect(screen.queryByRole("combobox", { name: "Đơn vị kiểm Sữa" })).toBeNull();
   expect(mocks.rpc).not.toHaveBeenCalled();
 }, 15_000);
+
+it("keeps the original small weight when switching back and forth before posting", async () => {
+  mocks.conversions.mockResolvedValue([{fromUnit:"Lon",toUnit:"G",factor:1100,isActive:true}]);
+  await addMilk();
+  const input=screen.getByLabelText("Tồn thực tế Sữa");
+  fireEvent.change(input,{target:{value:"1"}});fireEvent.blur(input);
+  function chooseUnit(unit:string) {
+    fireEvent.change(screen.getByRole("combobox",{name:"Đơn vị kiểm Sữa"}),{target:{value:unit}});
+  }
+  for(let index=0;index<3;index++) {
+    chooseUnit("Lon");chooseUnit("G");
+  }
+  expect(input).toHaveValue("1");
+  fireEvent.click(screen.getByRole("button",{name:"Hoàn thành kiểm kho"}));
+  await waitFor(()=>expect(mocks.rpc).toHaveBeenCalledTimes(1));
+  expect(mocks.rpc.mock.calls[0][1].p_items).toEqual([{product_id:"milk",quantity:1,inputUnit:"G",expectedFactor:.000909090909}]);
+},15_000);
