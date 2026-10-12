@@ -60,6 +60,33 @@ export interface ApplyAdvanceResult {
   allocationCount: number;
 }
 
+/** Available source money for this exact document, never another branch. */
+export async function getDocumentAdvanceAvailable(type: "invoice" | "purchase_order", referenceId: string): Promise<number> {
+  const supabase = getClient();
+  const ctx = await getCurrentContext();
+  const isInvoice = type === "invoice";
+  const partyColumn = isInvoice ? "customer_id" : "supplier_id";
+  const { data: document, error: documentError } = await supabase
+    .from(isInvoice ? "invoices" : "purchase_orders")
+    .select(isInvoice ? "branch_id, customer_id" : "branch_id, supplier_id")
+    .eq("tenant_id", ctx.tenantId).eq("id", referenceId).single();
+  if (documentError) handleError(documentError, "getDocumentAdvanceAvailable.document");
+  const row = document as unknown as Record<string, unknown> | null;
+  if (!row?.[partyColumn] || !row.branch_id) return 0;
+  let available = 0;
+  for (let offset = 0; ; offset += 200) {
+    const { data, error } = await supabase.from((isInvoice ? "customer_advances" : "supplier_advances") as never)
+      .select("remaining_amount").eq("tenant_id", ctx.tenantId)
+      .eq(partyColumn, row[partyColumn] as string).eq("branch_id", row.branch_id as string)
+      .eq("status", "active").gt("remaining_amount", 0)
+      .order("id", { ascending: true }).range(offset, offset + 199);
+    if (error) handleError(error, "getDocumentAdvanceAvailable.sources");
+    const sources = (data ?? []) as unknown as Array<{ remaining_amount: number | string }>;
+    available += sources.reduce((sum, source) => sum + Number(source.remaining_amount), 0);
+    if (sources.length < 200) return available;
+  }
+}
+
 async function recordPartyAdvance(
   type: "customer" | "supplier",
   input: RecordAdvanceInput,

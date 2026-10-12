@@ -63,6 +63,7 @@ import { useToast } from "@/lib/contexts";
 import type { Supplier, PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
+import { PartyCashHistory } from "@/components/shared/party-cash-history";
 
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
@@ -144,7 +145,7 @@ function SupplierDetail({
               fullWidth: true,
             },
             {
-              label: "Nợ cần trả hiện tại",
+              label: supplier.currentDebt < 0 ? "NCC đang giữ" : "Còn phải trả",
               value: (
                 <span
                   className={
@@ -153,7 +154,7 @@ function SupplierDetail({
                       : "text-muted-foreground"
                   }
                 >
-                  {formatCurrency(supplier.currentDebt)}
+                  {formatCurrency(Math.abs(supplier.currentDebt))}
                 </span>
               ),
             },
@@ -258,7 +259,7 @@ function SupplierDetail({
             columns={2}
             fields={[
               {
-                label: "Nợ cần trả hiện tại",
+                label: supplier.currentDebt < 0 ? "NCC đang giữ" : "Còn phải trả",
                 value: (
                   <span
                     className={
@@ -267,7 +268,7 @@ function SupplierDetail({
                         : "text-muted-foreground"
                     }
                   >
-                    {formatCurrency(supplier.currentDebt)}
+                    {formatCurrency(Math.abs(supplier.currentDebt))}
                   </span>
                 ),
               },
@@ -339,6 +340,7 @@ function SupplierDetail({
       label: "Lịch sử thay đổi",
       content: <AuditHistoryTab entityType="supplier" entityId={supplier.id} />,
     },
+    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="supplier" partyId={supplier.id} partyName={supplier.name} /> },
   ];
 
   return (
@@ -438,14 +440,15 @@ export default function NhaCungCapPage() {
     },
     {
       accessorKey: "currentDebt",
-      header: "Nợ cần trả hiện tại",
+      header: "Số dư công nợ",
       cell: ({ row }) => {
         const debt = row.original.currentDebt;
         return (
           <span
-            className={debt > 0 ? "text-destructive" : "text-muted-foreground"}
+            className={debt > 0 ? "text-destructive tabular-nums" : debt < 0 ? "text-status-success tabular-nums" : "text-muted-foreground tabular-nums"}
           >
             {formatCurrency(debt)}
+            {debt < 0 && <span className="block text-xs">NCC đang giữ</span>}
           </span>
         );
       },
@@ -648,7 +651,7 @@ export default function NhaCungCapPage() {
       { header: "Điện thoại", key: "phone", width: 15 },
       { header: "Email", key: "email", width: 25 },
       {
-        header: "Nợ cần trả hiện tại",
+        header: "Số dư công nợ",
         key: "currentDebt",
         width: 18,
         format: (v: number) => v,
@@ -745,12 +748,12 @@ export default function NhaCungCapPage() {
               />
               <ListMetric
                 icon={<Icon name="account_balance_wallet" size={15} />}
-                label="Công nợ"
+                label="Số dư công nợ"
                 value={formatCurrency(summary.totalDebt)}
                 hint={
                   summary.suppliersWithDebt > 0
                     ? `${summary.suppliersWithDebt} NCC còn nợ`
-                    : "Không có nợ"
+                    : summary.totalDebt < 0 ? "NCC đang giữ tiền" : "Không có nợ"
                 }
                 tone={summary.totalDebt > 0 ? "danger" : "default"}
               />

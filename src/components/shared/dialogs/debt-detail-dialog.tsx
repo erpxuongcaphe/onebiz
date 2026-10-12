@@ -69,6 +69,13 @@ export function DebtDetailDialog({
   const [docs, setDocs] = useState<DocLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [applyTarget, setApplyTarget] = useState<DocLine | null>(null);
+  const [revision, setRevision] = useState(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [remainingAdvance, setRemainingAdvance] = useState(availableAdvance);
+  useEffect(() => {
+    setRemainingAdvance(availableAdvance);
+    setApplyTarget(null);
+  }, [availableAdvance, open, partyId, branchId]);
 
   useEffect(() => {
     if (!open) {
@@ -77,6 +84,8 @@ export function DebtDetailDialog({
     }
     let cancelled = false;
     setLoading(true);
+    setDocs([]);
+    setLoadError(null);
     const fetcher =
       mode === "customer"
         ? getOpenInvoicesByCustomer(partyId, branchId)
@@ -87,6 +96,8 @@ export function DebtDetailDialog({
         setDocs(rows);
       })
       .catch((err) => {
+        if (cancelled) return;
+        setLoadError((err as Error).message);
         toast({
           title: "Không tải được chi tiết công nợ",
           description: (err as Error).message,
@@ -97,7 +108,7 @@ export function DebtDetailDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, mode, partyId, branchId, toast]);
+  }, [open, mode, partyId, branchId, toast, revision]);
 
   const totalDebt = docs.reduce((s, d) => s + d.debt, 0);
   const totalAmount = docs.reduce((s, d) => s + d.total, 0);
@@ -107,7 +118,7 @@ export function DebtDetailDialog({
   const detailRoute = mode === "customer" ? "/don-hang/hoa-don" : "/hang-hoa/nhap-hang";
   // The summary can span many branches, but an allocation must never do so.
   // Keep the action unavailable until the manager narrows the page scope.
-  const canApplyAdvance = Boolean(branchId) && availableAdvance > 0;
+  const canApplyAdvance = Boolean(branchId) && remainingAdvance > 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -175,6 +186,11 @@ export function DebtDetailDialog({
             <div className="text-center py-12 text-sm text-muted-foreground">
               <Icon name="progress_activity" className="animate-spin inline mr-2" />
               Đang tải chi tiết...
+            </div>
+          ) : loadError ? (
+            <div role="alert" className="py-8 space-y-3 text-sm text-destructive">
+              <p>{loadError}</p>
+              <Button variant="outline" onClick={() => setRevision(value => value + 1)}>Thử lại</Button>
             </div>
           ) : docs.length === 0 ? (
             <div className="text-center py-12 space-y-2">
@@ -321,9 +337,11 @@ export function DebtDetailDialog({
           referenceId={applyTarget.id}
           referenceCode={applyTarget.code}
           debt={applyTarget.debt}
-          availableAdvance={availableAdvance}
-          onSuccess={() => {
+          availableAdvance={remainingAdvance}
+          onSuccess={(result) => {
             setApplyTarget(null);
+            setRemainingAdvance(value => Math.max(0, value - result.appliedAmount));
+            setRevision(value => value + 1);
             onSuccess?.();
           }}
         />

@@ -23,7 +23,9 @@ import { useToast } from "@/lib/contexts";
 import {
   recordInvoicePayment,
   recordPurchasePayment,
+  getDocumentAdvanceAvailable,
 } from "@/lib/services/supabase/payments";
+import { ApplyAdvanceDialog } from "@/components/shared/dialogs/apply-advance-dialog";
 import { Icon } from "@/components/ui/icon";
 import { CashTimeFields, useCashTimeDraft } from "@/components/shared/cash-time-fields";
 import { cashInputToIso, validateCashTime } from "@/lib/cash-time";
@@ -56,6 +58,11 @@ export function RecordPaymentDialog({
   const [note, setNote] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [remainingDebt, setRemainingDebt] = useState(currentDebt);
+  const [availableAdvance, setAvailableAdvance] = useState(0);
+  const [advanceLoading, setAdvanceLoading] = useState(false);
+  const [advanceError, setAdvanceError] = useState<string | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
   const {cashTime,setCashTime} = useCashTimeDraft(open);
 
   const isInvoice = type === "invoice";
@@ -65,20 +72,33 @@ export function RecordPaymentDialog({
   useEffect(() => {
     if (open) {
       setAmount(currentDebt);
+      setRemainingDebt(currentDebt);
+      setApplyOpen(false);
       setPaymentMethod("cash");
       setNote("");
       setErrors({});
       setSaving(false);
     }
-  }, [open, currentDebt]);
+  }, [open, currentDebt, referenceId]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setAvailableAdvance(0); setAdvanceLoading(true); setAdvanceError(null);
+    getDocumentAdvanceAvailable(type, referenceId)
+      .then(value => { if (!cancelled) setAvailableAdvance(value); })
+      .catch(err => { if (!cancelled) setAdvanceError(err instanceof Error ? err.message : "Chưa kiểm tra được tiền ứng."); })
+      .finally(() => { if (!cancelled) setAdvanceLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, type, referenceId]);
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
     if (amount <= 0) newErrors.amount = "Số tiền phải lớn hơn 0";
-    if (isInvoice && amount > currentDebt) {
-      newErrors.amount = `Vượt quá công nợ (${formatCurrency(currentDebt)})`;
+    if (isInvoice && amount > remainingDebt) {
+      newErrors.amount = `Vượt quá công nợ (${formatCurrency(remainingDebt)})`;
     }
-    if (!isInvoice && amount > currentDebt && note.trim().length < 3) {
+    if (!isInvoice && amount > remainingDebt && note.trim().length < 3) {
       newErrors.note = "Cần ghi lý do cho khoản ứng trước nhà cung cấp";
     }
     const timeError=validateCashTime(cashTime.occurredLocal,cashTime.transactionDate,cashTime.timeReason);
@@ -127,6 +147,7 @@ export function RecordPaymentDialog({
   }
 
   return (
+    <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
@@ -142,10 +163,15 @@ export function RecordPaymentDialog({
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Công nợ hiện tại ({label})</span>
               <span className="font-semibold text-destructive">
-                {formatCurrency(currentDebt)}
+                {formatCurrency(remainingDebt)}
               </span>
             </div>
           </div>
+
+          {advanceLoading ? <p className="text-sm text-muted-foreground">Đang kiểm tra tiền ứng...</p> : advanceError ? <p role="alert" className="text-sm text-status-warning">Chưa kiểm tra được tiền ứng. {advanceError}</p> : availableAdvance > 0 && remainingDebt > 0 ? <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-status-success/30 bg-status-success/5 p-3 text-sm">
+            <span>Tiền ứng có thể dùng: <strong className="tabular-nums">{formatCurrency(availableAdvance)}</strong></span>
+            <Button size="sm" variant="outline" disabled={saving} onClick={() => setApplyOpen(true)}><Icon name="link" size={16} />Cấn tiền ứng</Button>
+          </div> : null}
 
           {/* Amount */}
           <div className="space-y-2">
@@ -162,23 +188,23 @@ export function RecordPaymentDialog({
             {errors.amount && (
               <p className="text-xs text-destructive">{errors.amount}</p>
             )}
-            {amount > 0 && amount < currentDebt && (
+            {amount > 0 && amount < remainingDebt && (
               <p className="text-xs text-muted-foreground">
-                Còn lại sau thanh toán: {formatCurrency(currentDebt - amount)}
+                Còn lại sau thanh toán: {formatCurrency(remainingDebt - amount)}
               </p>
             )}
-            {amount === currentDebt && currentDebt > 0 && (
+            {amount === remainingDebt && remainingDebt > 0 && (
               <p className="text-xs text-status-success">
                 Thanh toán hết nợ
               </p>
             )}
-            {!isInvoice && amount > currentDebt && (
+            {!isInvoice && amount > remainingDebt && (
               <div className="rounded-md border border-status-warning/30 bg-status-warning/10 p-2 text-xs">
                 <p className="font-medium text-status-warning">
-                  Trả hết nợ: {formatCurrency(currentDebt)}
+                  Trả hết nợ: {formatCurrency(remainingDebt)}
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  Ứng trước NCC: {formatCurrency(amount - currentDebt)}. Khoản này được theo dõi riêng, không làm công nợ phiếu nhập thành số âm.
+                  Ứng trước NCC: {formatCurrency(amount - remainingDebt)}. Khoản này được theo dõi riêng, không làm công nợ phiếu nhập thành số âm.
                 </p>
               </div>
             )}
@@ -230,5 +256,20 @@ export function RecordPaymentDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {applyOpen && <ApplyAdvanceDialog
+      open={applyOpen} onOpenChange={setApplyOpen}
+      mode={isInvoice ? "customer" : "supplier"}
+      partyName={counterpartyName} referenceId={referenceId} referenceCode={referenceCode}
+      debt={remainingDebt} availableAdvance={availableAdvance}
+      onSuccess={result => {
+        setApplyOpen(false);
+        setRemainingDebt(result.remainingDebt);
+        setAmount(result.remainingDebt);
+        setAvailableAdvance(value => Math.max(0, value - result.appliedAmount));
+        if (result.remainingDebt <= 0) onOpenChange(false);
+        onSuccess?.();
+      }}
+    />}
+    </>
   );
 }
