@@ -38,9 +38,9 @@ describe("party cash history presentation", () => {
     render(<PartyCashHistory mode="supplier" partyId="supplier-1" partyName="Trung Kien" />);
     fireEvent.click(await screen.findByRole("button", { name: "Xem phiếu PC000334" }));
     fireEvent.click(screen.getByRole("button", { name: "Hủy phiếu để điều chỉnh" }));
-    expect(screen.getByRole("button", { name: "Hủy phiếu", exact: true })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /^Hủy phiếu$/ })).toBeDisabled();
     fireEvent.change(screen.getByLabelText("Lý do hủy"), { target: { value: "Nhập sai số tiền" } });
-    fireEvent.click(screen.getByRole("button", { name: "Hủy phiếu", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: /^Hủy phiếu$/ }));
     await waitFor(() => expect(actions.cancel).toHaveBeenCalledWith("cash-1", "Nhập sai số tiền"));
   });
   it("does not expose cancellation without permission", async () => {
