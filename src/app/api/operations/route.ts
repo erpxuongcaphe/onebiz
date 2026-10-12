@@ -16,6 +16,8 @@ interface RpcClient {
 }
 const errors: Record<string, string> = {
   OPS_FORBIDDEN: "Bạn chưa có quyền thực hiện ở chi nhánh này.",
+  OPS_PROPOSAL_SCOPE: "Chỉ đề xuất việc riêng hoặc phiên bản của việc riêng trong chi nhánh được giao.",
+  OPS_INVALID_PROPOSAL: "Kiểm tra tên công việc, lịch, ngày áp dụng và tiêu chí của đề xuất.",
   OPS_UNAUTHENTICATED: "Vui lòng đăng nhập lại.",
   OPS_STALE: "Có người đã cập nhật công việc. Hãy tải lại trước khi lưu.",
   OPS_PERIOD_LOCKED: "Kỳ đã chốt. Không được sửa kết quả kỳ này.",

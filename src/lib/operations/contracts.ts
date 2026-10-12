@@ -5,6 +5,8 @@ export const operationActions = [
   "standard",
   "common_standard",
   "approve_standard",
+  "propose_standard",
+  "request_standard_changes",
   "generate",
   "ensure_schedule",
   "event",
@@ -97,6 +99,8 @@ export interface Standard {
   frequency: string;
   assignee_id: string;
   criteria: Criterion[];
+  created_by?: string;
+  review_note?: string | null;
 }
 export interface Todo {
   id: string;
@@ -182,6 +186,9 @@ export const states: Record<string, string> = {
   canceled: "Đã hủy",
   transferred: "Chuyển To-do",
   draft: "Bản nháp",
+  pending_approval: "Chờ CEO duyệt",
+  changes_requested: "Cần sửa đề xuất",
+  retired: "Ngừng áp dụng",
   approved: "Đã duyệt",
   superseded: "Đã thay thế",
   met: "Đạt",
