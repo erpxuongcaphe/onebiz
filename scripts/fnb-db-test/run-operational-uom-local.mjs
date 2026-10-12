@@ -5,7 +5,7 @@ const pglite=path.resolve(process.argv[2]);
 const resolver=fs.readFileSync('supabase/migrations/00320_uom_accounting_snapshots.sql','utf8').match(/create or replace function public\.resolve_product_uom_factor[\s\S]*?\n\$\$;/i)[0];
 const install=`
  await db.exec(\`create table if not exists tenants(id uuid primary key); insert into tenants select distinct tenant_id from profiles on conflict do nothing;
- create table if not exists branches(id uuid primary key,tenant_id uuid); 
+ create table if not exists branches(id uuid primary key,tenant_id uuid);
  create or replace function _can_read_branch_inventory_00476(uuid,uuid,uuid) returns boolean language sql as $$select user_has_branch_access($1,$3)$$;
  create table uom_conversions(tenant_id uuid,product_id uuid,from_unit text,to_unit text,factor numeric,is_active boolean);
  alter table products add column if not exists is_active boolean default true; alter table products add column if not exists unit text default 'G';

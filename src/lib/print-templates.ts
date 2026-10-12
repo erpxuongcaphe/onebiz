@@ -198,7 +198,7 @@ export function buildProductionOrderPrintData(row: ManufacturingOrder): Document
     date: row.date,
     headerFields: [
       { label: "Sản phẩm", value: `${row.productCode} — ${row.productName}` },
-      { label: "Số lượng", value: String(row.quantity) },
+      { label: "Số lượng", value: `${row.quantity}${row.unit ? ` ${row.unit}` : ''}` },
       { label: "Trạng thái", value: row.statusName || row.status },
       { label: "Người tạo", value: user },
     ],

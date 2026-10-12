@@ -223,6 +223,8 @@ jobs:
           npm ci
           createdb fnb_ui_production_test
           psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00417_fnb_real_production_chain.integration.sql
+          node scripts/fnb-db-test/extract-operational-uom.mjs /tmp/operational-uom-ui-fixture.sql
+          psql -X -v ON_ERROR_STOP=1 -f /tmp/operational-uom-ui-fixture.sql
           npx vitest run --config scripts/fnb-db-test/vitest.production.config.ts
 
       - name: Verify complete internal-sale documents and XTB cost
