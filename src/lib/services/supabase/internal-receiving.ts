@@ -1,4 +1,4 @@
-import { getClient, handleError } from './base';
+import { getClient, getCurrentTenantId, handleError } from './base';
 
 function explainReceiptError(error: {message: string}): never {
   const messages: Record<string, string> = {
@@ -20,16 +20,29 @@ function explainReceiptError(error: {message: string}): never {
 }
 
 export interface InternalReceivingItem { id: string; productId: string; code: string; name: string; unit: string; dispatched: number; received: number }
-export interface InternalReceipt { id: string; createdAt: string; updatedAt: string; revision: number; note?: string; createdBy: string; items: { itemId: string; quantity: number }[] }
+export interface InternalReceipt { id: string; createdAt: string; updatedAt: string; revision: number; note?: string; createdBy: string; items: { itemId: string; quantity: number; inputQuantity?: number; inputUnit?: string; conversionFactor?: number; stockUnit?: string }[] }
 export interface InternalReceivingOrder { id: string; code: string; createdAt: string; fromBranch: string; invoiceId: string; items: InternalReceivingItem[]; receipts: InternalReceipt[] }
 export async function getInternalReceivingWorkspace(branchId: string): Promise<InternalReceivingOrder[]> {
   // RPC enforces actor + tenant + destination branch and omits all prices/costs.
   const { data, error } = await (getClient().rpc as any)('get_internal_receiving_workspace', { p_branch_id: branchId });
   if (error) handleError(error, 'getInternalReceivingWorkspace');
-  return (Array.isArray(data) ? data : []).map((order: InternalReceivingOrder) => ({ ...order, items: order.items ?? [], receipts: order.receipts ?? [] }));
+  const orders: InternalReceivingOrder[] = (Array.isArray(data) ? data : []).map((order: InternalReceivingOrder) => ({ ...order, items: order.items ?? [], receipts: order.receipts ?? [] }));
+  const ids = orders.flatMap(order => order.receipts.map(receipt => receipt.id));
+  if (ids.length) {
+    const tenant = await getCurrentTenantId();
+    const { data: entries, error: snapshotError } = await (getClient().from as any)('operational_uom_requests').select('reference_id,snapshots,result,created_at').eq('tenant_id',tenant).eq('reference_type','internal_receipt').in('reference_id',ids).order('created_at',{ ascending: false });
+    if (snapshotError) handleError(snapshotError,'getInternalReceivingWorkspace:units');
+    const newest = new Map<string, any>();
+    for (const entry of entries ?? []) if (!newest.has(entry.reference_id) || Number(entry.result?.revision ?? 0) > Number(newest.get(entry.reference_id).result?.revision ?? 0)) newest.set(entry.reference_id,entry);
+    for (const order of orders) for (const receipt of order.receipts) receipt.items = receipt.items.map(item => {
+      const snapshot = newest.get(receipt.id)?.snapshots?.find((row: any) => row.itemId === item.itemId);
+      return snapshot ? {...item,inputQuantity:snapshot.inputQuantity,inputUnit:snapshot.inputUnit,conversionFactor:snapshot.conversionFactor,stockUnit:snapshot.stockUnit} : item;
+    });
+  }
+  return orders;
 }
-export async function receiveInternalSale(input: { saleId: string; requestId: string; items: { itemId: string; quantity: number }[]; note?: string; receiptId?: string; expectedRevision?: number }) {
-  const { data, error } = await (getClient().rpc as any)('receive_internal_sale_actual', {
+export async function receiveInternalSale(input: { saleId: string; requestId: string; items: { itemId: string; quantity: number; inputUnit?: string; expectedFactor?: number }[]; note?: string; receiptId?: string; expectedRevision?: number }) {
+  const { data, error } = await (getClient().rpc as any)(input.items.some(item => item.inputUnit) ? 'receive_internal_sale_with_uom' : 'receive_internal_sale_actual', {
     p_sale_id: input.saleId, p_items: input.items, p_request_id: input.requestId, p_note: input.note || null,
     p_receipt_id: input.receiptId || null, p_expected_revision: input.expectedRevision ?? null,
   });

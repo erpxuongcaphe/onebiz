@@ -57,6 +57,7 @@ export interface StockTransferItem {
   productCode: string;
   unit?: string;
   quantity: number;
+  input?: import("@/lib/operational-uom").OperationalUnitEntry;
   note?: string;
 }
 
@@ -65,6 +66,7 @@ export interface CreateStockTransferInput {
   toBranchId: string;
   items: StockTransferItem[];
   note?: string;
+  requestId?: string;
 }
 
 export interface StockTransferExportRow {
@@ -459,18 +461,20 @@ export async function createStockTransfer(
   }
 
   const supabase = getClient();
+  const requestId = input.requestId ?? (input.items.some(item => item.input) ? crypto.randomUUID() : undefined);
   // Máy chủ tự xác định tenant, người thao tác và dữ liệu sản phẩm.
   // Đầu phiếu và toàn bộ dòng hàng được ghi cùng một giao dịch.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data, error } = await (supabase.rpc as any)(
-    "create_stock_transfer_atomic",
+    requestId ? "create_stock_operation_with_uom" : "create_stock_transfer_atomic",
     {
-      p_from_branch_id: input.fromBranchId,
+      ...(requestId ? { p_kind: "transfer", p_branch_id: input.fromBranchId, p_request_id: requestId } : { p_from_branch_id: input.fromBranchId }),
       p_to_branch_id: input.toBranchId,
       p_note: input.note?.trim() || null,
       p_items: input.items.map((item) => ({
         product_id: item.productId,
-        quantity: item.quantity,
+        quantity: item.input?.quantity ?? item.quantity,
+        ...(item.input ? { inputUnit: item.input.unit, expectedFactor: item.input.expectedFactor } : {}),
         note: item.note?.trim() || null,
       })),
     },

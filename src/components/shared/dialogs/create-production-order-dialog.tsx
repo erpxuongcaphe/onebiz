@@ -25,6 +25,7 @@ import {
   getBOMsByProduct,
   getBranches,
   getProductById,
+  getUOMConversionsByProductIds,
   createProductionOrder,
   completeProductionAtomic,
   checkMaterialsAvailability,
@@ -32,10 +33,13 @@ import {
 import { getFnbProductionStockHealth } from "@/lib/services/supabase/fnb-branch-cost";
 import { getFnbSupplyBranchScope } from "@/lib/services/supabase/fnb-supply-catalog";
 import { formatDateInputValue, formatNumber } from "@/lib/format";
-import type { BOM } from "@/lib/types";
+import type { BOM, UOMConversion } from "@/lib/types";
 import type { BranchDetail } from "@/lib/services/supabase/branches";
 import { Icon } from "@/components/ui/icon";
 import { filterProductionOutputBoms } from "@/lib/production-output-scope";
+import { formatOperationalQuantity, operationalFactor, preferredWeighingUnit, quantityToStock, stockToInput, type OperationalUnitEntry } from "@/lib/operational-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { OperationalQuantityInput } from "@/components/shared/operational-quantity-input";
 
 interface CreateProductionOrderDialogProps {
   open: boolean;
@@ -79,6 +83,7 @@ export function CreateProductionOrderDialog({
   const [weighedQty, setWeighedQty] = useState("");
   const [tareQty, setTareQty] = useState("0");
   const [materialActuals, setMaterialActuals] = useState<Record<string, string>>({});
+  const [materialEntries,setMaterialEntries] = useState<Record<string,OperationalUnitEntry>>({});
   const [plannedStart, setPlannedStart] = useState("");
   const [plannedEnd, setPlannedEnd] = useState("");
   const [notes, setNotes] = useState("");
@@ -90,6 +95,7 @@ export function CreateProductionOrderDialog({
 
   const [selectedBom, setSelectedBom] = useState<BOM | null>(null);
   const [outputUnit, setOutputUnit] = useState("");
+  const [conversionMap, setConversionMap] = useState<Map<string, UOMConversion[]>>(new Map());
   const [materials, setMaterials] = useState<MaterialNeed[]>([]);
   const [computing, setComputing] = useState(false);
   const [checkedMaterialKey, setCheckedMaterialKey] = useState("");
@@ -131,7 +137,7 @@ export function CreateProductionOrderDialog({
       setBomsOfProduct([]);
       setBomId("");
       setBranchId("");
-      setPlannedQty("1"); setBatchCount("1"); setWeighedQty(""); setTareQty("0"); setMaterialActuals({});
+      setPlannedQty("1"); setBatchCount("1"); setWeighedQty(""); setTareQty("0"); setMaterialActuals({}); setMaterialEntries({});
       setPlannedStart("");
       setPlannedEnd("");
       setNotes("");
@@ -233,7 +239,7 @@ export function CreateProductionOrderDialog({
   }, [productId, productOptions]);
 
   // When BOM or qty changes → recompute material needs
-  useEffect(() => { setMaterialActuals({}); setWeighedQty(""); setTareQty("0"); }, [bomId]);
+  useEffect(() => { setMaterialActuals({}); setMaterialEntries({}); setWeighedQty(""); setTareQty("0"); }, [bomId]);
   useEffect(() => {
     let cancelled = false;
     setCheckedMaterialKey("");
@@ -270,7 +276,7 @@ export function CreateProductionOrderDialog({
         let needs: MaterialNeed[];
         let resolvedOutputUnit = bom.yieldUnit;
         if (branchId) {
-          const [checks, product] = await Promise.all([
+          const [checks, product, units] = await Promise.all([
             checkMaterialsAvailability(
               branchId,
               baseNeeds.map((n) => ({
@@ -281,8 +287,11 @@ export function CreateProductionOrderDialog({
               })),
             ),
             getProductById(bom.productId),
+            getUOMConversionsByProductIds([bom.productId, ...baseNeeds.map(item => item.productId)]),
           ]);
           if (!product) throw new Error("Không tìm thấy sản phẩm cần sản xuất.");
+          if (cancelled) return;
+          setConversionMap(units);
           // Completion credits the entered quantity in the product's stock unit,
           // not in a legacy inline BOM's default yield label.
           if (product.isFnbStockItem) {
@@ -338,7 +347,10 @@ export function CreateProductionOrderDialog({
   }, [bomId, plannedQty, branchId, selectedBranchMode, batchCount, materialActuals, toast]);
 
   const expectedOutput = selectedBranchMode === "outlet" ? (selectedBom?.yieldQty ?? 0) * Number(batchCount) : Number(plannedQty);
-  const actualOutput = selectedBranchMode === "outlet" ? Number(weighedQty) - Number(tareQty) : Number(plannedQty);
+  const outputConversions = conversionMap.get(selectedBom?.productId ?? "") ?? [];
+  const actualWeighUnit = preferredWeighingUnit(outputUnit, outputConversions);
+  const netWeight = Number(weighedQty) - Number(tareQty);
+  const actualOutput = selectedBranchMode === "outlet" ? quantityToStock(netWeight, outputUnit, actualWeighUnit, outputConversions) ?? NaN : Number(plannedQty);
   const hasShortage = materials.some((m) => m.shortage);
   const hasCostMismatch = materials.some((m) => m.costMismatch);
   const materialCheckKey = JSON.stringify([bomId, plannedQty, branchId, batchCount, materialActuals]);
@@ -381,7 +393,7 @@ export function CreateProductionOrderDialog({
         plannedQty: expectedOutput,
         plannedStart: plannedStart || undefined,
         plannedEnd: plannedEnd || undefined,
-        notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty}; vỏ ${tareQty}; thực nhập ${actualOutput} ${outputUnit}.`.trim() : notes || undefined,
+        notes: selectedBranchMode === "outlet" ? `${notes}\nSố mẻ nguyên liệu: ${batchCount}; dự kiến ${expectedOutput} ${outputUnit}; cân cả hộp ${weighedQty} ${actualWeighUnit}; vỏ ${tareQty} ${actualWeighUnit}; thực cân ${netWeight} ${actualWeighUnit}; ghi kho ${actualOutput} ${outputUnit}.`.trim() : notes || undefined,
         materials: materials.map((m) => ({
           productId: m.productId,
           plannedQty: m.needed,
@@ -402,6 +414,7 @@ export function CreateProductionOrderDialog({
           lot,
           manufacturedDate || today,
           expiryDate || undefined,
+          selectedBranchMode === "outlet" ? { quantity: netWeight, unit: actualWeighUnit, expectedFactor: operationalFactor(outputUnit, actualWeighUnit, outputConversions)?.toDecimalPlaces(12).toNumber(), materials: materials.map(m=>({productId:m.productId,...(materialEntries[m.productId] ?? {quantity:m.needed,unit:m.unit,expectedFactor:1})})) } : undefined,
         );
         toast({
           title: "Sản xuất hoàn thành",
@@ -601,7 +614,7 @@ export function CreateProductionOrderDialog({
                   aria-label="Số mẻ hoặc số lượng sản xuất"
                   value={selectedBranchMode === "outlet" ? batchCount : plannedQty}
                   min="0" step="any"
-                  onChange={(e) => { setMaterialActuals({}); selectedBranchMode === "outlet" ? setBatchCount(e.target.value) : setPlannedQty(e.target.value); }}
+                  onChange={(e) => { setMaterialActuals({}); setMaterialEntries({}); selectedBranchMode === "outlet" ? setBatchCount(e.target.value) : setPlannedQty(e.target.value); }}
                 />
                 {selectedBom && (
                   <span className="flex items-center text-sm text-muted-foreground">
@@ -678,12 +691,13 @@ export function CreateProductionOrderDialog({
           {selectedBranchMode === "outlet" && selectedBom && <section className="space-y-3 rounded-lg border bg-primary/5 p-3">
             <h3 className="font-medium text-primary">Cân thành phẩm thực nhận</h3>
             <div className="grid grid-cols-2 gap-3">
-              <label className="space-y-1 text-sm">Cân cả hộp ({outputUnit})<Input type="number" min="0" step="any" value={weighedQty} onChange={e => setWeighedQty(e.target.value)} /></label>
-              <label className="space-y-1 text-sm">Trừ vỏ hộp ({outputUnit})<Input type="number" min="0" step="any" value={tareQty} onChange={e => setTareQty(e.target.value)} /></label>
+              <label className="space-y-1 text-sm">Cân cả hộp ({actualWeighUnit})<Input aria-label={`Cân cả hộp (${actualWeighUnit})`} type="number" min="0" step="any" value={weighedQty} onChange={e => setWeighedQty(e.target.value)} /></label>
+              <label className="space-y-1 text-sm">Trừ vỏ hộp ({actualWeighUnit})<Input type="number" min="0" step="any" value={tareQty} onChange={e => setTareQty(e.target.value)} /></label>
             </div>
-            <p className="text-sm">Thực nhập <b>{formatNumber(Math.max(0, actualOutput))} {outputUnit}</b> · Dự kiến {formatNumber(expectedOutput)} {outputUnit}</p>
+            <p className="text-sm">Thực cân <b>{formatOperationalQuantity(Math.max(0, netWeight))} {actualWeighUnit}</b> · Ghi kho <b>{formatOperationalQuantity(Math.max(0, actualOutput))} {outputUnit}</b></p>
+            <p className="text-xs text-muted-foreground">Dự kiến {formatOperationalQuantity(stockToInput(expectedOutput, outputUnit, actualWeighUnit, outputConversions) ?? expectedOutput)} {actualWeighUnit}. Quy đổi theo thông tin sản phẩm; đơn vị và tồn cũ giữ nguyên.</p>
+            {Number.isFinite(actualOutput) && Math.abs((stockToInput(actualOutput, outputUnit, actualWeighUnit, outputConversions) ?? netWeight) - netWeight) > 0.00001 && <p className="text-xs text-muted-foreground">Sổ kho lưu 4 số lẻ: lượng ghi kho tương đương {formatOperationalQuantity(stockToInput(actualOutput, outputUnit, actualWeighUnit, outputConversions) ?? 0)} {actualWeighUnit}. Số cân gốc vẫn lưu trên chứng từ.</p>}
             <p className="text-xs text-muted-foreground">Tương đương {formatNumber(Math.max(0, actualOutput) / selectedBom.yieldQty)} mẻ chuẩn — chỉ để tham khảo. Nguyên liệu trừ theo số mẻ đã làm / thực dùng bên dưới, không suy ngược từ cân thành phẩm.</p>
-            {outputUnit.toLowerCase() !== "g" && outputUnit.toLowerCase() !== "gram" && <p className="text-xs text-muted-foreground">Mã cũ đang dùng {outputUnit}. Không tự đổi tồn sang gram; cần khai báo sản lượng chuẩn và chuyển đổi trước.</p>}
             {errors.actualOutput && <p className="text-xs text-destructive">{errors.actualOutput}</p>}
           </section>}
           {/* Material needs */}
@@ -715,8 +729,7 @@ export function CreateProductionOrderDialog({
                             <div className="text-xs text-muted-foreground">{m.productCode}</div>
                           </td>
                           <td className="p-2 text-right">
-                            {selectedBranchMode === "outlet" ? <Input className="w-28 text-right" aria-label={`Thực dùng ${m.productName}`} type="number" min="0" step="any" value={materialActuals[m.productId] ?? String(m.needed)} onChange={e => setMaterialActuals(previous => ({...previous, [m.productId]: e.target.value}))} /> : <span className="font-medium">{formatNumber(m.needed)}</span>}{" "}
-                            <span className="text-xs text-muted-foreground">{m.unit}</span>
+                            {selectedBranchMode === "outlet" ? <OperationalQuantityInput productId={m.productId} quantity={Number(materialActuals[m.productId] ?? m.needed)} unit={m.unit} conversions={conversionMap.get(m.productId)} max={m.available} label={`Thực dùng ${m.productName}`} onChange={(value,input) => {setMaterialActuals(previous => ({...previous,[m.productId]:String(value)}));setMaterialEntries(previous=>({...previous,[m.productId]:input}));}} /> : <StockWithConversion quantity={m.needed} unit={m.unit} conversions={conversionMap.get(m.productId)} />}
                           </td>
                           <td className="p-2 text-right">
                             <span
@@ -724,9 +737,8 @@ export function CreateProductionOrderDialog({
                                 m.shortage ? "text-destructive font-medium" : "text-foreground"
                               }
                             >
-                              {formatNumber(m.available)}
+                              <StockWithConversion quantity={m.available} unit={m.unit} conversions={conversionMap.get(m.productId)} />
                             </span>{" "}
-                            <span className="text-xs text-muted-foreground">{m.unit}</span>
                           </td>
                           <td className="p-2 text-center">
                             {m.shortage || m.costMismatch ? (

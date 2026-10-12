@@ -22,6 +22,10 @@ import { formatDate, formatNumber } from "@/lib/format";
 import type { ProductLot } from "@/lib/types";
 import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { getProductStockUnitsByIds, getUOMConversionsByProductIds } from "@/lib/services/supabase/uom";
+import { preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
 
 const AssignExpiryDialog = dynamic(
   () => import("@/components/shared/dialogs/assign-expiry-existing-stock-dialog").then((m) => m.AssignExpiryDialog),
@@ -69,6 +73,7 @@ export default function LoSanXuatPage() {
   const duocXemToanChuoi = hasAny(["reports.view_all_branches","system.manage_branches"]);
   const txPerms = useTxRowPermissions("production");
   const [data,setData]=useState<LotRow[]>([]);
+  const units = useProductUom(data.map(row => row.productId));
   const [total,setTotal]=useState(0);
   const [summary,setSummary]=useState({activeCount:0,currentQty:0,expiredCount:0,nearExpiryCount:0});
   const [loading,setLoading]=useState(true);
@@ -120,11 +125,21 @@ export default function LoSanXuatPage() {
     setExporting(true);
     try{
       const rows=await getProductLotsForExport(buildQuery());
-      await exportToExcel(rows,[
+      const ids=rows.map(row=>row.productId);
+      const [stockUnits,conversions]=await Promise.all([getProductStockUnitsByIds(ids),getUOMConversionsByProductIds(ids)]);
+      const exportRows=rows.map(row=>{
+        const stockUnit=stockUnits.get(row.productId) ?? '';
+        const alternatives=conversions.get(row.productId) ?? [];
+        const convertedUnit=preferredWeighingUnit(stockUnit,alternatives);
+        return {...row,stockUnit,convertedUnit,convertedCurrentQty:stockToInput(row.currentQty,stockUnit,convertedUnit,alternatives)};
+      });
+      await exportToExcel(exportRows,[
         {header:"Số lô",key:"lotNumber",width:20},{header:"Mã hàng",key:"productCode",width:18},
         {header:"Tên hàng",key:"productName",width:32},{header:"Nguồn",key:"sourceType",width:16,format:(v:string)=>sourceOptions.find(x=>x.value===v)?.label??v},
         {header:"Chi nhánh",key:"branchName",width:24},{header:"SL ban đầu",key:"initialQty",width:14},
-        {header:"SL hiện tại",key:"currentQty",width:14},{header:"Ngày nhận",key:"receivedDate",width:16,format:(v:string)=>formatDate(v)},
+        {header:"SL hiện tại",key:"currentQty",width:14},{header:"ĐVT kho",key:"stockUnit",width:14},
+        {header:"SL quy đổi hiện tại",key:"convertedCurrentQty",width:22},{header:"ĐVT quy đổi",key:"convertedUnit",width:16},
+        {header:"Ngày nhận",key:"receivedDate",width:16,format:(v:string)=>formatDate(v)},
         {header:"Hạn sử dụng",key:"expiryDate",width:16,format:(v:string)=>v?formatDate(v):""},
         {header:"Trạng thái",key:"status",width:16,format:(v:string)=>statusMap[v]?.label??v},
       ],"danh-sach-lo");
@@ -143,8 +158,8 @@ export default function LoSanXuatPage() {
     {accessorKey:"productName",header:"Sản phẩm",size:250,cell:({row})=><div className="min-w-0"><p className="truncate text-sm font-medium">{row.original.productName}</p><p className="font-mono text-xs text-muted-foreground">{row.original.productCode}</p></div>},
     {accessorKey:"sourceType",header:"Nguồn",size:110,cell:({row})=><span className="text-xs">{sourceOptions.find(x=>x.value===row.original.sourceType)?.label??row.original.sourceType}</span>},
     {accessorKey:"branchName",header:"Chi nhánh",size:160,cell:({row})=><span className="text-xs text-muted-foreground">{row.original.branchName||"—"}</span>},
-    {accessorKey:"initialQty",header:"SL ban đầu",size:110,cell:({row})=><span className="text-xs tabular-nums">{formatNumber(row.original.initialQty)}</span>},
-    {accessorKey:"currentQty",header:"SL hiện tại",size:120,cell:({row})=><span className="text-xs font-bold tabular-nums">{formatNumber(row.original.currentQty)}</span>},
+    {accessorKey:"initialQty",header:"SL ban đầu",size:150,cell:({row})=><StockWithConversion quantity={row.original.initialQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />},
+    {accessorKey:"currentQty",header:"SL hiện tại",size:150,cell:({row})=><StockWithConversion quantity={row.original.currentQty} unit={units.units.get(row.original.productId) ?? ''} conversions={units.map.get(row.original.productId)} />},
     {accessorKey:"expiryDate",header:"Hạn sử dụng",size:145,cell:({row})=>row.original.expiryDate?<span className={(row.original.daysUntilExpiry??999)<0?"font-medium text-status-error":(row.original.daysUntilExpiry??999)<=30?"text-status-warning":"text-muted-foreground"}>{formatDate(row.original.expiryDate)}</span>:<span className="text-muted-foreground">—</span>},
     {accessorKey:"status",header:"Trạng thái",size:120,cell:({row})=>{const s=statusMap[row.original.status]??statusMap.active;return <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${toneClass[s.tone]}`}><span className={`size-1.5 rounded-full ${dotClass[s.tone]}`}/>{s.label}</span>;}},
   ];
@@ -155,7 +170,7 @@ export default function LoSanXuatPage() {
       onExport={{items:[{label:exporting?"Đang xuất...":"Xuất Excel danh sách lô",icon:"table_view",onClick:()=>{if(!exporting)void handleExport();}}]}}/>
     <DataTable columns={columns} data={data} loading={loading} total={total} density="compact" columnToggle getRowId={(row)=>row.id}
       pageIndex={page} pageSize={pageSize} pageCount={Math.max(1,Math.ceil(total/pageSize))} onPageChange={setPage} onPageSizeChange={(size)=>{setPageSize(size);setPage(0);}}
-      toolbarMetrics={<><ListMetric label="Tổng lô" value={formatNumber(total)} tone="primary"/><ListMetric label="Đang hoạt động" value={formatNumber(summary.activeCount)}/><ListMetric label="Số lượng hiện tại" value={formatNumber(summary.currentQty)}/><ListMetric label={summary.expiredCount>0?"Đã hết hạn":"Sắp hết hạn (30 ngày)"} value={formatNumber(summary.expiredCount>0?summary.expiredCount:summary.nearExpiryCount)} tone={summary.expiredCount>0?"danger":"default"}/></>}
+      toolbarMetrics={<><ListMetric label="Tổng lô" value={formatNumber(total)} tone="primary"/><ListMetric label="Đang hoạt động" value={formatNumber(summary.activeCount)}/><ListMetric label={summary.expiredCount>0?"Đã hết hạn":"Sắp hết hạn (30 ngày)"} value={formatNumber(summary.expiredCount>0?summary.expiredCount:summary.nearExpiryCount)} tone={summary.expiredCount>0?"danger":"default"}/></>}
       toolbarActions={<Button type="button" variant="outline" size="sm" className="relative h-8 gap-1.5 px-2 text-xs pointer-coarse:min-h-11" onClick={()=>setFilterOpen(true)}><Icon name="filter_alt" size={15}/><span className="hidden sm:inline">Bộ lọc</span>{chips.length>0&&<span className="min-w-4 rounded-full bg-primary px-1 text-xs font-bold text-primary-foreground">{chips.length}</span>}</Button>}
       toolbarFooter={<>{chips.length>0&&<FilterChips filters={chips} onClearAll={clearFilters}/>} {viewAllBranches&&<AllBranchesBanner entityLabel="lô" branchName={currentBranch?.name} onBackToBranch={()=>setViewAllBranches(false)}/>}</>}
       rowActions={(row)=>buildTransactionRowActions({row,kind:"production",permissions:txPerms,onAuditLog:()=>setAuditDialogTarget(row)})}

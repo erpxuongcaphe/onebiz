@@ -27,6 +27,7 @@ vi.mock("@/lib/services", () => ({
   getBOMsByProduct: async () => mocks.boms.map((bom) => ({ ...bom, isFnbStockItem: mocks.prepared })),
   getBOMById: async () => mocks.boms[0],
   getProductById: async () => ({ isFnbStockItem: mocks.prepared, stockUnit: mocks.stockUnit, unit: mocks.unit }),
+  getUOMConversionsByProductIds: async () => new Map(),
   checkMaterialsAvailability: async () => [{ productId: "ingredient", available: mocks.available }],
   createProductionOrder: mocks.createProductionOrder,
   completeProductionAtomic: mocks.completeProductionAtomic,

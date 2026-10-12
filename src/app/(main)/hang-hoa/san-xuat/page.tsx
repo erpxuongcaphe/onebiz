@@ -54,6 +54,7 @@ import {
 } from "@/lib/services";
 import type { ProductionOrder, ProductionOrderStatus } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 
 type ViewMode = "list" | "kanban";
 
@@ -123,6 +124,7 @@ function ProductionOrderDetail({
       onDelete={onDelete}
       deleteLabel="Hủy"
     >
+      <UnitSnapshotHistory referenceType="production" referenceId={orderId} />
       <DetailTabs
         tabs={[
           {

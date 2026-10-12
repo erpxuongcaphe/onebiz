@@ -270,13 +270,14 @@ export async function completeProductionAtomic(
   completedQty: number,
   lotNumber?: string,
   manufacturedDate?: string,
-  expiryDate?: string
+  expiryDate?: string,
+  input?: { quantity: number; unit: string; expectedFactor?: number; materials?: {productId:string;quantity:number;unit:string;expectedFactor?:number}[] }
 ) {
   // RPC 00159 chưa có trong types sinh tự động (giống create_internal_sale_atomic).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase.rpc as any)("complete_production_atomic", {
+  const { data, error } = await (supabase.rpc as any)(input ? "complete_production_with_uom" : "complete_production_atomic", {
     p_production_order_id: productionOrderId,
-    p_completed_qty: completedQty,
+    ...(input ? { p_input_quantity: input.quantity, p_input_unit: input.unit, p_expected_factor: input.expectedFactor, p_material_inputs: input.materials ?? null } : { p_completed_qty: completedQty }),
     p_lot_number: lotNumber,
     p_manufactured_date: manufacturedDate,
     p_expiry_date: expiryDate,
@@ -288,9 +289,11 @@ export async function completeProductionAtomic(
     const rpcMissing = code === "PGRST202" || /complete_production_atomic/i.test(message);
     if (rpcMissing) {
       throw new Error(
-        "RPC complete_production_atomic chưa sẵn sàng. Vui lòng chạy migration 00159 và reload schema trước khi hoàn thành sản xuất để tránh lệch kho.",
+        input ? "Bộ ghi nhận đơn vị sản xuất chưa sẵn sàng. Tải lại trang trước khi hoàn thành lệnh; kho chưa thay đổi." : "RPC complete_production_atomic chưa sẵn sàng. Vui lòng chạy migration 00159 và reload schema trước khi hoàn thành sản xuất để tránh lệch kho.",
       );
     }
+    if (/UOM_CONVERSION_CHANGED/.test(message)) throw new Error("Hệ số quy đổi vừa thay đổi. Kiểm tra lại lệnh sản xuất trước khi hoàn thành; kho chưa thay đổi.");
+    if (/UOM_MATERIAL_INPUTS_INVALID/.test(message)) throw new Error("Đơn vị hoặc số nguyên liệu thực dùng không khớp lệnh sản xuất. Kiểm tra lại lệnh; chưa ghi nhận trừ kho.");
     throw error;
   }
   return data as string; // lot_id

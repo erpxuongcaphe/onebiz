@@ -9,12 +9,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { NumericInput } from "@/components/ui/numeric-input";
+
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatNumber } from "@/lib/format";
 import { useToast } from "@/lib/contexts";
 import { getClient, getCurrentContext } from "@/lib/services/supabase/base";
 import { createInternalExport } from "@/lib/services/supabase/inventory";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { OperationalQuantityInput, type UnitEntry } from "@/components/shared/operational-quantity-input";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 import { Icon } from "@/components/ui/icon";
 
 interface CreateInternalExportDialogProps {
@@ -40,6 +43,7 @@ interface ExportItem {
   stock: number;
   cost_price: number;
   quantity: number;
+  input?: UnitEntry;
 }
 
 const PENDING_CODE_PLACEHOLDER = "Tự tạo khi lưu";
@@ -61,6 +65,9 @@ export function CreateInternalExportDialog({
   const [saving, setSaving] = useState(false);
   const [currentTenantId, setCurrentTenantId] = useState<string | null>(null);
   const saveLockRef = useRef(false);
+
+  const units = useProductUom(items.map(item => item.product_id));
+  const requestId = useMemo(() => crypto.randomUUID(), [items, notes, destination]);
 
   useEffect(() => {
     if (!open) return;
@@ -133,18 +140,14 @@ export function CreateInternalExportDialog({
     setItems(items.filter((item) => item.product_id !== productId));
   }
 
-  function updateQuantity(productId: string, qty: number) {
+  function updateQuantity(productId: string, qty: number, input?: UnitEntry) {
     setItems(items.map((item) =>
       item.product_id === productId
-        ? { ...item, quantity: Math.max(1, Math.min(qty, Math.max(1, item.stock))) }
+        ? { ...item, quantity: qty, input }
         : item,
     ));
   }
 
-  const totalQuantity = useMemo(
-    () => items.reduce((sum, item) => sum + item.quantity, 0),
-    [items],
-  );
 
   const totalValue = useMemo(
     () => items.reduce((sum, item) => sum + item.quantity * item.cost_price, 0),
@@ -153,6 +156,7 @@ export function CreateInternalExportDialog({
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
+    if (items.some(item => !Number.isFinite(item.quantity) || item.quantity <= 0 || item.quantity > item.stock)) newErrors.items = "Kiểm tra số lượng và tồn tại chi nhánh.";
     if (items.length === 0) newErrors.items = "Vui lòng chọn ít nhất một sản phẩm";
     if (!destination.trim()) newErrors.destination = "Vui lòng nhập nơi nhận / mục đích sử dụng";
     setErrors(newErrors);
@@ -167,6 +171,7 @@ export function CreateInternalExportDialog({
     setSaving(true);
     try {
       const result = await createInternalExport({
+        requestId,
         department: destination,
         note: notes.trim() ? notes.trim() : undefined,
         items: items.map((item) => ({
@@ -174,6 +179,7 @@ export function CreateInternalExportDialog({
           productName: item.product_name,
           unit: item.unit,
           quantity: item.quantity,
+          input: item.input,
           unitPrice: item.cost_price,
         })),
       });
@@ -318,17 +324,9 @@ export function CreateInternalExportDialog({
                         </span>
                       </div>
                       <div className="text-right text-sm tabular-nums text-muted-foreground">
-                        {formatNumber(item.stock)}
+                        <StockWithConversion quantity={item.stock} unit={item.unit} conversions={units.map.get(item.product_id)} />
                       </div>
-                      <NumericInput
-                        value={item.quantity}
-                        onChange={(value) => updateQuantity(item.product_id, value ?? 1)}
-                        min={1}
-                        max={Math.max(1, item.stock)}
-                        decimals={2}
-                        className="h-8 text-right"
-                        aria-label={`Số lượng ${item.product_name}`}
-                      />
+                      <OperationalQuantityInput productId={item.product_id} disabled={saving} quantity={item.quantity} unit={item.unit} conversions={units.map.get(item.product_id)} max={item.stock} label={`Số lượng ${item.product_name}`} onChange={(value, entry) => updateQuantity(item.product_id,value,entry)} />
                       <div className="text-right text-sm tabular-nums">
                         {formatCurrency(item.cost_price)}
                       </div>
@@ -367,7 +365,6 @@ export function CreateInternalExportDialog({
           <div className="mx-auto grid w-full max-w-[1380px] grid-cols-1 items-center gap-3 lg:grid-cols-[1fr_auto]">
             <div className="grid gap-2 text-sm sm:grid-cols-3 xl:grid-cols-4">
               <FooterMetric label="Dòng" value={formatNumber(items.length)} />
-              <FooterMetric label="Tổng SL" value={formatNumber(totalQuantity)} />
               <FooterMetric label="Giá trị xuất" value={formatCurrency(totalValue)} strong />
               <FooterMetric label="Trạng thái" value="Ghi sổ khi tạo" />
             </div>

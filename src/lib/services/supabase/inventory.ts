@@ -410,6 +410,7 @@ export interface CreateExportItemInput {
   productName: string;
   unit: string;
   quantity: number;
+  input?: import("@/lib/operational-uom").OperationalUnitEntry;
   /** Giá vốn per unit — dùng để tính total_amount cho P&L. */
   unitPrice: number;
 }
@@ -419,6 +420,7 @@ export interface CreateInternalExportInput {
   department: string;
   note?: string;
   items: CreateExportItemInput[];
+  requestId?: string;
 }
 
 /**
@@ -437,15 +439,17 @@ export async function createInternalExport(
 ): Promise<{ id: string; code: string }> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
+  const requestId = input.requestId ?? (input.items.some(item => item.input) ? crypto.randomUUID() : undefined);
   const { data, error } = await (supabase.rpc as any)(
-    "create_internal_export_atomic",
+    requestId ? "create_stock_operation_with_uom" : "create_internal_export_atomic",
     {
       p_branch_id: ctx.branchId,
-      p_department: input.department,
+      ...(requestId ? { p_kind: "internal_export", p_request_id: requestId, p_reason: input.department } : { p_department: input.department }),
       p_note: input.note ?? null,
       p_items: input.items.map((item) => ({
         product_id: item.productId,
-        quantity: Number(item.quantity),
+        quantity: Number(item.input?.quantity ?? item.quantity),
+        ...(item.input ? { inputUnit: item.input.unit, expectedFactor: item.input.expectedFactor } : {}),
       })),
     },
   );
@@ -464,6 +468,7 @@ export interface CreateDisposalExportInput {
   reason: string;
   note?: string;
   items: CreateExportItemInput[];
+  requestId?: string;
 }
 
 /**
@@ -475,15 +480,18 @@ export async function createDisposalExport(
 ): Promise<{ id: string; code: string }> {
   const supabase = getClient();
   const ctx = await getCurrentContext();
+  const requestId = input.requestId ?? (input.items.some(item => item.input) ? crypto.randomUUID() : undefined);
   const { data, error } = await (supabase.rpc as any)(
-    "create_disposal_export_atomic",
+    requestId ? "create_stock_operation_with_uom" : "create_disposal_export_atomic",
     {
       p_branch_id: ctx.branchId,
       p_reason: input.reason,
+      ...(requestId ? { p_kind: "disposal", p_request_id: requestId } : {}),
       p_note: input.note ?? null,
       p_items: input.items.map((item) => ({
         product_id: item.productId,
-        quantity: Number(item.quantity),
+        quantity: Number(item.input?.quantity ?? item.quantity),
+        ...(item.input ? { inputUnit: item.input.unit, expectedFactor: item.input.expectedFactor } : {}),
       })),
     },
   );

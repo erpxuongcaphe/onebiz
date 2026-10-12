@@ -43,6 +43,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { OperationalQuantityInput, type UnitEntry } from "@/components/shared/operational-quantity-input";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
+import { UnitSnapshotHistory } from "@/components/shared/unit-snapshot-history";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -1076,6 +1080,7 @@ function TransferDetail({
               label: "Sản phẩm",
               content: (
                 <div className="space-y-2">
+                  <UnitSnapshotHistory referenceType="transfer" referenceId={item.id} />
                   {loadingItems ? (
                     <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
                       <Icon
@@ -1149,6 +1154,7 @@ interface CreateTransferDialogProps {
     toBranchId: string;
     items: StockTransferItem[];
     note?: string;
+    requestId?: string;
   }) => void;
 }
 
@@ -1173,6 +1179,8 @@ function CreateTransferDialog({
   const [items, setItems] = useState<
     (StockTransferItem & { id: string; stock: number })[]
   >([]);
+  const units = useProductUom(items.map(item => item.productId));
+  const requestId = useMemo(() => crypto.randomUUID(), [items, fromBranch, toBranch, note]);
 
   // Product search
   const [productSearch, setProductSearch] = useState("");
@@ -1236,16 +1244,14 @@ function CreateTransferDialog({
     setSearchResults([]);
   };
 
-  const updateQuantity = (id: string, qty: number) => {
+  const updateQuantity = (id: string, qty: number, input?: UnitEntry) => {
     setItems((prev) =>
       prev.map((item) => {
         if (item.id !== id) return item;
         // Cap [1 .. stock] — không cho user type số lớn hơn tồn tại chi nhánh xuất.
         // Nếu stock = 0 (edge case: vừa bị chuyển hết trước đó), giữ ở mức 1 để
         // user thấy rõ warning "vượt tồn" thay vì silent lock ở 0.
-        const maxQty = Math.max(1, Math.floor(item.stock));
-        const bounded = Math.min(Math.max(1, Math.floor(qty) || 1), maxQty);
-        return { ...item, quantity: bounded };
+        return { ...item, quantity: qty, input };
       }),
     );
   };
@@ -1265,12 +1271,14 @@ function CreateTransferDialog({
     onSubmit({
       fromBranchId: fromBranch,
       toBranchId: toBranch,
+      requestId,
       items: items.map((i) => ({
         productId: i.productId,
         productName: i.productName,
         productCode: i.productCode,
         unit: i.unit,
         quantity: i.quantity,
+        input: i.input,
       })),
       note: note || undefined,
     });
@@ -1294,6 +1302,7 @@ function CreateTransferDialog({
     Boolean(toBranch) &&
     fromBranch !== toBranch &&
     items.length > 0 &&
+    items.every(item => Number.isFinite(item.quantity) && item.quantity > 0) &&
     overStockItems.length === 0;
 
   return (
@@ -1454,20 +1463,10 @@ function CreateTransferDialog({
                         <td
                           className={`text-center text-xs ${overStock ? "text-status-error font-medium" : "text-muted-foreground"}`}
                         >
-                          {formatNumber(item.stock)} {item.unit ?? ""}
+                          <StockWithConversion quantity={item.stock} unit={item.unit ?? ""} conversions={units.map.get(item.productId)} />
                         </td>
                         <td className="text-center px-2">
-                          <Input
-                            type="number"
-                            min={1}
-                            max={Math.max(1, item.stock)}
-                            value={item.quantity}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                              updateQuantity(item.id, parseInt(e.target.value) || 1)
-                            }
-                            className={`h-7 text-center text-xs w-20 mx-auto ${overStock ? "border-status-error focus-visible:ring-status-error" : ""}`}
-                            aria-invalid={overStock || undefined}
-                          />
+                          <OperationalQuantityInput productId={item.productId} disabled={creating} quantity={item.quantity} unit={item.unit ?? ""} conversions={units.map.get(item.productId)} max={item.stock} label={`Số lượng chuyển ${item.productName}`} onChange={(value, input) => updateQuantity(item.id,value,input)} />
                         </td>
                         <td className="px-2">
                           <Button

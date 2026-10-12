@@ -32,6 +32,8 @@ import type {
 } from "@/lib/services";
 import Link from "next/link";
 import { Icon } from "@/components/ui/icon";
+import { useProductUom } from "@/lib/hooks/use-product-uom";
+import { StockWithConversion } from "@/components/shared/stock-with-conversion";
 
 // ────────────────────────────────────────────
 // Dynamic labels based on branch type
@@ -189,6 +191,7 @@ export default function ProductionDashboardPage() {
   const [trend, setTrend] = useState<ProductionTrend[]>([]);
   const [topProducts, setTopProducts] = useState<TopOutputProduct[]>([]);
   const [activeOrders, setActiveOrders] = useState<ActiveProductionOrder[]>([]);
+  const units = useProductUom(nvl.map(row => row.productId));
 
   useEffect(() => {
     if (!isReady) return;
@@ -432,7 +435,7 @@ export default function ProductionDashboardPage() {
                     <div className="text-xs text-muted-foreground">{r.productCode} · {r.unit}</div>
                   </td>
                   <td className="hidden sm:table-cell p-2 text-muted-foreground">{r.branchName}</td>
-                  <td className="p-2 text-right font-medium">{formatNumber(r.quantity)}</td>
+                  <td className="p-2 text-right font-medium"><StockWithConversion quantity={r.quantity} unit={r.unit} conversions={units.map.get(r.productId)} /></td>
                   <td className="hidden sm:table-cell p-2 text-right text-muted-foreground">{formatNumber(r.minStock)}</td>
                   <td className="hidden md:table-cell p-2 text-right">{formatCurrency(r.stockValue)}</td>
                   <td className="p-2 text-center">

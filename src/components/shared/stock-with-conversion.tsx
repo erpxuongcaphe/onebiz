@@ -9,10 +9,8 @@
  *   - `block` — 2 dòng đầy đủ với hệ số cho detail panel
  *   - `movement` — "+24 hộp (2 thùng)" cho stock movement / phiếu nhập-xuất
  *
- * Ẩn quy đổi khi:
- *   - SP không có UOM conversion
- *   - qty < factor (chưa đủ 1 đơn vị lớn)
- *   - qty = 0
+ * Hiện quy đổi đã khai báo kể cả tồn âm, số lẻ và 0; ưu tiên gram cho hàng cân.
+ * Không suy hệ số từ tên đơn vị hoặc tự đổi ml sang gram.
  *
  * Caller responsibility: load `conversions` (qua getUOMConversions hoặc batch
  * loader) rồi truyền vào. Component KHÔNG tự fetch để tránh N+1 query trên list.
@@ -21,9 +19,10 @@
 import type { UOMConversion } from "@/lib/types";
 import { getConversionText, pickBestConversion } from "@/lib/format-uom";
 import { formatNumber } from "@/lib/format";
+import { formatOperationalQuantity, operationalUnits, preferredWeighingUnit, stockToInput } from "@/lib/operational-uom";
 
 interface BaseProps {
-  /** Số lượng theo đơn vị nhỏ (đơn vị chính trong products.unit) */
+  /** Số lượng theo đơn vị kho cố định trong products.unit */
   quantity: number;
   /** Đơn vị nhỏ — vd "hộp", "kg" */
   unit: string;
@@ -60,7 +59,13 @@ type Props = InlineProps | BlockProps | MovementProps;
 export function StockWithConversion(props: Props) {
   const { quantity, unit, conversions, className } = props;
   const variant = props.variant ?? "inline";
-  const convText = getConversionText(quantity, unit, conversions ?? null);
+  const declared = conversions ?? [];
+  const weighUnit = preferredWeighingUnit(unit, declared);
+  const alternative = weighUnit !== unit ? weighUnit : operationalUnits(unit, declared).find(candidate => candidate !== unit);
+  const converted = alternative ? stockToInput(quantity, unit, alternative, declared) : null;
+  const convText = weighUnit !== unit && converted != null
+    ? `${formatOperationalQuantity(converted)} ${alternative}`
+    : getConversionText(quantity, unit, declared) ?? (converted != null ? `${formatOperationalQuantity(converted)} ${alternative}` : null);
 
   if (variant === "block") {
     const primarySize = (props as BlockProps).primarySize ?? "text-2xl";
@@ -73,7 +78,7 @@ export function StockWithConversion(props: Props) {
     return (
       <div className={className}>
         <div className={`${primarySize} font-semibold tabular-nums`}>
-          {formatNumber(quantity)}{" "}
+          {formatOperationalQuantity(quantity)}{" "}
           <span className="text-base font-normal text-muted-foreground">
             {unit}
           </span>
@@ -99,7 +104,7 @@ export function StockWithConversion(props: Props) {
         className={`font-semibold whitespace-nowrap tabular-nums ${className ?? ""}`}
       >
         <span className={signClass}>{sign}</span>
-        {formatNumber(quantity)}{" "}
+        {formatOperationalQuantity(quantity)}{" "}
         <span className="font-normal text-muted-foreground">{unit}</span>
         {convText && (
           <span className="text-muted-foreground font-normal text-xs ml-1">
@@ -119,7 +124,7 @@ export function StockWithConversion(props: Props) {
     <span
       className={`whitespace-nowrap font-semibold tabular-nums ${className ?? ""}`}
     >
-      {formatNumber(quantity)}
+      {formatOperationalQuantity(quantity)}
       {!hideUnit && (
         <>
           {" "}

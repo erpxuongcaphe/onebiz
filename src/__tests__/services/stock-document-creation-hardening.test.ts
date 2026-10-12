@@ -28,7 +28,7 @@ describe("stock document creation hardening", () => {
       "src/components/shared/dialogs/create-inventory-check-dialog.tsx",
     );
     expect(dialog).toContain(
-      '"create_and_apply_inventory_check_atomic"',
+      '"create_stock_operation_with_uom"',
     );
     expect(dialog).not.toContain('.from("inventory_checks").insert');
     expect(dialog).not.toContain('.from("inventory_check_items")');
