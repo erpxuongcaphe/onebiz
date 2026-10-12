@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocked = vi.hoisted(() => {
-  const query = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn() };
+  const query = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), range: vi.fn(), gte: vi.fn(), lte: vi.fn(), or: vi.fn() };
   return { query, from: vi.fn(), result: { data: [] as Record<string, unknown>[], count: 0, error: null as null | { message: string } } };
 });
 vi.mock("@/lib/services/supabase/base", () => ({
@@ -8,7 +8,7 @@ vi.mock("@/lib/services/supabase/base", () => ({
   getCurrentTenantId: async () => "tenant-1",
   handleError: (error: { message: string }) => { throw new Error(error.message); },
 }));
-import { getPartyCashHistory } from "@/lib/services/supabase/cash-book";
+import { getAllPartyCashHistory, getPartyCashHistory } from "@/lib/services/supabase/cash-book";
 
 describe("party cash history", () => {
   beforeEach(() => {
@@ -17,6 +17,9 @@ describe("party cash history", () => {
     mocked.query.select.mockReturnValue(mocked.query);
     mocked.query.eq.mockReturnValue(mocked.query);
     mocked.query.order.mockReturnValue(mocked.query);
+    mocked.query.gte.mockReturnValue(mocked.query);
+    mocked.query.lte.mockReturnValue(mocked.query);
+    mocked.query.or.mockReturnValue(mocked.query);
     mocked.query.range.mockImplementation(async () => mocked.result);
     mocked.result = { data: [], count: 0, error: null };
   });
@@ -39,5 +42,22 @@ describe("party cash history", () => {
   it("does not report an inaccessible history as empty", async () => {
     mocked.result.error = { message: "permission denied" };
     await expect(getPartyCashHistory("supplier", "supplier-1")).rejects.toThrow("permission denied");
+  });
+  it("applies filters and stable amount sorting before pagination", async () => {
+    await getPartyCashHistory("customer", "customer-1", "branch-1", 0, { search: 'PT1, note', dateFrom: "2026-10-01", dateTo: "2026-10-12", type: "receipt", status: "completed", paymentMethod: "transfer", sortBy: "amount", ascending: true });
+    expect(mocked.query.gte).toHaveBeenCalledWith("transaction_date", "2026-10-01");
+    expect(mocked.query.lte).toHaveBeenCalledWith("transaction_date", "2026-10-12");
+    expect(mocked.query.eq).toHaveBeenCalledWith("payment_method", "transfer");
+    expect(mocked.query.eq).toHaveBeenCalledWith("status", "completed");
+    expect(mocked.query.or).toHaveBeenCalledWith('code.ilike."%PT1, note%",note.ilike."%PT1, note%"');
+    expect(mocked.query.order.mock.calls[0]).toEqual(["amount", { ascending: true }]);
+  });
+  it("exports all matching pages without dropping the first page boundary", async () => {
+    const first = Array.from({ length: 1000 }, (_, index) => ({ id: `cash-${index}`, amount: index }));
+    mocked.query.range.mockResolvedValueOnce({ data: first, count: 1001, error: null }).mockResolvedValueOnce({ data: [{ id: "last", amount: 1 }], count: 1001, error: null });
+    const rows = await getAllPartyCashHistory("supplier", "supplier-1", "branch-1", { status: "completed" });
+    expect(rows).toHaveLength(1001);
+    expect(mocked.query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+    expect(mocked.query.eq).toHaveBeenCalledWith("supplier_id", "supplier-1");
   });
 });

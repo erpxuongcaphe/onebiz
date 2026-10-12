@@ -73,11 +73,13 @@ function SupplierDetail({
   onClose,
   onEdit,
   onDelete,
+  onChanged,
 }: {
   supplier: Supplier;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onChanged?: () => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
@@ -340,7 +342,7 @@ function SupplierDetail({
       label: "Lịch sử thay đổi",
       content: <AuditHistoryTab entityType="supplier" entityId={supplier.id} />,
     },
-    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="supplier" partyId={supplier.id} partyName={supplier.name} /> },
+    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="supplier" partyId={supplier.id} partyName={supplier.name} onChanged={onChanged} /> },
   ];
 
   return (
@@ -670,6 +672,7 @@ export default function NhaCungCapPage() {
   const renderDetail = (supplier: Supplier, onClose: () => void) => (
     <SupplierDetail
       supplier={supplier}
+      onChanged={() => { void fetchData({ background: true }); }}
       onClose={onClose}
       onEdit={() => {
         setEditingSupplier(supplier);

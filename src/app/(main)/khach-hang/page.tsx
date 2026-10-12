@@ -571,6 +571,7 @@ export default function KhachHangPage() {
   const renderDetail = (customer: Customer, onClose: () => void) => (
     <CustomerDetailPanel
       customer={customer}
+      onChanged={() => { void fetchData({ background: true }); }}
       onClose={onClose}
       onEdit={() => {
         setEditingCustomer(customer);
@@ -1146,11 +1147,13 @@ function CustomerDetailPanel({
   onClose,
   onEdit,
   onDelete,
+  onChanged,
 }: {
   customer: Customer;
   onClose: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onChanged?: () => void;
 }) {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [returns, setReturns] = useState<CustomerReturn[]>([]);
@@ -1587,7 +1590,7 @@ function CustomerDetailPanel({
       label: "Lịch sử thay đổi",
       content: <AuditHistoryTab entityType="customer" entityId={customer.id} />,
     },
-    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="customer" partyId={customer.id} partyName={customer.name} /> },
+    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="customer" partyId={customer.id} partyName={customer.name} onChanged={onChanged} /> },
   ];
 
   return (

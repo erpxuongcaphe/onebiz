@@ -40,10 +40,23 @@ export interface CashBookWorkspaceParams {
 }
 
 /** Exact party identity, not a name search; RLS and branch scope remain active. */
+export interface PartyCashHistoryFilters {
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  type?: "receipt" | "payment";
+  status?: "draft" | "completed" | "cancelled";
+  paymentMethod?: "cash" | "transfer" | "card" | "ewallet";
+  sortBy?: "transaction_date" | "amount" | "code";
+  ascending?: boolean;
+}
+
 export async function getPartyCashHistory(
   mode: "customer" | "supplier", partyId: string,
   branchId?: string | null, page = 0,
+  filters: PartyCashHistoryFilters = {}, pageSize = 25,
 ): Promise<QueryResult<CashBookEntry>> {
+  if (!Number.isInteger(page) || page < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new Error("Invalid history page");
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
   let query = supabase.from("cash_transactions")
@@ -51,13 +64,33 @@ export async function getPartyCashHistory(
     .eq("tenant_id", tenantId)
     .eq(mode === "customer" ? "customer_id" : "supplier_id", partyId);
   if (branchId) query = query.eq("branch_id", branchId);
+  query = applyCashDateRange(query, filters);
+  if (filters.type) query = query.eq("type", filters.type);
+  if (filters.status) query = query.eq("status", filters.status);
+  if (filters.paymentMethod) query = query.eq("payment_method", filters.paymentMethod);
+  if (filters.search?.trim()) {
+    const pattern = `%${filters.search.trim().replace(/[\\%_]/g, "\\$&")}%`;
+    query = query.or(`code.ilike.${JSON.stringify(pattern)},note.ilike.${JSON.stringify(pattern)}`);
+  }
+  const sortBy = ["transaction_date", "amount", "code"].includes(filters.sortBy ?? "") ? filters.sortBy! : "transaction_date";
+  const ascending = filters.ascending ?? false;
   const { data, count, error } = await query
-    .order("transaction_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .order("id", { ascending: false })
-    .range(page * 25, page * 25 + 24);
+    .order(sortBy, { ascending })
+    .order("created_at", { ascending })
+    .order("id", { ascending })
+    .range(page * pageSize, page * pageSize + pageSize - 1);
   if (error) handleError(error, "getPartyCashHistory");
   return { data: (data ?? []).map(mapCashEntry), total: count ?? 0 };
+}
+
+export async function getAllPartyCashHistory(mode: "customer" | "supplier", partyId: string, branchId?: string | null, filters: PartyCashHistoryFilters = {}) {
+  const rows: CashBookEntry[] = [];
+  for (let page = 0; page < 50; page++) {
+    const result = await getPartyCashHistory(mode, partyId, branchId, page, filters, 1000);
+    rows.push(...result.data);
+    if (rows.length >= result.total || result.data.length < 1000) return rows;
+  }
+  throw new Error("Lịch sử quá lớn. Chọn khoảng ngày nhỏ hơn để xuất đầy đủ.");
 }
 
 export interface CashBookWorkspaceSummary {
