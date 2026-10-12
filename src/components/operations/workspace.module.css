@@ -856,3 +856,8 @@
   min-width: 0;
   max-width: 100%;
 }
+.pending_approval,.changes_requested{background:#fff3cc;color:#775000}
+.standardDetails{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin:16px 0}
+.standardDetails dt{color:#637083;font-size:13px}.standardDetails dd{margin:4px 0 0;font-weight:600;overflow-wrap:anywhere}
+.standardCriterion{padding:12px 0;border-top:1px solid #dbe2eb}.standardCriterion h4{margin:0 0 6px}.standardCriterion p{margin:4px 0;overflow-wrap:anywhere}
+@media(max-width:600px){.standardDetails{grid-template-columns:minmax(0,1fr)}}

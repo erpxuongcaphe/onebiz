@@ -52,6 +52,7 @@ import { OperationsFilteredList } from "./filtered-list";
 import { OperationsFilterBar } from "./filter-bar";
 import { filterParams, initialFilters, matchesConfiguration } from "@/lib/operations/filters";
 import { OperationsTodoPicker } from "./todo-picker";
+import { canProposeStandard, canProposeRevision, initialMineFilters } from "@/lib/operations/standard-permissions";
 import { MeasurementPicker } from "./measurement-picker";
 import { OperationsMktLinks } from "./mkt-links";
 
@@ -66,6 +67,8 @@ type Tab = (typeof tabs)[number]["key"];
 type Editor = {
   kind:
     | "standard"
+    | "standard_details"
+    | "request_standard_changes"
     | "event"
     | "todo"
     | "result"
@@ -79,6 +82,7 @@ type Editor = {
     | "comment"
     | "close_period";
   standard?: Standard;
+  proposal?: boolean;
   policy?: Workspace["policies"][number];
   run?: Run;
   todo?: Todo;
@@ -172,7 +176,10 @@ export default function OperationsWorkspace() {
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [search, setSearch] = useState("");
-  const [onlyMine, setOnlyMine] = useState(true);
+  const [mineFilters, setMineFilters] = useState(initialMineFilters);
+  const mineTab = tab === "todo" ? "todo" : tab === "review" ? "review" : "work";
+  const onlyMine = mineFilters[mineTab];
+  const setOnlyMine = (value: boolean) => setMineFilters(previous => ({ ...previous, [mineTab]: value }));
   const [workFilters, setWorkFilters] = useState(() => initialFilters("run"));
   const [todoFilters, setTodoFilters] = useState(() => initialFilters("todo"));
   const [reviewFilters, setReviewFilters] = useState(() => ({ ...initialFilters("run"), verification: "pending_review" }));
@@ -197,7 +204,6 @@ export default function OperationsWorkspace() {
       setSearch((params.get("search") ?? "").slice(0, 200));
     }
   }, []);
-  useEffect(() => setOnlyMine(tab === "work"), [tab]);
   const load = useCallback(async () => {
     if (!period) return;
     const request = ++generation.current;
@@ -938,6 +944,7 @@ export default function OperationsWorkspace() {
                 <SettingsView
                   data={data}
                   canConfigure={can("approve_policy")}
+                  canPropose={canProposeStandard(data, branch)}
                   canManageMembers={can("manage_members")}
                   busy={busy}
                   onEdit={setEditor}
@@ -955,11 +962,11 @@ export default function OperationsWorkspace() {
         }}
       >
         <DialogContent
-          className={`${styles.dialog} ${editor?.kind === "standard" || editor?.kind === "policy" ? styles.configurationDialog : ""}`}
+          className={`${styles.dialog} ${editor?.kind === "standard" || editor?.kind === "standard_details" || editor?.kind === "policy" ? styles.configurationDialog : ""}`}
           showCloseButton={false}
         >
           <DialogTitle className={styles.dialogTitle}>
-            {editor ? actionLabel(editor.kind) : ""}
+            {editor?.proposal ? "Đề xuất Standard Working" : editor ? actionLabel(editor.kind) : ""}
             <button
               disabled={busy}
               title="Đóng"
@@ -992,9 +999,12 @@ function actionLabel(action: string) {
     (
       {
         standard: "Standard Working",
+        standard_details: "Chi tiết Standard Working",
         common_standard: "Mẫu chung các chi nhánh",
         event: "Công việc theo sự kiện",
         approve_standard: "Duyệt Standard Working",
+        propose_standard: "Đề xuất Standard Working",
+        request_standard_changes: "Yêu cầu sửa đề xuất",
         generate: "Tạo lịch công việc",
         result: "Ghi nhận kết quả",
         verify: "Xác minh kết quả",
@@ -1017,6 +1027,7 @@ function actionLabel(action: string) {
 function SettingsView({
   data,
   canConfigure,
+  canPropose,
   canManageMembers,
   busy,
   onEdit,
@@ -1024,6 +1035,7 @@ function SettingsView({
 }: {
   data: Workspace;
   canConfigure: boolean;
+  canPropose: boolean;
   canManageMembers: boolean;
   busy: boolean;
   onEdit: (editor: Editor) => void;
@@ -1044,12 +1056,14 @@ function SettingsView({
   return (
     <>
       <div className={styles.toolbar}>
+        {((canConfigure && data.isCeo) || canPropose) && (
+          <button onClick={() => onEdit({ kind: "standard", proposal: canPropose })}>
+            <Icon name="add" size={16} />
+            {canPropose ? "Đề xuất công việc" : "Standard Working"}
+          </button>
+        )}
         {canConfigure && (
           <>
-            <button onClick={() => onEdit({ kind: "standard" })}>
-              <Icon name="add" size={16} />
-              Standard Working
-            </button>
             <button onClick={() => onEdit({ kind: "policy" })}>
               <Icon name="add" size={16} />
               Chính sách thưởng
@@ -1071,8 +1085,8 @@ function SettingsView({
         )}
       </div>
       <div className={styles.toolbar}>
-        <label className={styles.field}><span>Danh mục thiết lập</span><select value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option><option value="policies">Chính sách thưởng</option><option value="members">Phân công chi nhánh</option></select></label>
-        <label className={styles.field}><span>Tìm trong thiết lập</span><input type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
+        <label className={styles.field}><span>Danh mục thiết lập</span><select aria-label="Danh mục thiết lập" value={target} onChange={event => { setTarget(event.target.value as typeof target); setFilters(initialFilters("settings")); setSearch(""); }}><option value="standards">Standard Working</option><option value="policies">Chính sách thưởng</option><option value="members">Phân công chi nhánh</option></select></label>
+        <label className={styles.field}><span>Tìm trong thiết lập</span><input aria-label="Tìm trong thiết lập" type="search" maxLength={200} value={search} onChange={event => setSearch(event.target.value)} placeholder={target === "members" ? "Tên tài khoản" : "Tên mẫu hoặc chính sách"} /></label>
       </div>
       <OperationsFilterBar kind="settings" settingsTarget={target} value={filters} onChange={setFilters} people={data.people} period={data.period} />
       {target === "standards" && <>
@@ -1097,7 +1111,9 @@ function SettingsView({
                 · {s.criteria.length} tiêu chí
               </p>
             </div>
-            <Badge value={s.status} />
+            <Badge value={s.status === "pending" ? "pending_approval" : s.status} />
+            <button onClick={() => onEdit({ kind: "standard_details", standard: s })}><Icon name="search" size={16} />Xem chi tiết</button>
+            {s.review_note && <p className={styles.notice}>CEO yêu cầu sửa: {s.review_note}</p>}
             {canConfigure &&
               s.status === "approved" &&
               s.frequency === "event" && (
@@ -1109,22 +1125,27 @@ function SettingsView({
                   Tạo lần thực hiện
                 </button>
               )}
-            {canConfigure && (
+            {((canConfigure && data.isCeo && s.status !== "pending") || (canPropose && canProposeRevision(s, data.userId))) && (
               <button
                 disabled={busy}
-                onClick={() => onEdit({ kind: "standard", standard: s })}
+                onClick={() => onEdit({ kind: "standard", standard: s, proposal: canPropose })}
               >
                 <Icon name="add" size={16} />
-                Phiên bản mới
+                {canPropose ? s.status === "changes_requested" ? "Sửa và gửi lại" : "Đề xuất thay đổi" : "Phiên bản mới"}
               </button>
             )}
-            {s.status === "draft" && canConfigure && (
+            {["draft", "pending"].includes(s.status) && canConfigure && data.isCeo && (
               <button
                 disabled={busy}
                 onClick={() => void onSave("approve_standard", { id: s.id })}
               >
                 <Icon name="check" size={16} />
                 Duyệt áp dụng
+              </button>
+            )}
+            {s.status === "pending" && canConfigure && data.isCeo && (
+              <button disabled={busy} onClick={() => onEdit({ kind: "request_standard_changes", standard: s })}>
+                <Icon name="edit" size={16} />Yêu cầu sửa
               </button>
             )}
           </article>
@@ -1211,7 +1232,7 @@ function EditorForm({
     editor.standard?.criteria ?? [blankCriterion()],
   );
   const [commonScope, setCommonScope] = useState(
-    editor.standard?.scope === "common",
+    !editor.proposal && editor.standard?.scope === "common",
   );
   const [correction, setCorrection] = useState(false);
   const [formError, setFormError] = useState("");
@@ -1260,6 +1281,7 @@ function EditorForm({
   }
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (editor.kind === "standard_details") return;
     setFormError("");
     const f = new FormData(event.currentTarget);
     const text = (key: string) => String(f.get(key) ?? "");
@@ -1289,6 +1311,7 @@ function EditorForm({
           scope: commonScope ? "common" : "branch",
           ...(editor.standard
             ? {
+                ...(editor.proposal ? { sourceId: editor.standard.id } : {}),
                 familyId: editor.standard.family_id,
                 revision: editor.standard.revision + 1,
               }
@@ -1419,8 +1442,10 @@ function EditorForm({
       }
       if (editor.kind === "close_period")
         payload = { period: data.period, reason: text("reason") };
+      if (editor.kind === "request_standard_changes")
+        payload = { id: editor.standard!.id, revision: editor.standard!.revision, reason: text("reason") };
       await onSave(
-        editor.kind === "standard" && commonScope && !editor.standard
+        editor.kind === "standard" && editor.proposal ? "propose_standard" : editor.kind === "standard" && commonScope && !editor.standard
           ? "common_standard"
           : editor.kind,
         payload,
@@ -1501,6 +1526,31 @@ function EditorForm({
               {formError || error}
             </p>
           )}
+          {editor.kind === "request_standard_changes" && <>
+            <h3>{editor.standard!.title}</h3>
+            <Field label="Nội dung cần sửa"><textarea name="reason" required maxLength={2000} rows={4} /></Field>
+          </>}
+          {editor.kind === "standard_details" && <>
+            <h3>{editor.standard!.title}</h3>
+            <p>{editor.standard!.description}</p>
+            <dl className={styles.standardDetails}>
+              <div><dt>Quản lý phụ trách</dt><dd>{data.people.find(person => person.id === editor.standard!.assignee_id)?.name ?? "Tài khoản OneBiz"}</dd></div>
+              <div><dt>Phiên bản</dt><dd>{formatNumber(editor.standard!.revision)}</dd></div>
+              <div><dt>Phạm vi</dt><dd>{editor.standard!.scope === "branch" ? "Đặc thù chi nhánh" : "Công việc chung"}</dd></div>
+              <div><dt>Tần suất</dt><dd>{({daily:"Hàng ngày",weekly:"Hàng tuần",monthly:"Hàng tháng",event:"Theo sự kiện"} as Record<string,string>)[editor.standard!.frequency]}</dd></div>
+              <div><dt>Ngày bắt đầu</dt><dd>{formatDate(`${editor.standard!.effective_from}T00:00:00+07:00`)}</dd></div>
+              <div><dt>Giờ hạn (Việt Nam)</dt><dd>{editor.standard!.due_time.slice(0,5)}{editor.standard!.frequency === "weekly" ? ` · ${["Thứ Hai","Thứ Ba","Thứ Tư","Thứ Năm","Thứ Sáu","Thứ Bảy","Chủ Nhật"][editor.standard!.day_number-1]}` : editor.standard!.frequency === "monthly" ? ` · Ngày ${editor.standard!.day_number}` : ""}</dd></div>
+            </dl>
+            <h3>Tiêu chí kết quả</h3>
+            {editor.standard!.criteria.map(criterion => <section key={criterion.id} className={styles.standardCriterion}>
+              <h4>{criterion.title}</h4><p>{criterion.measurementScope || "Theo phạm vi công việc"}</p>
+              <p>{({eq:"Bằng",lte:"Không vượt quá",gte:"Tối thiểu",lt:"Nhỏ hơn"} as Record<string,string>)[criterion.operator]} {criterion.kind === "boolean" ? criterion.threshold === 1 ? "Có" : "Không" : formatNumber(criterion.threshold)}{criterion.kind === "percent" ? "%" : criterion.kind === "duration" ? " phút" : ""} · {formatNumber(criterion.samples)} lần kiểm tra</p>
+              {!!criterion.measurementTimes?.length && <p>Giờ kiểm tra: {criterion.measurementTimes.join(", ")}</p>}
+              <p>{criterion.evidenceRequired ? "Bắt buộc minh chứng" : "Không bắt buộc minh chứng"} · {criterion.critical ? "Tiêu chí trọng yếu" : "Tiêu chí thông thường"}</p>
+              {criterion.ratioBasis && <p>Cách xác định tỷ lệ: {criterion.ratioBasis}</p>}
+            </section>)}
+            {editor.standard!.review_note && <p className={styles.notice}>CEO yêu cầu sửa: {editor.standard!.review_note}</p>}
+          </>}
           {editor.kind === "event" && (
             <>
               <h3>{editor.standard!.title}</h3>
@@ -1536,7 +1586,7 @@ function EditorForm({
                 <Field label="Phạm vi">
                   <select
                     value={commonScope ? "common" : "branch"}
-                    disabled={!!editor.standard}
+                    disabled={!!editor.standard || editor.proposal}
                     onChange={(event) =>
                       setCommonScope(event.target.value === "common")
                     }
@@ -2402,20 +2452,20 @@ function EditorForm({
           <span className={styles.footerState} role="status">
             {configurationErrors.length
               ? "Còn thông tin cần kiểm tra"
-              : "Bản nháp · Chưa áp dụng"}
+              : editor.proposal ? "Đề xuất · Chờ CEO duyệt trước khi áp dụng" : "Bản nháp · Chưa áp dụng"}
           </span>
         )}
-        <button
+        {editor.kind !== "standard_details" && <button
           className={styles.primary}
           type="submit"
           disabled={busy || configurationErrors.length > 0}
         >
           {busy
             ? "Đang lưu…"
-            : editor.kind === "standard" || editor.kind === "policy"
+            : editor.proposal ? "Gửi CEO duyệt" : editor.kind === "request_standard_changes" ? "Gửi yêu cầu sửa" : editor.kind === "standard" || editor.kind === "policy"
               ? "Lưu bản nháp"
               : "Lưu"}
-        </button>
+        </button>}
       </footer>
     </form>
   );

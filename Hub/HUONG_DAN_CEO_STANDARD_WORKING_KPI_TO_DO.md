@@ -41,6 +41,8 @@ Người văn phòng/bảo trì có thể được chọn làm người phối h
 
 ## 3. CEO tự tạo Standard Working
 
+**Bản bổ sung ngày 12/10/2026:** quản lý có quyền xử lý công việc và được phân công tại chi nhánh sẽ có nút **Đề xuất công việc** sau khi cập nhật giao diện. Đề xuất không cấp quyền cấu hình, không tự áp dụng. Chỉ CEO/owner được duyệt Standard Working; quyền cấu hình của người khác không cho phép tự duyệt mẫu. SQL 00514 đã được áp dụng và đối soát trên Supabase.
+
 1. **Thiết lập** → **Standard Working**.
 2. Nhập tên rõ hành động, mô tả kết quả cần đạt.
 3. Chọn công việc riêng chi nhánh hoặc mẫu chung nhiều chi nhánh. Với mẫu chung, chọn từng chi nhánh và một quản lý phụ trách ở mỗi nơi.
@@ -208,3 +210,34 @@ Danh sách tìm ngoài kỳ đánh giá vẫn xem được nhưng thao tác ghi 
 | Thu hồi phân công cuối cùng hoặc quyền Xem Hub | Lần tải tiếp theo bị chặn; không tự cấp quyền lại. | __________ |
 
 **Màu để nhận biết:** xanh dương là thao tác/bộ lọc; xanh lá là đạt/đã duyệt; vàng là cần xem/chờ; đỏ là lỗi/chưa đạt. Mọi màu đi kèm nhãn chữ, không chỉ dựa vào màu.
+
+## 12. Quản lý đề xuất và CEO duyệt
+
+Phần này thuộc bản sửa ngày 12/10/2026, cần SQL `00514_operations_standard_proposals.sql` trước khi phát hành code. SQL Hub ban đầu mang số 00510, đổi riêng số phát hành vì FnB đã dùng 00510–00513; không đổi nghiệp vụ. Không chạy lại các migration cũ hoặc nhầm với SQL FnB.
+
+### Quản lý
+
+1. Đăng nhập tài khoản OneBiz, chọn đúng chi nhánh → **Thiết lập → Đề xuất công việc**.
+2. Điền tên, kết quả cần đạt, quản lý phụ trách, lịch, ngày bắt đầu và tiêu chí. Phạm vi chỉ là việc riêng của chi nhánh được giao.
+3. Bấm **Gửi CEO duyệt**. Đề xuất có trạng thái **Chờ CEO duyệt**, chưa sinh lịch thực hiện.
+4. Với việc riêng đã duyệt, chọn **Đề xuất thay đổi**. Bản đã duyệt và các lần thực hiện cũ được giữ nguyên.
+5. Nếu CEO yêu cầu sửa, đọc lý do ở dòng mẫu, chọn **Sửa và gửi lại**. Hệ thống giữ phiên bản đã trả sửa, tạo phiên bản đề xuất mới.
+
+### CEO
+
+1. Chọn đúng chi nhánh → **Thiết lập → Standard Working**, lọc trạng thái **Chờ CEO duyệt**.
+2. Bấm **Xem chi tiết** để kiểm tra nội dung, người phụ trách, lịch, ngày áp dụng và toàn bộ tiêu chí. Cửa sổ này chỉ đọc, không lưu hoặc tạo phiên bản khác.
+3. Nếu phù hợp, bấm **Duyệt áp dụng**. Nếu cần sửa, bấm **Yêu cầu sửa**, ghi rõ nội dung cần bổ sung rồi gửi.
+4. Nếu ngày áp dụng đã qua, yêu cầu quản lý cập nhật ngày bắt đầu và gửi lại. Không sửa ngược công việc đã sinh hoặc số liệu KPI kỳ cũ.
+
+### To-do mặc định
+
+To-do mặc định hiển thị toàn bộ việc trong chi nhánh được phép xem. Bật **Của tôi** khi muốn chỉ xem việc phụ trách/phối hợp; lựa chọn độc lập với tab Công việc và Xác minh. Người chỉ phối hợp vẫn chỉ thấy đúng To-do được chỉ định, không mở rộng thành quyền xem cả quán.
+
+### Checklist bổ sung
+
+- Quản lý tạo được đề xuất nhưng không thấy nút duyệt; gửi yêu cầu duyệt trực tiếp tới máy chủ cũng bị chặn.
+- Người xác minh có quyền cấu hình vẫn không tự duyệt Standard Working; chỉ CEO/owner duyệt.
+- CEO trả sửa bắt buộc có nội dung; quản lý khác không sửa/gửi lại đề xuất đã trả sửa của người tạo.
+- Mẫu chờ duyệt chưa sinh lịch; thay đổi đề xuất không làm mất mẫu đã duyệt hoặc lịch sử kỳ cũ.
+- Hai quản lý cùng quán nhìn thấy To-do của nhau mặc định; không được hoàn thành thay hoặc đổi việc người khác khi thiếu quyền.
