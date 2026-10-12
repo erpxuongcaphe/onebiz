@@ -13,4 +13,4 @@ alter table products add column if not exists unit text default 'G';
 alter table products add column if not exists name text default 'Fixture product';
 alter table products add column if not exists code text default 'FIXTURE';
 `;
-fs.writeFileSync(process.argv[2],setup+'\n'+resolver+'\n'+fs.readFileSync('supabase/migrations/00511_fnb_actual_prepared_yield.sql','utf8')+'\n'+fs.readFileSync('supabase/migrations/00514_operational_uom_snapshots.sql','utf8'));
+fs.writeFileSync(process.argv[2],setup+'\n'+resolver+'\n'+fs.readFileSync('supabase/migrations/00511_fnb_actual_prepared_yield.sql','utf8')+'\n'+fs.readFileSync('supabase/migrations/00515_operational_uom_snapshots.sql','utf8'));

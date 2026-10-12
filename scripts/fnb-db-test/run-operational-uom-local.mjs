@@ -12,7 +12,8 @@ const install=`
  alter table products add column if not exists name text default 'Fixture product'; alter table products add column if not exists code text default 'FIXTURE';\`);
  await db.exec(${JSON.stringify(resolver)});
  const beforeUom=(await db.query('select branch_id,product_id,quantity from branch_stock order by branch_id,product_id')).rows;
- await db.exec(fs.readFileSync('supabase/migrations/00514_operational_uom_snapshots.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/00515_operational_uom_snapshots.sql','utf8'));
+ await db.exec(fs.readFileSync('supabase/migrations/00515_operational_uom_snapshots.sql','utf8'));
  assert.deepEqual((await db.query('select branch_id,product_id,quantity from branch_stock order by branch_id,product_id')).rows,beforeUom,'migration preserves every existing stock quantity');
 `;
 const prod=`

@@ -11,13 +11,17 @@ create table if not exists public.operational_uom_requests (
  created_by uuid not null references public.profiles(id), created_at timestamptz not null default now(),
  primary key(reference_type,request_id)
 );
-create index operational_uom_reference_idx on public.operational_uom_requests(tenant_id,reference_type,reference_id,created_at desc);
-create index operational_uom_document_code_idx on public.operational_uom_requests(tenant_id,reference_type,(result->>'code'));
+create index if not exists operational_uom_reference_idx on public.operational_uom_requests(tenant_id,reference_type,reference_id,created_at desc);
+create index if not exists operational_uom_document_code_idx on public.operational_uom_requests(tenant_id,reference_type,(result->>'code'));
 alter table public.operational_uom_requests enable row level security;
-create policy operational_uom_read on public.operational_uom_requests for select to authenticated
+do $$begin
+ if not exists(select 1 from pg_policies where schemaname='public' and tablename='operational_uom_requests' and policyname='operational_uom_read') then
+ execute $policy$create policy operational_uom_read on public.operational_uom_requests for select to authenticated
  using (public.user_has_permission(auth.uid(),'inventory.view') and
  (public._can_read_branch_inventory_00476(auth.uid(),tenant_id,branch_id) or
- (reference_type='transfer' and public._can_read_branch_inventory_00476(auth.uid(),tenant_id,to_branch_id))));
+ (reference_type='transfer' and public._can_read_branch_inventory_00476(auth.uid(),tenant_id,to_branch_id))))$policy$;
+ end if;
+end;$$;
 revoke all on public.operational_uom_requests from public,anon,authenticated;
 grant select on public.operational_uom_requests to authenticated;
 
