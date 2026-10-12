@@ -1,5 +1,7 @@
 "use client";
 
+import { PartyCashHistory } from "@/components/shared/party-cash-history";
+
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { useRevalidateOnFocus } from "@/lib/hooks/use-revalidate-on-focus";
 import { ColumnDef } from "@tanstack/react-table";
@@ -1585,6 +1587,7 @@ function CustomerDetailPanel({
       label: "Lịch sử thay đổi",
       content: <AuditHistoryTab entityType="customer" entityId={customer.id} />,
     },
+    { id: "cash", label: "Thu chi", content: <PartyCashHistory mode="customer" partyId={customer.id} partyName={customer.name} /> },
   ];
 
   return (

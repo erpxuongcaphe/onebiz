@@ -86,7 +86,7 @@ interface PartyBalanceSummaryRow {
   advance: number;
 }
 
-async function getCounterpartyBalanceSummary(branchId?: string | null) {
+export async function getCounterpartyBalanceSummary(branchId?: string | null) {
   const supabase = getClient();
   // Generated database types intentionally lag optional forward migrations.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
