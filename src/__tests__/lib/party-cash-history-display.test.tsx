@@ -55,4 +55,10 @@ describe("party cash history presentation", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Xem phiếu PC000334" }));
     expect(screen.queryByRole("button", { name: "Hủy phiếu để điều chỉnh" })).toBeNull();
   });
+  it("contains the wide table without expanding the surrounding dialog", async () => {
+    const { container } = render(<PartyCashHistory mode="supplier" partyId="supplier-1" partyName="Trung Kien" />);
+    await screen.findByText("Chi trả NCC");
+    expect(container.firstElementChild).toHaveClass("min-w-0", "w-full");
+    expect(screen.getByRole("table").parentElement).toHaveClass("min-w-0", "w-full", "overflow-auto");
+  });
 });
