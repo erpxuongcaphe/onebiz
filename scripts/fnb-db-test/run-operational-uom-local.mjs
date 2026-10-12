@@ -6,7 +6,7 @@ const resolver=fs.readFileSync('supabase/migrations/00320_uom_accounting_snapsho
 const install=`
  await db.exec(\`create table if not exists tenants(id uuid primary key); insert into tenants select distinct tenant_id from profiles on conflict do nothing;
  create table if not exists branches(id uuid primary key,tenant_id uuid);
- create or replace function _can_read_branch_inventory_00476(uuid,uuid,uuid) returns boolean language sql as $$select user_has_branch_access($1,$3)$$;
+ create or replace function _can_read_branch_inventory_00476(uuid,uuid,uuid) returns boolean language sql security definer set search_path=public as $$select (select tenant_id from profiles where id=$1)=$2 and user_has_branch_access($1,$3)$$;
  create table uom_conversions(tenant_id uuid,product_id uuid,from_unit text,to_unit text,factor numeric,is_active boolean);
  alter table products add column if not exists is_active boolean default true; alter table products add column if not exists unit text default 'G';
  alter table products add column if not exists name text default 'Fixture product'; alter table products add column if not exists code text default 'FIXTURE';\`);
@@ -73,6 +73,17 @@ const prod=`
  await db.exec('update uom_conversions set factor=900');
  await assert.rejects(db.query(\`select create_stock_operation_with_uom('inventory_check','\${branch}','\${packArgs}'::jsonb,'\${crypto.randomUUID()}',null,null,null)\`),/CONVERSION_CHANGED/);
  console.log('PASS count packaging: original full-pack and loose quantities retained; stale pack conversion rejected.');
+ const otherTenant=crypto.randomUUID(),otherBranch=crypto.randomUUID(),hidden=crypto.randomUUID(),crossTenant=crypto.randomUUID(),destination=crypto.randomUUID();
+ await db.exec(\`insert into tenants values('\${otherTenant}');insert into branches values('\${otherBranch}','\${tenant}');
+ insert into operational_uom_requests(reference_type,request_id,tenant_id,branch_id,to_branch_id,reference_id,payload,snapshots,result,created_by) values
+ ('production','\${hidden}','\${tenant}','\${otherBranch}',null,gen_random_uuid(),'{}','[]','{}','\${actor}'),
+ ('production','\${crossTenant}','\${otherTenant}','\${branch}',null,gen_random_uuid(),'{}','[]','{}','\${actor}'),
+ ('transfer','\${destination}','\${tenant}','\${otherBranch}','\${branch}',gen_random_uuid(),'{}','[]','{}','\${actor}');
+ grant usage on schema auth to authenticated;set role authenticated;\`);
+ assert.equal(Number((await db.query(\`select count(*) n from operational_uom_requests where request_id in ('\${hidden}','\${crossTenant}','\${destination}')\`)).rows[0].n),1,'authorized destination can read its transfer; other branch/tenant hidden');
+ await assert.rejects(db.query(\`update operational_uom_requests set payload='{}' where request_id='\${destination}'\`),/permission denied/);
+ await db.exec('reset role');
+ console.log('PASS unit metadata RLS: tenant and branch isolation, destination visibility, no direct browser writes.');
  await db.exec(\`create or replace function user_has_branch_access(uuid,uuid) returns boolean language sql as $$select false$$;\`);
  await assert.rejects(call(),/BRANCH_ACCESS_DENIED/);
  console.log('PASS operational production: exact legacy conversion; immutable original weight/factor; actual NVL unchanged; factor-change replay; changed payload and branch denial; migration leaves historical stock intact.');
