@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildSetupZip } from "@/lib/printer/setup-package";
+import { describe, expect, it, vi } from "vitest";
+import { buildSetupZip, getPrintSetupFiles } from "@/lib/printer/setup-package";
 describe("private branch print setup archive", () => {
   it("stores every file with matching local and central directory lengths", () => {
     const data = new TextEncoder().encode('{"pointId":"test"}');
@@ -16,5 +16,14 @@ describe("private branch print setup archive", () => {
   });
   it("rejects paths outside the setup folder", () => {
     expect(() => buildSetupZip([{ name: "../config.json", data: new Uint8Array() }])).toThrow();
+  });
+  it("includes the USB worker dependency in the downloadable installer", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(0) });
+    vi.stubGlobal("fetch", fetchMock);
+    try {
+      const files = await getPrintSetupFiles();
+      expect(files.map(file => file.name)).toContain("usb-worker.mjs");
+      expect(fetchMock).toHaveBeenCalledWith("/print-point/usb-worker.mjs", { cache: "no-store" });
+    } finally { vi.unstubAllGlobals(); }
   });
 });

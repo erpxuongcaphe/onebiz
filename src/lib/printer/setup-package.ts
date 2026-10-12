@@ -37,7 +37,7 @@ export function buildSetupZip(entries: { name: string; data: Uint8Array }[]): Ui
 }
 
 export async function getPrintSetupFiles() {
-  const files = ["agent.mjs", "destination.mjs", "network.mjs", "spool.ps1", "run.ps1", "setup.ps1", "runtime.ps1", "Cai-diem-in.cmd", "README.txt"];
+  const files = ["agent.mjs", "destination.mjs", "network.mjs", "usb-worker.mjs", "spool.ps1", "run.ps1", "setup.ps1", "runtime.ps1", "Cai-diem-in.cmd", "README.txt"];
   const entries = await Promise.all(files.map(async name => {
     const response = await fetch(`/print-point/${name}`, { cache: "no-store" });
     if (!response.ok) throw new Error("Không tải đủ bộ kết nối. Thử lại trước khi cấp mã kết nối mới.");

@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { parseDestination, isConnectionProbe } from './destination.mjs';
 import { sendNetworkPrint } from './network.mjs';
+import { createUsbWorker } from './usb-worker.mjs';
 
 export function validateRaster(bytes, paper) {
   if (!['58mm', '80mm'].includes(paper) || bytes.length > 1800000) throw new Error('INVALID_RASTER');
@@ -58,6 +59,8 @@ export async function runAgent(configPath) {
     child.on('close',()=>{clearTimeout(timer);try{const names=JSON.parse(out||'[]');done((Array.isArray(names)?names:[names]).filter(n=>typeof n==='string').slice(0,100));}catch{done([]);}});
   });
   const refreshPrinters = createPrinterRefresh(discover, data => call('heartbeat', data), error => console.error(error.message));
+  const usbWorker = createUsbWorker(join(dirname(fileURLToPath(import.meta.url)), 'spool.ps1'));
+  void usbWorker.warm().catch(error => console.error(error.message));
   let stopped=false;
   process.on('SIGINT',()=>{stopped=true;}); process.on('SIGTERM',()=>{stopped=true;});
   console.log('Onebiz · Điểm in đang chạy. Giữ máy bật.');
@@ -86,14 +89,7 @@ export async function runAgent(configPath) {
         } else {
         tempPath=join(tmpdir(),`onebiz-print-${randomUUID()}.bin`);
         await writeFile(tempPath,payload,{flag:'wx'}); attempted=true;
-        const output=await new Promise((done,reject)=>{
-          const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-File',join(dirname(fileURLToPath(import.meta.url)),'spool.ps1')],{windowsHide:true,env:{...process.env,ONEBIZ_PRINT_FILE:tempPath,ONEBIZ_PRINT_PRINTER:destination.printer},stdio:['ignore','pipe','pipe']});
-          let out=''; child.stdout.on('data',b=>{out+=b.toString();}); child.stderr.on('data',()=>{});
-          const timer=setTimeout(()=>{child.kill();reject(new Error('Điểm in quá thời gian; kiểm tra giấy trước khi in lại.'));},45000);
-          child.on('error',e=>{clearTimeout(timer);reject(e);});
-          child.on('close',code=>{clearTimeout(timer);code===0?done(out.trim()):reject(new Error('Chưa xác nhận kết quả gửi máy. Kiểm tra hàng đợi Windows và giấy.'));});
-        });
-        const result=JSON.parse(output); status=result.status;
+        const result=await usbWorker.send(tempPath,destination.printer); status=result.status;
         message=status==='handed_off'?'Windows đã nhận lệnh. Kiểm tra giấy tại máy; chưa xác nhận giấy đã ra.':status==='failed'?'Windows chưa nhận lệnh. Kiểm tra tên máy, driver và quyền dùng máy in.':'Chưa xác nhận đủ dữ liệu gửi. Kiểm tra giấy trước khi in lại.';
         if(!['handed_off','failed','unknown'].includes(status)) throw new Error('Kết quả điểm in không hợp lệ.');
         }
@@ -108,6 +104,7 @@ export async function runAgent(configPath) {
       console.log(`${new Date().toISOString()} · ${job.id} · ${status} · lấy lệnh ${sendStarted-claimStarted}ms · gửi máy ${acknowledgementStarted-sendStarted}ms · xác nhận ${Date.now()-acknowledgementStarted}ms`);
     }catch(error){console.error(error.message);await sleep(5000);}
   }
+  usbWorker.close();
 }
 if(process.argv[1] && pathToFileURL(resolve(process.argv[1])).href===import.meta.url){
   runAgent(resolve(process.argv[2]||'onebiz-print-point.json')).catch(error=>{console.error(error.message);process.exitCode=1;});
