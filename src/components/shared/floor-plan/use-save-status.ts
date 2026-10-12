@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /** A batch is saved only after every outstanding write completes. */
 export function useSaveStatus() {
   const pending = useRef(0);
   const failed = useRef(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  useUnsavedWork(saveStatus === "saving" || saveStatus === "error");
   const trackSave = useCallback(async <T,>(operation: () => Promise<T>): Promise<T> => {
     if (pending.current === 0) failed.current = false;
     pending.current += 1;

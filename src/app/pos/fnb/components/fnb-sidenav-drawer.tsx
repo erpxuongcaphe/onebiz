@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * FnbSidenavDrawer — Sidenav slide-in từ trái (Sprint A — CEO 06/05).
@@ -177,8 +178,7 @@ export function FnbSidenavDrawer({
           <button
             type="button"
             onClick={async () => {
-              onClose();
-              await logout();
+              requestPageLeave(async () => { onClose(); await logout(); });
             }}
             className="w-full min-h-11 flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-on-surface-variant hover:bg-status-error/10 hover:text-status-error transition-colors"
           >

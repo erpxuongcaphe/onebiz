@@ -1,4 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { PageLeaveGuard } from "@/components/shared/page-leave-guard";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ModuleSidebarLayout } from "@/components/shared/module-sidebar-layout";
 
@@ -14,6 +16,17 @@ const nav = [{ label: "Thiết lập", items: [
 ] }];
 
 describe("điều hướng module", () => {
+  it("hỏi trước khi menu mobile rời một trang có nội dung chưa lưu", async () => {
+    function Dirty() { useUnsavedWork(true); return null; }
+    render(<><PageLeaveGuard /><Dirty /><ModuleSidebarLayout title="Cài đặt" nav={nav}>Nội dung</ModuleSidebarLayout></>);
+    navigation.push.mockClear();
+    fireEvent.change(screen.getByRole("combobox", { name: "Mục Cài đặt" }), { target: { value: "/cai-dat/cua-hang" } });
+    expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByText("Quay lại để lưu")); expect(navigation.push).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByRole("combobox", { name: "Mục Cài đặt" }), { target: { value: "/cai-dat/cua-hang" } });
+    fireEvent.click(await screen.findByText("Bỏ thay đổi và rời trang"));
+    expect(navigation.push).toHaveBeenCalledWith("/cai-dat/cua-hang");
+  });
   beforeEach(() => navigation.push.mockClear());
   it("giữ đúng mục con đang xem và chuyển trang khi chọn mục khác", () => {
     render(<ModuleSidebarLayout title="Cài đặt" nav={nav}>Nội dung</ModuleSidebarLayout>);

@@ -28,12 +28,16 @@ describe("Order-only writes", () => {
     expect(rpc).toHaveBeenNthCalledWith(1,'save_fnb_modifier_links_atomic',{p_target:'category',p_target_id:'category',p_group_ids:['b','a'],p_use_common_order:true});
     expect(rpc).toHaveBeenNthCalledWith(2,'save_fnb_modifier_links_atomic',{p_target:'product',p_target_id:'product',p_group_ids:['a','b'],p_use_common_order:false});
   });
-  it("does not write when previewing and cancelling a reordered list", () => {
+  it("does not write when previewing and confirming cancellation of a reordered list", async () => {
     const close=vi.fn();
     render(<ModifierDisplayOrderDialog kind="groups" title="Sắp xếp nhóm" rows={rows} onClose={close} onSaved={vi.fn()} />);
     expect(screen.getByRole('button',{name:'Lưu thứ tự'})).toBeDisabled();
     fireEvent.click(screen.getByRole('button',{name:'Đưa Mức đường lên'}));
     fireEvent.click(screen.getByRole('button',{name:'Hủy'}));
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', {name:'Có nội dung chưa lưu'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button',{name:'Bỏ thay đổi và đóng'}));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce());
     expect(rpc).not.toHaveBeenCalled(); expect(close).toHaveBeenCalledOnce();
   });
   it("retains a stale draft, shows the conflict, and does not report success", async () => {

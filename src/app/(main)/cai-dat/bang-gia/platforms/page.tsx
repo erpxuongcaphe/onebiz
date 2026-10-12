@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * Bulk matrix editor — Giá bán theo nguồn đơn (CEO 13/05/2026, Fabi/iPos).
@@ -72,6 +73,7 @@ export default function PlatformPricesBulkEditorPage() {
 
   /** Edits state — chỉ những cell user vừa đổi. */
   const [edits, setEdits] = useState<EditsMap>({});
+  useUnsavedWork(Object.keys(edits).length > 0);
 
   // Quick action state
   const [quickPlatform, setQuickPlatform] = useState<DeliveryPlatform>("shopee_food");

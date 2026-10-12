@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * Cài đặt phí giao hàng theo cấp ngưỡng km (CEO 21/05/2026 — migration 00108)
@@ -45,6 +46,7 @@ export default function DeliveryFeeSettingsPage() {
   const [tiers, setTiers] = useState<DeliveryFeeTier[]>([]);
   const [editing, setEditing] = useState<Record<string, { label: string; fee: number }>>({});
   const [saving, setSaving] = useState<string | null>(null);
+  useUnsavedWork(!loading && tiers.some(tier => editing[tier.id] && (editing[tier.id].label !== tier.tierLabel || editing[tier.id].fee !== tier.fee)));
 
   const fetchTiers = useCallback(async () => {
     setLoading(true);

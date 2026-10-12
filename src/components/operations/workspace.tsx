@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 import Link from "next/link";
 import {
@@ -440,8 +441,8 @@ export default function OperationsWorkspace() {
             title={data?.branches.find((b) => b.id === branch)?.name}
             value={branch}
             onChange={(e) => {
-              setEditor(null);
-              setBranch(e.target.value);
+              const next = e.target.value;
+              requestPageLeave(() => { setEditor(null); setBranch(next); });
             }}
           >
             {data?.branches.map((b) => (
@@ -455,8 +456,8 @@ export default function OperationsWorkspace() {
             type="month"
             value={period}
             onChange={(e) => {
-              setEditor(null);
-              setPeriod(e.target.value);
+              const next = e.target.value;
+              requestPageLeave(() => { setEditor(null); setPeriod(next); });
             }}
           />
           <button
@@ -464,7 +465,7 @@ export default function OperationsWorkspace() {
             title="Tải lại"
             aria-label="Tải lại"
             disabled={loading || busy}
-            onClick={() => void load()}
+            onClick={() => requestPageLeave(() => load())}
           >
             <Icon name="refresh" size={17} />
           </button>
@@ -478,8 +479,8 @@ export default function OperationsWorkspace() {
               key={key}
               aria-current={tab === key ? "page" : undefined}
               onClick={() => {
-                setTab(key);
-                setSearch("");
+                const finish = () => { setTab(key); setSearch(""); };
+                if (key === tab) finish(); else requestPageLeave(finish);
               }}
             >
               <Icon name={icon} size={19} />

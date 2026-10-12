@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 // ---------------------------------------------------------------------------
 // TopNav v3 — Stitch style header h-16 bg-surface-container-lowest
@@ -132,7 +133,7 @@ function BranchSelector() {
         {canViewAll && (
           <DropdownMenuItem
             className="cursor-pointer"
-            onSelect={() => switchBranch(null)}
+            onSelect={() => requestPageLeave(() => switchBranch(null))}
           >
             <Icon
               name="apartment"
@@ -149,7 +150,7 @@ function BranchSelector() {
           <DropdownMenuItem
             key={branch.id}
             className="cursor-pointer"
-            onSelect={() => switchBranch(branch.id)}
+            onSelect={() => requestPageLeave(() => switchBranch(branch.id))}
           >
             <Icon
               name={branchTypeIcon(branch.branchType)}
@@ -260,19 +261,19 @@ function UserDropdown() {
         <DropdownMenuGroup>
           <DropdownMenuItem
             className="cursor-pointer"
-            onSelect={() => router.push("/ho-so")}
+            onSelect={() => requestPageLeave(() => router.push("/ho-so"))}
           >
             <Icon name="account_circle" size={16} />
             Hồ sơ cá nhân
           </DropdownMenuItem>
           <DropdownMenuItem
             className="cursor-pointer"
-            onSelect={() => router.push("/ho-so#pin-cua-toi")}
+            onSelect={() => requestPageLeave(() => router.push("/ho-so#pin-cua-toi"))}
           >
             <Icon name="pin" size={16} />
             PIN của tôi
           </DropdownMenuItem>
-          <DropdownMenuItem className="cursor-pointer" onSelect={() => router.push("/cai-dat")}>
+          <DropdownMenuItem className="cursor-pointer" onSelect={() => requestPageLeave(() => router.push("/cai-dat"))}>
             <Icon name="settings" size={16} /> Cài đặt
           </DropdownMenuItem>
         </DropdownMenuGroup>
@@ -281,7 +282,7 @@ function UserDropdown() {
           variant="destructive"
           className="cursor-pointer"
           onSelect={() => {
-            logout();
+            requestPageLeave(() => logout());
           }}
         >
           <Icon name="logout" size={16} />
@@ -522,7 +523,7 @@ function MobileNav() {
             </div>
             {canViewAll && (
               <button
-                onClick={() => switchBranch(null)}
+                onClick={() => requestPageLeave(() => switchBranch(null))}
                 className={cn(
                   "w-full press-scale-sm text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
                   currentBranch === null
@@ -540,7 +541,7 @@ function MobileNav() {
             {branches.map((branch) => (
               <button
                 key={branch.id}
-                onClick={() => switchBranch(branch.id)}
+                onClick={() => requestPageLeave(() => switchBranch(branch.id))}
                 className={cn(
                   "w-full press-scale-sm text-left flex items-center gap-3 px-3 py-2 rounded-lg text-sm",
                   currentBranch?.id === branch.id

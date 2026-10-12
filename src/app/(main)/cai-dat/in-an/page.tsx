@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 import { useSettings } from "@/lib/contexts/settings-context";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -252,6 +253,11 @@ function PrintSettingsPageContent() {
   const [invoiceFooter, setInvoiceFooter] = useState<string>("");
   const [invoiceTitle, setInvoiceTitle] = useState<string>("");
   const [invoiceFields, setInvoiceFields] = useState<InvoiceFieldFlags>({});
+  const [businessInfoLoaded, setBusinessInfoLoaded] = useState(false);
+  const markLogoSaved = useUnsavedSnapshot(logoUrl, businessInfoLoaded);
+  const markFooterSaved = useUnsavedSnapshot(invoiceFooter, businessInfoLoaded);
+  const markTitleSaved = useUnsavedSnapshot(invoiceTitle, businessInfoLoaded);
+  const markFieldsSaved = useUnsavedSnapshot(invoiceFields, businessInfoLoaded);
   const [logoSaving, setLogoSaving] = useState(false);
   // Cài đặt In V3 (CEO 30/06): master–detail — `selected` = id mục nav đang chọn.
   const [selected, setSelected] = useState<string>("may-in");
@@ -281,9 +287,11 @@ function PrintSettingsPageContent() {
         setInvoiceFooter(info.invoiceFooter ?? "");
         setInvoiceTitle(info.invoiceTitle ?? "");
         setInvoiceFields(info.invoiceFields ?? {});
+        setBusinessInfoLoaded(true);
       })
       .catch(() => {
         // Silent — UI vẫn render với defaults
+        if (!cancelled) setBusinessInfoLoaded(true);
       });
     return () => {
       cancelled = true;
@@ -296,6 +304,7 @@ function PrintSettingsPageContent() {
       setLogoSaving(true);
       try {
         await updateTenantBusinessInfo({ logoUrl: url ?? "" });
+        markLogoSaved(url);
         toast({
           variant: "success",
           title: url ? "Đã cập nhật logo" : "Đã xoá logo",
@@ -313,13 +322,14 @@ function PrintSettingsPageContent() {
         setLogoSaving(false);
       }
     },
-    [toast],
+    [toast, markLogoSaved],
   );
 
   const handleFooterSave = useCallback(async () => {
     setLogoSaving(true);
     try {
       await updateTenantBusinessInfo({ invoiceFooter });
+      markFooterSaved(invoiceFooter);
       toast({
         variant: "success",
         title: "Đã lưu lời cảm ơn",
@@ -334,12 +344,13 @@ function PrintSettingsPageContent() {
     } finally {
       setLogoSaving(false);
     }
-  }, [invoiceFooter, toast]);
+  }, [invoiceFooter, toast, markFooterSaved]);
 
   const handleTitleSave = useCallback(async () => {
     setLogoSaving(true);
     try {
       await updateTenantBusinessInfo({ invoiceTitle: invoiceTitle.trim() });
+      markTitleSaved(invoiceTitle);
       toast({
         variant: "success",
         title: "Đã lưu tiêu đề phiếu",
@@ -354,12 +365,13 @@ function PrintSettingsPageContent() {
     } finally {
       setLogoSaving(false);
     }
-  }, [invoiceTitle, toast]);
+  }, [invoiceTitle, toast, markTitleSaved]);
 
   const handleFieldsSave = useCallback(async () => {
     setLogoSaving(true);
     try {
       await updateTenantBusinessInfo({ invoiceFields });
+      markFieldsSaved(invoiceFields);
       toast({
         variant: "success",
         title: "Đã lưu hiển thị phiếu",
@@ -374,7 +386,7 @@ function PrintSettingsPageContent() {
     } finally {
       setLogoSaving(false);
     }
-  }, [invoiceFields, toast]);
+  }, [invoiceFields, toast, markFieldsSaved]);
 
   const handleConnectUsbPrinter = async (role: PrinterRole) => {
     setConnecting(role);

@@ -6,9 +6,10 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon";
+import { GuardedDialogRoot, useGuardedPopupProps } from "./dialog-edit-guard";
 
-function Dialog({ ...props }: DialogPrimitive.Root.Props) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />
+function Dialog({ ...props }: React.ComponentProps<typeof GuardedDialogRoot>) {
+  return <GuardedDialogRoot data-slot="dialog" {...props} />
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -44,10 +45,12 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  ref,
   ...props
 }: DialogPrimitive.Popup.Props & {
   showCloseButton?: boolean
 }) {
+  const guarded = useGuardedPopupProps(ref);
   return (
     <DialogPortal>
       <DialogOverlay />
@@ -59,6 +62,12 @@ function DialogContent({
           className
         )}
         {...props}
+        {...guarded}
+        onPointerDownCapture={(event) => { guarded.onPointerDownCapture?.(); props.onPointerDownCapture?.(event); }}
+        onKeyDownCapture={(event) => { guarded.onKeyDownCapture?.(); props.onKeyDownCapture?.(event); }}
+        onChangeCapture={(event) => { guarded.onChangeCapture?.(); props.onChangeCapture?.(event); }}
+        onInputCapture={(event) => { guarded.onInputCapture?.(); props.onInputCapture?.(event); }}
+        onClickCapture={(event) => { guarded.onClickCapture?.(event); if (!event.isPropagationStopped()) props.onClickCapture?.(event); }}
       >
         {children}
         {showCloseButton && (

@@ -26,9 +26,9 @@ export function FnbMenuOrderDialog({ onClose, onSaved }: { onClose: () => void; 
     catch (err) { setError(err instanceof Error ? err.message : "Không lưu được. Vui lòng thử lại."); }
     finally { setSaving(false); }
   };
-  return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
+  return <Dialog open hasUnsavedChanges={dirty} onOpenChange={open => { if (!open && !saving) onClose(); }}>
     <DialogContent showCloseButton={false} className="flex max-h-[90dvh] flex-col gap-2 sm:max-w-xl">
-      <div className="flex items-center justify-between gap-2"><DialogTitle className="text-lg">Sắp xếp thực đơn POS</DialogTitle><button type="button" disabled={saving} onClick={onClose} aria-label="Đóng sắp xếp" className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"><Icon name="close" /></button></div>
+      <div className="flex items-center justify-between gap-2"><DialogTitle className="text-lg">Sắp xếp thực đơn POS</DialogTitle><button data-dialog-close type="button" disabled={saving} onClick={onClose} aria-label="Đóng sắp xếp" className="flex h-11 w-11 items-center justify-center rounded-lg hover:bg-muted"><Icon name="close" /></button></div>
       <DialogDescription>Thứ tự dùng chung cho các chi nhánh. Di chuyển bằng nút lên/xuống, rồi lưu. Danh sách gồm cả món bị ẩn ở quán này; nhóm dùng chung với bán lẻ cũng đổi thứ tự nhóm.</DialogDescription>
       <div className="flex gap-1 rounded-lg bg-primary/5 p-1" role="group" aria-label="Loại sắp xếp">{(["categories", "products"] as const).map(value => <button type="button" key={value} disabled={saving} aria-pressed={kind === value} onClick={() => setKind(value)} className={"min-h-11 flex-1 rounded-md px-3 text-sm font-semibold " + (kind === value ? "bg-primary text-primary-foreground" : "text-foreground")}>{value === "categories" ? "Danh mục" : "Món trong danh mục"}</button>)}</div>
       {kind === "products" && <label className="flex items-center gap-2 text-sm font-medium">Danh mục<select value={category} disabled={saving} onChange={event => setCategory(event.target.value)} className="min-h-11 min-w-0 flex-1 rounded-lg border bg-background px-2 text-base">{draft?.categories.map(row => <option key={row.id} value={row.id}>{row.name}</option>)}<option value="">Chưa phân nhóm</option></select></label>}

@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 // ---------------------------------------------------------------------------
 // Command Palette — Cmd+K global search
@@ -149,8 +150,7 @@ function CommandPaletteDialog({
 
   const go = useCallback(
     (href: string) => {
-      router.push(href);
-      onOpenChange(false);
+      requestPageLeave(() => { router.push(href); onOpenChange(false); });
     },
     [router, onOpenChange]
   );
@@ -372,7 +372,7 @@ function CommandPaletteDialog({
   }, [activeIdx]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} protectUnsavedChanges={false} onOpenChange={onOpenChange}>
       <DialogContent
         className="p-0 gap-0 max-w-[640px] overflow-hidden"
         showCloseButton={false}

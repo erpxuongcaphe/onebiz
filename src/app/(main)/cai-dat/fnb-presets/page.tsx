@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 import { SettingsSwitch } from "@/components/shared/settings-toggle";
 
@@ -107,10 +108,13 @@ export default function FnbPresetsPage() {
     void loadSettings();
   }, [loadSettings]);
 
+  const markPlatformsSaved = useUnsavedSnapshot(platforms, !loading && !loadError);
+  const markPresetsSaved = useUnsavedSnapshot(presets, !loading && !loadError);
   const handleSavePlatforms = useCallback(async () => {
     setSavingPlatforms(true);
     try {
       await updateDeliveryPlatformSettings(platforms);
+      markPlatformsSaved(platforms);
       toast({
         variant: "success",
         title: "Đã lưu cấu hình sàn",
@@ -125,7 +129,7 @@ export default function FnbPresetsPage() {
     } finally {
       setSavingPlatforms(false);
     }
-  }, [platforms, toast]);
+  }, [platforms, toast, markPlatformsSaved]);
 
   const handleSavePresets = useCallback(async () => {
     setSavingPresets(true);
@@ -133,6 +137,7 @@ export default function FnbPresetsPage() {
       // Filter: chỉ save preset có name + value
       const valid = presets.filter((p) => p.name.trim() && p.value > 0);
       await saveDiscountPresets(valid);
+      markPresetsSaved(valid);
       setPresets(valid);
       toast({
         variant: "success",
@@ -148,7 +153,7 @@ export default function FnbPresetsPage() {
     } finally {
       setSavingPresets(false);
     }
-  }, [presets, toast]);
+  }, [presets, toast, markPresetsSaved]);
 
   const updatePlatform = (
     key: DeliveryPlatform,

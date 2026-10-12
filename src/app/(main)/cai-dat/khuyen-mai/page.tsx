@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 import { SettingsSwitch } from "@/components/shared/settings-toggle";
 
@@ -108,6 +109,7 @@ export default function PromotionSettingsPage() {
   const [settings, setSettings] = useState<PromotionSettings | null>(null);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  useUnsavedWork(settingsDirty);
 
   const fetchPromotions = useCallback(async () => {
     setLoading(true);

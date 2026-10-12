@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * ImportHubDialog — Trung tâm nhập dữ liệu Excel
@@ -121,8 +122,7 @@ export function ImportDataDialog({ open, onOpenChange }: ImportDataDialogProps) 
   const close = () => onOpenChange(false);
 
   const goToModule = (href: string) => {
-    close();
-    router.push(href);
+    requestPageLeave(() => { close(); router.push(href); });
   };
 
   return (

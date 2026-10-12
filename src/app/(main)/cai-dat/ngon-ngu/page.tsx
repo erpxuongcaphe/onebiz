@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 const languages = [
   { id: "vi", label: "Tiếng Việt", flag: "\u{1F1FB}\u{1F1F3}" },
@@ -57,6 +58,7 @@ export default function LanguageSettingsPage() {
     );
   }, [settings.language]);
 
+  useUnsavedWork(language !== settings.language.locale || currency !== settings.language.currency || timezone !== (timezoneFromSettings[settings.language.timezone] ?? "asia-hcm"));
   const handleSave = () => {
     updateSettings("language", {
       locale: language as "vi" | "en",

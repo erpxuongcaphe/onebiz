@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -126,8 +127,8 @@ export function MktNotificationBell() {
       }
     }
     const href = targetHref(n);
-    setOpen(false);
-    if (href) router.push(toHref(href));
+    if (href) requestPageLeave(() => { setOpen(false); router.push(toHref(href)); });
+    else setOpen(false);
   }
 
   return (

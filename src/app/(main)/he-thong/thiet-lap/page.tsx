@@ -26,6 +26,7 @@ import { BusinessLogoUpload } from "@/components/shared/business-logo-upload";
 import { HelpTip } from "@/components/shared/help-tip";
 import { PermissionPage } from "@/components/shared/permission-page";
 import { PERMISSIONS } from "@/lib/permissions";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 // S-2 13/06/2026 audit lần 2: guard — permission khớp nav-config (manage_roles).
 export default function ThietLapPageGuarded() {
@@ -41,6 +42,7 @@ function ThietLapPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<TenantBusinessInfo>({});
+  const markSaved = useUnsavedSnapshot(form, !loading);
 
   useEffect(() => {
     let cancelled = false;
@@ -69,6 +71,7 @@ function ThietLapPage() {
     setSaving(true);
     try {
       const updated = await updateTenantBusinessInfo(form);
+      markSaved(updated);
       setForm(updated);
       toast({
         title: "Đã lưu thông tin doanh nghiệp",

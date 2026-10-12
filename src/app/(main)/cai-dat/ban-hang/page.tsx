@@ -19,6 +19,7 @@ import {
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
 import { formatNumber } from "@/lib/format";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 
 export default function SalesSettingsPage() {
@@ -63,6 +64,8 @@ export default function SalesSettingsPage() {
     settings.sales.paymentMethods.ewallet
   );
 
+  const editSnapshot = { requireCustomer, autoPrintInvoice, showCostOnPos, discountType, maxDiscount, supervisorPin, supervisorDiscountAmountThreshold, paymentCash, paymentTransfer, paymentCard, paymentEwallet };
+  const markSaved = useUnsavedSnapshot(editSnapshot);
   function handleSave() {
     // Validate PIN: 4-8 chữ số hoặc rỗng (tắt)
     const pinTrimmed = supervisorPin.trim();
@@ -99,6 +102,7 @@ export default function SalesSettingsPage() {
         ewallet: paymentEwallet,
       },
     });
+    markSaved(editSnapshot);
     toast({
       title: "Lưu thành công",
       description: "Cài đặt bán hàng đã được cập nhật.",

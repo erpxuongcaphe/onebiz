@@ -10,6 +10,7 @@ import { PrintJobFeedback } from "@/components/shared/print-job-feedback";
 import { BranchPrintDefaults } from "@/components/shared/branch-print-defaults";
 
 import { PosPinOnboarding } from "@/components/shared/pos-pin-onboarding";
+import { PageLeaveGuard } from "@/components/shared/page-leave-guard";
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -19,6 +20,7 @@ export function Providers({ children }: { children: ReactNode }) {
         <ToastProvider>
           <TooltipProvider>
             <PosPinOnboarding>{children}</PosPinOnboarding>
+            <PageLeaveGuard />
             <ToastContainer />
             <PwaInstallPrompt />
             <AuthSessionToast />

@@ -45,7 +45,7 @@ export function ModifierDisplayOrderDialog({ kind, parentId, title, rows, onClos
       setSaving(false);
     }
   }
-  return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
+  return <Dialog open hasUnsavedChanges={changed} onOpenChange={open => { if (!open && !saving) onClose(); }}>
     <DialogContent className="flex max-h-[90dvh] flex-col sm:max-w-lg">
       <DialogHeader><DialogTitle>{title}</DialogTitle><DialogDescription>
         {kind === 'groups' ? 'Các món và nhóm hàng chọn Theo thứ tự chung sẽ tự dùng thứ tự này.' : 'Mọi món dùng nhóm này sẽ dùng chung thứ tự lựa chọn.'}

@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 import { SettingsToggle as Toggle } from "@/components/shared/settings-toggle";
 
@@ -176,6 +177,7 @@ export default function LoyaltyPointsSettingsPage() {
   const { toast } = useToast();
   const [settings, setSettings] = useState<LoyaltySettings | null>(null);
   const [settingsDirty, setSettingsDirty] = useState(false);
+  useUnsavedWork(settingsDirty);
   const [savingSettings, setSavingSettings] = useState(false);
   const [tiers, setTiers] = useState<LoyaltyTier[]>([]);
   const [loading, setLoading] = useState(true);
