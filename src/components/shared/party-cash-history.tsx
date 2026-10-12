@@ -51,7 +51,12 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
     return () => clearTimeout(timer);
   }, [searchText, filters.search]);
   const invalidDates = !!(filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo);
-  const cancellable = (row: CashBookEntry) => row.status === "completed" && !["customer_advance", "supplier_advance"].includes(row.category) && (!row.referenceType || ["invoice", "purchase_order"].includes(row.referenceType));
+  const cancellable = (row: CashBookEntry) => {
+    if (row.status !== "completed" || ["customer_advance", "supplier_advance"].includes(row.category)) return false;
+    if (!row.referenceType && !row.referenceId) return true;
+    return (row.referenceType === "invoice" && row.category === "customer_payment") ||
+      (row.referenceType === "purchase_order" && row.category === "supplier_payment");
+  };
   useEffect(() => { setPage(0); setSelected(null); setDebtOpen(false); setCancelTarget(null); setCancelReason(""); setActionError(null); setActionSuccess(null); }, [mode, partyId, activeBranchId]);
   useEffect(() => {
     if (!isReady || permissionsLoading || !canRead || invalidDates) return;
