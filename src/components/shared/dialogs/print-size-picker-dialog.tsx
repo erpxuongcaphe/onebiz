@@ -36,6 +36,7 @@ interface PrintSizePickerDialogProps {
   title?: string;
   /** Callback khi user chọn cỡ và bấm "In ngay". */
   onPrint: (paperSize: PaperSize) => void;
+  defaultPaperSize?: PaperSize;
 }
 
 /**
@@ -47,9 +48,10 @@ export function PrintSizePickerDialog({
   onOpenChange,
   title = "Chọn cỡ giấy in",
   onPrint,
+  defaultPaperSize,
 }: PrintSizePickerDialogProps) {
   const { settings } = useSettings();
-  const defaultSize = (settings?.print?.paperSize ?? "A4") as PaperSize;
+  const defaultSize = defaultPaperSize ?? (settings?.print?.paperSize ?? "A4") as PaperSize;
   const [selected, setSelected] = useState<PaperSize>(defaultSize);
 
   useEffect(() => {

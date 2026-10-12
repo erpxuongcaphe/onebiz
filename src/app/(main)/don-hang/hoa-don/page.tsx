@@ -1205,7 +1205,7 @@ export default function HoaDonPage() {
                       toPrintLines(items),
                     ),
                     "In hóa đơn",
-                    { channel: "retail", docType: "sale_invoice", branchId: row.branchId ?? activeBranchId },
+                    { channel: row.source === "fnb" ? "fnb" : "retail", docType: "sale_invoice", branchId: row.branchId ?? activeBranchId },
                   );
                 }
               },
@@ -1334,7 +1334,7 @@ export default function HoaDonPage() {
                     toPrintLines(items),
                   ),
                   "In hóa đơn",
-                  { channel: "retail", docType: "sale_invoice", branchId: row.branchId ?? activeBranchId },
+                  { channel: row.source === "fnb" ? "fnb" : "retail", docType: "sale_invoice", branchId: row.branchId ?? activeBranchId },
                 );
               },
               // Trả hàng (redirect)
