@@ -17,6 +17,7 @@ import { useToast } from "@/lib/contexts";
 import {
   applyCustomerAdvanceToInvoice,
   applySupplierAdvanceToPurchaseOrder,
+  type ApplyAdvanceResult,
 } from "@/lib/services/supabase/payments";
 
 interface ApplyAdvanceDialogProps {
@@ -28,7 +29,7 @@ interface ApplyAdvanceDialogProps {
   referenceCode: string;
   debt: number;
   availableAdvance: number;
-  onSuccess?: () => void;
+  onSuccess?: (result: ApplyAdvanceResult) => void;
 }
 
 /**
@@ -103,7 +104,7 @@ export function ApplyAdvanceDialog({
         variant: "success",
       });
       onOpenChange(false);
-      onSuccess?.();
+      onSuccess?.(result);
     } catch (error) {
       toast({
         title: "Không phân bổ được tiền ứng",

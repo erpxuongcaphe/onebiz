@@ -41,6 +41,7 @@ export function isAscending(params: QueryParams): boolean {
  */
 export function handleError(error: { message: string; code?: string }, context: string): never {
   const unitErrors: Record<string,string> = {
+    GRAM_FORM_REFRESH_REQUIRED: "Đơn vị kho của BTP đã chuyển sang gram. Tải lại dữ liệu và kiểm tra số cân trước khi lưu; thao tác này chưa ghi nhận kho.",
     UOM_CONVERSION_CHANGED: "Hệ số quy đổi vừa thay đổi. Tải lại dữ liệu rồi kiểm tra số lượng trước khi lưu; kho chưa thay đổi.",
     UOM_REQUEST_CHANGED: "Thao tác này đã được ghi nhận với nội dung khác. Cập nhật chứng từ để đối chiếu trước khi lưu tiếp.",
     UOM_QUANTITY_BELOW_LEDGER_PRECISION: "Số lượng quá nhỏ so với độ chính xác của đơn vị kho. Kiểm tra lại số lượng và đơn vị.",

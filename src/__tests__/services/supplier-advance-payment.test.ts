@@ -38,7 +38,8 @@ describe("supplier advance payment", () => {
   it("allows only supplier overpayment and explains the split in both dialogs", () => {
     expect(totalDialog).toContain('mode === "customer" && amount > totalDebt');
     expect(totalDialog).toContain("sẽ được ghi nhận là tiền ứng trước NCC");
-    expect(documentDialog).toContain("!isInvoice && amount > currentDebt");
+    expect(documentDialog).toContain("!isInvoice && amount > remainingDebt");
+    expect(documentDialog).toContain("isInvoice && amount > remainingDebt");
     expect(documentDialog).toContain("không làm công nợ phiếu nhập thành số âm");
   });
 

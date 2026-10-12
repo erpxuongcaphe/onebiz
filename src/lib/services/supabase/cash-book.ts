@@ -39,6 +39,27 @@ export interface CashBookWorkspaceParams {
   branchId?: string;
 }
 
+/** Exact party identity, not a name search; RLS and branch scope remain active. */
+export async function getPartyCashHistory(
+  mode: "customer" | "supplier", partyId: string,
+  branchId?: string | null, page = 0,
+): Promise<QueryResult<CashBookEntry>> {
+  const supabase = getClient();
+  const tenantId = await getCurrentTenantId();
+  let query = supabase.from("cash_transactions")
+    .select("*, profiles!cash_transactions_created_by_fkey(full_name), branches!cash_transactions_branch_id_fkey(name)", { count: "exact" })
+    .eq("tenant_id", tenantId)
+    .eq(mode === "customer" ? "customer_id" : "supplier_id", partyId);
+  if (branchId) query = query.eq("branch_id", branchId);
+  const { data, count, error } = await query
+    .order("transaction_date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(page * 25, page * 25 + 24);
+  if (error) handleError(error, "getPartyCashHistory");
+  return { data: (data ?? []).map(mapCashEntry), total: count ?? 0 };
+}
+
 export interface CashBookWorkspaceSummary {
   totalReceipt: number;
   totalPayment: number;

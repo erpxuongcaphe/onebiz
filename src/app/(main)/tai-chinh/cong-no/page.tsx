@@ -38,6 +38,8 @@ import { AuditLogDialog } from "@/components/shared/audit-log-dialog";
 import { SettleDebtDialog } from "@/components/shared/dialogs/settle-debt-dialog";
 import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
 import { RecordAdvanceDialog } from "@/components/shared/dialogs/record-advance-dialog";
+import { PartyCashHistory } from "@/components/shared/party-cash-history";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buildTransactionRowActions } from "@/components/shared/transaction-row-actions";
 import { downloadTemplate } from "@/lib/excel";
 import { debtOpeningExcelSchema } from "@/lib/excel/schemas";
@@ -129,6 +131,7 @@ export default function CongNoPage() {
     partyId?: string;
     partyName?: string;
   } | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<{ mode: "customer" | "supplier"; partyId: string; partyName: string } | null>(null);
 
   const fetchData = useCallback(async () => {
     if (!isReady) return;
@@ -344,6 +347,7 @@ export default function CongNoPage() {
               <Icon name="visibility" size={14} />
               Xem
             </Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setHistoryTarget({ mode: "customer", partyId: row.original.id, partyName: row.original.name })}><Icon name="receipt_long" size={14} />Thu chi</Button>
             {debt > 0 ? (
               <Button
                 size="sm"
@@ -490,6 +494,7 @@ export default function CongNoPage() {
               <Icon name="visibility" size={14} />
               Xem
             </Button>
+            <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={() => setHistoryTarget({ mode: "supplier", partyId: row.original.id, partyName: row.original.name })}><Icon name="receipt_long" size={14} />Thu chi</Button>
             {debt > 0 ? (
               <Button
                 size="sm"
@@ -1259,6 +1264,12 @@ export default function CongNoPage() {
           }}
         />
       )}
+      <Dialog open={!!historyTarget} onOpenChange={open => !open && setHistoryTarget(null)}>
+        <DialogContent className="sm:max-w-5xl max-h-[92vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Thu chi — {historyTarget?.partyName}</DialogTitle></DialogHeader>
+          {historyTarget && <PartyCashHistory {...historyTarget} />}
+        </DialogContent>
+      </Dialog>
     </ListPageLayout>
   );
 }

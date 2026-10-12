@@ -40,6 +40,7 @@ jobs:
           node scripts/fnb-db-test/run-internal-pos-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
           mkdir -p .tmp
           node scripts/fnb-db-test/run-operational-uom-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
+          node scripts/fnb-db-test/run-gram-cutover-local.mjs "$RUNNER_TEMP/internal-pos-runtime/node_modules/@electric-sql/pglite/dist/index.js"
 
       - name: Verify atomic opening stock and isolated branch value
         env:
