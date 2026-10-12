@@ -10,7 +10,8 @@ import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatShortDate } from "@/lib/format";
+import { cashCategoryLabel, cashPaymentMethodLabel } from "@/lib/utils/cash-book-labels";
 import type { CashBookEntry } from "@/lib/types";
 
 export function PartyCashHistory({ mode, partyId, partyName }: {
@@ -74,9 +75,9 @@ export function PartyCashHistory({ mode, partyId, partyName }: {
         <thead className="sticky top-0 bg-muted text-left"><tr>{["Mã phiếu", "Ngày ghi nhận", "Thu / Chi", "Khoản mục", "Số tiền", "Chi nhánh", "Trạng thái"].map(label => <th key={label} className="px-3 py-2 whitespace-nowrap">{label}</th>)}</tr></thead>
         <tbody>{rows.map(row => <tr key={row.id} className="border-t">
           <td className="px-3 py-2 whitespace-nowrap"><button className="text-primary font-medium hover:underline" onClick={() => setSelected(row)} aria-label={`Xem phiếu ${row.code}`}>{row.code}</button></td>
-          <td className="px-3 py-2 whitespace-nowrap">{formatDate(row.date)}</td>
+          <td className="px-3 py-2 whitespace-nowrap">{formatShortDate(row.date)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.type === "receipt" ? "Thu" : "Chi"}</td>
-          <td className="px-3 py-2">{row.category === "supplier_advance" ? "Ứng trước NCC" : row.category === "customer_advance" ? "Khách trả trước" : row.category}</td>
+          <td className="px-3 py-2">{row.category === "supplier_advance" ? "Ứng trước NCC" : row.category === "customer_advance" ? "Khách trả trước" : cashCategoryLabel(row.category)}</td>
           <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap font-medium">{formatCurrency(row.amount)}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.branchName || "—"}</td>
           <td className="px-3 py-2 whitespace-nowrap">{row.status === "cancelled" ? "Đã hủy" : row.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất"}</td>
@@ -89,10 +90,10 @@ export function PartyCashHistory({ mode, partyId, partyName }: {
     </div>
     <Dialog open={!!selected} onOpenChange={open => !open && setSelected(null)}><DialogContent className="sm:max-w-lg"><DialogHeader><DialogTitle>{selected?.type === "receipt" ? "Phiếu thu" : "Phiếu chi"} {selected?.code}</DialogTitle></DialogHeader>{selected && <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
       <dt>Đối tượng</dt><dd>{selected.counterparty || partyName}</dd><dt>Số tiền</dt><dd className="font-semibold tabular-nums">{formatCurrency(selected.amount)}</dd>
-      <dt>Ngày ghi nhận</dt><dd>{formatDate(selected.date)}</dd><dt>Thời điểm thu/chi</dt><dd>{selected.occurredAt ? new Date(selected.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận giờ thu/chi"}</dd>
+      <dt>Ngày ghi nhận</dt><dd>{formatShortDate(selected.date)}</dd><dt>Thời điểm thu/chi</dt><dd>{selected.occurredAt ? new Date(selected.occurredAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "Chưa ghi nhận giờ thu/chi"}</dd>
       <dt>Chi nhánh</dt><dd>{selected.branchName || "—"}</dd><dt>Người lập</dt><dd>{selected.createdByName || "—"}</dd><dt>Người thực hiện</dt><dd>{selected.performedByName || "Chưa ghi nhận"}</dd>
       <dt>Ngày lập phiếu</dt><dd>{selected.createdAt ? new Date(selected.createdAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }) : "—"}</dd>
-      <dt>Thanh toán</dt><dd>{({ cash: "Tiền mặt", transfer: "Chuyển khoản", card: "Thẻ", ewallet: "Ví điện tử" } as Record<string, string>)[selected.paymentMethod ?? ""] || selected.paymentMethod || "—"}</dd>
+      <dt>Thanh toán</dt><dd>{cashPaymentMethodLabel(selected.paymentMethod)}</dd>
       <dt>Ghi chú</dt><dd className="break-words whitespace-pre-wrap">{selected.note || "—"}</dd>
       <dt>Trạng thái</dt><dd>{selected.status === "cancelled" ? "Đã hủy" : selected.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất"}</dd>
     </dl>}</DialogContent></Dialog>
