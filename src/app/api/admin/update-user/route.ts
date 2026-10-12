@@ -110,6 +110,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (targetProfile.role === "owner" && body.isActive === false) {
+      return NextResponse.json({ success: false, message: "Thu hồi quyền quản trị bằng tài khoản quản trị khác trước khi vô hiệu hóa." }, { status: 403 });
+    }
+
     const updatesBranchAccess =
       body.allBranches !== undefined || body.branchIds !== undefined;
     const scope = await validateManagedUserScope(admin, tenantId, {
@@ -158,7 +162,9 @@ export async function POST(req: NextRequest) {
     }
 
     if (Object.keys(profilePatch).length > 0 || branchIds !== null) {
-      const { error } = await (sb.rpc as any)("update_managed_user_atomic", {
+      const { error } = await (sb.rpc as unknown as (
+        name: string, args: Record<string, unknown>
+      ) => Promise<{ error: { message: string } | null }>)("update_managed_user_atomic", {
         p_target_user_id: body.userId,
         p_profile_patch: profilePatch,
         p_branch_ids: branchIds,

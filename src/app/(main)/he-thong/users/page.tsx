@@ -42,6 +42,7 @@ import { requestPosPinReset, getManagedPinStatuses } from "@/lib/services/supaba
 
 // CEO 23/05/2026 (Phase 2 UI): per-user permission override dialog
 import { PermissionOverrideDialog } from "@/components/shared/dialogs/permission-override-dialog";
+import { SystemRoleDialog } from "@/components/shared/dialogs/system-role-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Icon } from "@/components/ui/icon";
@@ -99,11 +100,9 @@ function UsersPage() {
   const { toast } = useToast();
   const tenantId = tenant?.id ?? "";
 
-  // Security gate: chỉ owner mới được hiển thị checkbox "Cấp quyền owner".
-  // Trước đây ai mở dialog Mời cũng có thể tick → bypass toàn bộ RBAC.
-  // (Trang `/he-thong/users` cần wrap PermissionPage ở layout level — tạm
-  // thời chặn ở UI layer cho đến khi route gating sẵn sàng).
   const isCurrentUserOwner = user?.role === "owner";
+  const currentUserId = user?.id;
+  const [systemRoleTarget, setSystemRoleTarget] = useState<UserRow | null>(null);
 
   const [pinStatuses, setPinStatuses] = useState<Record<string, { hasPin: boolean; resetRequired: boolean }> | null>(null);
   const [resettingPin, setResettingPin] = useState(false);
@@ -160,9 +159,11 @@ function UsersPage() {
         userId: editTarget.id,
         fullName: editForm.fullName.trim() || undefined,
         phone: editForm.phone.trim(),
-        roleId: editForm.roleId || null,
-        branchIds: editForm.allBranches ? [] : editForm.branchIds,
-        allBranches: editForm.allBranches,
+        ...(editTarget.role !== "owner" && editTarget.id !== user?.id ? { roleId: editForm.roleId || null } : {}),
+        ...(editTarget.id !== user?.id ? {
+          branchIds: editForm.allBranches ? [] : editForm.branchIds,
+          allBranches: editForm.allBranches,
+        } : {}),
       });
 
       if (editForm.newPassword) {
@@ -452,6 +453,9 @@ function UsersPage() {
                           {user.role}
                         </span>
                       )}
+                      <p className={cn("mt-1 text-xs", user.role === "owner" ? "font-medium text-primary" : "text-muted-foreground")}>
+                        {user.role === "owner" ? "Quản trị toàn doanh nghiệp" : "Theo vai trò được gán"}
+                      </p>
                     </td>
                     <td className="py-3">
                       <Badge
@@ -467,7 +471,7 @@ function UsersPage() {
                     </td>
                     <td className="py-3">
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-lg hover:bg-muted transition-colors">
+                        <DropdownMenuTrigger aria-label={`Thao tác tài khoản ${user.fullName}`} className="inline-flex items-center justify-center h-10 w-10 rounded-lg hover:bg-muted transition-colors">
                           <Icon name="more_horiz" size={16} />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -492,6 +496,7 @@ function UsersPage() {
                             Chỉnh sửa thông tin
                           </DropdownMenuItem>
                           <DropdownMenuItem
+                            disabled={user.role === "owner" || user.id === currentUserId}
                             onSelect={() => {
                               setSelectedUser(user);
                               setSelectedRoleId(user.roleId ?? "");
@@ -501,10 +506,15 @@ function UsersPage() {
                             <Icon name="shield" size={16} className="mr-2" />
                             Gán vai trò
                           </DropdownMenuItem>
+                          {isCurrentUserOwner && <DropdownMenuItem onSelect={() => setSystemRoleTarget(user)}>
+                            <Icon name="admin_panel_settings" size={16} className="mr-2" />
+                            Quyền quản trị & lịch sử
+                          </DropdownMenuItem>}
                           {/* CEO 23/05/2026 (Phase 2): override quyền per-user.
                               Cho phép cấp thêm hoặc khoá bớt permission riêng
                               cho user này (override role default). */}
                           <DropdownMenuItem
+                            disabled={user.role === "owner"}
                             onSelect={() => {
                               setOverrideUser(user);
                               setOverrideOpen(true);
@@ -520,6 +530,7 @@ function UsersPage() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
+                            disabled={user.role === "owner" && user.isActive}
                             onSelect={() => handleToggleActive(user)}
                             className={user.isActive ? "text-status-error" : "text-status-success"}
                           >
@@ -536,6 +547,11 @@ function UsersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {systemRoleTarget && user && <SystemRoleDialog key={systemRoleTarget.id}
+        target={systemRoleTarget} actorId={user.id}
+        onClose={() => setSystemRoleTarget(null)}
+        onSaved={() => { setSystemRoleTarget(null); toast({ title: "Đã cập nhật quyền quản trị", description: "Người được đổi quyền nên đăng xuất và đăng nhập lại.", variant: "success" }); void load(); }} />}
 
       {/* Assign Role Dialog */}
       <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
@@ -631,6 +647,7 @@ function UsersPage() {
             <div className="space-y-1">
               <Label htmlFor="edit-role">Vai trò</Label>
               <Select
+                disabled={editTarget?.role === "owner" || editTarget?.id === currentUserId}
                 value={editForm.roleId}
                 onValueChange={(v) =>
                   setEditForm({ ...editForm, roleId: v ?? "" })
@@ -661,6 +678,7 @@ function UsersPage() {
               <label className="flex items-center gap-2 text-sm cursor-pointer">
                 <input
                   type="checkbox"
+                  disabled={editTarget?.id === currentUserId}
                   checked={editForm.allBranches}
                   onChange={(e) =>
                     setEditForm({
@@ -687,6 +705,7 @@ function UsersPage() {
                       >
                         <input
                           type="checkbox"
+                          disabled={editTarget?.id === currentUserId}
                           checked={editForm.branchIds.includes(b.id)}
                           onChange={(e) => {
                             const next = e.target.checked
@@ -707,6 +726,7 @@ function UsersPage() {
                   )}
                 </div>
               )}
+              {editTarget?.id === currentUserId && <p className="text-xs text-muted-foreground">Nhờ quản trị khác thay đổi quyền và chi nhánh của tài khoản này.</p>}
             </div>
 
             <div className="space-y-1 border-t pt-3">
