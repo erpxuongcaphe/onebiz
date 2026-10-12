@@ -831,6 +831,18 @@
    "updated_at",
    "weight"
   ],
+  "user_system_role_changes": [
+   "actor_id",
+   "after_role",
+   "before_role",
+   "created_at",
+   "id",
+   "reason",
+   "request_body",
+   "request_id",
+   "target_id",
+   "tenant_id"
+  ],
   "fnb_invoice_discount_snapshots": [
    "coupon_code",
    "created_at",
@@ -931,6 +943,12 @@
    "verified_at",
    "verified_by",
    "version"
+  ],
+  "prepared_stock_unit_rows_00517": [
+   "old_data",
+   "product_id",
+   "row_id",
+   "table_name"
   ],
   "fnb_invoice_item_bom_snapshot_components_00410": [
    "created_at",
@@ -1113,6 +1131,18 @@
    "sandbox_id",
    "token_hash",
    "used_runs"
+  ],
+  "prepared_stock_unit_cutovers_00517": [
+   "after_state",
+   "before_state",
+   "created_at",
+   "factor",
+   "new_unit",
+   "old_unit",
+   "product_id",
+   "state",
+   "tenant_id",
+   "transaction_id"
   ],
   "fnb_invoice_item_bom_snapshots_00410": [
    "branch_id",
@@ -2922,6 +2952,7 @@
   "_create_and_apply_stock_export_00268",
   "_create_internal_sale_auth_impl_00243",
   "_create_internal_sale_catalog_impl_00390",
+  "_create_production_before_gram_00517",
   "_create_production_order_auth_impl_00390",
   "_create_sales_return_atomic_impl_00376",
   "_create_sales_return_auth_impl_00244",
@@ -3129,6 +3160,7 @@
   "get_platform_commission_report",
   "get_platform_commission_report_unsecured_legacy",
   "get_pos_invoice_integrity_report",
+  "get_prepared_stock_unit_history_00517",
   "get_product_lot_list_workspace",
   "get_production_order_list_workspace",
   "get_products_with_branch_stock",
@@ -3317,6 +3349,7 @@
   "promotion_beneficiary_options_00458",
   "promotion_eligible_ids_00458",
   "promotion_link_employee_customer_00458",
+  "rebase_prepared_stock_to_grams_00517",
   "recalculate_bom_cost_cache",
   "receive_internal_sale_actual",
   "receive_internal_sale_with_uom",
@@ -3389,6 +3422,7 @@
   "set_stock_transfer_state_atomic",
   "set_tenant_setting",
   "set_user_pos_pin",
+  "set_user_system_role_atomic",
   "settle_cod_atomic",
   "settle_management_finance_event",
   "should_cascade_bom_at_branch",
@@ -3404,6 +3438,7 @@
   "update_branch_settings_atomic",
   "update_draft_invoice_atomic",
   "update_managed_user_atomic",
+  "update_managed_user_pre_system_roles",
   "update_own_profile_atomic",
   "update_purchase_order_prices",
   "update_purchase_order_prices_with_uom",
@@ -3423,7 +3458,7 @@
   "void_disposal_export_atomic",
   "void_internal_export_atomic"
  ],
- "soBang": 207,
- "soCot": 2483,
- "soRpc": 523
+ "soBang": 210,
+ "soCot": 2507,
+ "soRpc": 528
 }
