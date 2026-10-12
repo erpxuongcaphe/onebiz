@@ -21,6 +21,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 import {
   saveDraftOrder,
   deleteDraftOrder,
@@ -129,6 +130,11 @@ export interface DraftSaveState {
   revision: number;
 }
 
+type CartNavigationSnapshot = Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note" | "orderVatRate">;
+function navigationCartSignature(snapshot: CartNavigationSnapshot) {
+  return JSON.stringify([computeStateHash(snapshot), snapshot.orderVatRate ?? 0]);
+}
+
 export interface DraftSaveConflict {
   code: "POS_DRAFT_CONFLICT" | "POS_DRAFT_SESSION_CHANGED" | "POS_DRAFT_NOT_FOUND" | "POS_DRAFT_CHANGED_DURING_SAVE";
   invoiceId: string | null;
@@ -174,7 +180,7 @@ interface DraftServerState {
 }
 
 /**
- * Hook — chỉ side-effects, không return gì.
+ * Keeps existing auto-save behavior and returns a read-only check for other tabs.
  *
  * Usage:
  *   useAutoSaveDraft({ sessionId, snapshot: state, ctx, enabled: !submitting });
@@ -188,9 +194,14 @@ export function useAutoSaveDraft({
   draftRevision = null,
   onSaved,
   onConflict,
-}: UseAutoSaveDraftArgs): void {
+}: UseAutoSaveDraftArgs): (session: string, cart: CartNavigationSnapshot) => boolean {
   const debouncedRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedKeyRef = useRef<string>("");
+  const navigationSaved = useRef(new Map<string, string>());
+  const navigationCartSaved = useRef(new Map<string, string>());
+  const navigationSession = ctx && sessionId ? `${ctx.tenantId}:${ctx.branchId}:${sessionId}` : "";
+  const navigationPayload = ctx ? JSON.stringify(buildInput(snapshot, ctx)) : "";
+  useUnsavedWork(() => snapshot.lines.length > 0 && (!navigationSession || navigationSaved.current.get(navigationSession) !== navigationPayload));
   const currentSessionRef = useRef<string | null>(sessionId);
   const hasDraftContentRef = useRef(snapshot.lines.length > 0);
   const onSavedRef = useRef(onSaved);
@@ -258,6 +269,8 @@ export function useAutoSaveDraft({
             revision: result.revision,
           });
           lastSavedKeyRef.current = request.stateKey;
+          navigationSaved.current.set(`${request.ctx.tenantId}:${request.ctx.branchId}:${request.sessionId}`, JSON.stringify(input));
+          navigationCartSaved.current.set(`${request.ctx.tenantId}:${request.ctx.branchId}:${request.sessionId}`, navigationCartSignature(request.snapshot));
           consecutiveFailuresRef.current = 0;
           nextRetryAtRef.current = 0;
 
@@ -402,6 +415,7 @@ export function useAutoSaveDraft({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, sessionId, JSON.stringify(snapshot.lines), snapshot.customer?.id, snapshot.orderDiscount.value, snapshot.orderDiscount.mode, snapshot.paymentMethod, snapshot.shippingFee, snapshot.orderVatRate, snapshot.note, ctx?.tenantId, ctx?.branchId, visibilityTick]);
+  return (session, cart) => cart.lines.length > 0 && (!ctx || navigationCartSaved.current.get(`${ctx.tenantId}:${ctx.branchId}:${session}`) !== navigationCartSignature(cart));
 }
 
 /**
@@ -409,7 +423,7 @@ export function useAutoSaveDraft({
  * lines (productId+qty+price+discount), customer, orderDiscount, payment, note.
  * Các UI state khác (modal mở/đóng, hover...) không trigger save.
  */
-function computeStateHash(s: AutoSaveSnapshot): string {
+function computeStateHash(s: Pick<AutoSaveSnapshot, "lines" | "customer" | "orderDiscount" | "paymentMethod" | "note">): string {
   return JSON.stringify({
     l: s.lines.map((l) => [
       l.productId,

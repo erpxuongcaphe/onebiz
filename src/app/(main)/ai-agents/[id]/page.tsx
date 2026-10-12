@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -223,6 +224,8 @@ export default function AgentDetailPage() {
   const [promptTemplate, setPromptTemplate] = useState("");
   const [configJson, setConfigJson] = useState("{}");
   const [isActive, setIsActive] = useState(true);
+  const editSnapshot = { name, role, description, webhookUrl, workflowId, promptTemplate, configJson, isActive };
+  const markSaved = useUnsavedSnapshot(editSnapshot, !loading, params.id);
   const [configError, setConfigError] = useState<string | null>(null);
 
   // Actions state
@@ -329,6 +332,7 @@ export default function AgentDetailPage() {
         config: parsedConfig,
         isActive,
       });
+      markSaved(editSnapshot);
       notify("Đã lưu cấu hình agent", "success");
       await load();
     } catch (err) {

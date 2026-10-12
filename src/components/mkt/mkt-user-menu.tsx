@@ -28,6 +28,7 @@ export function MktUserMenu() {
       <button
         type="button"
         onClick={handleLogout}
+        data-page-close
         disabled={busy}
         title="Đăng xuất"
         className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-outline-variant bg-background px-3 text-sm font-medium hover:bg-surface-container disabled:opacity-50"

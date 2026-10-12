@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 const themes = [
   {
@@ -86,6 +87,7 @@ export default function AppearanceSettingsPage() {
   const mauDangChon =
     accentColors.find((c) => c.id === accentColor)?.hex ?? accentColors[0].hex;
 
+  useUnsavedWork(theme !== settings.appearance.theme || accentColor !== settings.appearance.accentColor || fontSize !== settings.appearance.fontSize || borderRadius !== settings.appearance.borderRadius);
   const handleSave = () => {
     updateSettings("appearance", {
       theme: theme as "light" | "dark" | "system",

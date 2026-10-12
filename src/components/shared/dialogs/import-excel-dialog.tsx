@@ -217,7 +217,7 @@ export function ImportExcelDialog<TRow>({
     errorCount === 0;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={open} protectUnsavedChanges={step !== "done"} onOpenChange={handleClose}>
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] flex-col md:max-w-2xl lg:max-w-3xl xl:max-w-4xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>

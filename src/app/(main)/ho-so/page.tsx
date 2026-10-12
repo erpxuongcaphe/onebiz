@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * Hồ sơ cá nhân — profile của user đang đăng nhập.
@@ -84,6 +85,8 @@ export default function HoSoPage() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  useUnsavedWork(!isLoading && !!user && (fullName !== (user.fullName ?? "") || phone !== (user.phone ?? "")));
+  useUnsavedWork(!!currentPassword || !!newPassword || !!confirmPassword);
 
   // Sync form state với user khi auth load xong.
   useEffect(() => {

@@ -4,6 +4,7 @@ import { changeDraftOrderType } from "../order-type-selection";
 import { finishKitchenSubmissionTabs } from './kitchen-submission-tabs';
 
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 import type {
   FnbOrderLine,
   FnbTabSnapshot,
@@ -192,6 +193,8 @@ export function useFnbPosState(branchId?: string): UseFnbPosStateReturn {
     return [initialTab];
   });
   const [activeTabId, setActiveTabId] = useState<string>(tabs[0].id);
+  // Sent lines are already on the server. Only warn for dishes not sent yet.
+  useUnsavedWork(tabs.some(tab => tab.lines.length > 0));
 
   const flushPersistedTabs = useCallback(async (strict = false) => {
     if (!branchId) {

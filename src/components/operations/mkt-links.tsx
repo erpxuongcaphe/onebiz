@@ -1,4 +1,5 @@
 "use client";
+import { captureFormSave } from "@/lib/utils/form-edit-tracker";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Icon } from "@/components/ui/icon";
 import { states } from "@/lib/operations/contracts";
@@ -73,6 +74,7 @@ export function OperationsMktLinks({
   async function link(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (saving.current) return;
+    const acknowledge = captureFormSave(event.currentTarget);
     saving.current = true;
     setBusy(true);
     setError("");
@@ -85,6 +87,7 @@ export function OperationsMktLinks({
       });
       const body = await response.json();
       if (!response.ok) throw Error(body.error);
+      acknowledge();
       await load();
     } catch (cause) {
       setError(

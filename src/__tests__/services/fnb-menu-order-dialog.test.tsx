@@ -12,7 +12,9 @@ describe("menu ordering dialog", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Đưa xuống: Cà phê" }));
     expect(screen.getByRole("button", { name: "Lưu thứ tự" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Hủy" }));
-    expect(close).toHaveBeenCalledOnce(); expect(mocks.save).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
+    fireEvent.click(await screen.findByRole("button", { name: "Bỏ thay đổi và đóng" }));
+    await waitFor(() => expect(close).toHaveBeenCalledOnce()); expect(mocks.save).not.toHaveBeenCalled();
   });
   it("retains edits and shows the server error when saving fails", async () => {
     mocks.save.mockRejectedValue(new Error("Thực đơn đã được người khác sửa"));

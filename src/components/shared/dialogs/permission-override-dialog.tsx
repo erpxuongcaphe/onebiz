@@ -174,7 +174,7 @@ export function PermissionOverrideDialog({
   if (!user) return null;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} hasUnsavedChanges={hasChanges} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="px-6 pt-6 pb-3 border-b shrink-0">
           <DialogTitle>

@@ -45,6 +45,7 @@ import {
   findBank,
 } from "@/lib/vietqr";
 import { cn } from "@/lib/utils";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 export default function PaymentSettingsPage() {
   const { toast } = useToast();
@@ -101,6 +102,8 @@ export default function PaymentSettingsPage() {
   const isDirty =
     bankCode !== "" || accountNumber !== "" || accountHolder !== "" || vietQrEnabled;
 
+  const editSnapshot = { bankCode, accountNumber, accountHolder, vietQrEnabled };
+  const markSaved = useUnsavedSnapshot(editSnapshot, !loading);
   const handleSave = async () => {
     if (!bankCode || !accountNumber) {
       toast({
@@ -129,6 +132,7 @@ export default function PaymentSettingsPage() {
         bankHolder: accountHolder.trim() || undefined,
         vietQrEnabled,
       });
+      markSaved(editSnapshot);
       // Sync sang local settings để POS thấy ngay (không cần refresh)
       updateSettings("payment", {
         bankName: bank?.shortName ?? "",

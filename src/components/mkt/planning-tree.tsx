@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 import { useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/ui/icon";
@@ -163,6 +164,7 @@ function OwnerAddSubplan({ nodeId }: { nodeId: string }) {
   const [title, setTitle] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  useUnsavedWork(open && !!title.trim());
 
   async function submit() {
     if (!title.trim()) { setError("Hãy đặt tên Kế hoạch phụ."); return; }
@@ -210,6 +212,7 @@ function OwnerAddSubplan({ nodeId }: { nodeId: string }) {
       <button
         type="button"
         onClick={() => { setOpen(false); setError(null); }}
+        data-page-close
         className="h-8 rounded-lg border border-outline-variant px-2 text-xs text-on-surface-variant"
       >
         Huỷ

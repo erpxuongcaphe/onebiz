@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -44,6 +45,7 @@ export default function DeviceBindingSettingsPage() {
 
   const [selectedBranchId, setSelectedBranchId] = useState<string>("");
   const [deviceName, setDeviceName] = useState<string>("");
+  useUnsavedWork(user?.role === "owner" && branches.length > 0 && (selectedBranchId !== (binding?.branchId ?? branches[0].id) || deviceName !== (binding?.deviceName ?? "")));
 
   // Prefill khi page load: nếu đã bind → show current.
   useEffect(() => {

@@ -1,4 +1,5 @@
 "use client";
+import { captureFormSave } from "@/lib/utils/form-edit-tracker";
 import {
   useEffect,
   useRef,
@@ -101,8 +102,8 @@ export function PeriodAdjustments({
     .sort((a, b) => b.base_revision - a.base_revision)[0];
   const revision = approved ? approved.base_revision + 1 : 0;
   const source = readClosedPeriod(approved?.snapshot ?? original);
-  async function save(command: Record<string, unknown>) {
-    if (saving.current) return;
+  async function save(command: Record<string, unknown>, acknowledge?: () => void) {
+    if (saving.current) return false;
     saving.current = true;
     setBusy(true);
     setError("");
@@ -120,12 +121,15 @@ export function PeriodAdjustments({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error);
+      acknowledge?.();
       pending.current = null;
       await load();
+      return true;
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : "Không lưu được điều chỉnh.",
       );
+      return false;
     } finally {
       saving.current = false;
       setBusy(false);
@@ -140,6 +144,7 @@ export function PeriodAdjustments({
       setError("Số tiền theo dạng 1,234.56; chỉ tiêu phải lớn hơn 0.");
       return;
     }
+    const acknowledge = captureFormSave(event.currentTarget);
     void save({
       action: "propose",
       periodId,
@@ -148,7 +153,7 @@ export function PeriodAdjustments({
       targetCents: target,
       reason: String(f.get("reason")),
       evidence: String(f.get("evidence")),
-    });
+    }, acknowledge);
   }
   return (
     <section>
@@ -167,7 +172,7 @@ export function PeriodAdjustments({
           busy={busy}
           canChangeCriteria={canApprove}
           onSave={(values) =>
-            void save({ ...values, periodId, baseRevision: revision })
+            save({ ...values, periodId, baseRevision: revision })
           }
         />
       )}
@@ -238,11 +243,12 @@ export function PeriodAdjustments({
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
+                  const acknowledge = captureFormSave(e.currentTarget);
                   void save({
                     action: "approve",
                     id: a.id,
                     note: String(new FormData(e.currentTarget).get("note")),
-                  });
+                  }, acknowledge);
                 }}
               >
                 <label className={styles.field}>

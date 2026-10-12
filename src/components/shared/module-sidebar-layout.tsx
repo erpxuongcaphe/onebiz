@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave } from "@/lib/hooks/use-unsaved-work";
 
 // ---------------------------------------------------------------------------
 // ModuleSidebarLayout — sub-layout sidebar tái sử dụng
@@ -145,7 +146,7 @@ export function ModuleSidebarLayout({
         <select
           aria-label={`Mục ${title}`}
           value={activeItem?.href ?? ""}
-          onChange={(event) => router.push(event.target.value)}
+          onChange={(event) => { const href = event.target.value; requestPageLeave(() => router.push(href)); }}
           className="h-11 w-full rounded-md border border-input bg-background px-3 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
         >
           {!activeItem && <option value="" disabled>Chọn mục {title.toLowerCase()}</option>}

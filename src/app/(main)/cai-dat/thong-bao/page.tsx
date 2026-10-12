@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { useSettings, useToast } from "@/lib/contexts";
 import { Icon } from "@/components/ui/icon";
+import { useUnsavedSnapshot } from "@/lib/hooks/use-unsaved-work";
 
 
 export default function NotificationSettingsPage() {
@@ -30,6 +31,8 @@ export default function NotificationSettingsPage() {
   const [channelSms, setChannelSms] = useState(false);
   const [channelPush, setChannelPush] = useState(true);
 
+  const editSnapshot = { newOrder, completedOrder, lowStock, paymentSuccess, channelEmail, cancelledOrder, outOfStock, newImport, overdueDebt, channelSms, channelPush };
+  const markSaved = useUnsavedSnapshot(editSnapshot);
   function handleSave() {
     updateSettings("notification", {
       orderNew: newOrder,
@@ -38,6 +41,7 @@ export default function NotificationSettingsPage() {
       paymentReceived: paymentSuccess,
       emailNotify: channelEmail,
     });
+    markSaved(editSnapshot);
     toast({
       title: "Đã lưu",
       description: "Cài đặt thông báo đã được cập nhật thành công.",

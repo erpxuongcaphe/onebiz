@@ -3,6 +3,7 @@ import { useState, type FormEvent } from "react";
 import { formatDate, formatNumber } from "@/lib/format";
 import type { Run } from "@/lib/operations/contracts";
 import styles from "./workspace.module.css";
+import { captureFormSave } from "@/lib/utils/form-edit-tracker";
 
 export function ResultAdjustmentForm({
   snapshot,
@@ -13,7 +14,7 @@ export function ResultAdjustmentForm({
   snapshot: unknown;
   busy: boolean;
   canChangeCriteria: boolean;
-  onSave: (values: Record<string, unknown>) => void;
+  onSave: (values: Record<string, unknown>) => Promise<boolean>;
 }) {
   const runs =
     typeof snapshot === "object" &&
@@ -25,9 +26,10 @@ export function ResultAdjustmentForm({
   const [id, setId] = useState("");
   const [criteriaChange, setCriteriaChange] = useState(false);
   const selected = runs.find((run) => run.id === id);
-  function submit(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selected) return;
+    const acknowledge = captureFormSave(event.currentTarget);
     const f = new FormData(event.currentTarget);
     const changes = [
       {
@@ -57,12 +59,13 @@ export function ResultAdjustmentForm({
           : {}),
       },
     ];
-    onSave({
+    const saved = await onSave({
       action: "propose_result",
       changes,
       reason: String(f.get("reason")),
       evidence: String(f.get("evidence")),
     });
+    if (saved) acknowledge();
   }
   return (
     <details>

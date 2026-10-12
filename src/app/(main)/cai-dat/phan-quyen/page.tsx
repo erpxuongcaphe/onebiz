@@ -1,4 +1,5 @@
 "use client";
+import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 /**
  * Role & Permission Management Page
@@ -71,6 +72,7 @@ function PermissionSettingsPage() {
   const [editPerms, setEditPerms] = useState<Set<string>>(new Set());
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useUnsavedWork(dirty);
 
   // Create role dialog
   const [createOpen, setCreateOpen] = useState(false);

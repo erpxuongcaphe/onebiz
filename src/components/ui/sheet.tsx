@@ -6,9 +6,10 @@ import { Dialog as SheetPrimitive } from "@base-ui/react/dialog"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Icon } from "@/components/ui/icon";
+import { GuardedDialogRoot, useGuardedPopupProps } from "./dialog-edit-guard";
 
-function Sheet({ ...props }: SheetPrimitive.Root.Props) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+function Sheet({ ...props }: React.ComponentProps<typeof GuardedDialogRoot>) {
+  return <GuardedDialogRoot data-slot="sheet" {...props} />
 }
 
 function SheetTrigger({ ...props }: SheetPrimitive.Trigger.Props) {
@@ -41,11 +42,13 @@ function SheetContent({
   children,
   side = "right",
   showCloseButton = true,
+  ref,
   ...props
 }: SheetPrimitive.Popup.Props & {
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const guarded = useGuardedPopupProps(ref);
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -57,6 +60,12 @@ function SheetContent({
           className
         )}
         {...props}
+        {...guarded}
+        onPointerDownCapture={(event) => { guarded.onPointerDownCapture?.(); props.onPointerDownCapture?.(event); }}
+        onKeyDownCapture={(event) => { guarded.onKeyDownCapture?.(); props.onKeyDownCapture?.(event); }}
+        onChangeCapture={(event) => { guarded.onChangeCapture?.(); props.onChangeCapture?.(event); }}
+        onInputCapture={(event) => { guarded.onInputCapture?.(); props.onInputCapture?.(event); }}
+        onClickCapture={(event) => { guarded.onClickCapture?.(event); if (!event.isPropagationStopped()) props.onClickCapture?.(event); }}
       >
         {children}
         {showCloseButton && (

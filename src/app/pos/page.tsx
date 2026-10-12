@@ -1,4 +1,5 @@
 "use client";
+import { requestPageLeave, useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 // ---------------------------------------------------------------------------
 // POS Terminal — KiotViet-style Retail POS (Redesign v4, 09/04/2026)
@@ -915,7 +916,7 @@ function PosPageInner() {
   // - Chưa có ctx (chưa load auth)
   // - Đang submit (tránh save state nửa chừng giữa lúc đang gửi RPC)
   // - Đang load draft từ recovery (avoid overwrite)
-  useAutoSaveDraft({
+  const hasUnsavedCart = useAutoSaveDraft({
     sessionId: clientSessionId,
     snapshot: {
       lines: state.lines,
@@ -955,6 +956,8 @@ function PosPageInner() {
       setDraftConflict({ invoiceId });
     },
   });
+
+  useUnsavedWork(() => tabs.some(tab => tab.snapshot && hasUnsavedCart(tab.sessionId, { ...tab.snapshot, orderVatRate: tab.snapshot.orderVatRate ?? 0 })));
 
   // ─── Recovery handlers ───
   const handleRecoverySelect = useCallback(
@@ -2928,7 +2931,7 @@ function PosPageInner() {
             duration: 3000,
           });
         } else {
-          router.push("/");
+          requestPageLeave(() => router.push("/"));
         }
         return;
       }
@@ -3227,7 +3230,7 @@ function PosPageInner() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onSelect={() => {
-                logout();
+                requestPageLeave(() => logout());
               }}
               variant="destructive"
             >
