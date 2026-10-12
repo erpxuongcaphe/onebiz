@@ -91,6 +91,7 @@ export type PaperSize = "A4" | "A5" | "80mm" | "58mm";
 export interface PrintOptions {
   /** Cỡ giấy in. Mặc định A4. */
   paperSize?: PaperSize;
+  branchId?: string;
 }
 
 export function printDocument(
@@ -99,7 +100,8 @@ export function printDocument(
 ): void {
   const paperSize = options.paperSize ?? "A4";
   const html = generateDocumentHtml(data, paperSize);
-  void sendPrintJob({html,paperSize,role:paperSize === "A4" || paperSize === "A5" ? "documents" : "cashier"});
+  void sendPrintJob({html,paperSize,role:paperSize === "A4" || paperSize === "A5" ? "documents" : "cashier",branchId:options.branchId,
+    buildHtml: options.branchId ? (paper) => generateDocumentHtml(data, paper) : undefined});
 }
 
 /** Lấy margin + base font-size phù hợp với cỡ giấy. */
