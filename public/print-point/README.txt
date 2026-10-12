@@ -23,7 +23,7 @@ phải dùng địa chỉ máy tại chính chi nhánh đó. Không tự đổi 
 Chỉ dùng sau khi thử tiếng Việt, QR, lề, cắt.
 2. Cài Node.js LTS từ nodejs.org. Tạo thư mục riêng tại máy quầy.
 3. Tải bộ ZIP và giải nén; đặt onebiz-print-point.json vào cùng thư mục
-có agent.mjs, destination.mjs, network.mjs, spool.ps1, run.ps1 và setup.ps1.
+có agent.mjs, destination.mjs, network.mjs, usb-worker.mjs, spool.ps1, run.ps1 và setup.ps1.
 Nâng cấp: dừng task điểm in, thay toàn bộ các tệp chương trình từ ZIP mới,
 giữ onebiz-print-point.json hiện có và chạy lại task. Không cần cấp lại mã.
 JSON có mã riêng: giữ kín tại quầy, chỉ người quản lý máy được đọc.
@@ -37,6 +37,9 @@ Nhân viên mở POS → Nơi nhận & lệnh in → Dùng điểm in chi nhánh
 Trên POS, nút “In & lệnh” mở ngay lịch sử, tự cập nhật mỗi 5 giây.
 Dò máy Windows chạy nền, không chặn lệnh LAN. Khi hàng đợi trống,
 điểm in kiểm tra lệnh mới sau 1 giây; lệnh đang gửi vẫn xử lý tuần tự.
+USB giữ một tiến trình gửi Windows sẵn sàng, không khởi tạo lại cho mỗi bill.
+Sau khi cập nhật, phải dừng và chạy lại task để nạp phiên bản mới.
+Nếu mất phản hồi từ Windows, không tự gửi lại bill; kiểm tra giấy trước.
 Nhật ký kỹ thuật tại logs/print-agent.log ghi thời gian lấy lệnh,
 gửi máy và xác nhận. Khởi động lại giữ bản trước ở đuôi .previous.
 Nhật ký không chứa mã kết nối hoặc nội dung phiếu.

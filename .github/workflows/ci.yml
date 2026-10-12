@@ -540,6 +540,9 @@ jobs:
       - name: Run tests
         run: npm run test:run
 
+      - name: Verify USB worker lifecycle without a physical printer
+        run: node --test scripts/test-usb-worker.mjs
+
       - name: Build
         run: npm run build
         # CEO 10/07: next build cần biến Supabase để khởi tạo @supabase/ssr
