@@ -59,11 +59,12 @@ import {
   getPurchaseOrdersForSupplier,
   getPurchaseOrderStatusMeta,
 } from "@/lib/services";
-import { useToast } from "@/lib/contexts";
+import { useToast, useBranchFilter } from "@/lib/contexts";
 import type { Supplier, PurchaseOrder } from "@/lib/types";
 import { Icon } from "@/components/ui/icon";
 import { Button } from "@/components/ui/button";
 import { PartyCashHistory } from "@/components/shared/party-cash-history";
+import { getSupplierReturnHistory, type SupplierReturnHistoryRow } from "@/lib/services/supabase/supplier-return-history";
 
 /* ------------------------------------------------------------------ */
 /*  Inline detail                                                      */
@@ -82,20 +83,29 @@ function SupplierDetail({
   onChanged?: () => void;
 }) {
   const [orders, setOrders] = useState<PurchaseOrder[]>([]);
+  const [returns, setReturns] = useState<SupplierReturnHistoryRow[]>([]);
+  const [returnsError, setReturnsError] = useState<string | null>(null);
   const [ordersLoading, setOrdersLoading] = useState(true);
+  const [ordersError, setOrdersError] = useState<string | null>(null);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const { activeBranchId } = useBranchFilter();
   const statusMeta = getPurchaseOrderStatusMeta();
 
   useEffect(() => {
     let cancelled = false;
     setOrdersLoading(true);
-    getPurchaseOrdersForSupplier(supplier.id, 30)
-      .then((rows) => {
+    setOrdersError(null); setReturnsError(null); setOrders([]); setReturns([]);
+    Promise.allSettled([getPurchaseOrdersForSupplier(supplier.id, null, activeBranchId),getSupplierReturnHistory(supplier.id,activeBranchId)])
+      .then(([rows,returned]) => {
         if (cancelled) return;
-        setOrders(rows);
+        if (rows.status === "fulfilled") setOrders(rows.value);
+        else setOrdersError(rows.reason instanceof Error ? rows.reason.message : "Không tải được lịch sử mua hàng.");
+        if (returned.status === "fulfilled") setReturns(returned.value);
+        else setReturnsError(returned.reason instanceof Error ? returned.reason.message : "Không tải được lịch sử trả hàng nhập.");
       })
-      .catch(() => {
+      .catch((err) => {
         if (cancelled) return;
-        setOrders([]);
+        setOrdersError(err instanceof Error ? err.message : "Không tải được lịch sử mua hàng.");
       })
       .finally(() => {
         if (cancelled) return;
@@ -104,9 +114,9 @@ function SupplierDetail({
     return () => {
       cancelled = true;
     };
-  }, [supplier.id]);
+  }, [supplier.id, activeBranchId, historyRevision, supplier.currentDebt]);
 
-  const outstandingOrders = orders.filter((o) => o.amountOwed > 0);
+  const outstandingOrders = orders.filter((o) => ["completed", "partial"].includes(o.status) && o.amountOwed > 0);
   const totalOrders = orders.length;
   const totalOrderValue = orders.reduce((sum, o) => sum + o.total, 0);
   const totalPaidAll = orders.reduce((sum, o) => sum + o.paid, 0);
@@ -172,12 +182,13 @@ function SupplierDetail({
     {
       id: "purchase_history",
       label: `Lịch sử mua hàng${totalOrders > 0 ? ` (${totalOrders})` : ""}`,
-      content: ordersLoading ? (
+      content: ordersError ? <div role="alert" className="text-sm text-destructive space-y-2"><p>{ordersError}</p><Button variant="outline" onClick={() => setHistoryRevision(v => v + 1)}>Thử lại</Button></div> : ordersLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">
           Đang tải lịch sử mua hàng...
         </div>
       ) : (
         <DetailItemsTable<PurchaseOrder>
+          pageSize={25}
           items={orders}
           columns={[
             {
@@ -280,7 +291,7 @@ function SupplierDetail({
               },
             ]}
           />
-          {ordersLoading ? (
+          {ordersError ? <p role="alert" className="text-sm text-destructive">{ordersError}</p> : ordersLoading ? (
             <div className="text-sm text-muted-foreground py-4 text-center">
               Đang tải danh sách đơn còn nợ...
             </div>
@@ -290,6 +301,7 @@ function SupplierDetail({
                 Đơn còn nợ NCC
               </div>
               <DetailItemsTable<PurchaseOrder>
+                pageSize={25}
                 items={outstandingOrders}
                 columns={[
                   {
@@ -336,6 +348,15 @@ function SupplierDetail({
           )}
         </div>
       ),
+    },
+    {
+      id: "return_history",
+      label: `Trả hàng nhập (${returns.length})`,
+      content: returnsError ? <div role="alert" className="text-sm text-destructive"><p>{returnsError}</p><Button variant="outline" onClick={()=>setHistoryRevision(v=>v+1)}>Thử lại</Button></div> : ordersLoading ? <p>Đang tải lịch sử trả hàng nhập...</p> : <DetailItemsTable pageSize={25} items={returns} columns={[
+        {header:"Mã phiếu trả",accessor:"code"},{header:"Ngày",accessor:r=>formatDate(r.date)},
+        {header:"Giá trị trả",align:"right",accessor:r=>formatCurrency(r.totalAmount)},
+        {header:"Trạng thái",accessor:r=>r.status === "cancelled" ? "Đã hủy" : r.status === "completed" ? "Hoàn thành" : "Chưa hoàn tất"},
+      ]} />,
     },
     {
       id: "audit",

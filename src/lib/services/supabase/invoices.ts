@@ -15,6 +15,7 @@ import {
 } from "@/lib/utils/list-date-preset-range";
 import { getClient, getPaginationRange, handleError, getCurrentTenantId } from "./base";
 import { apDungLocChungTuBan } from "./chung-tu-ban";
+import { readHistoryPages } from "./read-history-pages";
 import { DEFAULT_INVOICE_LIST_STATUSES } from "@/lib/utils/document-list-statuses";
 
 const VALID_INVOICE_LIST_STATUSES = new Set([
@@ -246,19 +247,21 @@ export function getInvoiceStatuses() {
  */
 export async function getInvoicesForCustomer(
   customerId: string,
-  limit: number = 50
+  limit: number | null = 50,
+  branchId?: string | null,
 ): Promise<Invoice[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  const data = await readHistoryPages(async (offset, size) => {
+    let query = supabase
     .from("invoices")
     .select("*, profiles!invoices_created_by_fkey(full_name)")
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
-    .order("ngay_chung_tu", { ascending: false })
-    .limit(limit);
-
-  if (error) handleError(error, "getInvoicesForCustomer");
+    .order("ngay_chung_tu", { ascending: false }).order("id", { ascending: false });
+    if (branchId) query = query.eq("branch_id", branchId);
+    return await query.range(offset, offset + size - 1);
+  }, limit);
   return (data ?? []).map(mapInvoice);
 }
 
@@ -276,19 +279,21 @@ export interface CustomerReturn {
 
 export async function getReturnsForCustomer(
   customerId: string,
-  limit: number = 50
+  limit: number | null = 50,
+  branchId?: string | null,
 ): Promise<CustomerReturn[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  const data = await readHistoryPages(async (offset, size) => {
+    let query = supabase
     .from("sales_returns")
     .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)")
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) handleError(error, "getReturnsForCustomer");
+    .order("created_at", { ascending: false }).order("id", { ascending: false });
+    if (branchId) query = query.eq("branch_id", branchId);
+    return await query.range(offset, offset + size - 1);
+  }, limit);
 
   return (data ?? []).map((row) => {
     const inv = row.invoices as unknown as { code: string } | null;

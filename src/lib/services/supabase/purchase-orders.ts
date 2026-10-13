@@ -14,6 +14,7 @@ import { applyCreatedAtRangeFilter } from "@/lib/utils/list-date-preset-range";
  *     received_quantity + status + input_invoice. Rollback all-or-nothing.
  */
 
+import { readHistoryPages } from "./read-history-pages";
 import type {
   PurchaseOrder,
   PurchaseOrderStatus,
@@ -333,19 +334,21 @@ export function getPurchaseOrderStatuses() {
  */
 export async function getPurchaseOrdersForSupplier(
   supplierId: string,
-  limit: number = 50
+  limit: number | null = 50,
+  branchId?: string | null,
 ): Promise<PurchaseOrder[]> {
   const supabase = getClient();
   const tenantId = await getCurrentTenantId();
-  const { data, error } = await supabase
+  const data = await readHistoryPages(async (offset, size) => {
+    let query = supabase
     .from("purchase_orders")
     .select("*, profiles!purchase_orders_created_by_fkey(full_name)")
     .eq("tenant_id", tenantId)
     .eq("supplier_id", supplierId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-
-  if (error) handleError(error, "getPurchaseOrdersForSupplier");
+    .order("created_at", { ascending: false }).order("id", { ascending: false });
+    if (branchId) query = query.eq("branch_id", branchId);
+    return await query.range(offset, offset + size - 1);
+  }, limit);
   return (data ?? []).map(mapPurchaseOrder);
 }
 

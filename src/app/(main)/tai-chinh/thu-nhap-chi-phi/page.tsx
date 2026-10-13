@@ -14,6 +14,7 @@ import {cashDateTimeInput, formatCashBookDate, formatCashTime} from '@/lib/cash-
 import {formatCurrency} from '@/lib/format';
 import {CASH_FLOW_LABELS, summarizeRecognition} from '@/lib/utils/finance-report-reconciliation';
 import {exportToExcel} from '@/lib/utils/export';
+import {financeCategoryMonths} from '@/lib/reports/finance-category-months';
 import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanceCategory, cancelFinanceDocument,
   type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
@@ -36,7 +37,7 @@ export default function ManagementFinancePage() {
   const [categoryCode, setCategoryCode] = useState('');
   const [categoryName, setCategoryName] = useState('');
   const [cashFlowActivity, setCashFlowActivity] = useState<CashFlowActivity>('unclassified');
-  const [view, setView] = useState<'documents' | 'categories'>('documents');
+  const [view, setView] = useState<'documents' | 'categories' | 'months'>('documents');
   const [categoryRows, setCategoryRows] = useState<FinanceEvent[]>([]);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [cancelling, setCancelling] = useState<FinanceEvent>();
@@ -46,6 +47,7 @@ export default function ManagementFinancePage() {
   const canRead = hasPermission('finance.view_cash_book');
   const canCreate = hasPermission('finance.create_transaction');
   const canCancel = hasPermission('finance.void_transaction');
+  const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export default function ManagementFinancePage() {
   }, [isLoading, canRead]);
   useEffect(() => {setPage(0);}, [activeBranchId]);
   useEffect(() => {
-    if (isLoading || !canRead || view !== 'categories') return;
+    if (isLoading || !canRead || view === 'documents') return;
     let active = true;
     setCategoryLoading(true); setCategoryRows([]); setError('');
     getAllFinanceRows({...filters,branchId:activeBranchId})
@@ -78,9 +80,16 @@ export default function ManagementFinancePage() {
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
 
   async function download() {
+    if (!canExport || exporting) return;
     setExporting(true); setError('');
     try {
       const rows = await getAllFinanceRows(scoped);
+      if (view === 'months') {
+        const matrix = financeCategoryMonths(rows, filters.from, filters.to, activeBranchId);
+        await exportToExcel(matrix.rows.map(r => ({code:r.code,name:r.name,kind:r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh',total:r.total,...Object.fromEntries(matrix.months.map(m => [m,r.values[m] ?? 0]))})),
+          [{header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},...matrix.months.map(m => ({header:m,key:m})),{header:'Tổng ghi nhận',key:'total'}],`ghi-nhan-theo-thang-${filters.from}-${filters.to}`);
+        return;
+      }
       if (view === 'categories') {
         await exportToExcel(summarizeRecognition(rows),[
           {header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},
@@ -132,7 +141,7 @@ export default function ManagementFinancePage() {
     <div className="flex flex-wrap gap-2">
       {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}} disabled={!categories.length}><Icon name="add"/>Ghi nhận mới</Button>}
       {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
-      <Button variant="outline" disabled={loading || exporting || !data} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>
+      {canExport && <Button variant="outline" disabled={loading || exporting || !data} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
       <Button variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
     </div>
@@ -154,8 +163,9 @@ export default function ManagementFinancePage() {
       <div><span className="text-sm text-muted-foreground">Ngoài kết quả kinh doanh</span><p className="font-semibold">{formatCurrency(data.summary.non_pnl)}</p></div>
     </div>}
     <div role="tablist" aria-label="Góc nhìn thu nhập chi phí" className="flex border-b gap-4">
-      {([['documents','Theo chứng từ'],['categories','Theo khoản mục']] as const).map(([value,label]) => <button key={value} role="tab" aria-selected={view === value} className={`py-2 text-sm border-b-2 ${view === value ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`} onClick={() => setView(value)}>{label}</button>)}
+      {([['documents','Theo chứng từ'],['categories','Theo khoản mục'],['months','Theo tháng']] as const).map(([value,label]) => <button key={value} role="tab" aria-selected={view === value} className={`py-2 text-sm border-b-2 ${view === value ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`} onClick={() => setView(value)}>{label}</button>)}
     </div>
+    {view === 'months' && <FinanceMonthTable rows={categoryRows} from={filters.from} to={filters.to} branchId={activeBranchId} loading={categoryLoading} error={error} />}
     {view === 'categories' && <section aria-label="Ghi nhận theo khoản mục" className="space-y-2">
       <div className="overflow-x-auto border rounded-md"><table className="w-full min-w-[750px] text-sm"><thead className="bg-muted"><tr>{['Khoản mục','Số khoản','Ghi nhận trong bộ lọc','Tổng khoản gốc','Đã thanh toán toàn khoản','Còn phải thu / chi toàn khoản'].map(h => <th key={h} className="p-3 text-left">{h}</th>)}</tr></thead><tbody>{summarizeRecognition(categoryRows).map(r => <tr key={`${r.kind}:${r.code}`} className="border-t"><td className="p-3"><button className="text-primary text-left" onClick={() => {const cat = categories.find(c => c.code === r.code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}>{r.name}<span className="block text-xs text-muted-foreground">{r.code}</span></button></td>{[r.count,formatCurrency(r.amount),formatCurrency(r.totalSource),formatCurrency(r.settled),formatCurrency(r.outstanding)].map((value,i) => <td key={i} className="p-3 text-right tabular-nums">{value}</td>)}</tr>)}</tbody></table></div>
       {categoryLoading && <p>Đang tải toàn bộ khoản ghi nhận…</p>}
@@ -191,6 +201,19 @@ export default function ManagementFinancePage() {
       <DialogFooter><Button variant="outline" disabled={actionSaving} onClick={() => setCancelling(undefined)}>Đóng</Button><Button variant="destructive" disabled={actionSaving || reason.trim().length < 3} onClick={cancelDocument}>Hủy ghi nhận</Button></DialogFooter>
     </DialogContent></Dialog>
   </div>;
+}
+
+function FinanceMonthTable({rows,from,to,branchId,loading,error}: {rows:FinanceEvent[];from:string;to:string;branchId?:string;loading:boolean;error:string}) {
+  if (loading) return <p>Đang tải toàn bộ khoản ghi nhận…</p>;
+  if (error) return null;
+  let matrix: ReturnType<typeof financeCategoryMonths>;
+  try {matrix = financeCategoryMonths(rows,from,to,branchId);} catch (e) {return <p role="alert" className="text-destructive">{e instanceof Error ? e.message : 'Kỳ báo cáo không hợp lệ.'}</p>;}
+  return <section aria-label="Thu nhập chi phí theo tháng" className="min-w-0 space-y-2">
+    <div className="max-h-[65vh] overflow-auto border rounded-md"><table className="w-full text-sm"><thead className="sticky top-0 z-20 bg-muted"><tr><th className="sticky left-0 z-30 bg-muted p-3 text-left">Khoản mục</th><th className="p-3 text-left">Loại</th>{matrix.months.map(m => <th key={m} className="p-3 text-right whitespace-nowrap">{m}</th>)}<th className="p-3 text-right whitespace-nowrap">Tổng ghi nhận</th></tr></thead><tbody>
+      {matrix.rows.map(r => <tr key={`${r.kind}:${r.code}`} className="border-t"><td className="sticky left-0 bg-background p-3 whitespace-nowrap"><strong>{r.name}</strong><span className="block text-xs text-muted-foreground">{r.code}</span></td><td className="p-3 whitespace-nowrap">{r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh'}</td>{matrix.months.map(m => <td key={m} className="p-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(r.values[m] ?? 0)}</td>)}<td className="p-3 text-right font-semibold tabular-nums">{formatCurrency(r.total)}</td></tr>)}
+    </tbody></table></div>
+    {!matrix.rows.length && <p className="text-sm text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
+  </section>;
 }
 
 function FinanceRow({row: r, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {

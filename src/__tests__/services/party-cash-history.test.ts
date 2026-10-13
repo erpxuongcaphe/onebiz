@@ -60,4 +60,11 @@ describe("party cash history", () => {
     expect(mocked.query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
     expect(mocked.query.eq).toHaveBeenCalledWith("supplier_id", "supplier-1");
   });
+  it("does not silently export partial or duplicated history", async () => {
+    const first = Array.from({ length: 1000 }, (_, i) => ({ id: `cash-${i}` }));
+    mocked.query.range.mockResolvedValueOnce({data:first,count:1001,error:null}).mockResolvedValueOnce({data:[],count:1001,error:null});
+    await expect(getAllPartyCashHistory("supplier","supplier-1")).rejects.toThrow("chưa tải đủ");
+    mocked.query.range.mockResolvedValueOnce({data:first,count:1001,error:null}).mockResolvedValueOnce({data:[{id:"cash-1"}],count:1001,error:null});
+    await expect(getAllPartyCashHistory("supplier","supplier-1")).rejects.toThrow("bị trùng");
+  });
 });

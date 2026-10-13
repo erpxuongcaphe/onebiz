@@ -1159,20 +1159,26 @@ function CustomerDetailPanel({
   const [returns, setReturns] = useState<CustomerReturn[]>([]);
   const [loyalty, setLoyalty] = useState<LoyaltyTransaction[]>([]);
   const [salesLoading, setSalesLoading] = useState(true);
+  const [salesError, setSalesError] = useState<string | null>(null);
+  const [historyRevision, setHistoryRevision] = useState(0);
+  const { activeBranchId } = useBranchFilter();
   const [loyaltyLoading, setLoyaltyLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     setSalesLoading(true);
+    setSalesError(null);
+    setInvoices([]); setReturns([]);
     Promise.all([
-      getInvoicesForCustomer(customer.id, 30).catch(() => []),
-      getReturnsForCustomer(customer.id, 30).catch(() => []),
+      getInvoicesForCustomer(customer.id, null, activeBranchId),
+      getReturnsForCustomer(customer.id, null, activeBranchId),
     ])
       .then(([inv, ret]) => {
         if (cancelled) return;
         setInvoices(inv);
         setReturns(ret);
       })
+      .catch(err => { if (!cancelled) setSalesError(err instanceof Error ? err.message : "Không tải được lịch sử bán/trả hàng."); })
       .finally(() => {
         if (!cancelled) setSalesLoading(false);
       });
@@ -1197,9 +1203,9 @@ function CustomerDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [customer.id]);
+  }, [customer.id, activeBranchId, historyRevision, customer.currentDebt]);
 
-  const outstandingInvoices = invoices.filter((i) => (i.debt ?? 0) > 0);
+  const outstandingInvoices = invoices.filter((i) => i.status === "completed" && (i.debt ?? 0) > 0);
   const totalOutstanding = outstandingInvoices.reduce(
     (s, i) => s + (i.debt ?? 0),
     0,
@@ -1298,7 +1304,7 @@ function CustomerDetailPanel({
     {
       id: "sales-history",
       label: `Lịch sử bán/trả hàng (${invoices.length + returns.length})`,
-      content: salesLoading ? (
+      content: salesError ? <div role="alert" className="text-sm text-destructive space-y-2"><p>{salesError}</p><Button variant="outline" onClick={() => setHistoryRevision(v => v + 1)}>Thử lại</Button></div> : salesLoading ? (
         <div className="text-sm text-muted-foreground py-4 text-center">
           Đang tải lịch sử...
         </div>
@@ -1309,6 +1315,7 @@ function CustomerDetailPanel({
               Hoá đơn bán hàng ({invoices.length})
             </p>
             <DetailItemsTable
+              pageSize={25}
               items={invoices}
               columns={[
                 {
@@ -1375,6 +1382,7 @@ function CustomerDetailPanel({
                 Phiếu trả hàng ({returns.length})
               </p>
               <DetailItemsTable
+                pageSize={25}
                 items={returns}
                 columns={[
                   {
@@ -1426,6 +1434,7 @@ function CustomerDetailPanel({
       label: "Nợ cần thu từ khách",
       content: (
         <div className="space-y-4">
+          {salesError && <p role="alert" className="text-sm text-destructive">{salesError}</p>}
           <DetailInfoGrid
             columns={2}
             fields={[
@@ -1455,6 +1464,7 @@ function CustomerDetailPanel({
                 Hoá đơn còn nợ ({outstandingInvoices.length})
               </p>
               <DetailItemsTable
+                pageSize={25}
                 items={outstandingInvoices}
                 columns={[
                   {
@@ -1502,7 +1512,7 @@ function CustomerDetailPanel({
               />
             </div>
           )}
-          {!salesLoading && outstandingInvoices.length === 0 && (
+          {!salesLoading && !salesError && outstandingInvoices.length === 0 && (
             <div className="text-sm text-muted-foreground py-2 text-center">
               Không có hoá đơn nào còn nợ.
             </div>
