@@ -85,12 +85,19 @@ export async function getPartyCashHistory(
 
 export async function getAllPartyCashHistory(mode: "customer" | "supplier", partyId: string, branchId?: string | null, filters: PartyCashHistoryFilters = {}) {
   const rows: CashBookEntry[] = [];
-  for (let page = 0; page < 50; page++) {
+  const ids = new Set<string>();
+  let expected: number | undefined;
+  for (let page = 0; ; page++) {
     const result = await getPartyCashHistory(mode, partyId, branchId, page, filters, 1000);
-    rows.push(...result.data);
-    if (rows.length >= result.total || result.data.length < 1000) return rows;
+    expected ??= result.total;
+    if (result.total !== expected || (!result.data.length && rows.length < expected)) throw new Error("Lịch sử đã thay đổi hoặc chưa tải đủ. Vui lòng xuất lại.");
+    for (const row of result.data) {
+      if (!row.id || ids.has(row.id)) throw new Error("Lịch sử bị trùng trong lúc tải. Vui lòng xuất lại.");
+      ids.add(row.id); rows.push(row);
+    }
+    if (rows.length === expected) return rows;
+    if (rows.length > expected) throw new Error("Số dòng lịch sử không khớp.");
   }
-  throw new Error("Lịch sử quá lớn. Chọn khoảng ngày nhỏ hơn để xuất đầy đủ.");
 }
 
 export interface CashBookWorkspaceSummary {

@@ -135,7 +135,7 @@ export function DebtDetailDialog({
             <span className="text-xs">
               {mode === "customer" ? "Khách hàng" : "Nhà cung cấp"} đang nợ{" "}
               <strong className="text-status-error tabular-nums">
-                {formatCurrency(totalDebt || estimatedDebt)}đ
+                {loadError ? "Chưa xác minh" : `${formatCurrency(loading ? estimatedDebt : totalDebt)}đ`}
               </strong>{" "}
               qua {docs.length} {docLabel.toLowerCase()}
             </span>
@@ -201,7 +201,7 @@ export function DebtDetailDialog({
               />
               <p className="font-semibold">Không có {docLabel.toLowerCase()} nào còn nợ</p>
               <p className="text-xs text-muted-foreground">
-                {mode === "customer"
+                {estimatedDebt > 0 ? "Số dư tổng hợp còn khác danh sách chứng từ. Kiểm tra số dư đầu kỳ và tải lại trước khi đối soát." : mode === "customer"
                   ? "Khách hàng này đã thanh toán hết tất cả hóa đơn."
                   : "Đã trả hết nợ cho nhà cung cấp này."}
               </p>

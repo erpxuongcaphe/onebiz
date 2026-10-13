@@ -60,7 +60,8 @@ describe("00335 — nơi PHẢI giữ thời gian giao dịch thật", () => {
   it("công nợ NHÀ CUNG CẤP (purchase_orders) giữ created_at", () => {
     const s = doc("src/lib/services/supabase/payments.ts");
     const sau = s.slice(s.indexOf('.from("purchase_orders")'));
-    expect(sau).toContain('.select("id, code, created_at, total, paid, debt, status")');
+    expect(sau).toContain('.select("id, code, created_at, total, paid, debt, status", {count:"exact"})');
+    expect(sau).toContain('readHistoryPages');
     expect(sau).not.toContain("ngay_chung_tu");
   });
 
