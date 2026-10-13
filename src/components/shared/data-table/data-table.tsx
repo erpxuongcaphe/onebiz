@@ -32,6 +32,7 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { resolveTableColumnAlignment, tableColumnAlignmentClass, type TableColumnAlignment } from "@/lib/table-column-alignment";
 import { DataTablePagination } from "./pagination";
 import { Icon } from "@/components/ui/icon";
 import { ListStrip } from "@/components/shared/list-strip";
@@ -246,6 +247,8 @@ function DataTableEmptyContent({
 declare module "@tanstack/react-table" {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface ColumnMeta<TData, TValue> {
+    /** One alignment for heading, body and summary; set explicitly for formatted/empty columns. */
+    align?: TableColumnAlignment;
     pinLeft?: boolean;
     /** Width fixed (px) cho cell sticky — cần để thân row không nhảy. */
     pinWidth?: number;
@@ -498,6 +501,15 @@ export function DataTable<TData, TValue>({
     ...(getRowId ? { getRowId: (row) => getRowId(row) } : {}),
   });
 
+  const columnAlignments = useMemo(() => {
+    const rows = table.getCoreRowModel().rows;
+    return new Map(table.getAllLeafColumns().map(column => [
+      column.id,
+      resolveTableColumnAlignment(column.columnDef.meta?.align, column.id, rows.map(row => row.getValue(column.id))),
+    ]));
+  }, [table, data, allColumns]);
+  const alignmentFor = (id: string) => columnAlignments.get(id) ?? "left";
+
   // Reset selection externally — parent ↑ trigger sau khi bulk action xong
   useEffect(() => {
     if (clearSelectionTrigger === undefined) return;
@@ -704,12 +716,14 @@ export function DataTable<TData, TValue>({
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
                   const pinned = isPinnedColumn(header.column.id);
+                  const alignment = alignmentFor(header.column.id);
                   return (
                   <TableHead
                     key={header.id}
                     data-column-id={header.id}
                     className={cn(
                       "text-xs font-semibold text-muted-foreground whitespace-nowrap uppercase",
+                      tableColumnAlignmentClass(alignment),
                       header.column.getCanSort() &&
                         "cursor-pointer select-none",
                       pinned && pinHeaderClass,
@@ -722,7 +736,7 @@ export function DataTable<TData, TValue>({
                     }}
                     onClick={header.column.getToggleSortingHandler()}
                   >
-                    <div className="flex items-center gap-1">
+                    <div className={cn("flex items-center gap-1", alignment === "right" && "justify-end", alignment === "center" && "justify-center")}>
                       {header.isPlaceholder
                         ? null
                         : flexRender(
@@ -730,7 +744,7 @@ export function DataTable<TData, TValue>({
                             header.getContext()
                           )}
                       {header.column.getCanSort() && (
-                        <span className="text-muted-foreground/50">
+                        <span className={cn("text-muted-foreground/50", alignment === "right" && "order-first")}>
                           {header.column.getIsSorted() === "asc" ? (
                             <Icon name="arrow_upward" size={14} />
                           ) : header.column.getIsSorted() === "desc" ? (
@@ -758,7 +772,7 @@ export function DataTable<TData, TValue>({
                   ?.headers.map((header) => {
                     const id = header.column.id;
                     return (
-                      <TableCell key={header.id} className="text-sm">
+                      <TableCell key={header.id} className={cn("text-sm", tableColumnAlignmentClass(alignmentFor(id)))}>
                         {id && summaryRow[id] !== undefined
                           ? summaryRow[id]
                           : ""}
@@ -815,6 +829,7 @@ export function DataTable<TData, TValue>({
                         key={cell.id}
                         className={cn(
                           "text-sm",
+                          tableColumnAlignmentClass(alignmentFor(cell.column.id)),
                           density === "compact" ? "py-2" : "py-3",
                           pinned && (isExpanded ? pinCellSelectedClass : pinCellClass),
                         )}

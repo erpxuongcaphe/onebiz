@@ -2,6 +2,7 @@
 
 import { ReactNode, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import { resolveTableColumnAlignment, tableColumnAlignmentClass } from "@/lib/table-column-alignment";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePermissions } from "@/lib/permissions/use-permission";
@@ -94,11 +95,11 @@ export function DetailItemsTable<T>({
     } catch (err) { setExportError(err instanceof Error ? err.message : "Không xuất được lịch sử."); }
     finally { setExporting(false); }
   };
-  const alignClass = {
-    left: "text-left",
-    center: "text-center",
-    right: "text-right",
-  };
+  const columnAlignments = useMemo(() => columns.map(col => resolveTableColumnAlignment(
+    col.align,
+    typeof col.accessor === "function" ? "" : String(col.accessor),
+    col.align ? [] : items.map(item => typeof col.accessor === "function" ? col.accessor(item) : item[col.accessor]),
+  )), [columns, items]);
 
   return (
     <div className={cn("min-w-0 border rounded-lg overflow-hidden", className)}>
@@ -126,7 +127,7 @@ export function DetailItemsTable<T>({
                 key={idx}
                 className={cn(
                   "px-3 py-2 text-xs font-semibold text-muted-foreground whitespace-nowrap",
-                  alignClass[col.align || "left"],
+                  tableColumnAlignmentClass(columnAlignments[idx]),
                   hideClassFor(col.hideOn),
                   col.className,
                   pageSize && idx === 0 && "sticky left-0 z-20 bg-muted"
@@ -150,7 +151,7 @@ export function DetailItemsTable<T>({
                     key={colIdx}
                     className={cn(
                       "px-3 py-2",
-                      alignClass[col.align || "left"],
+                      tableColumnAlignmentClass(columnAlignments[colIdx]),
                       hideClassFor(col.hideOn),
                       col.className,
                       pageSize && colIdx === 0 && "sticky left-0 bg-background"

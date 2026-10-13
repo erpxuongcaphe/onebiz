@@ -601,6 +601,7 @@ export default function NhapHangPage() {
     {
       accessorKey: "total",
       header: "Tổng cần trả NCC",
+      meta: { align: "right" },
       size: 160,
       cell: ({ row }) => (
         <span className="block text-right tabular-nums" title="Tổng tiền của phiếu nhập sau chiết khấu, thuế và chi phí">
@@ -611,6 +612,7 @@ export default function NhapHangPage() {
     {
       accessorKey: "paid",
       header: "Đã trả NCC",
+      meta: { align: "right" },
       size: 150,
       cell: ({ row }) => (
         <span className="block text-right tabular-nums">
@@ -621,6 +623,7 @@ export default function NhapHangPage() {
     {
       accessorKey: "amountOwed",
       header: "Còn phải trả",
+      meta: { align: "right" },
       size: 150,
       cell: ({ row }) => (
         <span className="text-right block tabular-nums">
