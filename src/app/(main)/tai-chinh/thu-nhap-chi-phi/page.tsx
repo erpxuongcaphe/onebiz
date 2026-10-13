@@ -57,6 +57,7 @@ export default function ManagementFinancePage() {
   const canCancel = hasPermission('finance.void_transaction');
   const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
+  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',...(activeBranchId ? {branch:activeBranchId} : {})}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
 
   useEffect(() => {
@@ -163,7 +164,8 @@ export default function ManagementFinancePage() {
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
       <Button variant="outline" onClick={() => {const [year,month]=today.split('-').map(Number); patch({from:new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,10),to:new Date(Date.UTC(year,month-1,0)).toISOString().slice(0,10)});}}><Icon name="calendar_today"/>Tháng trước</Button>
       <Button nativeButton={false} variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
-      <Button nativeButton={false} variant="outline" render={<Link href="/phan-tich/bao-cao-tai-chinh"/>}><Icon name="bar_chart"/>Kết quả kinh doanh</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href={`/phan-tich/bao-cao-tai-chinh?${reportPeriod}`}/>}><Icon name="bar_chart"/>Kết quả kinh doanh</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href={`/phan-tich/luong-tien?${reportPeriod}`}/>}><Icon name="payments"/>Dòng tiền</Button>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="grid gap-1 text-sm">Ghi nhận từ ngày<Input type="date" value={filters.from} onChange={e => patch({from: e.target.value})}/></label>

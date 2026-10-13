@@ -22,6 +22,14 @@ beforeEach(() => {
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('opens financial reports in the selected branch and recognition period',async()=>{
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    fireEvent.change(screen.getByLabelText('Ghi nhận từ ngày'),{target:{value:'2026-09-01'}});
+    fireEvent.change(screen.getByLabelText('Đến ngày'),{target:{value:'2026-09-30'}});
+    expect(screen.getByRole('link',{name:'Kết quả kinh doanh'})).toHaveAttribute('href','/phan-tich/bao-cao-tai-chinh?preset=custom&from=2026-09-01&to=2026-09-30&view=table&branch=xtb');
+    expect(screen.getByRole('link',{name:'Dòng tiền'})).toHaveAttribute('href','/phan-tich/luong-tien?preset=custom&from=2026-09-01&to=2026-09-30&view=table&branch=xtb');
+  });
   it('keeps income and expense in separate filtered tabs and entry actions',async()=>{
     render(<Page/>);
     await screen.findByRole('button',{name:'CP001'});
