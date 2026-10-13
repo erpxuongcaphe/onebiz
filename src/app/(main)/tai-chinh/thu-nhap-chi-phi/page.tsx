@@ -22,7 +22,8 @@ import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanc
   type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
-  const {activeBranchId, hasPermission, isLoading} = useAuth();
+  const {activeBranchId, branches, hasPermission, isLoading} = useAuth();
+  const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
   const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today});
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
@@ -107,7 +108,7 @@ export default function ManagementFinancePage() {
         counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.settled_amount,
         status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',
         allocations: r.allocations.map(a => `${a.branch_name} / ${a.recognition_date}: ${a.amount}`).join('; '),
-        cash: r.settlements.map(s => `${s.code} / ${formatCashBookDate(s.transaction_date)} / ${formatCashTime(s.occurred_at)} / ${s.performed_by_name || 'Chưa ghi nhận'} / ${cashPaymentMethodLabel(s.payment_method)} / ${s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}: ${s.amount}`).join('; '), creator: r.created_by_name})),
+        cash: r.settlements.map(s => `${s.code} / ${cashBranchName(s.branch_id)} / ${formatCashBookDate(s.transaction_date)} / ${formatCashTime(s.occurred_at)} / ${s.performed_by_name || 'Chưa ghi nhận'} / ${cashPaymentMethodLabel(s.payment_method)} / ${s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}: ${s.amount}`).join('; '), creator: r.created_by_name})),
         [{header: 'Mã', key: 'code'}, {header: 'Ngày phát sinh', key: 'date'}, {header: 'Khoản mục', key: 'category'},
           {header: 'Đối tượng', key: 'counterparty'}, {header: 'Tổng khoản', key: 'amount'}, {header: 'Ghi nhận trong bộ lọc', key: 'recognized'},
           {header: 'Đã thanh toán toàn khoản đến cuối kỳ', key: 'settled'}, {header: 'Trạng thái', key: 'status'},
@@ -174,7 +175,7 @@ export default function ManagementFinancePage() {
     {view === 'categories' && <FinanceCategoryTable rows={categoryRows} loading={categoryLoading} error={rangeError || error} onSelect={code => {const cat = categories.find(c => c.code === code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}/>}
     {view === 'documents' && <><ReportTableFrame tablePreferenceKey="finance.recognition.documents" allowColumnSelection={false}><div className="overflow-x-auto border rounded-md">
       <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh','Khoản mục / đối tượng','Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
-        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
+        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} cashBranchName={cashBranchName} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
           canSettle={canCreate && r.status === 'posted'} onSettle={() => {setSettling(r); setOpen(true);}}
           canCancel={canCancel && r.status === 'posted'} onCancel={() => {setCancelling(r); setReason(''); setActionError('');}}/>)}</tbody>
       </table>
@@ -232,7 +233,7 @@ function FinanceMonthTable({rows,from,to,branchId,loading,error}: {rows:FinanceE
   </section>;
 }
 
-function FinanceRow({row: r, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
+function FinanceRow({row: r, cashBranchName, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; cashBranchName:(id:string) => string; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
   return <><tr className="border-t">
     <td className="p-3"><button className="text-primary font-medium" onClick={onExpand} aria-expanded={expanded}>{r.code}</button></td>
     <td className="p-3">{formatCashBookDate(r.business_date)}</td><td className="p-3"><div>{r.category_name}</div><div className="text-muted-foreground">{r.counterparty}</div></td>
@@ -241,7 +242,7 @@ function FinanceRow({row: r, expanded, onExpand, canSettle, onSettle, canCancel,
   </tr>{expanded && <tr className="border-t bg-muted/30"><td colSpan={7} className="p-4 space-y-3">
     <p>Tổng khoản: <strong>{formatCurrency(r.amount)}</strong> · Người tạo: {r.created_by_name}</p>
     <div className="grid gap-4 lg:grid-cols-2"><div><h3 className="font-medium mb-2">Phân bổ ghi nhận</h3>{r.allocations.map((a, i) => <p key={i}>{a.branch_name} · {formatCashBookDate(a.recognition_date)} · {formatCurrency(a.amount)}</p>)}</div>
-      <div className="min-w-0"><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
+      <div className="min-w-0"><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Chi nhánh thu/chi','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2">{cashBranchName(s.branch_id)}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
     {r.note && <p className="break-words">{r.note}</p>}
     {canCancel && <Button size="sm" variant="outline" onClick={onCancel}><Icon name="cancel"/>Hủy ghi nhận</Button>}
   </td></tr>}</>;

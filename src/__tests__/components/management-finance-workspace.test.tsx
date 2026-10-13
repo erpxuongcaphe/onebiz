@@ -2,7 +2,7 @@ import {beforeEach,describe,expect,it,vi} from 'vitest';
 import {fireEvent,render,screen,waitFor} from '@testing-library/react';
 import type {ReactNode} from 'react';
 const mocks = vi.hoisted(() => ({workspace:vi.fn(),all:vi.fn()}));
-vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',hasPermission:() => true,isLoading:false})}));
+vi.mock('@/lib/contexts',() => ({useAuth:() => ({activeBranchId:'xtb',branches:[{id:'xtb',name:'XTB - Thu ngân'}],hasPermission:() => true,isLoading:false})}));
 vi.mock('@/components/shared/report',() => ({ReportTableFrame:({children}:{children:ReactNode}) => <div>{children}</div>}));
 vi.mock('@/components/shared/page-header',() => ({PageHeader:({title}:{title:string}) => <h1>{title}</h1>}));
 vi.mock('@/components/shared/dialogs/management-finance-dialog',() => ({ManagementFinanceDialog:() => null}));
@@ -27,6 +27,7 @@ describe('management finance reporting workspace',() => {
     fireEvent.click(await screen.findByRole('button',{name:'CP001'}));
     expect(screen.getByText('PC001')).toBeInTheDocument();
     expect(screen.getByText('Chuyển khoản')).toBeInTheDocument();
+    expect(screen.getByText('XTB - Thu ngân')).toBeInTheDocument();
     expect(screen.getByRole('cell',{name:'Đã hủy'})).toBeInTheDocument();
     expect(screen.getByText('Ngày chứng từ')).toBeInTheDocument();
     expect(screen.getByText('Thực thu/chi')).toBeInTheDocument();
