@@ -21,6 +21,7 @@ import {
 import { usePathname } from "next/navigation";
 import { sortReportRows } from "@/lib/reports/table-sort";
 import { cn } from "@/lib/utils";
+import { resolveTableColumnAlignment } from "@/lib/table-column-alignment";
 import { Button } from "@/components/ui/button";
 import { ReportTableViewport } from "./report-table-viewport";
 import { Icon } from "@/components/ui/icon";
@@ -167,11 +168,11 @@ export function ReportDataTable<T>({
   const columnEntries = useMemo(
     () =>
       columns.map((column, index) => ({
-        column,
+        column: { ...column, align: resolveTableColumnAlignment(column.align, String(column.key), column.align ? [] : rows.map(row => (row as Record<string, unknown>)[String(column.key)])) },
         index,
         id: column.id ?? String(column.key),
       })),
-    [columns],
+    [columns, rows],
   );
   const sortableColumnIds = useMemo(() => new Set(
     columnEntries
@@ -482,7 +483,7 @@ export function ReportDataTable<T>({
                     aria-label={`Sắp xếp ${col.label}${sortState?.id === id ? (sortState.direction === "asc" ? " giảm dần" : " tăng dần") : " tăng dần"}`}
                   >
                     {col.label}
-                    <Icon name={sortState?.id === id ? (sortState.direction === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more"} size={14} />
+                    <Icon className={col.align === "right" ? "order-first" : undefined} name={sortState?.id === id ? (sortState.direction === "asc" ? "arrow_upward" : "arrow_downward") : "unfold_more"} size={14} />
                   </button>
                 )}
               </th>
