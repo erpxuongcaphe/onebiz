@@ -25,6 +25,40 @@ async function fillUnpaid() {
   fireEvent.change(screen.getByLabelText('Đối tượng'), {target: {value: 'Utility'}});
 }
 describe('management finance dialog', () => {
+  it('follows the business date for a default single allocation but preserves explicit recognition dates',()=>{
+    render(<ManagementFinanceDialog {...props}/>);
+    fireEvent.change(screen.getByLabelText('Ngày phát sinh'),{target:{value:'2026-09-15'}});
+    expect(screen.getByLabelText('Ngày ghi nhận')).toHaveValue('2026-09-15');
+    fireEvent.change(screen.getByLabelText('Ngày ghi nhận'),{target:{value:'2026-09-30'}});
+    fireEvent.change(screen.getByLabelText('Ngày phát sinh'),{target:{value:'2026-09-14'}});
+    expect(screen.getByLabelText('Ngày ghi nhận')).toHaveValue('2026-09-30');
+  });
+  it('formats money and submits numeric values without separators',async()=>{
+    render(<ManagementFinanceDialog {...props}/>);
+    fireEvent.change(screen.getByLabelText('Khoản mục'),{target:{value:'leaf'}});
+    const input=screen.getByLabelText('Tổng số tiền');
+    fireEvent.change(input,{target:{value:'1,234,567.89'}});fireEvent.blur(input);
+    expect(input).toHaveValue('1,234,567.89');
+    fireEvent.change(screen.getByLabelText('Đối tượng'),{target:{value:'Supplier'}});
+    fireEvent.click(screen.getByRole('button',{name:'Lưu'}));
+    await waitFor(()=>expect(mocks.save).toHaveBeenCalled());
+    expect(mocks.save.mock.calls[0][1]).toMatchObject({amount:1234567.89,allocations:[{branchId:'xtb',amount:1234567.89}]});
+  });
+  it('only offers income categories in the income form and creates a category inline',()=>{
+    const create=vi.fn();
+    render(<ManagementFinanceDialog {...props} recordKind="income" categories={[category,{...category,id:'income',name:'Other income',kind:'income'}]} onCreateCategory={create}/>);
+    expect(screen.getByRole('heading',{name:'Ghi nhận thu nhập khác'})).toBeInTheDocument();
+    expect(screen.queryByRole('option',{name:'Electricity'})).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Khoản mục'),{target:{value:'__create_category'}});
+    expect(create).toHaveBeenCalledWith('income',expect.any(Function));
+  });
+  it('does not replay an expense under a new income form',async()=>{
+    localStorage.setItem('onebiz_finance_request_v1:tenant:user:new',JSON.stringify({requestId:'expense-key',payload:{categoryId:'leaf',amount:100}}));
+    render(<ManagementFinanceDialog {...props} recordKind="income"/>);
+    await screen.findByRole('alert');
+    expect(screen.getByRole('button',{name:'Thử lại'})).toBeDisabled();
+    expect(mocks.save).not.toHaveBeenCalled();
+  });
   it('records unpaid expense without creating cash and synchronizes the single allocation', async () => {
     await fillUnpaid();
     fireEvent.click(screen.getByRole('button', {name: 'Lưu'}));

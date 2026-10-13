@@ -58,29 +58,16 @@ export async function getPartyCashHistory(
 ): Promise<QueryResult<CashBookEntry>> {
   if (!Number.isInteger(page) || page < 0 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 1000) throw new Error("Invalid history page");
   const supabase = getClient();
-  const tenantId = await getCurrentTenantId();
-  let query = supabase.from("cash_transactions")
-    .select("*, profiles!cash_transactions_created_by_fkey(full_name), branches!cash_transactions_branch_id_fkey(name)", { count: "exact" })
-    .eq("tenant_id", tenantId)
-    .eq(mode === "customer" ? "customer_id" : "supplier_id", partyId);
-  if (branchId) query = query.eq("branch_id", branchId);
-  query = applyCashDateRange(query, filters);
-  if (filters.type) query = query.eq("type", filters.type);
-  if (filters.status) query = query.eq("status", filters.status);
-  if (filters.paymentMethod) query = query.eq("payment_method", filters.paymentMethod);
-  if (filters.search?.trim()) {
-    const pattern = `%${filters.search.trim().replace(/[\\%_]/g, "\\$&")}%`;
-    query = query.or(`code.ilike.${JSON.stringify(pattern)},note.ilike.${JSON.stringify(pattern)}`);
-  }
-  const sortBy = ["transaction_date", "amount", "code"].includes(filters.sortBy ?? "") ? filters.sortBy! : "transaction_date";
-  const ascending = filters.ascending ?? false;
-  const { data, count, error } = await query
-    .order(sortBy, { ascending })
-    .order("created_at", { ascending })
-    .order("id", { ascending })
-    .range(page * pageSize, page * pageSize + pageSize - 1);
+  const { data, error } = await supabase.rpc("get_party_cash_history_sources" as never, {
+    p_mode: mode, p_party_id: partyId, p_branch_id: branchId || null,
+    p_page: page, p_size: pageSize, p_filters: filters,
+  } as never);
+  if (error?.message.includes('PARTY_CASH_HISTORY_DENIED')) throw new Error('Tài khoản chưa có quyền xem lịch sử đối tượng hoặc chi nhánh này.');
+  if (error?.message.includes('PARTY_CASH_FILTER_INVALID')) throw new Error('Bộ lọc lịch sử thu chi chưa hợp lệ. Kiểm tra lại kỳ và điều kiện lọc.');
   if (error) handleError(error, "getPartyCashHistory");
-  return { data: (data ?? []).map(mapCashEntry), total: count ?? 0 };
+  const result = data as unknown as {items: Record<string,unknown>[]; total: number};
+  if (!result || !Array.isArray(result.items) || !Number.isSafeInteger(result.total) || result.total < 0 || result.items.length > pageSize) throw new Error("Lịch sử thu chi chưa trả về đủ dữ liệu hợp lệ.");
+  return { data: result.items.map(mapCashEntry), total: result.total };
 }
 
 export async function getAllPartyCashHistory(mode: "customer" | "supplier", partyId: string, branchId?: string | null, filters: PartyCashHistoryFilters = {}) {

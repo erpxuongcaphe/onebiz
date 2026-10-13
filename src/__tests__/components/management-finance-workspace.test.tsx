@@ -22,16 +22,26 @@ beforeEach(() => {
   mocks.all.mockResolvedValue([row]);
 });
 describe('management finance reporting workspace',() => {
+  it('keeps income and expense in separate filtered tabs and entry actions',async()=>{
+    render(<Page/>);
+    await screen.findByRole('button',{name:'CP001'});
+    expect(mocks.workspace.mock.calls.at(-1)?.[0]).toMatchObject({kind:'expense'});
+    expect(screen.getByRole('button',{name:'Ghi nhận chi phí'})).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('tab',{name:'Thu nhập khác'}));
+    await waitFor(()=>expect(mocks.workspace.mock.calls.at(-1)?.[0]).toMatchObject({kind:'income'}));
+    expect(screen.getByRole('button',{name:'Ghi nhận thu nhập'})).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Ghi nhận chi phí'})).not.toBeInTheDocument();
+  });
   it('retains cancelled settlement history with separate cash dates and readable methods',async () => {
     render(<Page/>);
     fireEvent.click(await screen.findByRole('button',{name:'CP001'}));
     expect(screen.getByText('PC001')).toBeInTheDocument();
     expect(screen.getByText('Chuyển khoản')).toBeInTheDocument();
-    expect(screen.getByText('XTB - Thu ngân')).toBeInTheDocument();
+    expect(screen.getByRole('cell',{name:'XTB - Thu ngân'})).toBeInTheDocument();
     expect(screen.getByRole('cell',{name:'Đã hủy'})).toBeInTheDocument();
     expect(screen.getByText('Ngày chứng từ')).toBeInTheDocument();
     expect(screen.getByText('Thực thu/chi')).toBeInTheDocument();
-    expect(screen.getByText('Thu nhập khác ghi nhận')).toBeInTheDocument();
+    expect(screen.getByText('Chi phí ghi nhận')).toBeInTheDocument();
   });
   it('stops reads and disables export for invalid date ranges',async () => {
     render(<Page/>);

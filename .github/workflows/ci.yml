@@ -447,6 +447,7 @@ jobs:
           PGDATABASE=management_finance_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00521_management_finance_external_import.integration.sql
           createdb debt_movement_test
           PGDATABASE=debt_movement_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00522_party_debt_movement_report.integration.sql
+          PGDATABASE=debt_movement_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00523_party_cash_history_sources.integration.sql
           createdb management_finance_pnl_test
           PGDATABASE=management_finance_pnl_test psql -X -v ON_ERROR_STOP=1 -f supabase/tests/00439_management_finance_pnl_recognition.integration.sql
 
