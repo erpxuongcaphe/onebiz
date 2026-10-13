@@ -51,6 +51,7 @@ import { PERMISSIONS, PERMISSION_GROUPS, DEFAULT_ROLE_TEMPLATES } from "@/lib/pe
 import type { PermissionCode } from "@/lib/permissions/constants";
 import { Icon } from "@/components/ui/icon";
 import { PermissionPage } from "@/components/shared/permission-page";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 
 export default function PermissionSettingsPageGuarded() {
   return (
@@ -254,6 +255,15 @@ function PermissionSettingsPage() {
     }
   };
 
+  const roleList = useLocalList(roles, {
+    searchText: r => `${r.name} ${r.description ?? ""}`,
+    filters: [
+      { key: "type", label: "Loại", options: [{ value: "system", label: "Vai trò hệ thống" }, { value: "custom", label: "Vai trò tùy chỉnh" }], matches: (r, value) => value === "system" ? r.isSystem : !r.isSystem },
+      { key: "members", label: "Nhân viên", options: [{ value: "used", label: "Đã có nhân viên" }, { value: "empty", label: "Chưa có nhân viên" }], matches: (r, value) => value === "used" ? r.memberCount > 0 : r.memberCount === 0 },
+    ],
+    sorts: [{ key: "name", label: "Tên vai trò", value: r => r.name }, { key: "members", label: "Số nhân viên", value: r => r.memberCount }],
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -296,8 +306,11 @@ function PermissionSettingsPage() {
         </div>
       </div>
 
+      <LocalListTools list={roleList} placeholder="Tìm tên hoặc mô tả vai trò..." disabled={dirty} />
+      {dirty && <p className="text-xs text-muted-foreground">Lưu hoặc hủy thay đổi quyền đang sửa trước khi đổi bộ lọc.</p>}
+      {roleList.count === 0 && <p className="py-8 text-center text-muted-foreground">Không có vai trò phù hợp. Thử đổi tìm kiếm hoặc xóa lọc.</p>}
       <div className="space-y-3">
-        {roles.map((role) => {
+        {roleList.rows.map((role) => {
           const isExpanded = expandedRole === role.id;
           return (
             <Card key={role.id}>

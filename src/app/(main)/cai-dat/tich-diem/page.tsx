@@ -1,4 +1,5 @@
 "use client";
+import { LocalListTools, useLocalList } from "@/components/shared/local-list-tools";
 import { useUnsavedWork } from "@/lib/hooks/use-unsaved-work";
 
 import { SettingsToggle as Toggle } from "@/components/shared/settings-toggle";
@@ -273,6 +274,11 @@ export default function LoyaltyPointsSettingsPage() {
     }
   }
 
+  const tierList = useLocalList(tiers, {
+    searchText: t => t.name,
+    filters: [{ key: "status", label: "Trạng thái", options: [{ value: "active", label: "Đang áp dụng" }, { value: "inactive", label: "Đã tắt" }], matches: (t, value) => value === "active" ? t.isActive : !t.isActive }],
+    sorts: [{ key: "order", label: "Thứ tự hạng", value: t => t.sortOrder }, { key: "name", label: "Tên hạng", value: t => t.name }, { key: "points", label: "Điểm yêu cầu", value: t => t.minPoints }, { key: "discount", label: "Mức ưu đãi", value: t => t.discountPercent }],
+  });
   return (
     <>
       <div className="space-y-4">
@@ -417,7 +423,9 @@ export default function LoyaltyPointsSettingsPage() {
               <div className="py-6 text-center text-sm text-muted-foreground">
                 Đang tải...
               </div>
-            ) : tiers.length === 0 ? (
+            ) : <>
+              <div className="mb-4"><LocalListTools list={tierList} placeholder="Tìm tên hạng thành viên..." /></div>
+              {tiers.length === 0 ? (
               <div className="py-8 text-center space-y-2">
                 <Icon name="star" size={32} className="mx-auto text-muted-foreground/40" />
                 <div className="text-sm text-muted-foreground">
@@ -446,7 +454,7 @@ export default function LoyaltyPointsSettingsPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y">
-                    {tiers.map((tier) => (
+                    {tierList.rows.map((tier) => (
                       <tr key={tier.id}>
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -503,10 +511,12 @@ export default function LoyaltyPointsSettingsPage() {
                         </td>
                       </tr>
                     ))}
+                    {tierList.count === 0 && <tr><td colSpan={5} className="py-8 text-center text-muted-foreground">Không có hạng phù hợp. Thử đổi tìm kiếm hoặc xóa lọc.</td></tr>}
                   </tbody>
                 </table>
               </div>
-            )}
+              )}
+            </>}
           </CardContent>
         </Card>
 
