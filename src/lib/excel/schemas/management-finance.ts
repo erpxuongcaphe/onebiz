@@ -30,7 +30,8 @@ export const financeImportSchema:ExcelSchema<FinanceImportRow> = {
   ],
   validateRow(row,index,rows) {
     try {
-      if (rows.some((other,i)=>i!==index && other.sourceSystem.trim()===row.sourceSystem.trim() && other.sourceCode.trim()===row.sourceCode.trim())) return 'Nguồn dữ liệu và mã nguồn bị trùng trong file.';
+      if (!row.sourceSystem?.trim() || !row.sourceCode?.trim()) return 'Nguồn dữ liệu và mã nguồn là bắt buộc.';
+      if (rows.some((other,i)=>i!==index && other.sourceSystem.trim().toUpperCase()===row.sourceSystem.trim().toUpperCase() && other.sourceCode.trim()===row.sourceCode.trim())) return 'Nguồn dữ liệu và mã nguồn bị trùng trong file.';
       if (financeMoneyCents(row.amount)<=0) return 'Số tiền phải lớn hơn 0.';
       if (row.operation==='record') {
         if (!row.categoryCode?.trim() || !row.counterparty?.trim() || !isFinanceReportDate(row.businessDate??'') || !isFinanceReportDate(row.recognitionDate??'')) return 'Ghi nhận mới cần khoản mục, đối tượng, ngày phát sinh và ngày ghi nhận hợp lệ (YYYY-MM-DD).';

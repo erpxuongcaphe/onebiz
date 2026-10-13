@@ -25,7 +25,7 @@ begin
   v_branch:=(v_row->>'branchId')::uuid;
   if not public.user_has_branch_access(auth.uid(),v_branch) or not exists(select 1 from public.branches where id=v_branch and tenant_id=v_tenant and coalesce(is_active,true)) then
    raise exception 'FINANCE_IMPORT_BRANCH_DENIED' using errcode='42501'; end if;
-  select * into v_existing from public.management_finance_import_sources where tenant_id=v_tenant and source_system=btrim(v_row->>'sourceSystem') and source_code=btrim(v_row->>'sourceCode');
+  select * into v_existing from public.management_finance_import_sources where tenant_id=v_tenant and source_system=upper(btrim(v_row->>'sourceSystem')) and source_code=btrim(v_row->>'sourceCode');
   if found then
    if not public.user_has_branch_access(auth.uid(),v_existing.branch_id) then raise exception 'FINANCE_IMPORT_SOURCE_DENIED' using errcode='42501'; end if;
    v_result:=v_result||jsonb_build_array(jsonb_build_object('sourceCode',v_row->>'sourceCode','state',case when v_existing.request_payload=v_row then 'imported' else 'conflict' end));
@@ -58,8 +58,8 @@ declare v_tenant uuid:=public.management_finance_actor('finance.create_transacti
 begin
  perform public.preview_management_finance_import(p_rows);
  -- Deterministic lock order prevents reversed-file imports deadlocking each other.
- for v_row in select value from jsonb_array_elements(p_rows) order by value->>'sourceSystem',value->>'sourceCode' loop
-  v_system:=btrim(v_row->>'sourceSystem'); v_code:=btrim(v_row->>'sourceCode'); v_branch:=(v_row->>'branchId')::uuid;
+ for v_row in select value from jsonb_array_elements(p_rows) order by upper(btrim(value->>'sourceSystem')),btrim(value->>'sourceCode') loop
+  v_system:=upper(btrim(v_row->>'sourceSystem')); v_code:=btrim(v_row->>'sourceCode'); v_branch:=(v_row->>'branchId')::uuid;
   if v_system is null or length(v_system) not between 1 and 64 or v_code is null or length(v_code) not between 1 and 100 then raise exception 'FINANCE_IMPORT_SOURCE_REQUIRED' using errcode='22023'; end if;
   v_key:=jsonb_build_array(v_system,v_code)::text;
   if v_key=any(v_seen) then raise exception 'FINANCE_IMPORT_DUPLICATE_ROW' using errcode='22023'; end if;
@@ -67,7 +67,7 @@ begin
   perform pg_advisory_xact_lock(hashtextextended(v_tenant::text||v_key,521));
  end loop;
  for v_row in select value from jsonb_array_elements(p_rows) loop
-  v_system:=btrim(v_row->>'sourceSystem'); v_code:=btrim(v_row->>'sourceCode'); v_branch:=(v_row->>'branchId')::uuid;
+  v_system:=upper(btrim(v_row->>'sourceSystem')); v_code:=btrim(v_row->>'sourceCode'); v_branch:=(v_row->>'branchId')::uuid;
   select * into v_existing from public.management_finance_import_sources where tenant_id=v_tenant and source_system=v_system and source_code=v_code;
   if found then
    if not public.user_has_branch_access(auth.uid(),v_existing.branch_id) then raise exception 'FINANCE_IMPORT_SOURCE_DENIED' using errcode='42501'; end if;
@@ -76,6 +76,8 @@ begin
    continue;
   end if;
   v_request:=gen_random_uuid(); v_operation:=v_row->>'operation'; v_payload:=v_row->'payload';
+  v_payload:=v_payload||jsonb_build_object('note',coalesce(v_payload->>'note','')||E'\nNguon: '||v_system||' / '||v_code);
+  if jsonb_typeof(v_payload->'payment')='object' then v_payload:=jsonb_set(v_payload,'{payment,note}',to_jsonb(coalesce(v_payload#>>'{payment,note}','')||E'\nNguon: '||v_system||' / '||v_code)); end if;
   if v_payload->>'paymentMethod'='bank_transfer' then v_payload:=jsonb_set(v_payload,'{paymentMethod}','"transfer"'); end if;
   if v_payload#>>'{payment,paymentMethod}'='bank_transfer' then v_payload:=jsonb_set(v_payload,'{payment,paymentMethod}','"transfer"'); end if;
   if v_operation='record' then

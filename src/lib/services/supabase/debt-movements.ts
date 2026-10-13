@@ -12,7 +12,9 @@ export async function getDebtMovements(mode:'customer'|'supplier',partyId:string
     const {data,error}=await getClient().rpc('get_party_debt_movements' as never,{p_mode:mode,p_party_id:partyId,p_branch_id:branchId,p_from:from,p_to:to,p_page:page,p_size:200} as never);
     if(error) throw new Error(error.message);
     const response=data as unknown as DebtMovementReport;
-    if(!response || !Array.isArray(response.items) || !Number.isSafeInteger(response.total) || response.total<0 || response.basis!=='current_effective_documents') throw new Error('Nguồn công nợ không hợp lệ.');
+    if(!response || !Array.isArray(response.items) || !Number.isSafeInteger(response.total) || response.total<0 || response.basis!=='current_effective_documents'
+      || ![response.opening,response.increase,response.decrease,response.closing,response.current_net,response.difference].every(Number.isFinite)
+      || !Number.isSafeInteger(response.unmapped) || response.unmapped<0) throw new Error('Nguồn công nợ không hợp lệ.');
     if(result && ['total','opening','increase','decrease','closing','current_net','difference','unmapped'].some(key=>response[key as keyof DebtMovementReport]!==result![key as keyof DebtMovementReport])) throw new Error('Công nợ đang thay đổi. Tải lại để đối soát đủ nguồn.');
     result??=response;
     if(!response.items.length && items.length<result.total) throw new Error('Chưa tải đủ lịch sử công nợ.');

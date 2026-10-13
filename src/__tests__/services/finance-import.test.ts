@@ -33,7 +33,7 @@ describe('external financial import',()=>{
     mocks.rpc.mockResolvedValueOnce({data:[{sourceCode:'CP1',state:'new'}],error:null});
     await previewFinanceImport(requests);
     expect(mocks.rpc).toHaveBeenCalledWith('preview_management_finance_import',{p_rows:requests});
-    mocks.rpc.mockResolvedValueOnce({data:[{state:'new'}],error:null});
+    mocks.rpc.mockResolvedValueOnce({data:[{sourceCode:'CP1',state:'new',result:{event:{id:'event'}}}],error:null});
     expect(await commitFinanceImport(requests)).toMatchObject({successCount:1,failureCount:0});
     mocks.rpc.mockResolvedValueOnce({data:[],error:null});
     await expect(commitFinanceImport(requests)).rejects.toThrow('Chưa xác nhận');
