@@ -4,11 +4,10 @@ export function financeCategoryMonths(rows: FinanceEvent[], from: string, to: st
   const validDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;
   if (!validDate(from) || !validDate(to) || from > to) throw new Error("Kỳ báo cáo không hợp lệ.");
   const months: string[] = [];
-  let cursor = from.slice(0, 7);
-  while (cursor <= to.slice(0, 7)) {
-    months.push(cursor);
-    const [year, month] = cursor.split("-").map(Number);
-    cursor = month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, "0")}`;
+  const [startYear,startMonth] = from.split("-").map(Number);
+  const [endYear,endMonth] = to.split("-").map(Number);
+  for (let index=startYear*12+startMonth-1; index<=endYear*12+endMonth-1; index++) {
+    months.push(`${String(Math.floor(index/12)).padStart(4,"0")}-${String(index%12+1).padStart(2,"0")}`);
   }
   const groups = new Map<string, { code: string; name: string; kind: string; total: number; values: Record<string, number> }>();
   const ids = new Set<string>();

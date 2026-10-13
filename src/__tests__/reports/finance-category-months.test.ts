@@ -22,4 +22,8 @@ describe("monthly recognition matrix", () => {
   it("rejects duplicate source events", () => {
     expect(()=>financeCategoryMonths([event,event],"2026-09-01","2026-10-31")).toThrow("bị trùng");
   });
+  it("handles year transitions and the final valid calendar year finitely",()=>{
+    expect(financeCategoryMonths([],"2026-12-01","2027-01-31").months).toEqual(["2026-12","2027-01"]);
+    expect(financeCategoryMonths([],"9999-12-01","9999-12-31").months).toEqual(["9999-12"]);
+  });
 });
