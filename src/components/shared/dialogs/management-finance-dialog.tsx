@@ -183,7 +183,7 @@ export function ManagementFinanceDialog({open, onOpenChange, categories, event, 
             {kind === 'non_pnl' && <label className="grid gap-1 text-sm">Hướng tiền<select className="h-10 rounded-md border bg-background px-3" value={direction} onChange={e => setDirection(e.target.value as 'receipt' | 'payment')}><option value="receipt">Thu</option><option value="payment">Chi</option></select></label>}
           </div>
           {performerError && <p role="alert" className="text-sm text-destructive">{performerError}</p>}
-          <CashTimeFields value={cashTime} onChange={setCashTime}/>
+          <CashTimeFields value={cashTime} onChange={setCashTime} verb={cashVerb}/>
         </div>}
         <label className="grid gap-1 text-sm">Nội dung<Input value={note} onChange={e => setNote(e.target.value)}/></label>
       </fieldset>

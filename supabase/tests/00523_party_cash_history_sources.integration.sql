@@ -15,6 +15,7 @@ insert into public.purchase_orders(id,tenant_id,branch_id,supplier_id,code) valu
 insert into public.cash_transactions(id,tenant_id,branch_id,reference_type,reference_id,type,code,transaction_date,created_at,status,amount)
 values('71000000-0000-0000-0000-000000000003','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','purchase_order','51000000-0000-0000-0000-000000000001','payment','PC-OLD','2026-09-21','2026-09-21 00:00+07','draft',50);
 \ir ../migrations/00523_party_cash_history_sources.sql
+select set_config('test.actor','10000000-0000-0000-0000-000000000001',false);
 select set_config('test.denied_permission','',false);
 do $$ declare r jsonb; before_count bigint; begin
  select count(*) into before_count from public.cash_transactions;
