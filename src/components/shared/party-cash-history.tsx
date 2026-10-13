@@ -7,6 +7,7 @@ import { PERMISSIONS } from "@/lib/permissions/constants";
 import { cancelCashTransaction, getAllPartyCashHistory, getPartyCashHistory, type PartyCashHistoryFilters } from "@/lib/services/supabase/cash-book";
 import { getCounterpartyBalanceSummary } from "@/lib/services/supabase/debt-workspace";
 import { DebtDetailDialog } from "@/components/shared/dialogs/debt-detail-dialog";
+import { DebtMovementsDialog } from "@/components/shared/dialogs/debt-movements-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -34,6 +35,7 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
   const [revision, setRevision] = useState(0);
   const [selected, setSelected] = useState<CashBookEntry | null>(null);
   const [debtOpen, setDebtOpen] = useState(false);
+  const [movementsOpen,setMovementsOpen]=useState(false);
   const [balance, setBalance] = useState<{ debt: number; advance: number } | null>(null);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [filters, setFilters] = useState<PartyCashHistoryFilters>({});
@@ -127,6 +129,8 @@ export function PartyCashHistory({ mode, partyId, partyName, onChanged }: {
     <Button size="sm" variant="ghost" onClick={() => { setSearchText(""); setFilters({}); setPage(0); setActionError(null); }}>Xóa bộ lọc</Button>
     {(actionError || invalidDates) && <p role="alert" className="text-sm text-destructive">{invalidDates ? "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc." : actionError}</p>}
     {actionSuccess && <p role="status" className="text-sm text-status-success">{actionSuccess}</p>}
+    {canReadDebt && <Button variant="outline" disabled={!activeBranchId} onClick={()=>setMovementsOpen(true)}><Icon name="receipt_long"/>Biến động công nợ</Button>}
+    <DebtMovementsDialog open={movementsOpen} onOpenChange={setMovementsOpen} mode={mode} partyId={partyId} partyName={partyName} branchId={activeBranchId} branchLabel={branchLabel}/>
     {balance && <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm tabular-nums">
       <span>{mode === "supplier" ? "Còn phải trả" : "Còn phải thu"}: <strong>{formatCurrency(balance.debt)}</strong></span>
       <span>Tiền ứng còn lại: <strong className="text-status-success">{formatCurrency(balance.advance)}</strong></span>
