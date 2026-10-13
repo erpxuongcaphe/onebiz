@@ -21,7 +21,7 @@ begin
  v_current:=coalesce(v_current,0);
  with source as (
   select 'invoice:'||i.id as key,i.id,'invoice'::text as kind,i.code,
-   coalesce(nullif(to_jsonb(i)->>'invoice_date','')::date,(i.created_at at time zone 'Asia/Ho_Chi_Minh')::date) as date,i.created_at,i.status,
+   (coalesce(i.issued_at,i.created_at) at time zone 'Asia/Ho_Chi_Minh')::date as date,i.created_at,i.status,
    i.total as amount,case when i.status='completed' and i.deleted_at is null then i.total else 0 end as delta,coalesce(i.note,'') as note,false as unmapped
   from public.invoices i where p_mode='customer' and i.tenant_id=v_tenant and i.branch_id=p_branch_id and i.customer_id=p_party_id
   union all

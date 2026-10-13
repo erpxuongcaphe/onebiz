@@ -76,6 +76,7 @@ begin
    continue;
   end if;
   v_request:=gen_random_uuid(); v_operation:=v_row->>'operation'; v_payload:=v_row->'payload';
+  if v_operation<>'record' and (v_payload->>'branchId')::uuid is distinct from v_branch then raise exception 'FINANCE_IMPORT_SCOPE_INVALID' using errcode='22023'; end if;
   v_payload:=v_payload||jsonb_build_object('note',coalesce(v_payload->>'note','')||E'\nNguon: '||v_system||' / '||v_code);
   if jsonb_typeof(v_payload->'payment')='object' then v_payload:=jsonb_set(v_payload,'{payment,note}',to_jsonb(coalesce(v_payload#>>'{payment,note}','')||E'\nNguon: '||v_system||' / '||v_code)); end if;
   if v_payload->>'paymentMethod'='bank_transfer' then v_payload:=jsonb_set(v_payload,'{paymentMethod}','"transfer"'); end if;

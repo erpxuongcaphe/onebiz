@@ -6,7 +6,7 @@ create table profiles(id uuid,tenant_id uuid,is_active boolean);
 create table branches(id uuid,tenant_id uuid,is_active boolean);
 create table customers(id uuid,tenant_id uuid);
 create table suppliers(id uuid,tenant_id uuid);
-create table invoices(id uuid,tenant_id uuid,branch_id uuid,customer_id uuid,code text,created_at timestamptz,status text,deleted_at timestamptz,total numeric,debt numeric,note text);
+create table invoices(id uuid,tenant_id uuid,branch_id uuid,customer_id uuid,code text,created_at timestamptz,status text,deleted_at timestamptz,total numeric,debt numeric,note text,issued_at timestamptz);
 create table purchase_orders(id uuid,tenant_id uuid,branch_id uuid,supplier_id uuid,code text,created_at timestamptz,status text,total numeric,debt numeric,note text);
 create table sales_returns(id uuid,tenant_id uuid,branch_id uuid,customer_id uuid,code text,created_at timestamptz,status text,total numeric,note text);
 create table supplier_returns(id uuid,tenant_id uuid,branch_id uuid,supplier_id uuid,code text,created_at timestamptz,status text,total numeric,note text);
@@ -24,6 +24,7 @@ insert into branches values('30000000-0000-0000-0000-000000000001','20000000-000
 insert into customers values('40000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001');
 insert into invoices values('50000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001','HD1','2026-09-30 18:00+00','completed',null,1000,400,'');
 insert into invoices select '50000000-0000-0000-0000-000000000002',tenant_id,branch_id,customer_id,'HD-HUY','2026-10-01 02:00+00','cancelled',null,999,0,'' from invoices limit 1;
+update invoices set issued_at=created_at,created_at='2026-09-15 00:00+07' where code='HD1';
 insert into debt_opening_balances values('60000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','customer','40000000-0000-0000-0000-000000000001',null,'2026-09-01','2026-09-01 00:00+07',100,'Opening');
 insert into cash_transactions values('70000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000001','30000000-0000-0000-0000-000000000001','40000000-0000-0000-0000-000000000001',null,'invoice','50000000-0000-0000-0000-000000000001','customer_payment','receipt','PT1','2026-10-02','2026-10-02 08:00+07','completed',400,'');
 insert into cash_transactions select '70000000-0000-0000-0000-000000000002',tenant_id,branch_id,customer_id,null,null,null,'customer_advance','receipt','PT2','2026-10-04','2026-10-04 08:00+07','completed',200,'' from cash_transactions limit 1;
