@@ -15,8 +15,10 @@ const CATEGORY_LABELS: Record<string, string> = {
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   cash: "Tiền mặt",
   transfer: "Chuyển khoản",
+  bank_transfer: "Chuyển khoản",
   card: "Thẻ",
   ewallet: "Ví điện tử",
+  other: "Khác",
 };
 
 export function cashCategoryLabel(category: string | null | undefined): string {

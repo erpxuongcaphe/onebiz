@@ -11,6 +11,8 @@ describe("cash book labels shared by ledger and reports", () => {
 
   it("labels payment methods", () => {
     expect(cashPaymentMethodLabel("transfer")).toBe("Chuyển khoản");
+    expect(cashPaymentMethodLabel("bank_transfer")).toBe("Chuyển khoản");
+    expect(cashPaymentMethodLabel("other")).toBe("Khác");
     expect(cashPaymentMethodLabel("cash")).toBe("Tiền mặt");
   });
 });
