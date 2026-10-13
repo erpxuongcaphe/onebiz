@@ -40,6 +40,32 @@ describe('finance report reconciliation',() => {
   });
   it('keeps filtered recognition distinct from whole-source settlement and excludes cancelled rows',() => {
     const row={id:'e',status:'posted',kind:'expense',category_code:'CP1',category_name:'Điện',amount:1000,report_amount:600,settled_amount:300} as FinanceEvent;
-    expect(summarizeRecognition([row,{...row,status:'cancelled'}])).toEqual([{code:'CP1',name:'Điện',kind:'expense',count:1,amount:600,totalSource:1000,settled:300,outstanding:700}]);
+    expect(summarizeRecognition([row,{...row,id:'cancelled',status:'cancelled'}])).toEqual([{code:'CP1',name:'Điện',kind:'expense',count:1,amount:600,totalSource:1000,settled:300,outstanding:700}]);
+  });
+  it('rejects inverted days within one month and impossible dates',() => {
+    for (const [from,to] of [['2026-10-20','2026-10-01'],['2026-02-30','2026-03-01'],['','2026-10-01']]) {
+      expect(()=>cashFlowMonths([],from,to)).toThrow('không hợp lệ');
+    }
+    expect(()=>cashFlowMonths([{...cash('x','receipt',1),date:'2026-02-30'}],'2026-02-01','2026-03-31')).toThrow('không hợp lệ');
+    expect(cashFlowMonths([],'9999-12-01','9999-12-31')).toHaveLength(1);
+  });
+  it('does not count cancelled or draft cash in monthly and activity totals',() => {
+    const entries=[cash('a','receipt',30),{...cash('b','receipt',100),status:'cancelled' as const},{...cash('c','payment',100),status:'draft' as const}];
+    expect(reconcileCashFlow(entries,[])).toMatchObject({receipt:30,payment:0});
+    expect(cashFlowMonths(entries,'2026-10-01','2026-10-31')[0]).toMatchObject({totalReceipt:30,totalPayment:0,net:30});
+  });
+  it('adds fractional amounts in cents and rejects invalid monthly sources',() => {
+    const entries=[cash('a','receipt',0.1),cash('b','receipt',0.2),cash('c','payment',0.1)];
+    expect(reconcileCashFlow(entries,[])).toMatchObject({receipt:0.3,payment:0.1});
+    expect(cashFlowMonths(entries,'2026-10-01','2026-10-31')[0]).toMatchObject({totalReceipt:0.3,net:0.2,cumulativeBalance:0.2});
+    expect(()=>cashFlowMonths([entries[0],entries[0]],'2026-10-01','2026-10-31')).toThrow('trùng');
+    for (const amount of [NaN,Infinity,-1,0.001]) expect(()=>cashFlowMonths([cash('a','receipt',amount)],'2026-10-01','2026-10-31')).toThrow('không hợp lệ');
+  });
+  it('validates recognized and paid amounts without inventing a branch settlement',() => {
+    const row={id:'e',status:'posted',kind:'expense',category_code:'CP1',category_name:'Điện',amount:0.3,report_amount:0.1,settled_amount:0.1} as FinanceEvent;
+    expect(summarizeRecognition([row,{...row,id:'e2'}])[0]).toMatchObject({amount:0.2,totalSource:0.6,settled:0.2,outstanding:0.4});
+    expect(()=>summarizeRecognition([row,row])).toThrow('trùng');
+    expect(()=>summarizeRecognition([{...row,settled_amount:1}])).toThrow('không hợp lệ');
+    expect(()=>summarizeRecognition([{...row,report_amount:1}])).toThrow('không hợp lệ');
   });
 });

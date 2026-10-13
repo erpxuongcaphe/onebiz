@@ -1,5 +1,52 @@
 # Reporting and finance finalization
 
+## Cap nhat 2026-10-13: pham vi nghiem thu hien tai
+
+Mau KiotViet chi de tham khao. Khong sua so lieu OneBiz cho khop file mau.
+Hai nhom ben duoi chua duoc tuyen bo hoan tat, du lich su day du da phat hanh
+qua PR618. May in cho kiem tra tai quan; khong gui lenh in trong dot nay.
+
+### Bao cao quan tri OneBiz
+
+- Ket qua kinh doanh: doanh thu ban/tru tra hang, gia von lich su,
+  chi phi va thu nhap khac theo ngay ghi nhan. Thieu can cu gia von phai hien
+  canh bao, khong thay bang gia hien tai hay so 0.
+- Thu nhap/chi phi: ngay phat sinh khac ngay phan bo ghi nhan; khoan goc,
+  phan ghi nhan cua chi nhanh/ky va thanh toan toan khoan la ba chi tieu rieng.
+- Dong tien: phieu hoan tat theo ngay chung tu, kem thoi diem thuc thu/chi.
+  Luy ke trong ky khong phai so du quy. Phieu huy/nhap van truy duoc trong
+  lich su, nhung khong cong vao tong dong tien.
+- Ban sua hien tai chi doc/tinh/hien thi: chan khoang ngay sai, kiem tra nguon
+  trung/so tien sai, cong tien theo don vi xu, bo sung ngay chung tu, gio thuc
+  thu/chi, nguoi thuc hien, phuong thuc va trang thai phieu lien ket.
+- Bang khoan muc va theo thang dung khung bang bao cao chung: tieu de co dinh,
+  tuy chon cot/mat do va thanh cuon ngang theo vung xem. Khong doi RPC ghi tien,
+  quyen, hoa don, ton kho, BOM hay du lieu Retail.
+
+### Hai nhom con lai va dieu kien chap nhan
+
+1. So bien dong cong no: dau ky, tang/giam, cuoi ky va so du tung dong; tach
+   khach tra truoc/ung truoc NCC. Lay ngay nghiep vu, phieu thu/chi, tra hang,
+   phan bo ung truoc va huy tu nguon co audit. Khong dung paid hien tai de suy
+   nguoc thanh toan lich su. Phai phan biet du lieu as-of voi chung tu con hieu
+   luc hien tai, hien ro nguon cu thieu lien ket; truy duoc tung chung tu va
+   dong hang. Kiem thu huy, thanh toan mot phan, nhieu dot, ung truoc, hai
+   chi nhanh, ngoai ky va xuat Excel theo loc/sort.
+2. Nhap thu/chi ngoai he thong: xem truoc truoc khi ghi, ma nguon on dinh de
+   chong nhap trung, map khoan muc/chi nhanh/doi tuong/nguoi thu chi; tach ngay
+   phat sinh, ngay ghi nhan va ngay gio tien. Chon ro nhap khoan ghi nhan moi
+   hay thanh toan khoan da co; thu no/chi NCC di dung RPC nghiep vu. Khong
+   bo qua guard bang chen truc tiep cash_transactions. Timeout dung lai cung
+   request key; khong nhap lai voi key moi. File sai chi ra dong/cot, khong ghi
+   mot phan ma khong thong bao. Kiem thu co lap truoc bat ky migration moi.
+
+### Cach phat hanh
+
+Nhanh rieng tu main, chi stage file cua dot nay. Kiem tra PR song song truoc
+merge. Unit/TypeScript/build/CI va preview phai dat; sau merge doi deployment
+Ready dung SHA va ten mien onebiz.com.vn, sau do kiem tra giao dien production.
+Khong coi bang rong la nghiem thu so tien nghiep vu da co.
+
 ## Scope and release gates
 
 This is one consolidated backlog, not a statement that every report is finished.

@@ -8,6 +8,9 @@ import {Input} from '@/components/ui/input';
 import {Icon} from '@/components/ui/icon';
 import {SearchableSelect} from '@/components/ui/searchable-select';
 import {PageHeader} from '@/components/shared/page-header';
+import {ReportTableFrame} from '@/components/shared/report';
+import {financeReportRangeError} from '@/lib/reports/finance-report-input';
+import {cashPaymentMethodLabel} from '@/lib/utils/cash-book-labels';
 import {ManagementFinanceDialog} from '@/components/shared/dialogs/management-finance-dialog';
 import {Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter} from '@/components/ui/dialog';
 import {cashDateTimeInput, formatCashBookDate, formatCashTime} from '@/lib/cash-time';
@@ -19,7 +22,8 @@ import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanc
   type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
-  const {activeBranchId, hasPermission, isLoading} = useAuth();
+  const {activeBranchId, branches, hasPermission, isLoading} = useAuth();
+  const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
   const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today});
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
@@ -49,16 +53,17 @@ export default function ManagementFinancePage() {
   const canCancel = hasPermission('finance.void_transaction');
   const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
+  const rangeError = financeReportRangeError(filters.from, filters.to);
 
   useEffect(() => {
-    if (isLoading || !canRead) return;
+    if (isLoading || !canRead || rangeError) {setData(null); setLoading(false); return;}
     let active = true;
     setLoading(true); setError(''); setData(null);
     getFinanceWorkspace({...filters, branchId: activeBranchId}, page).then(result => {if (active) setData(result);})
       .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không tải được báo cáo.');})
       .finally(() => {if (active) setLoading(false);});
     return () => {active = false;};
-  }, [isLoading, canRead, activeBranchId, filters, page, revision]);
+  }, [isLoading, canRead, activeBranchId, filters, page, revision, rangeError]);
   useEffect(() => {
     if (isLoading || !canRead) return;
     let active = true;
@@ -68,7 +73,7 @@ export default function ManagementFinancePage() {
   }, [isLoading, canRead]);
   useEffect(() => {setPage(0);}, [activeBranchId]);
   useEffect(() => {
-    if (isLoading || !canRead || view === 'documents') return;
+    if (isLoading || !canRead || view === 'documents' || rangeError) {setCategoryRows([]); setCategoryLoading(false); return;}
     let active = true;
     setCategoryLoading(true); setCategoryRows([]); setError('');
     getAllFinanceRows({...filters,branchId:activeBranchId})
@@ -76,11 +81,11 @@ export default function ManagementFinancePage() {
       .catch(e => {if (active) setError(e instanceof Error ? e.message : 'Không tải đủ khoản ghi nhận.');})
       .finally(() => {if (active) setCategoryLoading(false);});
     return () => {active = false;};
-  }, [isLoading,canRead,view,filters,activeBranchId,revision]);
+  }, [isLoading,canRead,view,filters,activeBranchId,revision,rangeError]);
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
 
   async function download() {
-    if (!canExport || exporting) return;
+    if (!canExport || exporting || rangeError || loading || categoryLoading || error) return;
     setExporting(true); setError('');
     try {
       const rows = await getAllFinanceRows(scoped);
@@ -91,7 +96,7 @@ export default function ManagementFinancePage() {
         return;
       }
       if (view === 'categories') {
-        await exportToExcel(summarizeRecognition(rows),[
+        await exportToExcel(summarizeRecognition(rows).map(r => ({...r,kind:r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh'})),[
           {header:'Mã khoản mục',key:'code'},{header:'Khoản mục',key:'name'},{header:'Loại',key:'kind'},
           {header:'Số khoản',key:'count'},{header:'Ghi nhận trong bộ lọc',key:'amount'},
           {header:'Tổng khoản gốc',key:'totalSource'},{header:'Đã thanh toán toàn khoản đến cuối kỳ',key:'settled'},
@@ -103,7 +108,7 @@ export default function ManagementFinancePage() {
         counterparty: r.counterparty, amount: r.amount, recognized: r.report_amount, settled: r.settled_amount,
         status: r.status === 'posted' ? 'Đã ghi nhận' : 'Đã hủy',
         allocations: r.allocations.map(a => `${a.branch_name} / ${a.recognition_date}: ${a.amount}`).join('; '),
-        cash: r.settlements.map(s => `${s.code} / ${s.transaction_date} / ${s.status}: ${s.amount}`).join('; '), creator: r.created_by_name})),
+        cash: r.settlements.map(s => `${s.code} / ${cashBranchName(s.branch_id)} / ${formatCashBookDate(s.transaction_date)} / ${formatCashTime(s.occurred_at)} / ${s.performed_by_name || 'Chưa ghi nhận'} / ${cashPaymentMethodLabel(s.payment_method)} / ${s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}: ${s.amount}`).join('; '), creator: r.created_by_name})),
         [{header: 'Mã', key: 'code'}, {header: 'Ngày phát sinh', key: 'date'}, {header: 'Khoản mục', key: 'category'},
           {header: 'Đối tượng', key: 'counterparty'}, {header: 'Tổng khoản', key: 'amount'}, {header: 'Ghi nhận trong bộ lọc', key: 'recognized'},
           {header: 'Đã thanh toán toàn khoản đến cuối kỳ', key: 'settled'}, {header: 'Trạng thái', key: 'status'},
@@ -136,14 +141,15 @@ export default function ManagementFinancePage() {
 
   if (isLoading) return <p className="p-6">Đang tải…</p>;
   if (!canRead) return <p className="p-6">Tài khoản chưa có quyền xem thu nhập / chi phí.</p>;
-  return <div className="space-y-4 p-4 sm:p-6">
+  return <div className="min-w-0 space-y-4 p-4 sm:p-6">
     <PageHeader title="Thu nhập và chi phí"/>
     <div className="flex flex-wrap gap-2">
       {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}} disabled={!categories.length}><Icon name="add"/>Ghi nhận mới</Button>}
       {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
-      {canExport && <Button variant="outline" disabled={loading || exporting || !data} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
+      {canExport && <Button variant="outline" disabled={loading || categoryLoading || exporting || !data || !!error || !!rangeError} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
-      <Button variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href="/phan-tich/bao-cao-tai-chinh"/>}><Icon name="bar_chart"/>Kết quả kinh doanh</Button>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="grid gap-1 text-sm">Ghi nhận từ ngày<Input type="date" value={filters.from} onChange={e => patch({from: e.target.value})}/></label>
@@ -156,31 +162,26 @@ export default function ManagementFinancePage() {
       <label className="grid gap-1 text-sm">Thanh toán đến cuối kỳ<select className="h-10 rounded-md border bg-background px-3" value={filters.paymentState ?? ''} onChange={e => patch({paymentState: e.target.value as FinanceFilters['paymentState'] || undefined})}><option value="">Tất cả</option><option value="unpaid">Chưa thanh toán</option><option value="partial">Một phần</option><option value="paid">Đủ</option></select></label>
       <label className="grid gap-1 text-sm">Sắp xếp<select className="h-10 rounded-md border bg-background px-3" value={filters.sort ?? 'date_desc'} onChange={e => patch({sort: e.target.value as FinanceFilters['sort']})}><option value="date_desc">Ngày phát sinh mới nhất</option><option value="date_asc">Ngày phát sinh cũ nhất</option><option value="amount_desc">Ghi nhận cao nhất</option><option value="amount_asc">Ghi nhận thấp nhất</option></select></label>
     </div>
-    {error && <p role="alert" className="text-sm text-destructive break-words">{error}</p>}
+    {(rangeError || error) && <p role="alert" className="text-sm text-destructive break-words">{rangeError || error}</p>}
     {data && <div className="grid gap-4 border-y py-3 sm:grid-cols-3">
-      <div><span className="text-sm text-muted-foreground">Thu nhập ghi nhận</span><p className="font-semibold">{formatCurrency(data.summary.income)}</p></div>
+      <div><span className="text-sm text-muted-foreground">Thu nhập khác ghi nhận</span><p className="font-semibold tabular-nums">{formatCurrency(data.summary.income)}</p></div>
       <div><span className="text-sm text-muted-foreground">Chi phí ghi nhận</span><p className="font-semibold">{formatCurrency(data.summary.expense)}</p></div>
       <div><span className="text-sm text-muted-foreground">Ngoài kết quả kinh doanh</span><p className="font-semibold">{formatCurrency(data.summary.non_pnl)}</p></div>
     </div>}
     <div role="tablist" aria-label="Góc nhìn thu nhập chi phí" className="flex border-b gap-4">
       {([['documents','Theo chứng từ'],['categories','Theo khoản mục'],['months','Theo tháng']] as const).map(([value,label]) => <button key={value} role="tab" aria-selected={view === value} className={`py-2 text-sm border-b-2 ${view === value ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`} onClick={() => setView(value)}>{label}</button>)}
     </div>
-    {view === 'months' && <FinanceMonthTable rows={categoryRows} from={filters.from} to={filters.to} branchId={activeBranchId} loading={categoryLoading} error={error} />}
-    {view === 'categories' && <section aria-label="Ghi nhận theo khoản mục" className="space-y-2">
-      <div className="overflow-x-auto border rounded-md"><table className="w-full min-w-[750px] text-sm"><thead className="bg-muted"><tr>{['Khoản mục','Số khoản','Ghi nhận trong bộ lọc','Tổng khoản gốc','Đã thanh toán toàn khoản','Còn phải thu / chi toàn khoản'].map(h => <th key={h} className="p-3 text-left">{h}</th>)}</tr></thead><tbody>{summarizeRecognition(categoryRows).map(r => <tr key={`${r.kind}:${r.code}`} className="border-t"><td className="p-3"><button className="text-primary text-left" onClick={() => {const cat = categories.find(c => c.code === r.code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}>{r.name}<span className="block text-xs text-muted-foreground">{r.code}</span></button></td>{[r.count,formatCurrency(r.amount),formatCurrency(r.totalSource),formatCurrency(r.settled),formatCurrency(r.outstanding)].map((value,i) => <td key={i} className="p-3 text-right tabular-nums">{value}</td>)}</tr>)}</tbody></table></div>
-      {categoryLoading && <p>Đang tải toàn bộ khoản ghi nhận…</p>}
-      {!categoryLoading && !categoryRows.length && !error && <p className="text-sm text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
-      <p className="text-xs text-muted-foreground">Đã hủy không cộng vào bảng. Thanh toán và số còn lại tính trên toàn khoản đến ngày cuối kỳ, không chia giả theo tỷ lệ chi nhánh.</p>
-    </section>}
-    {view === 'documents' && <><div className="overflow-x-auto border rounded-md">
+    {view === 'months' && <FinanceMonthTable rows={categoryRows} from={filters.from} to={filters.to} branchId={activeBranchId} loading={categoryLoading} error={rangeError || error} />}
+    {view === 'categories' && <FinanceCategoryTable rows={categoryRows} loading={categoryLoading} error={rangeError || error} onSelect={code => {const cat = categories.find(c => c.code === code); if (cat) {patch({categoryId:cat.id}); setView('documents');}}}/>}
+    {view === 'documents' && <><ReportTableFrame tablePreferenceKey="finance.recognition.documents" allowColumnSelection={false}><div className="overflow-x-auto border rounded-md">
       <table className="w-full min-w-[1000px] text-sm"><thead className="bg-muted"><tr>{['Khoản ghi nhận','Ngày phát sinh','Khoản mục / đối tượng','Ghi nhận trong bộ lọc','Đã thanh toán toàn khoản','Trạng thái',''].map((h, i) => <th key={i} className="p-3 text-left whitespace-nowrap">{h}</th>)}</tr></thead>
-        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
+        <tbody>{data?.items.map(r => <FinanceRow key={r.id} row={r} cashBranchName={cashBranchName} expanded={expanded === r.id} onExpand={() => setExpanded(expanded === r.id ? undefined : r.id)}
           canSettle={canCreate && r.status === 'posted'} onSettle={() => {setSettling(r); setOpen(true);}}
           canCancel={canCancel && r.status === 'posted'} onCancel={() => {setCancelling(r); setReason(''); setActionError('');}}/>)}</tbody>
       </table>
       {loading && <p className="p-6 text-center">Đang tải số liệu…</p>}
       {!loading && data?.items.length === 0 && <p className="p-6 text-center text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
-    </div>
+    </div></ReportTableFrame>
     <div className="flex items-center justify-between gap-2 text-sm"><span>{data?.total ?? 0} khoản · trang {page + 1}</span><div className="flex gap-2">
       <Button variant="outline" size="icon" aria-label="Trang trước" title="Trang trước" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}><Icon name="chevron_left"/></Button>
       <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => setPage(p => p + 1)}><Icon name="chevron_right"/></Button>
@@ -203,20 +204,36 @@ export default function ManagementFinancePage() {
   </div>;
 }
 
+function FinanceCategoryTable({rows,loading,error,onSelect}: {rows:FinanceEvent[];loading:boolean;error:string;onSelect:(code:string) => void}) {
+  if (loading) return <p>Đang tải toàn bộ khoản ghi nhận…</p>;
+  if (error) return null;
+  let groups: ReturnType<typeof summarizeRecognition>;
+  try {groups = summarizeRecognition(rows);} catch (e) {return <p role="alert" className="text-destructive">{e instanceof Error ? e.message : 'Không đối soát được khoản ghi nhận.'}</p>;}
+  return <section aria-label="Ghi nhận theo khoản mục" className="min-w-0 space-y-2">
+    <ReportTableFrame tablePreferenceKey="finance.recognition.categories"><div className="overflow-x-auto border rounded-md">
+      <table className="w-full min-w-[900px] text-sm"><thead className="bg-muted"><tr>{['Khoản mục','Loại','Số khoản','Ghi nhận trong bộ lọc','Tổng khoản gốc','Đã thanh toán đến cuối kỳ','Còn phải thu / chi toàn khoản'].map((h,i) => <th key={h} className={`p-3 ${i < 2 ? 'text-left' : 'text-right'}`}>{h}</th>)}</tr></thead><tbody>
+        {groups.map(r => <tr key={`${r.kind}:${r.code}`} className="border-t hover:bg-muted/30"><td className="p-3"><button className="text-primary text-left font-medium" onClick={() => onSelect(r.code)}>{r.name}<span className="block text-xs text-muted-foreground">{r.code}</span></button></td><td className="p-3">{r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh'}</td>{[r.count,formatCurrency(r.amount),formatCurrency(r.totalSource),formatCurrency(r.settled),formatCurrency(r.outstanding)].map((value,i) => <td key={i} className="p-3 text-right tabular-nums">{value}</td>)}</tr>)}
+      </tbody></table>
+    </div></ReportTableFrame>
+    {!groups.length && <p className="text-sm text-muted-foreground">Không có khoản đang ghi nhận trong bộ lọc.</p>}
+    <p className="text-xs text-muted-foreground">Đã hủy không cộng vào bảng. Thanh toán và số còn lại tính trên toàn khoản đến ngày cuối kỳ, không chia theo tỷ lệ chi nhánh.</p>
+  </section>;
+}
+
 function FinanceMonthTable({rows,from,to,branchId,loading,error}: {rows:FinanceEvent[];from:string;to:string;branchId?:string;loading:boolean;error:string}) {
   if (loading) return <p>Đang tải toàn bộ khoản ghi nhận…</p>;
   if (error) return null;
   let matrix: ReturnType<typeof financeCategoryMonths>;
   try {matrix = financeCategoryMonths(rows,from,to,branchId);} catch (e) {return <p role="alert" className="text-destructive">{e instanceof Error ? e.message : 'Kỳ báo cáo không hợp lệ.'}</p>;}
   return <section aria-label="Thu nhập chi phí theo tháng" className="min-w-0 space-y-2">
-    <div className="max-h-[65vh] overflow-auto border rounded-md"><table className="w-full text-sm"><thead className="sticky top-0 z-20 bg-muted"><tr><th className="sticky left-0 z-30 bg-muted p-3 text-left">Khoản mục</th><th className="p-3 text-left">Loại</th>{matrix.months.map(m => <th key={m} className="p-3 text-right whitespace-nowrap">{m}</th>)}<th className="p-3 text-right whitespace-nowrap">Tổng ghi nhận</th></tr></thead><tbody>
+    <ReportTableFrame tablePreferenceKey="finance.recognition.months"><div className="overflow-x-auto border rounded-md"><table className="w-full text-sm"><thead className="bg-muted"><tr><th className="p-3 text-left">Khoản mục</th><th className="p-3 text-left">Loại</th>{matrix.months.map(m => <th key={m} className="p-3 text-right whitespace-nowrap">{m}</th>)}<th className="p-3 text-right whitespace-nowrap">Tổng ghi nhận</th></tr></thead><tbody>
       {matrix.rows.map(r => <tr key={`${r.kind}:${r.code}`} className="border-t"><td className="sticky left-0 bg-background p-3 whitespace-nowrap"><strong>{r.name}</strong><span className="block text-xs text-muted-foreground">{r.code}</span></td><td className="p-3 whitespace-nowrap">{r.kind === 'income' ? 'Thu nhập' : r.kind === 'expense' ? 'Chi phí' : 'Ngoài kết quả kinh doanh'}</td>{matrix.months.map(m => <td key={m} className="p-3 text-right tabular-nums whitespace-nowrap">{formatCurrency(r.values[m] ?? 0)}</td>)}<td className="p-3 text-right font-semibold tabular-nums">{formatCurrency(r.total)}</td></tr>)}
-    </tbody></table></div>
+    </tbody></table></div></ReportTableFrame>
     {!matrix.rows.length && <p className="text-sm text-muted-foreground">Không có khoản ghi nhận trong bộ lọc.</p>}
   </section>;
 }
 
-function FinanceRow({row: r, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
+function FinanceRow({row: r, cashBranchName, expanded, onExpand, canSettle, onSettle, canCancel, onCancel}: {row: FinanceEvent; cashBranchName:(id:string) => string; expanded: boolean; onExpand: () => void; canSettle: boolean; onSettle: () => void; canCancel: boolean; onCancel: () => void}) {
   return <><tr className="border-t">
     <td className="p-3"><button className="text-primary font-medium" onClick={onExpand} aria-expanded={expanded}>{r.code}</button></td>
     <td className="p-3">{formatCashBookDate(r.business_date)}</td><td className="p-3"><div>{r.category_name}</div><div className="text-muted-foreground">{r.counterparty}</div></td>
@@ -225,7 +242,7 @@ function FinanceRow({row: r, expanded, onExpand, canSettle, onSettle, canCancel,
   </tr>{expanded && <tr className="border-t bg-muted/30"><td colSpan={7} className="p-4 space-y-3">
     <p>Tổng khoản: <strong>{formatCurrency(r.amount)}</strong> · Người tạo: {r.created_by_name}</p>
     <div className="grid gap-4 lg:grid-cols-2"><div><h3 className="font-medium mb-2">Phân bổ ghi nhận</h3>{r.allocations.map((a, i) => <p key={i}>{a.branch_name} · {formatCashBookDate(a.recognition_date)} · {formatCurrency(a.amount)}</p>)}</div>
-      <div><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : r.settlements.map(s => <p key={s.id}>{s.code} · {formatCashTime(s.occurred_at)} · {s.performed_by_name || 'Chưa ghi nhận'} · {formatCurrency(s.amount)} · {s.status === 'cancelled' ? 'Đã hủy' : 'Hoàn tất'}</p>)}</div></div>
+      <div className="min-w-0"><h3 className="font-medium mb-2">Phiếu thu / chi liên kết</h3>{r.settlements.length === 0 ? <p>Chưa có phiếu thu / chi.</p> : <div className="max-h-72 overflow-auto"><table className="w-full text-sm"><thead className="sticky top-0 bg-background"><tr>{['Mã phiếu','Chi nhánh thu/chi','Ngày chứng từ','Thực thu/chi','Người thu/chi','Phương thức','Số tiền','Trạng thái'].map(h => <th key={h} className="p-2 text-left whitespace-nowrap">{h}</th>)}</tr></thead><tbody>{r.settlements.map(s => <tr key={s.id} className="border-t"><td className="p-2 font-medium whitespace-nowrap">{s.code}</td><td className="p-2">{cashBranchName(s.branch_id)}</td><td className="p-2 whitespace-nowrap">{formatCashBookDate(s.transaction_date)}</td><td className="p-2 whitespace-nowrap">{formatCashTime(s.occurred_at)}</td><td className="p-2">{s.performed_by_name || 'Chưa ghi nhận'}</td><td className="p-2">{cashPaymentMethodLabel(s.payment_method)}</td><td className="p-2 text-right tabular-nums whitespace-nowrap">{formatCurrency(s.amount)}</td><td className="p-2">{s.status === 'cancelled' ? 'Đã hủy' : s.status === 'completed' ? 'Hoàn tất' : 'Chưa hoàn tất'}</td></tr>)}</tbody></table></div>}</div></div>
     {r.note && <p className="break-words">{r.note}</p>}
     {canCancel && <Button size="sm" variant="outline" onClick={onCancel}><Icon name="cancel"/>Hủy ghi nhận</Button>}
   </td></tr>}</>;
