@@ -40,7 +40,7 @@ export function DebtMovementsDialog({open,onOpenChange,mode,partyId,partyName,br
       .sort((a,b)=>{const cmp=sort==='amount'?a.amount-b.amount:sort==='balance'?a.balance-b.balance:sort==='code'?a.code.localeCompare(b.code,'vi',{numeric:true}):`${a.date}|${a.created_at}|${a.key}`.localeCompare(`${b.date}|${b.created_at}|${b.key}`);return direction==='asc'?cmp:-cmp;});
   },[report,search,kind,status,sort,direction]);
   const pages=Math.max(1,Math.ceil(rows.length/50));const currentPage=Math.min(page,pages-1);
-  return <Dialog open={open} onOpenChange={onOpenChange} protectUnsavedChanges={false}><DialogContent className="w-[calc(100vw-1rem)] max-w-[1200px] min-w-0"><DialogHeader><DialogTitle>Biến động công nợ · {partyName}</DialogTitle></DialogHeader>
+  return <Dialog open={open} onOpenChange={onOpenChange} protectUnsavedChanges={false}><DialogContent className="w-[calc(100vw-1rem)] max-w-[1200px] min-w-0 sm:max-w-[1200px]"><DialogHeader><DialogTitle>Biến động công nợ · {partyName}</DialogTitle></DialogHeader>
     <div className="max-h-[75vh] overflow-y-auto min-w-0 space-y-3">
       <p className="text-sm font-medium">{branchLabel}</p>
       <div className="flex flex-wrap items-end gap-2"><label className="text-sm">Từ ngày<Input type="date" value={from} onChange={e=>setFrom(e.target.value)}/></label><label className="text-sm">Đến ngày<Input type="date" value={to} onChange={e=>setTo(e.target.value)}/></label>
