@@ -22,4 +22,14 @@ describe("complete permitted history", () => {
     const fetch = vi.fn().mockResolvedValueOnce({data:Array.from({length:200},(_,i)=>({id:String(i)})),error:null}).mockResolvedValueOnce({data:[{id:"1"}],error:null});
     await expect(readHistoryPages(fetch)).rejects.toThrow("Lịch sử thay đổi");
   });
+  it("continues when a server page cap is smaller than the requested size",async()=>{
+    const source=Array.from({length:351},(_,i)=>({id:String(i)}));
+    const fetch=vi.fn(async(offset:number)=>({data:source.slice(offset,offset+100),error:null,count:351}));
+    expect(await readHistoryPages(fetch)).toEqual(source);
+    expect(fetch).toHaveBeenLastCalledWith(300,200);
+  });
+  it("rejects a short empty response before the exact count is reached",async()=>{
+    const fetch=vi.fn().mockResolvedValueOnce({data:[{id:"1"}],error:null,count:2}).mockResolvedValueOnce({data:[],error:null,count:2});
+    await expect(readHistoryPages(fetch)).rejects.toThrow("Chưa tải đủ");
+  });
 });

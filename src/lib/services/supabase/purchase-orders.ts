@@ -342,7 +342,7 @@ export async function getPurchaseOrdersForSupplier(
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("purchase_orders")
-    .select("*, profiles!purchase_orders_created_by_fkey(full_name)")
+    .select("*, profiles!purchase_orders_created_by_fkey(full_name)", {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("supplier_id", supplierId)
     .order("created_at", { ascending: false }).order("id", { ascending: false });

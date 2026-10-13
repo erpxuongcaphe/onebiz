@@ -10,13 +10,13 @@ export async function getSupplierReturnHistory(supplierId: string, branchId?: st
   const tenantId = await getCurrentTenantId();
   type RawReturn = {id:string;code:string;created_at:string;total:number|string;status:string};
   const rows = await readHistoryPages<RawReturn>(async (offset,size) => {
-    let query = client.from("supplier_returns").select("id, code, created_at, total, status")
+    let query = client.from("supplier_returns").select("id, code, created_at, total, status", {count:"exact"})
       .eq("tenant_id",tenantId).eq("supplier_id",supplierId)
       .order("created_at",{ascending:false}).order("id",{ascending:false});
     if (branchId) query=query.eq("branch_id",branchId);
     const result = await query.range(offset,offset+size-1);
     // This existing table is absent from the generated client schema.
-    return {data:result.data as unknown as RawReturn[] | null,error:result.error};
+    return {data:result.data as unknown as RawReturn[] | null,error:result.error,count:result.count};
   });
   return rows.map(row=>({id:row.id,code:row.code,date:row.created_at,totalAmount:Number(row.total),status:row.status,supplierReturn:true}));
 }

@@ -118,9 +118,10 @@ function SupplierDetail({
 
   const outstandingOrders = orders.filter((o) => ["completed", "partial"].includes(o.status) && o.amountOwed > 0);
   const totalOrders = orders.length;
-  const totalOrderValue = orders.reduce((sum, o) => sum + o.total, 0);
-  const totalPaidAll = orders.reduce((sum, o) => sum + o.paid, 0);
-  const totalOwedAll = orders.reduce((sum, o) => sum + o.amountOwed, 0);
+  const postedOrders = orders.filter(o => ["completed", "partial"].includes(o.status));
+  const totalOrderValue = postedOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalPaidAll = postedOrders.reduce((sum, o) => sum + o.paid, 0);
+  const totalOwedAll = outstandingOrders.reduce((sum, o) => sum + o.amountOwed, 0);
 
   const statusBadge = (status: PurchaseOrder["status"]) => {
     const meta = statusMeta[status];
@@ -236,11 +237,11 @@ function SupplierDetail({
             orders.length > 0
               ? [
                   {
-                    label: "Tổng giá trị",
+                    label: "Giá trị phiếu đã nhập",
                     value: formatCurrency(totalOrderValue),
                   },
                   {
-                    label: "Đã thanh toán",
+                    label: "Đã trả cho phiếu đã nhập",
                     value: formatCurrency(totalPaidAll),
                   },
                   {

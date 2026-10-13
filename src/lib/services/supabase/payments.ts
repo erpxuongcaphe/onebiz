@@ -15,6 +15,7 @@
 import { getClient, getCurrentContext, handleError } from "./base";
 import type { CashTimingInput } from "@/lib/cash-time";
 import { recordTimedCash } from "./cash-timing";
+import { readHistoryPages } from "./read-history-pages";
 
 export interface RecordPaymentInput extends CashTimingInput {
   branchId?: string;
@@ -281,7 +282,7 @@ export async function getOpenInvoicesByCustomer(
 
   let query = supabase
     .from("invoices")
-    .select("id, code, ngay_chung_tu, total, paid, debt, status")
+    .select("id, code, ngay_chung_tu, total, paid, debt, status", {count:"exact"})
     .eq("tenant_id", ctx.tenantId)
     .eq("customer_id", customerId)
     .gt("debt", 0)
@@ -290,11 +291,8 @@ export async function getOpenInvoicesByCustomer(
     .eq("status", "completed");
 
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query.order("ngay_chung_tu", {
-    ascending: true,
-  });
-
-  if (error) handleError(error, "getOpenInvoicesByCustomer");
+  query = query.order("ngay_chung_tu", {ascending:true}).order("id", {ascending:true});
+  const data = await readHistoryPages((offset,size) => query.range(offset,offset+size-1));
 
   const now = Date.now();
   return (data ?? []).map((row) => {
@@ -334,7 +332,7 @@ export async function getOpenPurchasesBySupplier(
 
   let query = supabase
     .from("purchase_orders")
-    .select("id, code, created_at, total, paid, debt, status")
+    .select("id, code, created_at, total, paid, debt, status", {count:"exact"})
     .eq("tenant_id", ctx.tenantId)
     .eq("supplier_id", supplierId)
     .gt("debt", 0)
@@ -342,9 +340,8 @@ export async function getOpenPurchasesBySupplier(
     .in("status", ["completed", "partial"]);
 
   if (branchId) query = query.eq("branch_id", branchId);
-  const { data, error } = await query.order("created_at", { ascending: true });
-
-  if (error) handleError(error, "getOpenPurchasesBySupplier");
+  query = query.order("created_at", {ascending:true}).order("id", {ascending:true});
+  const data = await readHistoryPages((offset,size) => query.range(offset,offset+size-1));
 
   const now = Date.now();
   return (data ?? []).map((row) => {

@@ -255,7 +255,7 @@ export async function getInvoicesForCustomer(
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_created_by_fkey(full_name)")
+    .select("*, profiles!invoices_created_by_fkey(full_name)", {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
     .order("ngay_chung_tu", { ascending: false }).order("id", { ascending: false });
@@ -287,7 +287,7 @@ export async function getReturnsForCustomer(
   const data = await readHistoryPages(async (offset, size) => {
     let query = supabase
     .from("sales_returns")
-    .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)")
+    .select("id, code, total, status, created_at, invoices!sales_returns_invoice_id_fkey(code)", {count:"exact"})
     .eq("tenant_id", tenantId)
     .eq("customer_id", customerId)
     .order("created_at", { ascending: false }).order("id", { ascending: false });
