@@ -15,7 +15,7 @@ beforeEach(()=>{vi.clearAllMocks();mocks.get.mockResolvedValue(report);mocks.exp
 describe('debt movement history UI',()=>{
   it('does not treat read-only report filters as unsaved business data',async()=>{
     render(<DebtMovementsDialog {...props}/>);
-    await screen.findByRole('button',{name:'HD1',exact:true});
+    await screen.findByRole('button',{name:'HD1'});
     fireEvent.change(screen.getByLabelText('Tìm biến động'),{target:{value:'HD1'}});
     expect(mocks.guard).toHaveBeenLastCalledWith(false);
   });
@@ -24,7 +24,7 @@ describe('debt movement history UI',()=>{
     await screen.findByRole('button',{name:'HD-HUY'});
     expect(screen.getByRole('cell',{name:'Đã hủy'})).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Trạng thái biến động'),{target:{value:'cancelled'}});
-    expect(screen.queryByRole('button',{name:'HD1',exact:true})).not.toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'HD1'})).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button',{name:'Xuất Excel'}));
     await waitFor(()=>expect(mocks.export).toHaveBeenCalled());
     expect(mocks.export.mock.calls[0][0]).toEqual([expect.objectContaining({code:'HD-HUY',increase:0,decrease:0,balance:110,opening:10,closing:110})]);

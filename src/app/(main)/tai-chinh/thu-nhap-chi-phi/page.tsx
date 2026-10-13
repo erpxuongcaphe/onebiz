@@ -20,13 +20,13 @@ import {CASH_FLOW_LABELS, summarizeRecognition} from '@/lib/utils/finance-report
 import {exportToExcel} from '@/lib/utils/export';
 import {financeCategoryMonths} from '@/lib/reports/finance-category-months';
 import {getFinanceCategories, getFinanceWorkspace, getAllFinanceRows, saveFinanceCategory, cancelFinanceDocument,
-  type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
+  type FinanceKind, type CashFlowActivity, type FinanceCategory, type FinanceEvent, type FinanceFilters, type FinanceWorkspace} from '@/lib/services/supabase/management-finance';
 
 export default function ManagementFinancePage() {
   const {activeBranchId, branches, hasPermission, isLoading} = useAuth();
   const cashBranchName = (id: string) => branches?.find(branch => branch.id === id)?.name ?? 'Chưa xác định';
   const today = cashDateTimeInput().slice(0, 10);
-  const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today});
+  const [filters, setFilters] = useState<FinanceFilters>({from: today.slice(0, 7) + '-01', to: today, kind: 'expense'});
   const [categories, setCategories] = useState<FinanceCategory[]>([]);
   const [data, setData] = useState<FinanceWorkspace | null>(null);
   const [page, setPage] = useState(0);
@@ -39,6 +39,8 @@ export default function ManagementFinancePage() {
   const [expanded, setExpanded] = useState<string>();
   const [revision, setRevision] = useState(0);
   const [categoryOpen, setCategoryOpen] = useState(false);
+  const [categoryKind, setCategoryKind] = useState<FinanceKind>('expense');
+  const [categoryTarget, setCategoryTarget] = useState<((id: string) => void) | null>(null);
   const [parentId, setParentId] = useState('');
   const [categoryCode, setCategoryCode] = useState('');
   const [categoryName, setCategoryName] = useState('');
@@ -55,6 +57,7 @@ export default function ManagementFinancePage() {
   const canCancel = hasPermission('finance.void_transaction');
   const canExport = hasPermission('reports.export');
   const scoped = {...filters, branchId: activeBranchId};
+  const reportPeriod = new URLSearchParams({preset:'custom',from:filters.from,to:filters.to,view:'table',...(activeBranchId ? {branch:activeBranchId} : {})}).toString();
   const rangeError = financeReportRangeError(filters.from, filters.to);
 
   useEffect(() => {
@@ -85,6 +88,10 @@ export default function ManagementFinancePage() {
     return () => {active = false;};
   }, [isLoading,canRead,view,filters,activeBranchId,revision,rangeError]);
   const patch = useCallback((value: Partial<FinanceFilters>) => {setFilters(f => ({...f, ...value})); setPage(0);}, []);
+  function openCategory(kind: FinanceKind, selectCreated?: (id: string) => void) {
+    setCategoryKind(kind); setCategoryTarget(() => selectCreated ?? null); setCategoryOpen(true);
+    setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');
+  }
 
   async function download() {
     if (!canExport || exporting || rangeError || loading || categoryLoading || error) return;
@@ -125,9 +132,10 @@ export default function ManagementFinancePage() {
     setActionSaving(true); setActionError('');
     try {
       const parent = categories.find(c => c.id === parentId && c.is_group);
-      if (!parent) throw new Error('Chọn nhóm khoản mục.');
-      await saveFinanceCategory({code: categoryCode, name: categoryName, kind: parent.kind, parentId, cashFlowActivity});
+      if (!parent || parent.kind !== categoryKind) throw new Error('Chọn nhóm khoản mục đúng loại.');
+      const created = await saveFinanceCategory({code: categoryCode, name: categoryName, kind: parent.kind, parentId, cashFlowActivity});
       setCategories(await getFinanceCategories()); setCategoryOpen(false);
+      categoryTarget?.(created.id); setCategoryTarget(null);
     } catch (e) {setActionError(e instanceof Error ? e.message : 'Chưa lưu được khoản mục.');}
     finally {setActionSaving(false);}
   }
@@ -145,21 +153,25 @@ export default function ManagementFinancePage() {
   if (!canRead) return <p className="p-6">Tài khoản chưa có quyền xem thu nhập / chi phí.</p>;
   return <div className="min-w-0 space-y-4 p-4 sm:p-6">
     <PageHeader title="Thu nhập và chi phí"/>
+    <div role="tablist" aria-label="Loại nghiệp vụ tài chính" className="flex flex-wrap gap-1 border-b">
+      {([['income','Thu nhập khác'],['expense','Chi phí'],['non_pnl','Ngoài kết quả kinh doanh']] as const).map(([kind,label]) => <button key={kind} role="tab" aria-selected={filters.kind === kind} className={`min-h-11 border-b-2 px-3 text-sm ${filters.kind === kind ? 'border-primary font-semibold text-primary' : 'border-transparent text-muted-foreground'}`} onClick={() => {patch({kind, categoryId: undefined}); setExpanded(undefined);}}>{label}</button>)}
+    </div>
     <div className="flex flex-wrap gap-2">
-      {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}} disabled={!categories.length}><Icon name="add"/>Ghi nhận mới</Button>}
+      {canCreate && <Button onClick={() => {setSettling(undefined); setOpen(true);}}><Icon name="add"/>{filters.kind === 'income' ? 'Ghi nhận thu nhập' : filters.kind === 'expense' ? 'Ghi nhận chi phí' : 'Ghi nhận khoản ngoài KQKD'}</Button>}
       {canCreate && <Button variant="outline" disabled={!activeBranchId || !categories.length} onClick={()=>setImportOpen(true)}><Icon name="upload"/>Nhập tài chính</Button>}
-      {canCreate && <Button variant="outline" onClick={() => {setCategoryOpen(true); setParentId(''); setCategoryCode(''); setCategoryName(''); setCashFlowActivity('unclassified'); setActionError('');}}><Icon name="category"/>Thêm khoản mục</Button>}
+      {canCreate && <Button variant="outline" onClick={() => openCategory(filters.kind ?? 'expense')}><Icon name="category"/>Thêm khoản mục</Button>}
       {canExport && <Button variant="outline" disabled={loading || categoryLoading || exporting || !data || !!error || !!rangeError} onClick={download}><Icon name="download"/>{exporting ? 'Đang xuất…' : 'Xuất Excel'}</Button>}
       <Button variant="outline" onClick={() => setRevision(r => r + 1)} disabled={loading}><Icon name="refresh"/>Tải lại</Button>
+      <Button variant="outline" onClick={() => {const [year,month]=today.split('-').map(Number); patch({from:new Date(Date.UTC(year,month-2,1)).toISOString().slice(0,10),to:new Date(Date.UTC(year,month-1,0)).toISOString().slice(0,10)});}}><Icon name="calendar_today"/>Tháng trước</Button>
       <Button nativeButton={false} variant="outline" render={<Link href="/so-quy"/>}><Icon name="payments"/>Sổ quỹ</Button>
-      <Button nativeButton={false} variant="outline" render={<Link href="/phan-tich/bao-cao-tai-chinh"/>}><Icon name="bar_chart"/>Kết quả kinh doanh</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href={`/phan-tich/bao-cao-tai-chinh?${reportPeriod}`}/>}><Icon name="bar_chart"/>Kết quả kinh doanh</Button>
+      <Button nativeButton={false} variant="outline" render={<Link href={`/phan-tich/luong-tien?${reportPeriod}`}/>}><Icon name="payments"/>Dòng tiền</Button>
     </div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       <label className="grid gap-1 text-sm">Ghi nhận từ ngày<Input type="date" value={filters.from} onChange={e => patch({from: e.target.value})}/></label>
       <label className="grid gap-1 text-sm">Đến ngày<Input type="date" value={filters.to} onChange={e => patch({to: e.target.value})}/></label>
-      <label className="grid gap-1 text-sm">Loại khoản<select className="h-10 rounded-md border bg-background px-3" value={filters.kind ?? ''} onChange={e => patch({kind: e.target.value as FinanceFilters['kind'] || undefined, categoryId: undefined})}><option value="">Tất cả</option><option value="expense">Chi phí</option><option value="income">Thu nhập</option><option value="non_pnl">Ngoài kết quả kinh doanh</option></select></label>
       <label className="grid gap-1 text-sm">Khoản mục<SearchableSelect value={filters.categoryId} onValueChange={value => patch({categoryId: value || undefined})} placeholder="Tất cả khoản mục"
-        options={[{value: '', label: 'Tất cả khoản mục'}, ...categories.filter(c => !c.is_group && (!filters.kind || c.kind === filters.kind)).map(c => ({value: c.id, label: c.name, meta: c.code}))]}/></label>
+        options={[{value: '', label: 'Tất cả khoản mục'}, ...categories.filter(c => !c.is_group && c.kind === filters.kind).map(c => ({value: c.id, label: c.name, meta: c.code}))]}/></label>
       <label className="grid gap-1 text-sm">Mã / đối tượng<Input type="search" value={filters.search ?? ''} onChange={e => patch({search: e.target.value})}/></label>
       <label className="grid gap-1 text-sm">Trạng thái<select className="h-10 rounded-md border bg-background px-3" value={filters.status ?? ''} onChange={e => patch({status: e.target.value as FinanceFilters['status'] || undefined})}><option value="">Tất cả</option><option value="posted">Đã ghi nhận</option><option value="cancelled">Đã hủy</option></select></label>
       <label className="grid gap-1 text-sm">Thanh toán đến cuối kỳ<select className="h-10 rounded-md border bg-background px-3" value={filters.paymentState ?? ''} onChange={e => patch({paymentState: e.target.value as FinanceFilters['paymentState'] || undefined})}><option value="">Tất cả</option><option value="unpaid">Chưa thanh toán</option><option value="partial">Một phần</option><option value="paid">Đủ</option></select></label>
@@ -167,9 +179,9 @@ export default function ManagementFinancePage() {
     </div>
     {(rangeError || error) && <p role="alert" className="text-sm text-destructive break-words">{rangeError || error}</p>}
     {data && <div className="grid gap-4 border-y py-3 sm:grid-cols-3">
-      <div><span className="text-sm text-muted-foreground">Thu nhập khác ghi nhận</span><p className="font-semibold tabular-nums">{formatCurrency(data.summary.income)}</p></div>
-      <div><span className="text-sm text-muted-foreground">Chi phí ghi nhận</span><p className="font-semibold">{formatCurrency(data.summary.expense)}</p></div>
-      <div><span className="text-sm text-muted-foreground">Ngoài kết quả kinh doanh</span><p className="font-semibold">{formatCurrency(data.summary.non_pnl)}</p></div>
+      <div><span className="text-sm text-muted-foreground">{filters.kind === 'income' ? 'Thu nhập khác ghi nhận' : filters.kind === 'expense' ? 'Chi phí ghi nhận' : 'Ngoài kết quả kinh doanh'}</span><p className="font-semibold tabular-nums">{formatCurrency(data.summary[filters.kind ?? 'expense'])}</p></div>
+      <div><span className="text-sm text-muted-foreground">Số khoản theo bộ lọc</span><p className="font-semibold tabular-nums">{new Intl.NumberFormat('en-US').format(data.total)}</p></div>
+      <div><span className="text-sm text-muted-foreground">Chi nhánh ghi nhận</span><p className="font-semibold">{activeBranchId ? cashBranchName(activeBranchId) : 'Các chi nhánh được phép'}</p></div>
     </div>}
     <div role="tablist" aria-label="Góc nhìn thu nhập chi phí" className="flex border-b gap-4">
       {([['documents','Theo chứng từ'],['categories','Theo khoản mục'],['months','Theo tháng']] as const).map(([value,label]) => <button key={value} role="tab" aria-selected={view === value} className={`py-2 text-sm border-b-2 ${view === value ? 'border-primary text-primary font-medium' : 'border-transparent text-muted-foreground'}`} onClick={() => setView(value)}>{label}</button>)}
@@ -189,10 +201,10 @@ export default function ManagementFinancePage() {
       <Button variant="outline" size="icon" aria-label="Trang trước" title="Trang trước" disabled={loading || page === 0} onClick={() => setPage(p => p - 1)}><Icon name="chevron_left"/></Button>
       <Button variant="outline" size="icon" aria-label="Trang sau" title="Trang sau" disabled={loading || !data || (page + 1) * 50 >= data.total} onClick={() => setPage(p => p + 1)}><Icon name="chevron_right"/></Button>
     </div></div></>}
-    <ManagementFinanceDialog open={open} onOpenChange={setOpen} categories={categories} event={settling} onSuccess={() => setRevision(r => r + 1)}/>
+    <ManagementFinanceDialog key={settling?.id ?? filters.kind} open={open} onOpenChange={setOpen} categories={categories} event={settling} recordKind={filters.kind ?? 'expense'} onCreateCategory={openCategory} onSuccess={() => setRevision(r => r + 1)}/>
     <FinanceImportDialog open={importOpen} onOpenChange={setImportOpen} categories={categories} onFinished={()=>setRevision(r=>r+1)}/>
-    <Dialog open={categoryOpen} onOpenChange={value => {if (!actionSaving) setCategoryOpen(value);}}><DialogContent><DialogHeader><DialogTitle>Thêm khoản mục chi tiết</DialogTitle></DialogHeader>
-      <label className="grid gap-1 text-sm">Nhóm khoản mục<SearchableSelect value={parentId} onValueChange={setParentId} options={categories.filter(c => c.is_group).map(c => ({value: c.id, label: c.name, meta: c.code}))} placeholder="Chọn nhóm"/></label>
+    <Dialog open={categoryOpen} onOpenChange={value => {if (!actionSaving) setCategoryOpen(value);}}><DialogContent><DialogHeader><DialogTitle>Thêm khoản mục {categoryKind === 'income' ? 'thu nhập' : categoryKind === 'expense' ? 'chi phí' : 'ngoài KQKD'}</DialogTitle></DialogHeader>
+      <label className="grid gap-1 text-sm">Nhóm khoản mục<SearchableSelect disabled={actionSaving} value={parentId} onValueChange={setParentId} options={categories.filter(c => c.is_group && c.kind === categoryKind).map(c => ({value: c.id, label: c.name, meta: c.code}))} placeholder="Chọn nhóm"/></label>
       <label className="grid gap-1 text-sm">Mã khoản mục<Input value={categoryCode} maxLength={32} onChange={e => setCategoryCode(e.target.value.toUpperCase())}/></label>
       <label className="grid gap-1 text-sm">Tên khoản mục<Input value={categoryName} onChange={e => setCategoryName(e.target.value)}/></label>
       <label className="grid gap-1 text-sm">Hoạt động dòng tiền<select value={cashFlowActivity} className="h-10 rounded-md border bg-background px-3" onChange={e => setCashFlowActivity(e.target.value as CashFlowActivity)}>{Object.entries(CASH_FLOW_LABELS).map(([value,label]) => <option key={value} value={value}>{label}</option>)}</select></label>
